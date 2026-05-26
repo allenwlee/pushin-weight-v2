@@ -34,8 +34,8 @@ MiniMax supports Anthropic's native `cache_control` protocol on its `/anthropic`
 
 1. OpenClaw (or Claude Code) places `cache_control` breakpoints at the end of system prompts and conversation turns
 2. On the next call, MiniMax checks if the prefix matches a cached version
-3. Cache hit → reads at **0.1× cost** (90% discount), refreshes the 5-minute TTL
-4. Cache miss → processes in full, writes to cache at 1.25× cost
+3. Cache hit → reads at **0.1× cost** (API rate card — same multiplier as Anthropic). On the Token Plan, this is irrelevant: all cache reads are absorbed into the flat per-request billing. You never see a separate cache line item.
+4. Cache miss → processes in full, writes to cache at 1.25× cost (API rate). Token Plan: also absorbed.
 
 ### Why Agent Workloads Benefit Disproportionately
 
