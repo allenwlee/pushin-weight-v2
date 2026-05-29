@@ -10,12 +10,13 @@
 | Field | Value |
 |-------|-------|
 | **Name** | Skyler (Yuhang) Miao (苗宇航) |
-| **Title** | Head of Engineering |
-| **Company** | MiniMax (tenure unknown, at least since M2 era ~Oct 2025) |
-| **Location** | Beijing, China (Haidian District); also listed as San Francisco, CA |
+| **Title** | Head of Engineering (Jul 2023 – Present, 2 yrs 11 mos) |
+| **Company** | MiniMax |
+| **Location** | Haidian District, Beijing, China |
 | **Education** | Beijing University of Posts and Telecommunications (北京邮电大学) |
 | **X/Twitter** | [@SkylerMiao7](https://x.com/SkylerMiao7) — joined Jan 2025, 15.5K followers, 304 following, 1.2K posts, ✅ individual verified |
 | **GitHub** | [github.com/adao-max](https://github.com/adao-max) — 6 repos, forked Claude-Code source exploration |
+| **LinkedIn** | 122 connections, 249 followers |
 | **Bio (X)** | "Head of Engineering @MiniMax_AI — Building MiniMax M2.x, Agent, Audio and @Hailuo_AI" |
 | **Languages** | Chinese (native), English (strong technical proficiency — active English engagement on X) |
 | **Website** | minimax.io |
@@ -26,12 +27,27 @@
 
 | Period | Role | Company |
 |--------|------|---------|
-| ? – Present | Head of Engineering | MiniMax (Beijing) |
-| ? – ? | Engineer | ByteDance (字节跳动) |
-| ? – ? | Engineer | Beike (贝壳 — real estate platform) |
-| ? – ? | Engineer | Baidu Inc. (百度) |
+| Jul 2023 – Present | Head of Engineering | MiniMax (Beijing) |
+| Jun 2018 – Oct 2025 | 西瓜视频 Tech Lead (技术负责人) | ByteDance (字节跳动) |
+| Aug 2016 – Jun 2018 | R&D Director (研发总监) | Beike (贝壳) |
+| Jun 2014 – Aug 2016 | Big Data Architect (大数据架构师) | Beike (贝壳) |
+| Jul 2009 – Jun 2014 | Team Lead & Senior Engineer | Baidu Inc. (百度) |
 
-**Pattern:** Moved through three of China's most engineering-intensive internet companies (Baidu → Beike → ByteDance) before joining MiniMax as Head of Engineering. Baidu gave him search-scale infrastructure, ByteDance gave him recommendation-scale ML, Beike gave him platform engineering. This is a pure engineering track — no business school, no MBA, no pivot.
+**Education:** BS Computer Science, Beijing University of Posts and Telecommunications (北京邮电大学), 2005–2009
+
+### Career Narrative
+
+Skyler's career is a 17-year arc through China's most demanding engineering organizations:
+
+**Baidu (2009–2014, 5 years):** Started as a fresh graduate and rose to Team Lead. Built three major systems: Baidu's latest-generation distributed NoSQL database (2009–2010), the commercial infrastructure data warehouse (2011–2012), and the AD anti-spam backend — distributed, high-availability, high-performance architecture (2012–2013). This is foundational infrastructure engineering at China's search monopoly.
+
+**Beike / Lianjia (2014–2018, 4 years):** Joined as Big Data Architect and created **Lianjia's mobile and big data teams from zero.** Built the consumer-facing Lianjia APP and the agent-facing Link APP — two products that now serve China's largest real estate platform. Built the data warehouse, big data platform, and ML systems for housing valuation and customer profiling. Promoted to R&D Director in 2016, leading the new housing R&D team across the full tech stack: user-facing (APP/M/PC), agent-facing, platform operations, BI, data warehouse, and ML.
+
+**ByteDance / 西瓜视频 (2018–2025, 7+ years):** Tech Lead (技术负责人) for 西瓜视频 (Xigua Video) — ByteDance's short-to-mid-form video platform with **tens of millions of DAU.** Managed a large org spanning backend, iOS/Android, frontend, QA, video infrastructure, product, operations, marketing, and HR. The platform handled **hundreds of services, tens of thousands of instances, millions of QPS.** Core metrics: first-screen time, first-frame time, animation performance, FPS, package size, bandwidth, and battery consumption — TikTok-level optimization. Overlapped with MiniMax (Jul 2023–Oct 2025), suggesting a transition period.
+
+**MiniMax (Jul 2023–Present):** Head of Engineering, building the full M-series model stack, Agent, Audio, and Hailuo AI.
+
+**Key takeaway:** This is not someone who "moved through three companies." This is someone who **built infrastructure at Baidu, built mobile + data platforms from zero at Lianjia, and led engineering for a platform with tens of millions of DAU at ByteDance.** He's managed teams at every level — from IC to Director — across mobile, backend, data, ML, and infrastructure. MiniMax is his first AI-native role, but his distributed systems and platform engineering foundation is world-class.
 
 ---
 
@@ -94,16 +110,17 @@ Skyler is MiniMax's **primary technical voice on X.** His posting style is:
 ## Profile Assessment
 
 **Strengths:**
-- **Deep engineering credibility:** Not a manager who delegates — he's discussing sparse attention architectures on X at midnight. Baidu → Beike → ByteDance track record proves he can build at scale
-- **Public technical voice:** MiniMax's most visible engineer. 15.5K followers on a 16-month-old account. His "Something BIG is coming" post got 699K views — he drives MiniMax's developer narrative
-- **Open-source native:** Committed to open-sourcing M3 and MSA implementation. Understands that developer trust comes from open weights and transparent architecture
-- **Western dev community fluency:** Natural English engagement, understands how to build hype on X, interacts with Western researchers as peers
-- **Speed of execution:** M2 (Oct 2025) → M2.7 (Mar 2026) → M3 (teased May 2026) — shipping major model generations in ~4-month cycles
+- **Battle-tested engineering leader:** 5 years at Baidu building distributed NoSQL and anti-spam infrastructure, 4 years at Beike building mobile + data platforms from zero, 7+ years at ByteDance leading engineering for a platform with tens of millions of DAU and millions of QPS. He's been a Director, a Tech Lead managing multi-functional orgs, and a founding team builder. This is not a theorist — he's shipped at scale for 17 years.
+- **Full-stack depth:** Mobile (iOS/Android), backend (distributed systems, NoSQL), data (warehouse, big data platform, ML pipelines), infrastructure (high-availability, anti-spam). He's not just "an ML guy" — he's someone who can talk architecture with any engineering team.
+- **Public technical voice:** MiniMax's most visible engineer. 15.5K followers on a 16-month-old account. His "Something BIG is coming" post got 699K views — he drives MiniMax's developer narrative personally.
+- **Open-source native:** Committed to open-sourcing M3 and MSA implementation. Understands that developer trust comes from open weights and transparent architecture.
+- **Western dev community fluency:** Natural English engagement, understands how to build hype on X, interacts with Western researchers as peers.
+- **Speed of execution:** M2 (Oct 2025) → M2.7 (Mar 2026) → M3 (teased May 2026) — shipping major model generations in ~4-month cycles.
 
 **Weaknesses:**
-- **No visible management background:** Pure IC engineer → Head of Engineering. Unknown how he handles team leadership, hiring, cross-functional coordination
-- **Beijing-based:** Though he operates in English on X, physical presence is China. For a DevRel role requiring North American community presence, his firsthand understanding of US developer culture may be limited
-- **Teaser culture risk:** "Something BIG is coming" with no date, then "in several days~" — this builds hype but can frustrate developers who need concrete timelines for planning
+- **Beijing-based:** Though he operates in English on X, physical presence is China. For a DevRel role requiring North American community presence, his firsthand understanding of US developer culture may be limited. He's spent his entire career in Beijing.
+- **Teaser culture risk:** "Something BIG is coming" with no date, then "in several days~" — this builds hype but can frustrate developers who need concrete timelines for planning.
+- **First AI-native role:** Despite his infrastructure pedigree, MiniMax is his first AI/LLM company. His previous ML experience (housing valuation, customer profiling at Lianjia) was applied ML, not frontier model research. He may be learning the LLM space alongside leading it.
 
 **Key insight for the interview:** Skyler is the person who will ultimately decide whether DevRel initiatives have engineering support. If Allen/Alice can demonstrate they understand the M3 sparse attention architecture and can represent it accurately to Western developers, they'll earn his respect immediately. He cares about *technical accuracy* above all else.
 
