@@ -47,6 +47,8 @@ His LinkedIn activity is almost entirely resharing MiniMax's official posts — 
 
 **Weaknesses:** English proficiency listed as "limited working" — this is notable since the JD requires "native-level English." His LinkedIn presence is passive (reposts only, no original content), which may be a concern for a role that involves content creation (blogs, GitHub, Discord). Relatively junior profile compared to someone running global DevRel for a public company.
 
+**Core Tech Stack:** ML training & inference — specifically recommendation systems and NLP. 3+ years as researcher at Tencent Music (recsys for QQ Music/Kugou/Kuwo) and 1+ year at ByteDance (TikTok/Douyin's recommendation engine). TensorFlow Developer Certificate + DeepLearning.AI TensorFlow + NLP in TensorFlow course. MSc in Big Data Technology at HKUST. His foundation is recsys → NLP → LLM APIs, not cloud infra or traditional software engineering. He'll evaluate candidates on ML/LLM credibility, not general engineering.
+
 **Key Question:** If he's currently Head of Developer Relations, why is he interviewing candidates for a DevRel Specialist role? Possibilities: (a) building out his team, (b) transitioning/promoting, (c) this is a new position under him. This should shape how Allen/Alice approach the conversation.
 
 ---
