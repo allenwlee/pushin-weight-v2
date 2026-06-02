@@ -1,0 +1,1409 @@
+<think>
+The user wants me to read pages 21-24 of this 10-K filing (which is actually an annual report from MiniMax Group Inc., a MiniMax-related company) and produce an ASCII org chart showing the ownership structure.
+
+Let me analyze the data carefully:
+
+**Page 21: Interests of Directors and Chief Executives in the Company**
+
+Class A Shares:
+- Dr. Yan Junjie: 
+  - Interest in controlled corporation (L) - MiniMax Matrix: 5,000,000 shares (2.15%)
+  - Interest in controlled corporation (L) - Local Linearity: 5,000,000 shares (2.15%)
+- Ms. Yun Yeyi: Beneficial interest (L) — 3,814,065 shares (1.64%)
+- Mr. Zhao Pengyu: Beneficial interest (L) — 567,182 shares (0.24%)
+- Mr. Zhou Yucong: Beneficial interest (L) — 1,010,724 shares (0.43%)
+
+Class B Shares:
+- Dr. Yan Junjie:
+  - Interest in controlled corporation (L) - Alpha EXP: 62,593,180 shares (77.18%)
+  - Interest in controlled corporation (L) - Scaling EXP Limited: 62,593,180 shares (77.18%)
+  - Trustee - Trident Trust Company (HK) Limited: 62,593,180 shares (77.18%)
+  - Interest in controlled corporation (L) - MiniMax Awakening: 11,509,339 shares (14.19%)
+  - Interest in controlled corporation (L) - MiniMax Limited: 15 shares (0.00%)
+  - Interest in controlled corporation (L) - Local Linearity: 11,509,354 shares (14.19%)
+- Ms. Yun Yeyi:
+  - Interest in controlled corporation (L) - Floating Sky: 7,000,000 shares (8.63%)
+  - Interest in controlled corporation (L) - Floating Cloud: 7,000,000 shares (8.63%)
+  - Trustee - Trident Trust Company (HK) Limited: 7,000,000 shares (8.63%)
+
+**Page 22-23: Substantial Shareholders' Interests**
+
+Class A Shares (only - no Class B for substantial shareholders shown):
+- Alisoft China Holding Limited: Beneficial interest (L) - 39,662,627 (17.06%)
+- Alisoft Investment Holding Limited: Interest in controlled corporations (L) - 39,662,627 (17.06%)
+- Alisoft Holding Limited: Interest in controlled corporations (L) - 39,662,627 (17.06%)
+- Alibaba Group Holding Limited: Interest in controlled corporations (L) - 39,662,627 (17.06%)
+
+- miHoYo Limited: Beneficial interest (L) - 16,015,779 (6.89%)
+- Shanghai Fanxing Dingchuang Technology Company Limited: Interest in controlled corporations (L) - 16,015,779 (6.89%)
+- Luo Yuhao: Interest in controlled corporations (L) - 16,015,779 (6.89%)
+
+- MiniMax Gene Alpha Limited: Interest in controlled corporation (L) - 20,890,736 (8.98%)
+- MiniMax Gene Limited: Interest in controlled corporation (L) - 20,890,736 (8.98%)
+- Futu Trustee Limited: Trustee (L) - 20,890,736 (8.98%)
+
+- XAM Holdings Limited: Beneficial interest (L) - 14,201,184 (6.11%)
+- NVMB IV Holdings Limited: Interest in controlled corporations (L) - 14,201,184 (6.11%)
+- BXA Holdings II, L.P.: Interest in controlled corporations (L) - 14,201,184 (6.11%)
+- JNR Holdings GP Limited: Interest in controlled corporations (L) - 14,201,184 (6.11%)
+- MNM Holdings Limited*: Beneficial interest (L) - 2,343,196 (1.01%)
+- BXA Holdings, L.P. *: Interest in controlled corporations (L) - 2,343,196 (1.01%)
+- BXA Holdings II GP Limited*: Interest in controlled corporations (L) - 2,343,196 (1.01%)
+- Mr. Colm O'Connell: Interest in controlled corporations (L) - 16,544,380 (7.11%)
+
+- Ho Chi Sing: Interest in controlled corporations (L) - 13,839,721 (5.95%)
+
+Now I need to build an org chart. The user asked for:
+- TOP: beneficial owners and individuals (people + holding companies with direct shareholdings)
+- MIDDLE: intermediary holding companies, controlled corporations, and trusts
+- BOTTOM: the final reporting company (the issuer of the 10-K) - MiniMax Group Inc.
+
+For each ownership chain, show the percentage of Class A shares and the number of shares.
+
+Let me organize the chains:
+
+**Chain 1: Dr. Yan Junjie chain**
+- Dr. Yan Junjie (beneficial owner)
+- → Local Linearity (controlled corp)
+  - → MiniMax Matrix (holding company, controlled by Dr. Yan through Local Linearity)
+  - → MiniMax Awakening (wholly owned by Dr. Yan through Local Linearity)
+  - → MiniMax Limited (wholly owned by Dr. Yan through Local Linearity)
+- → Scaling EXP Limited (controlled by Dr. Yan through Local Linearity, 1%)
+  - → Alpha EXP (held by Scaling EXP as 99% and Local Linearity as 1%)
+    - → Trident Trust Company (HK) Limited (trustee of Alpha EXP)
+
+Wait, the user asked for Class A shares specifically. Let me re-read:
+"For each ownership chain, show the percentage of Class A shares and the number of shares."
+
+So I should focus on Class A shares. But Class B shares are also part of the structure. The directors/CEOs are listed with both Class A and Class B. The substantial shareholders only show Class A.
+
+Let me focus on Class A primarily since that's what the user asked, but include the Class B structure for the directors since it's relevant to their control.
+
+Actually, re-reading the prompt: "show the percentage of Class A shares and the number of shares." This suggests Class A specifically. But the directors have both Class A and Class B entries. Let me include both for the directors as they're shown in the filing.
+
+Wait, I need to look at this more carefully. The substantial shareholders section only shows Class A. The directors/CEOs section shows both Class A and Class B.
+
+Let me structure the chart:
+
+TOP (Beneficial Owners/Individuals with direct shareholdings):
+- Dr. Yan Junjie
+- Ms. Yun Yeyi
+- Mr. Zhao Pengyu
+- Mr. Zhou Yucong
+- Alibaba Group Holding Limited
+- Luo Yuhao
+- Futu Trustee Limited
+- Mr. Colm O'Connell
+- Ho Chi Sing
+- Alisoft China Holding Limited (direct beneficial)
+- miHoYo Limited (direct beneficial)
+- XAM Holdings Limited (direct beneficial)
+- MNM Holdings Limited (direct beneficial)
+- Alisoft Investment Holding Limited (through controlled corps)
+- Alisoft Holding Limited (through controlled corps)
+- Shanghai Fanxing Dingchuang Technology Company Limited
+- MiniMax Gene Alpha Limited
+- MiniMax Gene Limited
+- NVMB IV Holdings Limited
+- BXA Holdings II, L.P.
+- JNR Holdings GP Limited
+- BXA Holdings, L.P.
+- BXA Holdings II GP Limited
+- MiniMax Matrix (Class A)
+- Local Linearity (Class A)
+- Floating Sky (Class B)
+- Floating Cloud (Class B)
+- Alpha EXP (Class B)
+- Scaling EXP Limited (Class B)
+- MiniMax Awakening (Class B)
+- MiniMax Limited (Class B)
+- Local Linearity (Class B)
+- Trident Trust Company (HK) Limited
+
+Hmm, this is getting complex. Let me restructure.
+
+The user wants:
+- TOP: beneficial owners AND individuals (people + holding companies with direct shareholdings)
+- MIDDLE: intermediary holding companies, controlled corporations, and trusts
+- BOTTOM: the final reporting company (MiniMax Group Inc.)
+
+For the substantial shareholders section, the "direct shareholdings" are by Alisoft China Holding Limited and miHoYo Limited and XAM Holdings Limited and MNM Holdings Limited. The others (Alisoft Investment Holding, Alisoft Holding, Alibaba Group, etc.) are "Interest in controlled corporations" - so they indirectly own shares.
+
+For the directors section, the direct shareholdings are:
+- Dr. Yan Junjie via MiniMax Matrix (Class A) - 5,000,000
+- Dr. Yan Junjie via Local Linearity (Class A) - 5,000,000
+- Dr. Yan Junjie via Alpha EXP (Class B) - 62,593,180
+- Dr. Yan Junjie via Scaling EXP Limited (Class B) - 62,593,180
+- Dr. Yan Junjie via Trident Trust Company (HK) Limited (Class B) - 62,593,180
+- Dr. Yan Junjie via MiniMax Awakening (Class B) - 11,509,339
+- Dr. Yan Junjie via MiniMax Limited (Class B) - 15
+- Dr. Yan Junjie via Local Linearity (Class B) - 11,509,354
+- Ms. Yun Yeyi (direct Class A) - 3,814,065
+- Ms. Yun Yeyi via Floating Sky (Class B) - 7,000,000
+- Ms. Yun Yeyi via Floating Cloud (Class B) - 7,000,000
+- Ms. Yun Yeyi via Trident Trust Company (HK) Limited (Class B) - 7,000,000
+- Mr. Zhao Pengyu (direct Class A) - 567,182
+- Mr. Zhou Yucong (direct Class A) - 1,010,724
+
+OK let me approach this differently. The user wants a clear ASCII chart. Let me build it as a hierarchical structure:
+
+```
+TOP TIER (Beneficial Owners & Direct Shareholders):
+- Individuals: Dr. Yan Junjie, Ms. Yun Yeyi, Mr. Zhao Pengyu, Mr. Zhou Yucong, Luo Yuhao, Mr. Colm O'Connell, Ho Chi Sing
+- Direct Holdings: Alisoft China Holding Limited, miHoYo Limited, XAM Holdings Limited, MNM Holdings Limited, Alisoft Investment Holding Limited, Alisoft Holding Limited, Alibaba Group Holding Limited, Shanghai Fanxing Dingchuang Technology Company Limited, MiniMax Gene Alpha Limited, MiniMax Gene Limited, Futu Trustee Limited, NVMB IV Holdings Limited, BXA Holdings II L.P., JNR Holdings GP Limited, BXA Holdings L.P., BXA Holdings II GP Limited
+
+MIDDLE TIER (Intermediary Holding Companies, Controlled Corps, Trusts):
+- MiniMax Matrix, Local Linearity, Alpha EXP, Scaling EXP Limited, Trident Trust Company (HK) Limited, MiniMax Awakening, MiniMax Limited, Floating Sky, Floating Cloud
+
+BOTTOM TIER (Issuer):
+- MiniMax Group Inc.
+```
+
+Let me draft the ASCII chart now. I'll group by ownership chain:
+
+Chain A: Dr. Yan Junjie chain
+Chain B: Ms. Yun Yeyi chain
+Chain C: Alibaba/Alisoft chain
+Chain D: miHoYo chain
+Chain E: MiniMax Gene chain
+Chain F: BXA/XAM chain
+Chain G: Mr. Colm O'Connell chain
+Chain H: Ho Chi Sing chain
+
+Plus individual beneficial owners: Mr. Zhao Pengyu, Mr. Zhou Yucong
+
+Let me build the chart. I should use box-drawing characters and try to show the chains clearly.
+
+Let me start building:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    TOP TIER: BENEFICIAL OWNERS &                        │
+│                  INDIVIDUALS WITH DIRECT HOLDINGS                       │
+└─────────────────────────────────────────────────────────────────────────┘
+
+ INDIVIDUALS (People):                  HOLDING COMPANIES (Direct Holders):
+ ┌──────────────────────────┐           ┌────────────────────────────┐
+ │ Dr. Yan Junjie (Dr. Yan) │           │ Alisoft China Holding Ltd  │
+ │ Ms. Yun Yeyi (Ms. Yun)   │           │ miHoYo Limited             │
+ │ Mr. Zhao Pengyu          │           │ XAM Holdings Limited       │
+ │ Mr. Zhou Yucong          │           │ MNM Holdings Limited       │
+ │ Luo Yuhao                │           │ Alisoft Investment Holding │
+ │ Mr. Colm O'Connell       │           │ Alisoft Holding Limited    │
+ │ Ho Chi Sing              │           │ Alibaba Group Holding Ltd  │
+ │                          │           │ Shanghai Fanxing Dingchuang│
+ │                          │           │ MiniMax Gene Alpha Ltd     │
+ │                          │           │ MiniMax Gene Limited       │
+ │                          │           │ NVMB IV Holdings Limited   │
+ │                          │           │ BXA Holdings II, L.P.      │
+ │                          │           │ JNR Holdings GP Limited    │
+ │                          │           │ BXA Holdings, L.P.         │
+ │                          │           │ BXA Holdings II GP Limited │
+ └──────────────────────────┘           └────────────────────────────┘
+```
+
+This is getting complicated. Let me think of a different layout.
+
+Actually, let me structure this more as a flow chart showing the ownership chains. Each chain will go from the individual at the top, through intermediary companies in the middle, to MiniMax Group Inc. at the bottom.
+
+Let me try again:
+
+```
+╔══════════════════════════════════════════════════════════════════════╗
+║         TOP TIER: BENEFICIAL OWNERS / INDIVIDUAL DIRECT HOLDERS       ║
+╚══════════════════════════════════════════════════════════════════════╝
+                                 │
+       ┌─────────────────────────┼─────────────────────────┐
+       │                         │                         │
+   (Dr. Yan chain)         (Ms. Yun chain)        (Individual direct)
+       │                         │                         │
+   Dr. Yan Junjie          Ms. Yun Yeyi           Mr. Zhao Pengyu (567,182 / 0.24%)
+   (77.18% Class B total)  (8.63% Class B total)  Mr. Zhou Yucong (1,010,724 / 0.43%)
+       │                         │                 Ms. Yun Yeyi direct (3,814,065 / 1.64%)
+       │                         │                         │
+       ↓                         ↓                         ↓
+╔══════════════════════════════════════════════════════════════════════╗
+║    MIDDLE TIER: INTERMEDIARY HOLDING COS, CONTROLLED CORPS, TRUSTS    ║
+╚══════════════════════════════════════════════════════════════════════╝
+                                 │
+       ... (etc.)
+                                 ↓
+╔══════════════════════════════════════════════════════════════════════╗
+║              BOTTOM TIER: ISSUER / REPORTING COMPANY                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+                          MiniMax Group Inc.
+```
+
+Let me make this more concrete and detailed. I'll trace each chain with the share counts and percentages.
+
+Chain 1: Dr. Yan Junjie chain
+- Dr. Yan Junjie (founder, beneficial owner)
+  - Class A: 10,000,000 shares (4.30%) via MiniMax Matrix + Local Linearity
+  - Class B: 74,102,514 shares (91.37%) via Alpha EXP, Scaling EXP Limited, Trident Trust Company (HK) Limited, MiniMax Awakening, MiniMax Limited, Local Linearity
+  
+Per note (3): MiniMax Awakening and MiniMax Limited are wholly owned by Dr. Yan Junjie through Local Linearity. MiniMax Matrix is also a controlled entity of Dr. Yan through Local Linearity. Alpha EXP is held by Scaling EXP Limited as to 99% and Local Linearity as to 1%. Scaling EXP Limited is wholly-owned by Trident Trust Company (Hong Kong) Limited, which acts as the trustee of Alpha EXP Trust. Alpha EXP Trust is a trust established by Dr. Yan (as settlor) for the benefit of himself.
+
+So the chain for Dr. Yan:
+- Dr. Yan Junjie
+  - Local Linearity (controlled by Dr. Yan)
+    - MiniMax Matrix (Class A: 5,000,000 / 2.15%)
+    - MiniMax Awakening (Class B: 11,509,339 / 14.19%)
+    - MiniMax Limited (Class B: 15 / 0.00%)
+    - Local Linearity direct Class B: 11,509,354 / 14.19% (this seems duplicate?)
+    - Wait, Local Linearity is shown both as an entity and as the relevant company
+  - Alpha EXP Trust (trust established by Dr. Yan for himself)
+    - Trident Trust Company (HK) Limited (trustee) [Class B: 62,593,180 / 77.18%]
+      - Scaling EXP Limited (wholly owned by Trident) [Class B: 62,593,180 / 77.18% same shares]
+        - Alpha EXP (held 99% by Scaling EXP and 1% by Local Linearity) [Class B: 62,593,180 / 77.18% same shares]
+
+OK, the duplicate numbers are because Dr. Yan is deemed interested in the same shares through multiple controlled corporations and as trustee. So it's the same block of shares being counted multiple times.
+
+Chain 2: Ms. Yun Yeyi chain
+Per note (4): Floating Sky is held by Floating Cloud Limited as to 99% and Apricity Investment Limited as to 1%. Apricity Investment Limited is wholly-owned by Ms. Yun Yeyi. Floating Cloud Limited is wholly-owned by Trident Trust Company (Hong Kong) Limited, which acts as the trustee of Floating Sky Trust. Floating Sky Trust is a trust established by Ms. Yun (as settlor) for the benefit of herself. Additionally, Ms. Yun is beneficially interested in 3,814,065 Class A Ordinary Shares, which underlies the outstanding options granted to her under the Pre-IPO Share Incentive Plan.
+
+So:
+- Ms. Yun Yeyi
+  - Apricity Investment Limited (wholly owned by Ms. Yun)
+    - Floating Sky (held 1% by Apricity, 99% by Floating Cloud) [Class B: 7,000,000 / 8.63%]
+  - Floating Sky Trust (trust established by Ms. Yun for herself)
+    - Trident Trust Company (HK) Limited (trustee) [Class B: 7,000,000 / 8.63%]
+      - Floating Cloud Limited (wholly owned by Trident) [Class B: 7,000,000 / 8.63%]
+        - Floating Sky (held 99% by Floating Cloud)
+  - Direct Class A: 3,814,065 / 1.64%
+
+Chain 3: Alibaba/Alisoft chain
+Note (3) for substantial shareholders is on the next page (page 24 likely). Let me look... I don't have the full note (3) for substantial shareholders. But the structure is clear:
+- Alibaba Group Holding Limited (top)
+  - Alisoft Holding Limited
+    - Alisoft Investment Holding Limited
+      - Alisoft China Holding Limited (direct beneficial owner)
+        - 39,662,627 Class A shares (17.06%)
+
+Chain 4: miHoYo chain
+- Luo Yuhao
+  - Shanghai Fanxing Dingchuang Technology Company Limited
+    - miHoYo Limited (direct beneficial owner)
+      - 16,015,779 Class A shares (6.89%)
+
+Chain 5: MiniMax Gene chain
+- Futu Trustee Limited (trustee) [Class A: 20,890,736 / 8.98%]
+  - MiniMax Gene Limited
+    - MiniMax Gene Alpha Limited (direct holding corp)
+      - 20,890,736 Class A shares (8.98%)
+
+Chain 6: BXA/XAM chain
+- Mr. Colm O'Connell
+  - 16,544,380 Class A shares (7.11%) via controlled corporations
+- XAM Holdings Limited (direct beneficial) - 14,201,184 / 6.11%
+  - NVMB IV Holdings Limited
+    - BXA Holdings II, L.P.
+      - JNR Holdings GP Limited
+- MNM Holdings Limited (direct beneficial) - 2,343,196 / 1.01%
+  - BXA Holdings, L.P.
+    - BXA Holdings II GP Limited
+
+Wait, Mr. Colm O'Connell is shown with 16,544,380 shares, but XAM has 14,201,184 and MNM has 2,343,196. 14,201,184 + 2,343,196 = 16,544,380. So Mr. Colm O'Connell is the ultimate beneficial owner of both XAM and MNM chains.
+
+Chain 7: Ho Chi Sing
+- Ho Chi Sing (individual)
+  - 13,839,721 Class A shares (5.95%) via controlled corporations
+  - The specific companies aren't fully detailed in what I have, but it's via controlled corporations
+
+Now let me build the ASCII chart. I'll use Unicode box-drawing characters.
+
+Let me try to be comprehensive but readable:
+
+```
+═══════════════════════════════════════════════════════════════════════════
+                  TIER 1 (TOP): BENEFICIAL OWNERS & DIRECT HOLDERS
+═══════════════════════════════════════════════════════════════════════════
+
+INDIVIDUALS:                          DIRECT HOLDING COMPANIES:
+┌────────────────────────────┐        ┌────────────────────────────────────┐
+│ • Dr. Yan Junjie            │        │ • Alisoft China Holding Limited    │
+│ • Ms. Yun Yeyi              │        │ • miHoYo Limited                   │
+│ • Mr. Zhao Pengyu           │        │ • XAM Holdings Limited             │
+│ • Mr. Zhou Yucong           │        │ • MNM Holdings Limited             │
+│ • Luo Yuhao                 │        │ • Alibaba Group Holding Limited    │
+│ • Mr. Colm O'Connell        │        │ • Alisoft Holding Limited          │
+│ • Ho Chi Sing               │        │ • Alisoft Investment Holding Ltd   │
+└────────────────────────────┘        │ • Shanghai Fanxing Dingchuang       │
+                                      │ • MiniMax Gene Alpha Limited       │
+                                      │ • MiniMax Gene Limited             │
+                                      │ • Futu Trustee Limited             │
+                                      │ • NVMB IV Holdings Limited         │
+                                      │ • BXA Holdings II, L.P.            │
+                                      │ • JNR Holdings GP Limited          │
+                                      │ • BXA Holdings, L.P.               │
+                                      │ • BXA Holdings II GP Limited       │
+                                      └────────────────────────────────────┘
+```
+
+Hmm, this is getting quite verbose. Let me think of a different layout.
+
+Actually, the prompt says "Produce a multi-tier ASCII org chart showing the ownership structure." So the chart should show the ownership chains. Let me make each chain clear and then have a final bottom row with the issuer.
+
+Let me try a different approach - showing each chain vertically:
+
+```
+════════════════════════════════════════════════════════════════════════════
+                 TIER 1 (TOP): BENEFICIAL OWNERS & INDIVIDUALS
+════════════════════════════════════════════════════════════════════════════
+
+  CHAIN 1 (Dr. Yan)              CHAIN 2 (Ms. Yun)         INDIVIDUALS (Direct)
+  ┌──────────────────┐           ┌──────────────────┐      ┌──────────────┐
+  │ Dr. Yan Junjie   │           │ Ms. Yun Yeyi     │      │ Mr. Zhao     │
+  │                  │           │                  │      │  Pengyu      │
+  └──────────────────┘           └──────────────────┘      │  567,182     │
+                                                            │  (0.24%)     │
+                                                            ├──────────────┤
+                                                            │ Mr. Zhou     │
+                                                            │  Yucong      │
+                                                            │  1,010,724   │
+                                                            │  (0.43%)     │
+                                                            └──────────────┘
+
+════════════════════════════════════════════════════════════════════════════
+                 TIER 2 (MIDDLE): INTERMEDIARIES
+════════════════════════════════════════════════════════════════════════════
+
+  CHAIN 1A                      CHAIN 2A                   CHAIN 3
+  ┌──────────────┐              ┌──────────────┐           (Alibaba)
+  │ Local        │              │ Apricity     │           ┌──────────────┐
+  │  Linearity   │              │  Investment  │           │ Alisoft      │
+  │ (Class A:    │              │  Limited     │           │  China       │
+  │  5,000,000 / │              │              │           │  Holding     │
+  │  2.15%)      │              └──────────────┘           │  39,662,627  │
+  └──────────────┘                       │                │  (17.06%)    │
+        │                                │                └──────────────┘
+        ↓                                ↓
+  ┌──────────────┐              ┌──────────────┐
+  │ MiniMax      │              │ Floating Sky │
+  │  Matrix      │              │  (Class B)   │
+  │ 5,000,000    │              │ 7,000,000 /  │
+  │ (2.15%)      │              │  8.63%       │
+  └──────────────┘              └──────────────┘
+
+  ... etc
+```
+
+This is getting unwieldy. Let me think of the best way to present this.
+
+Looking at the prompt again: "At the TOP: the beneficial owners and individuals (people + holding companies with direct shareholdings). In the MIDDLE: the intermediary holding companies, controlled corporations, and trusts that connect them. At the BOTTOM: the final reporting company (the issuer of the 10-K)."
+
+OK so the structure should be:
+- TOP: All beneficial owners, individuals, and direct holding companies
+- MIDDLE: All intermediaries (controlled corps, holding companies, trusts)
+- BOTTOM: MiniMax Group Inc. (the issuer)
+
+Let me try a cleaner approach with all chains:
+
+```
+╔══════════════════════════════════════════════════════════════════════════╗
+║ TIER 1: BENEFICIAL OWNERS & ENTITIES WITH DIRECT SHAREHOLDINGS           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ INDIVIDUALS (People)                                                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Dr. Yan Junjie ───────► Class A: 10,000,000 (4.30%) via Matrix+Linearity│
+│                       ► Class B: 74,102,514 (91.37%) via Alpha+Awaken   │
+│ Ms. Yun Yeyi ─────────► Class A:   3,814,065 (1.64%) direct             │
+│                       ► Class B:   7,000,000 (8.63%) via Floating Sky   │
+│ Mr. Zhao Pengyu ──────► Class A:     567,182 (0.24%) direct             │
+│ Mr. Zhou Yucong ──────► Class A:   1,010,724 (0.43%) direct             │
+│ Luo Yuhao ────────────► Class A:  16,015,779 (6.89%) via miHoYo chain   │
+│ Mr. Colm O'Connell ───► Class A:  16,544,380 (7.11%) via BXA chains     │
+│ Ho Chi Sing ──────────► Class A:  13,839,721 (5.95%) via controlled cos │
+├─────────────────────────────────────────────────────────────────────────┤
+│ DIRECT HOLDING COMPANIES (with beneficial interest in shares)           │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Alisoft China Holding Limited ─► Class A: 39,662,627 (17.06%)           │
+│ miHoYo Limited ─────────────────► Class A: 16,015,779 (6.89%)           │
+│ XAM Holdings Limited ────────────► Class A: 14,201,184 (6.11%)           │
+│ MNM Holdings Limited ────────────► Class A:  2,343,196 (1.01%)           │
+│ Alibaba Group Holding Limited ───► Class A: 39,662,627 (17.06%) indirect│
+│ Alisoft Holding Limited ─────────► Class A: 39,662,627 (17.06%) indirect│
+│ Alisoft Investment Holding Ltd ──► Class A: 39,662,627 (17.06%) indirect│
+│ Shanghai Fanxing Dingchuang Tech ─► Class A: 16,015,779 (6.89%) indirect│
+│ MiniMax Gene Alpha Limited ──────► Class A: 20,890,736 (8.98%) indirect│
+│ MiniMax Gene Limited ────────────► Class A: 20,890,736 (8.98%) indirect│
+│ Futu Trustee Limited ────────────► Class A: 20,890,736 (8.98%) indirect│
+│ NVMB IV Holdings Limited ────────► Class A: 14,201,184 (6.11%) indirect│
+│ BXA Holdings II, L.P. ───────────► Class A: 14,201,184 (6.11%) indirect│
+│ JNR Holdings GP Limited ─────────► Class A: 14,201,184 (6.11%) indirect│
+│ BXA Holdings, L.P. ──────────────► Class A:  2,343,196 (1.01%) indirect│
+│ BXA Holdings II GP Limited ──────► Class A:  2,343,196 (1.01%) indirect│
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+OK let me just produce the chart now. I'll do my best to make it clear and comprehensive.
+
+Let me design this carefully. The chart should show ownership chains. Each chain goes from the top beneficial owner down to the issuer.
+
+I'll structure it as:
+
+```
+══════════════════════════════════════════════════════════════════════════
+         TIER 1 (TOP): BENEFICIAL OWNERS & DIRECT HOLDING ENTITIES
+══════════════════════════════════════════════════════════════════════════
+```
+
+For each chain, I'll show:
+1. The beneficial owner
+2. The middle entities
+3. The issuer
+
+Let me build it now in ASCII.
+
+Actually I think the best approach is to show all chains flowing from top to bottom, with a final merger into MiniMax Group Inc.
+
+Let me write the chart:
+
+```
+═══════════════════════════════════════════════════════════════════════════
+ TIER 1 (TOP) – BENEFICIAL OWNERS & ENTITIES WITH DIRECT HOLDINGS
+═══════════════════════════════════════════════════════════════════════════
+
+ INDIVIDUALS:                                    DIRECT HOLDING ENTITIES:
+ ┌─────────────────────┐                        ┌──────────────────────────┐
+ │ Dr. Yan Junjie      │                        │ Alisoft China Holding    │
+ │ Ms. Yun Yeyi        │                        │ miHoYo Limited           │
+ │ Mr. Zhao Pengyu     │                        │ XAM Holdings Limited     │
+ │ Mr. Zhou Yucong     │                        │ MNM Holdings Limited     │
+ │ Luo Yuhao           │                        │ Alibaba Group Holding    │
+ │ Mr. Colm O'Connell  │                        │ Alisoft Holding          │
+ │ Ho Chi Sing         │                        │ Alisoft Investment Hldg  │
+ │                     │                        │ Shanghai Fanxing         │
+ │                     │                        │ MiniMax Gene Alpha       │
+ │                     │                        │ MiniMax Gene Limited     │
+ │                     │                        │ Futu Trustee Limited     │
+ │                     │                        │ NVMB IV Holdings         │
+ │                     │                        │ BXA Holdings II, L.P.    │
+ │                     │                        │ JNR Holdings GP          │
+ │                     │                        │ BXA Holdings, L.P.       │
+ │                     │                        │ BXA Holdings II GP       │
+ └─────────────────────┘                        └──────────────────────────┘
+```
+
+OK, I'll go with this approach. Let me finalize the chart now.
+
+Actually, I realize a better approach is to show each ownership chain as a vertical flow, then have MiniMax Group Inc. at the bottom. Let me try this:
+
+Let me draw it out:
+
+```
+═══════════════════════════════════════════════════════════════════════════
+                          TIER 1: TOP – BENEFICIAL OWNERS
+═══════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════╗  ╔══════════════════════════════════╗  
+║ CHAIN 1: Dr. Yan Junjie         ║  ║ CHAIN 2: Ms. Yun Yeyi           ║  
+║ (Founder, 4.30% A, 91.37% B)   ║  ║ (8.63% B; 1.64% A direct)      ║  
+╚══════════════════════════════════╝  ╚══════════════════════════════════╝  
+               │                                      │                    
+               ↓                                      ↓                    
+   ┌─────────────────────┐              ┌─────────────────────┐            
+   │  Local Linearity    │              │ Apricity Investment │            
+   │  (controlled corp)  │              │   Limited           │            
+   └─────────────────────┘              └─────────────────────┘            
+               │                                      │                    
+               ↓                                      ↓                    
+   ╔══════════════════════════════════╗  ╔══════════════════════════════════╗
+   ║ CHAIN 3: Alibaba / Alisoft       ║  ║ CHAIN 4: miHoYo / Luo Yuhao     ║
+   ║ (17.06% Class A)                 ║  ║ (6.89% Class A)                 ║
+   ╚══════════════════════════════════╝  ╚══════════════════════════════════╝
+   ...
+```
+
+This is getting quite long. Let me think about a more compact format.
+
+Let me try yet another approach - one that's more diagram-like:
+
+```
+                    ╔═══════════════════════════════════╗
+                    ║  TIER 1: BENEFICIAL OWNERS        ║
+                    ╚═══════════════════════════════════╝
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │ Dr. Yan      │  │ Ms. Yun      │  │ Alibaba      │  │ miHoYo (Luo) │
+   │ Junjie       │  │ Yeyi         │  │ Group        │  │              │
+   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+          │                 │                 │                 │
+          ↓                 ↓                 ↓                 ↓
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │ Local        │  │ Apricity     │  │ Alisoft      │  │ Shanghai     │
+   │ Linearity    │  │ Investment   │  │ Holding      │  │ Fanxing      │
+   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+          │                 │                 │                 │
+          ↓                 ↓                 ↓                 ↓
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │ MiniMax      │  │ Floating     │  │ Alisoft      │  │ miHoYo       │
+   │ Matrix       │  │ Sky Trust    │  │ Investment   │  │ Limited      │
+   │ 5,000,000    │  │              │  │ Holding      │  │ 16,015,779   │
+   │ (2.15%)      │  │              │  │              │  │ (6.89%)      │
+   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+          │                 │                 │                 │
+          ↓                 ↓                 ↓                 ↓
+   ┌─────────────────────────────────────────────────────────────────┐
+   │              MiniMax Group Inc. (THE ISSUER)                     │
+   │           Class A: 232,532,774    Class B: 81,102,534            │
+   └─────────────────────────────────────────────────────────────────┘
+```
+
+OK, let me just commit to writing a comprehensive ASCII chart. I'll organize it as follows:
+
+I'll start with the chart. Let me draft it:
+
+```
+══════════════════════════════════════════════════════════════════════════════
+   TIER 1 (TOP) — BENEFICIAL OWNERS, INDIVIDUALS & ENTITIES WITH DIRECT
+                  HOLDINGS IN MiniMax GROUP INC.
+══════════════════════════════════════════════════════════════════════════════
+
+   INDIVIDUALS (FOUNDERS / DIRECTORS / EXECUTIVES / OTHERS):
+   ┌────────────────────────────┐  ┌──────────────────────────────┐
+   │ Dr. Yan Junjie (Founder)   │  │ Ms. Yun Yeyi (Co-founder)    │
+   │ - 4.30% Class A (10M)      │  │ - 1.64% Class A direct       │
+   │ - 91.37% Class B (74.1M)   │  │ - 8.63% Class B (7.0M)       │
+   ├────────────────────────────┤  ├──────────────────────────────┤
+   │ Mr. Zhao Pengyu (Officer)  │  │ Mr. Zhou Yucong (Officer)    │
+   │ - 0.24% Class A (567K)     │  │ - 0.43% Class A (1.0M)       │
+   ├────────────────────────────┤  ├──────────────────────────────┤
+   │ Luo Yuhao                  │  │ Mr. Colm O'Connell           │
+   │ - 6.89% Class A (16.0M)    │  │ - 7.11% Class A (16.5M)      │
+   ├────────────────────────────┤  ├──────────────────────────────┤
+   │ Ho Chi Sing                │  │                              │
+   │ - 5.95% Class A (13.8M)    │  │                              │
+   └────────────────────────────┘  └──────────────────────────────┘
+
+   ENTITIES WITH DIRECT / BENEFICIAL HOLDINGS:
+   ┌──────────────────────────────┐  ┌──────────────────────────────┐
+   │ Alisoft China Holding Ltd   │  │ miHoYo Limited               │
+   │ - 17.06% Class A (39.7M)     │  │ - 6.89% Class A (16.0M)       │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ Alibaba Group Holding Ltd   │  │ Shanghai Fanxing Dingchuang  │
+   │ - 17.06% Class A (indirect)  │  │ - 6.89% Class A (indirect)    │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ Alisoft Holding Ltd         │  │ MiniMax Gene Alpha Limited    │
+   │ - 17.06% Class A (indirect)  │  │ - 8.98% Class A (20.9M)       │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ Alisoft Investment Hldg Ltd │  │ MiniMax Gene Limited          │
+   │ - 17.06% Class A (indirect)  │  │ - 8.98% Class A (indirect)    │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ XAM Holdings Limited         │  │ Futu Trustee Limited         │
+   │ - 6.11% Class A (14.2M)      │  │ - 8.98% Class A (trustee)     │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ MNM Holdings Limited         │  │ NVMB IV Holdings Limited      │
+   │ - 1.01% Class A (2.3M)       │  │ - 6.11% Class A (indirect)    │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ BXA Holdings II, L.P.        │  │ JNR Holdings GP Limited       │
+   │ - 6.11% Class A (indirect)    │  │ - 6.11% Class A (indirect)    │
+   ├──────────────────────────────┤  ├──────────────────────────────┤
+   │ BXA Holdings, L.P.           │  │ BXA Holdings II GP Limited    │
+   │ - 1.01% Class A (indirect)    │  │ - 1.01% Class A (indirect)    │
+   └──────────────────────────────┘  └──────────────────────────────┘
+```
+
+OK this is going to be a really long chart. Let me think about what's most important and concise.
+
+Let me design this final version more carefully. I'll trace each ownership chain explicitly and clearly. The key chains are:
+
+1. Dr. Yan Junjie chain
+2. Ms. Yun Yeyi chain
+3. Alibaba/Alisoft chain
+4. miHoYo/Luo Yuhao chain
+5. MiniMax Gene chain
+6. BXA/XAM/Colm O'Connell chain
+7. Ho Chi Sing chain
+8. Individual direct holders (Mr. Zhao, Mr. Zhou)
+
+Let me make the final version now. I'll show each chain as a vertical flow with the issuer at the bottom.
+
+Final design plan:
+- Header: TIER 1 (TOP)
+- Show all individuals and direct holding entities in boxes
+- Header: TIER 2 (MIDDLE)
+- Show all intermediary holding companies, controlled corporations, and trusts
+- Header: TIER 3 (BOTTOM)
+- Show MiniMax Group Inc. as the issuer
+
+For each chain, I'll show the percentages and shares.
+
+Let me write the final version:
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+  TIER 1 (TOP) — BENEFICIAL OWNERS & ENTITIES WITH DIRECT HOLDINGS
+═══════════════════════════════════════════════════════════════════════════════
+
+  INDIVIDUALS:                                DIRECT HOLDING ENTITIES:
+  ┌──────────────────────────────┐            ┌───────────────────────────────┐
+  │ Dr. Yan Junjie (Founder)     │            │ Alisoft China Holding Ltd     │
+  │  → 4.30% A (10,000,000)      │            │  → 17.06% A (39,662,627)      │
+  │  → 91.37% B (74,102,514)     │            ├───────────────────────────────┤
+  ├──────────────────────────────┤            │ miHoYo Limited               │
+  │ Ms. Yun Yeyi (Co-founder)    │            │  → 6.89% A (16,015,779)       │
+  │  → 1.64% A (3,814,065) direct│            ├───────────────────────────────┤
+  │  → 8.63% B (7,000,000)       │            │ XAM Holdings Limited          │
+  ├──────────────────────────────┤            │  → 6.11% A (14,201,184)       │
+  │ Mr. Zhao Pengyu              │            ├───────────────────────────────┤
+  │  → 0.24% A (567,182) direct  │            │ MNM Holdings Limited          │
+  ├──────────────────────────────┤            │  → 1.01% A (2,343,196)        │
+  │ Mr. Zhou Yucong              │            ├───────────────────────────────┤
+  │  → 0.43% A (1,010,724) direct│            │ MiniMax Gene Alpha Limited    │
+  ├──────────────────────────────┤            │  → 8.98% A (20,890,736)       │
+  │ Luo Yuhao                    │            ├───────────────────────────────┤
+  │  → 6.89% A (16,015,779)      │            │ Alibaba Group Holding Ltd     │
+  ├──────────────────────────────┤            │  → 17.06% A (indirect)        │
+  │ Mr. Colm O'Connell           │            ├───────────────────────────────┤
+  │  → 7.11% A (16,544,380)      │            │ Alisoft Holding Ltd           │
+  ├──────────────────────────────┤            │  → 17.06% A (indirect)        │
+  │ Ho Chi Sing                  │            ├───────────────────────────────┤
+  │  → 5.95% A (13,839,721)      │            │ Alisoft Investment Hldg Ltd   │
+  └──────────────────────────────┘            │  → 17.06% A (indirect)        │
+                                             ├───────────────────────────────┤
+                                             │ Shanghai Fanxing Dingchuang   │
+                                             │  → 6.89% A (indirect)         │
+                                             ├───────────────────────────────┤
+                                             │ MiniMax Gene Limited          │
+                                             │  → 8.98% A (indirect)         │
+                                             ├───────────────────────────────┤
+                                             │ Futu Trustee Limited          │
+                                             │  → 8.98% A (trustee)          │
+                                             ├───────────────────────────────┤
+                                             │ NVMB IV Holdings Limited      │
+                                             │  → 6.11% A (indirect)         │
+                                             ├───────────────────────────────┤
+                                             │ BXA Holdings II, L.P.         │
+                                             │  → 6.11% A (indirect)         │
+                                             ├───────────────────────────────┤
+                                             │ JNR Holdings GP Limited       │
+                                             │  → 6.11% A (indirect)         │
+                                             ├───────────────────────────────┤
+                                             │ BXA Holdings, L.P.            │
+                                             │  → 1.01% A (indirect)         │
+                                             ├───────────────────────────────┤
+                                             │ BXA Holdings II GP Limited    │
+                                             │  → 1.01% A (indirect)         │
+                                             └───────────────────────────────┘
+```
+
+Hmm, I think I should reorganize this differently. Let me show ownership chains instead of just listing entities.
+
+Let me make a cleaner version where each chain is shown vertically:
+
+OK let me just write the final chart now. I'll be comprehensive but try to keep it organized.
+
+Let me focus on creating chains and merging them at the bottom.
+
+```
+══════════════════════════════════════════════════════════════════════════════
+                       TIER 1: TOP — BENEFICIAL OWNERS
+══════════════════════════════════════════════════════════════════════════════
+
+CHAIN A (Dr. Yan)    CHAIN B (Ms. Yun)   CHAIN C (Alibaba)  CHAIN D (miHoYo)
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐   ┌──────────────┐
+│Dr. Yan       │    │Ms. Yun       │    │Alibaba Group │   │Luo Yuhao     │
+│Junjie        │    │Yeyi          │    │Holding Ltd   │   │              │
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘   └──────┬───────┘
+       │                   │                   │                  │
+       │                   │                   │                  │
+══════════════════════════════════════════════════════════════════════════════
+                  TIER 2: MIDDLE — INTERMEDIARIES
+══════════════════════════════════════════════════════════════════════════════
+
+       │                   │                   │                  │
+       ↓                   ↓                   ↓                  ↓
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐   ┌──────────────┐
+│Local         │    │Apricity      │    │Alisoft       │   │Shanghai      │
+│Linearity     │    │Investment    │    │Holding Ltd   │   │Fanxing       │
+│(controlled)  │    │Limited       │    │              │   │Dingchuang    │
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘   └──────┬───────┘
+       │                   │                   │                  │
+       │                   │                   │                  │
+       ↓                   ↓                   ↓                  ↓
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐   ┌──────────────┐
+│MiniMax Matrix│    │Floating Sky  │    │Alisoft       │   │miHoYo        │
+│(Class A:     │    │Trust /       │    │Investment    │   │Limited       │
+│ 5,000,000 /  │    │Trident Trust │    │Holding Ltd   │   │(Class A:     │
+│  2.15%)      │    │(Class B:     │    │              │   │ 16,015,779 / │
+└──────┬───────┘    │ 7,000,000 /  │    └──────┬───────┘   │  6.89%)      │
+       │            │  8.63%)      │           │           └──────┬───────┘
+       │            └──────┬───────┘           │                  │
+       │                   │                   ↓                  │
+       │                   │            ┌──────────────┐         │
+       │                   │            │Alisoft China │         │
+       │                   │            │Holding Ltd   │         │
+       │                   │            │(Class A:     │         │
+       │                   │            │ 39,662,627 / │         │
+       │                   │            │  17.06%)     │         │
+       │                   │            └──────┬───────┘         │
+       │                   │                   │                  │
+       ↓                   ↓                   ↓                  ↓
+══════════════════════════════════════════════════════════════════════════════
+                TIER 3: BOTTOM — ISSUER
+══════════════════════════════════════════════════════════════════════════════
+
+                       ┌────────────────────────┐
+                       │   MiniMax Group Inc.   │
+                       │   (THE ISSUER)         │
+                       │   Class A: 232,532,774 │
+                       │   Class B:  81,102,534 │
+                       └────────────────────────┘
+```
+
+OK let me just commit to writing the final chart. I think the user wants something comprehensive but readable. Let me try to be both.
+
+Let me look at this once more. I want to include all the chains properly. Let me write it now.
+
+The key chains to include:
+1. Dr. Yan Junjie → Local Linearity → MiniMax Matrix, MiniMax Awakening, MiniMax Limited, Local Linearity (direct), Alpha EXP Trust → Trident Trust → Scaling EXP Limited → Alpha EXP
+2. Ms. Yun Yeyi → Apricity Investment → Floating Sky; Floating Sky Trust → Trident Trust → Floating Cloud → Floating Sky
+3. Alibaba Group → Alisoft Holding → Alisoft Investment Holding → Alisoft China Holding
+4. Luo Yuhao → Shanghai Fanxing Dingchuang → miHoYo Limited
+5. MiniMax Gene Limited → MiniMax Gene Alpha Limited; Futu Trustee Limited (trustee)
+6. Mr. Colm O'Connell → BXA Holdings II, L.P. → JNR Holdings GP → NVMB IV Holdings → XAM Holdings (and similar for MNM)
+7. Ho Chi Sing → controlled corps
+8. Mr. Zhao Pengyu (direct), Mr. Zhou Yucong (direct)
+
+Let me now write the final chart:
+
+```
+════════════════════════════════════════════════════════════════════════════════
+      TIER 1 (TOP) — BENEFICIAL OWNERS, INDIVIDUALS & ENTITIES WITH
+                     DIRECT HOLDINGS IN MiniMax GROUP INC.
+════════════════════════════════════════════════════════════════════════════════
+
+   INDIVIDUALS:                                       ENTITIES (Direct Holders):
+   ┌─────────────────────────────┐                    ┌──────────────────────────────┐
+   │ Dr. Yan Junjie (Founder)    │                    │ Alisoft China Holding Ltd    │
+   │ • 4.30% A (10,000,000 sh)   │                    │ • 17.06% A (39,662,627)      │
+   │ • 91.37% B (74,102,514 sh)  │                    ├──────────────────────────────┤
+   ├─────────────────────────────┤                    │ Alibaba Group Holding Ltd    │
+   │ Ms. Yun Yeyi (Co-founder)   │                    │ • 17.06% A (indirect)        │
+   │ • 1.64% A (3,814,065 sh)    │                    ├──────────────────────────────┤
+   │ • 8.63% B (7,000,000 sh)    │                    │ Alisoft Holding Ltd          │
+   ├─────────────────────────────┤                    │ • 17.06% A (indirect)        │
+   │ Mr. Zhao Pengyu             │                    ├──────────────────────────────┤
+   │ • 0.24% A (567,182 sh)      │                    │ Alisoft Investment Holding   │
+   ├─────────────────────────────┤                    │ • 17.06% A (indirect)        │
+   │ Mr. Zhou Yucong             │                    ├──────────────────────────────┤
+   │ • 0.43% A (1,010,724 sh)    │                    │ miHoYo Limited               │
+   ├─────────────────────────────┤                    │ • 6.89% A (16,015,779)       │
+   │ Luo Yuhao                   │                    ├──────────────────────────────┤
+   │ • 6.89% A (16,015,779 sh)   │                    │ Shanghai Fanxing Dingchuang  │
+   ├─────────────────────────────┤                    │ • 6.89% A (indirect)         │
+   │ Mr. Colm O'Connell          │                    ├──────────────────────────────┤
+   │ • 7.11% A (16,544,380 sh)   │                    │ MiniMax Gene Alpha Limited   │
+   ├─────────────────────────────┤                    │ • 8.98% A (20,890,736)       │
+   │ Ho Chi Sing                 │                    ├──────────────────────────────┤
+   │ • 5.95% A (13,839,721 sh)   │                    │ MiniMax Gene Limited         │
+   └─────────────────────────────┘                    │ • 8.98% A (indirect)         │
+                                                      ├──────────────────────────────┤
+                                                      │ Futu Trustee Limited         │
+                                                      │ • 8.98% A (trustee)          │
+                                                      ├──────────────────────────────┤
+                                                      │ XAM Holdings Limited         │
+                                                      │ • 6.11% A (14,201,184)       │
+                                                      ├──────────────────────────────┤
+                                                      │ MNM Holdings Limited         │
+                                                      │ • 1.01% A (2,343,196)        │
+                                                      ├──────────────────────────────┤
+                                                      │ NVMB IV Holdings Limited     │
+                                                      │ • 6.11% A (indirect)         │
+                                                      ├──────────────────────────────┤
+                                                      │ BXA Holdings II, L.P.        │
+                                                      │ • 6.11% A (indirect)         │
+                                                      ├──────────────────────────────┤
+                                                      │ JNR Holdings GP Limited      │
+                                                      │ • 6.11% A (indirect)         │
+                                                      ├──────────────────────────────┤
+                                                      │ BXA Holdings, L.P.           │
+                                                      │ • 1.01% A (indirect)         │
+                                                      ├──────────────────────────────┤
+                                                      │ BXA Holdings II GP Limited   │
+                                                      │ • 1.01% A (indirect)         │
+                                                      └──────────────────────────────┘
+```
+
+OK this is the top tier. Now for the middle tier:
+
+```
+════════════════════════════════════════════════════════════════════════════════
+      TIER 2 (MIDDLE) — INTERMEDIARY HOLDING COMPANIES, CONTROLLED
+                        CORPORATIONS & TRUSTS
+════════════════════════════════════════════════════════════════════════════════
+
+CHAIN 1 — Dr. Yan Junjie chain:
+  ┌──────────────────────┐
+  │ Local Linearity      │ (wholly owns MiniMax Awakening & MiniMax Limited;
+  │ (controlled corp)    │  also 1% holder of Alpha EXP)
+  └──────────┬───────────┘
+             │
+  ┌──────────┴────────────────────┐
+  ↓                                ↓
+┌──────────────────┐    ┌──────────────────────────────────┐
+│ MiniMax Matrix   │    │ MiniMax Awakening                │
+│ • Class A:       │    │ • Class B: 11,509,339 (14.19%)   │
+│   5,000,000      │    └──────────────────────────────────┘
+│   (2.15%)        │    ┌──────────────────────────────────┐
+└──────────────────┘    │ MiniMax Limited                  │
+                        │ • Class B: 15 (0.00%)            │
+                        └──────────────────────────────────┘
+                        ┌──────────────────────────────────┐
+                        │ Alpha EXP Trust                  │
+                        │ (settlor: Dr. Yan, for himself)  │
+                        └────────────────┬─────────────────┘
+                                         ↓
+                        ┌──────────────────────────────────┐
+                        │ Trident Trust Co. (HK) Ltd       │
+                        │ (trustee) — Class B: 62,593,180  │
+                        │ (77.18%)                         │
+                        └────────────────┬─────────────────┘
+                                         ↓
+                        ┌──────────────────────────────────┐
+                        │ Scaling EXP Limited              │
+                        │ (wholly owned by Trident Trust)  │
+                        │ Class B: 62,593,180 (77.18%)     │
+                        └────────────────┬─────────────────┘
+                                         ↓
+                        ┌──────────────────────────────────┐
+                        │ Alpha EXP                        │
+                        │ (99% Scaling EXP + 1% Local Lin.)│
+                        │ Class B: 62,593,180 (77.18%)     │
+                        └──────────────────────────────────┘
+
+CHAIN 2 — Ms. Yun Yeyi chain:
+  ┌──────────────────────┐
+  │ Apricity Investment  │ (wholly owned by Ms. Yun; 1% of Floating Sky)
+  │ Limited              │
+  └──────────┬───────────┘
+             │
+             ↓
+  ┌──────────────────────┐
+  │ Floating Sky Trust   │ (settlor: Ms. Yun, for herself)
+  └──────────┬───────────┘
+             ↓
+  ┌──────────────────────┐
+  │ Trident Trust Co.    │ (trustee) — Class B: 7,000,000 (8.63%)
+  │ (HK) Ltd             │
+  └──────────┬───────────┘
+             ↓
+  ┌──────────────────────┐
+  │ Floating Cloud Ltd   │ (wholly owned by Trident Trust)
+  │ Class B: 7,000,000   │
+  │ (8.63%)              │
+  └──────────┬───────────┘
+             ↓
+  ┌──────────────────────┐
+  │ Floating Sky         │ (99% Floating Cloud + 1% Apricity)
+  │ Class B: 7,000,000   │
+  │ (8.63%)              │
+  └──────────────────────┘
+```
+
+OK let me just write the final answer now. I'll make it as comprehensive as possible but also as readable as possible.
+
+I realize I need to consolidate this. Let me create a final version that:
+1. Shows the top tier with all individuals and direct entities
+2. Shows the middle tier with all intermediaries
+3. Shows the bottom tier with MiniMax Group Inc.
+
+For each chain, the ownership flow should be clear.
+
+Let me write the final chart now. I want to use Unicode box-drawing characters and try to make it look nice.
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  TIER 1 (TOP) — BENEFICIAL OWNERS                          ║
+║           Individuals & Entities with Direct Shareholdings                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+INDIVIDUALS:                                ENTITIES (Direct Holders):
+┌────────────────────────────┐             ┌────────────────────────────────┐
+│ Dr. Yan Junjie (Founder)   │             │ Alisoft China Holding Ltd      │
+│ ▸ 4.30% A (10,000,000)     │             │ ▸ 17.06% A (39,662,627)        │
+│ ▸ 91.37% B (74,102,514)    │             ├────────────────────────────────┤
+├────────────────────────────┤             │ Alibaba Group Holding Ltd      │
+│ Ms. Yun Yeyi               │             │ ▸ 17.06% A (indirect)          │
+│ ▸ 1.64% A (3,814,065)      │             ├────────────────────────────────┤
+│ ▸ 8.63% B (7,000,000)      │             │ Alisoft Holding Ltd            │
+├────────────────────────────┤             │ ▸ 17.06% A (indirect)          │
+│ Mr. Zhao Pengyu            │             ├────────────────────────────────┤
+│ ▸ 0.24% A (567,182)        │             │ Alisoft Investment Holding Ltd │
+├────────────────────────────┤             │ ▸ 17.06% A (indirect)          │
+│ Mr. Zhou Yucong            │             ├────────────────────────────────┤
+│ ▸ 0.43% A (1,010,724)      │             │ miHoYo Limited                 │
+├────────────────────────────┤             │ ▸ 6.89% A (16,015,779)         │
+│ Luo Yuhao                  │             ├────────────────────────────────┤
+│ ▸ 6.89% A (16,015,779)     │             │ Shanghai Fanxing Dingchuang    │
+├────────────────────────────┤             │ ▸ 6.89% A (indirect)           │
+│ Mr. Colm O'Connell         │             ├────────────────────────────────┤
+│ ▸ 7.11% A (16,544,380)     │             │ MiniMax Gene Alpha Limited     │
+├────────────────────────────┤             │ ▸ 8.98% A (20,890,736)         │
+│ Ho Chi Sing                │             ├────────────────────────────────┤
+│ ▸ 5.95% A (13,839,721)     │             │ MiniMax Gene Limited           │
+└────────────────────────────┘             │ ▸ 8.98% A (indirect)           │
+                                            ├────────────────────────────────┤
+                                            │ Futu Trustee Limited           │
+                                            │ ▸ 8.98% A (trustee)            │
+                                            ├────────────────────────────────┤
+                                            │ XAM Holdings Limited           │
+                                            │ ▸ 6.11% A (14,201,184)         │
+                                            ├────────────────────────────────┤
+                                            │ MNM Holdings Limited           │
+                                            │ ▸ 1.01% A (2,343,196)          │
+                                            ├────────────────────────────────┤
+                                            │ NVMB IV Holdings Limited       │
+                                            │ ▸ 6.11% A (indirect)           │
+                                            ├────────────────────────────────┤
+                                            │ BXA Holdings II, L.P.          │
+                                            │ ▸ 6.11% A (indirect)           │
+                                            ├────────────────────────────────┤
+                                            │ JNR Holdings GP Limited        │
+                                            │ ▸ 6.11% A (indirect)           │
+                                            ├────────────────────────────────┤
+                                            │ BXA Holdings, L.P.             │
+                                            │ ▸ 1.01% A (indirect)           │
+                                            ├────────────────────────────────┤
+                                            │ BXA Holdings II GP Limited     │
+                                            │ ▸ 1.01% A (indirect)           │
+                                            └────────────────────────────────┘
+```
+
+Now for the middle tier, I'll show the chains:
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║       TIER 2 (MIDDLE) — INTERMEDIARIES                                       ║
+║   Holding Companies, Controlled Corporations & Trusts                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   ┌─ CHAIN 1: Dr. Yan Junjie ──────────────────────────────────────────┐
+   │                                                                     │
+   │  Dr. Yan Junjie                                                    │
+   │        │                                                            │
+   │        ├──► Local Linearity (controlled corp; wholly owns Matrix,  │
+   │        │     MiniMax Awakening, MiniMax Limited)                   │
+   │        │       │                                                    │
+   │        │       ├──► MiniMax Matrix                                  │
+   │        │       │   ▸ Class A: 5,000,000 (2.15%)                    │
+   │        │       │                                                    │
+   │        │       ├──► MiniMax Awakening                              │
+   │        │       │   ▸ Class B: 11,509,339 (14.19%)                  │
+   │        │       │                                                    │
+   │        │       ├──► MiniMax Limited                                 │
+   │        │       │   ▸ Class B: 15 (0.00%)                            │
+   │        │       │                                                    │
+   │        │       └──► Local Linearity direct (Class B)                │
+   │        │           ▸ Class B: 11,509,354 (14.19%)                   │
+   │        │                                                            │
+   │        └──► Alpha EXP Trust (Dr. Yan = settlor/beneficiary)        │
+   │                │                                                    │
+   │                ▼                                                    │
+   │            Trident Trust Company (HK) Limited                      │
+   │                ▸ Class B: 62,593,180 (77.18%)                      │
+   │                │                                                    │
+   │                ▼                                                    │
+   │            Scaling EXP Limited (wholly owned by Trident Trust)     │
+   │                ▸ Class B: 62,593,180 (77.18%)                      │
+   │                │                                                    │
+   │                ▼                                                    │
+   │            Alpha EXP                                               │
+   │                (99% Scaling EXP + 1% Local Linearity)              │
+   │                ▸ Class B: 62,593,180 (77.18%)                      │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ CHAIN 2: Ms. Yun Yeyi ───────────────────────────────────────────┐
+   │                                                                     │
+   │  Ms. Yun Yeyi (Co-founder)                                         │
+   │        │                                                            │
+   │        ├──► Apricity Investment Limited (wholly owned)              │
+   │        │       │                                                    │
+   │        │       └──► Floating Sky                                    │
+   │        │           (99% Floating Cloud + 1% Apricity)              │
+   │        │           ▸ Class B: 7,000,000 (8.63%)                    │
+   │        │                                                            │
+   │        └──► Floating Sky Trust (Ms. Yun = settlor/beneficiary)    │
+   │                │                                                    │
+   │                ▼                                                    │
+   │            Trident Trust Company (HK) Limited                      │
+   │                ▸ Class B: 7,000,000 (8.63%)                        │
+   │                │                                                    │
+   │                ▼                                                    │
+   │            Floating Cloud Limited (wholly owned by Trident Trust) │
+   │                ▸ Class B: 7,000,000 (8.63%)                        │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ CHAIN 3: Alibaba / Alisoft ──────────────────────────────────────┐
+   │                                                                     │
+   │  Alibaba Group Holding Limited                                     │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  Alisoft Holding Limited                                            │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  Alisoft Investment Holding Limited                                │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  Alisoft China Holding Limited (direct beneficial owner)           │
+   │        ▸ Class A: 39,662,627 (17.06%)                              │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ CHAIN 4: miHoYo / Luo Yuhao ─────────────────────────────────────┐
+   │                                                                     │
+   │  Luo Yuhao                                                          │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  Shanghai Fanxing Dingchuang Technology Company Limited            │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  miHoYo Limited (direct beneficial owner)                         │
+   │        ▸ Class A: 16,015,779 (6.89%)                                │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ CHAIN 5: MiniMax Gene / Futu Trustee ────────────────────────────┐
+   │                                                                     │
+   │  Futu Trustee Limited (trustee)                                    │
+   │        ▸ Class A: 20,890,736 (8.98%)                                │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  MiniMax Gene Limited                                              │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  MiniMax Gene Alpha Limited (direct holding company)               │
+   │        ▸ Class A: 20,890,736 (8.98%)                                │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ CHAIN 6: Mr. Colm O'Connell / BXA / XAM ─────────────────────────┐
+   │                                                                     │
+   │  Mr. Colm O'Connell                                                │
+   │        │                                                            │
+   │        ├──► XAM Holdings Limited (direct beneficial)                │
+   │        │        ▸ Class A: 14,201,184 (6.11%)                       │
+   │        │             │                                              │
+   │        │             ▼                                              │
+   │        │        NVMB IV Holdings Limited                           │
+   │        │             │                                              │
+   │        │             ▼                                              │
+   │        │        BXA Holdings II, L.P.                              │
+   │        │             │                                              │
+   │        │             ▼                                              │
+   │        │        JNR Holdings GP Limited                            │
+   │        │                                                            │
+   │        └──► MNM Holdings Limited (direct beneficial)                │
+   │                 ▸ Class A: 2,343,196 (1.01%)                        │
+   │                      │                                              │
+   │                      ▼                                              │
+   │                 BXA Holdings, L.P.                                 │
+   │                      │                                              │
+   │                      ▼                                              │
+   │                 BXA Holdings II GP Limited                         │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ CHAIN 7: Ho Chi Sing ────────────────────────────────────────────┐
+   │                                                                     │
+   │  Ho Chi Sing                                                        │
+   │        │                                                            │
+   │        ▼                                                            │
+   │  (controlled corporations — not specified)                          │
+   │        ▸ Class A: 13,839,721 (5.95%)                                │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   ┌─ DIRECT INDIVIDUAL HOLDERS ───────────────────────────────────────┐
+   │                                                                     │
+   │  Mr. Zhao Pengyu ──────► Class A: 567,182 (0.24%) direct          │
+   │  Mr. Zhou Yucong ──────► Class A: 1,010,724 (0.43%) direct        │
+   │  Ms. Yun Yeyi ─────────► Class A: 3,814,065 (1.64%) direct        │
+   └─────────────────────────────────────────────────────────────────────┘
+```
+
+And the bottom:
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              TIER 3 (BOTTOM) — THE ISSUER / REPORTING COMPANY               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+                        ┌──────────────────────────────────┐
+                        │                                  │
+                        │      MiniMax Group Inc.          │
+                        │      (THE ISSUER / 10-K FILER)   │
+                        │                                  │
+                        │  Class A Ordinary: 232,532,774   │
+                        │  Class B Ordinary:  81,102,534   │
+                        │  Total:            313,635,308   │
+                        │                                  │
+                        └──────────────────────────────────┘
+```
+
+OK I think I have a solid chart. Let me finalize it and clean it up.
+
+Actually, I realize I should not include the issuer (MiniMax) details that aren't in the document. The document doesn't explicitly mention 232,532,774 and 81,102,534 as the class A and B share counts - wait yes it does in note (2) on page 22: "the number of issued Class A Ordinary Shares was 232,532,774, the number of issued Class B Ordinary Shares was 81,102,534."
+
+OK so I can include those numbers. Let me finalize the chart.
+
+Let me also double-check the percentages:
+- Alisoft China: 39,662,627 / 232,532,774 = 17.06% ✓
+- miHoYo: 16,015,779 / 232,532,774 = 6.89% ✓
+- MiniMax Gene: 20,890,736 / 232,532,774 = 8.98% ✓
+- XAM: 14,201,184 / 232,532,774 = 6.11% ✓
+- MNM: 2,343,196 / 232,532,774 = 1.01% ✓
+- Mr. Colm O'Connell: 16,544,380 / 232,532,774 = 7.11% ✓
+- Ho Chi Sing: 13,839,721 / 232,532,774 = 5.95% ✓
+- Mr. Zhao Pengyu: 567,182 / 232,532,774 = 0.24% ✓
+- Mr. Zhou Yucong: 1,010,724 / 232,532,774 = 0.43% ✓
+- Ms. Yun Yeyi direct Class A: 3,814,065 / 232,532,774 = 1.64% ✓
+- MiniMax Matrix: 5,000,000 / 232,532,774 = 2.15% ✓
+- Local Linearity Class A: 5,000,000 / 232,532,774 = 2.15% ✓
+- Dr. Yan total Class A: 10,000,000 / 232,532,774 = 4.30% ✓
+
+Class B:
+- Alpha EXP: 62,593,180 / 81,102,534 = 77.18% ✓
+- MiniMax Awakening: 11,509,339 / 81,102,534 = 14.19% ✓
+- MiniMax Limited: 15 / 81,102,534 = 0.00% ✓
+- Local Linearity Class B: 11,509,354 / 81,102,534 = 14.19% ✓
+- Floating Sky: 7,000,000 / 81,102,534 = 8.63% ✓
+
+OK all checks out. Let me finalize the chart.
+
+I'll trim the chart a bit and present it cleanly. Let me also make sure I'm being consistent with the Class A vs Class B notation. The user asked for "Class A shares" specifically, but the directors' chart also includes Class B. I think it's important to include both for completeness, but I'll lead with Class A as primary.
+
+Actually re-reading the prompt: "For each ownership chain, show the percentage of Class A shares and the number of shares." - the user specifically asked for Class A percentages. So I should focus on Class A primarily. The Class B is also part of the structure (especially for the founders who control via Class B), so I should include it for completeness.
+
+Let me write the final chart now.
+
+Final version - I'll aim for a clean, readable chart with all the chains clearly shown.
+</think>
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                       TIER 1 (TOP) — BENEFICIAL OWNERS                          ║
+║             Individuals & Entities with Direct / Indirect Shareholdings          ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+   INDIVIDUALS:                                          ENTITIES (Direct Holders):
+   ┌──────────────────────────────┐                      ┌──────────────────────────────────┐
+   │ Dr. Yan Junjie  (Founder)    │                      │ Alisoft China Holding Limited    │
+   │  ▸ 4.30% A (10,000,000)      │                      │  ▸ 17.06% A (39,662,627)         │
+   │  ▸ 91.37% B (74,102,514)     │                      ├──────────────────────────────────┤
+   ├──────────────────────────────┤                      │ Alibaba Group Holding Limited    │
+   │ Ms. Yun Yeyi  (Co-founder)   │                      │  ▸ 17.06% A (indirect)           │
+   │  ▸ 1.64% A  (3,814,065) dir. │                      ├──────────────────────────────────┤
+   │  ▸ 8.63% B  (7,000,000)      │                      │ Alisoft Holding Limited          │
+   ├──────────────────────────────┤                      │  ▸ 17.06% A (indirect)           │
+   │ Mr. Zhao Pengyu              │                      ├──────────────────────────────────┤
+   │  ▸ 0.24% A    (567,182) dir. │                      │ Alisoft Investment Holding Ltd   │
+   ├──────────────────────────────┤                      │  ▸ 17.06% A (indirect)           │
+   │ Mr. Zhou Yucong              │                      ├──────────────────────────────────┤
+   │  ▸ 0.43% A  (1,010,724) dir. │                      │ miHoYo Limited                   │
+   ├──────────────────────────────┤                      │  ▸ 6.89% A (16,015,779)          │
+   │ Luo Yuhao                    │                      ├──────────────────────────────────┤
+   │  ▸ 6.89% A (16,015,779)      │                      │ Shanghai Fanxing Dingchuang Tech │
+   ├──────────────────────────────┤                      │  ▸ 6.89% A (indirect)            │
+   │ Mr. Colm O'Connell           │                      ├──────────────────────────────────┤
+   │  ▸ 7.11% A (16,544,380)      │                      │ MiniMax Gene Alpha Limited       │
+   ├──────────────────────────────┤                      │  ▸ 8.98% A (20,890,736)          │
+   │ Ho Chi Sing                  │                      ├──────────────────────────────────┤
+   │  ▸ 5.95% A (13,839,721)      │                      │ MiniMax Gene Limited             │
+   └──────────────────────────────┘                      │  ▸ 8.98% A (indirect)            │
+                                                         ├──────────────────────────────────┤
+                                                         │ Futu Trustee Limited             │
+                                                         │  ▸ 8.98% A (trustee)             │
+                                                         ├──────────────────────────────────┤
+                                                         │ XAM Holdings Limited             │
+                                                         │  ▸ 6.11% A (14,201,184)          │
+                                                         ├──────────────────────────────────┤
+                                                         │ MNM Holdings Limited             │
+                                                         │  ▸ 1.01% A (2,343,196)           │
+                                                         ├──────────────────────────────────┤
+                                                         │ NVMB IV Holdings Limited         │
+                                                         │  ▸ 6.11% A (indirect)            │
+                                                         ├──────────────────────────────────┤
+                                                         │ BXA Holdings II, L.P.            │
+                                                         │  ▸ 6.11% A (indirect)            │
+                                                         ├──────────────────────────────────┤
+                                                         │ JNR Holdings GP Limited          │
+                                                         │  ▸ 6.11% A (indirect)            │
+                                                         ├──────────────────────────────────┤
+                                                         │ BXA Holdings, L.P.               │
+                                                         │  ▸ 1.01% A (indirect)            │
+                                                         ├──────────────────────────────────┤
+                                                         │ BXA Holdings II GP Limited       │
+                                                         │  ▸ 1.01% A (indirect)            │
+                                                         └──────────────────────────────────┘
+                                       │
+                                       ▼
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                  TIER 2 (MIDDLE) — INTERMEDIARY HOLDING COMPANIES,              ║
+║                       CONTROLLED CORPORATIONS & TRUSTS                           ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── CHAIN 1 : Dr. YAN JUNJIE ────────────────────────────────────────────────────┐
+│                                                                                 │
+│   Dr. Yan Junjie (Founder)                                                     │
+│         │                                                                       │
+│         ├──► [ Local Linearity ]   ← controlled corp; wholly owns               │
+│         │    ───────────────         MiniMax Awakening & MiniMax Limited        │
+│         │    ▸ 2.15% A (5,000,000)    direct; 1% holder of Alpha EXP            │
+│         │                                                                       │
+│         ├──► [ MiniMax Matrix ]    ← wholly owned via Local Linearity           │
+│         │    ───────────────                                                  │
+│         │    ▸ 2.15% A (5,000,000)                                            │
+│         │                                                                       │
+│         ├──► [ MiniMax Awakening ]  ← wholly owned via Local Linearity         │
+│         │    ──────────────────                                                │
+│         │    ▸ 14.19% B (11,509,339)                                          │
+│         │                                                                       │
+│         ├──► [ MiniMax Limited ]     ← wholly owned via Local Linearity         │
+│         │    ──────────────                                                    │
+│         │    ▸ 0.00% B (15)                                                  │
+│         │                                                                       │
+│         └──► [ Alpha EXP Trust ]   ← established by Dr. Yan (settlor)          │
+│              ────────────────     for his own benefit                           │
+│                      │                                                          │
+│                      ▼                                                          │
+│              [ Trident Trust Company (HK) Limited ]  ← trustee                │
+│                ───────────────────────────────                                 │
+│                ▸ 77.18% B (62,593,180)                                        │
+│                      │                                                          │
+│                      ▼                                                          │
+│              [ Scaling EXP Limited ]  ← wholly owned by Trident Trust          │
+│                ──────────────────                                              │
+│                ▸ 77.18% B (62,593,180)                                        │
+│                      │                                                          │
+│                      ▼                                                          │
+│              [ Alpha EXP ]          ← 99% Scaling EXP + 1% Local Linearity     │
+│                ─────────            ▸ 77.18% B (62,593,180)                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── CHAIN 2 : Ms. YUN YEYI ─────────────────────────────────────────────────────┐
+│                                                                                 │
+│   Ms. Yun Yeyi (Co-founder)                                                    │
+│         │                                                                       │
+│         ├──► [ Apricity Investment Limited ] ← wholly owned by Ms. Yun         │
+│         │    ───────────────────────────                                       │
+│         │    (1% holder of Floating Sky)                                       │
+│         │                                                                       │
+│         ├──► [ Floating Sky ]  ← 99% Floating Cloud + 1% Apricity              │
+│         │    ──────────────                                                    │
+│         │    ▸ 8.63% B (7,000,000)                                            │
+│         │                                                                       │
+│         └──► [ Floating Sky Trust ]  ← established by Ms. Yun (settlor)        │
+│              ────────────────────      for her own benefit                     │
+│                      │                                                          │
+│                      ▼                                                          │
+│              [ Trident Trust Company (HK) Limited ]  ← trustee                │
+│                ───────────────────────────────                                 │
+│                ▸ 8.63% B (7,000,000)                                          │
+│                      │                                                          │
+│                      ▼                                                          │
+│              [ Floating Cloud Limited ]  ← wholly owned by Trident Trust       │
+│                ──────────────────────                                          │
+│                ▸ 8.63% B (7,000,000)                                          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── CHAIN 3 : ALIBABA / ALISOFT ────────────────────────────────────────────────┐
+│                                                                                 │
+│   [ Alibaba Group Holding Limited ]                                           │
+│              │                                                                  │
+│              ▼                                                                  │
+│   [ Alisoft Holding Limited ]                                                 │
+│              │                                                                  │
+│              ▼                                                                  │
+│   [ Alisoft Investment Holding Limited ]                                      │
+│              │                                                                  │
+│              ▼                                                                  │
+│   [ Alisoft China Holding Limited ]   ← direct beneficial owner              │
+│     ───────────────────────────                                                │
+│     ▸ 17.06% A (39,662,627)                                                   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── CHAIN 4 : miHoYo / LUO YUHAO ───────────────────────────────────────────────┐
+│                                                                                 │
+│   Luo Yuhao                                                                     │
+│     │                                                                           │
+│     ▼                                                                           │
+│   [ Shanghai Fanxing Dingchuang Technology Company Limited ]                   │
+│     ──────────────────────────────────────────────                             │
+│     │                                                                           │
+│     ▼                                                                           │
+│   [ miHoYo Limited ]   ← direct beneficial owner                              │
+│     ────────────                                                                │
+│     ▸ 6.89% A (16,015,779)                                                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── CHAIN 5 : MiniMax GENE / FUTU TRUSTEE ──────────────────────────────────────┐
+│                                                                                 │
+│   [ Futu Trustee Limited ]  ← trustee                                        │
+│     ────────────────────                                                        │
+│     ▸ 8.98% A (20,890,736)                                                    │
+│         │                                                                       │
+│         ▼                                                                       │
+│   [ MiniMax Gene Limited ]                                                    │
+│         │                                                                       │
+│         ▼                                                                       │
+│   [ MiniMax Gene Alpha Limited ]  ← direct holding corp                      │
+│     ────────────────────────                                                   │
+│     ▸ 8.98% A (20,890,736)                                                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── CHAIN 6 : Mr. COLM O'CONNELL / BXA / XAM / MNM ─────────────────────────────┐
+│                                                                                 │
+│   Mr. Colm O'Connell                                                            │
+│     │                                                                           │
+│     ├──► [ XAM Holdings Limited ]  ← direct beneficial                        │
+│     │    ─────────────────────                                                  │
+│     │    ▸ 6.11% A (14,201,184)                                                │
+│     │          │                                                                │
+│     │          ▼                                                                │
+│     │    [ NVMB IV Holdings Limited ]                                         │
+│     │          │                                                                │
+│     │          ▼                                                                │
+│     │    [ BXA Holdings II, L.P. ]                                            │
+│     │          │                                                                │
+│     │          ▼                                                                │
+│     │    [ JNR Holdings GP Limited ]                                          │
+│     │                                                                           │
+│     └──► [ MNM Holdings Limited ]  ← direct beneficial                        │
+│          ─────────────────────                                                  │
+│          ▸ 1.01% A (2,343,196)                                                 │
+│               │                                                                 │
+│               ▼                                                                 │
+│          [ BXA Holdings, L.P. ]                                               │
+│               │                                                                 │
+│               ▼                                                                 │
+│          [ BXA Holdings II GP Limited ]                                        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── CHAIN 7 : HO CHI SING ──────────────────────────────────────────────────────┐
+│                                                                                 │
+│   Ho Chi Sing                                                                   │
+│     │                                                                           │
+│     ▼                                                                           │
+│   (Controlled corporations — names not enumerated in filing)                   │
+│     ▸ 5.95% A (13,839,721)                                                     │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌── DIRECT INDIVIDUAL HOLDERS (no intermediary) ────────────────────────────────┐
+│                                                                                 │
+│   Mr. Zhao Pengyu   ──► ▸ 0.24% A (567,182)         direct                    │
+│   Mr. Zhou Yucong   ──► ▸ 0.43% A (1,010,724)       direct                    │
+│   Ms. Yun Yeyi      ──► ▸ 1.64% A (3,814,065)       direct (options)           │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║              TIER 3 (BOTTOM) — THE ISSUER / REPORTING COMPANY                   ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+                         ┌──────────────────────────────────┐
+                         │                                  │
+                         │      MiniMax Group Inc.          │
+                         │      (THE ISSUER / 10-K FILER)   │
+                         │                                  │
+                         │  Class A Ordinary: 232,532,774   │
+                         │  Class B Ordinary:  81,102,534   │
+                         │  Total Issued:     313,635,308   │
+                         │                                  │
+                         └──────────────────────────────────┘
+```
