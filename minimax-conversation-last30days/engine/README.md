@@ -1,4 +1,4 @@
-# MiniMax Conversation Research — Scripts
+# MiniMax Conversation Research — Engine
 
 Reusable tooling for the MiniMax conversation intelligence research run.
 Originally executed 2026-05-26 (results in `../20260526/`).

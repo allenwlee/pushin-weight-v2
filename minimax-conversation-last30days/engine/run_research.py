@@ -7,9 +7,9 @@ The plan lives at:
     ../20260526/consumer/2026-05-26-001-feat-minimax-conversation-research-plan.md
 
 Usage:
-    python3 scripts/run_research.py --out-dir minimax-conversation-last30days/20260602/producer
-    python3 scripts/run_research.py --unit 2 --out-dir .../producer
-    python3 scripts/run_research.py --units 2,3,4 --quick --out-dir .../producer
+    python3 engine/run_research.py --out-dir minimax-conversation-last30days/20260602/producer
+    python3 engine/run_research.py --unit 2 --out-dir .../producer
+    python3 engine/run_research.py --units 2,3,4 --quick --out-dir .../producer
 
 Output filenames match the plan spec. All queries use --emit=compact; add
 --quick to stay under 5-min bash timeouts.
@@ -63,8 +63,10 @@ UNITS = {
 }
 
 
-def run_query(query: str, output_path: Path, quick: bool = False) -> bool:
+def run_query(query: str, output_path: Path, quick: bool = False, days: int | None = None) -> bool:
     cmd = ["python3", str(LAST30DAYS), query, "--emit=compact"]
+    if days is not None:
+        cmd += ["--days", str(days)]
     if quick:
         cmd.append("--quick")
     print(f"  -> {' '.join(cmd[2:])} > {output_path.name}", file=sys.stderr)
@@ -87,6 +89,7 @@ def main() -> int:
     ap.add_argument("--units", default="2,3,4,5,7", help="Comma-separated unit numbers to run (default: 2,3,4,5,7)")
     ap.add_argument("--unit", type=int, help="Run only this unit (overrides --units)")
     ap.add_argument("--quick", action="store_true", help="Pass --quick to last30days.py (faster, less coverage)")
+    ap.add_argument("--days", type=int, default=None, help="Lookback days for last30days.py (default: 30). Use 2 for breaking-news runs.")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -105,7 +108,7 @@ def main() -> int:
         for label, (query, fname) in queries.items():
             out_path = out_dir / fname
             total += 1
-            if not run_query(query, out_path, quick=args.quick):
+            if not run_query(query, out_path, quick=args.quick, days=args.days):
                 failures.append((unit_num, label, query))
 
     print(f"\n{total - len(failures)}/{total} queries succeeded. Outputs in {out_dir}", file=sys.stderr)
