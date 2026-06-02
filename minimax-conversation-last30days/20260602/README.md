@@ -7,7 +7,7 @@ Placeholder for the next research run, dated 2026-06-02.
 ```bash
 cd /Users/fuchitalee/development/minimax-marketing
 mkdir -p minimax-conversation-last30days/20260602/{producer,consumer}
-python3 minimax-conversation-last30days/scripts/run_research.py \
+python3 minimax-conversation-last30days/engine/run_research.py \
     --out-dir minimax-conversation-last30days/20260602/producer
 ```
 
