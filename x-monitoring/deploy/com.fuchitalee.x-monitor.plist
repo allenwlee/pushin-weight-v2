@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- {{AGENT_ATTRIBUTION}} -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fuchitalee.x-monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-c</string>
+        <string>source ~/.env.secrets &amp;&amp; exec python3 -m x_monitor run</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring</string>
+
+    <key>WatchPaths</key>
+    <array>
+        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/data/queries</string>
+        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/data/accounts</string>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/fuchitalee/Library/Logs/x-monitor/stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/fuchitalee/Library/Logs/x-monitor/stderr.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>ThrottleInterval</key>
+    <integer>300</integer>
+</dict>
+</plist>

@@ -1,0 +1,20 @@
+# {{AGENT_ATTRIBUTION}}
+# Runtime data (not committed)
+data/runs/raw/
+data/runs/<run_id>.json
+data/runs/LATEST.json
+data/runs/LATEST.running.json
+data/runs/LOCK
+data/x_monitoring.db
+data/dashboard.pid
+data/dashboard.log
+data/_review_queue.json
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Cookies (defense in depth — never commit)
+config.local.yaml

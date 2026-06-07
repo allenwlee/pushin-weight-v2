@@ -1,0 +1,43 @@
+# {{AGENT_ATTRIBUTION}}
+# MiniMax query library (Q1-Q5).
+# Q1 — release signals from official account.
+# Q2 — community questions about MiniMax products.
+# Q3 — criticism, model failures, evals.
+# Q4 — commenter capture (replies to official).
+# Q5 — model-conditional (benchmark, paper, code).
+queries:
+  - id: Q1
+    query_string: 'from:MiniMaxAI min_faves:5'
+    expected_signal: release
+    max_results: 50
+    enabled: true
+    min_faves: 5
+    notes: Official MiniMax handle; release announcements and major posts.
+  - id: Q2
+    query_string: '(MiniMax OR 海螺 OR Hailuo) (how OR 怎么 OR 如何 OR 教程 OR tutorial) min_faves:2'
+    expected_signal: community_question
+    max_results: 50
+    enabled: true
+    min_faves: 2
+    notes: Brand term in EN+ZH, with how-to operators.
+  - id: Q3
+    query_string: '(MiniMax OR 海螺 OR Hailuo) (broken OR fails OR bad OR 翻车 OR 不行 OR 垃圾) min_faves:1'
+    expected_signal: criticism
+    max_results: 50
+    enabled: true
+    min_faves: 1
+    notes: Negative operators across EN+ZH.
+  - id: Q4
+    query_string: 'to:MiniMaxAI min_faves:5'
+    expected_signal: commenter_capture
+    max_results: 50
+    enabled: true
+    min_faves: 5
+    notes: Replies/mentions to the official handle.
+  - id: Q5
+    query_string: '(MiniMax OR Hailuo) (benchmark OR eval OR paper OR github OR code) min_faves:3'
+    expected_signal: other
+    max_results: 50
+    enabled: true
+    min_faves: 3
+    notes: Technical posts (benchmarks, papers, code).

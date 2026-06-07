@@ -1,0 +1,7 @@
+# {{AGENT_ATTRIBUTION}}
+accounts:
+  - handle: inclusionAI
+    display_name: "InclusionAI"
+    role: official
+    verified: true
+    notes: InclusionAI parent. Per-product handle for Ling TBD (Q1 unresolved).

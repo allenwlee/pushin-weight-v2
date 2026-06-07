@@ -1,0 +1,33 @@
+# {{AGENT_ATTRIBUTION}}
+# Moonshot AI / Kimi query library.
+queries:
+  - id: Q1
+    query_string: 'from:MoonshotAI min_faves:5'
+    expected_signal: release
+    max_results: 50
+    enabled: true
+    min_faves: 5
+  - id: Q2
+    query_string: '(Kimi OR Moonshot OR 月之暗面) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2'
+    expected_signal: community_question
+    max_results: 50
+    enabled: true
+    min_faves: 2
+  - id: Q3
+    query_string: '(Kimi OR Moonshot OR 月之暗面) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1'
+    expected_signal: criticism
+    max_results: 50
+    enabled: true
+    min_faves: 1
+  - id: Q4
+    query_string: 'to:MoonshotAI min_faves:5'
+    expected_signal: commenter_capture
+    max_results: 50
+    enabled: true
+    min_faves: 5
+  - id: Q5
+    query_string: '(Kimi OR Moonshot OR 月之暗面) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3'
+    expected_signal: other
+    max_results: 50
+    enabled: true
+    min_faves: 3

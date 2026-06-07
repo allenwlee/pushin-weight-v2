@@ -1,0 +1,7 @@
+# {{AGENT_ATTRIBUTION}}
+accounts:
+  - handle: QwenLM
+    display_name: "Qwen"
+    role: official
+    verified: true
+    notes: Official Qwen (Alibaba) handle.

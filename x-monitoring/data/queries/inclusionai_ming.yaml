@@ -1,0 +1,34 @@
+# {{AGENT_ATTRIBUTION}}
+# InclusionAI Ming query library (low volume — rot threshold 5).
+queries:
+  - id: Q1
+    query_string: 'from:inclusionAI min_faves:3'
+    expected_signal: release
+    max_results: 50
+    enabled: true
+    min_faves: 3
+    notes: InclusionAI parent handle; per-product handles TBD.
+  - id: Q2
+    query_string: '(InclusionAI OR Ming) (how OR 怎么 OR 教程 OR tutorial) min_faves:2'
+    expected_signal: community_question
+    max_results: 50
+    enabled: true
+    min_faves: 2
+  - id: Q3
+    query_string: '(InclusionAI OR Ming) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1'
+    expected_signal: criticism
+    max_results: 50
+    enabled: true
+    min_faves: 1
+  - id: Q4
+    query_string: 'to:inclusionAI min_faves:3'
+    expected_signal: commenter_capture
+    max_results: 50
+    enabled: true
+    min_faves: 3
+  - id: Q5
+    query_string: '(InclusionAI OR Ming) (benchmark OR eval OR paper OR github OR 开源) min_faves:2'
+    expected_signal: other
+    max_results: 50
+    enabled: true
+    min_faves: 2

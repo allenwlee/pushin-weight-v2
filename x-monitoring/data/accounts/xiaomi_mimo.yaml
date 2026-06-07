@@ -1,0 +1,7 @@
+# {{AGENT_ATTRIBUTION}}
+accounts:
+  - handle: XiaomiMiMo
+    display_name: "Xiaomi MiMo"
+    role: official
+    verified: true
+    notes: Official Xiaomi MiMo handle (verify — may be product-specific).

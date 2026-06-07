@@ -1,0 +1,7 @@
+# {{AGENT_ATTRIBUTION}}
+accounts:
+  - handle: deepseek_ai
+    display_name: "DeepSeek"
+    role: official
+    verified: true
+    notes: Official DeepSeek handle.

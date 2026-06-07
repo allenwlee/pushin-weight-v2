@@ -1,0 +1,129 @@
+{# {{AGENT_ATTRIBUTION}} #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ display_name }} — x-monitor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>x-monitor</h1>
+    <span class="muted">drill-down · {{ model_id }}</span>
+  </header>
+  <main class="detail" style="--accent: {{ accent_color }};">
+    <a class="back" href="/">← back to grid</a>
+    <header class="detail-head">
+      <h1>{{ display_name }}</h1>
+      <span class="muted model-id">{{ model_id }}</span>
+    </header>
+
+    {% set lr = latest_run or {} %}
+    {% if lr.get('degraded', {}).get('cookies') %}
+    <div class="banner red">⚠ cookies degraded — last run returned 0 results from probe search. Re-run <code>x-monitor setup cookies</code>.</div>
+    {% endif %}
+    {% for q in lr.get('queries') or [] %}
+      {% if q.model_id == model_id and q.status == 'error' %}
+      <div class="banner yellow">⚠ query {{ q.query_id }} errored in last run: {{ q.error }}</div>
+      {% endif %}
+    {% endfor %}
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="posts">Posts ({{ posts|length }})</button>
+      <button class="tab" data-tab="graph">Graph</button>
+      <button class="tab" data-tab="clusters">Clusters ({{ clusters|length }})</button>
+      <button class="tab" data-tab="roles">Roles</button>
+    </nav>
+
+    <section id="tab-posts" class="tab-pane active">
+      <ol class="post-list">
+        {% for p in posts %}
+          <li class="post">
+            <div class="post-head">
+              <span class="author">@{{ p.author_handle }}</span>
+              <span class="meta muted small">{{ p.created_at }} · ★{{ p.favorite_count }} · {{ p.source_query_id }}</span>
+            </div>
+            {% set t = p.text or '' %}
+            {% if t|length > 280 %}
+              <details><summary>show more</summary><div class="text">{{ t }}</div></details>
+            {% else %}
+              <div class="text">{{ t }}</div>
+            {% endif %}
+          </li>
+        {% else %}
+          <li class="muted">no posts in storage for this model yet</li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section id="tab-graph" class="tab-pane">
+      <div class="graph-wrap" hx-get="/api/model/{{ model_id }}.json" hx-trigger="every 30s" hx-swap="none">
+        {{ graph_svg|safe }}
+      </div>
+    </section>
+
+    <section id="tab-clusters" class="tab-pane">
+      <ul class="clusters">
+        {% for c in clusters %}
+          <li>
+            <strong>{{ c.commenters|length }} commenters</strong> on {{ c.post_ids|length }} posts
+            <ul>
+              {% for cm in c.commenters %}<li class="muted small">@{{ cm }}</li>{% endfor %}
+            </ul>
+          </li>
+        {% else %}
+          <li class="muted">no clusters above threshold yet</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section id="tab-roles" class="tab-pane">
+      <div class="role-bars">
+        {% set total = (role_counts.values()|sum) %}
+        {% if total > 0 %}
+          {% for role, count in role_counts.items() %}
+            <div class="role-bar" style="width: {{ (count / total * 100)|round(1) }}%" data-role="{{ role }}">
+              <span>{{ role }} · {{ count }}</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="muted">no accounts discovered yet</p>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+
+  <style>
+  .detail { padding: 1.5rem; }
+  .back { color: var(--link); text-decoration: none; font-size: 12px; }
+  .detail-head { display: flex; align-items: baseline; gap: 1rem; margin: 0.5rem 0 1rem; }
+  .detail-head h1 { margin: 0; font-size: 22px; }
+  .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--card-border); margin-bottom: 1rem; }
+  .tab { background: none; border: none; color: var(--muted); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+  .banner { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; font-size: 13px; }
+  .banner.red { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+  .banner.yellow { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+  .post-list { list-style: none; padding: 0; }
+  .post { border-bottom: 1px solid var(--card-border); padding: 0.5rem 0; }
+  .post-head { display: flex; justify-content: space-between; }
+  .role-bars { display: flex; flex-direction: column; gap: 0.25rem; }
+  .role-bar { background: var(--card-border); padding: 0.4rem 0.6rem; border-radius: 4px; min-width: 80px; }
+  .graph-wrap svg { max-width: 100%; height: auto; }
+  </style>
+
+  <script>
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
