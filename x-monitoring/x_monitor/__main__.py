@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -49,35 +48,26 @@ def _load_config_or_die(path: Path):
 
 
 def cmd_run(args, paths) -> int:
-    from x_monitor.apify import ApifyClient
+    from x_monitor.apify import TwitterApiClient
     from x_monitor.run import RunPipeline
 
     cfg = _load_config_or_die(paths["config"])
-    apify: ApifyClient
+    api: TwitterApiClient
     if args.dry_run:
         # In dry-run we don't need a real client; use a stub.
-        apify = ApifyClient(token="dry-run")
+        api = TwitterApiClient(api_key="dry-run")
     else:
         try:
-            apify = ApifyClient.from_env()
+            api = TwitterApiClient.from_env()
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
     pipeline = RunPipeline(cfg, paths["data"], db_path=paths["db"])
-    cookies = None
-    if not args.dry_run:
-        from x_monitor.cookies import load_cookies
-
-        try:
-            cookies = load_cookies()
-        except Exception as e:
-            print(f"warning: cookies not loaded: {e}", file=sys.stderr)
     summary = pipeline.execute(
-        apify,
+        api,
         model_filter=args.models.split(",") if args.models else None,
         query_filter=args.queries.split(",") if args.queries else None,
         dry_run=args.dry_run,
-        cookies=cookies,
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
     if args.dry_run:
@@ -176,24 +166,18 @@ def cmd_migrate(args, paths) -> int:
 
 def cmd_accounts(args, paths) -> int:
     from x_monitor.accounts import load_accounts
-    from x_monitor.apify import ApifyClient
-    from x_monitor.cookies import load_cookies
+    from x_monitor.apify import TwitterApiClient
 
     if args.accounts_action == "bootstrap-followers":
         if not args.model or not args.handle:
             print("--model and --handle required", file=sys.stderr)
             return 2
         try:
-            cookies = load_cookies()
+            api = TwitterApiClient.from_env()
         except Exception as e:
-            print(f"cookies error: {e}", file=sys.stderr)
+            print(f"twitterapi.io error: {e}", file=sys.stderr)
             return 2
-        try:
-            apify = ApifyClient.from_env()
-        except Exception as e:
-            print(f"apify error: {e}", file=sys.stderr)
-            return 2
-        followers = apify.run_followers(args.handle, cookies=cookies)
+        followers = api.run_followers(args.handle, max_results=200)
         # Append to data/accounts/<model>.yaml under a `discovered_followers`
         # section; do not modify the seeded 'accounts' list.
         import yaml
@@ -262,32 +246,24 @@ def cmd_queries(args, paths) -> int:
 
 
 def cmd_setup(args, paths) -> int:
-    if args.setup_action == "cookies":
-        from x_monitor.cookies import load_cookies, DEFAULT_COOKIE_PATH
-        import json as _json
+    if args.setup_action == "twitterapi-key":
+        # Just confirms the key is in env; the env file path is informational.
+        from x_monitor.apify import TwitterApiClient
 
-        path = Path(args.path) if args.path else DEFAULT_COOKIE_PATH
-        if args.validate:
-            try:
-                c = load_cookies(path)
-                print(f"OK: auth_token={c['auth_token'][:4]}... ct0={c['ct0'][:4]}...")
-                return 0
-            except Exception as e:
-                print(f"FAIL: {e}", file=sys.stderr)
-                return 1
-        # Interactive wizard
-        path.parent.mkdir(parents=True, exist_ok=True)
-        print("Enter your x.com cookies. Open dev tools → Application → Cookies → x.com")
-        print("Find auth_token and ct0 (NOT the ct0 from response headers).")
-        auth = input("auth_token: ").strip()
-        ct0 = input("ct0: ").strip()
-        if not auth or not ct0:
-            print("both fields required", file=sys.stderr)
+        try:
+            api = TwitterApiClient.from_env()
+            print(
+                f"OK: TWITTERAPI_IO_API_KEY present (prefix={api.api_key[:4]}...)"
+            )
+            return 0
+        except Exception as e:
+            print(
+                f"FAIL: {e}\n"
+                f"Add to ~/.env.secrets:\n"
+                f"  export TWITTERAPI_IO_API_KEY=\"...\"",
+                file=sys.stderr,
+            )
             return 1
-        path.write_text(_json.dumps({"auth_token": auth, "ct0": ct0}), encoding="utf-8")
-        os.chmod(path, 0o600)
-        print(f"wrote {path} (mode 600)")
-        return 0
     print(f"unknown setup action: {args.setup_action}", file=sys.stderr)
     return 2
 
@@ -337,11 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_q.set_defaults(func=cmd_queries)
 
     p_set = sub.add_parser("setup", help="One-time setup wizards")
-    p_set.add_argument("setup_action", choices=["cookies"])
-    p_set.add_argument("--path", default=None, help="Override cookie file path")
-    p_set.add_argument(
-        "--validate", action="store_true", help="Validate existing cookie file"
-    )
+    p_set.add_argument("setup_action", choices=["twitterapi-key"])
     p_set.set_defaults(func=cmd_setup)
 
     return p

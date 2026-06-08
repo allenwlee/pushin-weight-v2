@@ -16,13 +16,10 @@ enabled_models:
   - inclusionai_ring
   - inclusionai_ming
 
-# Daily Apify budget (paid tier ≈ $10/mo). Each unit = 1 tweet returned by
-# automation-lab/twitter-scraper. 333/day gives 6x headroom over the 9x5x50=2250
-# upper bound from SC1.
+# Daily TwitterAPI.io budget (pay-per-use). Each unit = 1 tweet returned by
+# advanced_search. 333/day gives 6x headroom over the 9x5x50=2250 upper bound
+# from SC1. At $0.15/1k tweets, a full 333/day is ~$0.05/day = ~$1.50/mo.
 daily_ceiling: 333
-
-# Apify actor (search + profile-followers modes).
-apify_actor: "automation-lab/twitter-scraper"
 
 # Reply-chain cluster threshold (Q3). Tune via PR.
 clustering:

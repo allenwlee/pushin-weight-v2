@@ -14,9 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from .accounts import Account, derive_edges, find_clusters, load_accounts, role_tag
-from .apify import ApifyAuthError, ApifyClient, ApifyRateLimitError, ApifyServerError
+from .apify import (
+    TwitterApiAuthError,
+    TwitterApiClient,
+    TwitterApiRateLimitError,
+    TwitterApiServerError,
+)
 from .config import Config
-from .cookie_check import run_cookie_check
 from .queries import Query, estimated_cost, load_queries
 from .review import ReviewQueue
 from .store import Store
@@ -114,12 +118,11 @@ class RunPipeline:
 
     def execute(
         self,
-        apify: ApifyClient,
+        apify: TwitterApiClient,
         *,
         model_filter: list[str] | None = None,
         query_filter: list[str] | None = None,
         dry_run: bool = False,
-        cookies: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run the daily harvest.
 
@@ -146,13 +149,6 @@ class RunPipeline:
 
             self._write_summary(run_id, summary)
             self._update_latest_symlink(run_id, running=True)
-
-            # Cookie check (R19)
-            if not dry_run:
-                ok, err = run_cookie_check(apify)
-                if not ok:
-                    summary["degraded"]["cookies"] = True
-                    summary["degraded"]["cookies_error"] = err
 
             # Load queries
             models = model_filter or self.config.enabled_models
@@ -208,19 +204,18 @@ class RunPipeline:
                         raw_path = self.raw_dir / run_id / f"{m}_{q.id}.json"
                         raw_path.parent.mkdir(parents=True, exist_ok=True)
 
-                        # Single attempt; retry inside ApifyClient handles
+                        # Single attempt; retry inside TwitterApiClient handles
                         # 429/5xx. Auth failures abort the run.
                         try:
                             items = apify.run_search(
                                 q.query_string,
                                 max_results=q.max_results,
-                                cookies=cookies,
                             )
-                        except ApifyAuthError as e:
-                            summary["degraded"]["apify_auth"] = str(e)
+                        except TwitterApiAuthError as e:
+                            summary["degraded"]["twitterapi_auth"] = str(e)
                             summary["status"] = "aborted"
                             break
-                        except (ApifyRateLimitError, ApifyServerError) as e:
+                        except (TwitterApiRateLimitError, TwitterApiServerError) as e:
                             summary["queries"].append(
                                 {
                                     "model_id": m,
@@ -378,7 +373,7 @@ class RunPipeline:
 
     # --- resume ----------------------------------------------------------
 
-    def resume(self, run_id: str, apify: ApifyClient) -> dict[str, Any]:
+    def resume(self, run_id: str, apify: TwitterApiClient) -> dict[str, Any]:
         """Re-read raw JSON for a prior run and re-attempt inserts.
 
         Does NOT call Apify. Idempotent on tweet_id.

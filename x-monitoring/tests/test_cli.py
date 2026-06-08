@@ -21,6 +21,13 @@ def test_help_lists_subcommands():
         assert sub in help_text
 
 
+def test_setup_twitterapi_key_subcommand_registered():
+    """The setup wizard now expects a `twitterapi-key` action, not `cookies`."""
+    parser = build_parser()
+    args = parser.parse_args(["setup", "twitterapi-key"])
+    assert args.setup_action == "twitterapi-key"
+
+
 def test_run_dry_run_exits_zero(tmp_path):
     # Set up a minimal project
     project = tmp_path / "x-monitoring"

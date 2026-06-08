@@ -1,5 +1,14 @@
 # {{AGENT_ATTRIBUTION}}
-"""Thin wrapper around automation-lab/twitter-scraper (R16, D5, D6)."""
+"""Thin wrapper around TwitterAPI.io (https://twitterapi.io).
+
+Migrated 2026-06-08 from automation-lab/twitter-scraper (Apify) to
+TwitterAPI.io. Rationale:
+  - search mode on automation-lab required user cookies; TwitterAPI.io
+    search is cookie-free and cheaper ($0.15/1k vs $3/1k)
+  - followers mode on automation-lab required cookies; TwitterAPI.io
+    get_user_followers is cookie-free ($0.01/1k)
+  - no more cookie probe, cookie file, or cookie rot failure mode
+"""
 
 from __future__ import annotations
 
@@ -11,56 +20,69 @@ from typing import Any
 
 import requests
 
-from .cookies import CookieMissingError, load_cookies
-
 log = logging.getLogger(__name__)
 
 
-APIFY_BASE = "https://api.apify.com/v2"
-DEFAULT_ACTOR = "automation-lab/twitter-scraper"
+TWITTERAPI_BASE = "https://api.twitterapi.io"
+SEARCH_PATH = "/twitter/tweet/advanced_search"
+FOLLOWERS_PATH = "/twitter/user/followers"
+USER_INFO_PATH = "/twitter/user/info"
 
-# A known-active handle used by the cookie probe search. R19: not just file
-# existence — we must validate cookies are ACCEPTED by X via a 1-tweet probe.
-PROBE_HANDLE = "MiniMaxAI"
-
-
-class ApifyAuthError(RuntimeError):
-    """Raised on HTTP 401 (cookies rejected or token bad)."""
-
-
-class ApifyRateLimitError(RuntimeError):
-    """Raised on HTTP 429 (caller should retry with backoff)."""
+# Pagination caps per the TwitterAPI.io pricing page:
+#   followers/following: 20-99 returned = 3cr each, 100-199 = 2cr, 200 = 1cr.
+#   Always ask for 200 — the price-per-item is the cheapest.
+FOLLOWERS_MAX_PER_PAGE = 200
 
 
-class ApifyServerError(RuntimeError):
+class TwitterApiAuthError(RuntimeError):
+    """Raised on HTTP 401 (X-API-Key missing or invalid)."""
+
+
+class TwitterApiRateLimitError(RuntimeError):
+    """Raised on HTTP 429."""
+
+
+class TwitterApiServerError(RuntimeError):
     """Raised on HTTP 5xx."""
 
 
 @dataclass
-class ApifyClient:
-    token: str
-    actor: str = DEFAULT_ACTOR
-    timeout_s: int = 90
+class TwitterApiClient:
+    """REST client for TwitterAPI.io.
+
+    Replaces the previous ApifyClient. The shape (run_search, run_followers,
+    from_env) is preserved so call sites in run.py / __main__.py / tests
+    only need to rename the class.
+    """
+
+    api_key: str
+    base_url: str = TWITTERAPI_BASE
+    timeout_s: int = 60
     max_retries: int = 2
 
     @classmethod
-    def from_env(cls, actor: str = DEFAULT_ACTOR) -> "ApifyClient":
-        token = os.environ.get("APIFY_API_TOKEN")
-        if not token:
-            raise CookieMissingError("APIFY_API_TOKEN not in environment")
-        return cls(token=token, actor=actor)
+    def from_env(cls) -> "TwitterApiClient":
+        api_key = os.environ.get("TWITTERAPI_IO_API_KEY")
+        if not api_key:
+            raise RuntimeError("TWITTERAPI_IO_API_KEY not in environment")
+        return cls(api_key=api_key)
+
+    # --- low-level HTTP --------------------------------------------------
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token}"}
+        return {
+            "X-API-Key": self.api_key,
+            "Accept": "application/json",
+        }
 
-    def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        url = f"{APIFY_BASE}/acts/{self.actor}/{path}"
+    def _get(self, path: str, params: dict[str, Any]) -> Any:
+        url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
-                r = requests.post(
+                r = requests.get(
                     url,
-                    json=body,
+                    params=params,
                     headers=self._headers(),
                     timeout=self.timeout_s,
                 )
@@ -71,176 +93,188 @@ class ApifyClient:
                     continue
                 raise
             if r.status_code == 401:
-                raise ApifyAuthError(f"Apify auth failed: {r.text[:200]}")
+                raise TwitterApiAuthError(
+                    f"TwitterAPI.io auth failed: {r.text[:200]}"
+                )
             if r.status_code == 429:
                 if attempt < self.max_retries:
                     time.sleep(2 ** (attempt + 2))
                     continue
-                raise ApifyRateLimitError(f"Apify rate limit: {r.text[:200]}")
+                raise TwitterApiRateLimitError(
+                    f"TwitterAPI.io rate limit: {r.text[:200]}"
+                )
             if 500 <= r.status_code < 600:
-                last_exc = ApifyServerError(f"Apify 5xx: {r.status_code}")
+                last_exc = TwitterApiServerError(
+                    f"TwitterAPI.io 5xx: {r.status_code}"
+                )
                 if attempt < self.max_retries:
                     time.sleep(2 ** attempt)
                     continue
                 raise last_exc
             if r.status_code >= 400:
-                raise RuntimeError(f"Apify error {r.status_code}: {r.text[:200]}")
+                raise RuntimeError(
+                    f"TwitterAPI.io error {r.status_code}: {r.text[:200]}"
+                )
             return r.json()
         if last_exc:
             raise last_exc
-        raise RuntimeError("Apify call failed without a recorded exception")
+        raise RuntimeError("TwitterAPI.io call failed without a recorded exception")
 
-    def _get_run(self, run_id: str) -> dict[str, Any]:
-        url = f"{APIFY_BASE}/actor-runs/{run_id}"
-        r = requests.get(url, headers=self._headers(), timeout=self.timeout_s)
-        if r.status_code == 401:
-            raise ApifyAuthError(f"Apify auth failed: {r.text[:200]}")
-        r.raise_for_status()
-        return r.json()
+    def _walk_followers(self, handle: str, max_results: int) -> list[dict[str, Any]]:
+        """Paginate get_user_followers via cursor. Returns normalized list."""
+        out: list[dict[str, Any]] = []
+        cursor: str | None = None
+        # Hard cap on pages so a runaway pagination can't run forever.
+        max_pages = max(1, (max_results + FOLLOWERS_MAX_PER_PAGE - 1) // FOLLOWERS_MAX_PER_PAGE)
+        for _ in range(max_pages):
+            params: dict[str, Any] = {
+                "userName": handle,
+                "page_size": FOLLOWERS_MAX_PER_PAGE,
+            }
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get(FOLLOWERS_PATH, params)
+            # Response shape (per TwitterAPI.io docs):
+            #   { "followers": [ {...}, ... ], "next_cursor": "..."|null,
+            #     "status": "success" }
+            followers = data.get("followers") or data.get("users") or []
+            for f in followers:
+                if len(out) >= max_results:
+                    break
+                out.append(_normalize_follower(f))
+            if len(out) >= max_results:
+                break
+            cursor = data.get("next_cursor")
+            if not cursor:
+                break
+        return out
 
-    def _wait_for_run(self, run_id: str, poll_s: int = 3, max_wait_s: int = 180) -> dict[str, Any]:
-        elapsed = 0
-        while elapsed < max_wait_s:
-            data = self._get_run(run_id)
-            status = data.get("status")
-            if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-                return data
-            time.sleep(poll_s)
-            elapsed += poll_s
-        raise TimeoutError(f"Apify run {run_id} did not finish in {max_wait_s}s")
-
-    def _fetch_dataset(self, dataset_id: str, limit: int | None = None) -> list[dict[str, Any]]:
-        url = f"{APIFY_BASE}/datasets/{dataset_id}/items"
-        params: dict[str, Any] = {}
-        if limit is not None:
-            params["limit"] = limit
-        r = requests.get(url, headers=self._headers(), params=params, timeout=self.timeout_s)
-        if r.status_code == 401:
-            raise ApifyAuthError(f"Apify auth failed: {r.text[:200]}")
-        r.raise_for_status()
-        data = r.json()
-        return data if isinstance(data, list) else []
+    # --- public surface (mirrors the old ApifyClient) --------------------
 
     def run_search(
         self,
         query: str,
         max_results: int = 50,
         since: str | None = None,
-        cookies: dict[str, str] | None = None,
+        cookies: dict[str, str] | None = None,  # noqa: ARG002 — kept for compat
     ) -> list[dict[str, Any]]:
-        """Run an X advanced-search query via the actor's search mode.
+        """Run an X advanced-search query via TwitterAPI.io.
 
-        `since` is an ISO date string (YYYY-MM-DD) passed as the search
-        `since:` filter — R-institutional learning: time-bound cursors are
-        robust to new accounts.
+        `query` is a raw advanced-search string (e.g., 'from:MiniMaxAI lang:en
+        min_faves:5'). TwitterAPI.io accepts the same X operators.
+
+        `since` is an ISO date string (YYYY-MM-DD). If provided, we pass it as
+        a `since:` operator suffix — TwitterAPI.io does not expose a separate
+        `since` param.
+
+        `cookies` is accepted for backward compatibility with the old
+        ApifyClient signature but is ignored (TwitterAPI.io does not require
+        user cookies).
         """
-        body: dict[str, Any] = {
-            "searchTerms": [query],
-            "maxItems": max_results,
-            "mode": "search",
+        effective_query = query
+        if since and "since:" not in query:
+            effective_query = f"{query} since:{since}"
+        params: dict[str, Any] = {
+            "query": effective_query,
+            "limit": max_results,
         }
-        if since:
-            body["since"] = since
-        if cookies:
-            body["twitterCookies"] = [
-                {"name": "auth_token", "value": cookies["auth_token"]},
-                {"name": "ct0", "value": cookies["ct0"]},
-            ]
-        run = self._post("run-sync", body)
-        run_id = run.get("id")
-        if not run_id:
-            return []
-        ds = run.get("defaultDatasetId")
-        if ds:
-            return self._fetch_dataset(ds, limit=max_results)
-        # No dataset yet — wait for the run, then fetch.
-        finished = self._wait_for_run(run_id)
-        ds = finished.get("defaultDatasetId")
-        if not ds:
-            return []
-        return self._fetch_dataset(ds, limit=max_results)
+        data = self._get(SEARCH_PATH, params)
+        # Response shape: { "tweets": [ {...}, ... ], "has_next_page": bool, ... }
+        tweets = data.get("tweets") or data.get("data") or []
+        return [_normalize_tweet(t) for t in tweets]
 
     def run_followers(
         self,
         handle: str,
         max_results: int = 200,
-        cookies: dict[str, str] | None = None,
+        cookies: dict[str, str] | None = None,  # noqa: ARG002 — kept for compat
     ) -> list[dict[str, Any]]:
-        """Run a profile-followers scrape for one handle.
+        """Fetch the followers list for a handle. Paginated up to max_results.
 
-        D6: gated on first-call success. If this fails, the operator
-        degrades to the R12 'official + commenters' spine.
+        `cookies` is accepted for backward compatibility but is ignored.
         """
-        body: dict[str, Any] = {
-            "mode": "followers",
-            "handles": [handle],
-            "maxItems": max_results,
-        }
-        if cookies:
-            body["twitterCookies"] = [
-                {"name": "auth_token", "value": cookies["auth_token"]},
-                {"name": "ct0", "value": cookies["ct0"]},
-            ]
-        run = self._post("run-sync", body)
-        run_id = run.get("id")
-        if not run_id:
-            return []
-        ds = run.get("defaultDatasetId")
-        if ds:
-            items = self._fetch_dataset(ds, limit=max_results)
-            return [_normalize_follower(it) for it in items]
-        finished = self._wait_for_run(run_id)
-        ds = finished.get("defaultDatasetId")
-        if not ds:
-            return []
-        items = self._fetch_dataset(ds, limit=max_results)
-        return [_normalize_follower(it) for it in items]
+        return self._walk_followers(handle, max_results)
 
-    def probe_cookie(
-        self,
-        cookies: dict[str, str] | None = None,
-        handle: str = PROBE_HANDLE,
-    ) -> bool:
-        """Validate the cookies are accepted by X (not just present on disk).
+    def probe_api(self) -> bool:
+        """Lightweight liveness check: hit user/info on a known handle.
 
-        Runs a 1-tweet search against a known-active handle. Returns True
-        iff 200 + >=1 result. False on 401 OR 200 + 0 results.
+        Returns True iff the call succeeds with a non-empty response. Used by
+        tests and operator diagnostics. Replaces the old cookie probe.
         """
-        if cookies is None:
-            try:
-                cookies = load_cookies()
-            except CookieMissingError as e:
-                log.warning("probe_cookie: %s", e)
-                return False
         try:
-            items = self.run_search(f"from:{handle}", max_results=5, cookies=cookies)
-        except ApifyAuthError:
+            data = self._get(USER_INFO_PATH, {"userName": "MiniMaxAI"})
+        except TwitterApiAuthError:
             return False
-        except (ApifyRateLimitError, ApifyServerError, requests.RequestException):
-            # Transient errors are NOT a cookie-rot signal.
-            return True
+        except (TwitterApiRateLimitError, TwitterApiServerError, requests.RequestException):
+            return True  # transient — not a liveness failure
         except Exception:
             return False
-        return len(items) >= 1
+        return bool(data) and data.get("status") != "error"
+
+
+# --- normalizers -----------------------------------------------------------
+
+
+def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize TwitterAPI.io tweet to the shape our Store.insert_posts expects.
+
+    TwitterAPI.io tweet shape (per docs):
+      { "id": "...", "text": "...", "createdAt": "...", "lang": "...",
+        "likeCount": N, "retweetCount": N, "replyCount": N, "quoteCount": N,
+        "bookmarkCount": N, "isReply": bool, "isRetweet": bool, "isQuote": bool,
+        "inReplyToUserId": "...", "author": { "userName": "...", "name": "...",
+          "followers": N, ..., "isBlueVerified": bool }, ... }
+
+    Our store expects: id, text, lang, created_at, favorite_count,
+    retweet_count, author_handle, in_reply_to_user_id, entities.
+    """
+    author = item.get("author") or {}
+    return {
+        "id": str(item.get("id") or ""),
+        "text": item.get("text") or "",
+        "lang": item.get("lang"),
+        "created_at": item.get("createdAt") or item.get("created_at"),
+        "favorite_count": int(item.get("likeCount") or 0),
+        "retweet_count": int(item.get("retweetCount") or 0),
+        "reply_count": int(item.get("replyCount") or 0),
+        "quote_count": int(item.get("quoteCount") or 0),
+        "bookmark_count": int(item.get("bookmarkCount") or 0),
+        "is_reply": bool(item.get("isReply")),
+        "is_retweet": bool(item.get("isRetweet")),
+        "is_quote": bool(item.get("isQuote")),
+        "in_reply_to_user_id": item.get("inReplyToUserId") or None,
+        "author_handle": (
+            author.get("userName")
+            or author.get("screen_name")
+            or item.get("userName")
+            or ""
+        ),
+        "author_name": author.get("name") or "",
+        "author_followers_count": int(author.get("followers") or 0),
+        "author_verified": bool(
+            author.get("isBlueVerified") or author.get("verified")
+        ),
+        # The store ignores unknown keys, so we leave the raw object too.
+        "raw": item,
+    }
 
 
 def _normalize_follower(item: dict[str, Any]) -> dict[str, Any]:
-    """Normalize Apify's follower response into {handle, display_name, follower_count}."""
-    handle = (
-        item.get("userName")
-        or item.get("screen_name")
-        or item.get("handle")
-        or ""
-    )
+    """Normalize TwitterAPI.io follower to {handle, display_name, follower_count}.
+
+    TwitterAPI.io follower shape (per docs):
+      { "id": "...", "userName": "...", "name": "...", "followers": N, ... }
+    """
+    handle = item.get("userName") or item.get("screen_name") or item.get("handle") or ""
     display_name = item.get("name") or item.get("display_name") or ""
-    follower_count = (
-        item.get("followers_count")
+    follower_count = int(
+        item.get("followers")
+        or item.get("followers_count")
         or item.get("followerCount")
-        or item.get("followers")
         or 0
     )
     return {
         "handle": str(handle),
         "display_name": str(display_name),
-        "follower_count": int(follower_count) if follower_count else 0,
+        "follower_count": follower_count,
     }

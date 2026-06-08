@@ -1,7 +1,7 @@
 # {{AGENT_ATTRIBUTION}}
 # Runtime data (not committed)
 data/runs/raw/
-data/runs/<run_id>.json
+data/runs/[0-9]*.json
 data/runs/LATEST.json
 data/runs/LATEST.running.json
 data/runs/LOCK

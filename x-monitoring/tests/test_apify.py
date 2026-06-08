@@ -1,72 +1,26 @@
 # {{AGENT_ATTRIBUTION}}
-"""Tests for x_monitor.apify and x_monitor.cookies."""
+"""Tests for x_monitor.apify (TwitterAPI.io client)."""
 
 from __future__ import annotations
 
 import json
-import os
-import stat
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
 from x_monitor.apify import (
-    ApifyAuthError,
-    ApifyClient,
-    ApifyRateLimitError,
-    ApifyServerError,
-    PROBE_HANDLE,
+    FOLLOWERS_MAX_PER_PAGE,
+    TwitterApiAuthError,
+    TwitterApiClient,
+    TwitterApiRateLimitError,
+    TwitterApiServerError,
+    _normalize_follower,
+    _normalize_tweet,
 )
-from x_monitor.cookies import CookieMissingError, load_cookies
 
 
-# --- cookies --------------------------------------------------------------
-
-
-def test_load_cookies_missing_file():
-    with tempfile.TemporaryDirectory() as d:
-        with pytest.raises(CookieMissingError, match="not found"):
-            load_cookies(Path(d) / "nonexistent.json")
-
-
-def test_load_cookies_empty_auth_token():
-    with tempfile.TemporaryDirectory() as d:
-        p = Path(d) / "cookies.json"
-        p.write_text(json.dumps({"auth_token": "", "ct0": "abc"}))
-        with pytest.raises(CookieMissingError, match="auth_token"):
-            load_cookies(p)
-
-
-def test_load_cookies_empty_ct0():
-    with tempfile.TemporaryDirectory() as d:
-        p = Path(d) / "cookies.json"
-        p.write_text(json.dumps({"auth_token": "abc", "ct0": ""}))
-        with pytest.raises(CookieMissingError, match="ct0"):
-            load_cookies(p)
-
-
-def test_load_cookies_valid():
-    with tempfile.TemporaryDirectory() as d:
-        p = Path(d) / "cookies.json"
-        p.write_text(json.dumps({"auth_token": "abc", "ct0": "def"}))
-        os.chmod(p, 0o600)
-        c = load_cookies(p)
-        assert c["auth_token"] == "abc"
-        assert c["ct0"] == "def"
-
-
-def test_load_cookies_invalid_json():
-    with tempfile.TemporaryDirectory() as d:
-        p = Path(d) / "cookies.json"
-        p.write_text("not json {")
-        with pytest.raises(CookieMissingError, match="JSON"):
-            load_cookies(p)
-
-
-# --- ApifyClient error mapping -------------------------------------------
+# --- error mapping --------------------------------------------------------
 
 
 def _mock_response(status: int, body: dict | list | str = {}) -> MagicMock:
@@ -79,105 +33,241 @@ def _mock_response(status: int, body: dict | list | str = {}) -> MagicMock:
 
 
 def test_run_search_raises_auth_error_on_401():
-    client = ApifyClient(token="x")
-    with patch.object(requests, "post", return_value=_mock_response(401, "unauth")):
-        with pytest.raises(ApifyAuthError):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(401, "unauth")):
+        with pytest.raises(TwitterApiAuthError):
             client.run_search("from:x")
 
 
 def test_run_search_raises_rate_limit_on_429():
-    client = ApifyClient(token="x", max_retries=0)
-    with patch.object(requests, "post", return_value=_mock_response(429, "rate")):
-        with pytest.raises(ApifyRateLimitError):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(429, "rate")):
+        with pytest.raises(TwitterApiRateLimitError):
             client.run_search("from:x")
 
 
 def test_run_search_raises_server_error_on_500():
-    client = ApifyClient(token="x", max_retries=0)
-    with patch.object(requests, "post", return_value=_mock_response(500, "boom")):
-        with pytest.raises(ApifyServerError):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(500, "boom")):
+        with pytest.raises(TwitterApiServerError):
             client.run_search("from:x")
 
 
-def test_run_search_returns_empty_on_unfinished_run():
-    client = ApifyClient(token="x", max_retries=0)
-    # Run with no datasetId AND not finished — _wait_for_run should be called
-    # and return a "still no dataset" result that produces an empty list.
-    run_resp = {"id": "run-1", "status": "RUNNING", "defaultDatasetId": None}
-    finished_resp = {"id": "run-1", "status": "SUCCEEDED", "defaultDatasetId": None}
-    with patch.object(requests, "post", return_value=_mock_response(201, run_resp)):
-        with patch.object(client, "_wait_for_run", return_value=finished_resp):
-            out = client.run_search("from:x", max_results=5)
-            assert out == []
+def test_run_search_passes_query_as_param():
+    """The new client must send `query` (not searchTerms/maxItems/mode)."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})) as mock_get:
+        client.run_search("from:MiniMaxAI lang:en", max_results=10)
+        args, kwargs = mock_get.call_args
+        assert kwargs["params"]["query"] == "from:MiniMaxAI lang:en"
+        assert kwargs["params"]["limit"] == 10
 
 
-# --- probe_cookie ---------------------------------------------------------
+def test_run_search_appends_since_if_provided():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})) as mock_get:
+        client.run_search("from:MiniMaxAI", since="2026-06-01")
+        args, kwargs = mock_get.call_args
+        assert "since:2026-06-01" in kwargs["params"]["query"]
 
 
-def test_probe_cookie_returns_false_on_401():
-    client = ApifyClient(token="x", max_retries=0)
-    with patch.object(client, "run_search", side_effect=ApifyAuthError("unauth")):
-        assert client.probe_cookie(cookies={"auth_token": "a", "ct0": "b"}) is False
+def test_run_search_does_not_double_since():
+    """If user already wrote since: in the query, don't append a second one."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})) as mock_get:
+        client.run_search("from:x since:2026-06-01", since="2026-06-02")
+        args, kwargs = mock_get.call_args
+        # The user's since:2026-06-01 wins; we don't append.
+        assert kwargs["params"]["query"].count("since:") == 1
 
 
-def test_probe_cookie_returns_false_on_zero_results():
-    client = ApifyClient(token="x", max_retries=0)
-    with patch.object(client, "run_search", return_value=[]):
-        assert client.probe_cookie(cookies={"auth_token": "a", "ct0": "b"}) is False
+def test_run_search_cookies_arg_is_ignored():
+    """Backward-compat: old call sites still pass cookies= — must not error."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})):
+        out = client.run_search(
+            "from:x",
+            cookies={"auth_token": "ignored", "ct0": "ignored"},
+        )
+        assert out == []
 
 
-def test_probe_cookie_returns_true_on_results():
-    client = ApifyClient(token="x", max_retries=0)
-    with patch.object(client, "run_search", return_value=[{"id": "1", "text": "hi"}]):
-        assert client.probe_cookie(cookies={"auth_token": "a", "ct0": "b"}) is True
+def test_run_search_returns_empty_on_200_with_no_tweets():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})):
+        assert client.run_search("from:x") == []
 
 
-def test_probe_cookie_does_not_treat_transient_as_rot():
-    client = ApifyClient(token="x", max_retries=0)
-    with patch.object(client, "run_search", side_effect=ApifyServerError("5xx")):
-        # 5xx is transient; probe_cookie should return True (do not flag
-        # cookie rot on transient errors).
-        assert client.probe_cookie(cookies={"auth_token": "a", "ct0": "b"}) is True
-
-
-# --- run_followers -------------------------------------------------------
-
-
-def test_run_followers_normalizes_response():
-    client = ApifyClient(token="x", max_retries=0)
-    run_resp = {
-        "id": "run-1",
-        "status": "SUCCEEDED",
-        "defaultDatasetId": "ds-1",
+def test_run_search_normalizes_tweet_shape():
+    """Output must have the keys our Store.insert_posts expects."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    raw = {
+        "tweets": [
+            {
+                "id": "123",
+                "text": "hello",
+                "lang": "en",
+                "createdAt": "2026-06-01T00:00:00Z",
+                "likeCount": 10,
+                "retweetCount": 2,
+                "replyCount": 1,
+                "quoteCount": 0,
+                "bookmarkCount": 0,
+                "isReply": True,
+                "isRetweet": False,
+                "inReplyToUserId": "999",
+                "author": {
+                    "userName": "alice",
+                    "name": "Alice",
+                    "followers": 5000,
+                    "isBlueVerified": True,
+                },
+            }
+        ]
     }
-    with patch.object(requests, "post", return_value=_mock_response(201, run_resp)):
-        with patch.object(
-            requests,
-            "get",
-            return_value=_mock_response(
-                200,
-                [
-                    {"userName": "alice", "name": "Alice", "followers_count": 100},
-                    {"screen_name": "bob", "display_name": "Bob", "followerCount": 50},
-                ],
-            ),
-        ):
-            out = client.run_followers("MiniMaxAI")
-            assert len(out) == 2
-            assert out[0]["handle"] == "alice"
-            assert out[0]["follower_count"] == 100
-            assert out[1]["handle"] == "bob"
-            assert out[1]["follower_count"] == 50
+    with patch.object(requests, "get", return_value=_mock_response(200, raw)):
+        out = client.run_search("from:alice")
+    assert len(out) == 1
+    t = out[0]
+    assert t["id"] == "123"
+    assert t["favorite_count"] == 10
+    assert t["retweet_count"] == 2
+    assert t["author_handle"] == "alice"
+    assert t["author_followers_count"] == 5000
+    assert t["author_verified"] is True
+    assert t["in_reply_to_user_id"] == "999"
 
 
-def test_from_env_requires_token(monkeypatch):
-    monkeypatch.delenv("APIFY_API_TOKEN", raising=False)
-    with pytest.raises(CookieMissingError, match="APIFY_API_TOKEN"):
-        ApifyClient.from_env()
+# --- run_followers --------------------------------------------------------
 
 
-def test_from_env_reads_token(monkeypatch):
-    monkeypatch.setenv("APIFY_API_TOKEN", "abc")
-    c = ApifyClient.from_env()
-    assert c.token == "abc"
-    assert c.actor == "automation-lab/twitter-scraper"
+def test_run_followers_single_page():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    body = {
+        "followers": [
+            {"userName": "alice", "name": "Alice", "followers": 100},
+            {"userName": "bob", "name": "Bob", "followers": 50},
+        ],
+        "next_cursor": None,
+    }
+    with patch.object(requests, "get", return_value=_mock_response(200, body)):
+        out = client.run_followers("MiniMaxAI", max_results=200)
+    assert len(out) == 2
+    assert out[0]["handle"] == "alice"
+    assert out[0]["follower_count"] == 100
+    assert out[1]["handle"] == "bob"
+    assert out[1]["follower_count"] == 50
+
+
+def test_run_followers_paginates_via_cursor():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    page1 = {
+        "followers": [
+            {"userName": f"user{i}", "name": f"User{i}", "followers": i}
+            for i in range(FOLLOWERS_MAX_PER_PAGE)
+        ],
+        "next_cursor": "page2",
+    }
+    page2 = {
+        "followers": [{"userName": "last", "name": "Last", "followers": 1}],
+        "next_cursor": None,
+    }
+    with patch.object(requests, "get", side_effect=[
+        _mock_response(200, page1),
+        _mock_response(200, page2),
+    ]) as mock_get:
+        out = client.run_followers("MiniMaxAI", max_results=250)
+    assert len(out) == FOLLOWERS_MAX_PER_PAGE + 1
+    # Second call must carry the cursor
+    second_call_params = mock_get.call_args_list[1].kwargs["params"]
+    assert second_call_params.get("cursor") == "page2"
+
+
+def test_run_followers_stops_at_max_results():
+    """Even if the API keeps returning pages, we stop at max_results."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    page1 = {
+        "followers": [
+            {"userName": f"u{i}", "name": f"U{i}", "followers": 1}
+            for i in range(FOLLOWERS_MAX_PER_PAGE)
+        ],
+        "next_cursor": "more",
+    }
+    page2 = {
+        "followers": [{"userName": "extra", "name": "X", "followers": 1}],
+        "next_cursor": None,
+    }
+    with patch.object(requests, "get", side_effect=[
+        _mock_response(200, page1),
+        _mock_response(200, page2),
+    ]):
+        out = client.run_followers("MiniMaxAI", max_results=50)
+    assert len(out) == 50
+
+
+def test_run_followers_cookies_arg_is_ignored():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    body = {"followers": [], "next_cursor": None}
+    with patch.object(requests, "get", return_value=_mock_response(200, body)):
+        out = client.run_followers(
+            "MiniMaxAI", cookies={"auth_token": "x", "ct0": "y"}
+        )
+        assert out == []
+
+
+# --- probe_api ------------------------------------------------------------
+
+
+def test_probe_api_returns_false_on_401():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(401, "unauth")):
+        assert client.probe_api() is False
+
+
+def test_probe_api_returns_true_on_success():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {
+        "status": "success", "data": {"userName": "MiniMaxAI"}
+    })):
+        assert client.probe_api() is True
+
+
+def test_probe_api_returns_true_on_transient_5xx():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(500, "boom")):
+        # Transient errors are NOT a liveness failure.
+        assert client.probe_api() is True
+
+
+# --- from_env -------------------------------------------------------------
+
+
+def test_from_env_requires_key(monkeypatch):
+    monkeypatch.delenv("TWITTERAPI_IO_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="TWITTERAPI_IO_API_KEY"):
+        TwitterApiClient.from_env()
+
+
+def test_from_env_reads_key(monkeypatch):
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "abc")
+    c = TwitterApiClient.from_env()
+    assert c.api_key == "abc"
+    assert c.base_url == "https://api.twitterapi.io"
+
+
+# --- normalizer unit tests -----------------------------------------------
+
+
+def test_normalize_tweet_handles_missing_fields():
+    out = _normalize_tweet({})
+    assert out["id"] == ""
+    assert out["favorite_count"] == 0
+    assert out["author_handle"] == ""
+    assert out["in_reply_to_user_id"] is None
+
+
+def test_normalize_follower_handles_missing_fields():
+    out = _normalize_follower({})
+    assert out["handle"] == ""
+    assert out["display_name"] == ""
+    assert out["follower_count"] == 0

@@ -1,5 +1,5 @@
 # {{AGENT_ATTRIBUTION}}
-"""Tests for x_monitor.run + x_monitor.cookie_check + x_monitor.query_rot + x_monitor.review."""
+"""Tests for x_monitor.run + x_monitor.query_rot + x_monitor.review."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from x_monitor.config import Config
-from x_monitor.cookie_check import run_cookie_check
 from x_monitor.queries import Query
 from x_monitor.query_rot import apply_rot, detect_rot, read_run_zero_result_streaks
 from x_monitor.review import ReviewQueue
@@ -111,7 +110,7 @@ def test_pipeline_lock_is_exclusive():
 
 
 def test_pipeline_writes_raw_before_db_insert():
-    """The raw Apify response is persisted to data/runs/raw/<run_id>/<q>.json
+    """The raw TwitterAPI.io response is persisted to data/runs/raw/<run_id>/<q>.json
     BEFORE the DB insert. We test by checking order via mocks."""
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
@@ -154,18 +153,15 @@ accounts:
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
-        # 1 probe + 5 query results
+        # 5 query results (no more cookie probe)
         apify.run_search.side_effect = [
-            [],  # cookie probe
             [{"id": "t1", "text": "hello", "author_handle": "u1"}],  # Q1
             [],  # Q2
             [],  # Q3
             [],  # Q4
             [],  # Q5
         ]
-        summary = p.execute(
-            apify, model_filter=["minimax"], cookies={"auth_token": "a", "ct0": "b"}
-        )
+        summary = p.execute(apify, model_filter=["minimax"])
         # All 5 queries should have run (cost 5*5=25 < 333 budget).
         assert summary["totals"]["n_queries_run"] == 5
         # Raw files present
@@ -254,33 +250,6 @@ def test_append_rule_match(tmp_path):
     q = ReviewQueue(tmp_path / "rq.json")
     q.append_rule_match("t1", "low_engagement", "m1", rule="release_min_faves")
     assert q.list()[0]["note"] == "release_min_faves"
-
-
-# --- cookie check --------------------------------------------------------
-
-
-def test_run_cookie_check_returns_false_on_missing(tmp_path):
-    apify = MagicMock()
-    ok, err = run_cookie_check(apify, cookie_path=tmp_path / "missing.json")
-    assert ok is False
-    assert err is not None
-
-
-def test_run_cookie_check_returns_true_on_probe_success():
-    apify = MagicMock()
-    apify.probe_cookie.return_value = True
-    ok, err = run_cookie_check(apify, cookie_path=None)
-    # cookie_path=None falls back to default; we patch load_cookies via apify
-    # probe. The default cookie path likely doesn't exist on test machine, so
-    # we expect a False here. Let's instead test with an explicit file:
-    import json as _json
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as d:
-        cp = Path(d) / "cookies.json"
-        cp.write_text(_json.dumps({"auth_token": "a", "ct0": "b"}))
-        ok, err = run_cookie_check(apify, cookie_path=cp)
-        assert ok is True
 
 
 # --- query_rot -----------------------------------------------------------
