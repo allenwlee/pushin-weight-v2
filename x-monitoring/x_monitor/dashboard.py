@@ -155,7 +155,8 @@ def serialize_grid_card(
         for sig in chart_series_keys:
             chart_series[sig].append(day_counter.get(sig, 0))
 
-    # Top 3 by favorite_count (ties broken by recency)
+    # Top 3 by like_count (ties broken by recency) — exposes DB column
+    # `favorite_count` under the user-facing name `like_count`.
     sorted_posts = sorted(
         in_window,
         key=lambda p: (
@@ -172,7 +173,7 @@ def serialize_grid_card(
             {
                 "tweet_id": p.get("tweet_id") or p.get("id"),
                 "text": text,
-                "favorite_count": p.get("favorite_count") or 0,
+                "like_count": p.get("favorite_count") or 0,
                 "author_handle": p.get("author_handle"),
                 "url": _tweet_url(p.get("author_handle"), p.get("tweet_id") or p.get("id")),
             }

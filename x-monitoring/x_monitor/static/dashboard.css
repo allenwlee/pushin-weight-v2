@@ -55,13 +55,10 @@ body {
 }
 .model-card:hover { border-color: var(--accent, #9ca3af); }
 
-.card-link {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  padding: 0.9rem 1rem;
-}
-.card-link:hover { background: rgba(255, 255, 255, 0.02); }
+/* Card body is now clickable via JS (trend-chart.js wireCardClicks).
+   The per-post <a class="top3-link"> handles tweet opens; everything else
+   navigates to the model drill-down. */
+.model-card { padding: 0.9rem 1rem; cursor: pointer; }
 
 .card-head {
   display: flex;
@@ -84,16 +81,25 @@ body {
 }
 .top3 li {
   font-size: 12px;
-  padding: 0.25rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.top3 li:last-child { border-bottom: none; }
+.top3 .top3-link {
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
+  padding: 0.25rem 0;
+  text-decoration: none;
+  color: inherit;
 }
-.top3 li:last-child { border-bottom: none; }
-.top3 .faves { color: var(--yellow); flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.top3 .text { flex: 1; }
-.top3 .ext { color: var(--link); text-decoration: none; }
+.top3 .top3-link:hover { background: rgba(255, 255, 255, 0.03); }
+.top3 .faves {
+  color: var(--yellow);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  min-width: 3.2em;  /* keeps the like-count flush-left, text indented under */
+}
+.top3 .text { flex: 1; word-break: break-word; }
 
 .card-foot {
   display: flex;
@@ -117,7 +123,8 @@ body {
 .trend-chart-wrap {
   margin: 0.5rem 0;
   position: relative;
-  height: 72px;
+  height: 120px;  /* taller: fills the gap that used to sit between chart
+                     and the top-3 list, and gives the Y-axis room for ticks */
 }
 .trend-chart {
   width: 100% !important;

@@ -459,3 +459,110 @@ class TestTrendChartAssets:
             assert "chart.js" in body
             assert "trend-chart.js" in body
 
+    def test_grid_html_no_outer_card_link_anchor(self):
+        """After refactor: no <a class="card-link"> wrapper. Card body
+        navigates via JS click handler (trend-chart.js wireCardClicks),
+        top-3 posts are first-class <a> tags."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax", "qwen"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/api/grid.html").get_data(as_text=True)
+            assert 'class="card-link"' not in body
+            # Each card should have a data-href for the JS click handler
+            assert body.count('data-href="/model/') == 2
+
+    def test_grid_html_top3_items_are_first_class_anchors(self):
+        """Each top-3 <li> must wrap its content in an <a class="top3-link">
+        with target='_blank' pointing at the tweet URL."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/api/grid.html").get_data(as_text=True)
+            # Empty top-3 in fresh DB; render the empty-state message
+            # but the template structure is still there.
+            assert 'class="top3"' in body
+            # Even with no posts, the .top3-item class shouldn't appear.
+            # Add a post to exercise the per-post anchor path:
+            # (Use direct serialize_grid_card instead.)
+            from x_monitor.dashboard import serialize_grid_card
+            from datetime import datetime, timezone
+            now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
+            posts = [
+                {"tweet_id": "t1", "model_id": "minimax", "author_handle": "u1",
+                 "text": "hello", "favorite_count": 7, "created_at": now_iso,
+                 "source_query_id": "Q5"},
+            ]
+            from jinja2 import Environment
+            env = Environment(loader=__import__("jinja2").FileSystemLoader(
+                str(Path("/Users/fuchitalee/development/minimax-marketing/x-monitoring/x_monitor/templates"))),
+            )
+            tpl = env.get_template("_model_card.html.j2")
+            rendered = tpl.render(
+                card=serialize_grid_card("minimax", posts),
+                MODEL_DISPLAY_NAMES={"minimax": "MiniMax AI"},
+                MODEL_ACCENT_COLORS={"minimax": "#3b82f6"},
+            )
+            assert 'class="top3-link"' in rendered
+            assert 'target="_blank"' in rendered
+            assert 'href="https://x.com/u1/status/t1"' in rendered
+
+
+
+def test_serialize_grid_card_top3_exposes_like_count_not_favorite_count():
+    """User-facing rename: the top3 dict key is `like_count`, not the raw
+    DB column name `favorite_count`. Keeps the DB schema stable while
+    exposing a clearer name to templates and the API."""
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
+    posts = [
+        {"tweet_id": "t1", "model_id": "minimax", "author_handle": "u1",
+         "text": "hi", "favorite_count": 42, "created_at": now_iso,
+         "source_query_id": "Q5"},
+        {"tweet_id": "t2", "model_id": "minimax", "author_handle": "u2",
+         "text": "wow", "favorite_count": 7, "created_at": now_iso,
+         "source_query_id": "Q6"},
+    ]
+    card = serialize_grid_card("minimax", posts)
+    # top-3 list has 2 entries here, ranked by like_count desc
+    top3 = card["top3_posts"]
+    assert len(top3) == 2
+    for entry in top3:
+        assert "like_count" in entry
+        assert "favorite_count" not in entry
+    # Ordering check: 42 first, 7 second
+    assert top3[0]["like_count"] == 42
+    assert top3[1]["like_count"] == 7
+
+
+def test_trend_chart_js_drops_begin_at_zero():
+    """After v1.1: Y-axis uses `suggestedMin: 0` not `beginAtZero: true`,
+    so a today=1 / yesterday=6 pair doesn't look like a cliff.
+    The literal `beginAtZero: true` should be gone from the JS file."""
+    js_path = Path("/Users/fuchitalee/development/minimax-marketing/x-monitoring/x_monitor/static/trend-chart.js")
+    body = js_path.read_text()
+    assert "beginAtZero: true" not in body, (
+        "trend-chart.js still pins Y axis to zero; remove beginAtZero so "
+        "low-volume days don't look like cliffs"
+    )
+    assert "suggestedMin: 0" in body
+
+
+def test_trend_chart_js_wires_card_click_handler():
+    """After card-link refactor: the JS bootstrap installs a click handler
+    on .model-card[data-href] so the card body still navigates to the
+    drill-down page, while clicks on the per-post .top3-link anchors
+    bubble up to the tweet URL instead."""
+    js_path = Path("/Users/fuchitalee/development/minimax-marketing/x-monitoring/x_monitor/static/trend-chart.js")
+    body = js_path.read_text()
+    assert "wireCardClicks" in body, "missing wireCardClicks handler"
+    assert "data-href" in body, "missing data-href attribute reference"
+    # Per-post anchor clicks must be ignored by the card-level handler
+    assert "e.target.closest('a')" in body

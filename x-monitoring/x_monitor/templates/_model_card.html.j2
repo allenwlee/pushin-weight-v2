@@ -1,7 +1,6 @@
 {# {{AGENT_ATTRIBUTION}} #}
-<div class="model-card" data-model-id="{{ card.model_id }}" style="--accent: {{ card.accent_color }};">
-  <a class="card-link" href="/model/{{ card.model_id }}">
-    <header class="card-head">
+<div class="model-card" data-model-id="{{ card.model_id }}" data-href="/model/{{ card.model_id }}" style="--accent: {{ card.accent_color }};">
+  <header class="card-head">
       <h2>{{ card.display_name }}</h2>
       <span class="model-id muted">{{ card.model_id }}</span>
     </header>
@@ -12,10 +11,11 @@
     </div>
     <ul class="top3">
       {% for p in card.top3_posts %}
-        <li>
-          <span class="faves">★{{ p.favorite_count }}</span>
-          <span class="text">{{ p.text }}</span>
-          {% if p.url %}<a class="ext" href="{{ p.url }}" target="_blank" rel="noopener">↗</a>{% endif %}
+        <li class="top3-item">
+          <a class="top3-link" href="{{ p.url }}" target="_blank" rel="noopener">
+            <span class="faves">★{{ p.like_count }}</span>
+            <span class="text">{{ p.text }}</span>
+          </a>
         </li>
       {% else %}
         <li class="muted small">no top posts yet</li>
@@ -29,5 +29,4 @@
         {% endfor %}
       </span>
     </footer>
-  </a>
 </div>

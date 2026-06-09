@@ -118,7 +118,10 @@
             grid: { display: false },
           },
           y: {
-            beginAtZero: true,
+            // Don't force beginAtZero: the latest day may have just 1 tweet
+            // while yesterday had 6+. beginAtZero makes the right edge look
+            // like a cliff. The suggestedMin floor is just a visual anchor.
+            suggestedMin: 0,
             stacked: true,
             title: {
               display: true,
@@ -152,5 +155,36 @@
   // swapped-in container.
   document.body.addEventListener('htmx:afterSwap', function (evt) {
     renderAll(evt.target);
+  });
+
+  // Card-wide click handler. After the card-link <a> wrapper was removed
+  // (so each top-3 post can be a real first-class <a> to the tweet), the
+  // rest of the card body (header, chart, footer) needs an explicit way
+  // to navigate to the model drill-down. Clicks on .top3-link (the per-post
+  // anchors) stop propagation so the tweet opens in a new tab as expected.
+  function wireCardClicks(root) {
+    var scope = root || document;
+    var cards = scope.querySelectorAll('.model-card[data-href]');
+    for (var i = 0; i < cards.length; i++) {
+      (function (card) {
+        if (card.__cardClickWired) return;
+        card.__cardClickWired = true;
+        card.addEventListener('click', function (e) {
+          // Don't intercept clicks on real anchors inside the card
+          // (the per-post top-3 links).
+          if (e.target.closest('a')) return;
+          // Don't intercept clicks on canvas / chart (they may handle
+          // their own events).
+          if (e.target.closest('canvas')) return;
+          window.location.href = card.getAttribute('data-href');
+        });
+      })(cards[i]);
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    wireCardClicks(document);
+  });
+  document.body.addEventListener('htmx:afterSwap', function (evt) {
+    wireCardClicks(evt.target);
   });
 })();
