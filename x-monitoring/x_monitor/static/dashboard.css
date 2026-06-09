@@ -77,21 +77,6 @@ body {
   opacity: 0.85;
 }
 
-.signal-bar {
-  display: flex;
-  height: 6px;
-  border-radius: 3px;
-  overflow: hidden;
-  background: var(--card-border);
-  margin: 0.5rem 0;
-}
-.signal-bar .seg { display: block; height: 100%; }
-.signal-bar .seg.release { background: var(--bar-release); }
-.signal-bar .seg.community { background: var(--bar-community); }
-.signal-bar .seg.criticism { background: var(--bar-criticism); }
-.signal-bar .seg.other { background: var(--bar-other); }
-.signal-bar .seg.praise { background: var(--bar-praise); }
-
 .top3 {
   list-style: none;
   padding: 0;
@@ -128,3 +113,14 @@ body {
 }
 .badge.red { background: var(--red); color: #fff; }
 .badge.yellow { background: var(--yellow); color: #000; }
+
+.trend-chart-wrap {
+  margin: 0.5rem 0;
+  position: relative;
+  height: 72px;
+}
+.trend-chart {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}

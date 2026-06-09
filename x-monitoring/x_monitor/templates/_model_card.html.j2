@@ -5,20 +5,10 @@
       <h2>{{ card.display_name }}</h2>
       <span class="model-id muted">{{ card.model_id }}</span>
     </header>
-    <div class="sparkline-wrap" style="color: var(--accent);">
-      {{ card.sparkline_svg|safe }}
-    </div>
-    <div class="signal-bar">
-      {% set total = (card.signal_breakdown.values()|sum) %}
-      {% if total > 0 %}
-        <span class="seg release" style="width: {{ (card.signal_breakdown.get('release', 0) / total * 100)|round(1) }}%"></span>
-        <span class="seg community" style="width: {{ (card.signal_breakdown.get('community_question', 0) / total * 100)|round(1) }}%"></span>
-        <span class="seg criticism" style="width: {{ (card.signal_breakdown.get('criticism', 0) / total * 100)|round(1) }}%"></span>
-        <span class="seg other" style="width: {{ (card.signal_breakdown.get('other', 0) + card.signal_breakdown.get('commenter_capture', 0)) / total * 100|round(1) }}%"></span>
-        <span class="seg praise" style="width: {{ (card.signal_breakdown.get('praise', 0) / total * 100)|round(1) }}%"></span>
-      {% else %}
-        <span class="muted small">no posts in window</span>
-      {% endif %}
+    <div class="trend-chart-wrap" data-chart='{{ card.chart|tojson }}'>
+      <canvas class="trend-chart"
+              data-model-id="{{ card.model_id }}"
+              aria-label="Daily tweet volume by signal, last 14 days"></canvas>
     </div>
     <ul class="top3">
       {% for p in card.top3_posts %}

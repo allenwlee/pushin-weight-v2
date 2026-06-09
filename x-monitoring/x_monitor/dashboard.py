@@ -53,44 +53,6 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
 # --- Sparkline ------------------------------------------------------------
 
 
-def build_sparkline(posts_by_day: list[int], days: int = 14) -> str:
-    """Return inline SVG for a sparkline of `days` data points.
-
-    `posts_by_day` is a list of post counts ordered oldest -> newest.
-    Width 200, height 36, no axes/labels.
-    """
-    # Pad to days
-    if len(posts_by_day) < days:
-        posts_by_day = [0] * (days - len(posts_by_day)) + list(posts_by_day)
-    elif len(posts_by_day) > days:
-        posts_by_day = list(posts_by_day[-days:])
-
-    width = 200
-    height = 36
-    pad = 2
-    inner_w = width - 2 * pad
-    inner_h = height - 2 * pad
-    max_v = max(max(posts_by_day), 1)
-    step = inner_w / max(days - 1, 1)
-    points: list[str] = []
-    for i, v in enumerate(posts_by_day):
-        x = pad + i * step
-        y = pad + inner_h - (v / max_v) * inner_h
-        points.append(f"{x:.1f},{y:.1f}")
-    polyline = " ".join(points)
-    last = posts_by_day[-1] if posts_by_day else 0
-    last_x = pad + (days - 1) * step
-    last_y = pad + inner_h - (last / max_v) * inner_h
-    return (
-        f'<svg class="sparkline" viewBox="0 0 {width} {height}" '
-        f'width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">'
-        f'<polyline points="{polyline}" fill="none" stroke="currentColor" '
-        f'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
-        f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="2" fill="currentColor"/>'
-        f"</svg>"
-    )
-
-
 # --- Card data assembly ---------------------------------------------------
 
 
@@ -125,6 +87,23 @@ def _parse_post_timestamp(created):
         return None
 
 
+# Canonical query_id -> expected_signal mapping. Single source of truth
+# shared by the totals branch and the per-day branch in serialize_grid_card.
+_QID_TO_SIGNAL: dict[str, str] = {
+    "Q1": "release",
+    "Q2": "community_question",
+    "Q3": "criticism",
+    "Q4": "commenter_capture",
+    "Q5": "other",
+    "Q6": "praise",
+}
+
+
+def _qid_to_signal(qid: str) -> str | None:
+    """Map a source_query_id to its expected_signal name, or None for unknown."""
+    return _QID_TO_SIGNAL.get(qid)
+
+
 def serialize_grid_card(
     model_id: str,
     posts: list[dict[str, Any]],
@@ -143,34 +122,38 @@ def serialize_grid_card(
         if dt >= cutoff:
             in_window.append(p)
 
-    # Posts per day (oldest -> newest), padded to window_days
-    day_counts: Counter[str] = Counter()
+    # Per-day per-signal counts. day_signal_counts[iso_date][signal] = int.
+    # A single pass populates both the totals (sig_counts) and the per-day
+    # grid that powers the stacked area chart.
+    sig_counts: Counter[str] = Counter()
+    day_signal_counts: dict[str, Counter[str]] = {}
     for p in in_window:
+        sqid = p.get("source_query_id") or ""
+        signal = _qid_to_signal(sqid)
+        if signal is None:
+            continue
+        sig_counts[signal] += 1
         dt = _parse_post_timestamp(p.get("created_at"))
         if dt is None:
             continue
-        day_counts[dt.date().isoformat()] += 1
-    posts_by_day: list[int] = []
+        day_signal_counts.setdefault(dt.date().isoformat(), Counter())[signal] += 1
+
+    # Materialize the per-day grid into the response shape Chart.js wants:
+    # `days` is a list of ISO date strings (oldest -> newest), and each series
+    # is a list[int] aligned to `days` with the count for that signal on that
+    # day (0 if no posts). Six series, ordered to match the bar segments.
+    chart_series_keys: tuple[str, ...] = (
+        "release", "community_question", "criticism",
+        "commenter_capture", "other", "praise",
+    )
+    chart_days: list[str] = []
+    chart_series: dict[str, list[int]] = {k: [] for k in chart_series_keys}
     for i in range(window_days - 1, -1, -1):
         d = (now.date() - timedelta(days=i)).isoformat()
-        posts_by_day.append(day_counts.get(d, 0))
-
-    # Signal-type breakdown (count of each expected_signal via source_query_id)
-    sig_counts: Counter[str] = Counter()
-    for p in in_window:
-        sqid = p.get("source_query_id") or ""
-        if sqid == "Q1":
-            sig_counts["release"] += 1
-        elif sqid == "Q2":
-            sig_counts["community_question"] += 1
-        elif sqid == "Q3":
-            sig_counts["criticism"] += 1
-        elif sqid == "Q4":
-            sig_counts["commenter_capture"] += 1
-        elif sqid == "Q5":
-            sig_counts["other"] += 1
-        elif sqid == "Q6":
-            sig_counts["praise"] += 1
+        chart_days.append(d)
+        day_counter = day_signal_counts.get(d, Counter())
+        for sig in chart_series_keys:
+            chart_series[sig].append(day_counter.get(sig, 0))
 
     # Top 3 by favorite_count (ties broken by recency)
     sorted_posts = sorted(
@@ -214,7 +197,7 @@ def serialize_grid_card(
         "model_id": model_id,
         "display_name": MODEL_DISPLAY_NAMES.get(model_id, model_id),
         "accent_color": MODEL_ACCENT_COLORS.get(model_id, "#9ca3af"),
-        "sparkline_svg": build_sparkline(posts_by_day, days=window_days),
+        "chart": {"days": chart_days, "series": chart_series},
         "signal_breakdown": dict(sig_counts),
         "top3_posts": top3,
         "n_posts_in_window": len(in_window),

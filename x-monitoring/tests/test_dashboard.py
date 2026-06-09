@@ -13,37 +13,11 @@ import pytest
 from x_monitor.config import Config
 from x_monitor.dashboard import (
     MODEL_DISPLAY_NAMES,
+    _qid_to_signal,
     _parse_post_timestamp,
-    build_sparkline,
     serialize_grid_card,
 )
 from x_monitor.store import Store
-
-
-def test_build_sparkline_returns_svg():
-    svg = build_sparkline([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], days=14)
-    assert "<svg" in svg
-    assert "</svg>" in svg
-    assert "polyline" in svg
-    # No external <image href>
-    assert "<image" not in svg
-
-
-def test_build_sparkline_deterministic():
-    a = build_sparkline([1, 2, 3] * 5, days=14)
-    b = build_sparkline([1, 2, 3] * 5, days=14)
-    assert a == b
-
-
-def test_build_sparkline_handles_empty():
-    svg = build_sparkline([], days=14)
-    assert "<svg" in svg
-    assert "<polyline" in svg
-
-
-def test_build_sparkline_handles_all_zeros():
-    svg = build_sparkline([0] * 14, days=14)
-    assert "<svg" in svg
 
 
 def test_serialize_grid_card_no_posts():
@@ -52,7 +26,10 @@ def test_serialize_grid_card_no_posts():
         try:
             card = serialize_grid_card("minimax", [], window_days=14, latest_run=None)
             assert card["model_id"] == "minimax"
-            assert "no posts" in card["sparkline_svg"] or "<svg" in card["sparkline_svg"]
+            chart = card["chart"]
+            assert len(chart["days"]) == 14
+            for series in chart["series"].values():
+                assert series == [0] * 14
             assert card["n_posts_in_window"] == 0
             assert card["top3_posts"] == []
             assert card["degraded_sentinels"] == []
@@ -135,15 +112,17 @@ def test_dashboard_api_grid_json_returns_cards():
         for card in body["cards"]:
             for key in (
                 "model_id",
-                "sparkline_svg",
+                "chart",
                 "signal_breakdown",
                 "top3_posts",
                 "degraded_sentinels",
                 "last_run_at",
             ):
                 assert key in card
-            assert "<svg" in card["sparkline_svg"]
-            assert "<image" not in card["sparkline_svg"]
+            assert "days" in card["chart"]
+            assert "series" in card["chart"]
+            assert len(card["chart"]["days"]) == 14
+            assert len(card["chart"]["series"]) == 6
 
 
 def test_dashboard_unknown_model_returns_404():
@@ -211,6 +190,90 @@ def test_dashboard_htmx_script_included_exactly_once():
         body = client.get("/").get_data(as_text=True)
         # htmx script tag
         assert body.count("htmx.org") == 1
+
+def test_serialize_grid_card_chart_six_series_aligned_to_window():
+    """Feed posts on 3 different days with different Q-IDs; each series
+    must be 14 entries, with the right day indices holding the right counts."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    days_ago = [0, 3, 10]  # today, 3 days ago, 10 days ago
+    posts = []
+    for i, ago in enumerate(days_ago):
+        ts = (now - timedelta(days=ago)).strftime("%a %b %d %H:%M:%S %z %Y")
+        qid = ["Q1", "Q3", "Q6"][i]
+        posts.append(
+            {
+                "tweet_id": f"t{i}",
+                "model_id": "minimax",
+                "author_handle": f"u{i}",
+                "text": f"hello {i}",
+                "favorite_count": i,
+                "created_at": ts,
+                "source_query_id": qid,
+            }
+        )
+    card = serialize_grid_card("minimax", posts, window_days=14)
+    chart = card["chart"]
+    assert len(chart["days"]) == 14
+    assert set(chart["series"].keys()) == {
+        "release", "community_question", "criticism",
+        "commenter_capture", "other", "praise",
+    }
+    for key, expected in [
+        ("release", 1),
+        ("criticism", 1),
+        ("praise", 1),
+        ("community_question", 0),
+        ("commenter_capture", 0),
+        ("other", 0),
+    ]:
+        assert sum(chart["series"][key]) == expected, f"{key} total wrong"
+    # The Q1 post was on "today" -> index 13 (oldest is i=0)
+    assert chart["series"]["release"][13] == 1
+    # The Q3 post was 3 days ago -> index 10
+    assert chart["series"]["criticism"][10] == 1
+    # The Q6 post was 10 days ago -> index 3
+    assert chart["series"]["praise"][3] == 1
+
+
+def test_serialize_grid_card_chart_unknown_qid_dropped():
+    """Unknown Q-IDs (defensive) must not pollute any series."""
+    from datetime import datetime, timezone
+
+    now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
+    posts = [
+        {"tweet_id": "t1", "model_id": "minimax", "author_handle": "u1",
+         "text": "?", "favorite_count": 0, "created_at": now_iso,
+         "source_query_id": "Q99"},
+    ]
+    card = serialize_grid_card("minimax", posts, window_days=14)
+    for series in card["chart"]["series"].values():
+        assert sum(series) == 0
+    assert card["signal_breakdown"] == {}
+
+
+def test_serialize_grid_card_chart_zero_posts_window():
+    """Empty input -> 14-day axis with all-zero series."""
+    card = serialize_grid_card("minimax", [], window_days=14)
+    chart = card["chart"]
+    assert len(chart["days"]) == 14
+    for key in ("release", "community_question", "criticism",
+                "commenter_capture", "other", "praise"):
+        assert chart["series"][key] == [0] * 14
+
+
+def test_qid_to_signal_helper():
+    assert _qid_to_signal("Q1") == "release"
+    assert _qid_to_signal("Q2") == "community_question"
+    assert _qid_to_signal("Q3") == "criticism"
+    assert _qid_to_signal("Q4") == "commenter_capture"
+    assert _qid_to_signal("Q5") == "other"
+    assert _qid_to_signal("Q6") == "praise"
+    assert _qid_to_signal("Q99") is None
+    assert _qid_to_signal("") is None
+    assert _qid_to_signal(None) is None
+
 
 class TestParsePostTimestamp:
     def test_iso8601_with_z(self):
@@ -332,4 +395,67 @@ def test_serialize_grid_card_unknown_query_id_does_not_count():
     card = serialize_grid_card("minimax", posts)
     # Q99 is unknown; it must not be bucketed into praise or any other signal
     assert card["signal_breakdown"] == {}
+
+
+class TestTrendChartAssets:
+    def test_api_grid_html_includes_chart_canvas_per_card(self):
+        """Each enabled model must get exactly one canvas.trend-chart in the
+        /api/grid.html response, with a data-chart JSON payload that decodes
+        into the expected 14-day / 6-series shape."""
+        import json as _json
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax", "qwen"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/api/grid.html").get_data(as_text=True)
+            assert body.count('class="trend-chart"') == 2
+            # Each wrap must have a JSON-parseable data-chart attribute with
+            # 14 days and 6 series.
+            import re
+            for match in re.finditer(r"""data-chart='([^']+)'""", body):
+                payload = _json.loads(match.group(1))
+                assert len(payload["days"]) == 14
+                assert len(payload["series"]) == 6
+
+    def test_grid_page_loads_chartjs_from_cdn(self):
+        """The / page must include the Chart.js CDN script tag."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/").get_data(as_text=True)
+            assert "chart.js" in body
+            assert "unpkg.com" in body
+
+    def test_grid_page_loads_static_trend_chart_js(self):
+        """The / page must reference the local trend-chart.js asset."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/").get_data(as_text=True)
+            assert "trend-chart.js" in body
+
+    def test_model_detail_page_loads_chartjs(self):
+        """Drill-down loads the chart deps too (drill-down doesn't render
+        a chart today, but keeps the dep in one place)."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/model/minimax").get_data(as_text=True)
+            assert "chart.js" in body
+            assert "trend-chart.js" in body
 
