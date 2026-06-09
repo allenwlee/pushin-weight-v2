@@ -12,13 +12,14 @@
     <h1>x-monitor</h1>
     <span class="muted">{{ cards|length }} models · polling every {{ poll_seconds }}s</span>
   </header>
+  {# hx-swap="innerHTML" so the <main> element persists across polls — that
+     keeps the hx-trigger attribute attached, so polling continues. The JSON
+     endpoint stays for external consumers; the HTML one drives the live UI. #}
   <main id="grid" class="grid"
-        hx-get="/api/grid.json"
+        hx-get="/api/grid.html"
         hx-trigger="every {{ poll_seconds }}s"
-        hx-swap="outerHTML">
-    {% for card in cards %}
-      {% include "_model_card.html.j2" %}
-    {% endfor %}
+        hx-swap="innerHTML">
+    {% include "_grid_cards.html.j2" %}
   </main>
 </body>
 </html>

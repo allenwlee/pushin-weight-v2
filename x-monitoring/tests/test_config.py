@@ -18,7 +18,7 @@ def _write(tmp: Path, body: str) -> Path:
     return p
 
 
-def test_loads_all_9_models():
+def test_loads_all_known_models():
     with tempfile.TemporaryDirectory() as d:
         path = _write(
             Path(d),
@@ -30,14 +30,12 @@ enabled_models:
   - glm
   - xiaomi_mimo
   - moonshot_kimi
-  - inclusionai_ling
-  - inclusionai_ring
-  - inclusionai_ming
+  - inclusionai
 daily_ceiling: 333
 """,
         )
         c = load_config(path)
-        assert len(c.enabled_models) == 9
+        assert len(c.enabled_models) == len(KNOWN_MODELS)
         for m in KNOWN_MODELS:
             assert m in c.enabled_models
 
@@ -115,10 +113,10 @@ daily_ceiling: 100
 
 
 def test_default_skip_order_is_r17():
-    """R17: skip order is Q5, Q3, Q2, Q4, Q1 (Q1 last because release has the
+    """R17: skip order is Q6, Q5, Q3, Q2, Q4, Q1 (Q1 last because release has the
     highest signal-per-tweet ratio)."""
     c = Config(enabled_models=["minimax"], daily_ceiling=100)
-    assert c.degraded_skip_order == ["Q5", "Q3", "Q2", "Q4", "Q1"]
+    assert c.degraded_skip_order == ["Q6", "Q5", "Q3", "Q2", "Q4", "Q1"]
 
 
 def test_skip_order_must_contain_all_query_ids():

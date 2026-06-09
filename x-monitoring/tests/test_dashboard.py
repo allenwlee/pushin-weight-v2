@@ -13,6 +13,7 @@ import pytest
 from x_monitor.config import Config
 from x_monitor.dashboard import (
     MODEL_DISPLAY_NAMES,
+    _parse_post_timestamp,
     build_sparkline,
     serialize_grid_card,
 )
@@ -101,7 +102,7 @@ def test_serialize_grid_card_query_rot_sentinel():
         assert any("q_error:Q3" in s for s in card["degraded_sentinels"])
 
 
-def test_dashboard_index_renders_nine_cards():
+def test_dashboard_index_renders_all_known_cards():
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
         cfg = Config(enabled_models=list(MODEL_DISPLAY_NAMES.keys()), daily_ceiling=333)
@@ -114,8 +115,8 @@ def test_dashboard_index_renders_nine_cards():
         body = resp.get_data(as_text=True)
         for m in cfg.enabled_models:
             assert f'data-model-id="{m}"' in body
-        # Exactly 9 model cards
-        assert body.count('class="model-card"') == 9
+        # Exactly len(MODEL_DISPLAY_NAMES) model cards
+        assert body.count('class="model-card"') == len(MODEL_DISPLAY_NAMES)
 
 
 def test_dashboard_api_grid_json_returns_cards():
@@ -210,3 +211,125 @@ def test_dashboard_htmx_script_included_exactly_once():
         body = client.get("/").get_data(as_text=True)
         # htmx script tag
         assert body.count("htmx.org") == 1
+
+class TestParsePostTimestamp:
+    def test_iso8601_with_z(self):
+        dt = _parse_post_timestamp("2026-06-08T22:40:07Z")
+        assert dt is not None
+        assert dt.tzinfo is not None
+        assert dt.year == 2026 and dt.hour == 22
+
+    def test_iso8601_with_offset(self):
+        dt = _parse_post_timestamp("2026-06-08T22:40:07+00:00")
+        assert dt is not None
+        assert dt.utcoffset().total_seconds() == 0
+
+    def test_twitter_legacy_format(self):
+        # Twitter legacy: "Mon Jun 08 22:40:07 +0000 2026"
+        dt = _parse_post_timestamp("Mon Jun 08 22:40:07 +0000 2026")
+        assert dt is not None
+        assert dt.year == 2026
+        assert dt.month == 6 and dt.day == 8 and dt.hour == 22
+        assert dt.utcoffset().total_seconds() == 0
+
+    def test_none_returns_none(self):
+        assert _parse_post_timestamp(None) is None
+
+    def test_empty_string_returns_none(self):
+        assert _parse_post_timestamp("") is None
+
+    def test_garbage_returns_none(self):
+        assert _parse_post_timestamp("not a date") is None
+
+
+class TestGridHtmlPollEndpoint:
+    def test_returns_html_content_type(self):
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            resp = client.get("/api/grid.html")
+            assert resp.status_code == 200
+            assert "text/html" in resp.content_type
+
+    def test_renders_one_card_per_enabled_model(self):
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=list(MODEL_DISPLAY_NAMES.keys()), daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/api/grid.html").get_data(as_text=True)
+            assert body.count('class="model-card"') == len(MODEL_DISPLAY_NAMES)
+
+    def test_response_is_innerhtml_fragment_not_full_page(self):
+        """The poll response must NOT include <html>/<body> wrappers — htmx
+        swaps it as innerHTML of <main>."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/api/grid.html").get_data(as_text=True)
+            assert "<html" not in body
+            assert "<body" not in body
+            assert "</body>" not in body
+
+    def test_grid_page_polls_html_endpoint(self):
+        """The / page's <main> must hx-get the HTML endpoint so polling works."""
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+            from x_monitor.dashboard import DashboardApp
+
+            app = DashboardApp(cfg, data, db_path=data / "x.db")
+            client = app.app.test_client()
+            body = client.get("/").get_data(as_text=True)
+            assert 'hx-get="/api/grid.html"' in body
+            # innerHTML swap keeps <main> alive across polls
+            assert 'hx-swap="innerHTML"' in body
+            # the trigger must be present and periodic
+            assert "every 30s" in body
+
+
+def test_serialize_grid_card_q6_maps_to_praise():
+    """Q6 (praise) posts must be counted under 'praise' in signal_breakdown."""
+    from datetime import datetime, timezone
+    # Use a recent timestamp so it falls inside the 14-day window
+    now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
+    posts = [
+        {"tweet_id": "t1", "model_id": "minimax", "source_query_id": "Q6",
+         "text": "amazing!", "favorite_count": 10, "created_at": now_iso,
+         "author_handle": "u1"},
+        {"tweet_id": "t2", "model_id": "minimax", "source_query_id": "Q6",
+         "text": "best!", "favorite_count": 5, "created_at": now_iso,
+         "author_handle": "u2"},
+        {"tweet_id": "t3", "model_id": "minimax", "source_query_id": "Q2",
+         "text": "how does X work?", "favorite_count": 1, "created_at": now_iso,
+         "author_handle": "u3"},
+    ]
+    card = serialize_grid_card("minimax", posts)
+    assert card["signal_breakdown"].get("praise", 0) == 2
+    assert card["signal_breakdown"].get("community_question", 0) == 1
+    assert card["n_posts_in_window"] == 3
+
+
+def test_serialize_grid_card_unknown_query_id_does_not_count():
+    """Unknown Q-IDs (defensive) should not crash or be silently miscounted."""
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
+    posts = [
+        {"tweet_id": "t1", "model_id": "minimax", "source_query_id": "Q99",
+         "text": "???", "favorite_count": 0, "created_at": now_iso,
+         "author_handle": "u1"},
+    ]
+    card = serialize_grid_card("minimax", posts)
+    # Q99 is unknown; it must not be bucketed into praise or any other signal
+    assert card["signal_breakdown"] == {}
+

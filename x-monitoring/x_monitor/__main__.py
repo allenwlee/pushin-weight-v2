@@ -275,7 +275,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="Run the daily harvest")
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--models", help="comma-separated model_id filter")
-    p_run.add_argument("--queries", help="comma-separated query_id filter (Q1..Q5)")
+    p_run.add_argument("--queries", help="comma-separated query_id filter (Q1..Q6)")
     p_run.set_defaults(func=cmd_run)
 
     p_dr = sub.add_parser("dry-run", help="Alias for `run --dry-run`")

@@ -33,9 +33,7 @@ MODEL_DISPLAY_NAMES: dict[str, str] = {
     "glm": "Zhipu GLM",
     "xiaomi_mimo": "Xiaomi MiMo",
     "moonshot_kimi": "Moonshot Kimi",
-    "inclusionai_ling": "InclusionAI Ling",
-    "inclusionai_ring": "InclusionAI Ring",
-    "inclusionai_ming": "InclusionAI Ming",
+    "inclusionai": "InclusionAI",
 }
 
 # Accent color per model — drives the card border-left + sparkline stroke.
@@ -46,9 +44,9 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
     "glm": "#a855f7",
     "xiaomi_mimo": "#eab308",
     "moonshot_kimi": "#ec4899",
-    "inclusionai_ling": "#06b6d4",
-    "inclusionai_ring": "#6366f1",
-    "inclusionai_ming": "#84cc16",
+    "inclusionai": "#06b6d4",
+    
+    
 }
 
 
@@ -109,6 +107,24 @@ def _load_latest_run(runs_dir: Path) -> dict[str, Any] | None:
     return None
 
 
+def _parse_post_timestamp(created):
+    """Parse a tweet created_at into an aware UTC datetime, or None.
+
+    Accepts ISO 8601 ("Z" or "+HH:MM") and Twitter legacy
+    ("Mon Jun 08 22:40:07 +0000 2026").
+    """
+    if not created:
+        return None
+    try:
+        return datetime.fromisoformat(created.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(created, "%a %b %d %H:%M:%S %z %Y")
+    except ValueError:
+        return None
+
+
 def serialize_grid_card(
     model_id: str,
     posts: list[dict[str, Any]],
@@ -121,12 +137,8 @@ def serialize_grid_card(
     cutoff = now - timedelta(days=window_days)
     in_window: list[dict[str, Any]] = []
     for p in posts:
-        created = p.get("created_at")
-        if not created:
-            continue
-        try:
-            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-        except ValueError:
+        dt = _parse_post_timestamp(p.get("created_at"))
+        if dt is None:
             continue
         if dt >= cutoff:
             in_window.append(p)
@@ -134,12 +146,8 @@ def serialize_grid_card(
     # Posts per day (oldest -> newest), padded to window_days
     day_counts: Counter[str] = Counter()
     for p in in_window:
-        created = p.get("created_at")
-        if not created:
-            continue
-        try:
-            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-        except ValueError:
+        dt = _parse_post_timestamp(p.get("created_at"))
+        if dt is None:
             continue
         day_counts[dt.date().isoformat()] += 1
     posts_by_day: list[int] = []
@@ -161,6 +169,8 @@ def serialize_grid_card(
             sig_counts["commenter_capture"] += 1
         elif sqid == "Q5":
             sig_counts["other"] += 1
+        elif sqid == "Q6":
+            sig_counts["praise"] += 1
 
     # Top 3 by favorite_count (ties broken by recency)
     sorted_posts = sorted(
@@ -254,6 +264,23 @@ class DashboardApp:
         self.app = app
         self._register_routes()
 
+    def _build_cards(self, db_path) -> tuple[list[dict], dict | None]:
+        """Build card payloads for all enabled models. Shared by /, /api/grid.json, /api/grid.html."""
+        cards: list[dict] = []
+        latest_run = _load_latest_run(self.runs_dir)
+        store = Store(db_path)
+        try:
+            for m in self.config.enabled_models:
+                posts = store.get_all_posts(m)
+                cards.append(
+                    serialize_grid_card(
+                        m, posts, window_days=self.config.dashboard.window_days, latest_run=latest_run
+                    )
+                )
+        finally:
+            store.close()
+        return cards, latest_run
+
     def _register_routes(self) -> None:
         app = self.app
         data_dir = self.data_dir
@@ -262,40 +289,24 @@ class DashboardApp:
 
         @app.route("/")
         def index():
-            cards = []
-            latest_run = _load_latest_run(self.runs_dir)
-            store = Store(db_path)
-            try:
-                for m in self.config.enabled_models:
-                    posts = store.get_all_posts(m)
-                    cards.append(
-                        serialize_grid_card(
-                            m, posts, window_days=window_days, latest_run=latest_run
-                        )
-                    )
-            finally:
-                store.close()
+            cards, _latest_run = self._build_cards(db_path)
             return render_template(
                 "grid.html.j2",
                 cards=cards,
                 poll_seconds=self.config.dashboard.poll_seconds,
             )
 
+        @app.route("/api/grid.html")
+        def api_grid_html():
+            # HTML fragment of just the cards; htmx polls this every Ns.
+            # Returns innerHTML payload so the wrapping <main> element
+            # persists and keeps its hx-trigger attribute attached.
+            cards, _latest_run = self._build_cards(db_path)
+            return render_template("_grid_cards.html.j2", cards=cards)
+
         @app.route("/api/grid.json")
         def api_grid():
-            cards = []
-            latest_run = _load_latest_run(self.runs_dir)
-            store = Store(db_path)
-            try:
-                for m in self.config.enabled_models:
-                    posts = store.get_all_posts(m)
-                    cards.append(
-                        serialize_grid_card(
-                            m, posts, window_days=window_days, latest_run=latest_run
-                        )
-                    )
-            finally:
-                store.close()
+            cards, _latest_run = self._build_cards(db_path)
             return jsonify({"cards": cards, "fetched_at": datetime.now(timezone.utc).isoformat()})
 
         @app.route("/model/<model_id>")

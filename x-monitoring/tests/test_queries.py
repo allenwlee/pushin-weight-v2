@@ -41,9 +41,7 @@ def test_loads_5_queries_per_model():
             "glm",
             "xiaomi_mimo",
             "moonshot_kimi",
-            "inclusionai_ling",
-            "inclusionai_ring",
-            "inclusionai_ming",
+            "inclusionai",
         ]
         for mid in all_ids:
             body = f"""
@@ -63,11 +61,14 @@ queries:
   - id: Q5
     query_string: '{mid} benchmark min_faves:3'
     expected_signal: other
+  - id: Q6
+    query_string: '{mid} amazing min_faves:5'
+    expected_signal: praise
 """
             _write_query_yaml(root, mid, body)
         for mid in all_ids:
             qs = load_queries(mid, root)
-            assert len(qs) == 5
+            assert len(qs) == 6
             assert {q.id for q in qs} == set(QUERY_IDS)
 
 

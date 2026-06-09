@@ -15,6 +15,7 @@
         <span class="seg community" style="width: {{ (card.signal_breakdown.get('community_question', 0) / total * 100)|round(1) }}%"></span>
         <span class="seg criticism" style="width: {{ (card.signal_breakdown.get('criticism', 0) / total * 100)|round(1) }}%"></span>
         <span class="seg other" style="width: {{ (card.signal_breakdown.get('other', 0) + card.signal_breakdown.get('commenter_capture', 0)) / total * 100|round(1) }}%"></span>
+        <span class="seg praise" style="width: {{ (card.signal_breakdown.get('praise', 0) / total * 100)|round(1) }}%"></span>
       {% else %}
         <span class="muted small">no posts in window</span>
       {% endif %}

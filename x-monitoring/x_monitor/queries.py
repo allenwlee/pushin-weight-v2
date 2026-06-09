@@ -12,11 +12,11 @@ from pydantic import BaseModel, Field, field_validator
 
 # Allowed expected_signal enum values.
 EXPECTED_SIGNALS: frozenset[str] = frozenset(
-    {"release", "criticism", "community_question", "commenter_capture", "other"}
+    {"release", "criticism", "community_question", "commenter_capture", "praise", "other"}
 )
 
 # Allowed query IDs.
-QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5")
+QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
 
 # X advanced-search operators recognized by validate_query_syntax.
 KNOWN_OPERATORS: tuple[str, ...] = (
@@ -45,12 +45,12 @@ LANG_ALLOWLIST: dict[str, set[str]] = {}
 
 
 class Query(BaseModel):
-    """A single curated X advanced-search query (one of Q1-Q5 for a model)."""
+    """A single curated X advanced-search query (one of Q1-Q6 for a model)."""
 
-    id: Literal["Q1", "Q2", "Q3", "Q4", "Q5"]
+    id: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]
     query_string: str = Field(min_length=1)
     expected_signal: Literal[
-        "release", "criticism", "community_question", "commenter_capture", "other"
+        "release", "criticism", "community_question", "commenter_capture", "praise", "other"
     ]
     max_results: int = Field(default=50, ge=1, le=200)
     enabled: bool = True
@@ -66,7 +66,7 @@ class Query(BaseModel):
 
 
 def load_queries(model_id: str, root: Path) -> list[Query]:
-    """Load and validate the 5 queries (Q1-Q5) for one model.
+    """Load and validate the 6 queries (Q1-Q6) for one model.
 
     root is the data/ directory of x-monitoring.
     """

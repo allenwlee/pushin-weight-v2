@@ -50,6 +50,10 @@ queries:
     query_string: 'v'
     expected_signal: other
     max_results: 50
+  - id: Q6
+    query_string: 'praise'
+    expected_signal: praise
+    max_results: 50
 """,
                 encoding="utf-8",
             )
@@ -60,8 +64,8 @@ queries:
 
         per_model = {m: load_queries(m, data) for m in cfg.enabled_models}
         cost = p.estimate_cost(per_model)
-        # 3 models × 5 queries × 50 = 750 — ABOVE 333 default
-        assert cost == 750
+        # 3 models × 6 queries × 50 = 900 — ABOVE 333 default
+        assert cost == 900
         # Test skip order with a per-model budget smaller than cost
         # (single model cost = 5*50 = 250; budget = 100 → 3 queries dropped)
         kept, skipped = p.apply_skip_order(per_model["minimax"], budget=100)
@@ -139,6 +143,10 @@ queries:
     query_string: 'minimax benchmark'
     expected_signal: other
     max_results: 5
+  - id: Q6
+    query_string: 'minimax praise min_faves:5'
+    expected_signal: praise
+    max_results: 5
 """,
             encoding="utf-8",
         )
@@ -160,13 +168,14 @@ accounts:
             [],  # Q3
             [],  # Q4
             [],  # Q5
+            [],  # Q6
         ]
         summary = p.execute(apify, model_filter=["minimax"])
         # All 5 queries should have run (cost 5*5=25 < 333 budget).
-        assert summary["totals"]["n_queries_run"] == 5
+        assert summary["totals"]["n_queries_run"] == 6
         # Raw files present
         raw_files = list((data / "runs" / "raw").rglob("*.json"))
-        assert len(raw_files) == 5, f"expected 5 raw files, got {len(raw_files)}"
+        assert len(raw_files) == 6, f"expected 6 raw files, got {len(raw_files)}"
         # DB has the 1 post from Q1
         from x_monitor.store import Store
 

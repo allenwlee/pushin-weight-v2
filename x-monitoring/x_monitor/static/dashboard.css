@@ -13,6 +13,7 @@
   --bar-community: #3b82f6;
   --bar-criticism: #ef4444;
   --bar-other: #8b949e;
+  --bar-praise: #a855f7;
 }
 
 * { box-sizing: border-box; }
@@ -89,6 +90,7 @@ body {
 .signal-bar .seg.community { background: var(--bar-community); }
 .signal-bar .seg.criticism { background: var(--bar-criticism); }
 .signal-bar .seg.other { background: var(--bar-other); }
+.signal-bar .seg.praise { background: var(--bar-praise); }
 
 .top3 {
   list-style: none;

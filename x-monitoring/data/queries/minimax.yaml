@@ -41,3 +41,10 @@ queries:
     enabled: true
     min_faves: 3
     notes: Technical posts (benchmarks, papers, code).
+  - id: Q6
+    query_string: '(MiniMax OR 海螺 OR Hailuo) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5'
+    expected_signal: praise
+    max_results: 50
+    enabled: true
+    min_faves: 5
+    notes: 5x min_faves to filter for unequivocally impressed (praise-only signal).
