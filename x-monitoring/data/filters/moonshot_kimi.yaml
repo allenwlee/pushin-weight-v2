@@ -1,0 +1,52 @@
+# Moonshot AI / Kimi relevance filter (v1.2).
+# Worst-offender model: F1 driver Kimi Antonelli hijacks Q5/Q6 with
+# motorsport posts; from:MoonshotAI is a Bitcoin trader, not Moonshot AI.
+# Run `python -m x_monitor relevance audit-handles` to verify the
+# canonical_handles below and update verified_at.
+canonical_handles:
+  - Kimi_Moonshot
+  - MoonshotAI
+  - dotey
+
+must_have_any:
+  - kimi
+  - moonshot
+  - k2
+  - k2.5
+  - kimi k
+  - kimi work
+  - kimi code
+  - kimi thinker
+  - kimi k2
+  - kimi-researcher
+  - moonshot ai
+
+cjk_tokens:
+  - 月之暗面
+  - 暗面
+  - 月之暗面ai
+
+# Tokens that signal F1 / motorsport content. Posts matching one of
+# these AND no must-have token are soft-dropped to the review queue
+# (not hard-deleted) so the user can promote a real post that happens
+# to mention F1.
+must_have_none:
+  - F1
+  - "grand prix"
+  - antonelli
+  - verstappen
+  - hamilton
+  - pirelli
+  - "pole position"
+  - formula 1
+  - formula1
+  - mclaren
+  - mercedes
+  - red bull
+  - qualifying
+  - sprint race
+  - race result
+
+notes: |
+  F1 driver Kimi Antonelli hijacks Q5/Q6. Canonical handles NEED AUDIT.
+  Run `x-monitor relevance audit-handles` and update verified_at.

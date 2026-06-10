@@ -1,0 +1,26 @@
+# Zhipu GLM relevance filter (v1.2).
+canonical_handles:
+  - ZhipuAI
+  - THUDM
+  - zhipuai
+  - zhipu_org
+
+must_have_any:
+  - glm
+  - glm-4
+  - glm-5
+  - "glm4.5"
+  - "glm5"
+  - "chatglm"
+  - "zhipu"
+  - "zhipu ai"
+  - cogvideox
+  - cogview
+
+cjk_tokens:
+  - 智谱
+  - 智谱ai
+  - 智谱清言
+
+notes: |
+  "GLM" is reasonably specific. No must_have_none needed.

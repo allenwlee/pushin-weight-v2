@@ -1,0 +1,23 @@
+# Xiaomi MiMo relevance filter (v1.2).
+# Canonical handle @XiaomiMiMo is verified and active.
+canonical_handles:
+  - XiaomiMiMo
+  - Xiaomi
+  - xiaomi
+
+must_have_any:
+  - mimo
+  - mimo-v2.5
+  - mimo-v2
+  - "mimo v"
+  - xiaomi mimo
+  - "mimo-pro"
+  - "mimo-ultra"
+  - "mimo vl"
+
+cjk_tokens:
+  - 小米
+  - 米莫
+
+notes: |
+  Canonical handle works. No must_have_none needed.

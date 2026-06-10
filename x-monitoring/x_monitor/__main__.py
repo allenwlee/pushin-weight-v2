@@ -268,6 +268,68 @@ def cmd_setup(args, paths) -> int:
     return 2
 
 
+def cmd_relevance(args, paths) -> int:
+    """Manage per-model relevance filter YAMLs.
+
+    Subcommands (v1.2):
+      list           - show all 7 model filter configs (table)
+      dry-run        - apply filter to a hardcoded fixture (commit 2)
+      audit-handles  - probe canonical_handles via TwitterAPI.io (commit 2)
+      backfill       - fetch headlines for URL-only DB rows (commit 3)
+    """
+    from x_monitor.config import KNOWN_MODELS
+    from x_monitor.relevance import load_filter
+
+    action = args.relevance_action
+
+    if action == "list":
+        # Header
+        print(
+            f"{'model':<18} {'canonical':<10} {'must_any':<8} "
+            f"{'cjk':<4} {'banned':<6} {'verified':<12} notes"
+        )
+        print("-" * 100)
+        for m in sorted(KNOWN_MODELS):
+            cfg = load_filter(m, paths["data"])
+            notes_short = (cfg.notes or "").split("\n")[0][:30]
+            print(
+                f"{m:<18} {len(cfg.canonical_handles):<10} "
+                f"{len(cfg.must_have_any):<8} {len(cfg.cjk_tokens):<4} "
+                f"{len(cfg.must_have_none):<6} "
+                f"{(cfg.verified_at or 'NOT AUDITED'):<12} {notes_short}"
+            )
+        print()
+        print(
+            "Hint: edit data/filters/<model_id>.yaml to add canonical_handles, "
+            "must_have_any, must_have_none, cjk_tokens."
+        )
+        return 0
+
+    if action == "dry-run":
+        print(
+            "relevance dry-run ships in commit 2 (v1.2).",
+            file=sys.stderr,
+        )
+        return 1
+
+    if action == "audit-handles":
+        print(
+            "relevance audit-handles ships in commit 2 (v1.2).",
+            file=sys.stderr,
+        )
+        return 1
+
+    if action == "backfill":
+        print(
+            "relevance backfill ships in commit 3 (v1.2).",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"unknown relevance action: {action}", file=sys.stderr)
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="x-monitor", description="x-monitor CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -315,6 +377,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_set = sub.add_parser("setup", help="One-time setup wizards")
     p_set.add_argument("setup_action", choices=["twitterapi-key"])
     p_set.set_defaults(func=cmd_setup)
+
+    p_rel = sub.add_parser(
+        "relevance",
+        help="Per-model relevance filter operations (v1.2)",
+    )
+    p_rel.add_argument(
+        "relevance_action",
+        choices=["list", "dry-run", "audit-handles", "backfill"],
+    )
+    p_rel.set_defaults(func=cmd_relevance)
 
     return p
 
