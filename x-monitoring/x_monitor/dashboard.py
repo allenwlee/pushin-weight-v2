@@ -169,10 +169,18 @@ def serialize_grid_card(
         text = (p.get("text") or "").strip()
         if len(text) > 200:
             text = text[:197] + "..."
+        headline = (p.get("headline") or "").strip() or None
+        # Headline preference: if the post has a fetched headline,
+        # render the headline instead of the bare URL. The original
+        # text is still passed to the template as a fallback.
+        display_text = headline if headline else text
         top3.append(
             {
                 "tweet_id": p.get("tweet_id") or p.get("id"),
                 "text": text,
+                "headline": headline,
+                "headline_source": p.get("headline_source"),
+                "display_text": display_text,
                 "like_count": p.get("favorite_count") or 0,
                 "author_handle": p.get("author_handle"),
                 "url": _tweet_url(p.get("author_handle"), p.get("tweet_id") or p.get("id")),

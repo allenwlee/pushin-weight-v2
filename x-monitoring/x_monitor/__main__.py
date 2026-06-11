@@ -485,11 +485,107 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         return 1 if any_failure else 0
 
     if action == "backfill":
-        print(
-            "relevance backfill ships in commit 3 (v1.2).",
-            file=sys.stderr,
+        from x_monitor.headlines import (
+            HeadlinesCache,
+            SOURCE_CACHED,
+            SOURCE_FETCHED,
+            SOURCE_FETCH_FAILED,
+            cache_key_for,
+            fetch_url,
         )
-        return 1
+        from x_monitor.store import Store
+        import time as _time
+
+        limit = int(getattr(args, "limit", 200) or 200)
+        per_query_cap = int(getattr(args, "batch", 8) or 8)
+        # Open the store (auto-migrates so the new columns exist).
+        store = Store(paths["db"], auto_migrate=True)
+        try:
+            cache = HeadlinesCache(paths["data"] / "headlines_cache.json")
+            # First report: what we're about to do.
+            total_url_only = store.count_url_only()
+            total_headlines = store.count_headlines()
+            print(
+                f"backfill: {total_url_only} url-only posts, "
+                f"{total_headlines} already have headlines, "
+                f"limit={limit} per_query_cap={per_query_cap}"
+            )
+            rows = store.iter_url_only_no_headline(limit=limit)
+            if not rows:
+                print("nothing to backfill.")
+                return 0
+            print(f"backfill: processing {len(rows)} posts...")
+            stats = {
+                "n_total": len(rows),
+                "n_already_fresh": 0,
+                "n_fetched": 0,
+                "n_cached": 0,
+                "n_failed": 0,
+                "n_skipped": 0,
+            }
+            fetches_this_run = 0
+            host_last_fetch: dict[str, float] = {}
+            for i, row in enumerate(rows, 1):
+                tweet_id = row["tweet_id"]
+                url = (row["text"] or "").strip()
+                if not url.startswith("http"):
+                    stats["n_skipped"] += 1
+                    continue
+                # Cache check: if a fresh entry exists, write it to the
+                # post row and move on.
+                hit = cache.get(url)
+                if hit is not None:
+                    store.update_post_headline(
+                        tweet_id, hit.get("title"), hit["source"]
+                    )
+                    if hit["source"] == SOURCE_CACHED:
+                        stats["n_cached"] += 1
+                    else:
+                        stats["n_already_fresh"] += 1
+                    continue
+                # Per-host throttle
+                from urllib.parse import urlparse as _urlparse
+                host = (_urlparse(url).hostname or "").lower()
+                now = _time.monotonic()
+                if host and host in host_last_fetch:
+                    if now - host_last_fetch[host] < 1.0:
+                        stats["n_skipped"] += 1
+                        continue
+                if fetches_this_run >= limit or fetches_this_run >= per_query_cap * 25:
+                    # Conservative hard cap on a single backfill run.
+                    stats["n_skipped"] += 1
+                    continue
+                html = fetch_url(url)
+                fetches_this_run += 1
+                if host:
+                    host_last_fetch[host] = _time.monotonic()
+                if html is None:
+                    cache.put(url, None, SOURCE_FETCH_FAILED, error="fetch_failed")
+                    store.update_post_headline(tweet_id, None, SOURCE_FETCH_FAILED)
+                    stats["n_failed"] += 1
+                    continue
+                from x_monitor.headlines import parse_title
+                title = parse_title(html)
+                cache.put(url, title, SOURCE_FETCHED, status_code=200)
+                source = SOURCE_FETCHED if title else SOURCE_FETCH_FAILED
+                store.update_post_headline(tweet_id, title, source)
+                if title:
+                    stats["n_fetched"] += 1
+                else:
+                    stats["n_failed"] += 1
+                if i % 10 == 0 or i == len(rows):
+                    print(
+                        f"  [{i}/{len(rows)}] fetched={stats['n_fetched']} "
+                        f"cached={stats['n_cached']} failed={stats['n_failed']} "
+                        f"skipped={stats['n_skipped']}"
+                    )
+            print()
+            print("backfill complete:")
+            for k, v in stats.items():
+                print(f"  {k}: {v}")
+            return 0
+        finally:
+            store.close()
 
     print(f"unknown relevance action: {action}", file=sys.stderr)
     return 2
@@ -554,6 +650,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_rel.add_argument(
         "--model",
         help="Restrict dry-run to one model (default: all)",
+    )
+    p_rel.add_argument(
+        "--limit", type=int, default=200,
+        help="Max posts to process in a single backfill run (default: 200)",
+    )
+    p_rel.add_argument(
+        "--batch", type=int, default=8,
+        help="Per-backfill cap equivalent to per-query cap (default: 8)",
     )
     p_rel.add_argument(
         "--write-verify",

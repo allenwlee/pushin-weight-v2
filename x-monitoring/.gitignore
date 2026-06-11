@@ -9,6 +9,8 @@ data/x_monitoring.db
 data/dashboard.pid
 data/dashboard.log
 data/_review_queue.json
+data/headlines_cache.json
+data/headlines_cache.json.lock
 
 # Python
 __pycache__/

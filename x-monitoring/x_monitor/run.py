@@ -188,7 +188,13 @@ class RunPipeline:
             "status": "running",
             "degraded": {},
             "queries": [],
-            "totals": {"n_queries_run": 0, "n_results": 0, "n_inserted": 0},
+            "totals": {
+                "n_queries_run": 0,
+                "n_results": 0,
+                "n_inserted": 0,
+                "n_headlines_fetched": 0,
+                "n_headlines_cached": 0,
+            },
         }
 
         with pipeline_lock(self.lock_path) as acquired:

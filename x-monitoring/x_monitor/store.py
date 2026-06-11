@@ -125,8 +125,8 @@ class Store:
                         created_at, fetched_at, favorite_count, retweet_count,
                         reply_count, quote_count, in_reply_to_user_id,
                         quoted_status_id, conversation_id, entities,
-                        source_query_id, raw
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        source_query_id, raw, headline, headline_source
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         str(tweet_id),
@@ -147,6 +147,8 @@ class Store:
                         json.dumps(p.get("entities") or {}),
                         p.get("source_query_id"),
                         json.dumps(p),
+                        p.get("headline"),
+                        p.get("headline_source"),
                     ),
                 )
                 if cur.rowcount > 0:
@@ -188,6 +190,64 @@ class Store:
             (model_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- headline enrichment (v1.2) -------------------------------------
+
+    def update_post_headline(
+        self,
+        tweet_id: str,
+        headline: str | None,
+        source: str,
+    ) -> bool:
+        """Set the headline + headline_source for a single post.
+
+        Returns True if a row was updated. Idempotent: re-running
+        backfill with the same data is a no-op.
+        """
+        cur = self._conn.execute(
+            """
+            UPDATE posts
+            SET headline = ?, headline_source = ?
+            WHERE tweet_id = ?
+            """,
+            (headline, source, tweet_id),
+        )
+        return cur.rowcount > 0
+
+    def iter_url_only_no_headline(
+        self, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """Yield posts where text is a bare URL and headline is NULL.
+
+        Backs the `relevance backfill` subcommand. Ordered by rowid so
+        the oldest unprocessed rows come first.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT tweet_id, text
+            FROM posts
+            WHERE headline IS NULL
+              AND text GLOB 'https*'
+            ORDER BY rowid
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_url_only(self) -> int:
+        """Total URL-only posts (text GLOB 'https*')."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM posts WHERE text GLOB 'https*'"
+        ).fetchone()
+        return int(row["n"]) if row else 0
+
+    def count_headlines(self) -> int:
+        """Total posts that have a non-NULL headline."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM posts WHERE headline IS NOT NULL"
+        ).fetchone()
+        return int(row["n"]) if row else 0
 
     # --- accounts ---------------------------------------------------------
 

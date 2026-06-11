@@ -88,8 +88,12 @@ def test_migrations_apply_forward_only_and_idempotent():
         store = Store(Path(d) / "x.db", auto_migrate=False)
         try:
             applied_first = store.apply_migrations()
+            # Migrations 1 (initial) and 2 (post_headline) should both apply
+            # on a fresh DB. The exact set may grow with v1.2+ migrations;
+            # what matters is that 1 and 2 are both in the set.
             assert 1 in applied_first
-            assert store.applied_migrations() == [1]
+            assert 2 in applied_first
+            assert store.applied_migrations() == [1, 2]
             # Re-apply is a no-op
             applied_second = store.apply_migrations()
             assert applied_second == []

@@ -566,3 +566,53 @@ def test_trend_chart_js_wires_card_click_handler():
     assert "data-href" in body, "missing data-href attribute reference"
     # Per-post anchor clicks must be ignored by the card-level handler
     assert "e.target.closest('a')" in body
+
+
+
+# --- v1.2 commit 3: headline display in top3 -----------------------------
+
+
+def test_top3_includes_headline_when_present():
+    from x_monitor.dashboard import serialize_grid_card
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    posts = [
+        {
+            "tweet_id": "t1",
+            "author_handle": "u1",
+            "text": "https://t.co/abc",
+            "headline": "Real Article Title",
+            "headline_source": "fetched",
+            "favorite_count": 100,
+            "created_at": (now - timedelta(days=1)).isoformat(),
+        },
+    ]
+    card = serialize_grid_card("minimax", posts)
+    top3 = card["top3_posts"]
+    assert len(top3) == 1
+    assert top3[0]["headline"] == "Real Article Title"
+    assert top3[0]["headline_source"] == "fetched"
+    # display_text prefers headline over text
+    assert top3[0]["display_text"] == "Real Article Title"
+    # original text preserved for fallback
+    assert top3[0]["text"] == "https://t.co/abc"
+
+
+def test_top3_falls_back_to_text_when_no_headline():
+    from x_monitor.dashboard import serialize_grid_card
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    posts = [
+        {
+            "tweet_id": "t1",
+            "author_handle": "u1",
+            "text": "minimax M3 is amazing",
+            "favorite_count": 50,
+            "created_at": (now - timedelta(days=1)).isoformat(),
+        },
+    ]
+    card = serialize_grid_card("minimax", posts)
+    top3 = card["top3_posts"]
+    assert len(top3) == 1
+    assert top3[0]["headline"] is None
+    assert top3[0]["display_text"] == "minimax M3 is amazing"

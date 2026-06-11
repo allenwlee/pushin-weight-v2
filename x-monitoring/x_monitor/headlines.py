@@ -13,10 +13,20 @@ just adds the network and cache layers without changing parse_title.
 """
 from __future__ import annotations
 
+import fcntl
+import json
+import logging
 import re
+import time
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlparse, urlunparse
+
+import requests
+
+log = logging.getLogger(__name__)
 
 
 # Common site-name separator patterns. Order matters: longer first.
@@ -170,3 +180,390 @@ def cache_key_for(url: str) -> str:
     """Final cache key. Same as normalize_url for v1.2 (kept as a
     separate function so a future hash-based key is a one-liner)."""
     return normalize_url(url)
+
+
+
+# --- HTTP fetching (v1.2 commit 3) ---------------------------------------
+
+
+# Cap on response body size. Titles are near the top of the document;
+# 50KB is enough to capture them while protecting the pipeline from
+# the 30MB pages some sites serve.
+_MAX_HTML_BYTES = 50 * 1024
+
+# Per-host throttle: minimum seconds between two fetches to the same
+# host. Cheap defense against hammering a single origin when 10
+# different posts in a batch all link to the same article.
+_PER_HOST_MIN_INTERVAL_S = 1.0
+
+# User-Agent. Identify ourselves so site operators can reach out if
+# the volume ever becomes a problem.
+_USER_AGENT = "x-monitor/1.2 (+https://github.com/allenwlee/minimax-marketing)"
+
+
+def fetch_url(url: str, *, timeout_s: float = 5.0) -> str | None:
+    """GET a URL, cap the body to 50KB, return the decoded text.
+
+    Returns None on any error: timeout, connection, non-2xx, decode,
+    or oversized body. We do NOT raise — the caller wants to know
+    "did we get a usable HTML chunk?" and a None is the same signal
+    as "no" everywhere.
+    """
+    if not url:
+        return None
+    try:
+        r = requests.get(
+            url,
+            timeout=timeout_s,
+            headers={"User-Agent": _USER_AGENT, "Accept": "text/html,*/*"},
+            allow_redirects=True,
+            stream=True,  # so we can bail at _MAX_HTML_BYTES
+        )
+    except requests.RequestException as e:
+        log.info("fetch_url: request failed for %s: %s", url, e)
+        return None
+    if not (200 <= r.status_code < 300):
+        log.info("fetch_url: %s returned %d", url, r.status_code)
+        return None
+    # Read up to the cap, then close the stream.
+    buf = bytearray()
+    try:
+        for chunk in r.iter_content(chunk_size=4096):
+            if not chunk:
+                continue
+            # Stop BEFORE the next chunk would push us over the cap.
+            # This guarantees len(buf) <= _MAX_HTML_BYTES at exit.
+            if len(buf) + len(chunk) > _MAX_HTML_BYTES:
+                remaining = _MAX_HTML_BYTES - len(buf)
+                if remaining > 0:
+                    buf.extend(chunk[:remaining])
+                break
+            buf.extend(chunk)
+    except requests.RequestException as e:
+        log.info("fetch_url: read failed for %s: %s", url, e)
+        return None
+    finally:
+        try:
+            r.close()
+        except Exception:
+            pass
+    try:
+        return buf.decode(r.encoding or "utf-8", errors="replace")
+    except LookupError:
+        return buf.decode("utf-8", errors="replace")
+
+
+# --- Headlines cache (v1.2 commit 3) ------------------------------------
+
+
+# Cache file format version. Bump if the on-disk schema changes;
+# older versions are loaded then re-written under the new shape.
+CACHE_VERSION = 1
+
+# Sources reported in cache entries and on post rows.
+SOURCE_FETCHED = "fetched"
+SOURCE_CACHED = "cached"
+SOURCE_URL_ONLY = "url_only"
+SOURCE_FETCH_FAILED = "fetch_failed"
+
+# A successful "fetched" entry is fresh for this many days. After that,
+# re-fetch. Kept short so headline drift / link rot is corrected
+# automatically without a manual backfill.
+_MAX_AGE_DAYS = 14
+
+# 403/timeout (fetch_failed) entries: retry after 1 day so we don't
+# keep hammering a Cloudflare-blocked origin.
+_FAIL_TTL_DAYS = 1
+
+
+class HeadlinesCache:
+    """JSON-file-backed headline cache. File-locked for concurrent safety.
+
+    Schema (v1):
+      {
+        "version": 1,
+        "entries": {
+          "<normalized_url>": {
+            "title": "..." | null,
+            "source": "fetched" | "cached" | "fetch_failed",
+            "fetched_at": "2026-06-10T01:23:45Z",
+            "status_code": 200 | null,
+            "error": null | "timeout" | "..."
+          },
+          ...
+        }
+      }
+    """
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._host_last_fetch: dict[str, float] = {}
+
+    # --- low-level file I/O ----------------------------------------------
+
+    def _lock_path(self) -> Path:
+        return self.path.with_suffix(self.path.suffix + ".lock")
+
+    def _read_unlocked(self) -> dict[str, Any]:
+        if not self.path.exists():
+            return {"version": CACHE_VERSION, "entries": {}}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"version": CACHE_VERSION, "entries": {}}
+        if not isinstance(data, dict) or "entries" not in data:
+            return {"version": CACHE_VERSION, "entries": {}}
+        # Future-proof: upgrade older versions by re-writing in current
+        # shape. For now only v1 exists, so this is a no-op.
+        data.setdefault("version", CACHE_VERSION)
+        return data
+
+    def _write_unlocked(self, data: dict[str, Any]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        tmp.replace(self.path)
+
+    def _with_lock(self, fn):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self._lock_path()
+        with open(lock_path, "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                return fn()
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    # --- public API -------------------------------------------------------
+
+    def get(self, url: str) -> dict[str, Any] | None:
+        """Return the cache entry for `url` (key = normalize_url) or None."""
+        key = cache_key_for(url)
+        if not key:
+            return None
+
+        def op() -> dict[str, Any] | None:
+            data = self._read_unlocked()
+            entry = (data.get("entries") or {}).get(key)
+            if not entry:
+                return None
+            if not self._is_fresh(entry):
+                # Stale — let the caller re-fetch.
+                return None
+            return entry
+
+        return self._with_lock(op)
+
+    def put(
+        self,
+        url: str,
+        title: str | None,
+        source: str,
+        *,
+        status_code: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Write a cache entry. Idempotent: re-writing the same key is fine."""
+        key = cache_key_for(url)
+        if not key:
+            return
+
+        def op() -> None:
+            data = self._read_unlocked()
+            data.setdefault("entries", {})
+            data["entries"][key] = {
+                "title": title,
+                "source": source,
+                "fetched_at": _now_iso(),
+                "status_code": status_code,
+                "error": error,
+            }
+            self._write_unlocked(data)
+
+        self._with_lock(op)
+
+    def _is_fresh(self, entry: dict[str, Any]) -> bool:
+        """A fetched/cached entry is fresh for _MAX_AGE_DAYS; failed for
+        _FAIL_TTL_DAYS. Missing/invalid timestamp => not fresh."""
+        ts = entry.get("fetched_at")
+        if not ts:
+            return False
+        try:
+            when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            return False
+        age = datetime.now(timezone.utc) - when
+        if entry.get("source") == SOURCE_FETCH_FAILED:
+            return age <= timedelta(days=_FAIL_TTL_DAYS)
+        return age <= timedelta(days=_MAX_AGE_DAYS)
+
+    # --- per-host throttle (advisory) ------------------------------------
+
+    def host_throttle_ok(self, url: str) -> bool:
+        """True if the per-host throttle window has elapsed.
+
+        Returns True on the first call for a host. Subsequent calls
+        within _PER_HOST_MIN_INTERVAL_S return False. This is a
+        soft in-process throttle — it does NOT persist across runs.
+        """
+        host = (urlparse(url).hostname or "").lower()
+        if not host:
+            return True
+        now = time.monotonic()
+        last = self._host_last_fetch.get(host, 0.0)
+        if now - last < _PER_HOST_MIN_INTERVAL_S:
+            return False
+        self._host_last_fetch[host] = now
+        return True
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# --- enrich_posts (v1.2 commit 3) ---------------------------------------
+
+
+# Per-run and per-query caps on HTTP fetches. Backfill uses larger
+# caps; the live pipeline uses the defaults so a long run doesn't
+# get stuck on slow origins.
+DEFAULT_PER_QUERY_CAP = 8
+DEFAULT_PER_RUN_CAP = 50
+
+
+def _extract_url(text: str) -> str | None:
+    """Pull the first http(s) URL out of a post text.
+
+    Returns the URL or None. Used by enrich_posts to identify which
+    URL to fetch for URL-only posts.
+    """
+    if not text:
+        return None
+    m = re.search(r"https?://\S+", text)
+    return m.group(0) if m else None
+
+
+def _is_url_only(text: str | None) -> bool:
+    """True if the post text is essentially just one or more URLs.
+
+    Re-imported here to avoid a circular dep with relevance.py at
+    import time. Mirrors the relevance.is_url_only logic exactly.
+    """
+    if not text:
+        return False
+    # Strip t.co / http(s) URLs; if nothing remains, it's URL-only.
+    stripped = re.sub(r"https?://t\.co/\w+", "", text, flags=re.IGNORECASE)
+    stripped = re.sub(r"https?://\S+", "", stripped, flags=re.IGNORECASE)
+    return stripped.strip() == ""
+
+
+def enrich_posts(
+    items: list[dict[str, Any]],
+    cache: HeadlinesCache,
+    *,
+    per_query_cap: int = DEFAULT_PER_QUERY_CAP,
+    run_fetches_used: list[int] | None = None,
+    per_run_cap: int = DEFAULT_PER_RUN_CAP,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Walk items, find URL-only posts, fetch/cache their headlines.
+
+    Args:
+        items: list of normalized post dicts. Mutated in place: each
+            URL-only post gets `headline` and `headline_source` set.
+        cache: the headlines cache (versioned, file-locked).
+        per_query_cap: max number of fetches within this call.
+        run_fetches_used: mutable single-element list [int] used as a
+            per-run counter. Caller owns it. If the cap is reached
+            the remaining URL-only posts get source="url_only" (no
+            fetch attempted).
+        per_run_cap: max total fetches in the run.
+
+    Returns:
+        (items, stats). `items` is the same list, with headline fields
+        added. `stats` is {n_url_only, n_fetched, n_cached, n_failed,
+        n_skipped_cap}.
+    """
+    stats = {
+        "n_url_only": 0,
+        "n_fetched": 0,
+        "n_cached": 0,
+        "n_failed": 0,
+        "n_skipped_cap": 0,
+    }
+    # url -> (headline, source) map for posts seen earlier in this
+    # query. Lets us satisfy the "same article twice in one batch"
+    # case without a second fetch AND without leaving the second post
+    # without a headline_source field.
+    seen_results: dict[str, tuple[str | None, str]] = {}
+    fetches_in_query = 0
+    for item in items:
+        text = item.get("text") or ""
+        if not _is_url_only(text):
+            continue
+        stats["n_url_only"] += 1
+        url = _extract_url(text)
+        if not url:
+            item["headline"] = None
+            item["headline_source"] = SOURCE_URL_ONLY
+            continue
+        key = cache_key_for(url)
+        # Per-query dedupe: reuse the result from earlier in this query.
+        if key in seen_results:
+            headline, source = seen_results[key]
+            item["headline"] = headline
+            item["headline_source"] = source
+            continue
+        # Caps: per-query first, then per-run.
+        if fetches_in_query >= per_query_cap:
+            item["headline"] = None
+            item["headline_source"] = SOURCE_URL_ONLY
+            seen_results[key] = (None, SOURCE_URL_ONLY)
+            stats["n_skipped_cap"] += 1
+            continue
+        if run_fetches_used is not None and run_fetches_used[0] >= per_run_cap:
+            item["headline"] = None
+            item["headline_source"] = SOURCE_URL_ONLY
+            seen_results[key] = (None, SOURCE_URL_ONLY)
+            stats["n_skipped_cap"] += 1
+            continue
+        # Cache lookup.
+        hit = cache.get(url)
+        if hit is not None:
+            item["headline"] = hit.get("title")
+            item["headline_source"] = SOURCE_CACHED
+            seen_results[key] = (item["headline"], SOURCE_CACHED)
+            stats["n_cached"] += 1
+            continue
+        # Per-host throttle: if we just fetched the same host, skip.
+        if not cache.host_throttle_ok(url):
+            item["headline"] = None
+            item["headline_source"] = SOURCE_URL_ONLY
+            seen_results[key] = (None, SOURCE_URL_ONLY)
+            stats["n_skipped_cap"] += 1
+            continue
+        # Fetch.
+        html = fetch_url(url)
+        fetches_in_query += 1
+        if run_fetches_used is not None:
+            run_fetches_used[0] += 1
+        if html is None:
+            cache.put(url, None, SOURCE_FETCH_FAILED, error="fetch_failed")
+            item["headline"] = None
+            item["headline_source"] = SOURCE_FETCH_FAILED
+            seen_results[key] = (None, SOURCE_FETCH_FAILED)
+            stats["n_failed"] += 1
+            continue
+        title = parse_title(html)
+        cache.put(url, title, SOURCE_FETCHED, status_code=200)
+        source = SOURCE_FETCHED if title else SOURCE_FETCH_FAILED
+        item["headline"] = title
+        item["headline_source"] = source
+        seen_results[key] = (title, source)
+        if title:
+            stats["n_fetched"] += 1
+        else:
+            stats["n_failed"] += 1
+    return items, stats

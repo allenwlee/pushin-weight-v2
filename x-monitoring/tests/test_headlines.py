@@ -2,10 +2,22 @@
 Tests for x_monitor.headlines (v1.2 commit 1: pure extractors only).
 HTTP and cache I/O come in commit 3.
 """
+import tempfile
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from x_monitor.headlines import (
+    HeadlinesCache,
+    SOURCE_CACHED,
+    SOURCE_FETCHED,
+    SOURCE_FETCH_FAILED,
+    SOURCE_URL_ONLY,
     cache_key_for,
+    enrich_posts,
+    fetch_url,
     normalize_url,
     parse_title,
 )
@@ -189,3 +201,251 @@ class TestNormalizeUrl:
         # v1.2: cache_key_for is just normalize_url; tested for stability
         url = "https://Example.com/x?utm_source=t"
         assert cache_key_for(url) == normalize_url(url)
+
+
+
+# --- v1.2 commit 3: HTTP + cache + enrich --------------------------------
+
+
+# --- fetch_url ----------------------------------------------------------
+
+
+def _mock_response(status: int, body: str = "", content_iter=None) -> MagicMock:
+    m = MagicMock()
+    m.status_code = status
+    m.encoding = "utf-8"
+    m.close = MagicMock()
+    if content_iter is not None:
+        m.iter_content.return_value = iter(content_iter)
+    else:
+        m.iter_content.return_value = iter([body.encode("utf-8")])
+    return m
+
+
+class TestFetchUrl:
+    def test_returns_none_for_empty_url(self):
+        assert fetch_url("") is None
+        assert fetch_url(None) is None  # type: ignore[arg-type]
+
+    def test_returns_html_for_200(self):
+        html = "<html><head><title>Hello</title></head><body></body></html>"
+        with patch("x_monitor.headlines.requests.get", return_value=_mock_response(200, html)) as g:
+            result = fetch_url("https://example.com/x")
+            assert result == html
+            # streamed=True so we cap reads
+            kwargs = g.call_args.kwargs
+            assert kwargs.get("stream") is True
+            assert "User-Agent" in kwargs["headers"]
+
+    def test_returns_none_on_4xx(self):
+        with patch("x_monitor.headlines.requests.get", return_value=_mock_response(404, "")):
+            assert fetch_url("https://example.com/missing") is None
+
+    def test_returns_none_on_5xx(self):
+        with patch("x_monitor.headlines.requests.get", return_value=_mock_response(503, "")):
+            assert fetch_url("https://example.com/down") is None
+
+    def test_returns_none_on_request_exception(self):
+        import requests as _req
+        with patch("x_monitor.headlines.requests.get", side_effect=_req.ConnectionError("boom")):
+            assert fetch_url("https://example.com/x") is None
+
+    def test_caps_body_to_50kb(self):
+        # Build a 60KB response, verify we stop at the cap.
+        # The cap is 50*1024 = 51200 bytes; the implementation extends
+        # the buffer by `cap - current_len` if a chunk would push us
+        # over, so the result is at most 51200 bytes.
+        big = ("x" * 60_000).encode("utf-8")
+        chunks = [big[:30000], big[30000:]]
+        with patch("x_monitor.headlines.requests.get", return_value=_mock_response(200, content_iter=chunks)):
+            result = fetch_url("https://example.com/x")
+            assert result is not None
+            assert len(result) <= 50 * 1024
+
+
+# --- HeadlinesCache -----------------------------------------------------
+
+
+class TestHeadlinesCache:
+    def test_get_returns_none_when_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            c = HeadlinesCache(Path(d) / "h.json")
+            assert c.get("https://example.com/x") is None
+
+    def test_put_then_get_roundtrip(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "h.json"
+            c = HeadlinesCache(path)
+            c.put("https://example.com/x", "Hello World", SOURCE_FETCHED, status_code=200)
+            entry = c.get("https://example.com/x")
+            assert entry is not None
+            assert entry["title"] == "Hello World"
+            assert entry["source"] == SOURCE_FETCHED
+            assert entry["status_code"] == 200
+
+    def test_cache_file_persists(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "h.json"
+            c1 = HeadlinesCache(path)
+            c1.put("https://example.com/x", "T", SOURCE_FETCHED)
+            # New instance reads the same file
+            c2 = HeadlinesCache(path)
+            assert c2.get("https://example.com/x")["title"] == "T"
+
+    def test_failed_entry_expires_after_one_day(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "h.json"
+            c = HeadlinesCache(path)
+            # Write a failed entry with an old timestamp
+            c._with_lock(lambda: c._write_unlocked({
+                "version": 1,
+                "entries": {
+                    cache_key_for("https://example.com/x"): {
+                        "title": None,
+                        "source": SOURCE_FETCH_FAILED,
+                        "fetched_at": "2020-01-01T00:00:00+00:00",
+                        "status_code": None,
+                        "error": "fetch_failed",
+                    }
+                }
+            }))
+            # Stale → re-fetch
+            assert c.get("https://example.com/x") is None
+
+    def test_fetched_entry_expires_after_14_days(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "h.json"
+            c = HeadlinesCache(path)
+            c._with_lock(lambda: c._write_unlocked({
+                "version": 1,
+                "entries": {
+                    cache_key_for("https://example.com/x"): {
+                        "title": "T",
+                        "source": SOURCE_FETCHED,
+                        "fetched_at": "2020-01-01T00:00:00+00:00",
+                        "status_code": 200,
+                        "error": None,
+                    }
+                }
+            }))
+            assert c.get("https://example.com/x") is None
+
+    def test_per_host_throttle(self):
+        c = HeadlinesCache(Path("/tmp/_h_throttle.json"))
+        # First call passes
+        assert c.host_throttle_ok("https://example.com/x") is True
+        # Immediate second call blocked
+        assert c.host_throttle_ok("https://example.com/x") is False
+        # Different host passes
+        assert c.host_throttle_ok("https://other.com/x") is True
+
+
+# --- enrich_posts -------------------------------------------------------
+
+
+class TestEnrichPosts:
+    def _cache(self, tmp: Path) -> HeadlinesCache:
+        return HeadlinesCache(tmp / "h.json")
+
+    def test_no_url_only_posts_is_noop(self):
+        with tempfile.TemporaryDirectory() as d:
+            items = [
+                {"id": "t1", "text": "minimax is great", "author_handle": "u"},
+            ]
+            c = self._cache(Path(d))
+            out, stats = enrich_posts(items, c)
+            assert out is items
+            assert stats["n_url_only"] == 0
+            assert stats["n_fetched"] == 0
+
+    def test_url_only_post_fetches_and_sets_headline(self):
+        with tempfile.TemporaryDirectory() as d:
+            html = "<html><head><title>Hello World</title></head></html>"
+            items = [
+                {"id": "t1", "text": "https://example.com/x", "author_handle": "u"},
+            ]
+            c = self._cache(Path(d))
+            with patch("x_monitor.headlines.fetch_url", return_value=html) as f:
+                out, stats = enrich_posts(items, c)
+            assert stats["n_url_only"] == 1
+            assert stats["n_fetched"] == 1
+            assert items[0]["headline"] == "Hello World"
+            assert items[0]["headline_source"] == SOURCE_FETCHED
+            f.assert_called_once()
+
+    def test_cache_hit_skips_http(self):
+        with tempfile.TemporaryDirectory() as d:
+            c = self._cache(Path(d))
+            c.put("https://example.com/x", "Cached Title", SOURCE_FETCHED)
+            items = [
+                {"id": "t1", "text": "https://example.com/x", "author_handle": "u"},
+            ]
+            with patch("x_monitor.headlines.fetch_url") as f:
+                out, stats = enrich_posts(items, c)
+            assert stats["n_cached"] == 1
+            assert items[0]["headline"] == "Cached Title"
+            assert items[0]["headline_source"] == SOURCE_CACHED
+            f.assert_not_called()
+
+    def test_fetch_failure_marks_fetch_failed(self):
+        with tempfile.TemporaryDirectory() as d:
+            items = [
+                {"id": "t1", "text": "https://example.com/x", "author_handle": "u"},
+            ]
+            c = self._cache(Path(d))
+            with patch("x_monitor.headlines.fetch_url", return_value=None):
+                out, stats = enrich_posts(items, c)
+            assert stats["n_failed"] == 1
+            assert items[0]["headline"] is None
+            assert items[0]["headline_source"] == SOURCE_FETCH_FAILED
+            # Cache now has the failed entry
+            entry = c.get("https://example.com/x")
+            assert entry is not None
+            assert entry["source"] == SOURCE_FETCH_FAILED
+
+    def test_per_query_cap_skips_extra_fetches(self):
+        with tempfile.TemporaryDirectory() as d:
+            # Use distinct hosts so the per-host throttle doesn't
+            # shadow the per-query cap. (In practice a batch of URL-
+            # only posts links to many different sites.)
+            items = [
+                {"id": f"t{i}", "text": f"https://h{i}.example.com/x", "author_handle": "u"}
+                for i in range(5)
+            ]
+            c = self._cache(Path(d))
+            with patch("x_monitor.headlines.fetch_url", return_value="<title>X</title>"):
+                out, stats = enrich_posts(items, c, per_query_cap=2)
+            assert stats["n_fetched"] == 2
+            assert stats["n_skipped_cap"] == 3
+            # The skipped items still have url_only source
+            for i in (2, 3, 4):
+                assert items[i]["headline_source"] == SOURCE_URL_ONLY
+
+    def test_per_run_cap_blocks_further_fetches(self):
+        with tempfile.TemporaryDirectory() as d:
+            items = [
+                {"id": f"t{i}", "text": f"https://h{i}.example.com/x", "author_handle": "u"}
+                for i in range(5)
+            ]
+            c = self._cache(Path(d))
+            run_used = [0]
+            with patch("x_monitor.headlines.fetch_url", return_value="<title>X</title>"):
+                out, stats = enrich_posts(items, c, per_query_cap=8, per_run_cap=2, run_fetches_used=run_used)
+            assert stats["n_fetched"] == 2
+            assert run_used[0] == 2
+            assert stats["n_skipped_cap"] == 3
+
+    def test_duplicate_url_in_same_query_only_fetches_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            items = [
+                {"id": "t1", "text": "https://example.com/x", "author_handle": "u"},
+                {"id": "t2", "text": "https://example.com/x", "author_handle": "u"},
+            ]
+            c = self._cache(Path(d))
+            with patch("x_monitor.headlines.fetch_url", return_value="<title>X</title>") as f:
+                out, stats = enrich_posts(items, c)
+            assert stats["n_fetched"] == 1
+            f.assert_called_once()
+            # Both items have the headline now
+            assert items[0]["headline_source"] == SOURCE_FETCHED
+            assert items[1]["headline_source"] == SOURCE_FETCHED
