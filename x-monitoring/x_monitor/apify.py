@@ -195,6 +195,32 @@ class TwitterApiClient:
         """
         return self._walk_followers(handle, max_results)
 
+    def user_info(self, handle: str) -> dict[str, Any] | None:
+        """Fetch a single user's public profile info.
+
+        Used by the v1.2 `relevance audit-handles` subcommand to verify
+        canonical_handles in data/filters/<model>.yaml.
+
+        Returns a normalized dict with at least: handle, name, description,
+        followers_count, verified. Returns None if the user is not found
+        (HTTP 200 but no `data`).
+
+        Raises TwitterApiAuthError on 401, TwitterApiRateLimitError on 429,
+        TwitterApiServerError on 5xx, RuntimeError on other 4xx.
+        """
+        data = self._get(USER_INFO_PATH, {"userName": handle})
+        # TwitterAPI.io shape: { "data": { ...user... }, "status": "success" }
+        # or { "user": { ... } } on some endpoints. Fall back to the whole
+        # response if neither key is present (defensive against future shape
+        # changes — caller still gets a dict back).
+        if isinstance(data, dict):
+            user = data.get("data") or data.get("user") or data
+        else:
+            user = None
+        if not user or not isinstance(user, dict):
+            return None
+        return _normalize_user(user)
+
     def probe_api(self) -> bool:
         """Lightweight liveness check: hit user/info on a known handle.
 
@@ -277,4 +303,35 @@ def _normalize_follower(item: dict[str, Any]) -> dict[str, Any]:
         "handle": str(handle),
         "display_name": str(display_name),
         "follower_count": follower_count,
+    }
+
+
+def _normalize_user(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize TwitterAPI.io user/info response to a flat dict.
+
+    TwitterAPI.io user/info shape (per docs):
+      { "id": "...", "userName": "...", "name": "...",
+        "description": "...", "followers": N, "verified": bool, ... }
+    """
+    return {
+        "handle": str(
+            item.get("userName")
+            or item.get("screen_name")
+            or item.get("handle")
+            or ""
+        ),
+        "name": str(item.get("name") or item.get("display_name") or ""),
+        "description": str(item.get("description") or item.get("bio") or ""),
+        "followers_count": int(
+            item.get("followers")
+            or item.get("followers_count")
+            or item.get("followerCount")
+            or 0
+        ),
+        "verified": bool(
+            item.get("isBlueVerified")
+            or item.get("verified")
+            or False
+        ),
+        "id": str(item.get("id") or ""),
     }

@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from x_monitor.config import Config
+from x_monitor.relevance import RelevanceConfig
 from x_monitor.queries import Query
 from x_monitor.query_rot import apply_rot, detect_rot, read_run_zero_result_streaks
 from x_monitor.review import ReviewQueue
@@ -364,3 +365,235 @@ queries:
     q2 = next(q for q in data["queries"] if q["id"] == "Q2")
     assert q1["enabled"] is False
     assert q2["enabled"] is True
+
+
+
+# --- v1.2: filter integration into the pipeline ----------------------------
+
+
+def _write_filter_yaml(data_dir: Path, model: str, cfg_dict: dict) -> None:
+    (data_dir / "filters").mkdir(exist_ok=True)
+    (data_dir / "filters" / f"{model}.yaml").write_text(
+        "canonical_handles: []\n"  # placeholder, replaced below
+    )
+    import yaml as _yaml
+    (data_dir / "filters" / f"{model}.yaml").write_text(
+        _yaml.safe_dump(cfg_dict, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
+def test_pipeline_applies_filter_before_insert():
+    """5 items: 2 noise (no signal), 1 banned, 2 valid. DB should have 2 rows."""
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: 'x'\n    expected_signal: release\n    enabled: false\n"
+            "  - id: Q2\n    query_string: 'y'\n    expected_signal: community_question\n    enabled: false\n"
+            "  - id: Q3\n    query_string: 'z'\n    expected_signal: criticism\n    enabled: false\n"
+            "  - id: Q4\n    query_string: 'w'\n    expected_signal: commenter_capture\n    enabled: false\n"
+            "  - id: Q5\n    query_string: 'minimax'\n    expected_signal: other\n    max_results: 50\n"
+            "  - id: Q6\n    query_string: 'p'\n    expected_signal: praise\n    enabled: false\n",
+            encoding="utf-8",
+        )
+        (data / "accounts" / "minimax.yaml").write_text("accounts: []\n", encoding="utf-8")
+        _write_filter_yaml(
+            data, "minimax",
+            {
+                "canonical_handles": [],
+                "must_have_any": ["minimax"],
+                "must_have_none": ["celebrity"],
+            },
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        apify.run_search.return_value = [
+            {"id": "t1", "text": "minimax is great", "author_handle": "u1",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t2", "text": "totally unrelated", "author_handle": "u2",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t3", "text": "celebrity post", "author_handle": "u3",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t4", "text": "minimax M3 review", "author_handle": "u4",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t5", "text": "random thoughts", "author_handle": "u5",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+        ]
+        summary = p.execute(apify, model_filter=["minimax"])
+        # DB has 2 rows (t1, t4); t2/t5 hard-drop, t3 soft-drop
+        from x_monitor.store import Store
+        store = Store(data / "x.db")
+        posts = store.get_all_posts("minimax")
+        assert len(posts) == 2
+        assert {p_["tweet_id"] for p_ in posts} == {"t1", "t4"}
+        # Summary: n_results=5, n_filtered=3, filter_reasons sums to n_filtered
+        entry = summary["queries"][0]
+        assert entry["n_results"] == 5
+        assert entry["n_filtered"] == 3
+        reasons_sum = sum(
+            v for k, v in entry["filter_reasons"].items()
+            if k not in ("kept", "canonical_bypass", "url_only_kept")
+        )
+        assert reasons_sum == 3
+        # 1 soft-drop, 2 hard-drops
+        assert entry["filter_reasons"]["soft_drop_banned"] == 1
+        assert entry["filter_reasons"]["hard_drop_no_signal"] == 2
+        store.close()
+
+
+def test_pipeline_soft_drop_adds_to_review_queue():
+    """A banned-token post must appear in the review queue with reason=banned_token,
+    and must NOT be in the DB."""
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: 'x'\n    expected_signal: release\n    enabled: false\n"
+            "  - id: Q2\n    query_string: 'y'\n    expected_signal: community_question\n    enabled: false\n"
+            "  - id: Q3\n    query_string: 'z'\n    expected_signal: criticism\n    enabled: false\n"
+            "  - id: Q4\n    query_string: 'w'\n    expected_signal: commenter_capture\n    enabled: false\n"
+            "  - id: Q5\n    query_string: 'minimax'\n    expected_signal: other\n    max_results: 50\n"
+            "  - id: Q6\n    query_string: 'p'\n    expected_signal: praise\n    enabled: false\n",
+            encoding="utf-8",
+        )
+        (data / "accounts" / "minimax.yaml").write_text("accounts: []\n", encoding="utf-8")
+        _write_filter_yaml(
+            data, "minimax",
+            {"must_have_any": ["minimax"], "must_have_none": ["celebrity"]},
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        apify.run_search.return_value = [
+            {"id": "t1", "text": "celebrity news", "author_handle": "u1",
+             "favorite_count": 5, "model_id": "minimax", "source_query_id": "Q5"},
+        ]
+        p.execute(apify, model_filter=["minimax"])
+        # t1 NOT in DB
+        from x_monitor.store import Store
+        store = Store(data / "x.db")
+        assert store.get_all_posts("minimax") == []
+        store.close()
+        # t1 IS in review queue with reason=banned_token
+        rq = ReviewQueue(data / "_review_queue.json")
+        items = rq.list()
+        assert len(items) == 1
+        assert items[0]["tweet_id"] == "t1"
+        assert items[0]["reason"] == "banned_token"
+        assert items[0]["model_id"] == "minimax"
+
+
+def test_pipeline_low_engagement_rule_only_runs_on_kept():
+    """Regression: a post that the filter HARD-DROPS must NOT appear in the
+    review queue via the low_engagement rule. Previously the rule iterated
+    over the unfiltered items, so dropped posts got a stale review-queue
+    entry pointing at a tweet_id that wasn't in the DB."""
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: 'from:MiniMaxAI'\n    expected_signal: release\n    max_results: 50\n"
+            "  - id: Q2\n    query_string: 'y'\n    expected_signal: community_question\n    enabled: false\n"
+            "  - id: Q3\n    query_string: 'z'\n    expected_signal: criticism\n    enabled: false\n"
+            "  - id: Q4\n    query_string: 'w'\n    expected_signal: commenter_capture\n    enabled: false\n"
+            "  - id: Q5\n    query_string: 'v'\n    expected_signal: other\n    enabled: false\n"
+            "  - id: Q6\n    query_string: 'p'\n    expected_signal: praise\n    enabled: false\n",
+            encoding="utf-8",
+        )
+        (data / "accounts" / "minimax.yaml").write_text("accounts: []\n", encoding="utf-8")
+        # Filter requires 'minimax' token; the noise post has none -> hard-drop.
+        _write_filter_yaml(
+            data, "minimax",
+            {"must_have_any": ["minimax"]},
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        apify.run_search.return_value = [
+            # Q1 release post that mentions 'minimax' — kept.
+            {"id": "kept1", "text": "minimax M3 release", "author_handle": "u1",
+             "favorite_count": 0, "model_id": "minimax", "source_query_id": "Q1"},
+            # Q1 release post with NO 'minimax' — filter hard-drops it.
+            {"id": "dropped1", "text": "totally unrelated release",
+             "author_handle": "u2", "favorite_count": 0,
+             "model_id": "minimax", "source_query_id": "Q1"},
+        ]
+        p.execute(apify, model_filter=["minimax"])
+        # DB has only kept1
+        from x_monitor.store import Store
+        store = Store(data / "x.db")
+        posts = store.get_all_posts("minimax")
+        assert {p_["tweet_id"] for p_ in posts} == {"kept1"}
+        store.close()
+        # Review queue: kept1 lands as low_engagement, dropped1 does NOT.
+        rq = ReviewQueue(data / "_review_queue.json")
+        items = rq.list()
+        assert len(items) == 1
+        assert items[0]["tweet_id"] == "kept1"
+        assert items[0]["reason"] == "low_engagement"
+
+
+def test_pipeline_drops_match_summary_counts():
+    """The drop reason counts in the per-query summary entry must sum
+    (excluding keep-reasons) to n_filtered."""
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: 'x'\n    expected_signal: release\n    enabled: false\n"
+            "  - id: Q2\n    query_string: 'y'\n    expected_signal: community_question\n    enabled: false\n"
+            "  - id: Q3\n    query_string: 'z'\n    expected_signal: criticism\n    enabled: false\n"
+            "  - id: Q4\n    query_string: 'w'\n    expected_signal: commenter_capture\n    enabled: false\n"
+            "  - id: Q5\n    query_string: 'minimax'\n    expected_signal: other\n    max_results: 50\n"
+            "  - id: Q6\n    query_string: 'p'\n    expected_signal: praise\n    enabled: false\n",
+            encoding="utf-8",
+        )
+        (data / "accounts" / "minimax.yaml").write_text("accounts: []\n", encoding="utf-8")
+        _write_filter_yaml(
+            data, "minimax",
+            {
+                "canonical_handles": ["OfficialBrand"],
+                "must_have_any": ["minimax"],
+                "must_have_none": ["celebrity"],
+            },
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        apify.run_search.return_value = [
+            {"id": "t1", "text": "minimax K2 is great", "author_handle": "u1",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t2", "text": "hello world", "author_handle": "OfficialBrand",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t3", "text": "celebrity post", "author_handle": "u3",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t4", "text": "unrelated content", "author_handle": "u4",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+            {"id": "t5", "text": "https://t.co/abc", "author_handle": "u5",
+             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+        ]
+        summary = p.execute(apify, model_filter=["minimax"])
+        entry = summary["queries"][0]
+        # t1 kept (must), t2 canonical_bypass, t3 soft_drop_banned,
+        # t4 hard_drop_no_signal, t5 url_only_kept
+        assert entry["n_results"] == 5
+        assert entry["n_kept"] == 3   # t1, t2, t5
+        assert entry["n_filtered"] == 2  # t3, t4
+        # Drop reason sum = 2
+        drop_sum = sum(
+            v for k, v in entry["filter_reasons"].items()
+            if k not in ("kept", "canonical_bypass", "url_only_kept")
+        )
+        assert drop_sum == entry["n_filtered"]
+        # 1 review added (t3)
+        assert entry["n_review_added"] == 1

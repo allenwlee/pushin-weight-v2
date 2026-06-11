@@ -277,11 +277,18 @@ def cmd_relevance(args, paths) -> int:
       audit-handles  - probe canonical_handles via TwitterAPI.io (commit 2)
       backfill       - fetch headlines for URL-only DB rows (commit 3)
     """
+    action = args.relevance_action
+    return _dispatch_relevance(args, action, paths)
+
+
+def _now_iso_for_audit() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _dispatch_relevance(args, action: str, paths) -> int:
     from x_monitor.config import KNOWN_MODELS
     from x_monitor.relevance import load_filter
-
-    action = args.relevance_action
-
     if action == "list":
         # Header
         print(
@@ -306,18 +313,176 @@ def cmd_relevance(args, paths) -> int:
         return 0
 
     if action == "dry-run":
-        print(
-            "relevance dry-run ships in commit 2 (v1.2).",
-            file=sys.stderr,
+        from x_monitor.relevance import (
+            REASON_CANONICAL_BYPASS,
+            REASON_HARD_DROP_NO_SIGNAL,
+            REASON_HARD_DROP_URL_ONLY,
+            REASON_KEPT,
+            REASON_SOFT_DROP_BANNED,
+            REASON_URL_ONLY_KEPT,
+            filter_posts,
+            load_filter,
         )
-        return 1
+        # Per-model hardcoded fixture of the kinds of posts that
+        # historically hijacked each query (Q1..Q6). The fixture is
+        # intentionally compact: 6-8 items per model, mixing real-signal,
+        # banned-token, and pure-noise. Purpose: prove the filter
+        # decision tree end-to-end without making a real API call.
+        fixtures: dict[str, list[dict]] = {
+            "moonshot_kimi": [
+                {"id": "f1", "text": "Kimi K2 is amazing", "author_handle": "fan"},
+                {"id": "f2", "text": "F1 driver Antonelli is fast", "author_handle": "f1fan"},
+                {"id": "f3", "text": "F1 qualifying results", "author_handle": "u"},
+                {"id": "f4", "text": "hello world", "author_handle": "u"},
+                {"id": "f5", "text": "Kimi K2 beats F1 cars in benchmarks", "author_handle": "u"},
+                {"id": "f6", "text": "Moonshot AI launched Kimi K2.5", "author_handle": "u"},
+                {"id": "f7", "text": "https://t.co/abc", "author_handle": "u"},
+            ],
+            "inclusionai": [
+                {"id": "f1", "text": "Inclusion AI released ring-1t", "author_handle": "fan"},
+                {"id": "f2", "text": "Tolkien's theme of inclusion", "author_handle": "u"},
+                {"id": "f3", "text": "WWE Raw results Rollins", "author_handle": "u"},
+                {"id": "f4", "text": "hello world", "author_handle": "u"},
+            ],
+            "minimax": [
+                {"id": "f1", "text": "minimax M3.0 launch", "author_handle": "fan"},
+                {"id": "f2", "text": "hailuo-2.3 prompt guide", "author_handle": "u"},
+                {"id": "f3", "text": "celebrity uses hailuo", "author_handle": "u"},
+                {"id": "f4", "text": "hello world", "author_handle": "u"},
+            ],
+            "qwen": [
+                {"id": "f1", "text": "Qwen3-Max is great", "author_handle": "fan"},
+                {"id": "f2", "text": "hello world", "author_handle": "u"},
+            ],
+            "deepseek": [
+                {"id": "f1", "text": "DeepSeek V3.2 release", "author_handle": "fan"},
+                {"id": "f2", "text": "hello world", "author_handle": "u"},
+            ],
+            "glm": [
+                {"id": "f1", "text": "GLM-4.5 launch", "author_handle": "fan"},
+                {"id": "f2", "text": "hello world", "author_handle": "u"},
+            ],
+            "xiaomi_mimo": [
+                {"id": "f1", "text": "Xiaomi MiMo v2.5 release", "author_handle": "fan"},
+                {"id": "f2", "text": "hello world", "author_handle": "u"},
+            ],
+        }
+        target = args.model if hasattr(args, "model") and args.model else None
+        models = [target] if target else sorted(fixtures)
+        # Build model_id -> items list
+        for m in models:
+            if m not in fixtures:
+                print(f"unknown model: {m}", file=sys.stderr)
+                continue
+            cfg = load_filter(m, paths["data"])
+            items = fixtures[m]
+            kept, stats, soft = filter_posts(items, cfg)
+            print(f"\n[{m}]")
+            print(f"  config: canonical={len(cfg.canonical_handles)} "
+                  f"must_any={len(cfg.must_have_any)} "
+                  f"banned={len(cfg.must_have_none)} "
+                  f"drop_url_only={cfg.drop_url_only}")
+            print(f"  n_in={len(items)}  n_kept={stats['n_kept']}  "
+                  f"n_dropped={stats['n_dropped']}  "
+                  f"n_soft_dropped={stats['n_soft_dropped']}")
+            print(f"  reasons: {stats['reasons']}")
+            if soft:
+                print(f"  soft-dropped (review queue):")
+                for s in soft:
+                    print(f"    - {s['tweet_id']}: {s['text_excerpt']!r}")
+        return 0
 
     if action == "audit-handles":
-        print(
-            "relevance audit-handles ships in commit 2 (v1.2).",
-            file=sys.stderr,
+        from x_monitor.apify import (
+            TwitterApiAuthError,
+            TwitterApiClient,
+            TwitterApiRateLimitError,
+            TwitterApiServerError,
         )
-        return 1
+        from x_monitor.config import KNOWN_MODELS
+        from x_monitor.relevance import (
+            load_filter,
+            looks_like_ai_account,
+        )
+        import yaml as _yaml
+
+        # Try to make a real client. If env var is missing, return 2 so the
+        # operator can run `x-monitor setup twitterapi-key` first.
+        try:
+            api = TwitterApiClient.from_env()
+        except Exception as e:
+            print(
+                f"error: {e}\n"
+                f"Run `x-monitor setup twitterapi-key` first.\n"
+                f"Or set TWITTERAPI_IO_API_KEY in your env.",
+                file=sys.stderr,
+            )
+            return 2
+
+        # Build brand_tokens per model from must_have_any. This is a
+        # rough heuristic; canonical_handles is the primary signal.
+        brand_tokens_per_model: dict[str, list[str]] = {}
+        for m in sorted(KNOWN_MODELS):
+            cfg = load_filter(m, paths["data"])
+            brand_tokens_per_model[m] = (
+                list(cfg.must_have_any)[:3] if cfg.must_have_any else [m]
+            )
+
+        print(
+            f"{'model':<18} {'handle':<22} {'followers':<10} "
+            f"{'verified':<9} {'likely':<7} reason"
+        )
+        print("-" * 110)
+
+        audited_at = _now_iso_for_audit()
+        any_failure = False
+        for m in sorted(KNOWN_MODELS):
+            cfg = load_filter(m, paths["data"])
+            for handle in cfg.canonical_handles:
+                try:
+                    info = api.user_info(handle)
+                except TwitterApiAuthError as e:
+                    print(f"  AUTH FAILED: {e}", file=sys.stderr)
+                    return 2
+                except (TwitterApiRateLimitError, TwitterApiServerError) as e:
+                    print(f"  {m}/{handle}: TRANSIENT ERROR {e}", file=sys.stderr)
+                    any_failure = True
+                    continue
+                except Exception as e:
+                    print(f"  {m}/{handle}: ERROR {e}", file=sys.stderr)
+                    any_failure = True
+                    continue
+                if not info:
+                    print(f"  {m}/{handle:<22} (not found)")
+                    continue
+                likely, reason = looks_like_ai_account(
+                    info, brand_tokens_per_model[m]
+                )
+                print(
+                    f"{m:<18} {handle:<22} "
+                    f"{info.get('followers_count', 0):<10} "
+                    f"{str(info.get('verified', False)):<9} "
+                    f"{str(likely):<7} {reason}"
+                )
+        print()
+        print(
+            "Hint: edit data/filters/<model>.yaml to remove handles that look "
+            "unrelated, then re-run. Pass --write-verify to stamp "
+            "verified_at on all loaded YAMLs."
+        )
+        if getattr(args, "write_verify", False):
+            for m in sorted(KNOWN_MODELS):
+                yaml_path = paths["data"] / "filters" / f"{m}.yaml"
+                if not yaml_path.exists():
+                    continue
+                raw = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+                raw["verified_at"] = audited_at
+                yaml_path.write_text(
+                    _yaml.safe_dump(raw, sort_keys=False, allow_unicode=True),
+                    encoding="utf-8",
+                )
+            print(f"\nverified_at updated to {audited_at}")
+        return 1 if any_failure else 0
 
     if action == "backfill":
         print(
@@ -385,6 +550,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_rel.add_argument(
         "relevance_action",
         choices=["list", "dry-run", "audit-handles", "backfill"],
+    )
+    p_rel.add_argument(
+        "--model",
+        help="Restrict dry-run to one model (default: all)",
+    )
+    p_rel.add_argument(
+        "--write-verify",
+        action="store_true",
+        help="Stamp verified_at on data/filters/<model>.yaml after audit-handles",
     )
     p_rel.set_defaults(func=cmd_relevance)
 

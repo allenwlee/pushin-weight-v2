@@ -22,6 +22,7 @@ from .apify import (
 )
 from .config import Config
 from .queries import Query, estimated_cost, load_queries
+from .relevance import RelevanceConfig, filter_posts, load_filter
 from .review import ReviewQueue
 from .store import Store
 
@@ -30,6 +31,57 @@ log = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def filter_and_review(
+    items: list[dict[str, Any]],
+    q: Query,
+    model_id: str,
+    cfg: RelevanceConfig,
+    review: ReviewQueue,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Apply the per-model relevance filter, then layer review-queue rules.
+
+    Returns (kept, drop_stats) where:
+      - kept: items that should be inserted into the DB.
+      - drop_stats: dict with n_dropped, n_kept, n_soft_dropped, reasons.
+        Reasons are the keys from x_monitor.relevance.
+
+    Side effects:
+      - Soft-dropped items are added to the review queue with
+        reason="banned_token" (so the operator can promote them via
+        `x-monitor review resolve` if they turn out to be real signal).
+      - Low-engagement release posts are added to the review queue with
+        reason="low_engagement" (the existing R25 rule). This rule only
+        runs on the KEPT set — the previous behavior iterated over the
+        unfiltered `items`, which meant a filter-dropped post would
+        still appear in the review queue with a tweet_id that wasn't
+        in the DB. That bug is fixed here.
+
+    Items here are normalized post dicts (with `id`, `text`,
+    `author_handle`, `favorite_count`, `model_id`, `source_query_id`).
+    """
+    kept, stats, soft = filter_posts(items, cfg)
+    for sd in soft:
+        review.append_rule_match(
+            tweet_id=sd["tweet_id"],
+            reason=sd["reason"],
+            model_id=model_id,
+            rule="must_have_none",
+        )
+    # Low-engagement rule runs ONLY on the kept set.
+    for it in kept:
+        if (
+            q.expected_signal == "release"
+            and (it.get("favorite_count") or 0) < 2
+        ):
+            review.append_rule_match(
+                tweet_id=it.get("id", ""),
+                reason="low_engagement",
+                model_id=model_id,
+                rule="release_min_faves",
+            )
+    return kept, stats
 
 
 class PipelineLockBusy(Exception):
@@ -184,9 +236,16 @@ class RunPipeline:
             review = ReviewQueue(self.review_queue_path)
 
             try:
+                # Load per-model filter configs once per model (v1.2).
+                # Missing files return an empty config (no filter applied),
+                # so legacy models without a YAML continue to work.
+                cfgs: dict[str, RelevanceConfig] = {
+                    m: load_filter(m, self.data_dir) for m in adjusted
+                }
                 for m, qs in adjusted.items():
                     if query_filter:
                         qs = [q for q in qs if q.id in query_filter]
+                    cfg = cfgs.get(m, RelevanceConfig())
                     for q in qs:
                         if not q.enabled:
                             continue
@@ -227,16 +286,40 @@ class RunPipeline:
                             )
                             continue
 
-                        # Persist raw BEFORE inserting (R16 atomicity).
-                        raw_path.write_text(
-                            json.dumps(items, ensure_ascii=False, default=str),
-                            encoding="utf-8",
-                        )
-                        # Stamp model_id on each item
+                        # Stamp model_id on each item BEFORE the filter pass
+                        # (the filter needs model_id for the review-queue
+                        # side effect).
                         for it in items:
                             it["model_id"] = m
                             it["source_query_id"] = q.id
-                        n_inserted = store.insert_posts(items)
+
+                        # v1.2: apply per-model relevance filter. The helper
+                        # also routes banned-token soft-drops and the
+                        # low-engagement rule to the review queue. Critical:
+                        # the rule iterates over the KEPT set, not `items`,
+                        # so a filter-dropped post never lands in the review
+                        # queue with a tweet_id that isn't in the DB.
+                        kept, drop_stats = filter_and_review(
+                            items, q, m, cfg, review
+                        )
+
+                        # Persist raw of the KEPT set (not the raw search
+                        # response) so data/runs/raw/ reflects what we
+                        # actually inserted. Drop counts are in the
+                        # per-query summary entry, so nothing is lost.
+                        raw_path.write_text(
+                            json.dumps(kept, ensure_ascii=False, default=str),
+                            encoding="utf-8",
+                        )
+                        n_inserted = store.insert_posts(kept)
+
+                        log.info(
+                            "model=%s query=%s n_results=%d n_kept=%d "
+                            "n_dropped=%d reasons=%s n_review=%d",
+                            m, q.id, len(items), drop_stats["n_kept"],
+                            drop_stats["n_dropped"], drop_stats["reasons"],
+                            drop_stats["n_soft_dropped"],
+                        )
 
                         summary["queries"].append(
                             {
@@ -244,6 +327,10 @@ class RunPipeline:
                                 "query_id": q.id,
                                 "status": "completed",
                                 "n_results": len(items),
+                                "n_kept": drop_stats["n_kept"],
+                                "n_filtered": drop_stats["n_dropped"],
+                                "filter_reasons": drop_stats["reasons"],
+                                "n_review_added": drop_stats["n_soft_dropped"],
                                 "n_inserted": n_inserted,
                                 "raw_path": str(raw_path.relative_to(self.data_dir)),
                             }
@@ -251,19 +338,6 @@ class RunPipeline:
                         summary["totals"]["n_queries_run"] += 1
                         summary["totals"]["n_results"] += len(items)
                         summary["totals"]["n_inserted"] += n_inserted
-
-                        # Review queue rules: low-engagement release posts
-                        for it in items:
-                            if (
-                                q.expected_signal == "release"
-                                and (it.get("favorite_count") or 0) < 2
-                            ):
-                                review.append_rule_match(
-                                    tweet_id=it.get("id", ""),
-                                    reason="low_engagement",
-                                    model_id=m,
-                                    rule="release_min_faves",
-                                )
 
                     if summary["status"] == "aborted":
                         break

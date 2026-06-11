@@ -26,7 +26,7 @@ KNOWN_MODELS: frozenset[str] = frozenset(
 )
 
 VALID_REVIEW_REASONS: frozenset[str] = frozenset(
-    {"low_engagement", "off_topic", "suspicious_actor", "ambiguous_role"}
+    {"low_engagement", "off_topic", "suspicious_actor", "ambiguous_role", "banned_token"}
 )
 
 VALID_QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
