@@ -151,19 +151,14 @@ def serialize_grid_card(
     cutoff_7d = now - timedelta(days=7)
     cutoff_24h = now - timedelta(hours=24)
     in_window: list[dict[str, Any]] = []
-    for p in posts:
-        dt = _parse_post_timestamp(p.get("created_at"))
-        if dt is None:
-            continue
-        if dt >= cutoff:
-            in_window.append(p)
-
     in_7d: list[dict[str, Any]] = []
     in_24h: list[dict[str, Any]] = []
     for p in posts:
         dt = _parse_post_timestamp(p.get("created_at"))
         if dt is None:
             continue
+        if dt >= cutoff:
+            in_window.append(p)
         if dt >= cutoff_7d:
             in_7d.append(p)
         if dt >= cutoff_24h:
