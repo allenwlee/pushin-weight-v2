@@ -757,6 +757,18 @@ class TestBrandColorize:
         assert "<span" not in out3
         # The full string is returned (with HTML-escape if needed)
         assert "neuralglam uses glmmodel" in out3
+        # POSITIVE case: standalone "glm" IS a word, so it DOES colorize.
+        # (The plan's original claim that \\bglm\\b wouldn't match inside
+        # "algorithm has glm" is wrong — glm is a standalone word there.)
+        out4 = brand_colorize("I built a glm model")
+        assert "color: #a855f7;" in out4
+        assert ">glm</span>" in out4
+        # Markup regression: ampersand in input must become exactly one
+        # &amp; in output (no &amp;amp;). This is the bug the reviewer
+        # found when the return was a plain str (Jinja auto-escaped it).
+        out5 = brand_colorize("MiniMax & DeepSeek")
+        assert "&amp;" in out5
+        assert "&amp;amp;" not in out5
 
     def test_brand_colorize_escapes_html_in_post_text(self):
         out = brand_colorize("<script>alert(1)</script> Qwen rocks")

@@ -7,6 +7,8 @@ import json
 import logging
 import os
 import re
+
+from markupsafe import Markup
 import signal
 import subprocess
 import sys
@@ -77,7 +79,7 @@ def brand_colorize(text: str) -> str:
             return token
         color = MODEL_ACCENT_COLORS[canonical]
         return f'<span style="color: {color}; font-weight: 600;">{token}</span>'
-    return _BRAND_RE.sub(_sub, escaped)
+    return Markup(_BRAND_RE.sub(_sub, escaped))
 
 
 # --- Sparkline ------------------------------------------------------------
