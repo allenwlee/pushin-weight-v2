@@ -206,6 +206,49 @@ def is_tco_url(url: str) -> bool:
     return host in TCO_HOSTS
 
 
+# Hosts that host X-native long-form articles under /i/article/{id}.
+# These return HTTP 200 but with login-walled HTML — the only way to
+# get a parseable title is via TwitterAPI.io's get_article endpoint.
+X_ARTICLE_HOSTS: frozenset[str] = frozenset(
+    {"x.com", "twitter.com", "www.x.com", "www.twitter.com"}
+)
+
+# Match /i/article/{numeric_id} optionally followed by / or query string.
+# Examples that should match:
+#   https://x.com/i/article/2064029478616182784
+#   https://twitter.com/i/article/123/foo
+#   https://x.com/i/article/123?utm=abc
+# Examples that should NOT match:
+#   https://x.com/foo/article/123    (wrong path)
+#   https://x.com/i/article/abc      (non-numeric)
+_X_ARTICLE_PATH_RE = re.compile(
+    r"^/i/article/(?P<tweet_id>\d+)(?:[/?#].*)?$"
+)
+
+
+def x_article_tweet_id(url: str) -> str | None:
+    """Return the tweet_id if `url` is an X-native article, else None.
+
+    The trailing path segment of an x.com/i/article/{id} URL IS the
+    tweet_id of the tweet that links to the article. The TwitterAPI.io
+    `get_article` endpoint takes that tweet_id and returns the full
+    article body.
+    """
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    host = (parsed.hostname or "").lower()
+    if host not in X_ARTICLE_HOSTS:
+        return None
+    m = _X_ARTICLE_PATH_RE.match(parsed.path or "")
+    if not m:
+        return None
+    return m.group("tweet_id")
+
+
 def resolve_tco(url: str, *, timeout_s: float = 5.0) -> str | None:
     """Follow t.co (and similar) redirects to discover the real URL.
 
@@ -409,9 +452,13 @@ class HeadlinesCache:
 
     # --- public API -------------------------------------------------------
 
-    def get(self, url: str) -> dict[str, Any] | None:
-        """Return the cache entry for `url` (key = normalize_url) or None."""
-        key = cache_key_for(url)
+    def get(self, url: str, *, key_override: str | None = None) -> dict[str, Any] | None:
+        """Return the cache entry for `url` (key = normalize_url) or None.
+
+        `key_override` is an escape hatch for callers that want a
+        different key (e.g., X-article lookups key on tweet_id, not URL).
+        """
+        key = key_override or cache_key_for(url)
         if not key:
             return None
 
@@ -435,9 +482,14 @@ class HeadlinesCache:
         *,
         status_code: int | None = None,
         error: str | None = None,
+        key_override: str | None = None,
     ) -> None:
-        """Write a cache entry. Idempotent: re-writing the same key is fine."""
-        key = cache_key_for(url)
+        """Write a cache entry. Idempotent: re-writing the same key is fine.
+
+        `key_override` mirrors HeadlinesCache.get — lets callers store
+        under a custom key (e.g., `x_article:{tweet_id}` for articles).
+        """
+        key = key_override or cache_key_for(url)
         if not key:
             return
 
@@ -537,6 +589,7 @@ def enrich_posts(
     per_query_cap: int = DEFAULT_PER_QUERY_CAP,
     run_fetches_used: list[int] | None = None,
     per_run_cap: int = DEFAULT_PER_RUN_CAP,
+    api: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Walk items, find URL-only posts, fetch/cache their headlines.
 
@@ -554,7 +607,13 @@ def enrich_posts(
     Returns:
         (items, stats). `items` is the same list, with headline fields
         added. `stats` is {n_url_only, n_fetched, n_cached, n_failed,
-        n_skipped_cap}.
+        n_skipped_cap, n_via_api}.
+
+    The optional `api` argument is a TwitterApiClient-like object with
+    a `.get_article(tweet_id) -> dict | None` method. When the resolved
+    URL of a URL-only post is an X-native long-form article
+    (x.com/i/article/{id}), the article title is fetched via get_article
+    instead of scraping HTML. Cache key for X-articles is the tweet_id.
     """
     stats = {
         "n_url_only": 0,
@@ -562,6 +621,7 @@ def enrich_posts(
         "n_cached": 0,
         "n_failed": 0,
         "n_skipped_cap": 0,
+        "n_via_api": 0,
     }
     # url -> (headline, source) map for posts seen earlier in this
     # query. Lets us satisfy the "same article twice in one batch"
@@ -590,8 +650,84 @@ def enrich_posts(
                 fetch_target = resolved
             # If resolve_tco failed, fall through and try the t.co URL
             # itself (fetch_url will follow redirects anyway).
+        # X-native article routing: if the resolved URL is an
+        # x.com/i/article/{id}, use the TwitterAPI.io get_article
+        # endpoint (100 credits per call). Cache key is the tweet_id.
+        # Bypasses per-host throttle (the API is the throttle, not
+        # the network) and the per-query fetch cap (still counted
+        # against per_run_cap so we don't blow the budget).
+        # Cache key for the resolved URL (computed once for both the
+        # X-article branch and the fallthrough HTTP fetch path).
         key = cache_key_for(fetch_target)
-        # Per-query dedupe: reuse the result from earlier in this query.
+        # X-native article routing: if the resolved URL is an
+        # x.com/i/article/{id}, use the TwitterAPI.io get_article
+        # endpoint (100 credits per call). Cache key is the tweet_id.
+        # Bypasses per-host throttle (the API is the throttle, not
+        # the network) and the per-query fetch cap (still counted
+        # against per_run_cap so we don't blow the budget).
+        x_tid = x_article_tweet_id(fetch_target)
+        if x_tid is not None and api is not None:
+            x_key = f"x_article:{x_tid}"
+            # Per-query dedupe for X-articles too.
+            if x_key in seen_results:
+                headline, source = seen_results[x_key]
+                item["headline"] = headline
+                item["headline_source"] = source
+                continue
+            # Per-run cap check (API calls are not free).
+            if run_fetches_used is not None and run_fetches_used[0] >= per_run_cap:
+                item["headline"] = None
+                item["headline_source"] = SOURCE_URL_ONLY
+                seen_results[x_key] = (None, SOURCE_URL_ONLY)
+                seen_results[key] = (None, SOURCE_URL_ONLY)
+                stats["n_skipped_cap"] += 1
+                continue
+            # Cache check (keyed on tweet_id, not URL).
+            hit = cache.get(x_tid, key_override=x_key)
+            if hit is not None:
+                item["headline"] = hit.get("title")
+                item["headline_source"] = SOURCE_CACHED
+                seen_results[x_key] = (item["headline"], SOURCE_CACHED)
+                seen_results[key] = (item["headline"], SOURCE_CACHED)
+                stats["n_cached"] += 1
+                # We count this as "via the api path" even though no
+                # API call was made (it would have been, on a miss).
+                stats["n_via_api"] = stats.get("n_via_api", 0) + 1
+                continue
+            # Fetch via API.
+            try:
+                article = api.get_article(x_tid)
+            except Exception as e:
+                log.info("enrich_posts: get_article(%s) failed: %s", x_tid, e)
+                article = None
+            fetches_in_query += 1
+            if run_fetches_used is not None:
+                run_fetches_used[0] += 1
+            if article is None:
+                cache.put(x_tid, None, SOURCE_FETCH_FAILED, error="api_no_article", key_override=x_key)
+                item["headline"] = None
+                item["headline_source"] = SOURCE_FETCH_FAILED
+                seen_results[x_key] = (None, SOURCE_FETCH_FAILED)
+                seen_results[key] = (None, SOURCE_FETCH_FAILED)
+                stats["n_failed"] += 1
+                stats["n_via_api"] = stats.get("n_via_api", 0) + 1
+                continue
+            title = article.get("title")
+            cache.put(x_tid, title, SOURCE_FETCHED, status_code=200, key_override=x_key)
+            source = SOURCE_FETCHED if title else SOURCE_FETCH_FAILED
+            item["headline"] = title
+            item["headline_source"] = source
+            seen_results[x_key] = (title, source)
+            seen_results[key] = (title, source)
+            if title:
+                stats["n_fetched"] += 1
+            else:
+                stats["n_failed"] += 1
+            stats["n_via_api"] = stats.get("n_via_api", 0) + 1
+            continue
+
+        # `key` was computed at the top of the loop (above the X-article
+        # branch). Per-query dedupe: reuse the result from earlier in this query.
         if key in seen_results:
             headline, source = seen_results[key]
             item["headline"] = headline

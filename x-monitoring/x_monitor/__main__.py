@@ -494,6 +494,7 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             fetch_url,
             is_tco_url,
             resolve_tco,
+            x_article_tweet_id,
         )
         from x_monitor.store import Store
         import time as _time
@@ -504,6 +505,24 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         per_host_min_interval = float(
             getattr(args, "per_host_min_interval", 1.0) or 1.0
         )
+        via_api = bool(getattr(args, "via_api", False))
+        # Build the api client lazily. If --via-api is requested but
+        # the env var is missing, we warn and fall back to fetch_url
+        # for everything (so the backfill still works for non-X-article
+        # URLs).
+        api = None
+        if via_api:
+            try:
+                from x_monitor.apify import TwitterApiClient
+                api = TwitterApiClient.from_env()
+            except Exception as e:
+                print(
+                    f"warning: --via-api requested but api init failed: {e}\n"
+                    f"  falling back to fetch_url for everything.",
+                    file=sys.stderr,
+                )
+                api = None
+        via_api_active = via_api and api is not None
         # Open the store (auto-migrates so the new columns exist).
         store = Store(paths["db"], auto_migrate=True)
         try:
@@ -528,6 +547,7 @@ def _dispatch_relevance(args, action: str, paths) -> int:
                 "n_cached": 0,
                 "n_failed": 0,
                 "n_skipped": 0,
+                "n_via_api": 0,
             }
             fetches_this_run = 0
             host_last_fetch: dict[str, float] = {}
@@ -545,6 +565,55 @@ def _dispatch_relevance(args, action: str, paths) -> int:
                     resolved = resolve_tco(url)
                     if resolved:
                         fetch_target = resolved
+                # X-article routing: if the resolved URL is an
+                # x.com/i/article/{id} and --via-api is on, call
+                # api.get_article(tweet_id) instead of fetch_url.
+                # Cost: 100 credits per call.
+                x_tid = x_article_tweet_id(fetch_target)
+                if x_tid is not None and via_api_active:
+                    x_key = f"x_article:{x_tid}"
+                    hit = cache.get(x_tid, key_override=x_key)
+                    if hit is not None:
+                        store.update_post_headline(
+                            tweet_id, hit.get("title"), hit["source"]
+                        )
+                        if hit["source"] == SOURCE_CACHED:
+                            stats["n_cached"] += 1
+                        else:
+                            stats["n_already_fresh"] += 1
+                        stats["n_via_api"] = stats.get("n_via_api", 0) + 1
+                        continue
+                    if fetches_this_run >= limit or fetches_this_run >= per_query_cap * 25:
+                        stats["n_skipped"] += 1
+                        continue
+                    try:
+                        article = api.get_article(x_tid)
+                    except Exception as e:
+                        print(f"  get_article({x_tid}) failed: {e}", file=sys.stderr)
+                        article = None
+                    fetches_this_run += 1
+                    if article is None:
+                        cache.put(x_tid, None, SOURCE_FETCH_FAILED, error="api_no_article", key_override=x_key)
+                        store.update_post_headline(tweet_id, None, SOURCE_FETCH_FAILED)
+                        stats["n_failed"] += 1
+                        stats["n_via_api"] = stats.get("n_via_api", 0) + 1
+                        continue
+                    title = (article.get("title") or "").strip() or None
+                    cache.put(x_tid, title, SOURCE_FETCHED, status_code=200, key_override=x_key)
+                    source = SOURCE_FETCHED if title else SOURCE_FETCH_FAILED
+                    store.update_post_headline(tweet_id, title, source)
+                    if title:
+                        stats["n_fetched"] += 1
+                    else:
+                        stats["n_failed"] += 1
+                    stats["n_via_api"] = stats.get("n_via_api", 0) + 1
+                    if i % 10 == 0 or i == len(rows):
+                        print(
+                            f"  [{i}/{len(rows)}] fetched={stats['n_fetched']} "
+                            f"cached={stats['n_cached']} failed={stats['n_failed']} "
+                            f"skipped={stats['n_skipped']} via_api={stats.get('n_via_api', 0)}"
+                        )
+                    continue
                 # Cache check (keyed on resolved URL).
                 hit = cache.get(fetch_target)
                 if hit is not None:
@@ -687,6 +756,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.0,
         help="Minimum seconds between fetches to the same host "
              "(default: 1.0; ignored if --skip-throttle is set)",
+    )
+    p_rel.add_argument(
+        "--via-api",
+        action="store_true",
+        help="Use TwitterAPI.io get_article() for x.com/i/article URLs "
+             "(100 credits per call). Requires TWITTERAPI_IO_API_KEY in env.",
     )
     p_rel.add_argument(
         "--write-verify",

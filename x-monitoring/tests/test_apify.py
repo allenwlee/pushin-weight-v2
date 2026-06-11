@@ -17,6 +17,7 @@ from x_monitor.apify import (
     TwitterApiServerError,
     _normalize_follower,
     _normalize_tweet,
+    _normalize_article,
 )
 
 
@@ -271,3 +272,125 @@ def test_normalize_follower_handles_missing_fields():
     assert out["handle"] == ""
     assert out["display_name"] == ""
     assert out["follower_count"] == 0
+
+
+
+class TestNormalizeArticle:
+    """_normalize_article trims the API response to title + plain text."""
+
+    def test_minimal(self):
+        out = _normalize_article({"title": "Hello", "preview_text": "World"})
+        assert out["title"] == "Hello"
+        assert out["preview_text"] == "World"
+        assert out["plain_text"] is None
+
+    def test_strips_empty_title(self):
+        out = _normalize_article({"title": "  ", "preview_text": "P"})
+        assert out["title"] is None  # whitespace-only -> None
+        assert out["preview_text"] == "P"
+
+    def test_flattens_content_blocks(self):
+        out = _normalize_article({
+            "title": "T",
+            "contents": [
+                {"type": "header-one", "text": "Intro"},
+                {"type": "unstyled", "text": "Para 1"},
+                {"type": "unordered-list-item", "text": "Item A"},
+                {"type": "image"},  # ignored
+                {"type": "divider"},  # ignored
+            ],
+        })
+        assert out["title"] == "T"
+        assert "Intro" in out["plain_text"]
+        assert "Para 1" in out["plain_text"]
+        assert "- Item A" in out["plain_text"]
+
+    def test_preserves_cover_and_author(self):
+        out = _normalize_article({
+            "title": "T",
+            "cover_media_img_url": "https://pbs.twimg.com/media/x.jpg",
+            "author": {"userName": "@foo"},
+            "createdAt": "Fri Mar 28 09:01:12 +0000 2025",
+        })
+        assert out["cover_media_img_url"] == "https://pbs.twimg.com/media/x.jpg"
+        assert out["author"] == {"userName": "@foo"}
+        assert out["created_at"] == "Fri Mar 28 09:01:12 +0000 2025"
+
+
+class TestGetArticle:
+    """TwitterApiClient.get_article() calls /twitter/article and normalizes."""
+
+    def _client(self):
+        from x_monitor.apify import TwitterApiClient
+        return TwitterApiClient(api_key="test-key", base_url="https://api.example.com")
+
+    def test_get_article_returns_normalized_dict(self):
+        client = self._client()
+        api_response = {
+            "article": {
+                "title": "Big AI News",
+                "preview_text": "Short preview.",
+                "contents": [
+                    {"type": "header-one", "text": "Intro"},
+                    {"type": "unstyled", "text": "Para 1"},
+                ],
+                "author": {"userName": "@ai"},
+                "createdAt": "Fri Mar 28 09:01:12 +0000 2025",
+            }
+        }
+        with patch.object(client, "_get", return_value=api_response) as mock_get:
+            result = client.get_article("2064029478616182784")
+        assert result is not None
+        assert result["title"] == "Big AI News"
+        assert result["preview_text"] == "Short preview."
+        assert "Intro" in result["plain_text"]
+        mock_get.assert_called_once()
+        # Must pass tweet_id as the only required param.
+        args, kwargs = mock_get.call_args
+        # _get(path, params) is called with params as a positional arg.
+        # args = (path, params), kwargs = {}.
+        assert args[0] == "/twitter/article"  # ARTICLE_PATH
+        assert args[1] == {"tweet_id": "2064029478616182784"}
+
+    def test_get_article_returns_none_when_no_article_key(self):
+        # API returns 200 but `article` is missing or null.
+        client = self._client()
+        with patch.object(client, "_get", return_value={"article": None}):
+            assert client.get_article("123") is None
+        with patch.object(client, "_get", return_value={}):
+            assert client.get_article("123") is None
+
+    def test_get_article_returns_none_for_empty_tweet_id(self):
+        client = self._client()
+        # Empty/None should not even call _get.
+        with patch.object(client, "_get") as mock_get:
+            assert client.get_article("") is None
+            assert client.get_article(None) is None  # type: ignore[arg-type]
+        mock_get.assert_not_called()
+
+    def test_get_article_returns_none_for_non_dict_response(self):
+        client = self._client()
+        with patch.object(client, "_get", return_value="not a dict"):
+            assert client.get_article("123") is None
+        with patch.object(client, "_get", return_value=["list", "of", "stuff"]):
+            assert client.get_article("123") is None
+
+    def test_get_article_propagates_auth_error(self):
+        from x_monitor.apify import TwitterApiAuthError
+        client = self._client()
+        with patch.object(
+            client, "_get",
+            side_effect=TwitterApiAuthError("bad key"),
+        ):
+            with pytest.raises(TwitterApiAuthError):
+                client.get_article("123")
+
+    def test_get_article_propagates_rate_limit(self):
+        from x_monitor.apify import TwitterApiRateLimitError
+        client = self._client()
+        with patch.object(
+            client, "_get",
+            side_effect=TwitterApiRateLimitError("429"),
+        ):
+            with pytest.raises(TwitterApiRateLimitError):
+                client.get_article("123")

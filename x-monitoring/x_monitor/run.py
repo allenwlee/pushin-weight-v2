@@ -25,6 +25,7 @@ from .queries import Query, estimated_cost, load_queries
 from .relevance import RelevanceConfig, filter_posts, load_filter
 from .review import ReviewQueue
 from .store import Store
+from .headlines import HeadlinesCache, enrich_posts
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ def filter_and_review(
     model_id: str,
     cfg: RelevanceConfig,
     review: ReviewQueue,
+    cache: HeadlinesCache | None = None,
+    api: TwitterApiClient | None = None,
+    run_fetches_used: list[int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Apply the per-model relevance filter, then layer review-queue rules.
 
@@ -60,6 +64,11 @@ def filter_and_review(
 
     Items here are normalized post dicts (with `id`, `text`,
     `author_handle`, `favorite_count`, `model_id`, `source_query_id`).
+
+    If `cache` is provided, the kept set is passed through enrich_posts()
+    so URL-only posts get their article headlines (X-articles go through
+    api.get_article when both `api` and the URL match). The returned
+    `kept` list reflects the enrichment.
     """
     kept, stats, soft = filter_posts(items, cfg)
     for sd in soft:
@@ -81,6 +90,16 @@ def filter_and_review(
                 model_id=model_id,
                 rule="release_min_faves",
             )
+    # v1.4: enrich the kept set with article headlines (X-articles go
+    # through api.get_article when both api and the URL match).
+    if cache is not None:
+        kept, headline_stats = enrich_posts(
+            kept, cache, api=api, run_fetches_used=run_fetches_used,
+        )
+        # Merge headline stats into the filter drop_stats so they show
+        # up in the per-query summary. Filter keys win on collision.
+        for k, v in headline_stats.items():
+            stats.setdefault(k, v)
     return kept, stats
 
 
@@ -240,6 +259,12 @@ class RunPipeline:
             # Store init (auto-migrates)
             store = Store(self.db_path)
             review = ReviewQueue(self.review_queue_path)
+            # v1.4: headline cache for URL-only posts (lives in data/).
+            cache = HeadlinesCache(self.data_dir / "headlines_cache.json")
+            # Per-run counter for API + HTTP fetches (shared across all
+            # queries in this run). Live runs use the v1.2 defaults of
+            # per_query_cap=8, per_run_cap=50.
+            run_fetches_used: list[int] = [0]
 
             try:
                 # Load per-model filter configs once per model (v1.2).
@@ -306,7 +331,9 @@ class RunPipeline:
                         # so a filter-dropped post never lands in the review
                         # queue with a tweet_id that isn't in the DB.
                         kept, drop_stats = filter_and_review(
-                            items, q, m, cfg, review
+                            items, q, m, cfg, review,
+                            cache=cache, api=apify,
+                            run_fetches_used=run_fetches_used,
                         )
 
                         # Persist raw of the KEPT set (not the raw search
@@ -338,6 +365,10 @@ class RunPipeline:
                                 "filter_reasons": drop_stats["reasons"],
                                 "n_review_added": drop_stats["n_soft_dropped"],
                                 "n_inserted": n_inserted,
+                                "n_url_only": drop_stats.get("n_url_only", 0),
+                                "n_headlines_fetched": drop_stats.get("n_fetched", 0),
+                                "n_headlines_cached": drop_stats.get("n_cached", 0),
+                                "n_via_api": drop_stats.get("n_via_api", 0),
                                 "raw_path": str(raw_path.relative_to(self.data_dir)),
                             }
                         )

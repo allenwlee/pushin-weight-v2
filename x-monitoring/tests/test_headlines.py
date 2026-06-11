@@ -23,6 +23,7 @@ from x_monitor.headlines import (
     normalize_url,
     parse_title,
     resolve_tco,
+    x_article_tweet_id,
 )
 
 
@@ -569,3 +570,135 @@ class TestResolveTco:
             assert out[0]["headline_source"] == SOURCE_FETCHED
             assert out[1]["headline"] == "Big AI News"  # shared from seen_results
             assert out[1]["headline_source"] == SOURCE_FETCHED
+
+
+
+class TestXArticleTweetId:
+    """x_article_tweet_id() detects x.com/i/article/{id} URLs."""
+
+    def test_x_com_article(self):
+        assert x_article_tweet_id("https://x.com/i/article/2064029478616182784") == "2064029478616182784"
+
+    def test_twitter_com_article(self):
+        assert x_article_tweet_id("https://twitter.com/i/article/123") == "123"
+
+    def test_www_x_com(self):
+        assert x_article_tweet_id("https://www.x.com/i/article/999") == "999"
+
+    def test_www_twitter_com(self):
+        assert x_article_tweet_id("https://www.twitter.com/i/article/42") == "42"
+
+    def test_with_trailing_path(self):
+        # /i/article/123/foo should still match.
+        assert x_article_tweet_id("https://x.com/i/article/123/foo") == "123"
+
+    def test_with_query_string(self):
+        # /i/article/123?utm=abc should still match.
+        assert x_article_tweet_id("https://x.com/i/article/123?utm=abc") == "123"
+
+    def test_rejects_non_numeric_id(self):
+        assert x_article_tweet_id("https://x.com/i/article/abc") is None
+
+    def test_rejects_wrong_path(self):
+        assert x_article_tweet_id("https://x.com/foo/article/123") is None
+        assert x_article_tweet_id("https://x.com/i/other/123") is None
+
+    def test_rejects_non_x_hosts(self):
+        assert x_article_tweet_id("https://nytimes.com/i/article/123") is None
+        assert x_article_tweet_id("https://t.co/abc") is None
+
+    def test_rejects_empty_and_none(self):
+        assert x_article_tweet_id("") is None
+        assert x_article_tweet_id(None) is None  # type: ignore[arg-type]
+
+
+class TestEnrichPostsXArticle:
+    """enrich_posts routes x.com/i/article/{id} URLs through api.get_article."""
+
+    def _cache(self, tmp: Path) -> HeadlinesCache:
+        return HeadlinesCache(tmp / "cache.json")
+
+    def test_routes_x_article_via_api(self):
+        # Mock api with a get_article method.
+        api = MagicMock()
+        api.get_article.return_value = {
+            "title": "Big AI News",
+            "preview_text": "A preview.",
+            "plain_text": "Body.",
+        }
+        with tempfile.TemporaryDirectory() as d:
+            items = [{
+                "id": "t1",
+                "text": "https://x.com/i/article/2064029478616182784",
+                "author_handle": "u",
+            }]
+            c = self._cache(Path(d))
+            out, stats = enrich_posts(items, c, api=api)
+        # api.get_article was called with the tweet_id from the URL.
+        api.get_article.assert_called_once_with("2064029478616182784")
+        # Headline is the article title.
+        assert out[0]["headline"] == "Big AI News"
+        assert out[0]["headline_source"] == "fetched"
+        # Stats include n_via_api.
+        assert stats["n_via_api"] == 1
+        assert stats["n_fetched"] == 1
+
+    def test_routes_x_article_cache_hit_skips_api(self):
+        # Pre-populate the cache under the X-article key.
+        api = MagicMock()
+        with tempfile.TemporaryDirectory() as d:
+            c = self._cache(Path(d))
+            c.put(
+                "2064029478616182784", "Cached Title", "fetched",
+                status_code=200, key_override="x_article:2064029478616182784",
+            )
+            items = [{
+                "id": "t1",
+                "text": "https://x.com/i/article/2064029478616182784",
+                "author_handle": "u",
+            }]
+            out, stats = enrich_posts(items, c, api=api)
+        # api was NOT called — the cache hit short-circuited.
+        api.get_article.assert_not_called()
+        assert out[0]["headline"] == "Cached Title"
+        assert out[0]["headline_source"] == "cached"
+        assert stats["n_cached"] == 1
+        assert stats["n_via_api"] == 1  # we still count it as "via api path"
+
+    def test_routes_x_article_api_returns_none_marks_failed(self):
+        # api.get_article returns None -> source = "fetch_failed".
+        api = MagicMock()
+        api.get_article.return_value = None
+        with tempfile.TemporaryDirectory() as d:
+            items = [{
+                "id": "t1",
+                "text": "https://x.com/i/article/123",
+                "author_handle": "u",
+            }]
+            c = self._cache(Path(d))
+            out, stats = enrich_posts(items, c, api=api)
+        assert out[0]["headline"] is None
+        assert out[0]["headline_source"] == "fetch_failed"
+        assert stats["n_failed"] == 1
+        assert stats["n_via_api"] == 1
+
+    def test_routes_x_article_no_api_skips_path(self):
+        # If api is None, X-article URLs fall through to fetch_url
+        # (the original v1.2 path) — no error raised.
+        with tempfile.TemporaryDirectory() as d:
+            items = [{
+                "id": "t1",
+                "text": "https://x.com/i/article/123",
+                "author_handle": "u",
+            }]
+            c = self._cache(Path(d))
+            with patch(
+                "x_monitor.headlines.fetch_url",
+                return_value="<html><head><title>HTML Title</title></head></html>",
+            ) as mock_fetch:
+                out, stats = enrich_posts(items, c, api=None)
+        # No api, so we tried fetch_url (and got a title from it).
+        mock_fetch.assert_called_once()
+        assert out[0]["headline"] == "HTML Title"
+        # n_via_api is 0 because the api path was not used.
+        assert stats.get("n_via_api", 0) == 0

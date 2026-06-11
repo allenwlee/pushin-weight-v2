@@ -27,6 +27,8 @@ TWITTERAPI_BASE = "https://api.twitterapi.io"
 SEARCH_PATH = "/twitter/tweet/advanced_search"
 FOLLOWERS_PATH = "/twitter/user/followers"
 USER_INFO_PATH = "/twitter/user/info"
+# v1.4: long-form X article body. Cost: 100 credits per article.
+ARTICLE_PATH = "/twitter/article"
 
 # Pagination caps per the TwitterAPI.io pricing page:
 #   followers/following: 20-99 returned = 3cr each, 100-199 = 2cr, 200 = 1cr.
@@ -221,6 +223,33 @@ class TwitterApiClient:
             return None
         return _normalize_user(user)
 
+    def get_article(self, tweet_id: str) -> dict[str, Any] | None:
+        """Fetch the long-form X article body for a given tweet_id.
+
+        The tweet_id is the integer id of the tweet that links to the
+        article (not the article's own internal id). For URLs like
+        `x.com/i/article/2064029478616182784`, the trailing path segment
+        IS the tweet_id.
+
+        Returns a normalized dict with at least: title, preview_text,
+        contents (list of content blocks). Returns None if the article
+        is not found (HTTP 200 but no `article` key) or if the
+        underlying tweet has no long-form article attached.
+
+        Raises TwitterApiAuthError on 401, TwitterApiRateLimitError on
+        429, TwitterApiServerError on 5xx, RuntimeError on other 4xx.
+        Cost: 100 credits per call.
+        """
+        if not tweet_id:
+            return None
+        data = self._get(ARTICLE_PATH, {"tweet_id": str(tweet_id)})
+        if not isinstance(data, dict):
+            return None
+        article = data.get("article")
+        if not article or not isinstance(article, dict):
+            return None
+        return _normalize_article(article)
+
     def probe_api(self) -> bool:
         """Lightweight liveness check: hit user/info on a known handle.
 
@@ -334,4 +363,38 @@ def _normalize_user(item: dict[str, Any]) -> dict[str, Any]:
             or False
         ),
         "id": str(item.get("id") or ""),
+    }
+
+
+def _normalize_article(article: dict[str, Any]) -> dict[str, Any]:
+    """Trim the TwitterAPI.io article response to what we need.
+
+    The API returns the full content tree (headers, lists, images,
+    markdown blocks). For v1.4 we only store the title + preview_text
+    + a flattened plain-text projection of the contents, since the
+    dashboard headline column is a single short string.
+    """
+    contents = article.get("contents") or []
+    plain_parts: list[str] = []
+    for block in contents:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type", "")
+        btext = block.get("text", "")
+        if not btext:
+            continue
+        if btype in {"header-one", "header-two", "header-three"}:
+            plain_parts.append(btext.strip())
+        elif btype in {"unstyled", "markdown"}:
+            plain_parts.append(btext.strip())
+        elif btype in {"unordered-list-item", "ordered-list-item"}:
+            plain_parts.append(f"- {btext.strip()}")
+        # image / gif / divider: no text contribution
+    return {
+        "title": (article.get("title") or "").strip() or None,
+        "preview_text": (article.get("preview_text") or "").strip() or None,
+        "plain_text": "\n\n".join(p for p in plain_parts if p) or None,
+        "cover_media_img_url": article.get("cover_media_img_url"),
+        "author": article.get("author"),
+        "created_at": article.get("createdAt"),
     }
