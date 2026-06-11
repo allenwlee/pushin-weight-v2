@@ -146,7 +146,17 @@ def serialize_grid_card(
 ) -> dict[str, Any]:
     """Return the per-model grid card payload."""
     if now is None:
+        # Anchor 'now' to the last run's finished_at when available, so
+        # the 24h/7d windows stay meaningful even if the DB hasn't been
+        # updated today. Fall back to wall-clock when no run exists yet.
         now = datetime.now(timezone.utc)
+        if latest_run and latest_run.get("finished_at"):
+            try:
+                now = datetime.fromisoformat(
+                    latest_run["finished_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
     cutoff = now - timedelta(days=window_days)
     cutoff_7d = now - timedelta(days=7)
     cutoff_24h = now - timedelta(hours=24)

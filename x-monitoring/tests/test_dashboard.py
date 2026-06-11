@@ -734,6 +734,34 @@ class TestSerializeGridCardDualWindows:
         # The 25h-old post is still in 7d though
         assert len(card["top3_7d"]) == 2
 
+    def test_serialize_grid_card_anchors_now_to_latest_run_finished_at(self):
+        """When no `now` is passed and `latest_run.finished_at` is set,
+        the 24h/7d windows are computed relative to that timestamp, not
+        wall-clock. This keeps the 24h column populated when the DB
+        hasn't been updated today."""
+        from datetime import datetime, timezone
+
+        # Run finished at 2026-06-10 19:28 UTC. Post is 2h before that —
+        # inside 24h relative to the run, but 3+ days before today.
+        run_finished = "2026-06-10T19:28:05+00:00"
+        ts_2h_before_run = "2026-06-10T17:28:05+00:00"
+        posts = [{
+            "tweet_id": "x", "author_handle": "u1", "text": "recent vs run",
+            "favorite_count": 1, "created_at": ts_2h_before_run,
+            "source_query_id": "Q5",
+        }]
+        latest_run = {"finished_at": run_finished}
+        card = serialize_grid_card("minimax", posts, latest_run=latest_run)
+        # 2h before run_finished is within 24h of run_finished
+        assert len(card["top3_24h"]) == 1
+        assert card["n_posts_24h"] == 1
+        # And in 7d
+        assert len(card["top3_7d"]) == 1
+        # Without latest_run, the same post is 3+ days before today and
+        # the 24h window (relative to wall-clock now) is empty.
+        card_stale = serialize_grid_card("minimax", posts)
+        assert card_stale["n_posts_24h"] == 0
+
 
 class TestBrandColorize:
     """v1.5: Jinja filter `brand_colorize` colors model_id matches with
