@@ -15,6 +15,7 @@ from x_monitor.dashboard import (
     MODEL_DISPLAY_NAMES,
     _qid_to_signal,
     _parse_post_timestamp,
+    brand_colorize,
     serialize_grid_card,
 )
 from x_monitor.store import Store
@@ -504,6 +505,10 @@ class TestTrendChartAssets:
             env = Environment(loader=__import__("jinja2").FileSystemLoader(
                 str(Path("/Users/fuchitalee/development/minimax-marketing/x-monitoring/x_monitor/templates"))),
             )
+            # Register the brand_colorize filter (v1.5) so the standalone
+            # template render path works.
+            from x_monitor.dashboard import brand_colorize as _bc
+            env.filters["brand_colorize"] = _bc
             tpl = env.get_template("_model_card.html.j2")
             rendered = tpl.render(
                 card=serialize_grid_card("minimax", posts),
@@ -616,3 +621,162 @@ def test_top3_falls_back_to_text_when_no_headline():
     assert len(top3) == 1
     assert top3[0]["headline"] is None
     assert top3[0]["display_text"] == "minimax M3 is amazing"
+
+
+# --- v1.5: dual time windows + brand colorization -----------------------
+
+
+class TestSerializeGridCardDualWindows:
+    """v1.5: serialize_grid_card returns top3_7d / top3_24h / n_posts_7d /
+    n_posts_24h alongside the legacy 14-day fields. The 14-day chart logic
+    is unchanged."""
+
+    def test_serialize_grid_card_exposes_dual_time_windows(self):
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
+        posts = [
+            # 2h ago -> in 24h, in 7d, in 14d
+            {
+                "tweet_id": "a", "author_handle": "u1", "text": "hi",
+                "favorite_count": 5,
+                "created_at": (now - timedelta(hours=2)).isoformat(),
+                "source_query_id": "Q5",
+            },
+            # 3d ago -> in 7d, in 14d, NOT in 24h
+            {
+                "tweet_id": "b", "author_handle": "u2", "text": "wow",
+                "favorite_count": 3,
+                "created_at": (now - timedelta(days=3)).isoformat(),
+                "source_query_id": "Q6",
+            },
+            # 10d ago -> in 14d, NOT in 7d, NOT in 24h
+            {
+                "tweet_id": "c", "author_handle": "u3", "text": "cool",
+                "favorite_count": 1,
+                "created_at": (now - timedelta(days=10)).isoformat(),
+                "source_query_id": "Q1",
+            },
+            # 30d ago -> NOT in 14d
+            {
+                "tweet_id": "d", "author_handle": "u4", "text": "old",
+                "favorite_count": 99,
+                "created_at": (now - timedelta(days=30)).isoformat(),
+                "source_query_id": "Q6",
+            },
+        ]
+        card = serialize_grid_card("minimax", posts, now=now)
+        assert card["n_posts_7d"] == 2
+        assert card["n_posts_24h"] == 1
+        assert card["n_posts_in_window"] == 3
+        assert len(card["top3_7d"]) == 2
+        assert len(card["top3_24h"]) == 1
+
+    def test_serialize_grid_card_dual_windows_preserve_likes_format(self):
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
+        long_text = "x" * 250
+        posts = [
+            {
+                "tweet_id": "a", "author_handle": "u1", "text": "hi",
+                "favorite_count": 5,
+                "created_at": (now - timedelta(hours=2)).isoformat(),
+                "source_query_id": "Q5",
+            },
+            {
+                "tweet_id": "b", "author_handle": "u2", "text": long_text,
+                "favorite_count": 3,
+                "created_at": (now - timedelta(days=3)).isoformat(),
+                "source_query_id": "Q6",
+            },
+            {
+                "tweet_id": "c", "author_handle": "u3", "text": "truncate me too",
+                "favorite_count": 1,
+                "created_at": (now - timedelta(days=4)).isoformat(),
+                "source_query_id": "Q1",
+            },
+        ]
+        card = serialize_grid_card("minimax", posts, now=now)
+        # 7d should contain all three; 24h only the 2h-old one
+        assert len(card["top3_7d"]) == 3
+        assert len(card["top3_24h"]) == 1
+        # Both lists: like_count key, no favorite_count, text truncated
+        for entry in card["top3_7d"] + card["top3_24h"]:
+            assert "like_count" in entry
+            assert "favorite_count" not in entry
+        # The long_text entry should be truncated to 200 chars (197 + "...")
+        long_entry = next(p for p in card["top3_7d"] if p["tweet_id"] == "b")
+        assert len(long_entry["text"]) == 200
+        assert long_entry["text"].endswith("...")
+
+    def test_serialize_grid_card_now_param_is_honored(self):
+        from datetime import datetime, timezone
+
+        fixed_now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
+        # 23h before fixed_now -> in 24h window
+        ts_23h = "2026-06-09T13:00:00+00:00"
+        # 25h before fixed_now -> NOT in 24h window (just outside)
+        ts_25h = "2026-06-09T11:00:00+00:00"
+        posts = [
+            {
+                "tweet_id": "a", "author_handle": "u1", "text": "fresh",
+                "favorite_count": 1, "created_at": ts_23h, "source_query_id": "Q5",
+            },
+            {
+                "tweet_id": "b", "author_handle": "u2", "text": "stale",
+                "favorite_count": 2, "created_at": ts_25h, "source_query_id": "Q5",
+            },
+        ]
+        card = serialize_grid_card("minimax", posts, now=fixed_now)
+        assert len(card["top3_24h"]) == 1
+        assert card["top3_24h"][0]["tweet_id"] == "a"
+        # The 25h-old post is still in 7d though
+        assert len(card["top3_7d"]) == 2
+
+
+class TestBrandColorize:
+    """v1.5: Jinja filter `brand_colorize` colors model_id matches with
+    the brand's accent color, escaping HTML first."""
+
+    def test_brand_colorize_colors_known_brand_with_correct_hex(self):
+        # Minimax -> #3b82f6
+        out = brand_colorize("I love MiniMax M3")
+        assert "color: #3b82f6;" in out
+        assert "MiniMax" in out
+        # Case-insensitive: lowercase "deepseek" -> #10b981
+        out2 = brand_colorize("deepseek is great")
+        assert "color: #10b981;" in out2
+        assert "deepseek" in out2
+        # Word boundary: "glm" attached to letters (no word boundary) must
+        # NOT colorize. The standalone "glm" in "algorithm has glm in it"
+        # IS a word, so use a string with "glm" glued to letters on at
+        # least one side, e.g. "neuralglm" or "glmmodel".
+        out3 = brand_colorize("neuralglam uses glmmodel")
+        # No <span> tag should appear (no standalone glm token)
+        assert "<span" not in out3
+        # The full string is returned (with HTML-escape if needed)
+        assert "neuralglam uses glmmodel" in out3
+
+    def test_brand_colorize_escapes_html_in_post_text(self):
+        out = brand_colorize("<script>alert(1)</script> Qwen rocks")
+        # The script tag must be escaped, not rendered
+        assert "<script>" not in out
+        assert "&lt;script&gt;" in out
+        # "Qwen" should still be colorized to its accent color
+        assert "color: #f97316;" in out
+        assert "Qwen" in out
+
+    def test_brand_colorize_handles_multiple_brand_mentions(self):
+        out = brand_colorize("MiniMax beats DeepSeek at qwen benchmark")
+        # Three spans, three distinct accent colors
+        assert "color: #3b82f6;" in out   # MiniMax
+        assert "color: #10b981;" in out   # DeepSeek
+        assert "color: #f97316;" in out   # qwen
+        # The surrounding text is intact (not consumed by the regex)
+        assert " beats " in out
+        assert " at " in out
+        assert " benchmark" in out
+        # Exactly three <span> tags
+        assert out.count("<span") == 3
+

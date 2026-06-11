@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -45,9 +46,38 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
     "xiaomi_mimo": "#eab308",
     "moonshot_kimi": "#ec4899",
     "inclusionai": "#06b6d4",
-    
-    
 }
+
+
+_BRAND_RE = re.compile(
+    r"\b(" + "|".join(re.escape(m) for m in MODEL_ACCENT_COLORS) + r")\b",
+    flags=re.IGNORECASE,
+)
+
+
+def brand_colorize(text: str) -> str:
+    """Colorize model_id matches in `text` with the brand's accent color.
+
+    Word-boundary, case-insensitive. Escapes HTML first so we can safely
+    inject raw <span> tags as replacements - the filter is the only path
+    that introduces HTML into auto-escaped Jinja output.
+    """
+    if not text:
+        return ""
+    escaped = (
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace(chr(34), "&quot;")
+    )
+    def _sub(m):
+        token = m.group(0)
+        canonical = token.lower()
+        if canonical not in MODEL_ACCENT_COLORS:
+            return token
+        color = MODEL_ACCENT_COLORS[canonical]
+        return f'<span style="color: {color}; font-weight: 600;">{token}</span>'
+    return _BRAND_RE.sub(_sub, escaped)
 
 
 # --- Sparkline ------------------------------------------------------------
@@ -110,10 +140,14 @@ def serialize_grid_card(
     *,
     window_days: int = 14,
     latest_run: dict[str, Any] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Return the per-model grid card payload."""
-    now = datetime.now(timezone.utc)
+    if now is None:
+        now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=window_days)
+    cutoff_7d = now - timedelta(days=7)
+    cutoff_24h = now - timedelta(hours=24)
     in_window: list[dict[str, Any]] = []
     for p in posts:
         dt = _parse_post_timestamp(p.get("created_at"))
@@ -121,6 +155,17 @@ def serialize_grid_card(
             continue
         if dt >= cutoff:
             in_window.append(p)
+
+    in_7d: list[dict[str, Any]] = []
+    in_24h: list[dict[str, Any]] = []
+    for p in posts:
+        dt = _parse_post_timestamp(p.get("created_at"))
+        if dt is None:
+            continue
+        if dt >= cutoff_7d:
+            in_7d.append(p)
+        if dt >= cutoff_24h:
+            in_24h.append(p)
 
     # Per-day per-signal counts. day_signal_counts[iso_date][signal] = int.
     # A single pass populates both the totals (sig_counts) and the per-day
@@ -157,8 +202,52 @@ def serialize_grid_card(
 
     # Top 3 by like_count (ties broken by recency) — exposes DB column
     # `favorite_count` under the user-facing name `like_count`.
+    top3 = _build_top3(in_window)
+    top3_7d = _build_top3(in_7d)
+    top3_24h = _build_top3(in_24h)
+
+    # Degraded sentinels
+    sentinels: list[str] = []
+    if latest_run:
+        degraded = latest_run.get("degraded") or {}
+        if degraded.get("cookies"):
+            sentinels.append("cookies")
+        # Per-model: query_rot
+        for q in latest_run.get("queries") or []:
+            if q.get("model_id") == model_id and q.get("status") == "error":
+                sentinels.append(f"q_error:{q.get('query_id')}")
+        # Per-model: skipped_budget entries
+        for entry in degraded.get("skipped_budget") or []:
+            if isinstance(entry, str) and entry.startswith(f"{model_id}/"):
+                sentinels.append("budget")
+
+    return {
+        "model_id": model_id,
+        "display_name": MODEL_DISPLAY_NAMES.get(model_id, model_id),
+        "accent_color": MODEL_ACCENT_COLORS.get(model_id, "#9ca3af"),
+        "chart": {"days": chart_days, "series": chart_series},
+        "signal_breakdown": dict(sig_counts),
+        "top3_posts": top3,
+        "top3_7d": top3_7d,
+        "top3_24h": top3_24h,
+        "n_posts_in_window": len(in_window),
+        "n_posts_7d": len(in_7d),
+        "n_posts_24h": len(in_24h),
+        "degraded_sentinels": sentinels,
+        "last_run_at": (latest_run or {}).get("finished_at"),
+    }
+
+
+def _build_top3(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the top-3 most-liked list for a window of posts.
+
+    Same dict shape as the legacy `top3_posts` key: exposes DB column
+    `favorite_count` under the user-facing name `like_count`, prefers
+    a fetched headline over the raw tweet text for `display_text`,
+    and truncates `text` to 200 chars.
+    """
     sorted_posts = sorted(
-        in_window,
+        posts,
         key=lambda p: (
             -(p.get("favorite_count") or 0),
             p.get("created_at") or "",
@@ -186,33 +275,7 @@ def serialize_grid_card(
                 "url": _tweet_url(p.get("author_handle"), p.get("tweet_id") or p.get("id")),
             }
         )
-
-    # Degraded sentinels
-    sentinels: list[str] = []
-    if latest_run:
-        degraded = latest_run.get("degraded") or {}
-        if degraded.get("cookies"):
-            sentinels.append("cookies")
-        # Per-model: query_rot
-        for q in latest_run.get("queries") or []:
-            if q.get("model_id") == model_id and q.get("status") == "error":
-                sentinels.append(f"q_error:{q.get('query_id')}")
-        # Per-model: skipped_budget entries
-        for entry in degraded.get("skipped_budget") or []:
-            if isinstance(entry, str) and entry.startswith(f"{model_id}/"):
-                sentinels.append("budget")
-
-    return {
-        "model_id": model_id,
-        "display_name": MODEL_DISPLAY_NAMES.get(model_id, model_id),
-        "accent_color": MODEL_ACCENT_COLORS.get(model_id, "#9ca3af"),
-        "chart": {"days": chart_days, "series": chart_series},
-        "signal_breakdown": dict(sig_counts),
-        "top3_posts": top3,
-        "n_posts_in_window": len(in_window),
-        "degraded_sentinels": sentinels,
-        "last_run_at": (latest_run or {}).get("finished_at"),
-    }
+    return top3
 
 
 def _tweet_url(handle: str | None, tweet_id: str | None) -> str | None:
@@ -246,12 +309,18 @@ class DashboardApp:
         # Make our helpers available in templates
         env.globals["MODEL_DISPLAY_NAMES"] = MODEL_DISPLAY_NAMES
         env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
+        env.filters["brand_colorize"] = brand_colorize
 
         app = Flask(
             __name__,
             template_folder=str(self.template_dir),
             static_folder=str(self.static_dir),
         )
+        # Expose the filter and globals to Flask's own jinja_env so
+        # render_template() picks them up too.
+        app.jinja_env.filters["brand_colorize"] = brand_colorize
+        app.jinja_env.globals["MODEL_DISPLAY_NAMES"] = MODEL_DISPLAY_NAMES
+        app.jinja_env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
         app.config["JSON_SORT_KEYS"] = False
         self.app = app
         self._register_routes()
