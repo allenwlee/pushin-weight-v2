@@ -2,6 +2,7 @@
 Tests for x_monitor.headlines (v1.2 commit 1: pure extractors only).
 HTTP and cache I/O come in commit 3.
 """
+import requests
 import tempfile
 import time
 from pathlib import Path
@@ -18,8 +19,10 @@ from x_monitor.headlines import (
     cache_key_for,
     enrich_posts,
     fetch_url,
+    is_tco_url,
     normalize_url,
     parse_title,
+    resolve_tco,
 )
 
 
@@ -449,3 +452,120 @@ class TestEnrichPosts:
             # Both items have the headline now
             assert items[0]["headline_source"] == SOURCE_FETCHED
             assert items[1]["headline_source"] == SOURCE_FETCHED
+
+
+
+class TestResolveTco:
+    """resolve_tco and is_tco_url handle t.co links (the 90+ in the live DB)."""
+
+    def _cache(self, tmp: Path) -> HeadlinesCache:
+        return HeadlinesCache(tmp / "cache.json")
+
+    def test_is_tco_url_true_for_tco(self):
+        assert is_tco_url("https://t.co/abc123") is True
+
+    def test_is_tco_url_true_for_uppercase(self):
+        assert is_tco_url("HTTPS://T.CO/abc123") is True
+
+    def test_is_tco_url_false_for_www_tco(self):
+        # Real t.co links never carry `www.`; urlparse returns host
+        # `www.t.co` which is NOT in TCO_HOSTS, so we expect False.
+        # Defending against `www.t.co` would be cheap but adds no
+        # real-world value.
+        assert is_tco_url("https://www.t.co/abc123") is False
+
+    def test_is_tco_url_false_for_real_site(self):
+        assert is_tco_url("https://nytimes.com/article") is False
+
+    def test_is_tco_url_false_for_twitter(self):
+        # twitter.com / x.com are NOT in TCO_HOSTS; only t.co.
+        assert is_tco_url("https://twitter.com/foo") is False
+
+    def test_is_tco_url_false_for_empty(self):
+        assert is_tco_url("") is False
+        assert is_tco_url(None) is False  # type: ignore[arg-type]
+
+    def test_resolve_tco_passthrough_for_non_tco(self):
+        # Non-t.co URLs come back unchanged (no HTTP call).
+        result = resolve_tco("https://nytimes.com/article")
+        assert result == "https://nytimes.com/article"
+
+    def test_resolve_tco_returns_none_for_empty(self):
+        assert resolve_tco("") is None
+        assert resolve_tco(None) is None  # type: ignore[arg-type]
+
+    def test_resolve_tco_follows_redirect(self):
+        # Mock HEAD: 302 -> nytimes.com.
+        mock_resp = MagicMock()
+        mock_resp.status_code = 302
+        mock_resp.url = "https://www.nytimes.com/2026/06/10/article-xyz"
+        mock_resp.close = MagicMock()
+        with patch("x_monitor.headlines.requests.head", return_value=mock_resp) as mock_head:
+            result = resolve_tco("https://t.co/abc123")
+        assert result == "https://www.nytimes.com/2026/06/10/article-xyz"
+        mock_head.assert_called_once()
+        # Crucial: allow_redirects=True must be passed.
+        call_kwargs = mock_head.call_args.kwargs
+        assert call_kwargs.get("allow_redirects") is True
+        mock_resp.close.assert_not_called()  # HEAD did not need the fallback close
+
+    def test_resolve_tco_falls_back_to_get_on_head_4xx(self):
+        # HEAD returns 405 -> we retry with GET, then close immediately.
+        head_resp = MagicMock()
+        head_resp.status_code = 405
+        head_resp.close = MagicMock()
+        get_resp = MagicMock()
+        get_resp.url = "https://techcrunch.com/2026/06/article-abc"
+        get_resp.close = MagicMock()
+        with patch("x_monitor.headlines.requests.head", return_value=head_resp), \
+             patch("x_monitor.headlines.requests.get", return_value=get_resp) as mock_get:
+            result = resolve_tco("https://t.co/abc")
+        assert result == "https://techcrunch.com/2026/06/article-abc"
+        head_resp.close.assert_called_once()
+        get_resp.close.assert_called_once()
+        # GET must also use allow_redirects=True.
+        assert mock_get.call_args.kwargs.get("allow_redirects") is True
+
+    def test_resolve_tco_returns_none_on_request_exception(self):
+        with patch(
+            "x_monitor.headlines.requests.head",
+            side_effect=requests.RequestException("boom"),
+        ):
+            assert resolve_tco("https://t.co/abc") is None
+
+    def test_resolve_tco_returns_none_if_still_on_tco(self):
+        # Mock returns a URL still on t.co (chain didn't resolve).
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.url = "https://t.co/someother"
+        mock_resp.close = MagicMock()
+        with patch("x_monitor.headlines.requests.head", return_value=mock_resp):
+            assert resolve_tco("https://t.co/abc") is None
+
+    def test_enrich_posts_resolves_tco_before_caching(self):
+        # Two distinct t.co URLs that point to the same article should
+        # share a single cache entry and a single fetch. The headline
+        # comes from the resolved target, not the t.co HTML.
+        with tempfile.TemporaryDirectory() as d:
+            items = [
+                {"id": "t1", "text": "https://t.co/aaa", "author_handle": "u"},
+                {"id": "t2", "text": "https://t.co/bbb", "author_handle": "u"},
+            ]
+            c = self._cache(Path(d))
+            # resolve_tco -> the same nytimes URL both times.
+            # fetch_url -> a title for that resolved URL.
+            with patch(
+                "x_monitor.headlines.resolve_tco",
+                return_value="https://www.nytimes.com/article",
+            ), patch(
+                "x_monitor.headlines.fetch_url",
+                return_value="<html><head><title>Big AI News</title></head></html>",
+            ) as mock_fetch:
+                out, stats = enrich_posts(items, c)
+            assert mock_fetch.call_count == 1, "should fetch once for two t.co -> same target"
+            assert stats["n_url_only"] == 2
+            assert stats["n_fetched"] == 1
+            assert out[0]["headline"] == "Big AI News"
+            assert out[0]["headline_source"] == SOURCE_FETCHED
+            assert out[1]["headline"] == "Big AI News"  # shared from seen_results
+            assert out[1]["headline_source"] == SOURCE_FETCHED

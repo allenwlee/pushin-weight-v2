@@ -492,12 +492,18 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             SOURCE_FETCH_FAILED,
             cache_key_for,
             fetch_url,
+            is_tco_url,
+            resolve_tco,
         )
         from x_monitor.store import Store
         import time as _time
 
         limit = int(getattr(args, "limit", 200) or 200)
         per_query_cap = int(getattr(args, "batch", 8) or 8)
+        skip_throttle = bool(getattr(args, "skip_throttle", False))
+        per_host_min_interval = float(
+            getattr(args, "per_host_min_interval", 1.0) or 1.0
+        )
         # Open the store (auto-migrates so the new columns exist).
         store = Store(paths["db"], auto_migrate=True)
         try:
@@ -525,15 +531,22 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             }
             fetches_this_run = 0
             host_last_fetch: dict[str, float] = {}
+            from urllib.parse import urlparse as _urlparse
             for i, row in enumerate(rows, 1):
                 tweet_id = row["tweet_id"]
                 url = (row["text"] or "").strip()
                 if not url.startswith("http"):
                     stats["n_skipped"] += 1
                     continue
-                # Cache check: if a fresh entry exists, write it to the
-                # post row and move on.
-                hit = cache.get(url)
+                # Resolve t.co (and similar) redirects. Cache key and
+                # fetch target are based on the *resolved* URL.
+                fetch_target = url
+                if is_tco_url(url):
+                    resolved = resolve_tco(url)
+                    if resolved:
+                        fetch_target = resolved
+                # Cache check (keyed on resolved URL).
+                hit = cache.get(fetch_target)
                 if hit is not None:
                     store.update_post_headline(
                         tweet_id, hit.get("title"), hit["source"]
@@ -543,30 +556,33 @@ def _dispatch_relevance(args, action: str, paths) -> int:
                     else:
                         stats["n_already_fresh"] += 1
                     continue
-                # Per-host throttle
-                from urllib.parse import urlparse as _urlparse
-                host = (_urlparse(url).hostname or "").lower()
+                # Per-host throttle (keyed on resolved host).
+                host = (_urlparse(fetch_target).hostname or "").lower()
                 now = _time.monotonic()
-                if host and host in host_last_fetch:
-                    if now - host_last_fetch[host] < 1.0:
-                        stats["n_skipped"] += 1
-                        continue
+                if (
+                    not skip_throttle
+                    and host
+                    and host in host_last_fetch
+                    and now - host_last_fetch[host] < per_host_min_interval
+                ):
+                    stats["n_skipped"] += 1
+                    continue
                 if fetches_this_run >= limit or fetches_this_run >= per_query_cap * 25:
                     # Conservative hard cap on a single backfill run.
                     stats["n_skipped"] += 1
                     continue
-                html = fetch_url(url)
+                html = fetch_url(fetch_target)
                 fetches_this_run += 1
-                if host:
+                if host and not skip_throttle:
                     host_last_fetch[host] = _time.monotonic()
                 if html is None:
-                    cache.put(url, None, SOURCE_FETCH_FAILED, error="fetch_failed")
+                    cache.put(fetch_target, None, SOURCE_FETCH_FAILED, error="fetch_failed")
                     store.update_post_headline(tweet_id, None, SOURCE_FETCH_FAILED)
                     stats["n_failed"] += 1
                     continue
                 from x_monitor.headlines import parse_title
                 title = parse_title(html)
-                cache.put(url, title, SOURCE_FETCHED, status_code=200)
+                cache.put(fetch_target, title, SOURCE_FETCHED, status_code=200)
                 source = SOURCE_FETCHED if title else SOURCE_FETCH_FAILED
                 store.update_post_headline(tweet_id, title, source)
                 if title:
@@ -658,6 +674,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_rel.add_argument(
         "--batch", type=int, default=8,
         help="Per-backfill cap equivalent to per-query cap (default: 8)",
+    )
+    p_rel.add_argument(
+        "--skip-throttle",
+        action="store_true",
+        help="Disable per-host throttle in backfill (use with care; "
+             "may hammer a single origin)",
+    )
+    p_rel.add_argument(
+        "--per-host-min-interval",
+        type=float,
+        default=1.0,
+        help="Minimum seconds between fetches to the same host "
+             "(default: 1.0; ignored if --skip-throttle is set)",
     )
     p_rel.add_argument(
         "--write-verify",

@@ -183,6 +183,76 @@ def cache_key_for(url: str) -> str:
 
 
 
+# --- t.co redirect resolution (v1.2 commit 3.1) ------------------------
+
+
+# Hosts that we treat as redirects. t.co is the canonical case; the
+# others are intermediate hops the t.co redirector sometimes uses.
+TCO_HOSTS: frozenset[str] = frozenset({"t.co"})
+
+# Cap on the number of redirects we'll follow. 5 is enough to handle
+# t.co -> tracker -> final article.
+_MAX_REDIRECTS = 5
+
+
+def is_tco_url(url: str) -> bool:
+    """True if `url`'s host is in TCO_HOSTS (t.co, etc.)."""
+    if not url:
+        return False
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    return host in TCO_HOSTS
+
+
+def resolve_tco(url: str, *, timeout_s: float = 5.0) -> str | None:
+    """Follow t.co (and similar) redirects to discover the real URL.
+
+    Uses a HEAD request with allow_redirects=True; falls back to a
+    streaming GET that bails after the first chunk if HEAD returns
+    a non-redirect 2xx/4xx (some sites don't accept HEAD).
+
+    Returns the final URL (different host from t.co) or None on any
+    error. Returns the input URL unchanged if it doesn't look like a
+    t.co link.
+    """
+    if not url:
+        return None
+    if not is_tco_url(url):
+        return url
+    try:
+        # HEAD is cheapest. allow_redirects=True follows the chain.
+        r = requests.head(
+            url,
+            timeout=timeout_s,
+            headers={"User-Agent": _USER_AGENT, "Accept": "text/html,*/*"},
+            allow_redirects=True,
+        )
+        # Some sites return 4xx on HEAD. If so, retry with GET (no body).
+        if not (200 <= r.status_code < 400):
+            r.close()
+            r = requests.get(
+                url,
+                timeout=timeout_s,
+                headers={"User-Agent": _USER_AGENT, "Accept": "text/html,*/*"},
+                allow_redirects=True,
+                stream=True,
+            )
+            # Close immediately; we only want the URL, not the body.
+            r.close()
+        final = r.url
+    except requests.RequestException as e:
+        log.info("resolve_tco: %s -> %s", url, e)
+        return None
+    if not final or final == url:
+        return None
+    # If we still ended up on a t.co host, the chain didn't resolve.
+    if is_tco_url(final):
+        return None
+    return final
+
+
 # --- HTTP fetching (v1.2 commit 3) ---------------------------------------
 
 
@@ -509,7 +579,18 @@ def enrich_posts(
             item["headline"] = None
             item["headline_source"] = SOURCE_URL_ONLY
             continue
-        key = cache_key_for(url)
+        # If this is a t.co link, resolve it first. The cache key and
+        # the fetch target are based on the *resolved* URL, so 145
+        # distinct t.co links pointing to the same article all share
+        # one cache entry.
+        fetch_target = url
+        if is_tco_url(url):
+            resolved = resolve_tco(url)
+            if resolved:
+                fetch_target = resolved
+            # If resolve_tco failed, fall through and try the t.co URL
+            # itself (fetch_url will follow redirects anyway).
+        key = cache_key_for(fetch_target)
         # Per-query dedupe: reuse the result from earlier in this query.
         if key in seen_results:
             headline, source = seen_results[key]
@@ -530,7 +611,7 @@ def enrich_posts(
             stats["n_skipped_cap"] += 1
             continue
         # Cache lookup.
-        hit = cache.get(url)
+        hit = cache.get(fetch_target)
         if hit is not None:
             item["headline"] = hit.get("title")
             item["headline_source"] = SOURCE_CACHED
@@ -538,26 +619,28 @@ def enrich_posts(
             stats["n_cached"] += 1
             continue
         # Per-host throttle: if we just fetched the same host, skip.
-        if not cache.host_throttle_ok(url):
+        # Keyed on the *resolved* host so 145 t.co links all throttle
+        # to one fetch per second on the real origin (nytimes.com, etc).
+        if not cache.host_throttle_ok(fetch_target):
             item["headline"] = None
             item["headline_source"] = SOURCE_URL_ONLY
             seen_results[key] = (None, SOURCE_URL_ONLY)
             stats["n_skipped_cap"] += 1
             continue
         # Fetch.
-        html = fetch_url(url)
+        html = fetch_url(fetch_target)
         fetches_in_query += 1
         if run_fetches_used is not None:
             run_fetches_used[0] += 1
         if html is None:
-            cache.put(url, None, SOURCE_FETCH_FAILED, error="fetch_failed")
+            cache.put(fetch_target, None, SOURCE_FETCH_FAILED, error="fetch_failed")
             item["headline"] = None
             item["headline_source"] = SOURCE_FETCH_FAILED
             seen_results[key] = (None, SOURCE_FETCH_FAILED)
             stats["n_failed"] += 1
             continue
         title = parse_title(html)
-        cache.put(url, title, SOURCE_FETCHED, status_code=200)
+        cache.put(fetch_target, title, SOURCE_FETCHED, status_code=200)
         source = SOURCE_FETCHED if title else SOURCE_FETCH_FAILED
         item["headline"] = title
         item["headline_source"] = source
