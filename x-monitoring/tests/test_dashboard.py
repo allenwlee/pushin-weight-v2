@@ -820,3 +820,78 @@ class TestBrandColorize:
         # Exactly three <span> tags
         assert out.count("<span") == 3
 
+
+
+# --- v1.6 staleness indicator + dashboard.js -----------------------------
+
+class TestStalenessIndicator:
+    """The topbar surfaces a last-updated stamp so users can see how
+    fresh the data is. Marked .stale after 1h."""
+
+    def _make_client(self, tmp_path, with_runs=True):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        from x_monitor.store import Store
+
+        data = tmp_path / "data"
+        data.mkdir()
+        db_path = data / "x.db"
+        runs_dir = data / "runs"
+        if with_runs:
+            runs_dir.mkdir()
+        store = Store(db_path)
+        store.close()
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333), data, db_path=db_path,
+        )
+        return app.app.test_client()
+
+    def test_staleness_indicator_present_in_grid(self, tmp_path):
+        client = self._make_client(tmp_path)
+        r = client.get("/")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        assert 'id="last-run-stamp"' in body
+        assert "data-finished-at=" in body
+        assert "last updated:" in body
+
+    def test_staleness_indicator_with_finished_at(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        from x_monitor.store import Store
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        # DashboardApp expects LATEST.json to be a SYMLINK (production
+        # writes it that way via the post-pipeline symlink step). The
+        # symlink target holds the actual run summary.
+        run_file = runs_dir / "2026-06-16T00-00-00.json"
+        run_file.write_text(
+            '{"finished_at": "2026-06-16T00:00:00+00:00"}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        store = Store(data / "x.db")
+        store.close()
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333), data, db_path=data / "x.db",
+        )
+        r = app.app.test_client().get("/")
+        body = r.get_data(as_text=True)
+        assert "2026-06-16T00:00:00" in body
+        assert "last updated: 2026-06-16T00:00:00+00:00" in body
+
+    def test_staleness_indicator_when_never_run(self, tmp_path):
+        client = self._make_client(tmp_path, with_runs=False)
+        r = client.get("/")
+        body = r.get_data(as_text=True)
+        assert "last updated: never" in body
+
+    def test_dashboard_js_served_as_static(self, tmp_path):
+        client = self._make_client(tmp_path)
+        r = client.get("/static/dashboard.js")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        assert "updateLastRun" in body

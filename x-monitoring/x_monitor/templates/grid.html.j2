@@ -8,10 +8,15 @@
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{{ url_for('static', filename='trend-chart.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='dashboard.js') }}" defer></script>
 </head>
 <body>
   <header class="topbar">
     <h1>x-monitor</h1>
+    <span class="muted" id="last-run-stamp"
+          data-finished-at="{{ cards[0].last_run_at or '' }}">
+      last updated: {{ cards[0].last_run_at or 'never' }}
+    </span>
     <span class="muted">{{ cards|length }} models · polling every {{ poll_seconds }}s</span>
   </header>
   {# hx-swap="innerHTML" so the <main> element persists across polls — that

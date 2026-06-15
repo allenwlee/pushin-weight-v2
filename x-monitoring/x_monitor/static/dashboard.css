@@ -156,3 +156,8 @@ body {
 @media (max-width: 600px) {
   .top3-grid { grid-template-columns: 1fr; }
 }
+
+/* v1.6 staleness indicator — amber when data is > 1h old. */
+#last-run-stamp.stale {
+  color: #f59e0b;
+}
