@@ -597,3 +597,86 @@ def test_pipeline_drops_match_summary_counts():
         assert drop_sum == entry["n_filtered"]
         # 1 review added (t3)
         assert entry["n_review_added"] == 1
+
+
+def test_pipeline_short_circuits_over_cap_query():
+    """A query with > 22 top-level OR operators is short-circuited BEFORE
+    apify.run_search is called. The per-query summary entry has
+    status="operator_cap_exceeded" and no credits are burned.
+
+    We construct one of the six queries to be massively over-cap; the other
+    five are normal. After execute(), the over-cap query must appear with
+    status operator_cap_exceeded and apify.run_search must have been called
+    exactly 5 times (one per under-cap query), not 6.
+    """
+    # 30 ORs (31 terms) — well over the 22 cap.
+    over_cap_q = " OR ".join(f"x{i}" for i in range(31))
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "queries" / "minimax.yaml").write_text(
+            f"""
+queries:
+  - id: Q1
+    query_string: 'from:MiniMaxAI'
+    expected_signal: release
+    max_results: 5
+  - id: Q2
+    query_string: 'minimax how'
+    expected_signal: community_question
+    max_results: 5
+  - id: Q3
+    query_string: '{over_cap_q}'
+    expected_signal: criticism
+    max_results: 5
+  - id: Q4
+    query_string: 'to:MiniMaxAI'
+    expected_signal: commenter_capture
+    max_results: 5
+  - id: Q5
+    query_string: 'minimax benchmark'
+    expected_signal: other
+    max_results: 5
+  - id: Q6
+    query_string: 'minimax praise min_faves:5'
+    expected_signal: praise
+    max_results: 5
+""",
+            encoding="utf-8",
+        )
+        (data / "accounts" / "minimax.yaml").write_text(
+            """
+accounts:
+  - handle: MiniMaxAI
+    role: official
+""",
+            encoding="utf-8",
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        # The 5 under-cap queries (Q1, Q2, Q4, Q5, Q6) hit the API.
+        apify.run_search.side_effect = [
+            [{"id": "t1", "text": "hi", "author_handle": "u1"}],  # Q1
+            [],
+            [],
+            [],
+            [],
+        ]
+        summary = p.execute(apify, model_filter=["minimax"])
+        # The 5 under-cap queries ran. The 6th call (for Q3) was NOT made
+        # because the operator-cap pre-check short-circuited it.
+        assert apify.run_search.call_count == 5
+        # The Q3 entry must be flagged operator_cap_exceeded.
+        q3_entries = [
+            q for q in summary["queries"] if q.get("query_id") == "Q3"
+        ]
+        assert len(q3_entries) == 1
+        assert q3_entries[0]["status"] == "operator_cap_exceeded"
+        assert q3_entries[0]["n_operators"] == 30
+        # The degraded field carries a per-call description for triage.
+        assert "operator_cap_exceeded" in summary["degraded"]
+        assert any(
+            "minimax/Q3" in s for s in summary["degraded"]["operator_cap_exceeded"]
+        )

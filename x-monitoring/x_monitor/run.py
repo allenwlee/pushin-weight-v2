@@ -21,7 +21,13 @@ from .apify import (
     TwitterApiServerError,
 )
 from .config import Config
-from .queries import Query, estimated_cost, load_queries
+from .queries import (
+    Query,
+    assert_under_operator_cap,
+    count_x_operators,
+    estimated_cost,
+    load_queries,
+)
 from .relevance import RelevanceConfig, filter_posts, load_filter
 from .review import ReviewQueue
 from .store import Store
@@ -293,6 +299,34 @@ class RunPipeline:
 
                         raw_path = self.raw_dir / run_id / f"{m}_{q.id}.json"
                         raw_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        # v1.6: pre-check the X advanced-search operator cap. A
+                        # query with more than ~22 top-level OR operators is
+                        # silently dropped by X (HTTP 200 + tweets:[]) — the
+                        # loud-fail behavior here writes a per-query summary
+                        # entry with status="operator_cap_exceeded" and skips
+                        # the call entirely so no credits are burned.
+                        try:
+                            assert_under_operator_cap(q.query_string)
+                        except ValueError as e:
+                            n_ops = count_x_operators(q.query_string)
+                            summary["queries"].append(
+                                {
+                                    "model_id": m,
+                                    "query_id": q.id,
+                                    "status": "operator_cap_exceeded",
+                                    "n_operators": n_ops,
+                                    "n_results": 0,
+                                    "n_kept": 0,
+                                    "n_filtered": 0,
+                                    "n_inserted": 0,
+                                    "error": str(e),
+                                }
+                            )
+                            summary["degraded"].setdefault(
+                                "operator_cap_exceeded", []
+                            ).append(f"{m}/{q.id} ({n_ops} ORs)")
+                            continue
 
                         # Single attempt; retry inside TwitterApiClient handles
                         # 429/5xx. Auth failures abort the run.

@@ -11,6 +11,7 @@ import requests
 
 from x_monitor.apify import (
     FOLLOWERS_MAX_PER_PAGE,
+    SEARCH_MAX_PER_PAGE,
     TwitterApiAuthError,
     TwitterApiClient,
     TwitterApiRateLimitError,
@@ -394,3 +395,177 @@ class TestGetArticle:
         ):
             with pytest.raises(TwitterApiRateLimitError):
                 client.get_article("123")
+
+
+
+# --- v1.6: multi-page search via _walk_search ----------------------------
+
+
+def _tweet(tid: str, text: str = "hi") -> dict:
+    """Build a minimal TwitterAPI.io tweet payload (just the fields we read)."""
+    return {
+        "id": tid,
+        "text": text,
+        "createdAt": "2026-06-15T00:00:00+00:00",
+        "author": {"userName": "u1", "followers": 100, "isBlueVerified": False},
+        "likeCount": 1,
+    }
+
+
+class TestSearchMaxPerPage:
+    """The platform-side cap is locked at 20."""
+
+    def test_cap_is_20(self):
+        # TwitterAPI.io caps each advanced_search response at 20; _walk_search
+        # relies on this. If they ever raise it, this test forces an explicit
+        # decision.
+        assert SEARCH_MAX_PER_PAGE == 20
+
+
+class TestWalkSearch:
+    """TwitterApiClient._walk_search follows next_cursor until exhausted."""
+
+    def _client(self):
+        return TwitterApiClient(api_key="test-key", base_url="https://api.example.com")
+
+    def test_single_page_no_cursor(self):
+        client = self._client()
+        page = {"tweets": [_tweet("1"), _tweet("2")], "has_next_page": False}
+        with patch.object(client, "_get", return_value=page) as mock_get:
+            out = client._walk_search("from:x", max_results=50)
+        assert [t["id"] for t in out] == ["1", "2"]
+        # First call: no cursor; queryType+limit present.
+        args, _ = mock_get.call_args
+        assert args[0] == "/twitter/tweet/advanced_search"
+        assert "cursor" not in args[1]  # first page: cursor not yet in params
+        assert args[1]["queryType"] == "Latest"
+        assert args[1]["limit"] == 20  # min(20, 50)
+
+    def test_follows_next_cursor(self):
+        client = self._client()
+        page1 = {
+            "tweets": [_tweet(f"p1_{i}") for i in range(20)],
+            "has_next_page": True,
+            "next_cursor": "cur1",
+        }
+        page2 = {
+            "tweets": [_tweet(f"p2_{i}") for i in range(5)],
+            "has_next_page": False,
+        }
+        with patch.object(
+            client, "_get", side_effect=[page1, page2]
+        ) as mock_get:
+            out = client._walk_search("from:x", max_results=50)
+        assert len(out) == 25
+        # Second call carries cursor=cur1.
+        second = mock_get.call_args_list[1]
+        assert second.args[1]["cursor"] == "cur1"
+
+    def test_respects_max_results_ceiling(self):
+        client = self._client()
+        page1 = {
+            "tweets": [_tweet(f"a_{i}") for i in range(20)],
+            "has_next_page": True,
+            "next_cursor": "c",
+        }
+        page2 = {
+            "tweets": [_tweet(f"b_{i}") for i in range(20)],
+            "has_next_page": True,
+            "next_cursor": "c2",
+        }
+        page3 = {
+            "tweets": [_tweet(f"c_{i}") for i in range(20)],
+            "has_next_page": True,
+            "next_cursor": "c3",
+        }
+        with patch.object(
+            client, "_get", side_effect=[page1, page2, page3]
+        ):
+            out = client._walk_search("from:x", max_results=25)
+        # Should stop as soon as we hit 25, regardless of more pages being
+        # available. The 26th-39th items must NOT be fetched/normalized.
+        assert len(out) == 25
+        assert out[-1]["id"] == "b_4"
+
+    def test_stops_at_max_pages_defensively(self):
+        client = self._client()
+        # Always signal has_next_page=True with a fresh cursor so the loop
+        # would run forever without the max_pages cap.
+        def infinite_pages(*args, **kwargs):
+            return {
+                "tweets": [_tweet("1")],
+                "has_next_page": True,
+                "next_cursor": "always-more",
+            }
+
+        with patch.object(client, "_get", side_effect=infinite_pages) as mock_get:
+            out = client._walk_search("from:x", max_results=500, max_pages=3)
+        # max_pages=3 means at most 3 calls to _get, even though pages never
+        # run out. Should return 3 tweets (1 per page) without spinning.
+        assert len(out) == 3
+        assert mock_get.call_count == 3
+
+    def test_returns_empty_on_empty_response(self):
+        client = self._client()
+        with patch.object(client, "_get", return_value={"tweets": []}):
+            assert client._walk_search("from:nobody", max_results=50) == []
+
+    def test_handles_data_key_fallback(self):
+        # Some endpoints return "data" instead of "tweets".
+        client = self._client()
+        page = {"data": [_tweet("x")], "has_next_page": False}
+        with patch.object(client, "_get", return_value=page):
+            assert client._walk_search("from:x", max_results=50)[0]["id"] == "x"
+
+
+class TestRunSearch:
+    """TwitterApiClient.run_search uses _walk_search + handles since:. """
+
+    def _client(self):
+        return TwitterApiClient(api_key="test-key", base_url="https://api.example.com")
+
+    def test_passes_since_only_when_caller_didnt(self):
+        client = self._client()
+        page = {"tweets": [_tweet("1")], "has_next_page": False}
+        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+            client.run_search("from:x", since="2026-06-01")
+            # Caller passed since= and query lacked `since:` => should append.
+            args, _ = mock_walk.call_args
+            assert "since:2026-06-01" in args[0]
+            assert args[1] == 50  # max_results default
+
+    def test_skips_since_when_query_already_has_it(self):
+        client = self._client()
+        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+            client.run_search("from:x since:2026-05-01", since="2026-06-01")
+            args, _ = mock_walk.call_args
+            # The query already has since:, so the run_search `since=` arg
+            # must NOT be appended (avoids duplicate-operator issues).
+            assert "since:2026-06-01" not in args[0]
+            assert "since:2026-05-01" in args[0]
+
+    def test_no_since_argument_means_no_appended_token(self):
+        client = self._client()
+        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+            client.run_search("from:x min_faves:5")
+            args, _ = mock_walk.call_args
+            assert "since:" not in args[0]
+
+    def test_pagination_pulls_more_than_20(self):
+        # Integration-style: confirm the public surface actually paginates
+        # beyond the per-page cap (i.e., it doesn't silently truncate).
+        client = self._client()
+        page1 = {
+            "tweets": [_tweet(f"p1_{i}") for i in range(20)],
+            "has_next_page": True,
+            "next_cursor": "c",
+        }
+        page2 = {
+            "tweets": [_tweet(f"p2_{i}") for i in range(10)],
+            "has_next_page": False,
+        }
+        with patch.object(
+            client, "_get", side_effect=[page1, page2]
+        ):
+            out = client.run_search("from:x", max_results=50)
+        assert len(out) == 30

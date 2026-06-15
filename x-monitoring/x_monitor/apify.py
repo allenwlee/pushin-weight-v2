@@ -26,6 +26,9 @@ log = logging.getLogger(__name__)
 TWITTERAPI_BASE = "https://api.twitterapi.io"
 SEARCH_PATH = "/twitter/tweet/advanced_search"
 FOLLOWERS_PATH = "/twitter/user/followers"
+# Per docs TwitterAPI.io caps each advanced_search response at 20 tweets.
+# We paginate via next_cursor to retrieve up to max_results.
+SEARCH_MAX_PER_PAGE = 20
 USER_INFO_PATH = "/twitter/user/info"
 # v1.4: long-form X article body. Cost: 100 credits per article.
 ARTICLE_PATH = "/twitter/article"
@@ -153,6 +156,48 @@ class TwitterApiClient:
 
     # --- public surface (mirrors the old ApifyClient) --------------------
 
+    def _walk_search(
+        self,
+        query: str,
+        max_results: int,
+        *,
+        max_pages: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Paginate advanced_search via next_cursor. Returns up to max_results.
+
+        TwitterAPI.io caps each response at SEARCH_MAX_PER_PAGE tweets and
+        signals more results via `has_next_page` + `next_cursor`. We follow
+        the cursor until either the user's max_results ceiling is hit or
+        has_next_page is false. The defensive max_pages cap (default 5)
+        guards against a runaway cursor draining the credit budget — at 20
+        tweets/page × 5 pages = 100 tweets, which covers all current
+        max_results=50 calls with headroom.
+        """
+        out: list[dict[str, Any]] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            if len(out) >= max_results:
+                break
+            params: dict[str, Any] = {
+                "query": query,
+                "queryType": "Latest",
+                "limit": min(SEARCH_MAX_PER_PAGE, max_results - len(out)),
+            }
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get(SEARCH_PATH, params)
+            tweets = data.get("tweets") or data.get("data") or []
+            for t in tweets:
+                out.append(_normalize_tweet(t))
+                if len(out) >= max_results:
+                    return out
+            if not data.get("has_next_page"):
+                break
+            cursor = data.get("next_cursor")
+            if not cursor:
+                break
+        return out
+
     def run_search(
         self,
         query: str,
@@ -167,23 +212,20 @@ class TwitterApiClient:
 
         `since` is an ISO date string (YYYY-MM-DD). If provided, we pass it as
         a `since:` operator suffix — TwitterAPI.io does not expose a separate
-        `since` param.
+        `since` param. We only inject it if the caller didn't already include
+        a `since:` operator in the query.
 
         `cookies` is accepted for backward compatibility with the old
         ApifyClient signature but is ignored (TwitterAPI.io does not require
         user cookies).
+
+        Returns up to max_results tweets, paginated via next_cursor (see
+        _walk_search).
         """
         effective_query = query
         if since and "since:" not in query:
             effective_query = f"{query} since:{since}"
-        params: dict[str, Any] = {
-            "query": effective_query,
-            "limit": max_results,
-        }
-        data = self._get(SEARCH_PATH, params)
-        # Response shape: { "tweets": [ {...}, ... ], "has_next_page": bool, ... }
-        tweets = data.get("tweets") or data.get("data") or []
-        return [_normalize_tweet(t) for t in tweets]
+        return self._walk_search(effective_query, max_results, max_pages=5)
 
     def run_followers(
         self,

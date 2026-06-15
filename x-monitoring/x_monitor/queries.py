@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -141,3 +142,50 @@ def validate_query_syntax(q: Query) -> list[str]:
 def estimated_cost(queries: list[Query]) -> int:
     """Sum max_results across enabled queries. Used by the budget guard."""
     return sum(q.max_results for q in queries if q.enabled)
+
+
+# --- X advanced-search operator cap (v1.6) --------------------------------
+
+# X advanced search silently drops operators past ~22-23 per query: an
+# over-cap query returns HTTP 200 with `tweets: []` and no error. We count
+# top-level OR tokens (paren-stripped) and refuse to fire the call when over
+# the cap — this is the loud-fail behavior the v1.6 pipeline needs.
+X_OPERATOR_CAP = 22
+_OR_OP_RE = re.compile(r"\bOR\b", re.IGNORECASE)
+
+
+def count_x_operators(query: str) -> int:
+    """Count top-level OR tokens in the query string.
+
+    X treats each `from:X` / `to:X` / `min_faves:N` as one operator and the
+    platform-enforced cap sits around 22-23. We count only the top-level OR
+    tokens (i.e., those outside any paren group) because X collapses nested
+    parens before counting; for our purposes — knowing whether we're about
+    to hit the silent-fail cliff — top-level is the conservative answer.
+    """
+    depth = 0
+    top_level: list[str] = []
+    for ch in query:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif depth == 0:
+            top_level.append(ch)
+    return len(_OR_OP_RE.findall("".join(top_level)))
+
+
+def assert_under_operator_cap(query: str) -> None:
+    """Raise ValueError if the query exceeds X's ~22 OR-operator cap.
+
+    Callers in RunPipeline.execute invoke this BEFORE apify.run_search so an
+    over-cap query is short-circuited into a per-query summary entry
+    `{status: "operator_cap_exceeded"}` and no credits are burned.
+    """
+    n = count_x_operators(query)
+    if n > X_OPERATOR_CAP:
+        raise ValueError(
+            f"query has {n} OR operators at the top level; X caps at ~"
+            f"{X_OPERATOR_CAP}. 0-tweet silent fail expected. Rewrite with "
+            f"fewer OR clauses or split into multiple calls."
+        )

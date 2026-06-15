@@ -12,6 +12,9 @@ from pydantic import ValidationError
 from x_monitor.queries import (
     QUERY_IDS,
     Query,
+    X_OPERATOR_CAP,
+    assert_under_operator_cap,
+    count_x_operators,
     estimated_cost,
     load_queries,
     validate_query_syntax,
@@ -165,3 +168,63 @@ def test_estimated_cost_skips_disabled():
         Query(id="Q3", query_string="z", expected_signal="criticism", max_results=50, enabled=True),
     ]
     assert estimated_cost(qs) == 100
+
+
+
+# --- v1.6: operator-cap helpers -------------------------------------------
+
+
+class TestCountXOperators:
+    """count_x_operators counts top-level OR tokens (paren-stripped)."""
+
+    def test_zero_for_single_term(self):
+        assert count_x_operators("from:MiniMaxAI") == 0
+
+    def test_n_minus_1_for_n_ored_terms(self):
+        # 3 terms ORed => 2 OR tokens at the top level.
+        assert count_x_operators("foo OR bar OR baz") == 2
+
+    def test_ignores_or_inside_parens(self):
+        # ORs nested in parens don't count at the top level.
+        assert count_x_operators("(foo OR bar) (a OR b)") == 0
+        assert count_x_operators("(foo OR bar) baz") == 0
+
+    def test_counts_mixed_top_and_nested(self):
+        # 1 top-level OR + 2 nested in parens.
+        assert count_x_operators("(foo OR bar) baz OR qux") == 1
+
+    def test_is_case_insensitive(self):
+        assert count_x_operators("foo or bar") == 1
+        assert count_x_operators("foo Or bar") == 1
+
+    def test_handles_exactly_at_cap(self):
+        # 22 OR tokens (23 terms) => 22.
+        assert count_x_operators(" OR ".join(f"t{i}" for i in range(23))) == 22
+
+    def test_handles_over_cap(self):
+        # 29 OR tokens (30 terms) => 29, triggers the cap check.
+        assert count_x_operators(" OR ".join(f"t{i}" for i in range(30))) == 29
+
+    def test_empty_string(self):
+        assert count_x_operators("") == 0
+
+
+class TestAssertUnderOperatorCap:
+    """assert_under_operator_cap raises ValueError over the cap, silent at/under."""
+
+    def test_silent_when_zero(self):
+        # Should not raise.
+        assert_under_operator_cap("from:MiniMaxAI min_faves:5")
+
+    def test_silent_at_exact_cap(self):
+        # Exactly 22 ORs is still under the cap (cap is > 22, not >=).
+        assert_under_operator_cap(" OR ".join(f"t{i}" for i in range(23)))
+
+    def test_raises_over_cap_with_message(self):
+        with pytest.raises(ValueError, match="OR operators at the top level"):
+            assert_under_operator_cap(" OR ".join(f"t{i}" for i in range(30)))
+
+    def test_cap_constant_is_22(self):
+        # Lock the constant. If we ever bump X_OPERATOR_CAP, this test forces
+        # an explicit decision.
+        assert X_OPERATOR_CAP == 22
