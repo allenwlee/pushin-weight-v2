@@ -41,6 +41,19 @@ class Account(BaseModel):
     notes: str = ""
 
 
+class StaffAccount(BaseModel):
+    """A staff/employee handle for v1.6 OR-collapse (manually curated).
+
+    Distinct from `Account`: a staff handle is treated as a brand
+    representative but is NOT auto-discovered from posts. The
+    `data/accounts/<brand>.yaml::staff: []` list is the source of
+    truth — the operator adds handles by hand.
+    """
+
+    handle: str = Field(min_length=1)
+    role: Literal["staff", "developer", "employee"] = "staff"
+
+
 class Edge(BaseModel):
     """A typed edge in the account graph.
 
@@ -90,6 +103,28 @@ def load_accounts(model_id: str, root: Path) -> list[Account]:
     if len(seen) != len(accounts):
         raise ValueError(f"{path}: duplicate handle in seed YAML")
     return accounts
+
+
+def load_staff(model_id: str, root: Path) -> list[StaffAccount]:
+    """Load the manually-curated staff list for a model (v1.6).
+
+    root is the data/ directory. The list lives under the `staff:` key
+    in data/accounts/<model_id>.yaml; if the key is missing, an empty
+    list is returned. The list is never derived from posts — only the
+    operator (or a future v1.7 audit) adds entries here.
+    """
+    if model_id not in KNOWN_MODELS:
+        raise ValueError(f"unknown model_id '{model_id}'")
+    path = root / "accounts" / f"{model_id}.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"missing account file: {path}")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        return []
+    staff_raw = raw.get("staff") or []
+    if not isinstance(staff_raw, list):
+        raise ValueError(f"{path}: 'staff' must be a list")
+    return [StaffAccount.model_validate(s) for s in staff_raw]
 
 
 # --- Edge derivation (R11) -------------------------------------------------

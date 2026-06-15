@@ -28,6 +28,8 @@ from .queries import (
     estimated_cost,
     load_queries,
 )
+from .query_plan import plan_calls
+from .intent_classifier import classify_signal, attribute_to_brand
 from .relevance import RelevanceConfig, filter_posts, load_filter
 from .review import ReviewQueue
 from .store import Store
@@ -138,6 +140,81 @@ def pipeline_lock(lock_path: Path, *, blocking: bool = False):
             except Exception:
                 pass
         fd.close()
+
+
+def _signal_to_qid(signal: str) -> str:
+    """Map a classified signal to the legacy Q1-Q6 source_query_id.
+
+    This preserves dashboard rendering (`signal_breakdown` keys are Q1-Q6)
+    for tweets that came back from the new intent calls. Account calls
+    always stamp Q1; intent calls stamp the signal-derived QID.
+    """
+    return {
+        "release": "Q1",
+        "community_question": "Q2",
+        "criticism": "Q3",
+        "commenter_capture": "Q4",
+        "other": "Q5",
+        "praise": "Q6",
+    }.get(signal, "Q5")
+
+
+def _planned_call_to_query(call: "PlannedCall") -> Query:
+    """Synthesize a Query object for the v1.2 filter_and_review helper.
+
+    The filter only reads .id, .min_faves, .query_string, and
+    .expected_signal. Account calls get Q1/release; intent calls get
+    Q5/other (the helper uses these only for logging; the per-tweet
+    source_query_id is set on the tweet itself before this is called).
+    """
+    from .query_plan import PlannedCall  # local to avoid circular at import
+    if call.call_kind == "account":
+        qid, signal, min_faves = "Q1", "release", 1
+    else:
+        qid, signal = _signal_to_qid(call.expected_signal), call.expected_signal
+        min_faves = 0
+    return Query(
+        id=qid,  # type: ignore[arg-type]
+        query_string=call.query_string,
+        expected_signal=signal,  # type: ignore[arg-type]
+        max_results=50,
+        enabled=True,
+        min_faves=min_faves,
+    )
+
+
+def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
+    """Build {model_id: [brand_token, ...]} from data/queries/<m>.yaml.
+
+    Mirrors query_plan._load_brand_tokens_per_model; duplicated here
+    so RunPipeline doesn't have to import a private function.
+    """
+    from .query_plan import _load_brand_tokens_per_model
+    return _load_brand_tokens_per_model(enabled_models, data_dir / "queries")
+
+
+def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
+    """Build {model_id: [handle, ...]} for staff/official attribution.
+
+    For v1.6 the attribute_to_brand prefers author_handle match over
+    text-contains, so we fold the official handle into the per-brand
+    list alongside staff.
+    """
+    from .accounts import load_accounts, load_staff
+    out: dict[str, list[str]] = {}
+    for m in enabled_models:
+        try:
+            accts = load_accounts(m, data_dir)
+        except (FileNotFoundError, ValueError):
+            out[m] = []
+            continue
+        handles = [a.handle for a in accts if a.role == "official"]
+        try:
+            staff = load_staff(m, data_dir)
+        except (FileNotFoundError, ValueError):
+            staff = []
+        out[m] = handles + [s.handle for s in staff]
+    return out
 
 
 class RunPipeline:
@@ -279,139 +356,173 @@ class RunPipeline:
                 cfgs: dict[str, RelevanceConfig] = {
                     m: load_filter(m, self.data_dir) for m in adjusted
                 }
-                for m, qs in adjusted.items():
-                    if query_filter:
-                        qs = [q for q in qs if q.id in query_filter]
-                    cfg = cfgs.get(m, RelevanceConfig())
-                    for q in qs:
-                        if not q.enabled:
-                            continue
-                        if dry_run:
-                            summary["queries"].append(
-                                {
-                                    "model_id": m,
-                                    "query_id": q.id,
-                                    "status": "dry_run",
-                                    "n_results": 0,
-                                }
-                            )
-                            continue
+                # v1.6: build the per-cycle call list once. Account calls
+                # (1 per brand) come first, then intent calls (1-3 per
+                # bucket, split when over the operator cap). For each call:
+                #   1. Run apify.run_search (paginated since v1.6 commit 1).
+                #   2. For intent calls, reclassify each tweet's
+                #      model_id + source_query_id via attribute_to_brand
+                #      + classify_signal.
+                #   3. Run the existing v1.2 filter_and_review (F1
+                #      hijack, banned-token review-queue, low-engagement).
+                #   4. Insert kept rows + log summary.
+                plan = plan_calls(self.data_dir, models)
+                # Pre-load brand-token + staff-handle maps for
+                # attribute_to_brand (intent calls only). These are
+                # computed once per run — pure data lookup, no API.
+                brand_tokens = _brand_tokens_map(models, self.data_dir)
+                staff_handles = _staff_handles_map(models, self.data_dir)
+                for call in plan:
+                    if dry_run:
+                        summary["queries"].append(
+                            {
+                                "model_id": call.model_id,
+                                "call_kind": call.call_kind,
+                                "bucket": call.bucket,
+                                "query_id": "Q1" if call.call_kind == "account" else "QX",
+                                "status": "dry_run",
+                                "n_operators": call.n_operators,
+                                "n_results": 0,
+                            }
+                        )
+                        continue
+                    raw_path = self.raw_dir / run_id / f"{call.model_id}_{call.call_kind}_{call.bucket or 'acct'}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
 
-                        raw_path = self.raw_dir / run_id / f"{m}_{q.id}.json"
-                        raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        items = apify.run_search(
+                            call.query_string,
+                            max_results=50,
+                        )
+                    except TwitterApiAuthError as e:
+                        summary["degraded"]["twitterapi_auth"] = str(e)
+                        summary["status"] = "aborted"
+                        break
+                    except (TwitterApiRateLimitError, TwitterApiServerError) as e:
+                        summary["queries"].append(
+                            {
+                                "model_id": call.model_id,
+                                "call_kind": call.call_kind,
+                                "bucket": call.bucket,
+                                "query_id": "Q1" if call.call_kind == "account" else "QX",
+                                "status": "error",
+                                "n_operators": call.n_operators,
+                                "n_results": 0,
+                                "error": str(e),
+                            }
+                        )
+                        continue
 
-                        # v1.6: pre-check the X advanced-search operator cap. A
-                        # query with more than ~22 top-level OR operators is
-                        # silently dropped by X (HTTP 200 + tweets:[]) — the
-                        # loud-fail behavior here writes a per-query summary
-                        # entry with status="operator_cap_exceeded" and skips
-                        # the call entirely so no credits are burned.
-                        try:
-                            assert_under_operator_cap(q.query_string)
-                        except ValueError as e:
-                            n_ops = count_x_operators(q.query_string)
-                            summary["queries"].append(
-                                {
-                                    "model_id": m,
-                                    "query_id": q.id,
-                                    "status": "operator_cap_exceeded",
-                                    "n_operators": n_ops,
-                                    "n_results": 0,
-                                    "n_kept": 0,
-                                    "n_filtered": 0,
-                                    "n_inserted": 0,
-                                    "error": str(e),
-                                }
-                            )
-                            summary["degraded"].setdefault(
-                                "operator_cap_exceeded", []
-                            ).append(f"{m}/{q.id} ({n_ops} ORs)")
-                            continue
-
-                        # Single attempt; retry inside TwitterApiClient handles
-                        # 429/5xx. Auth failures abort the run.
-                        try:
-                            items = apify.run_search(
-                                q.query_string,
-                                max_results=q.max_results,
-                            )
-                        except TwitterApiAuthError as e:
-                            summary["degraded"]["twitterapi_auth"] = str(e)
-                            summary["status"] = "aborted"
-                            break
-                        except (TwitterApiRateLimitError, TwitterApiServerError) as e:
-                            summary["queries"].append(
-                                {
-                                    "model_id": m,
-                                    "query_id": q.id,
-                                    "status": "error",
-                                    "error": str(e),
-                                    "n_results": 0,
-                                }
-                            )
-                            continue
-
-                        # Stamp model_id on each item BEFORE the filter pass
-                        # (the filter needs model_id for the review-queue
-                        # side effect).
+                    # v1.6: for intent calls, reclassify model_id +
+                    # source_query_id per tweet from the text content.
+                    # For account calls, the model_id is the brand and
+                    # source_query_id is "Q1" (release).
+                    if call.call_kind == "intent":
+                        classified = 0
                         for it in items:
-                            it["model_id"] = m
-                            it["source_query_id"] = q.id
+                            brand = attribute_to_brand(
+                                it.get("text", ""),
+                                it.get("author_handle", ""),
+                                brand_tokens,
+                                staff_handles,
+                            )
+                            if brand:
+                                it["model_id"] = brand
+                                classified += 1
+                            else:
+                                # No brand match: drop the tweet rather
+                                # than letting it land in the wrong brand
+                                # bucket. Mark with a sentinel so we can
+                                # count drops below.
+                                it["_unattributed"] = True
+                            it["source_query_id"] = _signal_to_qid(
+                                classify_signal(it.get("text", ""))
+                            )
+                        items = [
+                            it for it in items if not it.get("_unattributed")
+                        ]
+                        log.info(
+                            "intent call model_id=%s bucket=%s n_results=%d "
+                            "n_classified=%d",
+                            call.model_id, call.bucket, len(items) + sum(
+                                1 for it in items if it.get("_unattributed")
+                            ),
+                            classified,
+                        )
+                    else:
+                        for it in items:
+                            it["model_id"] = call.model_id
+                            it["source_query_id"] = "Q1"
 
-                        # v1.2: apply per-model relevance filter. The helper
-                        # also routes banned-token soft-drops and the
-                        # low-engagement rule to the review queue. Critical:
-                        # the rule iterates over the KEPT set, not `items`,
-                        # so a filter-dropped post never lands in the review
-                        # queue with a tweet_id that isn't in the DB.
-                        kept, drop_stats = filter_and_review(
-                            items, q, m, cfg, review,
+                    # The existing v1.2 filter + review-queue machinery
+                    # expects a Query object (for source_query_id + min_faves).
+                    # We synthesize one for the call. The Query.id is
+                    # derived from the call shape:
+                    #   account calls -> "Q1" (release)
+                    #   intent calls  -> the signal-derived QID
+                    synth_q = _planned_call_to_query(call)
+                    # The filter is per-model, but the tweets now span
+                    # potentially many models. We partition by model_id
+                    # and filter each subset.
+                    by_model: dict[str, list[dict]] = {}
+                    for it in items:
+                        m_id = it.get("model_id") or "unknown"
+                        by_model.setdefault(m_id, []).append(it)
+                    kept_all: list[dict] = []
+                    n_filtered_total = 0
+                    reasons_total: dict[str, int] = {}
+                    n_review_total = 0
+                    for m_id, m_items in by_model.items():
+                        cfg_m = cfgs.get(m_id, RelevanceConfig())
+                        kept_m, drop_stats = filter_and_review(
+                            m_items, synth_q, m_id, cfg_m, review,
                             cache=cache, api=apify,
                             run_fetches_used=run_fetches_used,
                         )
+                        kept_all.extend(kept_m)
+                        n_filtered_total += drop_stats["n_dropped"]
+                        for k, v in drop_stats["reasons"].items():
+                            reasons_total[k] = reasons_total.get(k, 0) + v
+                        n_review_total += drop_stats["n_soft_dropped"]
 
-                        # Persist raw of the KEPT set (not the raw search
-                        # response) so data/runs/raw/ reflects what we
-                        # actually inserted. Drop counts are in the
-                        # per-query summary entry, so nothing is lost.
-                        raw_path.write_text(
-                            json.dumps(kept, ensure_ascii=False, default=str),
-                            encoding="utf-8",
-                        )
-                        n_inserted = store.insert_posts(kept)
+                    # Persist raw of the KEPT set.
+                    raw_path.write_text(
+                        json.dumps(kept_all, ensure_ascii=False, default=str),
+                        encoding="utf-8",
+                    )
+                    n_inserted = store.insert_posts(kept_all)
 
-                        log.info(
-                            "model=%s query=%s n_results=%d n_kept=%d "
-                            "n_dropped=%d reasons=%s n_review=%d",
-                            m, q.id, len(items), drop_stats["n_kept"],
-                            drop_stats["n_dropped"], drop_stats["reasons"],
-                            drop_stats["n_soft_dropped"],
-                        )
+                    log.info(
+                        "call model=%s kind=%s bucket=%s n_results=%d "
+                        "n_kept=%d n_dropped=%d reasons=%s n_review=%d",
+                        call.model_id, call.call_kind, call.bucket,
+                        len(items), len(kept_all), n_filtered_total,
+                        reasons_total, n_review_total,
+                    )
 
-                        summary["queries"].append(
-                            {
-                                "model_id": m,
-                                "query_id": q.id,
-                                "status": "completed",
-                                "n_results": len(items),
-                                "n_kept": drop_stats["n_kept"],
-                                "n_filtered": drop_stats["n_dropped"],
-                                "filter_reasons": drop_stats["reasons"],
-                                "n_review_added": drop_stats["n_soft_dropped"],
-                                "n_inserted": n_inserted,
-                                "n_url_only": drop_stats.get("n_url_only", 0),
-                                "n_headlines_fetched": drop_stats.get("n_fetched", 0),
-                                "n_headlines_cached": drop_stats.get("n_cached", 0),
-                                "n_via_api": drop_stats.get("n_via_api", 0),
-                                "raw_path": str(raw_path.relative_to(self.data_dir)),
-                            }
-                        )
-                        summary["totals"]["n_queries_run"] += 1
-                        summary["totals"]["n_results"] += len(items)
-                        summary["totals"]["n_inserted"] += n_inserted
+                    summary["queries"].append(
+                        {
+                            "model_id": call.model_id,
+                            "call_kind": call.call_kind,
+                            "bucket": call.bucket,
+                            "query_id": synth_q.id,
+                            "n_operators": call.n_operators,
+                            "status": "completed",
+                            "n_results": len(items),
+                            "n_kept": len(kept_all),
+                            "n_filtered": n_filtered_total,
+                            "filter_reasons": reasons_total,
+                            "n_review_added": n_review_total,
+                            "n_inserted": n_inserted,
+                            "raw_path": str(raw_path.relative_to(self.data_dir)),
+                        }
+                    )
+                    summary["totals"]["n_queries_run"] += 1
+                    summary["totals"]["n_results"] += len(items)
+                    summary["totals"]["n_inserted"] += n_inserted
 
-                    if summary["status"] == "aborted":
-                        break
+                if summary["status"] == "aborted":
+                    pass  # already handled in the inner break
             finally:
                 store.close()
 

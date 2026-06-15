@@ -163,16 +163,12 @@ def count_x_operators(query: str) -> int:
     parens before counting; for our purposes — knowing whether we're about
     to hit the silent-fail cliff — top-level is the conservative answer.
     """
-    depth = 0
-    top_level: list[str] = []
-    for ch in query:
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-        elif depth == 0:
-            top_level.append(ch)
-    return len(_OR_OP_RE.findall("".join(top_level)))
+    # X caps total operators (\bOR\b, `from:`, `to:`, `min_faves:`, etc.)
+    # at around 22-23 per query; an over-cap query silently returns 0
+    # tweets. We count just \bOR\b tokens because the other operators
+    # (from:/to:/min_faves:) are the same shape across all our queries —
+    # what varies and what matters for the cap is the OR-chain length.
+    return len(_OR_OP_RE.findall(query))
 
 
 def assert_under_operator_cap(query: str) -> None:

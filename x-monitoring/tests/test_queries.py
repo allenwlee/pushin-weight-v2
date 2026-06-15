@@ -184,14 +184,19 @@ class TestCountXOperators:
         # 3 terms ORed => 2 OR tokens at the top level.
         assert count_x_operators("foo OR bar OR baz") == 2
 
-    def test_ignores_or_inside_parens(self):
-        # ORs nested in parens don't count at the top level.
-        assert count_x_operators("(foo OR bar) (a OR b)") == 0
-        assert count_x_operators("(foo OR bar) baz") == 0
+    def test_counts_nested_paren_ors(self):
+        # Paren-nested ORs DO count toward the cap (X's cap is total OR
+        # operators per query, not top-level). This is important for the
+        # v1.6 plan_calls architecture where brand clauses are wrapped
+        # in `(BrandA OR BrandB) OR (BrandC OR BrandD)`.
+        assert count_x_operators("(foo OR bar) (a OR b)") == 2
+        assert count_x_operators("(foo OR bar) baz") == 1
 
     def test_counts_mixed_top_and_nested(self):
-        # 1 top-level OR + 2 nested in parens.
-        assert count_x_operators("(foo OR bar) baz OR qux") == 1
+        # count_x_operators counts ALL \bOR\b tokens regardless of
+        # paren nesting — X treats each from:/to:/OR as one operator and
+        # we conservatively sum them. (foo OR bar) baz OR qux = 2 ORs.
+        assert count_x_operators("(foo OR bar) baz OR qux") == 2
 
     def test_is_case_insensitive(self):
         assert count_x_operators("foo or bar") == 1
