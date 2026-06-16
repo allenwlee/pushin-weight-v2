@@ -16,6 +16,26 @@ from .config import KNOWN_MODELS
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
+def _parse_post_created_at(value):
+    """Parse a `posts.created_at` value into an aware UTC datetime, or None.
+
+    Handles both ISO 8601 ("Z" or "+HH:MM") and Twitter legacy
+    ("Mon Jun 08 22:40:07 +0000 2026") formats. Returns None for
+    empty or unparseable values so callers can use it as a sort key
+    without raising.
+    """
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(value, "%a %b %d %H:%M:%S %z %Y")
+    except ValueError:
+        return None
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -185,11 +205,22 @@ class Store:
     def get_all_posts(self, model_id: str) -> list[dict[str, Any]]:
         if model_id not in KNOWN_MODELS:
             raise ValueError(f"unknown model_id '{model_id}'")
+        # The `created_at` column is TEXT and may hold either ISO 8601 or
+        # Twitter legacy (e.g. "Wed Jun 10 21:31:32 +0000 2026"). A SQL
+        # `ORDER BY created_at DESC` on the latter is lexicographic, not
+        # chronological (Wed > Mon, "10" > "09"), which makes the model
+        # detail page render 5-day-old posts at the top. Sort in Python by
+        # parsed timestamp instead.
         rows = self._conn.execute(
-            "SELECT * FROM posts WHERE model_id = ? ORDER BY created_at DESC",
+            "SELECT * FROM posts WHERE model_id = ?",
             (model_id,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        posts = [dict(r) for r in rows]
+        posts.sort(
+            key=lambda p: _parse_post_created_at(p.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        return posts
 
     # --- headline enrichment (v1.2) -------------------------------------
 
