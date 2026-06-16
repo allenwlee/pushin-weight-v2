@@ -567,10 +567,12 @@ def _dispatch_relevance(args, action: str, paths) -> int:
                         fetch_target = resolved
                 # X-article routing: if the resolved URL is an
                 # x.com/i/article/{id} and --via-api is on, call
-                # api.get_article(tweet_id) instead of fetch_url.
+                # api.get_article(tweet_id) using the POST's tweet_id
+                # (NOT the article path id — the API rejects that).
                 # Cost: 100 credits per call.
-                x_tid = x_article_tweet_id(fetch_target)
-                if x_tid is not None and via_api_active:
+                is_x_article = x_article_tweet_id(fetch_target) is not None
+                x_tid = tweet_id
+                if is_x_article and via_api_active:
                     x_key = f"x_article:{x_tid}"
                     hit = cache.get(x_tid, key_override=x_key)
                     if hit is not None:

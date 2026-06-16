@@ -652,21 +652,22 @@ def enrich_posts(
             # itself (fetch_url will follow redirects anyway).
         # X-native article routing: if the resolved URL is an
         # x.com/i/article/{id}, use the TwitterAPI.io get_article
-        # endpoint (100 credits per call). Cache key is the tweet_id.
+        # endpoint (100 credits per call). IMPORTANT: the endpoint
+        # takes the tweet_id of the POST that links to the article,
+        # NOT the article path id. The post's tweet_id is on the
+        # item (item["id"] / item["tweet_id"]).
         # Bypasses per-host throttle (the API is the throttle, not
         # the network) and the per-query fetch cap (still counted
         # against per_run_cap so we don't blow the budget).
         # Cache key for the resolved URL (computed once for both the
         # X-article branch and the fallthrough HTTP fetch path).
         key = cache_key_for(fetch_target)
-        # X-native article routing: if the resolved URL is an
-        # x.com/i/article/{id}, use the TwitterAPI.io get_article
-        # endpoint (100 credits per call). Cache key is the tweet_id.
-        # Bypasses per-host throttle (the API is the throttle, not
-        # the network) and the per-query fetch cap (still counted
-        # against per_run_cap so we don't blow the budget).
-        x_tid = x_article_tweet_id(fetch_target)
-        if x_tid is not None and api is not None:
+        # Same routing as above: detect x.com/i/article/{id} to know
+        # we're in X-article territory, then use the POST's tweet_id
+        # for the API call.
+        is_x_article = x_article_tweet_id(fetch_target) is not None
+        x_tid = item.get("id") or item.get("tweet_id") or ""
+        if is_x_article and api is not None and x_tid:
             x_key = f"x_article:{x_tid}"
             # Per-query dedupe for X-articles too.
             if x_key in seen_results:
