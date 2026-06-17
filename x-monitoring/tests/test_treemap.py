@@ -52,20 +52,20 @@ class TestBinPolarity:
 
     def test_bin_polarity_positive_one_returns_deep_green(self):
         c = bin_polarity(1.0)
-        assert c == "rgb(0, 150, 0)"
+        assert c == "rgb(120, 255, 120)"
 
     def test_bin_polarity_negative_one_returns_deep_red(self):
         c = bin_polarity(-1.0)
-        assert c == "rgb(170, 0, 0)"
+        assert c == "rgb(255, 100, 100)"
 
     def test_bin_polarity_none_returns_yellow(self):
         c = bin_polarity(None)
         assert c == "rgb(234, 179, 8)"
 
     def test_bin_polarity_half_positive_returns_green(self):
-        # 0.5 -> t=0.5 -> GREEN bin rgb(30, 180, 30)
+        # 0.5 -> t=0.5 -> GREEN bin rgb(60, 200, 60)
         c = bin_polarity(0.5)
-        assert c == "rgb(30, 180, 30)"
+        assert c == "rgb(60, 200, 60)"
 
 
 # ---------- polarity_fill (v1.7.2 + v1.7.3) --------------------------------
@@ -74,22 +74,22 @@ class TestPolarityFill:
     extreme active score (Finviz-style relative).
     v1.7.3: 5-step binning with fully saturated solid rgb() colors
     (no alpha) replaces the 3-stop lerp. Bin thresholds:
-        t <= -0.6  -> DEEP_RED    rgb(170, 0, 0)
+        t <= -0.6  -> LIGHT_RED   rgb(255, 100, 100)
         t <= -0.2  -> RED         rgb(210, 40, 40)
         t <  0     -> DARK_RED    rgb(90, 25, 25)
         t <  0.2   -> DARK_GREEN  rgb(25, 80, 25)
-        t <  0.6   -> GREEN       rgb(30, 180, 30)
-        t >=  0.6  -> DEEP_GREEN  rgb(0, 150, 0)
+        t <  0.6   -> GREEN       rgb(60, 200, 60)
+        t >=  0.6  -> LIGHT_GREEN rgb(120, 255, 120)
         None       -> YELLOW      rgb(234, 179, 8)
     """
 
     def test_extreme_positive_normalized_to_deep_green(self):
         c = polarity_fill(0.15, 0.15)
-        assert c == "rgb(0, 150, 0)"
+        assert c == "rgb(120, 255, 120)"
 
     def test_extreme_negative_normalized_to_deep_red(self):
         c = polarity_fill(-0.12, 0.12)
-        assert c == "rgb(170, 0, 0)"
+        assert c == "rgb(255, 100, 100)"
 
     def test_zero_normalized_to_dark_green(self):
         c = polarity_fill(0.0, 0.15)
@@ -98,7 +98,7 @@ class TestPolarityFill:
     def test_moderate_positive_returns_green(self):
         # 0.075 / 0.15 = 0.5 -> 0.2 <= t < 0.6 -> GREEN
         c = polarity_fill(0.075, 0.15)
-        assert c == "rgb(30, 180, 30)"
+        assert c == "rgb(60, 200, 60)"
 
     def test_slight_positive_returns_dark_green(self):
         # 0.02 / 0.15 = 0.133 -> 0 < t < 0.2 -> DARK_GREEN
@@ -117,7 +117,7 @@ class TestPolarityFill:
 
     def test_single_active_model_gets_full_saturation(self):
         c = polarity_fill(0.05, 0.05)
-        assert c == "rgb(0, 150, 0)"
+        assert c == "rgb(120, 255, 120)"
 
     def test_all_flat_returns_dark_green(self):
         # max_abs = 0 (degenerate) -> DARK_GREEN for any non-None score.
@@ -137,28 +137,28 @@ class TestPolarityFill:
         v1.7.3 bins to saturated 5-step Finviz palette.
         """
         max_abs = 0.147
-        # t = 0.147/0.147 = 1.0 -> DEEP_GREEN
-        assert polarity_fill(0.147, max_abs) == "rgb(0, 150, 0)"
-        # t = -0.122/0.147 = -0.83 -> DEEP_RED
-        assert polarity_fill(-0.122, max_abs) == "rgb(170, 0, 0)"
-        # t = 0.129/0.147 = 0.878 -> DEEP_GREEN
-        assert polarity_fill(0.129, max_abs) == "rgb(0, 150, 0)"
-        # t = 0.063/0.147 = 0.429 -> GREEN
-        assert polarity_fill(0.063, max_abs) == "rgb(30, 180, 30)"
-        # t = 0.050/0.147 = 0.340 -> GREEN
-        assert polarity_fill(0.050, max_abs) == "rgb(30, 180, 30)"
+        # t = 0.147/0.147 = 1.0 -> LIGHT_GREEN
+        assert polarity_fill(0.147, max_abs) == "rgb(120, 255, 120)"
+        # t = -0.122/0.147 = -0.83 -> LIGHT_RED
+        assert polarity_fill(-0.122, max_abs) == "rgb(255, 100, 100)"
+        # t = 0.129/0.147 = 0.878 -> LIGHT_GREEN
+        assert polarity_fill(0.129, max_abs) == "rgb(120, 255, 120)"
+        # t = 0.063/0.147 = 0.429 -> GREEN (v1.8.1: rgb 60,200,60)
+        assert polarity_fill(0.063, max_abs) == "rgb(60, 200, 60)"
+        # t = 0.050/0.147 = 0.340 -> GREEN (v1.8.1: rgb 60,200,60)
+        assert polarity_fill(0.050, max_abs) == "rgb(60, 200, 60)"
         # t = 0.029/0.147 = 0.197 -> DARK_GREEN (0 < t < 0.2)
         assert polarity_fill(0.029, max_abs) == "rgb(25, 80, 25)"
         # t = -0.042/0.147 = -0.286 -> RED
         assert polarity_fill(-0.042, max_abs) == "rgb(210, 40, 40)"
 
     def test_score_clamped_to_unit_range(self):
-        # score > max_abs -> t=1.0 -> DEEP_GREEN (no overshoot).
+        # score > max_abs -> t=1.0 -> LIGHT_GREEN (no overshoot).
         c = polarity_fill(0.5, 0.15)
-        assert c == "rgb(0, 150, 0)"
-        # score < -max_abs -> t=-1.0 -> DEEP_RED
+        assert c == "rgb(120, 255, 120)"
+        # score < -max_abs -> t=-1.0 -> LIGHT_RED
         c = polarity_fill(-0.5, 0.15)
-        assert c == "rgb(170, 0, 0)"
+        assert c == "rgb(255, 100, 100)"
 
     def test_palette_is_solid_rgb_not_rgba(self):
         """v1.7.3: no more rgba() with 0.85 alpha. The alpha mixed
@@ -175,18 +175,18 @@ class TestPolarityFill:
         #   0.2 < |t| <= 0.6: saturated bins
         #   |t| > 0.6: deep bins
         for t, expected in [
-            (-1.0, "rgb(170, 0, 0)"),
-            (-0.6, "rgb(170, 0, 0)"),
+            (-1.0, "rgb(255, 100, 100)"),
+            (-0.6, "rgb(255, 100, 100)"),
             (-0.59, "rgb(210, 40, 40)"),
             (-0.2, "rgb(210, 40, 40)"),
             (-0.19, "rgb(90, 25, 25)"),
             (-0.01, "rgb(90, 25, 25)"),
             (0.01, "rgb(25, 80, 25)"),
             (0.19, "rgb(25, 80, 25)"),
-            (0.2, "rgb(30, 180, 30)"),
-            (0.59, "rgb(30, 180, 30)"),
-            (0.6, "rgb(0, 150, 0)"),
-            (1.0, "rgb(0, 150, 0)"),
+            (0.2, "rgb(60, 200, 60)"),
+            (0.59, "rgb(60, 200, 60)"),
+            (0.6, "rgb(120, 255, 120)"),
+            (1.0, "rgb(120, 255, 120)"),
         ]:
             assert polarity_fill(t, 1.0) == expected, f"t={t} should be {expected}"
 
@@ -409,8 +409,10 @@ class TestTileHoverAndTooltip:
         assert _text_color_for_fill("rgb(234, 179, 8)") == "#0d1117"
 
     def test_text_color_white_for_dark_fill(self):
-        # Deep red (170, 0, 0) has luminance 0.142 < threshold -> white text.
-        assert _text_color_for_fill("rgb(170, 0, 0)") == "#ffffff"
+        # v1.8.1: DARK_RED rgb(90, 25, 25) has luminance 0.152 < threshold -> white text.
+        # (Previously this used DEEP_RED rgb(170,0,0); that exact RGB is no longer
+        # a palette stop after the v1.8.1 rebalance.)
+        assert _text_color_for_fill("rgb(90, 25, 25)") == "#ffffff"
 
     def test_text_color_white_for_unparseable_fill(self):
         # Anything we can't parse falls back to white.

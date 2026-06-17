@@ -36,23 +36,33 @@ import squarify
 # are resolved lazily inside compute_polarity below.
 
 
-# Finviz-style 5-step divergent palette. No alpha — these are
-# fully saturated solid colors (not blended over the dark background,
-# which would wash them out). The 5 visible bins are (from -1 to +1):
-#   t <= -0.6  -> DEEP_RED    (-2% and worse, e.g. NVDA-as-competitor)
-#   t <= -0.2  -> RED         (negative trajectory, visible)
-#   t <  0     -> DARK_RED    (slightly negative, just tinted)
-#   t <  0.2   -> DARK_GREEN  (slightly positive, just tinted)
-#   t <=  0.6  -> GREEN       (positive trajectory, visible)
-#   t >  0.6   -> DEEP_GREEN  (strong praise shift, e.g. v1.7.2 full)
+# v1.8.1 — Finviz-style 5-step divergent palette, balanced so the most-extreme
+# bin is the BRIGHTEST on the dark dashboard background. This matches the
+# user-intuitive Finviz convention: extremes are vivid ("light"), middle is
+# muted ("dark"). The previous v1.7.3 palette named extremes as DEEP_* which
+# read as darker on screen (DEEP_GREEN rgb(0,150,0) has luminance 0.421,
+# lower than GREEN rgb(30,180,30) at 0.538) — opposite of what users expect.
+#
+# The 6 visible bins are (from -1 to +1):
+#   t <= -0.6  -> LIGHT_RED    (most negative, brightest red)
+#   -0.6 < t <= -0.2  -> RED         (negative, medium red)
+#   -0.2 < t <  0     -> DARK_RED    (slightly negative, just tinted)
+#    0  < t <  0.2    -> DARK_GREEN  (slightly positive, just tinted)
+#    0.2 <= t <  0.6  -> GREEN       (positive, medium green)
+#    t >=  0.6        -> LIGHT_GREEN (most positive, brightest green)
+#
+# Luminance (BT.709) is monotonically ascending across the positive side
+# (0.252 -> 0.628 -> 0.849) and the negative side (0.152 -> 0.299 -> 0.521)
+# so the most-extreme tile always reads as the most-visible on the dark bg.
+#
 # None (the "went dark" sentinel) returns YELLOW as before so the
 # visual cue is preserved across palette rewrites.
-_DEEP_RED = (170, 0, 0)
+_LIGHT_RED = (255, 100, 100)
 _RED = (210, 40, 40)
 _DARK_RED = (90, 25, 25)
 _DARK_GREEN = (25, 80, 25)
-_GREEN = (30, 180, 30)
-_DEEP_GREEN = (0, 150, 0)
+_GREEN = (60, 200, 60)
+_LIGHT_GREEN = (120, 255, 120)
 _YELLOW = (234, 179, 8)    # the "went dark" sentinel
 
 
@@ -178,7 +188,7 @@ def polarity_fill(score: float | None, max_abs_score: float) -> str:
         return _rgb(_DARK_GREEN)
     t = max(-1.0, min(1.0, score / max_abs_score))
     if t <= -0.6:
-        return _rgb(_DEEP_RED)
+        return _rgb(_LIGHT_RED)
     if t <= -0.2:
         return _rgb(_RED)
     if t < 0:
@@ -187,7 +197,7 @@ def polarity_fill(score: float | None, max_abs_score: float) -> str:
         return _rgb(_DARK_GREEN)
     if t < 0.6:
         return _rgb(_GREEN)
-    return _rgb(_DEEP_GREEN)
+    return _rgb(_LIGHT_GREEN)
 
 
 def bin_polarity(score: float | None) -> str:
