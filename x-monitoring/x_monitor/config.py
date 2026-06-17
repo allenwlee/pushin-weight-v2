@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
 # Canonical model registry — adding a model here is the only "code change" needed.
@@ -46,6 +46,28 @@ class DashboardConfig(BaseModel):
     port: int = 5000
     poll_seconds: int = 30
     window_days: int = 14
+    # Treemap volume + polarity-change window (days). The current and prior
+    # windows for the polarity score are both this length, so the prior window
+    # is always [anchor - 2*N, anchor - N). Must be <= window_days so the prior
+    # window is fully covered by the post history; the model_validator below
+    # enforces that.
+    treemap_volume_window_days: int = 7
+
+    @model_validator(mode="after")
+    def _validate_treemap_window(self) -> DashboardConfig:
+        # treemap_volume_window_days must be positive and <= window_days so the
+        # prior window [anchor - 2N, anchor - N) is fully covered by post history.
+        if self.treemap_volume_window_days <= 0:
+            raise ValueError(
+                f"treemap_volume_window_days must be positive (got {self.treemap_volume_window_days})"
+            )
+        if self.treemap_volume_window_days > self.window_days:
+            raise ValueError(
+                f"treemap_volume_window_days ({self.treemap_volume_window_days}) "
+                f"must be <= window_days ({self.window_days}) so the polarity prior "
+                f"window is fully covered by post history"
+            )
+        return self
 
 
 class Config(BaseModel):
