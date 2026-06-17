@@ -34,13 +34,24 @@ import squarify
 # are resolved lazily inside compute_polarity below.
 
 
-# CSS color tokens from x_monitor/static/dashboard.css (lines 4-14).
-# These are the source of truth for the polarity palette; the SVG embeds
-# the resolved rgba() string per tile (no CSS variable lookups in SVG).
-_RED = (239, 68, 68)       # #ef4444
-_MUTED = (139, 148, 158)   # #8b949e
-_GREEN = (16, 185, 129)    # #10b981
-_YELLOW = (234, 179, 8)    # #eab308 — used for the "went dark" sentinel
+# Finviz-style 5-step divergent palette. No alpha — these are
+# fully saturated solid colors (not blended over the dark background,
+# which would wash them out). The 5 visible bins are (from -1 to +1):
+#   t <= -0.6  -> DEEP_RED    (-2% and worse, e.g. NVDA-as-competitor)
+#   t <= -0.2  -> RED         (negative trajectory, visible)
+#   t <  0     -> DARK_RED    (slightly negative, just tinted)
+#   t <  0.2   -> DARK_GREEN  (slightly positive, just tinted)
+#   t <=  0.6  -> GREEN       (positive trajectory, visible)
+#   t >  0.6   -> DEEP_GREEN  (strong praise shift, e.g. v1.7.2 full)
+# None (the "went dark" sentinel) returns YELLOW as before so the
+# visual cue is preserved across palette rewrites.
+_DEEP_RED = (170, 0, 0)
+_RED = (210, 40, 40)
+_DARK_RED = (90, 25, 25)
+_DARK_GREEN = (25, 80, 25)
+_GREEN = (30, 180, 30)
+_DEEP_GREEN = (0, 150, 0)
+_YELLOW = (234, 179, 8)    # the "went dark" sentinel
 
 
 class TreemapTile(NamedTuple):
@@ -67,50 +78,51 @@ class TreemapTile(NamedTuple):
 SIZE_EPSILON = 1e-6
 
 
-def _lerp_color(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> str:
-    """Linearly interpolate two RGB triples at t in [0, 1] and return rgba() string.
-
-    Output is rgba(0-255, 0-255, 0-255, 0.85) — fixed 0.85 alpha for legibility
-    on a dark background (matches the grid cards' fill convention).
-    """
-    t = max(0.0, min(1.0, t))
-    r = round(c1[0] + (c2[0] - c1[0]) * t)
-    g = round(c1[1] + (c2[1] - c1[1]) * t)
-    b = round(c1[2] + (c2[2] - c1[2]) * t)
-    return f"rgba({r}, {g}, {b}, 0.85)"
+def _rgb(c: tuple[int, int, int]) -> str:
+    """Format a solid rgb() string from a 3-tuple. No alpha."""
+    return f"rgb({c[0]}, {c[1]}, {c[2]})"
 
 
 def polarity_fill(score: float | None, max_abs_score: float) -> str:
-    """Map a polarity score to a divergent palette color, relative to the
-    most extreme score in the active set.
+    """Map a polarity score to a Finviz-style 5-step divergent palette,
+    relative to the most extreme score in the active set.
 
-    Normalization:
-        t = score / max_abs_score, clamped to [-1, +1]
-    Then 3-stop interpolation red -> muted -> green at |t| in [0, 1]:
-        t < 0  -> lerp(RED, MUTED, t + 1.0)     # -1 full red, 0 muted
-        t > 0  -> lerp(MUTED, GREEN, t)         #  0 muted, +1 full green
-        t == 0 -> muted
+    Bin thresholds (Finviz convention):
+        t <= -0.6  -> DEEP_RED
+        -0.6 < t <= -0.2  -> RED
+        -0.2 < t <  0     -> DARK_RED
+         0  < t <  0.2    -> DARK_GREEN
+         0.2 <= t <  0.6  -> GREEN
+         t >=  0.6        -> DEEP_GREEN
 
     The "went dark" sentinel (score is None) returns --yellow regardless
-    of the scale, so it stays visually distinct from the muted bin.
+    of the scale.
 
     `max_abs_score` is the absolute value of the most extreme polarity
-    score in the active tile set. If all scores are 0 (e.g. only one
-    active model, or all flat), max_abs_score == 0 and the function
-    returns muted for any score, which is the correct degenerate case.
+    score in the active tile set. If all scores are 0, the function
+    returns DARK_RED for any negative score and DARK_GREEN for any
+    positive score (degenerate-but-readable). For score == 0 exactly
+    we pick DARK_GREEN (the conventional "neutral slight positive"
+    read in Finviz, since both dark bins are visually similar and
+    green is the conventional default).
     """
     if score is None:
-        return f"rgba({_YELLOW[0]}, {_YELLOW[1]}, {_YELLOW[2]}, 0.85)"
+        return _rgb(_YELLOW)
     if max_abs_score <= 0:
-        # Degenerate: only one active model, or all flat. Stay muted.
-        return f"rgba({_MUTED[0]}, {_MUTED[1]}, {_MUTED[2]}, 0.85)"
+        # Degenerate. Default to dark green for any non-None score.
+        return _rgb(_DARK_GREEN)
     t = max(-1.0, min(1.0, score / max_abs_score))
+    if t <= -0.6:
+        return _rgb(_DEEP_RED)
+    if t <= -0.2:
+        return _rgb(_RED)
     if t < 0:
-        return _lerp_color(_RED, _MUTED, t + 1.0)
-    if t > 0:
-        return _lerp_color(_MUTED, _GREEN, t)
-    # t == 0 exactly -> muted
-    return f"rgba({_MUTED[0]}, {_MUTED[1]}, {_MUTED[2]}, 0.85)"
+        return _rgb(_DARK_RED)
+    if t < 0.2:
+        return _rgb(_DARK_GREEN)
+    if t < 0.6:
+        return _rgb(_GREEN)
+    return _rgb(_DEEP_GREEN)
 
 
 def bin_polarity(score: float | None) -> str:
@@ -275,37 +287,73 @@ def _squarify_layout(
 
 
 def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -> str:
-    """Render one active tile as an <a> wrapping a <rect> with a <text> label."""
+    """Render one active tile as an <a> wrapping a <rect> with two <text>
+    labels: the model name on top, the polarity as a signed percentage
+    below it. Both lines are white for legibility on the saturated
+    palette. Font size is adaptive to the smaller of the tile width/height
+    so small tiles get a smaller label and don't overflow.
+    """
     x, y, dx, dy = rect["x"], rect["y"], rect["dx"], rect["dy"]
     fill = polarity_fill(tile.polarity_score, max_abs_score)
-    label = _xml_escape(tile.display_name)
-    polarity_str = (
-        "no data" if tile.polarity_score is None
-        else f"{tile.polarity_score:+.2f}"
-    )
+    name = _xml_escape(tile.display_name)
+    # Polarity as a signed percentage. Multiply by 100 because the raw
+    # polarity is a rate difference in [-1, +1]. Two decimals matches
+    # Finviz (+1.16%, -3.49%) but is dropped to 1 decimal under 100px
+    # wide tiles to save space.
+    if tile.polarity_score is None:
+        pct_str = "no data"
+    else:
+        pct_val = tile.polarity_score * 100
+        decimals = 1 if dx < 100 or dy < 80 else 2
+        pct_str = f"{pct_val:+.{decimals}f}%"
     aria = (
-        f"{tile.display_name}: polarity {polarity_str}, "
+        f"{tile.display_name}: polarity {pct_str}, "
         f"area weight {tile.area_weight:.0f}"
     )
-    title = f"{tile.display_name} — polarity {polarity_str}"
-    # Truncate label to fit the tile width (8px per char at 11pt font is a safe rough).
-    if dx < 60:
-        label = ""
-    elif len(label) * 7 > dx:
-        label = label[: max(1, int(dx / 7) - 1)] + "…"
-    return (
+    title = f"{tile.display_name} — polarity {pct_str}"
+    # Adaptive font size. Finviz uses ~16pt for the name and ~12pt for
+    # the percentage. We scale to ~16% of the shorter side, clamped to
+    # [9, 22]. Tile must be at least 60x40 to render any text at all.
+    if dx < 60 or dy < 40:
+        name = ""
+        pct_str_render = ""
+    else:
+        font = max(9, min(22, int(min(dx, dy) * 0.18)))
+        # Truncate the name if it would overflow (rough: 0.6em per char).
+        char_w = font * 0.6
+        if len(name) * char_w > dx * 0.9:
+            max_chars = max(1, int(dx * 0.9 / char_w) - 1)
+            name = name[:max_chars] + "…"
+        pct_str_render = pct_str
+    parts = [
         f'<a href="/model/{tile.model_id}" data-href="/model/{tile.model_id}" '
-        f'aria-label="{_xml_escape(aria)}">'
-        f'<title>{_xml_escape(title)}</title>'
+        f'aria-label="{_xml_escape(aria)}">',
+        f'<title>{_xml_escape(title)}</title>',
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{dx:.2f}" height="{dy:.2f}" '
         f'fill="{fill}" stroke="{tile.accent_color}" stroke-width="2" '
-        f'rx="2" ry="2"/>'
-        + (f'<text x="{x + dx / 2:.2f}" y="{y + dy / 2 + 4:.2f}" '
-           f'font-size="13" fill="#0d1117" text-anchor="middle" '
-           f'font-weight="600" pointer-events="none">{label}</text>'
-           if label else "")
-        + "</a>"
-    )
+        f'rx="2" ry="2"/>',
+    ]
+    if name:
+        # Two-line layout: name slightly above center, pct slightly below.
+        cx = x + dx / 2
+        cy = y + dy / 2
+        # Stagger by font size so the two lines don't overlap.
+        name_y = cy - font * 0.2
+        pct_y = cy + font * 0.9
+        parts.append(
+            f'<text x="{cx:.2f}" y="{name_y:.2f}" '
+            f'font-size="{font}" fill="#ffffff" text-anchor="middle" '
+            f'font-weight="700" pointer-events="none" '
+            f'font-family="system-ui, -apple-system, sans-serif">{name}</text>'
+        )
+        parts.append(
+            f'<text x="{cx:.2f}" y="{pct_y:.2f}" '
+            f'font-size="{max(8, font - 2)}" fill="#ffffff" text-anchor="middle" '
+            f'font-weight="500" pointer-events="none" '
+            f'font-family="system-ui, -apple-system, sans-serif">{_xml_escape(pct_str_render)}</text>'
+        )
+    parts.append("</a>")
+    return "".join(parts)
 
 
 def build_treemap_svg(

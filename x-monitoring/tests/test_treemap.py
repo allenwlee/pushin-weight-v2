@@ -37,116 +37,155 @@ def _now() -> datetime:
     return datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
 
 
-# ---------- bin_polarity -----------------------------------------------------
-
+# ---------- bin_polarity (v1.7.3: thin backwards-compat wrapper) ------------
 class TestBinPolarity:
-    def test_bin_polarity_zero_returns_muted(self):
-        # The 3-stop interpolation at score=0 returns the muted color.
-        # 0 -> lerp(MUTED, GREEN, 0) = MUTED.
+    def test_bin_polarity_zero_returns_dark_green(self):
+        # 0.0 -> t=0.0 -> DARK_GREEN rgb(25, 80, 25)
         c = bin_polarity(0.0)
-        assert "139" in c and "148" in c and "158" in c, c
+        assert c == "rgb(25, 80, 25)"
 
-    def test_bin_polarity_positive_one_returns_green(self):
+    def test_bin_polarity_positive_one_returns_deep_green(self):
         c = bin_polarity(1.0)
-        assert "16" in c and "185" in c and "129" in c, c
+        assert c == "rgb(0, 150, 0)"
 
-    def test_bin_polarity_negative_one_returns_red(self):
+    def test_bin_polarity_negative_one_returns_deep_red(self):
         c = bin_polarity(-1.0)
-        assert "239" in c and "68" in c and "68" in c, c
+        assert c == "rgb(170, 0, 0)"
 
     def test_bin_polarity_none_returns_yellow(self):
         c = bin_polarity(None)
-        # --yellow is #eab308 = 234, 179, 8
-        assert "234" in c and "179" in c and "8" in c, c
+        assert c == "rgb(234, 179, 8)"
 
-    def test_bin_polarity_half_positive_lerps_muted_to_green(self):
-        # 0.5 -> midpoint of (MUTED, GREEN) at 0.85 alpha.
+    def test_bin_polarity_half_positive_returns_green(self):
+        # 0.5 -> t=0.5 -> GREEN bin rgb(30, 180, 30)
         c = bin_polarity(0.5)
-        # Expected: round((139+16)/2)=78, round((148+185)/2)=166, round((158+129)/2)=144
-        assert "78" in c and "166" in c and "144" in c, c
+        assert c == "rgb(30, 180, 30)"
 
 
-# ---------- polarity_fill (v1.7.2: relative polarity) ------------------------
+# ---------- polarity_fill (v1.7.2 + v1.7.3) --------------------------------
 class TestPolarityFill:
     """v1.7.2: polarity_fill normalizes scores relative to the most
-    extreme active score in the dashboard, instead of using fixed
-    absolute thresholds. This fixes the bug where the live DB polarity
-    scores (typically in [-0.15, +0.15]) were all collapsed to near-muted
-    by the old lerp(score).
+    extreme active score (Finviz-style relative).
+    v1.7.3: 5-step binning with fully saturated solid rgb() colors
+    (no alpha) replaces the 3-stop lerp. Bin thresholds:
+        t <= -0.6  -> DEEP_RED    rgb(170, 0, 0)
+        t <= -0.2  -> RED         rgb(210, 40, 40)
+        t <  0     -> DARK_RED    rgb(90, 25, 25)
+        t <  0.2   -> DARK_GREEN  rgb(25, 80, 25)
+        t <  0.6   -> GREEN       rgb(30, 180, 30)
+        t >=  0.6  -> DEEP_GREEN  rgb(0, 150, 0)
+        None       -> YELLOW      rgb(234, 179, 8)
     """
 
-    def test_extreme_positive_normalized_to_full_green(self):
-        # When the active set's max |score| is 0.15, a score of 0.15
-        # should land at the green endpoint (#10b981).
+    def test_extreme_positive_normalized_to_deep_green(self):
         c = polarity_fill(0.15, 0.15)
-        assert c == "rgba(16, 185, 129, 0.85)"
+        assert c == "rgb(0, 150, 0)"
 
-    def test_extreme_negative_normalized_to_full_red(self):
+    def test_extreme_negative_normalized_to_deep_red(self):
         c = polarity_fill(-0.12, 0.12)
-        assert c == "rgba(239, 68, 68, 0.85)"
+        assert c == "rgb(170, 0, 0)"
 
-    def test_zero_normalized_to_muted(self):
+    def test_zero_normalized_to_dark_green(self):
         c = polarity_fill(0.0, 0.15)
-        assert c == "rgba(139, 148, 158, 0.85)"
+        assert c == "rgb(25, 80, 25)"
 
-    def test_half_max_lerps_halfway(self):
-        # score/max = 0.5 -> t = 0.5, lerp(muted, green, 0.5)
-        # = (78, 167, 144)
+    def test_moderate_positive_returns_green(self):
+        # 0.075 / 0.15 = 0.5 -> 0.2 <= t < 0.6 -> GREEN
         c = polarity_fill(0.075, 0.15)
-        assert c == "rgba(78, 166, 144, 0.85)"
+        assert c == "rgb(30, 180, 30)"
+
+    def test_slight_positive_returns_dark_green(self):
+        # 0.02 / 0.15 = 0.133 -> 0 < t < 0.2 -> DARK_GREEN
+        c = polarity_fill(0.02, 0.15)
+        assert c == "rgb(25, 80, 25)"
+
+    def test_slight_negative_returns_dark_red(self):
+        # -0.02 / 0.15 = -0.133 -> -0.2 < t < 0 -> DARK_RED
+        c = polarity_fill(-0.02, 0.15)
+        assert c == "rgb(90, 25, 25)"
+
+    def test_moderate_negative_returns_red(self):
+        # -0.075 / 0.15 = -0.5 -> -0.6 < t <= -0.2 -> RED
+        c = polarity_fill(-0.075, 0.15)
+        assert c == "rgb(210, 40, 40)"
 
     def test_single_active_model_gets_full_saturation(self):
-        # If the only active model has score 0.05, the dashboard is
-        # showing "this is the only signal, and it's positive" -> full
-        # green is the right read.
         c = polarity_fill(0.05, 0.05)
-        assert c == "rgba(16, 185, 129, 0.85)"
+        assert c == "rgb(0, 150, 0)"
 
-    def test_all_flat_returns_muted(self):
-        # max_abs_score = 0 (degenerate) -> muted for any score.
-        assert polarity_fill(0.0, 0.0) == "rgba(139, 148, 158, 0.85)"
-        assert polarity_fill(0.5, 0.0) == "rgba(139, 148, 158, 0.85)"
-        assert polarity_fill(-0.5, 0.0) == "rgba(139, 148, 158, 0.85)"
+    def test_all_flat_returns_dark_green(self):
+        # max_abs = 0 (degenerate) -> DARK_GREEN for any non-None score.
+        assert polarity_fill(0.0, 0.0) == "rgb(25, 80, 25)"
+        assert polarity_fill(0.5, 0.0) == "rgb(25, 80, 25)"
+        assert polarity_fill(-0.5, 0.0) == "rgb(25, 80, 25)"
 
     def test_went_dark_unaffected_by_scale(self):
-        # The went-dark sentinel (None) is always yellow.
-        assert polarity_fill(None, 0.0) == "rgba(234, 179, 8, 0.85)"
-        assert polarity_fill(None, 1.0) == "rgba(234, 179, 8, 0.85)"
+        assert polarity_fill(None, 0.0) == "rgb(234, 179, 8)"
+        assert polarity_fill(None, 1.0) == "rgb(234, 179, 8)"
 
     def test_live_db_range_now_visible(self):
-        """Regression test for the v1.7.1 -> v1.7.2 fix.
+        """Regression test for v1.7.1 -> v1.7.2 -> v1.7.3 fix chain.
 
-        On 2026-06-17 the live polarity scores were all in [-0.15, +0.15].
-        Under the old fixed-threshold bin_polarity, all of these landed
-        at near-muted because score itself was the lerp parameter.
-        Under polarity_fill with the same max_abs, the strongest signal
-        hits full green and the rest spread across the gradient.
+        Live polarity scores on 2026-06-17 lived in [-0.15, +0.15].
+        v1.7.1 had wrong area; v1.7.2 lerp collapsed to muted;
+        v1.7.3 bins to saturated 5-step Finviz palette.
         """
         max_abs = 0.147
-        # Strongest positive -> full green
-        xiaomi = polarity_fill(0.147, max_abs)
-        assert xiaomi == "rgba(16, 185, 129, 0.85)"
-        # Strongest negative -> near-full red (|-0.122/0.147|=0.83, lerp
-        # at t+1=1.83 clamped to 1.0... wait, t=-0.83, t+1=0.17, lerp
-        # red->muted at 0.17 = (239-(239-139)*0.17, 68+(148-68)*0.17,
-        # 68+(158-68)*0.17) = (217, 84, 87)
-        glm = polarity_fill(-0.122, max_abs)
-        assert glm == "rgba(222, 82, 83, 0.85)"
-        # Weakest negative -> still slightly red, NOT muted
-        # (the bug was: this rendered as muted). |-0.042/0.147|=0.286,
-        # t=-0.286, t+1=0.714, lerp(red,muted,0.714) = (239-71, 68+57,
-        # 68+64) = (168, 125, 132)
-        moonshot = polarity_fill(-0.042, max_abs)
-        assert moonshot == "rgba(168, 125, 132, 0.85)"
+        # t = 0.147/0.147 = 1.0 -> DEEP_GREEN
+        assert polarity_fill(0.147, max_abs) == "rgb(0, 150, 0)"
+        # t = -0.122/0.147 = -0.83 -> DEEP_RED
+        assert polarity_fill(-0.122, max_abs) == "rgb(170, 0, 0)"
+        # t = 0.129/0.147 = 0.878 -> DEEP_GREEN
+        assert polarity_fill(0.129, max_abs) == "rgb(0, 150, 0)"
+        # t = 0.063/0.147 = 0.429 -> GREEN
+        assert polarity_fill(0.063, max_abs) == "rgb(30, 180, 30)"
+        # t = 0.050/0.147 = 0.340 -> GREEN
+        assert polarity_fill(0.050, max_abs) == "rgb(30, 180, 30)"
+        # t = 0.029/0.147 = 0.197 -> DARK_GREEN (0 < t < 0.2)
+        assert polarity_fill(0.029, max_abs) == "rgb(25, 80, 25)"
+        # t = -0.042/0.147 = -0.286 -> RED
+        assert polarity_fill(-0.042, max_abs) == "rgb(210, 40, 40)"
 
     def test_score_clamped_to_unit_range(self):
-        # A score > max_abs should still be treated as full saturation,
-        # not overshoot. (Defensive.)
+        # score > max_abs -> t=1.0 -> DEEP_GREEN (no overshoot).
         c = polarity_fill(0.5, 0.15)
-        assert c == "rgba(16, 185, 129, 0.85)"
+        assert c == "rgb(0, 150, 0)"
+        # score < -max_abs -> t=-1.0 -> DEEP_RED
+        c = polarity_fill(-0.5, 0.15)
+        assert c == "rgb(170, 0, 0)"
+
+    def test_palette_is_solid_rgb_not_rgba(self):
+        """v1.7.3: no more rgba() with 0.85 alpha. The alpha mixed
+        with the dark background and washed out the colors.
+        """
+        for s in [0.0, 0.05, -0.05, 0.15, -0.15]:
+            c = polarity_fill(s, 0.15)
+            assert c.startswith("rgb("), f"score {s} -> {c} is not solid rgb()"
+            assert "rgba" not in c, f"score {s} -> {c} still has alpha"
+
+    def test_bin_thresholds_match_finviz_convention(self):
+        # The 5-step palette should match Finviz boundaries:
+        #   |t| <= 0.2: dark bins
+        #   0.2 < |t| <= 0.6: saturated bins
+        #   |t| > 0.6: deep bins
+        for t, expected in [
+            (-1.0, "rgb(170, 0, 0)"),
+            (-0.6, "rgb(170, 0, 0)"),
+            (-0.59, "rgb(210, 40, 40)"),
+            (-0.2, "rgb(210, 40, 40)"),
+            (-0.19, "rgb(90, 25, 25)"),
+            (-0.01, "rgb(90, 25, 25)"),
+            (0.01, "rgb(25, 80, 25)"),
+            (0.19, "rgb(25, 80, 25)"),
+            (0.2, "rgb(30, 180, 30)"),
+            (0.59, "rgb(30, 180, 30)"),
+            (0.6, "rgb(0, 150, 0)"),
+            (1.0, "rgb(0, 150, 0)"),
+        ]:
+            assert polarity_fill(t, 1.0) == expected, f"t={t} should be {expected}"
 
 
-# ---------- end polarity_fill (v1.7.2) ---------------------------------------
+# ---------- end polarity_fill (v1.7.2 + v1.7.3) -----------------------------
 
 # ---------- compute_polarity -------------------------------------------------
 
