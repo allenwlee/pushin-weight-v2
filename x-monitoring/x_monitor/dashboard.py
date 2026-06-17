@@ -23,6 +23,11 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from .account_graph import build_force_directed
 from .config import Config
 from .store import Store
+from .treemap import (
+    TreemapTile,
+    build_treemap_svg,
+    compute_polarity,
+)
 
 log = logging.getLogger(__name__)
 
@@ -338,10 +343,11 @@ class DashboardApp:
         app.jinja_env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
         app.config["JSON_SORT_KEYS"] = False
         self.app = app
+        self._validate_dashboard_config()
         self._register_routes()
 
     def _build_cards(self, db_path) -> tuple[list[dict], dict | None]:
-        """Build card payloads for all enabled models. Shared by /, /api/grid.json, /api/grid.html."""
+        """Build card payloads for all enabled models. Shared by /grid, /api/grid.json, /api/grid.html."""
         cards: list[dict] = []
         latest_run = _load_latest_run(self.runs_dir)
         store = Store(db_path)
@@ -357,19 +363,163 @@ class DashboardApp:
             store.close()
         return cards, latest_run
 
+    def _build_treemap_tiles(
+        self, latest_run: dict | None
+    ) -> list[TreemapTile]:
+        """Build TreemapTile list for all enabled models.
+
+        Anchors 'now' to the latest run's finished_at (falls back to wall-clock),
+        then for each enabled model:
+          - area_weight = Q1_count + Q4_count in the current N-day window
+          - polarity_score = compute_polarity(...) in the current + prior N-day windows
+
+        Per-model failures (e.g. broken store read) are caught and rendered as
+        no-data tiles so one bad model doesn't take the whole page down.
+        """
+        n_days = self.config.dashboard.treemap_volume_window_days
+        # Anchor 'now' to the last run's finished_at when available, mirroring
+        # serialize_grid_card so the polarity windows are stable across cycles.
+        now = datetime.now(timezone.utc)
+        if latest_run and latest_run.get("finished_at"):
+            try:
+                now = datetime.fromisoformat(
+                    latest_run["finished_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+        current_window = (now - timedelta(days=n_days), now)
+        prior_window = (now - timedelta(days=2 * n_days), now - timedelta(days=n_days))
+
+        store = Store(self.db_path)
+        tiles: list[TreemapTile] = []
+        try:
+            for m in self.config.enabled_models:
+                try:
+                    posts = store.get_all_posts(m)
+                    # area_weight = Q1 + Q4 in the current window
+                    area_weight = 0
+                    current_lower, current_upper = current_window
+                    for p in posts:
+                        sqid = p.get("source_query_id") or ""
+                        if sqid not in ("Q1", "Q4"):
+                            continue
+                        dt = _parse_post_timestamp(p.get("created_at"))
+                        if dt is None:
+                            continue
+                        if current_lower <= dt < current_upper:
+                            area_weight += 1
+                    polarity = compute_polarity(posts, current_window, prior_window)
+                except Exception as e:
+                    log.warning(
+                        "treemap tile build failed for %s: %s — rendering as no-data",
+                        m, e,
+                    )
+                    area_weight = 0
+                    polarity = None
+                tiles.append(
+                    TreemapTile(
+                        model_id=m,
+                        display_name=MODEL_DISPLAY_NAMES.get(m, m),
+                        accent_color=MODEL_ACCENT_COLORS.get(m, "#9ca3af"),
+                        area_weight=float(area_weight),
+                        polarity_score=polarity,
+                    )
+                )
+        finally:
+            store.close()
+        # R13: sort by area desc, then display_name asc for stable layout
+        tiles.sort(key=lambda t: (-t.area_weight, t.display_name))
+        return tiles
+
+    def _validate_dashboard_config(self) -> None:
+        """Startup check that every enabled_model has a display_name + accent_color.
+
+        Raised at app boot (not request time) so a misconfigured enabled_models
+        list fails fast and visibly, not silently with a fallback accent.
+        """
+        for m in self.config.enabled_models:
+            if m not in MODEL_DISPLAY_NAMES:
+                raise ValueError(
+                    f"enabled_model '{m}' has no entry in MODEL_DISPLAY_NAMES. "
+                    f"Add it before restarting the dashboard."
+                )
+            if m not in MODEL_ACCENT_COLORS:
+                raise ValueError(
+                    f"enabled_model '{m}' has no entry in MODEL_ACCENT_COLORS. "
+                    f"Add it before restarting the dashboard."
+                )
+
     def _register_routes(self) -> None:
         app = self.app
         data_dir = self.data_dir
         db_path = self.db_path
         window_days = self.config.dashboard.window_days
+        treemap_n_days = self.config.dashboard.treemap_volume_window_days
 
         @app.route("/")
         def index():
+            # Treemap front page (Finviz-style). The htmx wrapper polls the
+            # partial endpoint every Ns; this initial render is the
+            # same data the first poll will return.
+            latest_run = _load_latest_run(self.runs_dir)
+            tiles = self._build_treemap_tiles(latest_run)
+            svg = build_treemap_svg(tiles, width=1200, height=800)
+            return render_template(
+                "treemap.html.j2",
+                treemap_svg=svg,
+                tiles=tiles,
+                treemap_window_days=treemap_n_days,
+                poll_seconds=self.config.dashboard.poll_seconds,
+                last_run_at=(latest_run or {}).get("finished_at"),
+            )
+
+        @app.route("/grid")
+        def grid():
+            # 9-card grid (preserved from v1.6). Moved off / when the treemap
+            # became the default front page.
             cards, _latest_run = self._build_cards(db_path)
             return render_template(
                 "grid.html.j2",
                 cards=cards,
                 poll_seconds=self.config.dashboard.poll_seconds,
+            )
+
+        @app.route("/api/treemap.html")
+        def api_treemap_html():
+            # SVG-only htmx partial — no <main> wrapper. The wrapping
+            # <main id="treemap"> on the initial page persists, so the
+            # hx-trigger attribute stays attached and polling continues.
+            latest_run = _load_latest_run(self.runs_dir)
+            tiles = self._build_treemap_tiles(latest_run)
+            svg = build_treemap_svg(tiles, width=1200, height=800)
+            return render_template(
+                "_treemap_svg.html.j2",
+                treemap_svg=svg,
+            )
+
+        @app.route("/api/treemap.json")
+        def api_treemap_json():
+            # Structured payload for external consumers. Per R13, returns
+            # the sorted tile list + fetched_at + window metadata.
+            latest_run = _load_latest_run(self.runs_dir)
+            tiles = self._build_treemap_tiles(latest_run)
+            return jsonify(
+                {
+                    "tiles": [
+                        {
+                            "model_id": t.model_id,
+                            "display_name": t.display_name,
+                            "accent_color": t.accent_color,
+                            "area_weight": t.area_weight,
+                            "polarity_score": t.polarity_score,
+                        }
+                        for t in tiles
+                    ],
+                    "fetched_at": datetime.now(timezone.utc).isoformat(),
+                    "window": {
+                        "treemap_volume_window_days": treemap_n_days,
+                    },
+                }
             )
 
         @app.route("/api/grid.html")

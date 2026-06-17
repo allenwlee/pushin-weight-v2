@@ -28,7 +28,10 @@ from typing import Iterable, NamedTuple
 
 import squarify
 
-from .dashboard import _QID_TO_SIGNAL, _parse_post_timestamp  # noqa: F401  (re-exported for tests)
+# NOTE: We intentionally do NOT import _QID_TO_SIGNAL or _parse_post_timestamp
+# from .dashboard at module load. dashboard.py imports build_treemap_svg from
+# THIS module, so any top-level import here would form a cycle. Both names
+# are resolved lazily inside compute_polarity below.
 
 
 # CSS color tokens from x_monitor/static/dashboard.css (lines 4-14).
@@ -122,6 +125,12 @@ def compute_polarity(
 
     Returns a float in approximately [-1.0, +1.0] or None for the went-dark case.
     """
+    # Lazy import: dashboard.py imports from this module at top-level, so a
+    # module-level import here would cycle. These two helpers are pure
+    # functions of `dashboard.py`'s module state, so resolving them at call
+    # time is safe and avoids the cycle.
+    from .dashboard import _QID_TO_SIGNAL, _parse_post_timestamp
+
     current_lower, current_upper = current_window
     prior_lower, prior_upper = prior_window
 

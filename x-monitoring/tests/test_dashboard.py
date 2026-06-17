@@ -80,7 +80,8 @@ def test_serialize_grid_card_query_rot_sentinel():
         assert any("q_error:Q3" in s for s in card["degraded_sentinels"])
 
 
-def test_dashboard_index_renders_all_known_cards():
+def test_dashboard_grid_renders_all_known_cards():
+    # Grid moved to /grid in v1.7 (treemap took /).
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
         cfg = Config(enabled_models=list(MODEL_DISPLAY_NAMES.keys()), daily_ceiling=333)
@@ -88,7 +89,7 @@ def test_dashboard_index_renders_all_known_cards():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        resp = client.get("/")
+        resp = client.get("/grid")
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         for m in cfg.enabled_models:
@@ -154,17 +155,15 @@ def test_dashboard_known_model_drilldown_renders_4_tabs():
             assert f'data-tab="{tab}"' in body
 
 
-def test_dashboard_adding_tenth_model_yields_tenth_card():
+def test_dashboard_grid_adding_models_yields_matching_card_count():
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
-        # Use a real model from the registry + a 10th would require extending
-        # the registry. Instead, test that the count matches enabled_models.
         cfg = Config(enabled_models=["minimax", "qwen"], daily_ceiling=333)
         from x_monitor.dashboard import DashboardApp
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        body = client.get("/").get_data(as_text=True)
+        body = client.get("/grid").get_data(as_text=True)
         assert body.count('class="model-card"') == 2
 
 
@@ -180,7 +179,7 @@ def test_dashboard_drilldown_known_model_200():
         assert resp.status_code == 200
 
 
-def test_dashboard_htmx_script_included_exactly_once():
+def test_dashboard_grid_htmx_script_included_exactly_once():
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
@@ -188,7 +187,7 @@ def test_dashboard_htmx_script_included_exactly_once():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        body = client.get("/").get_data(as_text=True)
+        body = client.get("/grid").get_data(as_text=True)
         # htmx script tag
         assert body.count("htmx.org") == 1
 
@@ -354,7 +353,7 @@ class TestGridHtmlPollEndpoint:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/").get_data(as_text=True)
+            body = client.get("/grid").get_data(as_text=True)
             assert 'hx-get="/api/grid.html"' in body
             # innerHTML swap keeps <main> alive across polls
             assert 'hx-swap="innerHTML"' in body
@@ -422,7 +421,7 @@ class TestTrendChartAssets:
                 assert len(payload["series"]) == 6
 
     def test_grid_page_loads_chartjs_from_cdn(self):
-        """The / page must include the Chart.js CDN script tag."""
+        """The /grid page must include the Chart.js CDN script tag."""
         with tempfile.TemporaryDirectory() as d:
             data = Path(d)
             cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
@@ -430,12 +429,12 @@ class TestTrendChartAssets:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/").get_data(as_text=True)
+            body = client.get("/grid").get_data(as_text=True)
             assert "chart.js" in body
             assert "unpkg.com" in body
 
     def test_grid_page_loads_static_trend_chart_js(self):
-        """The / page must reference the local trend-chart.js asset."""
+        """The /grid page must reference the local trend-chart.js asset."""
         with tempfile.TemporaryDirectory() as d:
             data = Path(d)
             cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
@@ -443,7 +442,7 @@ class TestTrendChartAssets:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/").get_data(as_text=True)
+            body = client.get("/grid").get_data(as_text=True)
             assert "trend-chart.js" in body
 
     def test_model_detail_page_loads_chartjs(self):
@@ -848,7 +847,7 @@ class TestStalenessIndicator:
 
     def test_staleness_indicator_present_in_grid(self, tmp_path):
         client = self._make_client(tmp_path)
-        r = client.get("/")
+        r = client.get("/grid")
         assert r.status_code == 200
         body = r.get_data(as_text=True)
         assert 'id="last-run-stamp"' in body
@@ -878,14 +877,14 @@ class TestStalenessIndicator:
         app = DashboardApp(
             Config(enabled_models=["minimax"], daily_ceiling=333), data, db_path=data / "x.db",
         )
-        r = app.app.test_client().get("/")
+        r = app.app.test_client().get("/grid")
         body = r.get_data(as_text=True)
         assert "2026-06-16T00:00:00" in body
         assert "last updated: 2026-06-16T00:00:00+00:00" in body
 
     def test_staleness_indicator_when_never_run(self, tmp_path):
         client = self._make_client(tmp_path, with_runs=False)
-        r = client.get("/")
+        r = client.get("/grid")
         body = r.get_data(as_text=True)
         assert "last updated: never" in body
 
@@ -895,3 +894,206 @@ class TestStalenessIndicator:
         assert r.status_code == 200
         body = r.get_data(as_text=True)
         assert "updateLastRun" in body
+
+
+# --- v1.7 treemap front page + nav strip + htmx partial -----------------
+
+class TestTreemapRoutes:
+    """The treemap front page replaces the grid on / in v1.7. The grid
+    itself is preserved at /grid."""
+
+    def test_treemap_root_renders_svg_and_nav(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax", "qwen", "deepseek", "glm"],
+                daily_ceiling=333,
+            ),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        # Nav strip with both tabs
+        assert "view-tabs" in body
+        assert 'href="/"' in body
+        assert 'href="/grid"' in body
+        # Initial render embeds the SVG
+        assert '<svg' in body
+        assert 'class="treemap"' in body
+        # htmx polling on the partial endpoint
+        assert 'hx-get="/api/treemap.html"' in body
+        assert 'hx-swap="innerHTML"' in body
+        # Active tab is Treemap on this page
+        assert 'aria-current="page"' in body
+        # Legend present
+        assert "Polarity" in body or "polarity" in body
+
+    def test_treemap_grid_route_preserved(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/grid")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        # Grid-specific marker (a model-card div per enabled model)
+        assert body.count('class="model-card"') == 1
+        # Nav strip still present
+        assert "view-tabs" in body
+        # Active tab is Grid on this page (aria-current on the grid tab)
+        assert 'href="/grid"' in body
+
+    def test_api_treemap_html_returns_svg_partial_only(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(enabled_models=["minimax", "qwen"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.html")
+        assert r.status_code == 200
+        # text/html, not application/json
+        assert "text/html" in r.headers.get("Content-Type", "")
+        body = r.get_data(as_text=True)
+        # SVG only, no <main> wrapper (the client keeps the wrapping element)
+        assert '<svg' in body
+        assert "<main" not in body
+
+    def test_api_treemap_json_has_tiles_and_window(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(enabled_models=["minimax", "qwen"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        assert r.status_code == 200
+        body = r.get_json()
+        assert "tiles" in body
+        assert "fetched_at" in body
+        assert "window" in body
+        assert body["window"]["treemap_volume_window_days"] == 7
+        assert len(body["tiles"]) == 2
+        for t in body["tiles"]:
+            for key in (
+                "model_id", "display_name", "accent_color",
+                "area_weight", "polarity_score",
+            ):
+                assert key in t
+        # Sort order: descending area_weight, then display_name
+        weights = [t["area_weight"] for t in body["tiles"]]
+        assert weights == sorted(weights, reverse=True)
+
+    def test_treemap_tile_count_matches_enabled_models(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        enabled = ["minimax", "qwen", "deepseek"]
+        app = DashboardApp(
+            Config(enabled_models=enabled, daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        body = r.get_json()
+        # Tiles are sorted by (-area_weight, display_name) per R13. With no
+        # data, the secondary sort is display_name asc — so we just check
+        # the set of model_ids is the set of enabled models, not order.
+        assert len(body["tiles"]) == len(enabled)
+        got = {t["model_id"] for t in body["tiles"]}
+        assert got == set(enabled)
+
+    def test_treemap_validates_enabled_models_at_startup(self, tmp_path):
+        # An unknown model id in enabled_models should fail at construction
+        # time, not silently render a fallback accent at request time.
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        with pytest.raises(Exception):  # ValidationError or ValueError
+            DashboardApp(
+                Config(enabled_models=["not_a_real_model"], daily_ceiling=333),
+                data, db_path=data / "x.db",
+            )
+
+    def test_treemap_tiles_sort_by_area_then_name(self, tmp_path):
+        from datetime import datetime, timedelta, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        from x_monitor.store import Store
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        # Anchor "now" to a known timestamp so the posts fall in the
+        # current 7-day window.
+        anchor = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{anchor.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        db_path = data / "x.db"
+        store = Store(db_path)
+        # Q1+Q4 counts per model: minimax=10, qwen=5, deepseek=5
+        counts = {"minimax": 10, "qwen": 5, "deepseek": 5}
+        all_posts = []
+        for m, n in counts.items():
+            for i in range(n):
+                qid = "Q1" if i % 2 == 0 else "Q4"
+                all_posts.append(
+                    {
+                        "tweet_id": f"t_{m}_{i}",
+                        "model_id": m,
+                        "author_handle": f"u_{i}",
+                        "text": "x",
+                        "favorite_count": 0,
+                        "created_at": (anchor - timedelta(hours=i + 1))
+                        .strftime("%a %b %d %H:%M:%S %z %Y"),
+                        "source_query_id": qid,
+                    }
+                )
+        store.insert_posts(all_posts)
+        store.close()
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax", "qwen", "deepseek"],
+                daily_ceiling=333,
+            ),
+            data, db_path=db_path,
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        tiles = r.get_json()["tiles"]
+        # minimax first (highest area), then qwen + deepseek tied on area
+        assert tiles[0]["model_id"] == "minimax"
+        # qwen and deepseek are tied on area=5; sort is stable, falls
+        # back to display_name asc.
+        tied = sorted([tiles[1]["display_name"], tiles[2]["display_name"]])
+        assert tied == [tiles[1]["display_name"], tiles[2]["display_name"]]
+

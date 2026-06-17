@@ -13,6 +13,15 @@
 <body>
   <header class="topbar">
     <h1>x-monitor</h1>
+    {# Topbar nav strip: 2 tabs (Treemap | 9-Card Grid) with active state set
+       server-side based on request.endpoint. aria-current="page" gives screen
+       readers the active tab. #}
+    <nav class="view-tabs" aria-label="View switcher">
+      <a class="view-tab" href="/">Treemap</a>
+      <a class="view-tab is-active"
+         href="/grid"
+         aria-current="page">9-Card Grid</a>
+    </nav>
     <span class="muted" id="last-run-stamp"
           data-finished-at="{{ cards[0].last_run_at or '' }}">
       last updated: {{ cards[0].last_run_at or 'never' }}

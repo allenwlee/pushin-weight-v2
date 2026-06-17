@@ -1,0 +1,51 @@
+{# {{AGENT_ATTRIBUTION}} #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>x-monitor — treemap</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>x-monitor</h1>
+    {# Topbar nav strip: 2 tabs (Treemap | 9-Card Grid) with active state set
+       server-side based on request.endpoint. aria-current="page" gives screen
+       readers the active tab. #}
+    <nav class="view-tabs" aria-label="View switcher">
+      <a class="view-tab is-active"
+         href="/"
+         aria-current="page">Treemap</a>
+      <a class="view-tab"
+         href="/grid">9-Card Grid</a>
+    </nav>
+    <span class="muted" id="last-run-stamp"
+          data-finished-at="{{ last_run_at or '' }}">
+      last updated: {{ last_run_at or 'never' }}
+    </span>
+    <span class="muted">{{ tiles|length }} models · {{ treemap_window_days }}d window · polling every {{ poll_seconds }}s</span>
+  </header>
+
+  {# Polarity legend — fixed at the top of the page so users can decode
+     tile fills without a hover (we don't ship hover in v1). #}
+  <div class="treemap-legend" role="note" aria-label="Polarity legend">
+    <span class="legend-label">Polarity (rate change vs prior {{ treemap_window_days }}d):</span>
+    <span class="legend-cell" style="background: var(--red);"></span><span>criticism rising</span>
+    <span class="legend-cell" style="background: var(--muted);"></span><span>flat</span>
+    <span class="legend-cell" style="background: var(--green);"></span><span>praise rising</span>
+    <span class="legend-cell" style="background: var(--yellow);"></span><span>went dark</span>
+    <span class="legend-cell" style="background: #9ca3af; opacity: 0.4;"></span><span>no data</span>
+  </div>
+
+  {# hx-swap="innerHTML" so the <main> element persists across polls — that
+     keeps the hx-trigger attribute attached, so polling continues. The initial
+     render includes the SVG so the page is meaningful before the first poll. #}
+  <main id="treemap" class="treemap-wrap"
+        hx-get="/api/treemap.html"
+        hx-trigger="every {{ poll_seconds }}s"
+        hx-swap="innerHTML">
+    {{ treemap_svg | safe }}
+  </main>
+</body>
+</html>
