@@ -57,6 +57,73 @@ _BRAND_RE = re.compile(
 )
 
 
+# Supported display locales. Anything else falls back to "en" with a
+# warning log. The columns are populated by x_monitor.translator (Unit 4)
+# and consumed by _pick_text (Unit 6).
+SUPPORTED_LOCALES: tuple[str, ...] = ("en", "zh-CN", "zh_cn")
+
+# Maps a user-facing locale (e.g. "zh-CN") to the DB column suffix
+# used in `text_<suffix>`. Both "zh-CN" and "zh_cn" map to "zh_cn".
+_LOCALE_TO_COLUMN: dict[str, str] = {
+    "en": "en",
+    "zh-CN": "zh_cn",
+    "zh_cn": "zh_cn",
+}
+
+
+def normalize_locale(locale: str | None) -> str:
+    """Return a supported locale or "en" (with a warning log) for unsupported.
+
+    Args:
+        locale: the user-supplied locale string (from query/cookie).
+            None or empty string → "en".
+
+    Returns:
+        A member of SUPPORTED_LOCALES. Unsupported values fall back
+        to "en" and emit a warning log.
+    """
+    if not locale:
+        return "en"
+    # Case-insensitive check
+    for sup in SUPPORTED_LOCALES:
+        if locale.casefold() == sup.casefold():
+            return sup
+    log.warning(
+        "unsupported display_locale %r; falling back to 'en'", locale
+    )
+    return "en"
+
+
+def _pick_text(
+    post: dict[str, Any],
+    locale: str,
+) -> tuple[str | None, bool]:
+    """Return `(display_text, is_translated)` for a post in the given locale.
+
+    The post is expected to have `text` (source), `text_en`, and
+    `text_zh_cn` columns. The function reads `text_<column>` for the
+    requested locale; if NULL, falls back to the source `text` and
+    sets `is_translated=False`.
+
+    Args:
+        post: dict with at least `text`, `text_en`, `text_zh_cn`.
+        locale: a supported locale from SUPPORTED_LOCALES.
+
+    Returns:
+        A 2-tuple of (text, is_translated). `is_translated` is False
+        when the dashboard is showing the source `text` because the
+        translation is NULL.
+    """
+    column = _LOCALE_TO_COLUMN.get(locale, "en")
+    translated = post.get(f"text_{column}")
+    if translated:
+        return translated, True
+    # Fall back to source text. is_translated=False signals to the
+    # template to render a "translation pending" / "(English source)"
+    # / "(中文原文)" badge.
+    return post.get("text"), False
+
+
 def brand_colorize(text: str) -> str:
     """Colorize model_id matches in `text` with the brand's accent color.
 
@@ -143,8 +210,21 @@ def serialize_grid_card(
     window_days: int = 14,
     latest_run: dict[str, Any] | None = None,
     now: datetime | None = None,
+    display_locale: str = "en",
 ) -> dict[str, Any]:
-    """Return the per-model grid card payload."""
+    """Return the per-model grid card payload.
+
+    Args:
+        model_id: the model slug (e.g. "minimax").
+        posts: list of post dicts (from `Store.get_all_posts`).
+        window_days: total window for the chart (default 14).
+        latest_run: parsed LATEST.json (or None) for sentinel rendering.
+        now: anchor timestamp for window cutoffs (test seam).
+        display_locale: which locale to render top-3 post text in.
+            Default "en". Supported: "en", "zh-CN", "zh_cn".
+            Unsupported → "en" with a warning log.
+    """
+    locale = normalize_locale(display_locale)
     if now is None:
         # Anchor 'now' to the last run's finished_at when available, so
         # the 24h/7d windows stay meaningful even if the DB hasn't been
@@ -209,9 +289,11 @@ def serialize_grid_card(
 
     # Top 3 by like_count (ties broken by recency) — exposes DB column
     # `favorite_count` under the user-facing name `like_count`.
-    top3 = _build_top3(in_window)
-    top3_7d = _build_top3(in_7d)
-    top3_24h = _build_top3(in_24h)
+    # v1.7: thread `locale` into _build_top3 so each top-3 row's
+    # `display_text` comes from the chosen locale (text_en / text_zh_cn).
+    top3 = _build_top3(in_window, locale=locale)
+    top3_7d = _build_top3(in_7d, locale=locale)
+    top3_24h = _build_top3(in_24h, locale=locale)
 
     # Degraded sentinels
     sentinels: list[str] = []
@@ -242,16 +324,28 @@ def serialize_grid_card(
         "n_posts_24h": len(in_24h),
         "degraded_sentinels": sentinels,
         "last_run_at": (latest_run or {}).get("finished_at"),
+        "display_locale": locale,
     }
 
 
-def _build_top3(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_top3(
+    posts: list[dict[str, Any]],
+    *,
+    locale: str = "en",
+) -> list[dict[str, Any]]:
     """Build the top-3 most-liked list for a window of posts.
 
     Same dict shape as the legacy `top3_posts` key: exposes DB column
     `favorite_count` under the user-facing name `like_count`, prefers
     a fetched headline over the raw tweet text for `display_text`,
     and truncates `text` to 200 chars.
+
+    v1.7: threads `locale` into _pick_text so each row's
+    `display_text` is the chosen locale's translation (text_<locale>).
+    Headline preference: if the post has a fetched headline, the
+    headline wins (the headline is English-source per the plan, so the
+    locale toggle is opt-in for headlines). When the headline is
+    missing, _pick_text chooses between text_<locale> and source text.
     """
     sorted_posts = sorted(
         posts,
@@ -266,10 +360,15 @@ def _build_top3(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if len(text) > 200:
             text = text[:197] + "..."
         headline = (p.get("headline") or "").strip() or None
-        # Headline preference: if the post has a fetched headline,
-        # render the headline instead of the bare URL. The original
-        # text is still passed to the template as a fallback.
-        display_text = headline if headline else text
+        if headline:
+            # Headline wins (English source per the plan). Mark
+            # is_translated=False because the headline is not the
+            # translation — the user is seeing the original English
+            # headline regardless of locale.
+            display_text = headline
+            is_translated = False
+        else:
+            display_text, is_translated = _pick_text(p, locale)
         top3.append(
             {
                 "tweet_id": p.get("tweet_id") or p.get("id"),
@@ -277,6 +376,7 @@ def _build_top3(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "headline": headline,
                 "headline_source": p.get("headline_source"),
                 "display_text": display_text,
+                "is_translated": is_translated,
                 "like_count": p.get("favorite_count") or 0,
                 "author_handle": p.get("author_handle"),
                 "url": _tweet_url(p.get("author_handle"), p.get("tweet_id") or p.get("id")),
@@ -333,21 +433,40 @@ class DashboardApp:
         self._register_routes()
 
     def _build_cards(self, db_path) -> tuple[list[dict], dict | None]:
-        """Build card payloads for all enabled models. Shared by /, /api/grid.json, /api/grid.html."""
+        """Build card payloads for all enabled models. Shared by /, /api/grid.json, /api/grid.html.
+
+        v1.7: reads the display locale from the request's `?locale=`
+        query param (highest priority) or the `locale` cookie
+        (fallback), defaulting to "en". The same locale is used for
+        every card on the page.
+        """
         cards: list[dict] = []
         latest_run = _load_latest_run(self.runs_dir)
+        locale = self._resolve_locale()
         store = Store(db_path)
         try:
             for m in self.config.enabled_models:
                 posts = store.get_all_posts(m)
                 cards.append(
                     serialize_grid_card(
-                        m, posts, window_days=self.config.dashboard.window_days, latest_run=latest_run
+                        m, posts, window_days=self.config.dashboard.window_days,
+                        latest_run=latest_run, display_locale=locale,
                     )
                 )
         finally:
             store.close()
         return cards, latest_run
+
+    def _resolve_locale(self) -> str:
+        """Read the display locale from the current request.
+
+        Priority: `?locale=` query param > `locale` cookie > "en".
+        Invalid locales fall back to "en" (with a warning log) via
+        normalize_locale.
+        """
+        from flask import request
+        locale = request.args.get("locale") or request.cookies.get("locale")
+        return normalize_locale(locale)
 
     def _register_routes(self) -> None:
         app = self.app
@@ -362,6 +481,7 @@ class DashboardApp:
                 "grid.html.j2",
                 cards=cards,
                 poll_seconds=self.config.dashboard.poll_seconds,
+                active_locale=self._resolve_locale(),
             )
 
         @app.route("/api/grid.html")
@@ -370,7 +490,38 @@ class DashboardApp:
             # Returns innerHTML payload so the wrapping <main> element
             # persists and keeps its hx-trigger attribute attached.
             cards, _latest_run = self._build_cards(db_path)
-            return render_template("_grid_cards.html.j2", cards=cards)
+            return render_template(
+                "_grid_cards.html.j2",
+                cards=cards,
+                active_locale=self._resolve_locale(),
+            )
+
+        @app.post("/api/set_locale")
+        def api_set_locale():
+            """Set the `locale` cookie. Returns 200 on success, 400 on invalid.
+
+            The form field is `locale`; valid values are "en" and "zh-CN"
+            (plus the alias "zh_cn"). Anything else → 400.
+            """
+            from flask import make_response, redirect, request
+            locale = (request.form.get("locale") or "").strip()
+            if not locale:
+                return jsonify({"error": "missing locale param"}), 400
+            # Validate against the supported set; reject unknown locales
+            if not any(locale.casefold() == s.casefold() for s in SUPPORTED_LOCALES):
+                return jsonify({"error": f"unsupported locale: {locale!r}"}), 400
+            # Round-trip to the canonical spelling (e.g. "ZH-cn" → "zh-CN")
+            canonical = next(
+                s for s in SUPPORTED_LOCALES
+                if s.casefold() == locale.casefold()
+            )
+            resp = make_response(jsonify({"locale": canonical}), 200)
+            # 1 year, path=/ so all routes see it
+            resp.set_cookie(
+                "locale", canonical,
+                max_age=60 * 60 * 24 * 365, path="/", samesite="Lax",
+            )
+            return resp
 
         @app.route("/api/grid.json")
         def api_grid():

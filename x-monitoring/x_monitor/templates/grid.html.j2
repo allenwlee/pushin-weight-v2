@@ -1,6 +1,6 @@
 {# {{AGENT_ATTRIBUTION}} #}
 <!doctype html>
-<html lang="en">
+<html lang="{{ active_locale.split('-')[0] }}">
 <head>
   <meta charset="utf-8">
   <title>x-monitor — {{ cards|length }} models</title>
@@ -18,6 +18,20 @@
       last updated: {{ cards[0].last_run_at or 'never' }}
     </span>
     <span class="muted">{{ cards|length }} models · polling every {{ poll_seconds }}s</span>
+    <nav class="locale-switcher" aria-label="Display language">
+      {# POST form sets the `locale` cookie via /api/set_locale.
+         The hx-get poll on <main> below preserves the cookie on
+         subsequent requests, so the locale sticks across polls. #}
+      <form method="POST" action="/api/set_locale" class="locale-form">
+        <button type="submit" name="locale" value="en"
+                class="locale-link {% if active_locale == 'en' %}active{% endif %}"
+                aria-label="English">EN</button>
+        <span class="locale-sep" aria-hidden="true">|</span>
+        <button type="submit" name="locale" value="zh-CN"
+                class="locale-link {% if active_locale in ('zh-CN', 'zh_cn') %}active{% endif %}"
+                aria-label="简体中文">中文</button>
+      </form>
+    </nav>
   </header>
   {# hx-swap="innerHTML" so the <main> element persists across polls — that
      keeps the hx-trigger attribute attached, so polling continues. The JSON

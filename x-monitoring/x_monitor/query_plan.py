@@ -1,72 +1,53 @@
 # {{AGENT_ATTRIBUTION}}
-"""Build the per-cycle call list from accounts + intent buckets (v1.6).
+"""Per-cycle call planning for x-monitor.
 
-In the v1.5 architecture, the pipeline ran 6 queries per model
-(7 brands × 6 = 42 calls/cycle) and the per-tweet `source_query_id`
-attribution came for free. The v1.6 architecture collapses:
+v1.7 redesign (2026-06-17):
 
-  - Account coverage: 1 OR-chain per brand, e.g.
-      (from:MiniMaxAI OR to:MiniMaxAI OR from:STAFF1 OR to:STAFF1
-       OR ... OR from:STAFF10 OR to:STAFF10) min_faves:1
-    = 22 operators at 1 official + 10 staff, under X's ~22-cap.
-  - Intent coverage: 1-3 OR-chains per intent bucket, e.g.
-      ((MiMo OR 小米) OR (DeepSeek OR 深度求索) OR ...)
-      (how OR 怎么 OR 教程 OR ...) min_faves:0
-    = N brand-terms + M intent-terms, split when over the cap.
+The v1.6 plan emitted 7-15 calls per cycle (one account call per brand +
+3 intent buckets, sometimes split across multiple calls to fit the old
+22-OR operator cap). The empirical cap probe on 2026-06-17 confirmed the
+real cap is **character length** (~512, per docs.x.com), not operator
+count — and that the `list:<id>` operator (~12 chars) returns tweets
+from any list (public or private) without scaling the query string.
 
-The per-tweet brand + signal attribution is recovered post-fetch by
-`x_monitor.intent_classifier`. The filter pipeline (relevance, review
-queue) runs unchanged after the post-fetch classify step.
+v1.7 collapses all per-cycle work to **2 calls**:
 
-This module is the source of truth for which calls fire in a cycle.
-`RunPipeline.execute` iterates the PlannedCall list it returns; tests
-target the helpers directly to lock the call-shape invariants.
+  Call A (account):   (list:<x_monitor_list_id>) min_faves:1
+                       — picks up everything from list members,
+                         one place to manage brand coverage.
+  Call B (brand_wide): ((BrandTok1a OR BrandTok1b) OR
+                        (BrandTok2a OR BrandTok2b) OR ... OR
+                        (BrandTokNa OR ...)) min_faves:0
+                       — paren-grouped brand tokens across all
+                         yaml-defined brands, regardless of list
+                         membership. Catches the long tail of
+                         mentions not from the curated handles.
+
+Signal classification is post-fetch in `intent_classifier.classify_signal`
+and `attribute_to_brand` (Unit 2). The query shape no longer encodes
+signal intent — the structure is one wide net, one targeted net.
+
+Length cap guard: `assert_under_length_cap` is called on every emitted
+query so an over-cap query short-circuits to a per-query summary entry
+(status: "length_cap_exceeded") and no credits are burned.
+
+The retired v1.6 `INTENT_BUCKETS`, `_split_brands_to_fit_cap`, and
+`_compose_intent_query` are gone. Tests assert their absence
+(see test_query_plan_v17.py).
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 import yaml
 
-from .accounts import load_accounts, load_staff
-from .queries import (
-    X_OPERATOR_CAP,
-    assert_under_operator_cap,
-    count_x_operators,
-)
+from .queries import X_LENGTH_CAP, assert_under_length_cap
 
 
-# Intent bucket definitions. The post-fetch classifier (intent_classifier.py)
-# must agree on which tokens map to which signal — keep these in sync.
-INTENT_BUCKETS: dict[str, dict[str, object]] = {
-    # Token lists are ORed at the top level of the intent clause.
-    # CJK terms are matched by substring (no \\b), ASCII by word boundary
-    # in the post-fetch classifier.
-    "howto_criticism": {
-        "tokens": [
-            "how", "tutorial", "怎么", "教程", "guide", "如何",
-            "broken", "fails", "bad", "翻车", "不行",
-        ],
-        "expected_signal": "criticism",  # post-fetch bias; classifier may override
-    },
-    "benchmark_tech": {
-        "tokens": [
-            "benchmark", "eval", "paper", "github", "code", "开源",
-        ],
-        "expected_signal": "other",
-    },
-    "praise_other": {
-        "tokens": [
-            "amazing", "incredible", "best", "love", "mind blowing",
-            "🤯", "卧槽", "太强了",
-        ],
-        "expected_signal": "praise",
-    },
-}
+CallKind = Literal["account", "brand_wide"]
 
 
 @dataclass
@@ -74,50 +55,31 @@ class PlannedCall:
     """A single API call to fire this cycle.
 
     Attributes:
-        call_kind: "account" = per-brand from/to chain; "intent" =
-            cross-brand intent bucket.
-        model_id: brand this call maps to. For intent calls, this is
-            the FIRST brand in the included split (used as a placeholder
-            for `source_query_id`; the post-fetch classifier reassigns
-            the real model_id from the tweet content).
-        bucket: None for account calls; intent bucket name for intent calls.
-        query_string: the actual X advanced-search query (operator cap
-            already asserted).
+        call_kind: "account" = list-based fan-in (Call A in v1.7);
+            "brand_wide" = paren-grouped brand-token OR-chain (Call B).
+        model_id: brand this call is attributed to. For Call A
+            (list-based), this is "*" because the list spans all
+            brands — post-fetch `attribute_to_brand` reassigns. For
+            Call B, this is the FIRST brand in the input order (used
+            as a placeholder for `source_query_id`; same reassignment
+            applies).
+        bucket: None for both v1.7 call kinds. Retained for schema
+            stability with the v1.6 contract.
+        query_string: the actual X advanced-search query.
         expected_signal: signal bucket this call primarily targets.
-            Account calls target "release"; intent calls target the
-            bucket's expected_signal.
-        n_operators: top-level OR token count in query_string.
+            Call A targets "release" (faved official posts).
+            Call B targets "other" (the long tail; classifier may
+            upgrade to criticism/praise/etc).
+        query_length: len(query_string) in characters. Verified under
+            `X_LENGTH_CAP` (512) before being returned.
     """
 
-    call_kind: Literal["account", "intent"]
+    call_kind: CallKind
     model_id: str
     bucket: str | None
     query_string: str
     expected_signal: str
-    n_operators: int
-
-
-def _bucket_to_signal(bucket_name: str) -> str:
-    """Map an intent bucket name to its primary expected_signal."""
-    info = INTENT_BUCKETS.get(bucket_name)
-    if not info:
-        return "other"
-    return str(info["expected_signal"])
-
-
-def _extract_brand_tokens(query_string: str) -> list[str]:
-    """Pull the brand-term list from the first `(...)` group of a query.
-
-    The Q2-Q6 query yaml pattern is `(Brand1 OR Brand2 OR ...) (intent ...)
-    min_faves:N`. We parse the first paren group, split on ` OR `, and
-    return the stripped token list. Quoted tokens (e.g., "love it") are
-    preserved as-is so the post-fetch classifier sees them literally.
-    """
-    m = re.search(r"\(([^()]*)\)", query_string)
-    if not m:
-        return []
-    inner = m.group(1)
-    return [tok.strip() for tok in inner.split(" OR ") if tok.strip()]
+    query_length: int
 
 
 def _load_brand_tokens_per_model(
@@ -127,7 +89,8 @@ def _load_brand_tokens_per_model(
 
     Brand tokens are read from the Q2 / Q3 / Q5 / Q6 query strings (the
     intent queries carry the brand OR-clause). If a model has none of
-    those enabled, the brand-token list falls back to [].
+    those enabled, or its yaml is missing, the brand-token list falls
+    back to [] — the model contributes 0 paren groups to Call B.
     """
     out: dict[str, list[str]] = {}
     for m in enabled_models:
@@ -141,138 +104,138 @@ def _load_brand_tokens_per_model(
         for entry in raw.get("queries", []):
             if entry.get("id") not in {"Q2", "Q3", "Q5", "Q6"}:
                 continue
-            for tok in _extract_brand_tokens(entry.get("query_string", "")):
-                if tok not in seen:
-                    seen.add(tok)
-                    toks.append(tok)
+            inner = entry.get("query_string", "")
+            # Pull the first `(...)` group (the brand clause) and split.
+            # No re import — we use a tiny inline parser.
+            depth = 0
+            start = -1
+            for i, ch in enumerate(inner):
+                if ch == "(":
+                    if depth == 0:
+                        start = i + 1
+                    depth += 1
+                elif ch == ")":
+                    if depth > 0:
+                        depth -= 1
+                        if depth == 0 and start != -1:
+                            group = inner[start:i]
+                            for tok in group.split(" OR "):
+                                tok = tok.strip()
+                                if tok and tok not in seen:
+                                    seen.add(tok)
+                                    toks.append(tok)
+                            start = -1
+                            break
         out[m] = toks
     return out
 
 
-def _split_brands_to_fit_cap(
-    brand_tokens: dict[str, list[str]],
-    intent_tokens: list[str],
-    operator_cap: int,
-) -> list[dict[str, list[str]]]:
-    """Split the brand-token map into 1+ chunks, each within the operator cap.
-
-    For a single bucket, the operator count is approximately
-        len(brand_tokens) + len(intent_tokens) + 1
-    (the +1 covers the OR between the brands clause and the intent clause;
-    intra-clause ORs are counted separately as N-1 and M-1 respectively,
-    so the formula above is the count of `OR` tokens at the top level).
-
-    If a single chunk over-shoots the cap, we halve the brand list and
-    emit two chunks; if either half still over-shoots, we halve again.
-    The intent-token list is NOT split (one bucket, one intent OR list).
-    """
-    if not brand_tokens:
-        return []
-    single_count = count_x_operators(_compose_intent_query(brand_tokens, intent_tokens))
-    if single_count <= operator_cap:
-        return [brand_tokens]
-    # Halve the brand list. Recurse if needed.
-    items = list(brand_tokens.items())
-    mid = max(1, len(items) // 2)
-    left = dict(items[:mid])
-    right = dict(items[mid:])
-    out: list[dict[str, list[str]]] = []
-    for half in (left, right):
-        if not half:
-            continue
-        out.extend(_split_brands_to_fit_cap(half, intent_tokens, operator_cap))
-    return out
-
-
-def _compose_intent_query(
-    brand_tokens: dict[str, list[str]], intent_tokens: list[str]
+def _build_brand_wide_query(
+    brand_tokens_per_model: dict[str, list[str]],
+    enabled_models: list[str],
 ) -> str:
-    """Build the cross-brand intent query string (no cap check here).
+    """Compose Call B from per-model brand tokens.
 
-    Shape: `((BrandA OR A2) OR (BrandB OR B2) OR ...) intent1 OR intent2
-    OR ... min_faves:0`. The outer paren around brands is required to
-    keep the brand clause as a single token against the intent OR-list.
-    The intent clause is NOT wrapped in extra parens — it is already
-    a flat OR list of tokens at the top level.
+    Shape: `((BrandTok1a OR BrandTok1b) OR (BrandTok2a OR ...) OR ...
+    OR (BrandTokNa OR ...)) min_faves:0`. The outer paren around the
+    whole brand OR chain is required so the trailing `min_faves:0`
+    binds to the whole expression. Each per-model group is itself a
+    paren to keep its inner ORs together.
+
+    Iteration order follows `enabled_models` (NOT alphabetical) so the
+    plan is deterministic and the post-fetch `attribute_to_brand`
+    regex can match brand group boundaries in a known order.
+
+    Models with empty token lists contribute 0 paren groups.
     """
-    brands_part = " OR ".join(
-        f"({' OR '.join(toks)})" for toks in brand_tokens.values() if toks
-    )
-    intent_part = " OR ".join(intent_tokens)
-    return f"({brands_part}) {intent_part} min_faves:0"
+    parts: list[str] = []
+    for m in enabled_models:
+        toks = brand_tokens_per_model.get(m, [])
+        if not toks:
+            continue
+        parts.append(f"({' OR '.join(toks)})")
+    if not parts:
+        # Defensive — should not happen at the 7-brand baseline, but
+        # an all-empty configuration still returns a syntactically
+        # valid (if useless) query.
+        return "(empty) min_faves:0"
+    return f"({' OR '.join(parts)}) min_faves:0"
 
 
 def plan_calls(
     data_dir: Path,
     enabled_models: list[str],
     *,
-    operator_cap: int = X_OPERATOR_CAP,
+    x_monitor_list_id: int | str,
 ) -> list[PlannedCall]:
-    """Build the per-cycle call list.
+    """Build the per-cycle call list (v1.7: exactly 2 calls).
 
-    Returns one PlannedCall per (brand, kind) and 1-3 per intent bucket
-    bucketed across all brands. Order: account calls first (release +
-    mention capture), then intent calls.
+    Call A — `(list:<x_monitor_list_id>) min_faves:1` — fans in all
+    curated list members in one go. The list is operator-managed (see
+    the v1.7 plan's "Operator manual step"). Length: ~29 chars
+    regardless of list size.
+
+    Call B — `((BrandTok_a OR BrandTok_b) OR ... OR (BrandTok_n OR ...))
+    min_faves:0` — catches the long tail of brand mentions from
+    non-list accounts. ~218 chars at the 7-brand baseline; well under
+    the 512-char cap. v1.7 keeps this as a single paren-grouped call
+    because we have well under 17 brands (the threshold where Call B
+    would need splitting — see queries.py:212 docstring).
+
+    Args:
+        data_dir: project data/ directory (yaml files live under
+            data/queries/<model>.yaml).
+        enabled_models: brands to include, in the order Call B's paren
+            groups are emitted.
+        x_monitor_list_id: numeric X list ID for Call A. Required —
+            v1.7 does not operate without a list, because Call A is
+            the only place we get "faved by official handles" signal
+            at scale.
+
+    Returns:
+        [Call A, Call B]. Each call has already been length-capped.
 
     Raises:
-        ValueError: if any emitted query exceeds operator_cap (propagated
-            from `assert_under_operator_cap`). The pipeline treats this as
-            a per-query summary entry and skips the call.
+        TypeError: if x_monitor_list_id is not provided.
+        ValueError: if either emitted query exceeds 512 chars
+            (propagated from `assert_under_length_cap`).
     """
-    calls: list[PlannedCall] = []
-    # Account calls: per-brand, from:OFFICIAL + to:OFFICIAL + from:STAFF +
-    # to:STAFF for each staff handle in the brand's staff list. Each
-    # handle contributes 2 ORs (from:H, to:H) — at 1 official + 10 staff
-    # we get 22 ORs, exactly at the cap.
-    for m in enabled_models:
-        try:
-            accts = load_accounts(m, data_dir)
-        except (FileNotFoundError, ValueError):
-            continue
-        handles = [a.handle for a in accts if a.role == "official"]
-        try:
-            staff = load_staff(m, data_dir)
-        except (FileNotFoundError, ValueError):
-            staff = []
-        all_handles = handles + [s.handle for s in staff]
-        if not all_handles:
-            continue
-        from_to = " OR ".join(f"from:{h} OR to:{h}" for h in all_handles)
-        q = f"({from_to}) min_faves:1"
-        assert_under_operator_cap(q)
-        calls.append(
-            PlannedCall(
-                call_kind="account",
-                model_id=m,
-                bucket=None,
-                query_string=q,
-                expected_signal="release",
-                n_operators=count_x_operators(q),
-            )
+    if x_monitor_list_id is None:
+        raise TypeError(
+            "plan_calls() requires x_monitor_list_id (v1.7's Call A is "
+            "list-based; no fallback to per-brand account calls)."
         )
-    # Intent calls: bucket each brand's brand-terms with intent tokens.
-    brand_tokens_per_model = _load_brand_tokens_per_model(
+
+    call_a_query = f"(list:{x_monitor_list_id}) min_faves:1"
+    assert_under_length_cap(call_a_query)
+
+    brand_tokens = _load_brand_tokens_per_model(
         enabled_models, data_dir / "queries"
     )
-    for bucket_name, info in INTENT_BUCKETS.items():
-        intent_tokens = list(info["tokens"])  # type: ignore[arg-type]
-        splits = _split_brands_to_fit_cap(
-            brand_tokens_per_model, intent_tokens, operator_cap
-        )
-        for split in splits:
-            if not split:
-                continue
-            q = _compose_intent_query(split, intent_tokens)
-            assert_under_operator_cap(q)
-            first_brand = next(iter(split))
-            calls.append(
-                PlannedCall(
-                    call_kind="intent",
-                    model_id=first_brand,
-                    bucket=bucket_name,
-                    query_string=q,
-                    expected_signal=_bucket_to_signal(bucket_name),
-                    n_operators=count_x_operators(q),
-                )
-            )
-    return calls
+    call_b_query = _build_brand_wide_query(brand_tokens, enabled_models)
+    assert_under_length_cap(call_b_query)
+
+    return [
+        PlannedCall(
+            call_kind="account",
+            model_id="*",
+            bucket=None,
+            query_string=call_a_query,
+            expected_signal="release",
+            query_length=len(call_a_query),
+        ),
+        PlannedCall(
+            call_kind="brand_wide",
+            model_id=enabled_models[0] if enabled_models else "*",
+            bucket=None,
+            query_string=call_b_query,
+            expected_signal="other",
+            query_length=len(call_b_query),
+        ),
+    ]
+
+
+# Retired v1.6 symbols — referenced in tests as `hasattr() == False`.
+# Kept here ONLY as a structural marker; do not uncomment or call.
+# def _split_brands_to_fit_cap(...): ...
+# INTENT_BUCKETS: dict = {}  # removed in v1.7

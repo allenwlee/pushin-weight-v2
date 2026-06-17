@@ -58,6 +58,14 @@ class Config(BaseModel):
     degraded_skip_order: list[Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]] = Field(
         default_factory=lambda: ["Q6", "Q5", "Q3", "Q2", "Q4", "Q1"]
     )
+    # v1.7: x.com list ID for Call A (list-based fan-in). The list is
+    # operator-managed (see v1.7 plan §"Operator manual step"). When
+    # None, the pipeline runs in v1.6-compatible mode (per-brand
+    # account calls) — this is a transitional affordance; v1.8 will
+    # require the list unconditionally. See
+    # docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
+    # §"Call A — list-based fan-in".
+    x_monitor_list_id: int | None = None
     dashboard: DashboardConfig = DashboardConfig()
 
     @field_validator("enabled_models")

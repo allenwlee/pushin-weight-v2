@@ -20,3 +20,4 @@ __pycache__/
 
 # Cookies (defense in depth — never commit)
 config.local.yaml
+venv
