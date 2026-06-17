@@ -14,6 +14,12 @@ import pytest
 
 from x_monitor.treemap import (
     TreemapTile,
+    MODEL_SECTORS,
+    _TILE_GAP_PX,
+    _luminance,
+    _text_color_for_fill,
+    _tile_svg,
+    _squarify_layout,
     bin_polarity,
     polarity_fill,
     build_treemap_svg,
@@ -382,3 +388,135 @@ class TestBuildTreemapSvg:
         svg = build_treemap_svg(tiles, width=600, height=400)
         assert "htmx" not in svg.lower()
         assert "chart.js" not in svg.lower()
+
+
+# ---------- v1.8 Finviz aesthetic refinements --------------------------------
+
+class TestTileHoverAndTooltip:
+    """v1.8: extended <title>, luminance-based text color, pct font-weight 400,
+    Arial font-family, MODEL_SECTORS coverage."""
+
+    def test_luminance_helper_uses_bt709_weights(self):
+        # Pure green channel: (0, 255, 0) -> 0.7152 per BT.709.
+        assert abs(_luminance((0, 255, 0)) - 0.7152) < 0.001
+        # Pure red channel: (255, 0, 0) -> 0.2126.
+        assert abs(_luminance((255, 0, 0)) - 0.2126) < 0.001
+        # Pure blue channel: (0, 0, 255) -> 0.0722.
+        assert abs(_luminance((0, 0, 255)) - 0.0722) < 0.001
+
+    def test_text_color_dark_for_light_fill(self):
+        # Yellow (234, 179, 8) has luminance 0.667 > threshold 0.5 -> dark text.
+        assert _text_color_for_fill("rgb(234, 179, 8)") == "#0d1117"
+
+    def test_text_color_white_for_dark_fill(self):
+        # Deep red (170, 0, 0) has luminance 0.142 < threshold -> white text.
+        assert _text_color_for_fill("rgb(170, 0, 0)") == "#ffffff"
+
+    def test_text_color_white_for_unparseable_fill(self):
+        # Anything we can't parse falls back to white.
+        assert _text_color_for_fill("not-a-color") == "#ffffff"
+
+    def test_title_contains_model_id_and_display_name(self):
+        tile = TreemapTile(
+            "minimax", "MiniMax AI", "#3b82f6", 100.0, 0.05,
+            posts_in_window=47, polarity_window_days=7,
+            last_run_finished_at="2026-06-17T13:50:00+00:00",
+            sector="closed-source LLM",
+        )
+        rect = {"x": 10.0, "y": 20.0, "dx": 200.0, "dy": 150.0}
+        svg = _tile_svg(tile, rect, max_abs_score=0.05)
+        assert "<title>" in svg
+        assert "MiniMax AI (minimax)" in svg
+        assert "Polarity:" in svg
+        assert "Posts in window: 47" in svg
+        assert "Last run: 2026-06-17T13:50:00+00:00" in svg
+        assert "Sector: closed-source LLM" in svg
+
+    def test_title_omits_sector_when_none(self):
+        tile = TreemapTile(
+            "unknown_model", "Unknown", "#3b82f6", 100.0, 0.05,
+            posts_in_window=10, polarity_window_days=7,
+            last_run_finished_at=None,
+            sector=None,
+        )
+        rect = {"x": 10.0, "y": 20.0, "dx": 200.0, "dy": 150.0}
+        svg = _tile_svg(tile, rect, max_abs_score=0.05)
+        assert "Sector:" not in svg
+        assert "Last run:" not in svg
+
+    def test_pct_font_weight_is_400(self):
+        tile = TreemapTile("a", "A", "#3b82f6", 100.0, 0.05)
+        rect = {"x": 10.0, "y": 20.0, "dx": 200.0, "dy": 150.0}
+        svg = _tile_svg(tile, rect, max_abs_score=0.05)
+        # The pct line carries font-weight=400. Symbol line stays 700.
+        assert 'font-weight="400"' in svg
+        assert 'font-weight="500"' not in svg
+
+    def test_tile_uses_arial_font_family(self):
+        tile = TreemapTile("a", "A", "#3b82f6", 100.0, 0.05)
+        rect = {"x": 10.0, "y": 20.0, "dx": 200.0, "dy": 150.0}
+        svg = _tile_svg(tile, rect, max_abs_score=0.05)
+        assert 'font-family="Arial, Helvetica, sans-serif"' in svg
+
+    def test_tile_border_radius_is_zero(self):
+        tile = TreemapTile("a", "A", "#3b82f6", 100.0, 0.05)
+        rect = {"x": 10.0, "y": 20.0, "dx": 200.0, "dy": 150.0}
+        svg = _tile_svg(tile, rect, max_abs_score=0.05)
+        assert 'rx="0"' in svg
+        assert 'ry="0"' in svg
+
+    def test_model_sectors_table_covers_all_v17_roster(self):
+        # The 11 enabled models in v1.7.4 should each have a sector label.
+        # If a new model is added later without sector, the <title> just omits the line.
+        expected = {
+            "minimax", "deepseek", "qwen", "glm", "moonshot_kimi", "inclusionai",
+            "mimo", "mistral", "stepfun", "ernie", "hunyuan",
+        }
+        assert expected.issubset(MODEL_SECTORS.keys())
+
+
+class TestSquarifyLayoutPadding:
+    """v1.8: squarify rects are shrunk by padding+gap."""
+
+    def test_one_tile_rect_is_shrunk_by_padding(self):
+        tile = TreemapTile("a", "A", "#3b82f6", 100.0, 0.1)
+        result = _squarify_layout([tile], 300, 200)
+        assert len(result) == 1
+        _, rect = result[0]
+        # Squarify's full-canvas rect is x=0, y=0, dx=300, dy=200.
+        # v1.8 shrinks by padding (top-left) + gap (bottom-right) = 4 + 2 = 6 on dx/dy.
+        assert rect["x"] == 4.0  # padding
+        assert rect["y"] == 4.0
+        assert rect["dx"] == 300.0 - 4.0 - 2.0  # 294
+        assert rect["dy"] == 200.0 - 4.0 - 2.0  # 194
+
+    def test_two_tile_rects_have_visible_gap_between_them(self):
+        tiles = [
+            TreemapTile("a", "A", "#3b82f6", 50.0, 0.1),
+            TreemapTile("b", "B", "#f97316", 50.0, 0.1),
+        ]
+        result = _squarify_layout(tiles, 300, 200)
+        _, rect_a = result[0]
+        _, rect_b = result[1]
+        # Adjacent tiles share an edge. After v1.8 shrinking, there must be
+        # at least _TILE_GAP_PX of visible gutter between them.
+        # Squarify lays these side-by-side for equal-area equal-weights.
+        a_right = rect_a["x"] + rect_a["dx"]
+        b_left = rect_b["x"]
+        assert (b_left - a_right) >= _TILE_GAP_PX - 0.01, (
+            f"expected gap >= {_TILE_GAP_PX}, got {b_left - a_right}"
+        )
+
+    def test_padding_shrinks_does_not_translate(self):
+        # Padding+gap should subtract from each rect's dx/dy, not translate the
+        # whole layout. Total visible area shrinks by ~2*(padding+gap) per tile
+        # summed across edges.
+        tiles = [TreemapTile("a", "A", "#3b82f6", 100.0, 0.1)]
+        result = _squarify_layout(tiles, 300, 200)
+        _, rect = result[0]
+        # Single tile: rect occupies (4, 4) -> (4 + 294, 4 + 194) = full inner area.
+        # The visible area is 294 * 194 = 57036, vs total 300*200 = 60000.
+        visible_area = rect["dx"] * rect["dy"]
+        # Shrink factor should be roughly (1 - padding/total_w) * (1 - padding/total_h),
+        # i.e. ~95% of the original. Tolerate 1% rounding.
+        assert abs(visible_area - 57036) < 100

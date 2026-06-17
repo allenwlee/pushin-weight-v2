@@ -458,6 +458,11 @@ class DashboardApp:
 
         store = Store(self.db_path)
         tiles: list[TreemapTile] = []
+        # v1.8 — derive last-run timestamp + sector lookup once per build.
+        last_run_str = None
+        if latest_run and latest_run.get("finished_at"):
+            last_run_str = latest_run["finished_at"]
+        from .treemap import MODEL_SECTORS
         try:
             for m in self.config.enabled_models:
                 try:
@@ -467,6 +472,14 @@ class DashboardApp:
                     # right signal.
                     area_weight = len(posts)
                     polarity = compute_polarity(posts, current_window, prior_window)
+                    # v1.8 — count posts inside the current polarity window for
+                    # the native <title> tooltip. Same filter compute_polarity
+                    # uses internally; we recompute here because we only need
+                    # the count, not the signal breakdown.
+                    posts_in_window = sum(
+                        1 for post in posts
+                        if (current_window[0] <= (_ts := _parse_post_timestamp(post.get("created_at")) or current_window[0]) < current_window[1])
+                    )
                 except Exception as e:
                     log.warning(
                         "treemap tile build failed for %s: %s — rendering as no-data",
@@ -474,6 +487,7 @@ class DashboardApp:
                     )
                     area_weight = 0
                     polarity = None
+                    posts_in_window = 0
                 tiles.append(
                     TreemapTile(
                         model_id=m,
@@ -481,6 +495,10 @@ class DashboardApp:
                         accent_color=MODEL_ACCENT_COLORS.get(m, "#9ca3af"),
                         area_weight=float(area_weight),
                         polarity_score=polarity,
+                        posts_in_window=posts_in_window,
+                        polarity_window_days=polarity_window_days,
+                        last_run_finished_at=last_run_str,
+                        sector=MODEL_SECTORS.get(m),
                     )
                 )
         finally:
@@ -590,6 +608,10 @@ class DashboardApp:
                             "accent_color": t.accent_color,
                             "area_weight": t.area_weight,
                             "polarity_score": t.polarity_score,
+                            "posts_in_window": t.posts_in_window,
+                            "polarity_window_days": t.polarity_window_days,
+                            "last_run_finished_at": t.last_run_finished_at,
+                            "sector": t.sector,
                         }
                         for t in tiles
                     ],

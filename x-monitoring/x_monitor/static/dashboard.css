@@ -22,7 +22,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* v1.8 — Arial stack matches the treemap tile font for visual consistency. */
+  font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
   line-height: 1.4;
 }
@@ -220,13 +221,23 @@ body {
 }
 
 .treemap-wrap {
-  padding: 1.5rem;
+  /* v1.8 — tighter wrap padding; treemap hover affordance below. */
+  padding: 0.5rem;
 }
 .treemap-wrap svg.treemap {
   display: block;
   margin: 0 auto;
   max-width: 100%;
   height: auto;
+}
+
+/* v1.8 — stroke-width hover affordance. No JS; SVG <a> hover thickens
+   the surrounding rect's stroke from 2px to 3px within 150ms. */
+.treemap rect {
+  transition: stroke-width 0.15s ease;
+}
+.treemap a:hover rect {
+  stroke-width: 3;
 }
 
 /* Polarity window toggle (v1.7.4). Mirrors .view-tab styling but smaller,

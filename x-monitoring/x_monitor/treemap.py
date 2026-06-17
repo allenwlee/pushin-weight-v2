@@ -23,8 +23,10 @@ No randomness; the algorithm is deterministic by contract.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
-from typing import Iterable, NamedTuple
+from dataclasses import dataclass
+from typing import Iterable
 
 import squarify
 
@@ -54,15 +56,24 @@ _DEEP_GREEN = (0, 150, 0)
 _YELLOW = (234, 179, 8)    # the "went dark" sentinel
 
 
-class TreemapTile(NamedTuple):
+@dataclass(frozen=True)
+class TreemapTile:
     """One model's data for the treemap layout.
 
     model_id: canonical model id (e.g. "minimax", "mistral")
     display_name: human label (e.g. "MiniMax AI", "Mistral")
     accent_color: hex string from MODEL_ACCENT_COLORS (used as rect stroke)
-    area_weight: float, the tile's area weight (Q1 + Q4 in the current window).
+    area_weight: float, the tile's area weight (cumulative post count).
                  0 means "no data" -> rendered as a placeholder, not in the layout.
     polarity_score: float in [-1, +1], or None for the "went dark" sentinel.
+    posts_in_window: int, count of posts in the polarity window (for <title>).
+                     Defaults to 0 for fixtures / tests that don't care.
+    polarity_window_days: int, the polarity window the score was computed over
+                          (for <title>). Defaults to 0.
+    last_run_finished_at: str | None, ISO timestamp of the latest pipeline run
+                          (for <title>). None when no run has completed yet.
+    sector: str | None, human label (e.g. "closed-source LLM") for <title>.
+            None when the model is not in MODEL_SECTORS.
     """
 
     model_id: str
@@ -70,12 +81,66 @@ class TreemapTile(NamedTuple):
     accent_color: str
     area_weight: float
     polarity_score: float | None
+    posts_in_window: int = 0
+    polarity_window_days: int = 0
+    last_run_finished_at: str | None = None
+    sector: str | None = None
 
 
 # Tiny epsilon so a 0-area tile still gets a rect (squarify requires all sizes > 0).
 # We don't WANT 0-area tiles in the layout (they go to the no-data strip), but the
 # constant is referenced in case a future unit wants to render 1px "stubs" for them.
 SIZE_EPSILON = 1e-6
+
+# v1.8 — Finviz aesthetic refinements. Defaults locked; tune from live visual diff.
+_TILE_PADDING_PX = 4
+_TILE_GAP_PX = 2
+_TILE_BORDER_RADIUS = 0
+_FONT_FAMILY = "Arial, Helvetica, sans-serif"
+_LUMINANCE_THRESHOLD = 0.5
+_TEXT_DARK = "#0d1117"
+_TEXT_LIGHT = "#ffffff"
+
+
+# Sector taxonomy for the 11 enabled models (v1.7 roster). Used by the
+# native <title> tooltip. New models default to None if not listed here.
+MODEL_SECTORS: dict[str, str] = {
+    "minimax": "closed-source LLM",
+    "deepseek": "Chinese open-source LLM",
+    "qwen": "Chinese open-source LLM",
+    "glm": "Chinese open-source LLM",
+    "moonshot_kimi": "Chinese closed-source LLM",
+    "inclusionai": "Chinese open-source LLM",
+    "mimo": "Chinese open-source LLM",
+    "mistral": "Western open-source LLM",
+    "stepfun": "Chinese multimodal",
+    "ernie": "Chinese closed-source LLM",
+    "hunyuan": "Chinese closed-source LLM",
+}
+
+
+def _luminance(rgb: tuple[int, int, int]) -> float:
+    """ITU-R BT.709 relative luminance for an sRGB 0-255 tuple.
+
+    Output in [0, 1]. Used to pick black-vs-white text against a saturated
+    polarity fill so dark fills get white text and light fills get dark text.
+    """
+    r, g, b = rgb
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+
+
+def _text_color_for_fill(fill_rgb: str) -> str:
+    """Pick white or dark text for a polarity fill string.
+
+    `fill_rgb` is an `rgb(R, G, B)` string (the format polarity_fill emits).
+    Anything we don't recognise falls back to white.
+    """
+    m = re.match(r"^rgb\((\d+),\s*(\d+),\s*(\d+)\)$", fill_rgb.strip())
+    if not m:
+        return _TEXT_LIGHT
+    r, g, b = (int(m.group(i)) for i in (1, 2, 3))
+    lum = _luminance((r, g, b))
+    return _TEXT_DARK if lum >= _LUMINANCE_THRESHOLD else _TEXT_LIGHT
 
 
 def _rgb(c: tuple[int, int, int]) -> str:
@@ -279,22 +344,45 @@ def _squarify_layout(
 
     `squarify.squarify` returns rects in the same order as the input sizes,
     so we zip them back to the tiles.
+
+    v1.8: each rect is shrunk by `_TILE_PADDING_PX` on the top-left edge
+    and `_TILE_GAP_PX` on the bottom-right edge to produce a visible
+    inner margin and inter-tile gutter. Total area decreases by ~1-2%
+    per edge — visually negligible.
     """
     sizes = [t.area_weight for t in active]
     normed = squarify.normalize_sizes(sizes, width, height)
     rects = squarify.squarify(normed, 0, 0, width, height)
-    return list(zip(active, rects))
+    shrunk: list[tuple[TreemapTile, dict[str, float]]] = []
+    for tile, r in zip(active, rects):
+        new_x = float(r["x"]) + _TILE_PADDING_PX
+        new_y = float(r["y"]) + _TILE_PADDING_PX
+        new_dx = max(0.0, float(r["dx"]) - _TILE_PADDING_PX - _TILE_GAP_PX)
+        new_dy = max(0.0, float(r["dy"]) - _TILE_PADDING_PX - _TILE_GAP_PX)
+        shrunk.append((tile, {"x": new_x, "y": new_y, "dx": new_dx, "dy": new_dy}))
+    return shrunk
 
 
 def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -> str:
     """Render one active tile as an <a> wrapping a <rect> with two <text>
     labels: the model name on top, the polarity as a signed percentage
-    below it. Both lines are white for legibility on the saturated
-    palette. Font size is adaptive to the smaller of the tile width/height
-    so small tiles get a smaller label and don't overflow.
+    below it.
+
+    v1.8 refinements (Finviz aesthetic):
+    - Font family = `Arial, Helvetica, sans-serif` (was system-ui).
+    - Pct font-weight = 400 (was 500). Symbol line stays bold (700).
+    - Text color = luminance-based (was always white). Dark fills keep
+      white text, light fills get dark text (#0d1117).
+    - Tile border radius = 0 (was 2). Finviz tiles are sharp squares.
+    - Native <title> tooltip carries model_id, polarity, window days,
+      post count, last-run timestamp, and sector.
+
+    Font size is adaptive to the smaller of the tile width/height so
+    small tiles get a smaller label and don't overflow.
     """
     x, y, dx, dy = rect["x"], rect["y"], rect["dx"], rect["dy"]
     fill = polarity_fill(tile.polarity_score, max_abs_score)
+    text_color = _text_color_for_fill(fill)
     name = _xml_escape(tile.display_name)
     # Polarity as a signed percentage. Multiply by 100 because the raw
     # polarity is a rate difference in [-1, +1]. Two decimals matches
@@ -302,15 +390,27 @@ def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -
     # wide tiles to save space.
     if tile.polarity_score is None:
         pct_str = "no data"
+        pct_val_for_title = "no data"
     else:
         pct_val = tile.polarity_score * 100
         decimals = 1 if dx < 100 or dy < 80 else 2
         pct_str = f"{pct_val:+.{decimals}f}%"
+        pct_val_for_title = pct_str
     aria = (
         f"{tile.display_name}: polarity {pct_str}, "
         f"area weight {tile.area_weight:.0f}"
     )
-    title = f"{tile.display_name} — polarity {pct_str}"
+    # v1.8 — extended native <title>. Browser-rendered SVG tooltip; no JS.
+    title_lines = [
+        f"{tile.display_name} ({tile.model_id})",
+        f"Polarity: {pct_val_for_title} (vs prior {tile.polarity_window_days}d)",
+        f"Posts in window: {tile.posts_in_window}",
+    ]
+    if tile.last_run_finished_at:
+        title_lines.append(f"Last run: {tile.last_run_finished_at}")
+    if tile.sector:
+        title_lines.append(f"Sector: {tile.sector}")
+    title = "\n".join(title_lines)
     # Adaptive font size. Finviz uses ~16pt for the name and ~12pt for
     # the percentage. We scale to ~16% of the shorter side, clamped to
     # [9, 22]. Tile must be at least 60x40 to render any text at all.
@@ -331,7 +431,7 @@ def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -
         f'<title>{_xml_escape(title)}</title>',
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{dx:.2f}" height="{dy:.2f}" '
         f'fill="{fill}" stroke="{tile.accent_color}" stroke-width="2" '
-        f'rx="2" ry="2"/>',
+        f'rx="{_TILE_BORDER_RADIUS}" ry="{_TILE_BORDER_RADIUS}"/>',
     ]
     if name:
         # Two-line layout: name slightly above center, pct slightly below.
@@ -342,15 +442,15 @@ def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -
         pct_y = cy + font * 0.9
         parts.append(
             f'<text x="{cx:.2f}" y="{name_y:.2f}" '
-            f'font-size="{font}" fill="#ffffff" text-anchor="middle" '
+            f'font-size="{font}" fill="{text_color}" text-anchor="middle" '
             f'font-weight="700" pointer-events="none" '
-            f'font-family="system-ui, -apple-system, sans-serif">{name}</text>'
+            f'font-family="{_FONT_FAMILY}">{name}</text>'
         )
         parts.append(
             f'<text x="{cx:.2f}" y="{pct_y:.2f}" '
-            f'font-size="{max(8, font - 2)}" fill="#ffffff" text-anchor="middle" '
-            f'font-weight="500" pointer-events="none" '
-            f'font-family="system-ui, -apple-system, sans-serif">{_xml_escape(pct_str_render)}</text>'
+            f'font-size="{max(8, font - 2)}" fill="{text_color}" text-anchor="middle" '
+            f'font-weight="400" pointer-events="none" '
+            f'font-family="{_FONT_FAMILY}">{_xml_escape(pct_str_render)}</text>'
         )
     parts.append("</a>")
     return "".join(parts)
