@@ -376,8 +376,11 @@ class DashboardApp:
 
         Anchors 'now' to the latest run's finished_at (falls back to wall-clock),
         then for each enabled model:
-          - area_weight = Q1_count + Q4_count in the current N-day window
+          - area_weight = total post count for the model to-date (cumulative,
+            no time filter). 11 models x 2000 posts total is fine; if this
+            ever becomes a hotspot swap len(posts) for a Store.count_posts().
           - polarity_score = compute_polarity(...) in the current + prior N-day windows
+            (windowed, so the color reflects rate of change, not all-time mix)
 
         Per-model failures (e.g. broken store read) are caught and rendered as
         no-data tiles so one bad model doesn't take the whole page down.
@@ -402,18 +405,10 @@ class DashboardApp:
             for m in self.config.enabled_models:
                 try:
                     posts = store.get_all_posts(m)
-                    # area_weight = Q1 + Q4 in the current window
-                    area_weight = 0
-                    current_lower, current_upper = current_window
-                    for p in posts:
-                        sqid = p.get("source_query_id") or ""
-                        if sqid not in ("Q1", "Q4"):
-                            continue
-                        dt = _parse_post_timestamp(p.get("created_at"))
-                        if dt is None:
-                            continue
-                        if current_lower <= dt < current_upper:
-                            area_weight += 1
+                    # area_weight = total posts to-date (cumulative). Windowing
+                    # is reserved for polarity, where rate-of-change is the
+                    # right signal.
+                    area_weight = len(posts)
                     polarity = compute_polarity(posts, current_window, prior_window)
                 except Exception as e:
                     log.warning(

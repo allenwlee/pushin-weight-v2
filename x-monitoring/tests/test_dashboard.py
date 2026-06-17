@@ -1101,3 +1101,96 @@ class TestTreemapRoutes:
         assert tiles[1]["display_name"] == "DeepSeek"
         assert tiles[2]["display_name"] == "Qwen"
 
+    def test_treemap_area_is_cumulative_total_not_windowed(self, tmp_path):
+        """v1.7.1 amendment: area_weight = total posts to-date, NOT
+        Q1+Q4 in the current 7-day window. Polarity stays windowed.
+        This test seeds a mix of signals and asserts area equals the
+        total post count for each model, regardless of source_query_id
+        or whether the post falls inside the polarity window.
+        """
+        from datetime import datetime, timedelta, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        from x_monitor.store import Store
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        # Anchor "now" to a recent timestamp so the polarity window
+        # (last 7d) is well-defined and excludes the older posts below.
+        anchor = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'''{{"finished_at": "{anchor.isoformat()}"}}''',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        db_path = data / "x.db"
+        store = Store(db_path)
+        # Seed: minimax has 8 posts in the window (mix of Q1/Q3/Q5)
+        # and 5 posts OUTSIDE the window (Q4, 30 days ago). Area
+        # should be 13 (cumulative), NOT 8 (windowed Q1+Q4 = 4).
+        all_posts = []
+        in_window_signals = ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]
+        for i in range(8):
+            all_posts.append(
+                {
+                    "tweet_id": f"in_{i}",
+                    "model_id": "minimax",
+                    "author_handle": "u",
+                    "text": "x",
+                    "favorite_count": 0,
+                    "created_at": (anchor - timedelta(hours=i + 1))
+                    .strftime("%a %b %d %H:%M:%S %z %Y"),
+                    "source_query_id": in_window_signals[i % 6],
+                }
+            )
+        for i in range(5):
+            all_posts.append(
+                {
+                    "tweet_id": f"out_{i}",
+                    "model_id": "minimax",
+                    "author_handle": "u",
+                    "text": "x",
+                    "favorite_count": 0,
+                    "created_at": (anchor - timedelta(days=30, hours=i + 1))
+                    .strftime("%a %b %d %H:%M:%S %z %Y"),
+                    "source_query_id": "Q4",  # would have counted under old formula
+                }
+            )
+        # qwen: 3 posts, all in window. Area should be 3.
+        for i in range(3):
+            all_posts.append(
+                {
+                    "tweet_id": f"qwen_{i}",
+                    "model_id": "qwen",
+                    "author_handle": "u",
+                    "text": "x",
+                    "favorite_count": 0,
+                    "created_at": (anchor - timedelta(hours=i + 1))
+                    .strftime("%a %b %d %H:%M:%S %z %Y"),
+                    "source_query_id": "Q5",
+                }
+            )
+        # mistral: 0 posts. Should render as no-data (area=0).
+        store.insert_posts(all_posts)
+        store.close()
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax", "qwen", "mistral"],
+                daily_ceiling=333,
+            ),
+            data, db_path=db_path,
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        tiles = r.get_json()["tiles"]
+        by_id = {t["model_id"]: t for t in tiles}
+        # Cumulative: minimax 13 (in-window + out-of-window), qwen 3.
+        # NOT 4 (old Q1+Q4-windowed formula would have given us that).
+        assert by_id["minimax"]["area_weight"] == 13.0
+        assert by_id["qwen"]["area_weight"] == 3.0
+        # No-data tile for a model with zero posts to-date.
+        assert by_id["mistral"]["area_weight"] == 0.0
+
