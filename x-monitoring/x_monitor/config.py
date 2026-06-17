@@ -22,6 +22,10 @@ KNOWN_MODELS: frozenset[str] = frozenset(
         "xiaomi_mimo",
         "moonshot_kimi",
         "inclusionai",
+        "mistral",
+        "stepfun",
+        "ernie",
+        "hunyuan",
     }
 )
 

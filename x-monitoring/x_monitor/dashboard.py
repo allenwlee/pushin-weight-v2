@@ -27,7 +27,7 @@ from .store import Store
 log = logging.getLogger(__name__)
 
 
-# Display name map for the 9 v1 models. PR-reviewable; tweak per brand team
+# Display name map for the 11 v1 models. PR-reviewable; tweak per brand team
 # feedback without touching the rest of the code.
 MODEL_DISPLAY_NAMES: dict[str, str] = {
     "minimax": "MiniMax AI",
@@ -37,6 +37,10 @@ MODEL_DISPLAY_NAMES: dict[str, str] = {
     "xiaomi_mimo": "Xiaomi MiMo",
     "moonshot_kimi": "Moonshot Kimi",
     "inclusionai": "InclusionAI",
+    "mistral": "Mistral",
+    "stepfun": "StepFun",
+    "ernie": "Baidu ERNIE",
+    "hunyuan": "Tencent Hunyuan",
 }
 
 # Accent color per model — drives the card border-left + sparkline stroke.
@@ -48,6 +52,10 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
     "xiaomi_mimo": "#eab308",
     "moonshot_kimi": "#ec4899",
     "inclusionai": "#06b6d4",
+    "mistral": "#facc15",
+    "stepfun": "#22c55e",
+    "ernie": "#0ea5e9",
+    "hunyuan": "#ec4899",
 }
 
 

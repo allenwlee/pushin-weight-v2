@@ -31,6 +31,10 @@ enabled_models:
   - xiaomi_mimo
   - moonshot_kimi
   - inclusionai
+  - mistral
+  - stepfun
+  - ernie
+  - hunyuan
 daily_ceiling: 333
 """,
         )
