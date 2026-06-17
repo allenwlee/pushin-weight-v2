@@ -80,26 +80,47 @@ def _lerp_color(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) ->
     return f"rgba({r}, {g}, {b}, 0.85)"
 
 
-def bin_polarity(score: float | None) -> str:
-    """Map a polarity score to a 5-step divergent palette color.
+def polarity_fill(score: float | None, max_abs_score: float) -> str:
+    """Map a polarity score to a divergent palette color, relative to the
+    most extreme score in the active set.
 
-    3-stop interpolation: red -> muted -> green, via the existing --red and
-    --green CSS tokens. The 5 visible bins are:
-      score <= -0.5  -> red
-      -0.5 < score < 0  -> red -> muted
-      score == 0  -> muted
-      0 < score < 0.5  -> muted -> green
-      score >= 0.5  -> green
-    None (the "went dark" sentinel) returns the --yellow color so it is
-    visually distinct from both no-data and from the muted bin.
+    Normalization:
+        t = score / max_abs_score, clamped to [-1, +1]
+    Then 3-stop interpolation red -> muted -> green at |t| in [0, 1]:
+        t < 0  -> lerp(RED, MUTED, t + 1.0)     # -1 full red, 0 muted
+        t > 0  -> lerp(MUTED, GREEN, t)         #  0 muted, +1 full green
+        t == 0 -> muted
+
+    The "went dark" sentinel (score is None) returns --yellow regardless
+    of the scale, so it stays visually distinct from the muted bin.
+
+    `max_abs_score` is the absolute value of the most extreme polarity
+    score in the active tile set. If all scores are 0 (e.g. only one
+    active model, or all flat), max_abs_score == 0 and the function
+    returns muted for any score, which is the correct degenerate case.
     """
     if score is None:
         return f"rgba({_YELLOW[0]}, {_YELLOW[1]}, {_YELLOW[2]}, 0.85)"
-    if score < 0:
-        # Map [-1, 0) to [0, 1) and lerp red -> muted.
-        return _lerp_color(_RED, _MUTED, score + 1.0)
-    # score >= 0
-    return _lerp_color(_MUTED, _GREEN, score)
+    if max_abs_score <= 0:
+        # Degenerate: only one active model, or all flat. Stay muted.
+        return f"rgba({_MUTED[0]}, {_MUTED[1]}, {_MUTED[2]}, 0.85)"
+    t = max(-1.0, min(1.0, score / max_abs_score))
+    if t < 0:
+        return _lerp_color(_RED, _MUTED, t + 1.0)
+    if t > 0:
+        return _lerp_color(_MUTED, _GREEN, t)
+    # t == 0 exactly -> muted
+    return f"rgba({_MUTED[0]}, {_MUTED[1]}, {_MUTED[2]}, 0.85)"
+
+
+def bin_polarity(score: float | None) -> str:
+    """Backwards-compatible wrapper for tests that predate polarity_fill.
+
+    Treats the score as if it were already normalized to [-1, +1] (i.e.
+    max_abs_score=1). New code should call polarity_fill directly with
+    the active-set max-abs.
+    """
+    return polarity_fill(score, 1.0)
 
 
 def compute_polarity(
@@ -253,10 +274,10 @@ def _squarify_layout(
     return list(zip(active, rects))
 
 
-def _tile_svg(tile: TreemapTile, rect: dict[str, float]) -> str:
+def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -> str:
     """Render one active tile as an <a> wrapping a <rect> with a <text> label."""
     x, y, dx, dy = rect["x"], rect["y"], rect["dx"], rect["dy"]
-    fill = bin_polarity(tile.polarity_score)
+    fill = polarity_fill(tile.polarity_score, max_abs_score)
     label = _xml_escape(tile.display_name)
     polarity_str = (
         "no data" if tile.polarity_score is None
@@ -328,10 +349,21 @@ def build_treemap_svg(
         svg.append("<g>")
 
     if active:
+        # Relative polarity: normalize to the most extreme active score so
+        # the strongest positive signal in the dashboard hits full green
+        # and the strongest negative hits full red. This is the same
+        # approach Finviz uses (relative, not absolute threshold) and
+        # keeps the palette responsive on day 1 when absolute scores are
+        # small. Went-dark (None) and no-data (area=0) are excluded.
+        # If the active set has a single tile, max_abs_score will be
+        # that tile's |score| and it lands at full saturation — which
+        # is the right "you're the only signal" read.
+        active_scores = [t.polarity_score for t in active if t.polarity_score is not None]
+        max_abs_score = max((abs(s) for s in active_scores), default=0.0)
         # squarify returns 4-tuple lists in the same order as the input sizes.
         # All sizes are > 0 by separate_active_and_no_data's contract.
         for tile, rect in _squarify_layout(active, width, layout_height):
-            svg.append(_tile_svg(tile, rect))
+            svg.append(_tile_svg(tile, rect, max_abs_score))
 
     svg.append("</g>")
     svg.append("</svg>")

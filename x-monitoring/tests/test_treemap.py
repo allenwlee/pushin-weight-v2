@@ -15,6 +15,7 @@ import pytest
 from x_monitor.treemap import (
     TreemapTile,
     bin_polarity,
+    polarity_fill,
     build_treemap_svg,
     compute_polarity,
     separate_active_and_no_data,
@@ -64,6 +65,88 @@ class TestBinPolarity:
         # Expected: round((139+16)/2)=78, round((148+185)/2)=166, round((158+129)/2)=144
         assert "78" in c and "166" in c and "144" in c, c
 
+
+# ---------- polarity_fill (v1.7.2: relative polarity) ------------------------
+class TestPolarityFill:
+    """v1.7.2: polarity_fill normalizes scores relative to the most
+    extreme active score in the dashboard, instead of using fixed
+    absolute thresholds. This fixes the bug where the live DB polarity
+    scores (typically in [-0.15, +0.15]) were all collapsed to near-muted
+    by the old lerp(score).
+    """
+
+    def test_extreme_positive_normalized_to_full_green(self):
+        # When the active set's max |score| is 0.15, a score of 0.15
+        # should land at the green endpoint (#10b981).
+        c = polarity_fill(0.15, 0.15)
+        assert c == "rgba(16, 185, 129, 0.85)"
+
+    def test_extreme_negative_normalized_to_full_red(self):
+        c = polarity_fill(-0.12, 0.12)
+        assert c == "rgba(239, 68, 68, 0.85)"
+
+    def test_zero_normalized_to_muted(self):
+        c = polarity_fill(0.0, 0.15)
+        assert c == "rgba(139, 148, 158, 0.85)"
+
+    def test_half_max_lerps_halfway(self):
+        # score/max = 0.5 -> t = 0.5, lerp(muted, green, 0.5)
+        # = (78, 167, 144)
+        c = polarity_fill(0.075, 0.15)
+        assert c == "rgba(78, 166, 144, 0.85)"
+
+    def test_single_active_model_gets_full_saturation(self):
+        # If the only active model has score 0.05, the dashboard is
+        # showing "this is the only signal, and it's positive" -> full
+        # green is the right read.
+        c = polarity_fill(0.05, 0.05)
+        assert c == "rgba(16, 185, 129, 0.85)"
+
+    def test_all_flat_returns_muted(self):
+        # max_abs_score = 0 (degenerate) -> muted for any score.
+        assert polarity_fill(0.0, 0.0) == "rgba(139, 148, 158, 0.85)"
+        assert polarity_fill(0.5, 0.0) == "rgba(139, 148, 158, 0.85)"
+        assert polarity_fill(-0.5, 0.0) == "rgba(139, 148, 158, 0.85)"
+
+    def test_went_dark_unaffected_by_scale(self):
+        # The went-dark sentinel (None) is always yellow.
+        assert polarity_fill(None, 0.0) == "rgba(234, 179, 8, 0.85)"
+        assert polarity_fill(None, 1.0) == "rgba(234, 179, 8, 0.85)"
+
+    def test_live_db_range_now_visible(self):
+        """Regression test for the v1.7.1 -> v1.7.2 fix.
+
+        On 2026-06-17 the live polarity scores were all in [-0.15, +0.15].
+        Under the old fixed-threshold bin_polarity, all of these landed
+        at near-muted because score itself was the lerp parameter.
+        Under polarity_fill with the same max_abs, the strongest signal
+        hits full green and the rest spread across the gradient.
+        """
+        max_abs = 0.147
+        # Strongest positive -> full green
+        xiaomi = polarity_fill(0.147, max_abs)
+        assert xiaomi == "rgba(16, 185, 129, 0.85)"
+        # Strongest negative -> near-full red (|-0.122/0.147|=0.83, lerp
+        # at t+1=1.83 clamped to 1.0... wait, t=-0.83, t+1=0.17, lerp
+        # red->muted at 0.17 = (239-(239-139)*0.17, 68+(148-68)*0.17,
+        # 68+(158-68)*0.17) = (217, 84, 87)
+        glm = polarity_fill(-0.122, max_abs)
+        assert glm == "rgba(222, 82, 83, 0.85)"
+        # Weakest negative -> still slightly red, NOT muted
+        # (the bug was: this rendered as muted). |-0.042/0.147|=0.286,
+        # t=-0.286, t+1=0.714, lerp(red,muted,0.714) = (239-71, 68+57,
+        # 68+64) = (168, 125, 132)
+        moonshot = polarity_fill(-0.042, max_abs)
+        assert moonshot == "rgba(168, 125, 132, 0.85)"
+
+    def test_score_clamped_to_unit_range(self):
+        # A score > max_abs should still be treated as full saturation,
+        # not overshoot. (Defensive.)
+        c = polarity_fill(0.5, 0.15)
+        assert c == "rgba(16, 185, 129, 0.85)"
+
+
+# ---------- end polarity_fill (v1.7.2) ---------------------------------------
 
 # ---------- compute_polarity -------------------------------------------------
 

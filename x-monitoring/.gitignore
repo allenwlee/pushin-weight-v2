@@ -20,3 +20,8 @@ __pycache__/
 
 # Cookies (defense in depth — never commit)
 config.local.yaml
+
+# Worktree-only runtime files (NOT committed, NOT shared with main)
+run_dashboard*.py
+data/dashboard-worktree.log
+data/dashboard-worktree.pid
