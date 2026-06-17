@@ -21,6 +21,16 @@
          href="/grid"
          {{ 'aria-current="page"' | safe if request_endpoint == 'grid' else '' }}>9-Card Grid</a>
     </nav>
+    {# Polarity window toggle (v1.7.4). 1d / 7d / 30d. The active
+       window is highlighted server-side based on the cookie value. #}
+    <nav class="window-toggle" aria-label="Polarity window selector">
+      <span class="window-toggle-label">window:</span>
+      {% for n in allowed_polarity_windows %}
+        <a class="window-tab {{ 'is-active' if selected_window_days == n else '' }}"
+           href="/api/polarity_window/{{ n }}"
+           {{ 'aria-current="true"' | safe if selected_window_days == n else '' }}>{{ n }}d</a>
+      {% endfor %}
+    </nav>
     <span class="muted" id="last-run-stamp"
           data-finished-at="{{ last_run_at or '' }}">
       last updated: {{ last_run_at or 'never' }}

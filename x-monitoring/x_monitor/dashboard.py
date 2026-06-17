@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, abort, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request, make_response, redirect, url_for
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .account_graph import build_force_directed
@@ -143,6 +143,51 @@ _QID_TO_SIGNAL: dict[str, str] = {
     "Q6": "praise",
 }
 
+
+
+# Allowed values for the polarity window toggle (v1.7.4). 1d is the daily
+# pulse (high variance, may be sparse); 7d is the weekly default; 30d is
+# the long-range trend (lower variance, requires window_days >= 30, which
+# we clamp at read time). The literal tuple is the single source of truth
+# for both the route validator and the topbar template loop.
+ALLOWED_POLARITY_WINDOWS: tuple[int, ...] = (1, 7, 30)
+POLARITY_WINDOW_COOKIE = "polarity_window"
+
+
+def _resolve_polarity_window(req, default: int) -> int:
+    """Read the polarity window from a Flask request's cookies.
+
+    Returns the validated int if the cookie is set to one of the allowed
+    values; otherwise returns `default`. Defensive: any malformed value
+    (non-int, out of range, negative) falls back to the default rather
+    than raising, so a stale or hand-edited cookie can't crash the page.
+    """
+    raw = req.cookies.get(POLARITY_WINDOW_COOKIE)
+    if raw is None:
+        return default
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if n not in ALLOWED_POLARITY_WINDOWS:
+        return default
+    return n
+
+
+def _clamp_polarity_window(window: int, ceiling: int) -> int:
+    """Clamp the polarity window to the config's window_days ceiling.
+
+    The polarity prior window is [anchor - 2N, anchor - N), so it requires
+    2*N days of post history. With the default config window_days=14,
+    picking 30d from the toggle would extend the prior window to 60d ago,
+    which is outside the post history. We silently clamp to the ceiling
+    rather than crash or extend the prior window into nothing.
+
+    The user's choice is preserved in the cookie; only the read-time
+    computation is clamped. The 1d choice is always honored (N=1 means
+    the prior window is 1 day ago, well within any reasonable history).
+    """
+    return max(1, min(window, ceiling))
 
 def _qid_to_signal(qid: str) -> str | None:
     """Map a source_query_id to its expected_signal name, or None for unknown."""
@@ -370,7 +415,7 @@ class DashboardApp:
         return cards, latest_run
 
     def _build_treemap_tiles(
-        self, latest_run: dict | None
+        self, latest_run: dict | None, polarity_window_days: int | None = None,
     ) -> list[TreemapTile]:
         """Build TreemapTile list for all enabled models.
 
@@ -382,10 +427,22 @@ class DashboardApp:
           - polarity_score = compute_polarity(...) in the current + prior N-day windows
             (windowed, so the color reflects rate of change, not all-time mix)
 
+        `polarity_window_days` (v1.7.4) overrides the per-request polarity
+        window (1, 7, or 30). When None, falls back to the config default
+        `treemap_volume_window_days`. The 30d option is bounded by the
+        DashboardConfig validator (must be <= window_days); we silently
+        clamp to that limit on read, since the UI exposes only 1/7/30 but
+        operators may lower window_days.
+
         Per-model failures (e.g. broken store read) are caught and rendered as
         no-data tiles so one bad model doesn't take the whole page down.
         """
-        n_days = self.config.dashboard.treemap_volume_window_days
+        if polarity_window_days is None:
+            polarity_window_days = self.config.dashboard.treemap_volume_window_days
+        polarity_window_days = _clamp_polarity_window(
+            polarity_window_days, self.config.dashboard.window_days,
+        )
+        n_days = polarity_window_days
         # Anchor 'now' to the last run's finished_at when available, mirroring
         # serialize_grid_card so the polarity windows are stable across cycles.
         now = datetime.now(timezone.utc)
@@ -463,13 +520,21 @@ class DashboardApp:
             # partial endpoint every Ns; this initial render is the
             # same data the first poll will return.
             latest_run = _load_latest_run(self.runs_dir)
-            tiles = self._build_treemap_tiles(latest_run)
+            raw_window = _resolve_polarity_window(
+                request, self.config.dashboard.treemap_volume_window_days,
+            )
+            window = _clamp_polarity_window(
+                raw_window, self.config.dashboard.window_days,
+            )
+            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
             svg = build_treemap_svg(tiles, width=1200, height=800)
             return render_template(
                 "treemap.html.j2",
                 treemap_svg=svg,
                 tiles=tiles,
-                treemap_window_days=treemap_n_days,
+                treemap_window_days=window,
+                selected_window_days=raw_window,
+                allowed_polarity_windows=list(ALLOWED_POLARITY_WINDOWS),
                 poll_seconds=self.config.dashboard.poll_seconds,
                 last_run_at=(latest_run or {}).get("finished_at"),
             )
@@ -491,7 +556,13 @@ class DashboardApp:
             # <main id="treemap"> on the initial page persists, so the
             # hx-trigger attribute stays attached and polling continues.
             latest_run = _load_latest_run(self.runs_dir)
-            tiles = self._build_treemap_tiles(latest_run)
+            raw_window = _resolve_polarity_window(
+                request, self.config.dashboard.treemap_volume_window_days,
+            )
+            window = _clamp_polarity_window(
+                raw_window, self.config.dashboard.window_days,
+            )
+            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
             svg = build_treemap_svg(tiles, width=1200, height=800)
             return render_template(
                 "_treemap_svg.html.j2",
@@ -503,7 +574,13 @@ class DashboardApp:
             # Structured payload for external consumers. Per R13, returns
             # the sorted tile list + fetched_at + window metadata.
             latest_run = _load_latest_run(self.runs_dir)
-            tiles = self._build_treemap_tiles(latest_run)
+            raw_window = _resolve_polarity_window(
+                request, self.config.dashboard.treemap_volume_window_days,
+            )
+            window = _clamp_polarity_window(
+                raw_window, self.config.dashboard.window_days,
+            )
+            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
             return jsonify(
                 {
                     "tiles": [
@@ -518,10 +595,45 @@ class DashboardApp:
                     ],
                     "fetched_at": datetime.now(timezone.utc).isoformat(),
                     "window": {
-                        "treemap_volume_window_days": treemap_n_days,
+                        "treemap_volume_window_days": window,
+                        "requested_window_days": raw_window,
+                        "default_window_days": self.config.dashboard.treemap_volume_window_days,
+                        "allowed_windows": list(ALLOWED_POLARITY_WINDOWS),
                     },
                 }
             )
+
+        @app.route("/api/polarity_window/<int:days>")
+        def api_set_polarity_window(days: int):
+            """Set the polarity window cookie and redirect back to where
+            the user came from (or the treemap front page if no Referer).
+
+            The toggle buttons in the topbar link here. After the redirect,
+            the next page render reads the new cookie and re-renders the
+            treemap with the chosen window. Because the htmx poller on
+            /api/treemap.html also reads the cookie, the toggle updates
+            on the very next poll (within `poll_seconds`).
+            """
+            if days not in ALLOWED_POLARITY_WINDOWS:
+                # 400, not a redirect: bad days value (e.g. 99) means the
+                # client is broken or hostile. Avoid setting a junk cookie.
+                return jsonify(
+                    {
+                        "error": "invalid polarity window",
+                        "allowed": list(ALLOWED_POLARITY_WINDOWS),
+                    }
+                ), 400
+            resp = make_response(
+                redirect(request.referrer or url_for("index"), code=303)
+            )
+            resp.set_cookie(
+                POLARITY_WINDOW_COOKIE,
+                str(days),
+                max_age=60 * 60 * 24 * 365,  # 1 year
+                samesite="Lax",
+                httponly=True,
+            )
+            return resp
 
         @app.route("/api/grid.html")
         def api_grid_html():

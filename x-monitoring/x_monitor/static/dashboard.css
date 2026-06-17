@@ -228,3 +228,43 @@ body {
   max-width: 100%;
   height: auto;
 }
+
+/* Polarity window toggle (v1.7.4). Mirrors .view-tab styling but smaller,
+   with a label and 3 compact buttons for 1d / 7d / 30d. */
+.window-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+  align-items: center;
+}
+.window-toggle-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.window-tab {
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.window-tab:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+.window-tab.is-active {
+  color: var(--fg);
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+.window-tab:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
