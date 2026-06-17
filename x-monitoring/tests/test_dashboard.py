@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from x_monitor.config import Config
 from x_monitor.dashboard import (
@@ -1033,7 +1034,9 @@ class TestTreemapRoutes:
 
         data = tmp_path / "data"
         data.mkdir()
-        with pytest.raises(Exception):  # ValidationError or ValueError
+        # Tighten from bare Exception so a regression (e.g. accidental
+        # KeyError from a typo in _validate_dashboard_config) actually fails.
+        with pytest.raises((ValidationError, ValueError)):
             DashboardApp(
                 Config(enabled_models=["not_a_real_model"], daily_ceiling=333),
                 data, db_path=data / "x.db",
@@ -1092,8 +1095,9 @@ class TestTreemapRoutes:
         tiles = r.get_json()["tiles"]
         # minimax first (highest area), then qwen + deepseek tied on area
         assert tiles[0]["model_id"] == "minimax"
-        # qwen and deepseek are tied on area=5; sort is stable, falls
-        # back to display_name asc.
-        tied = sorted([tiles[1]["display_name"], tiles[2]["display_name"]])
-        assert tied == [tiles[1]["display_name"], tiles[2]["display_name"]]
+        # qwen and deepseek are tied on area=5; sort falls back to
+        # display_name asc per R13. Make the intent explicit (don't
+        # rely on a coincidental alphabetical match).
+        assert tiles[1]["display_name"] == "DeepSeek"
+        assert tiles[2]["display_name"] == "Qwen"
 

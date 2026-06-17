@@ -223,7 +223,7 @@ def _no_data_strip_svg(no_data: list[TreemapTile], width: int) -> str:
             f'stroke-width="1" rx="2" ry="2"/>'
             f'<text x="{x + (box_w - 4) / 2}" y="{y + box_h / 2 + 4}" '
             f'font-size="11" fill="#8b949e" text-anchor="middle" '
-            f'pointer-events="none" opacity="6">{_xml_escape(tile.display_name)} (no data)</text>'
+            f'pointer-events="none" opacity="0.6">{_xml_escape(tile.display_name)} (no data)</text>'
         )
     parts.append("</g>")
     return "".join(parts)

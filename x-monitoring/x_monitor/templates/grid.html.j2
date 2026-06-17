@@ -17,10 +17,12 @@
        server-side based on request.endpoint. aria-current="page" gives screen
        readers the active tab. #}
     <nav class="view-tabs" aria-label="View switcher">
-      <a class="view-tab" href="/">Treemap</a>
-      <a class="view-tab is-active"
+      <a class="view-tab {{ 'is-active' if request_endpoint == 'index' else '' }}"
+         href="/"
+         {{ 'aria-current="page"' | safe if request_endpoint == 'index' else '' }}>Treemap</a>
+      <a class="view-tab {{ 'is-active' if request_endpoint == 'grid' else '' }}"
          href="/grid"
-         aria-current="page">9-Card Grid</a>
+         {{ 'aria-current="page"' | safe if request_endpoint == 'grid' else '' }}>9-Card Grid</a>
     </nav>
     <span class="muted" id="last-run-stamp"
           data-finished-at="{{ cards[0].last_run_at or '' }}">

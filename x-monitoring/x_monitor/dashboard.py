@@ -342,6 +342,12 @@ class DashboardApp:
         app.jinja_env.globals["MODEL_DISPLAY_NAMES"] = MODEL_DISPLAY_NAMES
         app.jinja_env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
         app.config["JSON_SORT_KEYS"] = False
+        # Inject request.endpoint into every template render so the nav
+        # strip can pick its active tab without per-route plumbing.
+        @app.context_processor
+        def _inject_request():
+            from flask import request
+            return {"request_endpoint": request.endpoint}
         self.app = app
         self._validate_dashboard_config()
         self._register_routes()
