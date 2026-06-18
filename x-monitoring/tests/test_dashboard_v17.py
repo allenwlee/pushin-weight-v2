@@ -289,11 +289,11 @@ def _build_app(enabled=None):
 
 
 def test_index_renders_locale_switcher():
-    """The / page must contain a locale switcher (EN | 中文)."""
+    """The /grid page must contain a locale switcher (EN | 中文)."""
     app, _ = _build_app()
     try:
         client = app.app.test_client()
-        body = client.get("/").get_data(as_text=True)
+        body = client.get("/grid").get_data(as_text=True)
         # The switcher is in the topbar
         assert "EN" in body
         assert "中文" in body
@@ -316,7 +316,7 @@ def test_index_locale_cookie_honored():
         client = app.app.test_client()
         # Set the cookie
         client.set_cookie("locale", "zh-CN")
-        body = client.get("/").get_data(as_text=True)
+        body = client.get("/grid").get_data(as_text=True)
         # The card data is rendered with locale=zh-CN
         # Verify by checking the active locale marker (e.g., a CSS class
         # on the switcher indicating "中文" is the current one).
@@ -382,7 +382,7 @@ def test_index_query_param_locale_overrides_cookie():
         client = app.app.test_client()
         # Cookie says en, query says zh-CN
         client.set_cookie("locale", "en")
-        resp = client.get("/?locale=zh-CN")
+        resp = client.get("/grid?locale=zh-CN")
         body = resp.get_data(as_text=True)
         # The active locale marker should be on the 中文 link.
         # Implementation detail: the active link gets `class="active"`.
