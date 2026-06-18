@@ -1,0 +1,5 @@
+# Created by Claude Code v2.1.162, using MiniMax-M3.0, on 2026-06-18-07:11 (JST)
+# Local git worktrees — not committed, lives in .git/worktrees/
+# Adding these here so `git status`, `git ls-files`, and any tool that
+# walks the repo from the root do not see a duplicate tree of the project.
+/worktrees/

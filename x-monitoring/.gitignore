@@ -6,9 +6,13 @@ data/runs/LATEST.json
 data/runs/LATEST.running.json
 data/runs/LOCK
 data/x_monitoring.db
+data/x_monitoring.db-*
 data/dashboard.pid
 data/dashboard.log
+data/dashboard-worktree.pid
+data/dashboard-worktree.log
 data/_review_queue.json
+data/_review_queue.json.lock
 data/headlines_cache.json
 data/headlines_cache.json.lock
 
@@ -17,6 +21,8 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Cookies (defense in depth — never commit)
 config.local.yaml
