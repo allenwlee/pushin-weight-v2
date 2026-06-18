@@ -22,7 +22,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* v1.8 — Arial stack matches the treemap tile font for visual consistency. */
+  font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
   line-height: 1.4;
 }
@@ -160,4 +161,121 @@ body {
 /* v1.6 staleness indicator — amber when data is > 1h old. */
 #last-run-stamp.stale {
   color: #f59e0b;
+}
+
+/* --- v1.7 nav strip + treemap page styles ---------------------------- */
+
+/* 2-tab nav strip in the topbar. Server-side active state via
+   .is-active + aria-current="page" on the link. */
+.view-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+}
+.view-tab {
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.view-tab:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+.view-tab.is-active {
+  color: var(--fg);
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+.view-tab:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+/* Treemap front page. The legend lives at the top of the page so users
+   can decode tile fills without hover (v1 has no hover). */
+.treemap-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.5rem;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--card-border);
+  flex-wrap: wrap;
+}
+.legend-label { color: var(--fg); margin-right: 0.4rem; font-weight: 500; }
+.legend-cell {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-left: 0.4rem;
+  margin-right: 0.15rem;
+  vertical-align: -2px;
+}
+
+.treemap-wrap {
+  /* v1.8 — tighter wrap padding; treemap hover affordance below. */
+  padding: 0.5rem;
+}
+.treemap-wrap svg.treemap {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* v1.8 — stroke-width hover affordance. No JS; SVG <a> hover thickens
+   the surrounding rect's stroke from 2px to 3px within 150ms. */
+.treemap rect {
+  transition: stroke-width 0.15s ease;
+}
+.treemap a:hover rect {
+  stroke-width: 3;
+}
+
+/* Polarity window toggle (v1.7.4). Mirrors .view-tab styling but smaller,
+   with a label and 3 compact buttons for 1d / 7d / 30d. */
+.window-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+  align-items: center;
+}
+.window-toggle-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.window-tab {
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.window-tab:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+.window-tab.is-active {
+  color: var(--fg);
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+.window-tab:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }

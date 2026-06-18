@@ -17,17 +17,22 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, abort, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request, make_response, redirect, url_for
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .account_graph import build_force_directed
 from .config import Config
 from .store import Store
+from .treemap import (
+    TreemapTile,
+    build_treemap_svg,
+    compute_polarity,
+)
 
 log = logging.getLogger(__name__)
 
 
-# Display name map for the 9 v1 models. PR-reviewable; tweak per brand team
+# Display name map for the 11 v1 models. PR-reviewable; tweak per brand team
 # feedback without touching the rest of the code.
 MODEL_DISPLAY_NAMES: dict[str, str] = {
     "minimax": "MiniMax AI",
@@ -37,6 +42,10 @@ MODEL_DISPLAY_NAMES: dict[str, str] = {
     "xiaomi_mimo": "Xiaomi MiMo",
     "moonshot_kimi": "Moonshot Kimi",
     "inclusionai": "InclusionAI",
+    "mistral": "Mistral",
+    "stepfun": "StepFun",
+    "ernie": "Baidu ERNIE",
+    "hunyuan": "Tencent Hunyuan",
 }
 
 # Accent color per model — drives the card border-left + sparkline stroke.
@@ -48,6 +57,10 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
     "xiaomi_mimo": "#eab308",
     "moonshot_kimi": "#ec4899",
     "inclusionai": "#06b6d4",
+    "mistral": "#facc15",
+    "stepfun": "#22c55e",
+    "ernie": "#0ea5e9",
+    "hunyuan": "#ec4899",
 }
 
 
@@ -197,6 +210,51 @@ _QID_TO_SIGNAL: dict[str, str] = {
     "Q6": "praise",
 }
 
+
+
+# Allowed values for the polarity window toggle (v1.7.4). 1d is the daily
+# pulse (high variance, may be sparse); 7d is the weekly default; 30d is
+# the long-range trend (lower variance, requires window_days >= 30, which
+# we clamp at read time). The literal tuple is the single source of truth
+# for both the route validator and the topbar template loop.
+ALLOWED_POLARITY_WINDOWS: tuple[int, ...] = (1, 7, 30)
+POLARITY_WINDOW_COOKIE = "polarity_window"
+
+
+def _resolve_polarity_window(req, default: int) -> int:
+    """Read the polarity window from a Flask request's cookies.
+
+    Returns the validated int if the cookie is set to one of the allowed
+    values; otherwise returns `default`. Defensive: any malformed value
+    (non-int, out of range, negative) falls back to the default rather
+    than raising, so a stale or hand-edited cookie can't crash the page.
+    """
+    raw = req.cookies.get(POLARITY_WINDOW_COOKIE)
+    if raw is None:
+        return default
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if n not in ALLOWED_POLARITY_WINDOWS:
+        return default
+    return n
+
+
+def _clamp_polarity_window(window: int, ceiling: int) -> int:
+    """Clamp the polarity window to the config's window_days ceiling.
+
+    The polarity prior window is [anchor - 2N, anchor - N), so it requires
+    2*N days of post history. With the default config window_days=14,
+    picking 30d from the toggle would extend the prior window to 60d ago,
+    which is outside the post history. We silently clamp to the ceiling
+    rather than crash or extend the prior window into nothing.
+
+    The user's choice is preserved in the cookie; only the read-time
+    computation is clamped. The 1d choice is always honored (N=1 means
+    the prior window is 1 day ago, well within any reasonable history).
+    """
+    return max(1, min(window, ceiling))
 
 def _qid_to_signal(qid: str) -> str | None:
     """Map a source_query_id to its expected_signal name, or None for unknown."""
@@ -429,7 +487,14 @@ class DashboardApp:
         app.jinja_env.globals["MODEL_DISPLAY_NAMES"] = MODEL_DISPLAY_NAMES
         app.jinja_env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
         app.config["JSON_SORT_KEYS"] = False
+        # Inject request.endpoint into every template render so the nav
+        # strip can pick its active tab without per-route plumbing.
+        @app.context_processor
+        def _inject_request():
+            from flask import request
+            return {"request_endpoint": request.endpoint}
         self.app = app
+        self._validate_dashboard_config()
         self._register_routes()
 
     def _build_cards(self, db_path) -> tuple[list[dict], dict | None]:
@@ -467,15 +532,153 @@ class DashboardApp:
         from flask import request
         locale = request.args.get("locale") or request.cookies.get("locale")
         return normalize_locale(locale)
+    def _build_treemap_tiles(
+        self, latest_run: dict | None, polarity_window_days: int | None = None,
+    ) -> list[TreemapTile]:
+        """Build TreemapTile list for all enabled models.
+
+        Anchors 'now' to the latest run's finished_at (falls back to wall-clock),
+        then for each enabled model:
+          - area_weight = total post count for the model to-date (cumulative,
+            no time filter). 11 models x 2000 posts total is fine; if this
+            ever becomes a hotspot swap len(posts) for a Store.count_posts().
+          - polarity_score = compute_polarity(...) in the current + prior N-day windows
+            (windowed, so the color reflects rate of change, not all-time mix)
+
+        `polarity_window_days` (v1.7.4) overrides the per-request polarity
+        window (1, 7, or 30). When None, falls back to the config default
+        `treemap_volume_window_days`. The 30d option is bounded by the
+        DashboardConfig validator (must be <= window_days); we silently
+        clamp to that limit on read, since the UI exposes only 1/7/30 but
+        operators may lower window_days.
+
+        Per-model failures (e.g. broken store read) are caught and rendered as
+        no-data tiles so one bad model doesn't take the whole page down.
+        """
+        if polarity_window_days is None:
+            polarity_window_days = self.config.dashboard.treemap_volume_window_days
+        polarity_window_days = _clamp_polarity_window(
+            polarity_window_days, self.config.dashboard.window_days,
+        )
+        n_days = polarity_window_days
+        # Anchor 'now' to the last run's finished_at when available, mirroring
+        # serialize_grid_card so the polarity windows are stable across cycles.
+        now = datetime.now(timezone.utc)
+        if latest_run and latest_run.get("finished_at"):
+            try:
+                now = datetime.fromisoformat(
+                    latest_run["finished_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+        current_window = (now - timedelta(days=n_days), now)
+        prior_window = (now - timedelta(days=2 * n_days), now - timedelta(days=n_days))
+
+        store = Store(self.db_path)
+        tiles: list[TreemapTile] = []
+        # v1.8 — derive last-run timestamp + sector lookup once per build.
+        last_run_str = None
+        if latest_run and latest_run.get("finished_at"):
+            last_run_str = latest_run["finished_at"]
+        from .treemap import MODEL_SECTORS
+        try:
+            for m in self.config.enabled_models:
+                try:
+                    posts = store.get_all_posts(m)
+                    # area_weight = total posts to-date (cumulative). Windowing
+                    # is reserved for polarity, where rate-of-change is the
+                    # right signal.
+                    area_weight = len(posts)
+                    polarity = compute_polarity(posts, current_window, prior_window)
+                    # v1.8 — count posts inside the current polarity window for
+                    # the native <title> tooltip. Same filter compute_polarity
+                    # uses internally; we recompute here because we only need
+                    # the count, not the signal breakdown.
+                    posts_in_window = sum(
+                        1 for post in posts
+                        if (current_window[0] <= (_ts := _parse_post_timestamp(post.get("created_at")) or current_window[0]) < current_window[1])
+                    )
+                except Exception as e:
+                    log.warning(
+                        "treemap tile build failed for %s: %s — rendering as no-data",
+                        m, e,
+                    )
+                    area_weight = 0
+                    polarity = None
+                    posts_in_window = 0
+                tiles.append(
+                    TreemapTile(
+                        model_id=m,
+                        display_name=MODEL_DISPLAY_NAMES.get(m, m),
+                        accent_color=MODEL_ACCENT_COLORS.get(m, "#9ca3af"),
+                        area_weight=float(area_weight),
+                        polarity_score=polarity,
+                        posts_in_window=posts_in_window,
+                        polarity_window_days=polarity_window_days,
+                        last_run_finished_at=last_run_str,
+                        sector=MODEL_SECTORS.get(m),
+                    )
+                )
+        finally:
+            store.close()
+        # R13: sort by area desc, then display_name asc for stable layout
+        tiles.sort(key=lambda t: (-t.area_weight, t.display_name))
+        return tiles
+
+    def _validate_dashboard_config(self) -> None:
+        """Startup check that every enabled_model has a display_name + accent_color.
+
+        Raised at app boot (not request time) so a misconfigured enabled_models
+        list fails fast and visibly, not silently with a fallback accent.
+        """
+        for m in self.config.enabled_models:
+            if m not in MODEL_DISPLAY_NAMES:
+                raise ValueError(
+                    f"enabled_model '{m}' has no entry in MODEL_DISPLAY_NAMES. "
+                    f"Add it before restarting the dashboard."
+                )
+            if m not in MODEL_ACCENT_COLORS:
+                raise ValueError(
+                    f"enabled_model '{m}' has no entry in MODEL_ACCENT_COLORS. "
+                    f"Add it before restarting the dashboard."
+                )
 
     def _register_routes(self) -> None:
         app = self.app
         data_dir = self.data_dir
         db_path = self.db_path
         window_days = self.config.dashboard.window_days
+        treemap_n_days = self.config.dashboard.treemap_volume_window_days
 
         @app.route("/")
         def index():
+            # Treemap front page (Finviz-style). The htmx wrapper polls the
+            # partial endpoint every Ns; this initial render is the
+            # same data the first poll will return.
+            latest_run = _load_latest_run(self.runs_dir)
+            raw_window = _resolve_polarity_window(
+                request, self.config.dashboard.treemap_volume_window_days,
+            )
+            window = _clamp_polarity_window(
+                raw_window, self.config.dashboard.window_days,
+            )
+            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
+            svg = build_treemap_svg(tiles, width=1200, height=800)
+            return render_template(
+                "treemap.html.j2",
+                treemap_svg=svg,
+                tiles=tiles,
+                treemap_window_days=window,
+                selected_window_days=raw_window,
+                allowed_polarity_windows=list(ALLOWED_POLARITY_WINDOWS),
+                poll_seconds=self.config.dashboard.poll_seconds,
+                last_run_at=(latest_run or {}).get("finished_at"),
+            )
+
+        @app.route("/grid")
+        def grid():
+            # 9-card grid (preserved from v1.6). Moved off / when the treemap
+            # became the default front page.
             cards, _latest_run = self._build_cards(db_path)
             return render_template(
                 "grid.html.j2",
@@ -483,6 +686,95 @@ class DashboardApp:
                 poll_seconds=self.config.dashboard.poll_seconds,
                 active_locale=self._resolve_locale(),
             )
+
+        @app.route("/api/treemap.html")
+        def api_treemap_html():
+            # SVG-only htmx partial — no <main> wrapper. The wrapping
+            # <main id="treemap"> on the initial page persists, so the
+            # hx-trigger attribute stays attached and polling continues.
+            latest_run = _load_latest_run(self.runs_dir)
+            raw_window = _resolve_polarity_window(
+                request, self.config.dashboard.treemap_volume_window_days,
+            )
+            window = _clamp_polarity_window(
+                raw_window, self.config.dashboard.window_days,
+            )
+            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
+            svg = build_treemap_svg(tiles, width=1200, height=800)
+            return render_template(
+                "_treemap_svg.html.j2",
+                treemap_svg=svg,
+            )
+
+        @app.route("/api/treemap.json")
+        def api_treemap_json():
+            # Structured payload for external consumers. Per R13, returns
+            # the sorted tile list + fetched_at + window metadata.
+            latest_run = _load_latest_run(self.runs_dir)
+            raw_window = _resolve_polarity_window(
+                request, self.config.dashboard.treemap_volume_window_days,
+            )
+            window = _clamp_polarity_window(
+                raw_window, self.config.dashboard.window_days,
+            )
+            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
+            return jsonify(
+                {
+                    "tiles": [
+                        {
+                            "model_id": t.model_id,
+                            "display_name": t.display_name,
+                            "accent_color": t.accent_color,
+                            "area_weight": t.area_weight,
+                            "polarity_score": t.polarity_score,
+                            "posts_in_window": t.posts_in_window,
+                            "polarity_window_days": t.polarity_window_days,
+                            "last_run_finished_at": t.last_run_finished_at,
+                            "sector": t.sector,
+                        }
+                        for t in tiles
+                    ],
+                    "fetched_at": datetime.now(timezone.utc).isoformat(),
+                    "window": {
+                        "treemap_volume_window_days": window,
+                        "requested_window_days": raw_window,
+                        "default_window_days": self.config.dashboard.treemap_volume_window_days,
+                        "allowed_windows": list(ALLOWED_POLARITY_WINDOWS),
+                    },
+                }
+            )
+
+        @app.route("/api/polarity_window/<int:days>")
+        def api_set_polarity_window(days: int):
+            """Set the polarity window cookie and redirect back to where
+            the user came from (or the treemap front page if no Referer).
+
+            The toggle buttons in the topbar link here. After the redirect,
+            the next page render reads the new cookie and re-renders the
+            treemap with the chosen window. Because the htmx poller on
+            /api/treemap.html also reads the cookie, the toggle updates
+            on the very next poll (within `poll_seconds`).
+            """
+            if days not in ALLOWED_POLARITY_WINDOWS:
+                # 400, not a redirect: bad days value (e.g. 99) means the
+                # client is broken or hostile. Avoid setting a junk cookie.
+                return jsonify(
+                    {
+                        "error": "invalid polarity window",
+                        "allowed": list(ALLOWED_POLARITY_WINDOWS),
+                    }
+                ), 400
+            resp = make_response(
+                redirect(request.referrer or url_for("index"), code=303)
+            )
+            resp.set_cookie(
+                POLARITY_WINDOW_COOKIE,
+                str(days),
+                max_age=60 * 60 * 24 * 365,  # 1 year
+                samesite="Lax",
+                httponly=True,
+            )
+            return resp
 
         @app.route("/api/grid.html")
         def api_grid_html():

@@ -1,4 +1,4 @@
-# {{AGENT_ATTRIBUTION}}
+# Created by Claude Code v2.1.162, using MiniMax-M3.0, on 2026-06-18-07:11 (JST)
 # Runtime data (not committed)
 data/runs/raw/
 data/runs/[0-9]*.json
@@ -16,14 +16,17 @@ data/_review_queue.json.lock
 data/headlines_cache.json
 data/headlines_cache.json.lock
 
+# Worktree-only runtime files (NOT committed, NOT shared with main)
+run_dashboard*.py
+
 # Python
 __pycache__/
 *.egg-info/
 .venv/
+venv
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
 # Cookies (defense in depth — never commit)
 config.local.yaml
-venv

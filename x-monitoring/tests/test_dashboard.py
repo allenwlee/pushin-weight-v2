@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from x_monitor.config import Config
 from x_monitor.dashboard import (
@@ -80,7 +81,8 @@ def test_serialize_grid_card_query_rot_sentinel():
         assert any("q_error:Q3" in s for s in card["degraded_sentinels"])
 
 
-def test_dashboard_index_renders_all_known_cards():
+def test_dashboard_grid_renders_all_known_cards():
+    # Grid moved to /grid in v1.7 (treemap took /).
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
         cfg = Config(enabled_models=list(MODEL_DISPLAY_NAMES.keys()), daily_ceiling=333)
@@ -88,7 +90,7 @@ def test_dashboard_index_renders_all_known_cards():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        resp = client.get("/")
+        resp = client.get("/grid")
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         for m in cfg.enabled_models:
@@ -154,17 +156,15 @@ def test_dashboard_known_model_drilldown_renders_4_tabs():
             assert f'data-tab="{tab}"' in body
 
 
-def test_dashboard_adding_tenth_model_yields_tenth_card():
+def test_dashboard_grid_adding_models_yields_matching_card_count():
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
-        # Use a real model from the registry + a 10th would require extending
-        # the registry. Instead, test that the count matches enabled_models.
         cfg = Config(enabled_models=["minimax", "qwen"], daily_ceiling=333)
         from x_monitor.dashboard import DashboardApp
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        body = client.get("/").get_data(as_text=True)
+        body = client.get("/grid").get_data(as_text=True)
         assert body.count('class="model-card"') == 2
 
 
@@ -180,7 +180,7 @@ def test_dashboard_drilldown_known_model_200():
         assert resp.status_code == 200
 
 
-def test_dashboard_htmx_script_included_exactly_once():
+def test_dashboard_grid_htmx_script_included_exactly_once():
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
@@ -188,7 +188,7 @@ def test_dashboard_htmx_script_included_exactly_once():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        body = client.get("/").get_data(as_text=True)
+        body = client.get("/grid").get_data(as_text=True)
         # htmx script tag
         assert body.count("htmx.org") == 1
 
@@ -354,7 +354,7 @@ class TestGridHtmlPollEndpoint:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/").get_data(as_text=True)
+            body = client.get("/grid").get_data(as_text=True)
             assert 'hx-get="/api/grid.html"' in body
             # innerHTML swap keeps <main> alive across polls
             assert 'hx-swap="innerHTML"' in body
@@ -422,7 +422,7 @@ class TestTrendChartAssets:
                 assert len(payload["series"]) == 6
 
     def test_grid_page_loads_chartjs_from_cdn(self):
-        """The / page must include the Chart.js CDN script tag."""
+        """The /grid page must include the Chart.js CDN script tag."""
         with tempfile.TemporaryDirectory() as d:
             data = Path(d)
             cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
@@ -430,12 +430,12 @@ class TestTrendChartAssets:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/").get_data(as_text=True)
+            body = client.get("/grid").get_data(as_text=True)
             assert "chart.js" in body
             assert "unpkg.com" in body
 
     def test_grid_page_loads_static_trend_chart_js(self):
-        """The / page must reference the local trend-chart.js asset."""
+        """The /grid page must reference the local trend-chart.js asset."""
         with tempfile.TemporaryDirectory() as d:
             data = Path(d)
             cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
@@ -443,7 +443,7 @@ class TestTrendChartAssets:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/").get_data(as_text=True)
+            body = client.get("/grid").get_data(as_text=True)
             assert "trend-chart.js" in body
 
     def test_model_detail_page_loads_chartjs(self):
@@ -848,7 +848,7 @@ class TestStalenessIndicator:
 
     def test_staleness_indicator_present_in_grid(self, tmp_path):
         client = self._make_client(tmp_path)
-        r = client.get("/")
+        r = client.get("/grid")
         assert r.status_code == 200
         body = r.get_data(as_text=True)
         assert 'id="last-run-stamp"' in body
@@ -878,14 +878,14 @@ class TestStalenessIndicator:
         app = DashboardApp(
             Config(enabled_models=["minimax"], daily_ceiling=333), data, db_path=data / "x.db",
         )
-        r = app.app.test_client().get("/")
+        r = app.app.test_client().get("/grid")
         body = r.get_data(as_text=True)
         assert "2026-06-16T00:00:00" in body
         assert "last updated: 2026-06-16T00:00:00+00:00" in body
 
     def test_staleness_indicator_when_never_run(self, tmp_path):
         client = self._make_client(tmp_path, with_runs=False)
-        r = client.get("/")
+        r = client.get("/grid")
         body = r.get_data(as_text=True)
         assert "last updated: never" in body
 
@@ -895,3 +895,641 @@ class TestStalenessIndicator:
         assert r.status_code == 200
         body = r.get_data(as_text=True)
         assert "updateLastRun" in body
+
+
+# --- v1.7 treemap front page + nav strip + htmx partial -----------------
+
+class TestTreemapRoutes:
+    """The treemap front page replaces the grid on / in v1.7. The grid
+    itself is preserved at /grid."""
+
+    def test_treemap_root_renders_svg_and_nav(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax", "qwen", "deepseek", "glm"],
+                daily_ceiling=333,
+            ),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        # Nav strip with both tabs
+        assert "view-tabs" in body
+        assert 'href="/"' in body
+        assert 'href="/grid"' in body
+        # Initial render embeds the SVG
+        assert '<svg' in body
+        assert 'class="treemap"' in body
+        # htmx polling on the partial endpoint
+        assert 'hx-get="/api/treemap.html"' in body
+        assert 'hx-swap="innerHTML"' in body
+        # Active tab is Treemap on this page
+        assert 'aria-current="page"' in body
+        # Legend present
+        assert "Polarity" in body or "polarity" in body
+
+    def test_treemap_grid_route_preserved(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/grid")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        # Grid-specific marker (a model-card div per enabled model)
+        assert body.count('class="model-card"') == 1
+        # Nav strip still present
+        assert "view-tabs" in body
+        # Active tab is Grid on this page (aria-current on the grid tab)
+        assert 'href="/grid"' in body
+
+    def test_api_treemap_html_returns_svg_partial_only(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(enabled_models=["minimax", "qwen"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.html")
+        assert r.status_code == 200
+        # text/html, not application/json
+        assert "text/html" in r.headers.get("Content-Type", "")
+        body = r.get_data(as_text=True)
+        # SVG only, no <main> wrapper (the client keeps the wrapping element)
+        assert '<svg' in body
+        assert "<main" not in body
+
+    def test_api_treemap_json_has_tiles_and_window(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        app = DashboardApp(
+            Config(enabled_models=["minimax", "qwen"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        assert r.status_code == 200
+        body = r.get_json()
+        assert "tiles" in body
+        assert "fetched_at" in body
+        assert "window" in body
+        assert body["window"]["treemap_volume_window_days"] == 7
+        assert len(body["tiles"]) == 2
+        for t in body["tiles"]:
+            for key in (
+                "model_id", "display_name", "accent_color",
+                "area_weight", "polarity_score",
+            ):
+                assert key in t
+        # Sort order: descending area_weight, then display_name
+        weights = [t["area_weight"] for t in body["tiles"]]
+        assert weights == sorted(weights, reverse=True)
+
+    def test_treemap_tile_count_matches_enabled_models(self, tmp_path):
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        enabled = ["minimax", "qwen", "deepseek"]
+        app = DashboardApp(
+            Config(enabled_models=enabled, daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        body = r.get_json()
+        # Tiles are sorted by (-area_weight, display_name) per R13. With no
+        # data, the secondary sort is display_name asc — so we just check
+        # the set of model_ids is the set of enabled models, not order.
+        assert len(body["tiles"]) == len(enabled)
+        got = {t["model_id"] for t in body["tiles"]}
+        assert got == set(enabled)
+
+    def test_treemap_validates_enabled_models_at_startup(self, tmp_path):
+        # An unknown model id in enabled_models should fail at construction
+        # time, not silently render a fallback accent at request time.
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        # Tighten from bare Exception so a regression (e.g. accidental
+        # KeyError from a typo in _validate_dashboard_config) actually fails.
+        with pytest.raises((ValidationError, ValueError)):
+            DashboardApp(
+                Config(enabled_models=["not_a_real_model"], daily_ceiling=333),
+                data, db_path=data / "x.db",
+            )
+
+    def test_treemap_tiles_sort_by_area_then_name(self, tmp_path):
+        from datetime import datetime, timedelta, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        from x_monitor.store import Store
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        # Anchor "now" to a known timestamp so the posts fall in the
+        # current 7-day window.
+        anchor = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{anchor.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        db_path = data / "x.db"
+        store = Store(db_path)
+        # Q1+Q4 counts per model: minimax=10, qwen=5, deepseek=5
+        counts = {"minimax": 10, "qwen": 5, "deepseek": 5}
+        all_posts = []
+        for m, n in counts.items():
+            for i in range(n):
+                qid = "Q1" if i % 2 == 0 else "Q4"
+                all_posts.append(
+                    {
+                        "tweet_id": f"t_{m}_{i}",
+                        "model_id": m,
+                        "author_handle": f"u_{i}",
+                        "text": "x",
+                        "favorite_count": 0,
+                        "created_at": (anchor - timedelta(hours=i + 1))
+                        .strftime("%a %b %d %H:%M:%S %z %Y"),
+                        "source_query_id": qid,
+                    }
+                )
+        store.insert_posts(all_posts)
+        store.close()
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax", "qwen", "deepseek"],
+                daily_ceiling=333,
+            ),
+            data, db_path=db_path,
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        tiles = r.get_json()["tiles"]
+        # minimax first (highest area), then qwen + deepseek tied on area
+        assert tiles[0]["model_id"] == "minimax"
+        # qwen and deepseek are tied on area=5; sort falls back to
+        # display_name asc per R13. Make the intent explicit (don't
+        # rely on a coincidental alphabetical match).
+        assert tiles[1]["display_name"] == "DeepSeek"
+        assert tiles[2]["display_name"] == "Qwen"
+
+    def test_treemap_area_is_cumulative_total_not_windowed(self, tmp_path):
+        """v1.7.1 amendment: area_weight = total posts to-date, NOT
+        Q1+Q4 in the current 7-day window. Polarity stays windowed.
+        This test seeds a mix of signals and asserts area equals the
+        total post count for each model, regardless of source_query_id
+        or whether the post falls inside the polarity window.
+        """
+        from datetime import datetime, timedelta, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        from x_monitor.store import Store
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        # Anchor "now" to a recent timestamp so the polarity window
+        # (last 7d) is well-defined and excludes the older posts below.
+        anchor = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'''{{"finished_at": "{anchor.isoformat()}"}}''',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        db_path = data / "x.db"
+        store = Store(db_path)
+        # Seed: minimax has 8 posts in the window (mix of Q1/Q3/Q5)
+        # and 5 posts OUTSIDE the window (Q4, 30 days ago). Area
+        # should be 13 (cumulative), NOT 8 (windowed Q1+Q4 = 4).
+        all_posts = []
+        in_window_signals = ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]
+        for i in range(8):
+            all_posts.append(
+                {
+                    "tweet_id": f"in_{i}",
+                    "model_id": "minimax",
+                    "author_handle": "u",
+                    "text": "x",
+                    "favorite_count": 0,
+                    "created_at": (anchor - timedelta(hours=i + 1))
+                    .strftime("%a %b %d %H:%M:%S %z %Y"),
+                    "source_query_id": in_window_signals[i % 6],
+                }
+            )
+        for i in range(5):
+            all_posts.append(
+                {
+                    "tweet_id": f"out_{i}",
+                    "model_id": "minimax",
+                    "author_handle": "u",
+                    "text": "x",
+                    "favorite_count": 0,
+                    "created_at": (anchor - timedelta(days=30, hours=i + 1))
+                    .strftime("%a %b %d %H:%M:%S %z %Y"),
+                    "source_query_id": "Q4",  # would have counted under old formula
+                }
+            )
+        # qwen: 3 posts, all in window. Area should be 3.
+        for i in range(3):
+            all_posts.append(
+                {
+                    "tweet_id": f"qwen_{i}",
+                    "model_id": "qwen",
+                    "author_handle": "u",
+                    "text": "x",
+                    "favorite_count": 0,
+                    "created_at": (anchor - timedelta(hours=i + 1))
+                    .strftime("%a %b %d %H:%M:%S %z %Y"),
+                    "source_query_id": "Q5",
+                }
+            )
+        # mistral: 0 posts. Should render as no-data (area=0).
+        store.insert_posts(all_posts)
+        store.close()
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax", "qwen", "mistral"],
+                daily_ceiling=333,
+            ),
+            data, db_path=db_path,
+        )
+        client = app.app.test_client()
+        r = client.get("/api/treemap.json")
+        tiles = r.get_json()["tiles"]
+        by_id = {t["model_id"]: t for t in tiles}
+        # Cumulative: minimax 13 (in-window + out-of-window), qwen 3.
+        # NOT 4 (old Q1+Q4-windowed formula would have given us that).
+        assert by_id["minimax"]["area_weight"] == 13.0
+        assert by_id["qwen"]["area_weight"] == 3.0
+        # No-data tile for a model with zero posts to-date.
+        assert by_id["mistral"]["area_weight"] == 0.0
+
+
+
+
+# ---------- v1.7.4: polarity window toggle ---------------------------------
+class TestPolarityWindowToggle:
+    """v1.7.4: 1d / 7d / 30d polarity window toggle, persisted in a cookie.
+
+    The toggle buttons in the topbar are <a> links to
+    /api/polarity_window/<int:days>. Clicking one sets the cookie and
+    redirects back to the referer. The next page render (and every htmx
+    poll) reads the cookie and uses the chosen window for the polarity
+    computation.
+    """
+
+    def test_index_renders_three_toggle_links(self, tmp_path):
+        """The treemap topbar must render exactly one toggle link per
+        allowed window value (1, 7, 30), each linking to
+        /api/polarity_window/<n>.
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        html = client.get("/").get_data(as_text=True)
+        # 3 toggle links
+        for n in (1, 7, 30):
+            assert f'href="/api/polarity_window/{n}"' in html, (
+                f"missing toggle link for {n}d in /  page"
+            )
+        # The "window:" label is rendered
+        assert "window:" in html
+
+    def test_default_window_highlighted_when_no_cookie(self, tmp_path):
+        """When the user has no cookie, the 7d toggle is highlighted
+        (matching the config default treemap_volume_window_days=7).
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        html = client.get("/").get_data(as_text=True)
+        # Find the active-window tab. It must be the 7d link.
+        import re
+        active_tabs = re.findall(
+            r'class="window-tab is-active"[^>]*href="/api/polarity_window/(\d+)"',
+            html,
+        )
+        assert active_tabs == ["7"], (
+            f"expected 7d to be highlighted, got {active_tabs}"
+        )
+
+    def test_toggle_route_sets_cookie_and_redirects(self, tmp_path):
+        """GET /api/polarity_window/30 should set the cookie and 303
+        redirect back to the Referer (or /).
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        client.set_cookie("polarity_window", "30")  # sanity: ensure cookie set doesn't matter for the toggle route
+        r = client.get(
+            "/api/polarity_window/30",
+            headers={"Referer": "http://localhost/"},
+        )
+        assert r.status_code == 303
+        assert r.headers["Location"] == "http://localhost/"
+        # Cookie set with 1 year max-age
+        cookie = r.headers.get("Set-Cookie", "")
+        assert "polarity_window=30" in cookie
+        assert "Max-Age=31536000" in cookie
+        assert "HttpOnly" in cookie
+
+    def test_toggle_route_rejects_invalid_window(self, tmp_path):
+        """GET /api/polarity_window/99 must 400 (not set a junk cookie).
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        r = client.get("/api/polarity_window/99")
+        assert r.status_code == 400
+        body = r.get_json()
+        assert body["error"] == "invalid polarity window"
+        assert body["allowed"] == [1, 7, 30]
+        # No cookie should be set
+        assert "Set-Cookie" not in r.headers
+
+    def test_cookie_picks_up_window_on_subsequent_request(self, tmp_path):
+        """With polarity_window=1 in the cookie, the / page should
+        highlight the 1d toggle.
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        client.set_cookie("polarity_window", "1")
+        r = client.get("/")
+        html = r.get_data(as_text=True)
+        import re
+        active_tabs = re.findall(
+            r'class="window-tab is-active"[^>]*href="/api/polarity_window/(\d+)"',
+            html,
+        )
+        assert active_tabs == ["1"], (
+            f"cookie=1 should highlight 1d, got {active_tabs}"
+        )
+
+    def test_invalid_cookie_falls_back_to_default(self, tmp_path):
+        """A garbage cookie value (e.g. 'banana' or '99') should NOT
+        crash the page. The default window (7d) is used instead.
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        for bad in ("polarity_window=banana", "polarity_window=99", "polarity_window=-1", "polarity_window=0"):
+            # Use environ_base to pass the raw HTTP_COOKIE because Flask
+            # test_client's headers={} parameter drops Cookie for security.
+            client.set_cookie("polarity_window", bad.split("=", 1)[1])
+            r = client.get("/")
+            assert r.status_code == 200, f"{bad} -> {r.status_code}"
+            html = r.get_data(as_text=True)
+            import re
+            active_tabs = re.findall(
+                r'class="window-tab is-active"[^>]*href="/api/polarity_window/(\d+)"',
+                html,
+            )
+            assert active_tabs == ["7"], f"{bad} -> active={active_tabs}"
+
+    def test_json_response_includes_window_metadata(self, tmp_path):
+        """v1.7.4: /api/treemap.json now returns the active window in
+        window.treemap_volume_window_days, plus default_window_days and
+        allowed_windows for client visibility.
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(enabled_models=["minimax"], daily_ceiling=333),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        # Default (no cookie)
+        body = client.get("/api/treemap.json").get_json()
+        assert body["window"]["treemap_volume_window_days"] == 7
+        assert body["window"]["default_window_days"] == 7
+        assert body["window"]["allowed_windows"] == [1, 7, 30]
+        # With cookie=30
+        client.set_cookie("polarity_window", "30")
+        body = client.get("/api/treemap.json").get_json()
+        # window_days = 14 default, so 30 clamps to 14
+        assert body["window"]["treemap_volume_window_days"] == 14
+        assert body["window"]["default_window_days"] == 7
+
+    def test_window_30d_clamps_to_window_days_ceiling(self, tmp_path):
+        """With config window_days=14 and cookie polarity_window=30,
+        the polarity_window is silently clamped to 14 (because the prior
+        window would otherwise extend to 60d ago, outside post history).
+        The cookie itself is not modified (user choice is preserved),
+        only the read-time clamp applies.
+        """
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax"],
+                daily_ceiling=333,
+                dashboard={"window_days": 14, "treemap_volume_window_days": 7},
+            ),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        client.set_cookie("polarity_window", "30")
+        body = client.get("/api/treemap.json").get_json()
+        # Clamped to the 14-day ceiling
+        assert body["window"]["treemap_volume_window_days"] == 14
+
+    def test_index_highlights_cookie_selected_window_even_when_clamped(self, tmp_path) -> None:
+        # The active-tab indicator must follow the user's choice (raw cookie
+        # value), not the clamped computation value. Otherwise a user picking
+        # "30d" with a 14d config would see no tab highlighted and the
+        # computation-label would say "14d" with no visible cue that they
+        # chose 30d and the system is capping them.
+        from datetime import datetime, timezone
+        from x_monitor.config import Config
+        from x_monitor.dashboard import DashboardApp
+        import re
+
+        data = tmp_path / "data"
+        data.mkdir()
+        runs_dir = data / "runs"
+        runs_dir.mkdir()
+        now = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        run_file = runs_dir / "2026-06-17T12-00-00.json"
+        run_file.write_text(
+            f'{{"finished_at": "{now.isoformat()}"}}',
+            encoding="utf-8",
+        )
+        (runs_dir / "LATEST.json").symlink_to(run_file)
+        app = DashboardApp(
+            Config(
+                enabled_models=["minimax"],
+                daily_ceiling=333,
+                dashboard={"window_days": 14, "treemap_volume_window_days": 7},
+            ),
+            data, db_path=data / "x.db",
+        )
+        client = app.app.test_client()
+        client.set_cookie("polarity_window", "30")
+        html = client.get("/").get_data(as_text=True)
+        active_tabs = re.findall(
+            r'class="window-tab is-active"[^>]*href="/api/polarity_window/(\d+)"',
+            html,
+        )
+        assert active_tabs == ["30"], f"expected 30d active, got {active_tabs}"
+        # Footer label still shows the clamped value
+        assert "14d window" in html, "footer should reflect clamped computation window"
+
