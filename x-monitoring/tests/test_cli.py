@@ -40,6 +40,7 @@ def test_run_dry_run_exits_zero(tmp_path):
         """
 enabled_models: [minimax]
 daily_ceiling: 333
+x_monitor_list_id: 1234567890
 """,
         encoding="utf-8",
     )

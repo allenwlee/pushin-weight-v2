@@ -17,7 +17,7 @@
             <li class="top3-item">
               <a class="top3-link" href="{{ p.url }}" target="_blank" rel="noopener">
                 <span class="faves">★{{ p.like_count }}</span>
-                <span class="text{% if p.headline %} with-headline{% endif %}"
+                <span class="text{% if p.headline %} with-headline{% endif %}{% if p.is_translated == false %} source-fallback{% endif %}"
                       {% if p.headline_source %}data-headline-source="{{ p.headline_source }}"{% endif %}>{{ p.display_text | brand_colorize }}</span>
               </a>
             </li>
@@ -33,7 +33,7 @@
             <li class="top3-item">
               <a class="top3-link" href="{{ p.url }}" target="_blank" rel="noopener">
                 <span class="faves">★{{ p.like_count }}</span>
-                <span class="text{% if p.headline %} with-headline{% endif %}"
+                <span class="text{% if p.headline %} with-headline{% endif %}{% if p.is_translated == false %} source-fallback{% endif %}"
                       {% if p.headline_source %}data-headline-source="{{ p.headline_source }}"{% endif %}>{{ p.display_text | brand_colorize }}</span>
               </a>
             </li>

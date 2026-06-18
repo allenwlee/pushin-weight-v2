@@ -1,5 +1,14 @@
 # {{AGENT_ATTRIBUTION}}
-"""Curated X advanced-search query library (R1-R8)."""
+"""Curated X advanced-search query library (R1-R8).
+
+v1.7 update (2026-06-17): The X advanced-search cap is on character
+LENGTH (~512, per docs.x.com), not operator count. The v1.6 helpers
+`assert_under_operator_cap` / `count_x_operators` are retained for
+backward compatibility with v1.6 callers and tests, but new code should
+use `assert_under_length_cap` / `X_LENGTH_CAP`. See
+docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
+§"Cap probe amendment" for the empirical evidence.
+"""
 
 from __future__ import annotations
 
@@ -184,4 +193,52 @@ def assert_under_operator_cap(query: str) -> None:
             f"query has {n} OR operators at the top level; X caps at ~"
             f"{X_OPERATOR_CAP}. 0-tweet silent fail expected. Rewrite with "
             f"fewer OR clauses or split into multiple calls."
+        )
+
+
+# --- X advanced-search LENGTH cap (v1.7) --------------------------------
+#
+# The actual constraint on X advanced-search queries is the URL-encoded
+# character length of the `query` parameter (~512 per docs.x.com), not
+# the operator count. v1.6 used the operator-count cap (22) which is a
+# conservative proxy. For v1.7's Call B (paren-grouped brand-wide net),
+# we need a length check to be safe.
+#
+# TwitterAPI.io (the v1.7 fetch backend) silently returns 0 results on
+# over-length queries — same silent-fail mode as the operator cap, just
+# triggered by length, not count. See memory feedback
+# `feedback_x_advanced_search_cap_is_characters_not_operators.md`.
+
+X_LENGTH_CAP = 512
+
+
+def assert_under_length_cap(
+    query: str, max_len: int = X_LENGTH_CAP
+) -> None:
+    """Raise ValueError if the query exceeds the X length cap.
+
+    Args:
+        query: the full X advanced-search query string (operators, OR
+            tokens, paren groups — the whole thing).
+        max_len: the cap. Default 512 (X's documented limit per
+            docs.x.com). Override only for tests that probe the
+            boundary.
+
+    The check is on the literal string length of the query, since
+    that's what X (and TwitterAPI.io) sees. URL-encoding would expand
+    special chars (~33% for spaces, more for CJK), so a 512-char
+    literal is the conservative cap.
+
+    Callers in RunPipeline.execute invoke this BEFORE
+    twitterapi.run_search so an over-length query is short-circuited
+    into a per-query summary entry
+    `{status: "length_cap_exceeded"}` and no credits are burned.
+    """
+    n = len(query)
+    if n > max_len:
+        raise ValueError(
+            f"query length is {n} chars; X caps at {max_len} per "
+            f"docs.x.com. Over-length queries silently return 0 results. "
+            f"Rewrite with fewer tokens, narrower OR-chains, or split "
+            f"into multiple calls."
         )

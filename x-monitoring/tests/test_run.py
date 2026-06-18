@@ -59,7 +59,7 @@ queries:
 """,
                 encoding="utf-8",
             )
-        cfg = Config(enabled_models=["minimax", "qwen", "deepseek"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax", "qwen", "deepseek"], daily_ceiling=333, x_monitor_list_id=1234567890)
         # Pipeline needs a data_dir; we don't call execute here
         p = RunPipeline(cfg, data, db_path=Path(d) / "x.db")
         from x_monitor.queries import load_queries
@@ -80,7 +80,7 @@ def test_apply_skip_order_drops_in_configured_order():
     """Per R17: Q5 first, then Q3, Q2, Q4, Q1 last."""
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=50)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=50, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=Path(d) / "x.db")
         qs = [
             Query(id=qid, query_string=qid, expected_signal=signal, max_results=50)
@@ -160,7 +160,7 @@ accounts:
 """,
             encoding="utf-8",
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         # 5 query results (no more cookie probe)
@@ -193,7 +193,7 @@ def test_pipeline_exits_cleanly_when_already_running():
         data = Path(d)
         (data / "queries").mkdir()
         (data / "accounts").mkdir()
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         # Pre-acquire the lock so the pipeline's first call fails to acquire.
         with pipeline_lock(p.lock_path):
@@ -219,7 +219,7 @@ def test_resume_does_not_call_apify():
             {"id": "t2", "model_id": "minimax", "text": "bye"},
         ]
         (raw_dir / "minimax_Q1.json").write_text(json.dumps(items), encoding="utf-8")
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         out = p.resume(run_id, apify)
@@ -409,7 +409,7 @@ def _v15_deprecated_pipeline_applies_filter_before_insert():
                 "must_have_none": ["celebrity"],
             },
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         apify.run_search.return_value = [
@@ -468,7 +468,7 @@ def _v15_deprecated_pipeline_soft_drop_adds_to_review_queue():
             data, "minimax",
             {"must_have_any": ["minimax"], "must_have_none": ["celebrity"]},
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         apify.run_search.return_value = [
@@ -515,7 +515,7 @@ def _v15_deprecated_pipeline_low_engagement_rule_only_runs_on_kept():
             data, "minimax",
             {"must_have_any": ["minimax"]},
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         apify.run_search.return_value = [
@@ -568,7 +568,7 @@ def _v15_deprecated_pipeline_drops_match_summary_counts():
                 "must_have_none": ["celebrity"],
             },
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         apify.run_search.return_value = [
@@ -654,7 +654,7 @@ accounts:
 """,
             encoding="utf-8",
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         # The 5 under-cap queries (Q1, Q2, Q4, Q5, Q6) hit the API.
@@ -703,7 +703,7 @@ def _stub_plan_calls(enabled_models):
             bucket=None,
             query_string=f"(from:{m}) min_faves:1",
             expected_signal="release",
-            n_operators=1,
+            query_length=1,
         ))
         out.append(PlannedCall(
             call_kind="intent",
@@ -711,7 +711,7 @@ def _stub_plan_calls(enabled_models):
             bucket="howto_criticism",
             query_string=f"({m}) how OR broken min_faves:0",
             expected_signal="criticism",
-            n_operators=3,
+            query_length=3,
         ))
     return out
 
@@ -744,7 +744,7 @@ def test_pipeline_runs_via_plan_calls_account_call(monkeypatch):
             "  - id: Q6\n    query_string: 'minimax'\n    expected_signal: praise\n    enabled: true\n",
             encoding="utf-8",
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         # account call returns 1 item (t1); intent call returns 1 item (t2)
@@ -835,7 +835,7 @@ def test_pipeline_applies_filter_before_insert_v16(monkeypatch):
                 "must_have_none": ["celebrity"],
             },
         )
-        cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         # account call: 0 items; intent call: 5 items (1 banned, 2 noise, 2 valid)
@@ -920,7 +920,7 @@ def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
                 "must_have_none": ["F1", "antonelli"],
             },
         )
-        cfg = Config(enabled_models=["moonshot_kimi"], daily_ceiling=333)
+        cfg = Config(enabled_models=["moonshot_kimi"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         # The F1 hijack: a tweet that mentions F1 but no kimi/moonshot.

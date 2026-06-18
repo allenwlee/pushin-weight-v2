@@ -103,11 +103,58 @@ def _is_cjk(token: str) -> bool:
     return any("一" <= ch <= "鿿" for ch in token)
 
 
+def build_compiled_brand_pattern(
+    brand_tokens: dict[str, list[str]],
+) -> tuple[re.Pattern[str] | None, dict[str, str]]:
+    """Build a single alternation regex over all deduped brand tokens.
+
+    v1.7 fast-path: instead of looping `re.search()` per brand per token
+    per tweet (v1.6: ~4,200 iterations/cycle at 7 brands), we compile
+    ONE regex that matches any brand token and walk each tweet with
+    a single `regex.search()`. The matched text is mapped back to its
+    brand via the returned `token_to_brand` lookup.
+
+    The alternation preserves brand iteration order (NOT alphabetical)
+    so the first-match-wins contract from v1.6 holds. CJK tokens use
+    substring (no \b); ASCII tokens use word boundary. ASCII tokens
+    are casefolded at match time via `re.IGNORECASE`.
+
+    Dedup rule: if the same token appears in two brands, the FIRST
+    brand in the input iteration order wins. This matches v1.6's
+    first-match-wins semantics.
+
+    Returns (None, {}) when `brand_tokens` is empty. The caller
+    (typically run.py) passes both back into `attribute_to_brand` as
+    the `compiled_brand_pattern` and `token_to_brand` kwargs.
+
+    See docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
+    §"Compiled-regex fast-path for wide-net brand attribution" (Decision 3).
+    """
+    parts: list[str] = []
+    token_to_brand: dict[str, str] = {}
+    for brand, toks in brand_tokens.items():
+        for tok in toks:
+            if tok in token_to_brand:
+                # Dedup: keep the FIRST brand seen for each token.
+                continue
+            token_to_brand[tok] = brand
+            if _is_cjk(tok):
+                parts.append(re.escape(tok))
+            else:
+                parts.append(r"\b" + re.escape(tok) + r"\b")
+    if not parts:
+        return None, {}
+    return re.compile("|".join(parts), re.IGNORECASE), token_to_brand
+
+
 def attribute_to_brand(
     text: str,
     author_handle: str,
     brand_tokens: dict[str, list[str]],
     staff_handles: dict[str, list[str]],
+    *,
+    compiled_brand_pattern: re.Pattern[str] | None = None,
+    token_to_brand: dict[str, str] | None = None,
 ) -> str | None:
     """Pick the most likely model_id for a tweet.
 
@@ -119,6 +166,15 @@ def attribute_to_brand(
        iteration order).
     3. None if neither matches (caller drops the tweet or routes to review).
 
+    v1.7 fast-path: when `compiled_brand_pattern` and `token_to_brand`
+    are both provided, step 2 uses a single `re.search()` over a
+    pre-compiled alternation regex instead of looping per brand per
+    token. The caller (run.py) builds the pattern once per cycle via
+    `build_compiled_brand_pattern(brand_tokens)` and passes it in.
+    When either kwarg is None/empty, the legacy Python loop is used
+    (unchanged from v1.6) — this preserves backward compatibility for
+    tests and any callers that haven't migrated to the fast-path yet.
+
     `staff_handles` is a {brand: [handle, ...]} map; for v1.6 the official
     handles are also folded in by the caller. A None for either map is
     treated as empty.
@@ -128,6 +184,32 @@ def attribute_to_brand(
         for hh in handles:
             if h and h == hh.casefold():
                 return brand
+    # v1.7 fast-path: when a compiled pattern is provided, use it.
+    if compiled_brand_pattern is not None:
+        if not text:
+            return None
+        m = compiled_brand_pattern.search(text)
+        if m is None:
+            return None
+        matched_text = m.group(0)
+        # Map the matched text back to its brand via token_to_brand.
+        # Case-insensitive equality because the regex is re.IGNORECASE.
+        if token_to_brand:
+            cf = matched_text.casefold()
+            for tok, brand in token_to_brand.items():
+                if tok.casefold() == cf:
+                    return brand
+        # Defensive fallback (should not fire if pattern was built
+        # by build_compiled_brand_pattern): scan brand_tokens for
+        # substring match. This handles the case where a caller
+        # constructed the regex by hand and the token_to_brand map
+        # was missed.
+        for brand, tokens in (brand_tokens or {}).items():
+            for tok in tokens:
+                if tok and tok in matched_text:
+                    return brand
+        return None
+    # Legacy v1.6 path: per-brand, per-token loop.
     t = (text or "").casefold()
     for brand, tokens in (brand_tokens or {}).items():
         for tok in tokens:

@@ -366,7 +366,21 @@ class RunPipeline:
                 #   3. Run the existing v1.2 filter_and_review (F1
                 #      hijack, banned-token review-queue, low-engagement).
                 #   4. Insert kept rows + log summary.
-                plan = plan_calls(self.data_dir, models)
+                # v1.7: pass x_monitor_list_id to plan_calls when set on
+                # config. When None, plan_calls raises TypeError (v1.7 does
+                # not support a list-less fallback). The transitional
+                # `x_monitor_list_id: int | None = None` on Config lets
+                # legacy configs surface a clear "set x_monitor_list_id"
+                # error rather than silently emit 0 calls.
+                if self.config.x_monitor_list_id is None:
+                    raise ValueError(
+                        "config.x_monitor_list_id must be set in v1.7 — "
+                        "Call A is list-based; see plan §'Call A — list-based "
+                        "fan-in' for the operator steps to create the list."
+                    )
+                plan = plan_calls(
+                    self.data_dir, models, x_monitor_list_id=self.config.x_monitor_list_id
+                )
                 # Pre-load brand-token + staff-handle maps for
                 # attribute_to_brand (intent calls only). These are
                 # computed once per run — pure data lookup, no API.
@@ -381,7 +395,7 @@ class RunPipeline:
                                 "bucket": call.bucket,
                                 "query_id": "Q1" if call.call_kind == "account" else "QX",
                                 "status": "dry_run",
-                                "n_operators": call.n_operators,
+                                "query_length": call.query_length,
                                 "n_results": 0,
                             }
                         )
@@ -406,7 +420,7 @@ class RunPipeline:
                                 "bucket": call.bucket,
                                 "query_id": "Q1" if call.call_kind == "account" else "QX",
                                 "status": "error",
-                                "n_operators": call.n_operators,
+                                "query_length": call.query_length,
                                 "n_results": 0,
                                 "error": str(e),
                             }
@@ -506,7 +520,7 @@ class RunPipeline:
                             "call_kind": call.call_kind,
                             "bucket": call.bucket,
                             "query_id": synth_q.id,
-                            "n_operators": call.n_operators,
+                            "query_length": call.query_length,
                             "status": "completed",
                             "n_results": len(items),
                             "n_kept": len(kept_all),

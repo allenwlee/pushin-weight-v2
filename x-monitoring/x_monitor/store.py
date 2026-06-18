@@ -145,8 +145,9 @@ class Store:
                         created_at, fetched_at, favorite_count, retweet_count,
                         reply_count, quote_count, in_reply_to_user_id,
                         quoted_status_id, conversation_id, entities,
-                        source_query_id, raw, headline, headline_source
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        source_query_id, raw, headline, headline_source,
+                        text_en, text_zh_cn, lang_detected, signal
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         str(tweet_id),
@@ -169,11 +170,119 @@ class Store:
                         json.dumps(p),
                         p.get("headline"),
                         p.get("headline_source"),
+                        # v1.7: per-locale translation columns + signal.
+                        # NULL when callers don't supply (legacy call sites).
+                        p.get("text_en"),
+                        p.get("text_zh_cn"),
+                        p.get("lang_detected"),
+                        p.get("signal"),
                     ),
                 )
                 if cur.rowcount > 0:
                     n_new += 1
         return n_new
+
+    # --- v1.7: per-locale translation helpers -----------------------------
+
+    # Allowed locales — kept as a closed set so the column name can be
+    # safely interpolated into the WHERE clause of get_posts_missing_translations
+    # without a SQL-injection risk. Adding a new locale means adding a
+    # column in migration 003 + a key here.
+    _TRANSLATION_LOCALES: frozenset[str] = frozenset({"en", "zh_cn"})
+    _LOCALE_TO_COLUMN: dict[str, str] = {
+        "en": "text_en",
+        "zh_cn": "text_zh_cn",
+    }
+
+    def bulk_update_translations(
+        self, rows: list[dict[str, Any]]
+    ) -> int:
+        """Update text_en / text_zh_cn / lang_detected for a batch of posts.
+
+        Each row is a dict with at least `tweet_id`; the other 3 fields
+        (text_en, text_zh_cn, lang_detected) are optional and default
+        to NULL. Rows whose tweet_id does not exist in `posts` are
+        silently skipped (UPDATE matches 0 rows; we count only the
+        ones that did match).
+
+        A row missing `tweet_id` raises KeyError BEFORE the transaction
+        starts (the test for this is at tests/test_store_v17.py).
+        Returning the count of *updated* rows (not requested) lets the
+        translation pass log accurate "X of N translated" stats.
+
+        Empty list is a no-op and returns 0.
+
+        See docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
+        §"Column additions to posts" (Decision 5).
+        """
+        if not rows:
+            return 0
+        # Pre-validate: every row must have a tweet_id. This is a fast
+        # check that raises before the transaction opens.
+        for r in rows:
+            if "tweet_id" not in r:
+                raise KeyError(
+                    "bulk_update_translations: row missing 'tweet_id': "
+                    f"{r!r}"
+                )
+        n_updated = 0
+        with self.transaction() as conn:
+            for r in rows:
+                cur = conn.execute(
+                    """
+                    UPDATE posts
+                    SET text_en = ?, text_zh_cn = ?, lang_detected = ?
+                    WHERE tweet_id = ?
+                    """,
+                    (
+                        r.get("text_en"),
+                        r.get("text_zh_cn"),
+                        r.get("lang_detected"),
+                        str(r["tweet_id"]),
+                    ),
+                )
+                n_updated += cur.rowcount
+        return n_updated
+
+    def get_posts_missing_translations(
+        self, locale: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Return posts where `text_<locale>` IS NULL, newest-first.
+
+        Used by the `x-monitor translate` backfill subcommand to find
+        posts that the end-of-cycle translation pass missed (e.g. due
+        to rate-limit, transient API errors, or new posts inserted
+        since the last translate run).
+
+        `locale` must be one of {"en", "zh_cn"} — closed-set validation
+        prevents SQL-injection via the column name. Other strings
+        raise ValueError. The limit caps the result count; pass a
+        large number to disable (no streaming pagination in v1.7).
+
+        Returns a list of dicts with at least tweet_id, model_id, text,
+        author_handle, created_at — the fields the translation pass
+        needs to build a Claude Haiku prompt.
+        """
+        if locale not in self._TRANSLATION_LOCALES:
+            raise ValueError(
+                f"locale must be one of {sorted(self._TRANSLATION_LOCALES)}, "
+                f"got {locale!r}"
+            )
+        col = self._LOCALE_TO_COLUMN[locale]
+        # col is from a closed-set literal dict — safe to interpolate
+        # directly into the SQL. DO NOT accept the column name from
+        # the caller; route it through _LOCALE_TO_COLUMN only.
+        rows = self._conn.execute(
+            f"""
+            SELECT tweet_id, model_id, text, author_handle, created_at
+            FROM posts
+            WHERE {col} IS NULL
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_posts_for_digest(
         self, model_id: str, since_iso: str | None = None, limit: int = 200

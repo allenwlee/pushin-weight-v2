@@ -93,7 +93,7 @@ def test_migrations_apply_forward_only_and_idempotent():
             # what matters is that 1 and 2 are both in the set.
             assert 1 in applied_first
             assert 2 in applied_first
-            assert store.applied_migrations() == [1, 2]
+            assert store.applied_migrations() == [1, 2, 3]
             # Re-apply is a no-op
             applied_second = store.apply_migrations()
             assert applied_second == []
