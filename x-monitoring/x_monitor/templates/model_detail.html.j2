@@ -12,13 +12,13 @@
 <body>
   <header class="topbar">
     <h1>x-monitor</h1>
-    <span class="muted">drill-down · {{ model_id }}</span>
+    <span class="muted">drill-down · {{ brand_id }}</span>
   </header>
   <main class="detail" style="--accent: {{ accent_color }};">
     <a class="back" href="/">← back to grid</a>
     <header class="detail-head">
       <h1>{{ display_name }}</h1>
-      <span class="muted model-id">{{ model_id }}</span>
+      <span class="muted model-id">{{ brand_id }}</span>
     </header>
 
     {% set lr = latest_run or {} %}
@@ -26,7 +26,7 @@
     <div class="banner red">⚠ cookies degraded — last run returned 0 results from probe search. Re-run <code>x-monitor setup cookies</code>.</div>
     {% endif %}
     {% for q in lr.get('queries') or [] %}
-      {% if q.model_id == model_id and q.status == 'error' %}
+      {% if q.brand_id == brand_id and q.status == 'error' %}
       <div class="banner yellow">⚠ query {{ q.query_id }} errored in last run: {{ q.error }}</div>
       {% endif %}
     {% endfor %}
@@ -44,7 +44,7 @@
           <li class="post">
             <div class="post-head">
               <span class="author">@{{ p.author_handle }}</span>
-              <span class="meta muted small">{{ p.created_at }} · ★{{ p.favorite_count }} · {{ p.source_query_id }}</span>
+              <span class="meta muted small">{{ p.created_at }} · ★{{ p.like_count }} · {{ p.source_query_id }}</span>
             </div>
             {% set t = p.text or '' %}
             {% if t|length > 280 %}
@@ -60,7 +60,7 @@
     </section>
 
     <section id="tab-graph" class="tab-pane">
-      <div class="graph-wrap" hx-get="/api/model/{{ model_id }}.json" hx-trigger="every 30s" hx-swap="none">
+      <div class="graph-wrap" hx-get="/api/model/{{ brand_id }}.json" hx-trigger="every 30s" hx-swap="none">
         {{ graph_svg|safe }}
       </div>
     </section>

@@ -2,9 +2,9 @@
 """
 Per-model relevance post-filter (v1.2).
 
-Loads a RelevanceConfig from data/filters/<model_id>.yaml and applies
+Loads a RelevanceConfig from data/filters/<brand_id>.yaml and applies
 filter_posts() to a list of normalized tweet dicts (the shape produced
-by x_monitor.apify._normalize_tweet, with model_id and source_query_id
+by x_monitor.apify._normalize_tweet, with brand_id and source_query_id
 stamped by the run loop). Returns the kept set + per-reason drop counts.
 
 Token matching rules:
@@ -40,7 +40,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class RelevanceConfig(BaseModel):
-    """Per-model filter config. Loaded from data/filters/<model_id>.yaml."""
+    """Per-model filter config. Loaded from data/filters/<brand_id>.yaml."""
 
     canonical_handles: list[str] = Field(
         default_factory=list,
@@ -187,7 +187,7 @@ def filter_posts(
             - "n_kept": int
             - "n_soft_dropped": int
             - "reasons": Counter of reason -> count
-        - soft_dropped: list of {tweet_id, model_id, text_excerpt, reason}
+        - soft_dropped: list of {tweet_id, brand_id, text_excerpt, reason}
             items for the caller to route to the review queue.
     """
     kept: list[dict[str, Any]] = []
@@ -246,7 +246,7 @@ def filter_posts(
             soft_dropped.append(
                 {
                     "tweet_id": item.get("tweet_id") or item.get("id") or "",
-                    "model_id": item.get("model_id", ""),
+                    "brand_id": item.get("brand_id", ""),
                     "text_excerpt": text[:200],
                     "reason": "banned_token",
                 }
@@ -273,14 +273,14 @@ def filter_posts(
 # --- YAML loader ---------------------------------------------------------
 
 
-def load_filter(model_id: str, root: Path) -> RelevanceConfig:
-    """Load data/filters/<model_id>.yaml, return RelevanceConfig.
+def load_filter(brand_id: str, root: Path) -> RelevanceConfig:
+    """Load data/filters/<brand_id>.yaml, return RelevanceConfig.
 
     If the file is missing, returns an empty config (no filter applied).
     This is intentional: legacy models can be added without a filter,
     and the user can drop in a YAML later to enable one.
     """
-    path = root / "filters" / f"{model_id}.yaml"
+    path = root / "filters" / f"{brand_id}.yaml"
     if not path.exists():
         return RelevanceConfig()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

@@ -107,7 +107,7 @@ def test_translate_batch_happy_path_20_tweets_one_call():
     from x_monitor.translator import translate_batch
 
     tweets = [
-        {"tweet_id": f"t{i}", "text": f"tweet {i}", "model_id": "minimax"}
+        {"tweet_id": f"t{i}", "text": f"tweet {i}", "brand_id": "minimax"}
         for i in range(20)
     ]
     client = FakeClaudeClient()
@@ -293,7 +293,7 @@ def test_translate_batch_brand_names_in_prompt():
     from x_monitor.translator import build_translation_prompt
 
     prompt = build_translation_prompt(
-        tweets=[{"tweet_id": "t1", "text": "海螺 is great", "model_id": "minimax"}],
+        tweets=[{"tweet_id": "t1", "text": "海螺 is great", "brand_id": "minimax"}],
         target_locales=["en", "zh_cn"],
         brand_names=["MiniMax", "海螺", "Hailuo"],
     )

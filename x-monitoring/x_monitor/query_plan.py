@@ -57,7 +57,7 @@ class PlannedCall:
     Attributes:
         call_kind: "account" = list-based fan-in (Call A in v1.7);
             "brand_wide" = paren-grouped brand-token OR-chain (Call B).
-        model_id: brand this call is attributed to. For Call A
+        brand_id: brand this call is attributed to. For Call A
             (list-based), this is "*" because the list spans all
             brands — post-fetch `attribute_to_brand` reassigns. For
             Call B, this is the FIRST brand in the input order (used
@@ -75,7 +75,7 @@ class PlannedCall:
     """
 
     call_kind: CallKind
-    model_id: str
+    brand_id: str
     bucket: str | None
     query_string: str
     expected_signal: str
@@ -218,7 +218,7 @@ def plan_calls(
     return [
         PlannedCall(
             call_kind="account",
-            model_id="*",
+            brand_id="*",
             bucket=None,
             query_string=call_a_query,
             expected_signal="release",
@@ -226,7 +226,7 @@ def plan_calls(
         ),
         PlannedCall(
             call_kind="brand_wide",
-            model_id=enabled_models[0] if enabled_models else "*",
+            brand_id=enabled_models[0] if enabled_models else "*",
             bucket=None,
             query_string=call_b_query,
             expected_signal="other",

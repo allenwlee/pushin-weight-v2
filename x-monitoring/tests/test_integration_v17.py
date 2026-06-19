@@ -111,16 +111,16 @@ def test_v17_pipeline_emits_exactly_two_calls():
             x_monitor_list_id=cfg.x_monitor_list_id,
         )
         assert len(calls) == 2
-        # Call A is the list-based one (model_id="*" = all-models)
+        # Call A is the list-based one (brand_id="*" = all-models)
         assert calls[0].call_kind == "account"
-        assert calls[0].model_id == "*"
+        assert calls[0].brand_id == "*"
         assert f"list:{cfg.x_monitor_list_id}" in calls[0].query_string
         assert "min_faves:1" in calls[0].query_string
         # Call B is the brand-wide paren-grouped one
-        # (model_id = first enabled model — used as a "primary key"
+        # (brand_id = first enabled model — used as a "primary key"
         # for the per-call summary, not a hard filter on results)
         assert calls[1].call_kind == "brand_wide"
-        assert calls[1].model_id == cfg.enabled_models[0]
+        assert calls[1].brand_id == cfg.enabled_models[0]
         # Has paren groups for each brand (one outer wrap + 1 per brand)
         assert calls[1].query_string.count("(") == len(cfg.enabled_models) + 1
         # Stay under length cap
@@ -193,7 +193,7 @@ def test_v17_pipeline_inserts_with_translation_columns():
             posts = [
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": "minimax is great",
                     "text_en": "minimax is great",
@@ -201,7 +201,7 @@ def test_v17_pipeline_inserts_with_translation_columns():
                     "lang_detected": "en",
                     "lang": "en",
                     "created_at": now_iso,
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "retweet_count": 1,
                     "entities": {"user_mentions": []},
                 },
@@ -231,12 +231,12 @@ def test_v17_translate_batch_threads_kept_posts_through():
             kept = [
                 {
                     "tweet_id": f"t{i}",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": f"minimax update {i}",
                     "lang": "en",
                     "created_at": now_iso,
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "retweet_count": 1,
                     "entities": {"user_mentions": []},
                 }
@@ -291,12 +291,12 @@ def test_v17_dashboard_renders_locale_in_zh_cn():
             store.insert_posts([
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "MiniMaxAI",
                     "text": "minimax release",
                     "text_en": "minimax release",
                     "text_zh_cn": "minimax发布",
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 },

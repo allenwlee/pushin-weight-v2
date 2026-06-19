@@ -70,7 +70,7 @@ _YELLOW = (234, 179, 8)    # the "went dark" sentinel
 class TreemapTile:
     """One model's data for the treemap layout.
 
-    model_id: canonical model id (e.g. "minimax", "mistral")
+    brand_id: canonical model id (e.g. "minimax", "mistral")
     display_name: human label (e.g. "MiniMax AI", "Mistral")
     accent_color: hex string from MODEL_ACCENT_COLORS (used as rect stroke)
     area_weight: float, the tile's area weight (cumulative post count).
@@ -86,7 +86,7 @@ class TreemapTile:
             None when the model is not in MODEL_SECTORS.
     """
 
-    model_id: str
+    brand_id: str
     display_name: str
     accent_color: str
     area_weight: float
@@ -384,7 +384,7 @@ def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -
     - Text color = luminance-based (was always white). Dark fills keep
       white text, light fills get dark text (#0d1117).
     - Tile border radius = 0 (was 2). Finviz tiles are sharp squares.
-    - Native <title> tooltip carries model_id, polarity, window days,
+    - Native <title> tooltip carries brand_id, polarity, window days,
       post count, last-run timestamp, and sector.
 
     Font size is adaptive to the smaller of the tile width/height so
@@ -412,7 +412,7 @@ def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -
     )
     # v1.8 — extended native <title>. Browser-rendered SVG tooltip; no JS.
     title_lines = [
-        f"{tile.display_name} ({tile.model_id})",
+        f"{tile.display_name} ({tile.brand_id})",
         f"Polarity: {pct_val_for_title} (vs prior {tile.polarity_window_days}d)",
         f"Posts in window: {tile.posts_in_window}",
     ]
@@ -436,7 +436,7 @@ def _tile_svg(tile: TreemapTile, rect: dict[str, float], max_abs_score: float) -
             name = name[:max_chars] + "…"
         pct_str_render = pct_str
     parts = [
-        f'<a href="/model/{tile.model_id}" data-href="/model/{tile.model_id}" '
+        f'<a href="/model/{tile.brand_id}" data-href="/model/{tile.brand_id}" '
         f'aria-label="{_xml_escape(aria)}">',
         f'<title>{_xml_escape(title)}</title>',
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{dx:.2f}" height="{dy:.2f}" '

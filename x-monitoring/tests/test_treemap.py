@@ -287,8 +287,8 @@ class TestSeparateActiveAndNoData:
             TreemapTile("d", "D", "#a855f7", 0.0, 0.0),  # also no data
         ]
         active, no_data = separate_active_and_no_data(tiles)
-        assert [t.model_id for t in active] == ["a", "c"]
-        assert [t.model_id for t in no_data] == ["b", "d"]
+        assert [t.brand_id for t in active] == ["a", "c"]
+        assert [t.brand_id for t in no_data] == ["b", "d"]
 
 
 # ---------- build_treemap_svg -----------------------------------------------
@@ -302,13 +302,13 @@ class TestBuildTreemapSvg:
         names = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]
         for i in range(n_active):
             tiles.append(TreemapTile(
-                model_id=f"m{i}", display_name=names[i], accent_color=accents[i],
+                brand_id=f"m{i}", display_name=names[i], accent_color=accents[i],
                 area_weight=float(2 ** (n_active - i)),  # geometric so the largest dominates
                 polarity_score=0.0,
             ))
         for i in range(n_no_data):
             tiles.append(TreemapTile(
-                model_id=f"nd{i}", display_name=f"ND{i}", accent_color="#9ca3af",
+                brand_id=f"nd{i}", display_name=f"ND{i}", accent_color="#9ca3af",
                 area_weight=0.0, polarity_score=None,
             ))
         return tiles
@@ -343,7 +343,7 @@ class TestBuildTreemapSvg:
         tiles = self._tiles(5, 0)
         svg = build_treemap_svg(tiles, width=800, height=600)
         for t in tiles:
-            assert f'data-href="/model/{t.model_id}"' in svg, f"missing {t.model_id}"
+            assert f'data-href="/model/{t.brand_id}"' in svg, f"missing {t.brand_id}"
 
     def test_every_active_tile_has_aria_label(self):
         tiles = self._tiles(3, 0)
@@ -353,7 +353,7 @@ class TestBuildTreemapSvg:
         # Confirm the per-tile labels are present (one per active tile).
         for t in tiles:
             expected = f'aria-label="{t.display_name}: polarity'
-            assert expected in svg, f"missing tile aria-label for {t.model_id}"
+            assert expected in svg, f"missing tile aria-label for {t.brand_id}"
 
     def test_every_active_tile_has_title_element(self):
         tiles = self._tiles(3, 0)
@@ -418,7 +418,7 @@ class TestTileHoverAndTooltip:
         # Anything we can't parse falls back to white.
         assert _text_color_for_fill("not-a-color") == "#ffffff"
 
-    def test_title_contains_model_id_and_display_name(self):
+    def test_title_contains_brand_id_and_display_name(self):
         tile = TreemapTile(
             "minimax", "MiniMax AI", "#3b82f6", 100.0, 0.05,
             posts_in_window=47, polarity_window_days=7,

@@ -138,7 +138,7 @@ def _pick_text(
 
 
 def brand_colorize(text: str) -> str:
-    """Colorize model_id matches in `text` with the brand's accent color.
+    """Colorize brand_id matches in `text` with the brand's accent color.
 
     Word-boundary, case-insensitive. Escapes HTML first so we can safely
     inject raw <span> tags as replacements - the filter is the only path
@@ -262,7 +262,7 @@ def _qid_to_signal(qid: str) -> str | None:
 
 
 def serialize_grid_card(
-    model_id: str,
+    brand_id: str,
     posts: list[dict[str, Any]],
     *,
     window_days: int = 14,
@@ -273,7 +273,7 @@ def serialize_grid_card(
     """Return the per-model grid card payload.
 
     Args:
-        model_id: the model slug (e.g. "minimax").
+        brand_id: the model slug (e.g. "minimax").
         posts: list of post dicts (from `Store.get_all_posts`).
         window_days: total window for the chart (default 14).
         latest_run: parsed LATEST.json (or None) for sentinel rendering.
@@ -346,7 +346,7 @@ def serialize_grid_card(
             chart_series[sig].append(day_counter.get(sig, 0))
 
     # Top 3 by like_count (ties broken by recency) — exposes DB column
-    # `favorite_count` under the user-facing name `like_count`.
+    # `like_count` — the user-facing name (DB column renamed v1.8).
     # v1.7: thread `locale` into _build_top3 so each top-3 row's
     # `display_text` comes from the chosen locale (text_en / text_zh_cn).
     top3 = _build_top3(in_window, locale=locale)
@@ -361,17 +361,17 @@ def serialize_grid_card(
             sentinels.append("cookies")
         # Per-model: query_rot
         for q in latest_run.get("queries") or []:
-            if q.get("model_id") == model_id and q.get("status") == "error":
+            if q.get("brand_id") == brand_id and q.get("status") == "error":
                 sentinels.append(f"q_error:{q.get('query_id')}")
         # Per-model: skipped_budget entries
         for entry in degraded.get("skipped_budget") or []:
-            if isinstance(entry, str) and entry.startswith(f"{model_id}/"):
+            if isinstance(entry, str) and entry.startswith(f"{brand_id}/"):
                 sentinels.append("budget")
 
     return {
-        "model_id": model_id,
-        "display_name": MODEL_DISPLAY_NAMES.get(model_id, model_id),
-        "accent_color": MODEL_ACCENT_COLORS.get(model_id, "#9ca3af"),
+        "brand_id": brand_id,
+        "display_name": MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
+        "accent_color": MODEL_ACCENT_COLORS.get(brand_id, "#9ca3af"),
         "chart": {"days": chart_days, "series": chart_series},
         "signal_breakdown": dict(sig_counts),
         "top3_posts": top3,
@@ -394,7 +394,7 @@ def _build_top3(
     """Build the top-3 most-liked list for a window of posts.
 
     Same dict shape as the legacy `top3_posts` key: exposes DB column
-    `favorite_count` under the user-facing name `like_count`, prefers
+    `like_count` (the DB column name, the user-facing API key), prefers
     a fetched headline over the raw tweet text for `display_text`,
     and truncates `text` to 200 chars.
 
@@ -408,7 +408,7 @@ def _build_top3(
     sorted_posts = sorted(
         posts,
         key=lambda p: (
-            -(p.get("favorite_count") or 0),
+            -(p.get("like_count") or 0),
             p.get("created_at") or "",
         ),
     )
@@ -435,7 +435,7 @@ def _build_top3(
                 "headline_source": p.get("headline_source"),
                 "display_text": display_text,
                 "is_translated": is_translated,
-                "like_count": p.get("favorite_count") or 0,
+                "like_count": p.get("like_count") or 0,
                 "author_handle": p.get("author_handle"),
                 "url": _tweet_url(p.get("author_handle"), p.get("tweet_id") or p.get("id")),
             }
@@ -608,7 +608,7 @@ class DashboardApp:
                     posts_in_window = 0
                 tiles.append(
                     TreemapTile(
-                        model_id=m,
+                        brand_id=m,
                         display_name=MODEL_DISPLAY_NAMES.get(m, m),
                         accent_color=MODEL_ACCENT_COLORS.get(m, "#9ca3af"),
                         area_weight=float(area_weight),
@@ -722,7 +722,7 @@ class DashboardApp:
                 {
                     "tiles": [
                         {
-                            "model_id": t.model_id,
+                            "brand_id": t.brand_id,
                             "display_name": t.display_name,
                             "accent_color": t.accent_color,
                             "area_weight": t.area_weight,
@@ -820,16 +820,27 @@ class DashboardApp:
             cards, _latest_run = self._build_cards(db_path)
             return jsonify({"cards": cards, "fetched_at": datetime.now(timezone.utc).isoformat()})
 
-        @app.route("/model/<model_id>")
-        def model_detail(model_id: str):
-            if model_id not in self.config.enabled_models:
+        # v1.8: /model/<id> is the legacy route (Decision 16). New canonical
+        # path is /brand/<id>. Old route returns 301 to preserve external
+        # links / browser history. The new /brand/<id> handler does the
+        # actual work.
+        @app.route("/model/<brand_id>")
+        def model_detail(brand_id: str):
+            # Backward-compat redirect — preserves bookmarks, dashboards
+            # that link here, and any in-flight requests during deploy.
+            from flask import redirect
+            return redirect(f"/brand/{brand_id}", code=301)
+
+        @app.route("/brand/<brand_id>")
+        def brand_detail(brand_id: str):
+            if brand_id not in self.config.enabled_models:
                 abort(404)
             from .account_graph import build_force_directed
 
             store = Store(db_path)
             try:
-                posts = store.get_all_posts(model_id)
-                accounts = store.get_accounts(model_id)
+                posts = store.get_all_posts(brand_id)
+                accounts = store.get_accounts(brand_id)
             finally:
                 store.close()
             # Re-derive edges from posts for the drill-down graph
@@ -846,7 +857,7 @@ class DashboardApp:
                 }
                 for p in posts
             ]
-            edges = derive_edges(posts_for_edges, model_id)
+            edges = derive_edges(posts_for_edges, brand_id)
             clusters = find_clusters(
                 posts_for_edges,
                 edges,
@@ -869,9 +880,9 @@ class DashboardApp:
             role_counts: Counter[str] = Counter(a.get("role", "unknown") for a in accounts)
             return render_template(
                 "model_detail.html.j2",
-                model_id=model_id,
-                display_name=MODEL_DISPLAY_NAMES.get(model_id, model_id),
-                accent_color=MODEL_ACCENT_COLORS.get(model_id, "#9ca3af"),
+                brand_id=brand_id,
+                display_name=MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
+                accent_color=MODEL_ACCENT_COLORS.get(brand_id, "#9ca3af"),
                 posts=posts[:200],
                 clusters=clusters,
                 graph_svg=graph_svg,
@@ -879,20 +890,20 @@ class DashboardApp:
                 latest_run=_load_latest_run(self.runs_dir),
             )
 
-        @app.route("/api/model/<model_id>.json")
-        def api_model(model_id: str):
-            if model_id not in self.config.enabled_models:
+        @app.route("/api/model/<brand_id>.json")
+        def api_model(brand_id: str):
+            if brand_id not in self.config.enabled_models:
                 abort(404)
             store = Store(db_path)
             try:
-                posts = store.get_all_posts(model_id)
-                accounts = store.get_accounts(model_id)
+                posts = store.get_all_posts(brand_id)
+                accounts = store.get_accounts(brand_id)
             finally:
                 store.close()
             return jsonify(
                 {
-                    "model_id": model_id,
-                    "display_name": MODEL_DISPLAY_NAMES.get(model_id, model_id),
+                    "brand_id": brand_id,
+                    "display_name": MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
                     "n_posts": len(posts),
                     "n_accounts": len(accounts),
                     "fetched_at": datetime.now(timezone.utc).isoformat(),

@@ -1,12 +1,12 @@
 {# {{AGENT_ATTRIBUTION}} #}
-<div class="model-card" data-model-id="{{ card.model_id }}" data-href="/model/{{ card.model_id }}" style="--accent: {{ card.accent_color }};">
+<div class="model-card" data-brand-id="{{ card.brand_id }}" data-href="/brand/{{ card.brand_id }}" style="--accent: {{ card.accent_color }};">
   <header class="card-head">
       <h2>{{ card.display_name }}</h2>
-      <span class="model-id muted">{{ card.model_id }}</span>
+      <span class="model-id muted">{{ card.brand_id }}</span>
     </header>
     <div class="trend-chart-wrap" data-chart='{{ card.chart|tojson }}'>
       <canvas class="trend-chart"
-              data-model-id="{{ card.model_id }}"
+              data-brand-id="{{ card.brand_id }}"
               aria-label="Daily tweet volume by signal, last 14 days"></canvas>
     </div>
     <div class="top3-grid">

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator, model_v
 
 
 # Canonical model registry — adding a model here is the only "code change" needed.
-# The data/queries/<model_id>.yaml and data/accounts/<model_id>.yaml files
+# The data/queries/<brand_id>.yaml and data/accounts/<brand_id>.yaml files
 # drop in alongside enabled_models in config.yaml.
 KNOWN_MODELS: frozenset[str] = frozenset(
     {
@@ -103,10 +103,10 @@ class Config(BaseModel):
         for m in v:
             if m not in KNOWN_MODELS:
                 raise ValueError(
-                    f"unknown model_id '{m}'. Known: {sorted(KNOWN_MODELS)}"
+                    f"unknown brand_id '{m}'. Known: {sorted(KNOWN_MODELS)}"
                 )
             if m in seen:
-                raise ValueError(f"duplicate model_id '{m}' in enabled_models")
+                raise ValueError(f"duplicate brand_id '{m}' in enabled_models")
             seen.add(m)
         return v
 
@@ -137,7 +137,7 @@ class Config(BaseModel):
         for m, t in v.items():
             if m not in KNOWN_MODELS:
                 raise ValueError(
-                    f"query_rot_streak_threshold_per_model: unknown model_id '{m}'"
+                    f"query_rot_streak_threshold_per_model: unknown brand_id '{m}'"
                 )
             if t < 1:
                 raise ValueError(

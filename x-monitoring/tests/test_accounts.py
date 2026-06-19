@@ -30,7 +30,7 @@ def test_derive_replied_to_from_in_reply_to_user_id():
             "in_reply_to_user_id": "official",
         }
     ]
-    edges = derive_edges(posts, model_id="minimax")
+    edges = derive_edges(posts, brand_id="minimax")
     assert any(
         e.edge_type == "replied_to" and e.from_handle == "alice" and e.to_handle == "official"
         for e in edges
@@ -46,7 +46,7 @@ def test_derive_quoted_from_quoted_status_id_and_author():
             "quoted_status_author_handle": "carol",
         }
     ]
-    edges = derive_edges(posts, model_id="minimax")
+    edges = derive_edges(posts, brand_id="minimax")
     assert any(
         e.edge_type == "quoted" and e.from_handle == "bob" and e.to_handle == "carol"
         for e in edges
@@ -61,7 +61,7 @@ def test_derive_mentioned_from_entities_user_mentions():
             "entities": {"user_mentions": [{"id": "official", "screen_name": "MiniMaxAI"}]},
         }
     ]
-    edges = derive_edges(posts, model_id="minimax")
+    edges = derive_edges(posts, brand_id="minimax")
     assert any(
         e.edge_type == "mentioned" and e.from_handle == "dave" and e.to_handle == "official"
         for e in edges
@@ -74,7 +74,7 @@ def test_derive_co_appears_in_thread_from_conversation_id():
         {"id": "b", "author_handle": "u2", "conversation_id": "C1"},
         {"id": "c", "author_handle": "u3", "conversation_id": "C1"},
     ]
-    edges = derive_edges(posts, model_id="minimax")
+    edges = derive_edges(posts, brand_id="minimax")
     co = [e for e in edges if e.edge_type == "co_appears_in_thread"]
     # 3 unique authors → 3 choose 2 = 3 co-appearing edges
     assert len(co) == 3
@@ -91,7 +91,7 @@ def test_no_replied_to_edge_when_field_missing():
             "in_reply_to_user_id": None,
         }
     ]
-    edges = derive_edges(posts, model_id="minimax")
+    edges = derive_edges(posts, brand_id="minimax")
     assert not any(e.edge_type == "replied_to" for e in edges)
 
 
@@ -151,9 +151,9 @@ def test_role_tag_multi_thread_becomes_community():
 def test_role_tag_suspicious_actor():
     a = Account(handle="bot")
     posts = [
-        {"favorite_count": 20, "in_reply_to_user_id": None, "author_bio": ""},
-        {"favorite_count": 15, "in_reply_to_user_id": None, "author_bio": ""},
-        {"favorite_count": 30, "in_reply_to_user_id": None, "author_bio": ""},
+        {"like_count": 20, "in_reply_to_user_id": None, "author_bio": ""},
+        {"like_count": 15, "in_reply_to_user_id": None, "author_bio": ""},
+        {"like_count": 30, "in_reply_to_user_id": None, "author_bio": ""},
     ]
     assert role_tag(a, posts_for_account=posts) == "suspicious_actor"
 
@@ -189,7 +189,7 @@ accounts:
 
 def test_load_accounts_rejects_unknown_model():
     with tempfile.TemporaryDirectory() as d:
-        with pytest.raises(ValueError, match="unknown model_id"):
+        with pytest.raises(ValueError, match="unknown brand_id"):
             load_accounts("bogus", Path(d))
 
 

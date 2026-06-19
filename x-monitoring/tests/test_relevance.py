@@ -101,7 +101,7 @@ def _post(text: str, author: str = "alice", **extra) -> dict:
         "tweet_id": "t",
         "text": text,
         "author_handle": author,
-        "model_id": "test",
+        "brand_id": "test",
         "source_query_id": "Q5",
         **extra,
     }

@@ -322,7 +322,7 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "inReplyToUserId": "...", "author": { "userName": "...", "name": "...",
           "followers": N, ..., "isBlueVerified": bool }, ... }
 
-    Our store expects: id, text, lang, created_at, favorite_count,
+    Our store expects: id, text, lang, created_at, like_count,
     retweet_count, author_handle, in_reply_to_user_id, entities.
     """
     author = item.get("author") or {}
@@ -331,7 +331,7 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "text": item.get("text") or "",
         "lang": item.get("lang"),
         "created_at": item.get("createdAt") or item.get("created_at"),
-        "favorite_count": int(item.get("likeCount") or 0),
+        "like_count": int(item.get("likeCount") or 0),
         "retweet_count": int(item.get("retweetCount") or 0),
         "reply_count": int(item.get("replyCount") or 0),
         "quote_count": int(item.get("quoteCount") or 0),

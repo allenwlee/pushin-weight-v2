@@ -132,7 +132,7 @@ def test_run_search_normalizes_tweet_shape():
     assert len(out) == 1
     t = out[0]
     assert t["id"] == "123"
-    assert t["favorite_count"] == 10
+    assert t["like_count"] == 10
     assert t["retweet_count"] == 2
     assert t["author_handle"] == "alice"
     assert t["author_followers_count"] == 5000
@@ -263,7 +263,7 @@ def test_from_env_reads_key(monkeypatch):
 def test_normalize_tweet_handles_missing_fields():
     out = _normalize_tweet({})
     assert out["id"] == ""
-    assert out["favorite_count"] == 0
+    assert out["like_count"] == 0
     assert out["author_handle"] == ""
     assert out["in_reply_to_user_id"] is None
 

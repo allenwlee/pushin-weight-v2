@@ -215,8 +215,8 @@ def test_resume_does_not_call_apify():
         raw_dir = data / "runs" / "raw" / run_id
         raw_dir.mkdir(parents=True)
         items = [
-            {"id": "t1", "model_id": "minimax", "text": "hi"},
-            {"id": "t2", "model_id": "minimax", "text": "bye"},
+            {"id": "t1", "brand_id": "minimax", "text": "hi"},
+            {"id": "t2", "brand_id": "minimax", "text": "bye"},
         ]
         (raw_dir / "minimax_Q1.json").write_text(json.dumps(items), encoding="utf-8")
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
@@ -232,7 +232,7 @@ def test_resume_does_not_call_apify():
 
 def test_review_queue_add_list_resolve(tmp_path):
     q = ReviewQueue(tmp_path / "rq.json")
-    e = q.add("t1", reason="suspicious_actor", model_id="minimax")
+    e = q.add("t1", reason="suspicious_actor", brand_id="minimax")
     assert e["status"] == "open"
     items = q.list()
     assert len(items) == 1
@@ -250,8 +250,8 @@ def test_review_queue_dismiss(tmp_path):
 
 def test_review_queue_add_is_idempotent(tmp_path):
     q = ReviewQueue(tmp_path / "rq.json")
-    q.add("t1", reason="low_engagement", model_id="m1")
-    q.add("t1", reason="off_topic", model_id="m1")
+    q.add("t1", reason="low_engagement", brand_id="m1")
+    q.add("t1", reason="off_topic", brand_id="m1")
     items = q.list()
     assert len(items) == 1
     assert items[0]["reason"] == "off_topic"  # updated
@@ -275,8 +275,8 @@ def test_read_run_zero_result_streaks(tmp_path):
             {
                 "started_at": "2026-06-15T00:00:00+00:00",
                 "queries": [
-                    {"model_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
-                    {"model_id": "m", "query_id": "Q2", "status": "completed", "n_results": 5},
+                    {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
+                    {"brand_id": "m", "query_id": "Q2", "status": "completed", "n_results": 5},
                 ],
             }
         )
@@ -290,8 +290,8 @@ def test_read_run_zero_result_streaks(tmp_path):
             {
                 "started_at": "2026-06-15T01:00:00+00:00",
                 "queries": [
-                    {"model_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
-                    {"model_id": "m", "query_id": "Q2", "status": "completed", "n_results": 3},
+                    {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
+                    {"brand_id": "m", "query_id": "Q2", "status": "completed", "n_results": 3},
                 ],
             }
         )
@@ -311,7 +311,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
             {
                 "started_at": "2026-06-15T00:00:00+00:00",
                 "queries": [
-                    {"model_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
+                    {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
             }
         )
@@ -321,7 +321,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
             {
                 "started_at": "2026-06-15T01:00:00+00:00",
                 "queries": [
-                    {"model_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
+                    {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
             }
         )
@@ -331,7 +331,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
             {
                 "started_at": "2026-06-15T02:00:00+00:00",
                 "queries": [
-                    {"model_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
+                    {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
             }
         )
@@ -414,15 +414,15 @@ def _v15_deprecated_pipeline_applies_filter_before_insert():
         apify = MagicMock()
         apify.run_search.return_value = [
             {"id": "t1", "text": "minimax is great", "author_handle": "u1",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t2", "text": "totally unrelated", "author_handle": "u2",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t3", "text": "celebrity post", "author_handle": "u3",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t4", "text": "minimax M3 review", "author_handle": "u4",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t5", "text": "random thoughts", "author_handle": "u5",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
         ]
         summary = p.execute(apify, model_filter=["minimax"])
         # DB has 2 rows (t1, t4); t2/t5 hard-drop, t3 soft-drop
@@ -473,7 +473,7 @@ def _v15_deprecated_pipeline_soft_drop_adds_to_review_queue():
         apify = MagicMock()
         apify.run_search.return_value = [
             {"id": "t1", "text": "celebrity news", "author_handle": "u1",
-             "favorite_count": 5, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 5, "brand_id": "minimax", "source_query_id": "Q5"},
         ]
         p.execute(apify, model_filter=["minimax"])
         # t1 NOT in DB
@@ -487,7 +487,7 @@ def _v15_deprecated_pipeline_soft_drop_adds_to_review_queue():
         assert len(items) == 1
         assert items[0]["tweet_id"] == "t1"
         assert items[0]["reason"] == "banned_token"
-        assert items[0]["model_id"] == "minimax"
+        assert items[0]["brand_id"] == "minimax"
 
 
 def _v15_deprecated_pipeline_low_engagement_rule_only_runs_on_kept():
@@ -521,11 +521,11 @@ def _v15_deprecated_pipeline_low_engagement_rule_only_runs_on_kept():
         apify.run_search.return_value = [
             # Q1 release post that mentions 'minimax' — kept.
             {"id": "kept1", "text": "minimax M3 release", "author_handle": "u1",
-             "favorite_count": 0, "model_id": "minimax", "source_query_id": "Q1"},
+             "like_count": 0, "brand_id": "minimax", "source_query_id": "Q1"},
             # Q1 release post with NO 'minimax' — filter hard-drops it.
             {"id": "dropped1", "text": "totally unrelated release",
-             "author_handle": "u2", "favorite_count": 0,
-             "model_id": "minimax", "source_query_id": "Q1"},
+             "author_handle": "u2", "like_count": 0,
+             "brand_id": "minimax", "source_query_id": "Q1"},
         ]
         p.execute(apify, model_filter=["minimax"])
         # DB has only kept1
@@ -573,15 +573,15 @@ def _v15_deprecated_pipeline_drops_match_summary_counts():
         apify = MagicMock()
         apify.run_search.return_value = [
             {"id": "t1", "text": "minimax K2 is great", "author_handle": "u1",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t2", "text": "hello world", "author_handle": "OfficialBrand",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t3", "text": "celebrity post", "author_handle": "u3",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t4", "text": "unrelated content", "author_handle": "u4",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t5", "text": "https://t.co/abc", "author_handle": "u5",
-             "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+             "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
         ]
         summary = p.execute(apify, model_filter=["minimax"])
         entry = summary["queries"][0]
@@ -699,7 +699,7 @@ def _stub_plan_calls(enabled_models):
     for m in enabled_models:
         out.append(PlannedCall(
             call_kind="account",
-            model_id=m,
+            brand_id=m,
             bucket=None,
             query_string=f"(from:{m}) min_faves:1",
             expected_signal="release",
@@ -707,7 +707,7 @@ def _stub_plan_calls(enabled_models):
         ))
         out.append(PlannedCall(
             call_kind="intent",
-            model_id=m,
+            brand_id=m,
             bucket="howto_criticism",
             query_string=f"({m}) how OR broken min_faves:0",
             expected_signal="criticism",
@@ -764,10 +764,10 @@ def test_pipeline_runs_via_plan_calls_account_call(monkeypatch):
         assert kinds == {"account", "intent"}
 
 
-def test_intent_call_reclassifies_model_id(monkeypatch):
+def test_intent_call_reclassifies_brand_id(monkeypatch):
     """v1.6 intent call: a tweet mentioning "minimax" is attributed to
     the minimax brand via attribute_to_brand, even if the call came
-    from a multi-brand split that started with a different model_id.
+    from a multi-brand split that started with a different brand_id.
     """
     from x_monitor.intent_classifier import attribute_to_brand, classify_signal
     # Direct test: tweet mentions "minimax" and the author is a
@@ -843,15 +843,15 @@ def test_pipeline_applies_filter_before_insert_v16(monkeypatch):
             [],
             [
                 {"id": "t1", "text": "minimax is great", "author_handle": "u1",
-                 "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+                 "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
                 {"id": "t2", "text": "totally unrelated", "author_handle": "u2",
-                 "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+                 "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
                 {"id": "t3", "text": "celebrity post", "author_handle": "u3",
-                 "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+                 "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
                 {"id": "t4", "text": "minimax M3 review", "author_handle": "u4",
-                 "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+                 "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
                 {"id": "t5", "text": "random thoughts", "author_handle": "u5",
-                 "favorite_count": 10, "model_id": "minimax", "source_query_id": "Q5"},
+                 "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             ],
         ]
         summary = p.execute(apify, model_filter=["minimax"])
@@ -924,7 +924,7 @@ def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
         # The F1 hijack: a tweet that mentions F1 but no kimi/moonshot.
-        # Pre-stamp model_id to bypass the intent-call reclassify.
+        # Pre-stamp brand_id to bypass the intent-call reclassify.
         apify.run_search.side_effect = [
             [],
             [
@@ -934,8 +934,8 @@ def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
                 # queue). v1.6 reclassify sees the brand match; the
                 # filter then sees the banned token.
                 {"id": "f1", "text": "kimi is faster than F1 today",
-                 "author_handle": "f1fan", "favorite_count": 50,
-                 "model_id": "moonshot_kimi", "source_query_id": "Q5"},
+                 "author_handle": "f1fan", "like_count": 50,
+                 "brand_id": "moonshot_kimi", "source_query_id": "Q5"},
             ],
         ]
         review = ReviewQueue(data / "_review_queue.json")

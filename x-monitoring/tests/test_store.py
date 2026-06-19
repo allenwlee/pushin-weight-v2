@@ -12,17 +12,17 @@ import pytest
 from x_monitor.store import Store
 
 
-def _make_post(tweet_id: str, model_id: str = "minimax", **kwargs) -> dict:
+def _make_post(tweet_id: str, brand_id: str = "minimax", **kwargs) -> dict:
     p = {
         "id": tweet_id,
         "tweet_id": tweet_id,
-        "model_id": model_id,
+        "brand_id": brand_id,
         "author_handle": "user1",
         "author_id": "u1",
         "text": "hello",
         "lang": "en",
         "created_at": "2026-06-07T00:00:00+00:00",
-        "favorite_count": 5,
+        "like_count": 5,
         "retweet_count": 1,
         "entities": {"user_mentions": []},
     }
@@ -93,7 +93,7 @@ def test_migrations_apply_forward_only_and_idempotent():
             # what matters is that 1 and 2 are both in the set.
             assert 1 in applied_first
             assert 2 in applied_first
-            assert store.applied_migrations() == [1, 2, 3]
+            assert store.applied_migrations() == [1, 2, 3, 4]
             # Re-apply is a no-op
             applied_second = store.apply_migrations()
             assert applied_second == []
@@ -142,7 +142,7 @@ def test_account_post_appearances_fk_to_unknown_handle_ignored():
         store = Store(Path(d) / "x.db")
         try:
             store.insert_posts([_make_post("p1")])
-            # The handle isn't in accounts yet; FK on (model_id, handle) should
+            # The handle isn't in accounts yet; FK on (brand_id, handle) should
             # cause an IntegrityError, which we catch silently.
             store.record_appearance("minimax", "ghost", "p1")
             # After upserting the account, the appearance can be recorded.

@@ -126,6 +126,14 @@ class Store:
         """Idempotent insert. Returns number of NEWLY inserted rows.
 
         Uses INSERT OR IGNORE — re-inserting the same tweet_id is a no-op.
+
+        v1.8: posts.brand_id and posts.signal are dropped (migration 004).
+        Attribution moves to post_brands(brand_id, post_id, weight); per-brand
+        signal moves to post_brand_signals(post_id, brand_id, signal). The
+        post dict still carries `brand_id` and `signal` keys (from the
+        caller / TwitterAPI.io response) — we extract them here and write
+        to the join tables. Posts with no brand_id get a sentinel
+        `_unattributed` row so the treemap's "unattributed" bin still works.
         """
         if not posts:
             return 0
@@ -135,30 +143,48 @@ class Store:
                 tweet_id = p.get("id") or p.get("tweet_id")
                 if not tweet_id:
                     continue
-                model_id = p.get("model_id")
-                if model_id not in KNOWN_MODELS:
-                    continue
+                tweet_id_str = str(tweet_id)
+                brand_id = p.get("brand_id")
+                # Per R1: attribution moves to post_brands. The post dict
+                # may carry a single brand_id (legacy callers) or a list
+                # (v1.8 multi-brand). Normalize to a list of brand_ids
+                # with equal weight = 1/N.
+                if isinstance(brand_id, list):
+                    raw_brands = [b for b in brand_id if b]
+                elif brand_id:
+                    raw_brands = [brand_id]
+                else:
+                    raw_brands = []
+                # Filter to known brands + sentinel; unknown slugs get
+                # bucketed into `_unattributed` so they still surface
+                # somewhere.
+                valid_brands: list[str] = []
+                for b in raw_brands:
+                    if b in KNOWN_MODELS:
+                        valid_brands.append(b)
+                if not valid_brands:
+                    valid_brands = ["_unattributed"]
+                weight = 1.0 / len(valid_brands)
                 cur = conn.execute(
                     """
                     INSERT OR IGNORE INTO posts(
-                        tweet_id, model_id, author_handle, author_id, text, lang,
-                        created_at, fetched_at, favorite_count, retweet_count,
+                        tweet_id, author_handle, author_id, text, lang,
+                        created_at, fetched_at, like_count, retweet_count,
                         reply_count, quote_count, in_reply_to_user_id,
                         quoted_status_id, conversation_id, entities,
                         source_query_id, raw, headline, headline_source,
-                        text_en, text_zh_cn, lang_detected, signal
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        text_en, text_zh_cn, lang_detected
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
-                        str(tweet_id),
-                        model_id,
+                        tweet_id_str,
                         p.get("author_handle") or p.get("author_id") or "",
                         p.get("author_id"),
                         p.get("text"),
                         p.get("lang"),
                         p.get("created_at"),
                         _now_iso(),
-                        int(p.get("favorite_count") or 0),
+                        int(p.get("like_count") or 0),
                         int(p.get("retweet_count") or 0),
                         int(p.get("reply_count") or 0),
                         int(p.get("quote_count") or 0),
@@ -170,16 +196,67 @@ class Store:
                         json.dumps(p),
                         p.get("headline"),
                         p.get("headline_source"),
-                        # v1.7: per-locale translation columns + signal.
+                        # v1.7: per-locale translation columns.
                         # NULL when callers don't supply (legacy call sites).
                         p.get("text_en"),
                         p.get("text_zh_cn"),
                         p.get("lang_detected"),
-                        p.get("signal"),
                     ),
                 )
                 if cur.rowcount > 0:
                     n_new += 1
+                    # Only write attribution rows for newly-inserted posts;
+                    # re-inserts must not duplicate (post_brands PK is
+                    # (brand_id, post_id)).
+                    for b in valid_brands:
+                        conn.execute(
+                            """
+                            INSERT OR IGNORE INTO post_brands(
+                                brand_id, post_id, weight
+                            ) VALUES (?, ?, ?)
+                            """,
+                            (b, tweet_id_str, weight),
+                        )
+                    # Per-brand signal: one row per (post, brand) tuple.
+                    # Legacy callers passed a single `signal` string; v1.8
+                    # callers may pass a list of (brand_id, signal) tuples.
+                    signal_raw = p.get("signal")
+                    per_brand_signals: list[tuple[str, str]] = []
+                    if isinstance(signal_raw, list):
+                        for item in signal_raw:
+                            if (
+                                isinstance(item, tuple)
+                                and len(item) == 2
+                                and isinstance(item[0], str)
+                                and isinstance(item[1], str)
+                            ):
+                                per_brand_signals.append((item[0], item[1]))
+                            elif (
+                                isinstance(item, dict)
+                                and "brand_id" in item
+                                and "signal" in item
+                            ):
+                                per_brand_signals.append(
+                                    (item["brand_id"], item["signal"])
+                                )
+                    elif isinstance(signal_raw, str) and signal_raw:
+                        # Legacy single-signal path: emit one row per brand
+                        # in the attribution list.
+                        for b in valid_brands:
+                            per_brand_signals.append((b, signal_raw))
+                    for b, sig in per_brand_signals:
+                        if b == "_unattributed":
+                            # CHECK constraint on post_brand_signals excludes
+                            # the sentinel (Decision 15). Skip silently.
+                            continue
+                        conn.execute(
+                            """
+                            INSERT OR IGNORE INTO post_brand_signals(
+                                post_id, brand_id, signal
+                            ) VALUES (?, ?, ?)
+                            """,
+                            (tweet_id_str, b, sig),
+                        )
         return n_new
 
     # --- v1.7: per-locale translation helpers -----------------------------
@@ -259,7 +336,7 @@ class Store:
         raise ValueError. The limit caps the result count; pass a
         large number to disable (no streaming pagination in v1.7).
 
-        Returns a list of dicts with at least tweet_id, model_id, text,
+        Returns a list of dicts with at least tweet_id, brand_id, text,
         author_handle, created_at — the fields the translation pass
         needs to build a Claude Haiku prompt.
         """
@@ -272,12 +349,20 @@ class Store:
         # col is from a closed-set literal dict — safe to interpolate
         # directly into the SQL. DO NOT accept the column name from
         # the caller; route it through _LOCALE_TO_COLUMN only.
+        #
+        # v1.8: posts.brand_id is dropped (migration 004). Attribution
+        # moves to post_brands(brand_id, post_id, weight). We pick any
+        # one brand_id per post (the first by lexicographic brand_id) so
+        # the translation pipeline still has SOME brand to attribute
+        # the post to for translation-prompt context. The translation
+        # itself does not need multi-brand precision.
         rows = self._conn.execute(
             f"""
-            SELECT tweet_id, model_id, text, author_handle, created_at
-            FROM posts
-            WHERE {col} IS NULL
-            ORDER BY created_at DESC
+            SELECT p.tweet_id, pb.brand_id, p.text, p.author_handle, p.created_at
+            FROM posts p
+            JOIN post_brands pb ON pb.post_id = p.tweet_id
+            WHERE p.{col} IS NULL
+            ORDER BY p.created_at DESC
             LIMIT ?
             """,
             (int(limit),),
@@ -285,44 +370,61 @@ class Store:
         return [dict(r) for r in rows]
 
     def get_posts_for_digest(
-        self, model_id: str, since_iso: str | None = None, limit: int = 200
+        self, brand_id: str, since_iso: str | None = None, limit: int = 200
     ) -> list[dict[str, Any]]:
-        if model_id not in KNOWN_MODELS:
-            raise ValueError(f"unknown model_id '{model_id}'")
+        if brand_id not in KNOWN_MODELS:
+            raise ValueError(f"unknown brand_id '{brand_id}'")
+        # v1.8: posts.brand_id is dropped (migration 004). Attribution
+        # moves to post_brands(brand_id, post_id, weight). The returned
+        # dicts keep the `brand_id` key (with weight on the side) so
+        # downstream code that does `p.get("brand_id")` continues to
+        # work unchanged.
         if since_iso:
             rows = self._conn.execute(
                 """
-                SELECT * FROM posts
-                WHERE model_id = ? AND created_at >= ?
-                ORDER BY created_at DESC
+                SELECT p.*, pb.weight
+                FROM posts p
+                JOIN post_brands pb ON pb.post_id = p.tweet_id
+                WHERE pb.brand_id = ? AND p.created_at >= ?
+                ORDER BY p.created_at DESC
                 LIMIT ?
                 """,
-                (model_id, since_iso, limit),
+                (brand_id, since_iso, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
                 """
-                SELECT * FROM posts
-                WHERE model_id = ?
-                ORDER BY created_at DESC
+                SELECT p.*, pb.weight
+                FROM posts p
+                JOIN post_brands pb ON pb.post_id = p.tweet_id
+                WHERE pb.brand_id = ?
+                ORDER BY p.created_at DESC
                 LIMIT ?
                 """,
-                (model_id, limit),
+                (brand_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_all_posts(self, model_id: str) -> list[dict[str, Any]]:
-        if model_id not in KNOWN_MODELS:
-            raise ValueError(f"unknown model_id '{model_id}'")
+    def get_all_posts(self, brand_id: str) -> list[dict[str, Any]]:
+        if brand_id not in KNOWN_MODELS:
+            raise ValueError(f"unknown brand_id '{brand_id}'")
         # The `created_at` column is TEXT and may hold either ISO 8601 or
         # Twitter legacy (e.g. "Wed Jun 10 21:31:32 +0000 2026"). A SQL
         # `ORDER BY created_at DESC` on the latter is lexicographic, not
         # chronological (Wed > Mon, "10" > "09"), which makes the model
         # detail page render 5-day-old posts at the top. Sort in Python by
         # parsed timestamp instead.
+        #
+        # v1.8: posts.brand_id is dropped (migration 004); JOIN post_brands
+        # to filter by brand.
         rows = self._conn.execute(
-            "SELECT * FROM posts WHERE model_id = ?",
-            (model_id,),
+            """
+            SELECT p.*, pb.weight
+            FROM posts p
+            JOIN post_brands pb ON pb.post_id = p.tweet_id
+            WHERE pb.brand_id = ?
+            """,
+            (brand_id,),
         ).fetchall()
         posts = [dict(r) for r in rows]
         posts.sort(
@@ -393,7 +495,7 @@ class Store:
 
     def upsert_account(
         self,
-        model_id: str,
+        brand_id: str,
         handle: str,
         role: str = "unknown",
         engagement_tier: str = "low",
@@ -404,76 +506,124 @@ class Store:
         multi_brand_voice: bool = False,
         notes: str | None = None,
     ) -> None:
-        if model_id not in KNOWN_MODELS:
-            raise ValueError(f"unknown model_id '{model_id}'")
+        """Upsert a per-brand account edge.
+
+        v1.8: accounts table loses the brand_id/handle PK and the per-account
+        role/multi_brand_voice columns (migration 004, Decision 10). The
+        per-brand role now lives in `brand_accounts(brand_id, author_id,
+        role)`. The `multi_brand_voice` column is dropped (R12) — that
+        derivation moves to a query against brand_accounts.
+
+        For callers that don't have a real author_id (yaml-derived accounts
+        in `data/brands/<brand>/accounts.yaml`), we synthesize a stable
+        `handle:<handle>` author_id so re-upserts hit the same row.
+        """
+        if brand_id not in KNOWN_MODELS:
+            raise ValueError(f"unknown brand_id '{brand_id}'")
+        author_id = f"handle:{handle}"
         now = _now_iso()
+        # Upsert into accounts (author_id PK). We drop multi_brand_voice
+        # silently — v1.8 callers can stop passing it; old callers passing
+        # it just see the kwarg ignored.
         self._conn.execute(
             """
             INSERT INTO accounts(
-                model_id, handle, display_name, role, verified,
-                bio_contains_brand, engagement_tier, multi_brand_voice,
+                author_id, handle, display_name, verified,
+                bio_contains_brand, engagement_tier,
                 first_seen_at, last_seen_at, source_query_ids, notes
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(model_id, handle) DO UPDATE SET
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(author_id) DO UPDATE SET
                 display_name = COALESCE(excluded.display_name, accounts.display_name),
-                role = excluded.role,
                 verified = MAX(accounts.verified, excluded.verified),
                 bio_contains_brand = MAX(accounts.bio_contains_brand, excluded.bio_contains_brand),
                 engagement_tier = excluded.engagement_tier,
-                multi_brand_voice = MAX(accounts.multi_brand_voice, excluded.multi_brand_voice),
                 last_seen_at = excluded.last_seen_at,
                 source_query_ids = excluded.source_query_ids,
                 notes = COALESCE(excluded.notes, accounts.notes)
             """,
             (
-                model_id,
+                author_id,
                 handle,
                 display_name,
-                role,
                 int(verified),
                 int(bio_contains_brand),
                 engagement_tier,
-                int(multi_brand_voice),
                 now,
                 now,
                 json.dumps(source_query_ids or []),
                 notes,
             ),
         )
+        # Upsert the per-brand edge in brand_accounts (the per-brand role).
+        self._conn.execute(
+            """
+            INSERT INTO brand_accounts(
+                brand_id, author_id, role, added_at
+            ) VALUES (?,?,?,?)
+            ON CONFLICT(brand_id, author_id) DO UPDATE SET
+                role = excluded.role
+            """,
+            (brand_id, author_id, role, now),
+        )
 
-    def get_account(self, model_id: str, handle: str) -> dict[str, Any] | None:
-        if model_id not in KNOWN_MODELS:
-            raise ValueError(f"unknown model_id '{model_id}'")
+    def get_account(self, brand_id: str, handle: str) -> dict[str, Any] | None:
+        if brand_id not in KNOWN_MODELS:
+            raise ValueError(f"unknown brand_id '{brand_id}'")
+        # v1.8: JOIN brand_accounts so we can return the per-brand role
+        # alongside the account row.
         row = self._conn.execute(
-            "SELECT * FROM accounts WHERE model_id = ? AND handle = ?",
-            (model_id, handle),
+            """
+            SELECT a.*, ba.role
+            FROM accounts a
+            JOIN brand_accounts ba ON ba.author_id = a.author_id
+            WHERE ba.brand_id = ? AND a.handle = ?
+            """,
+            (brand_id, handle),
         ).fetchone()
         return dict(row) if row else None
 
-    def get_accounts(self, model_id: str) -> list[dict[str, Any]]:
-        if model_id not in KNOWN_MODELS:
-            raise ValueError(f"unknown model_id '{model_id}'")
+    def get_accounts(self, brand_id: str) -> list[dict[str, Any]]:
+        if brand_id not in KNOWN_MODELS:
+            raise ValueError(f"unknown brand_id '{brand_id}'")
+        # v1.8: accounts no longer has brand_id. The per-brand accounts
+        # live behind brand_accounts JOIN.
         rows = self._conn.execute(
-            "SELECT * FROM accounts WHERE model_id = ?", (model_id,)
+            """
+            SELECT a.*, ba.role
+            FROM accounts a
+            JOIN brand_accounts ba ON ba.author_id = a.author_id
+            WHERE ba.brand_id = ?
+            """,
+            (brand_id,),
         ).fetchall()
         return [dict(r) for r in rows]
 
     # --- appearances ------------------------------------------------------
 
     def record_appearance(
-        self, model_id: str, handle: str, tweet_id: str, role_at_time: str | None = None
+        self, brand_id: str, handle: str, tweet_id: str, role_at_time: str | None = None
     ) -> None:
-        # FK enforces that both (model_id, handle) and tweet_id exist; ignore
-        # silently on FK violation since the pipeline can call this before
-        # the account is upserted in some races — caller should upsert first.
+        """Record that `handle` (an account edge of `brand_id`) appeared on
+        `tweet_id`.
+
+        v1.8: account_post_appearances PK changed from
+        (model_id, handle, tweet_id) to (author_id, tweet_id) (Decision 4).
+        Resolve handle -> author_id from accounts; if the handle isn't in
+        accounts yet (race), silently skip — caller should upsert_account
+        first.
+        """
+        author_id = f"handle:{handle}"
+        # If the account row exists with this synthetic id, write the
+        # appearance. Otherwise the FK on (author_id, tweet_id) would fail;
+        # silently skip per the prior contract.
         try:
             self._conn.execute(
                 """
                 INSERT OR IGNORE INTO account_post_appearances(
-                    model_id, handle, tweet_id, role_at_time
-                ) VALUES (?,?,?,?)
+                    author_id, tweet_id, role_at_time
+                ) VALUES (?,?,?)
                 """,
-                (model_id, handle, tweet_id, role_at_time),
+                (author_id, str(tweet_id), role_at_time),
             )
         except sqlite3.IntegrityError:
             pass

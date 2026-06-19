@@ -6,7 +6,7 @@ column, which puts e.g. "Wed Jun 10 21:31:32 +0000 2026" before the
 chronologically newer "Mon Jun 15 19:05:46 +0000 2026" because:
   - "Wed" > "Mon" alphabetically, and
   - "10" > "09" / "08" / "06"
-The result is the user sees 5-day-old posts on /model/<model_id> even
+The result is the user sees 5-day-old posts on /model/<brand_id> even
 though fresher posts are in the DB.
 """
 
@@ -21,13 +21,13 @@ from x_monitor.store import Store
 def _make_post(tweet_id: str, created_at: str) -> dict:
     return {
         "tweet_id": tweet_id,
-        "model_id": "minimax",
+        "brand_id": "minimax",
         "author_handle": "user1",
         "author_id": "u1",
         "text": "hello",
         "lang": "en",
         "created_at": created_at,
-        "favorite_count": 5,
+        "like_count": 5,
         "retweet_count": 1,
         "entities": {"user_mentions": []},
     }

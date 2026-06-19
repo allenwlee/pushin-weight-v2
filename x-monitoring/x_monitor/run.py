@@ -45,7 +45,7 @@ def _now_iso() -> str:
 def filter_and_review(
     items: list[dict[str, Any]],
     q: Query,
-    model_id: str,
+    brand_id: str,
     cfg: RelevanceConfig,
     review: ReviewQueue,
     cache: HeadlinesCache | None = None,
@@ -71,7 +71,7 @@ def filter_and_review(
         in the DB. That bug is fixed here.
 
     Items here are normalized post dicts (with `id`, `text`,
-    `author_handle`, `favorite_count`, `model_id`, `source_query_id`).
+    `author_handle`, `like_count`, `brand_id`, `source_query_id`).
 
     If `cache` is provided, the kept set is passed through enrich_posts()
     so URL-only posts get their article headlines (X-articles go through
@@ -83,19 +83,19 @@ def filter_and_review(
         review.append_rule_match(
             tweet_id=sd["tweet_id"],
             reason=sd["reason"],
-            model_id=model_id,
+            brand_id=brand_id,
             rule="must_have_none",
         )
     # Low-engagement rule runs ONLY on the kept set.
     for it in kept:
         if (
             q.expected_signal == "release"
-            and (it.get("favorite_count") or 0) < 2
+            and (it.get("like_count") or 0) < 2
         ):
             review.append_rule_match(
                 tweet_id=it.get("id", ""),
                 reason="low_engagement",
-                model_id=model_id,
+                brand_id=brand_id,
                 rule="release_min_faves",
             )
     # v1.4: enrich the kept set with article headlines (X-articles go
@@ -184,7 +184,7 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
 
 
 def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
-    """Build {model_id: [brand_token, ...]} from data/queries/<m>.yaml.
+    """Build {brand_id: [brand_token, ...]} from data/queries/<m>.yaml.
 
     Mirrors query_plan._load_brand_tokens_per_model; duplicated here
     so RunPipeline doesn't have to import a private function.
@@ -194,7 +194,7 @@ def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, li
 
 
 def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
-    """Build {model_id: [handle, ...]} for staff/official attribution.
+    """Build {brand_id: [handle, ...]} for staff/official attribution.
 
     For v1.6 the attribute_to_brand prefers author_handle match over
     text-contains, so we fold the official handle into the per-brand
@@ -329,7 +329,7 @@ class RunPipeline:
                 for q in skipped:
                     summary["queries"].append(
                         {
-                            "model_id": m,
+                            "brand_id": m,
                             "query_id": q.id,
                             "status": "skipped_budget",
                             "n_results": 0,
@@ -361,7 +361,7 @@ class RunPipeline:
                 # bucket, split when over the operator cap). For each call:
                 #   1. Run apify.run_search (paginated since v1.6 commit 1).
                 #   2. For intent calls, reclassify each tweet's
-                #      model_id + source_query_id via attribute_to_brand
+                #      brand_id + source_query_id via attribute_to_brand
                 #      + classify_signal.
                 #   3. Run the existing v1.2 filter_and_review (F1
                 #      hijack, banned-token review-queue, low-engagement).
@@ -390,7 +390,7 @@ class RunPipeline:
                     if dry_run:
                         summary["queries"].append(
                             {
-                                "model_id": call.model_id,
+                                "brand_id": call.brand_id,
                                 "call_kind": call.call_kind,
                                 "bucket": call.bucket,
                                 "query_id": "Q1" if call.call_kind == "account" else "QX",
@@ -400,7 +400,7 @@ class RunPipeline:
                             }
                         )
                         continue
-                    raw_path = self.raw_dir / run_id / f"{call.model_id}_{call.call_kind}_{call.bucket or 'acct'}.json"
+                    raw_path = self.raw_dir / run_id / f"{call.brand_id}_{call.call_kind}_{call.bucket or 'acct'}.json"
                     raw_path.parent.mkdir(parents=True, exist_ok=True)
 
                     try:
@@ -415,7 +415,7 @@ class RunPipeline:
                     except (TwitterApiRateLimitError, TwitterApiServerError) as e:
                         summary["queries"].append(
                             {
-                                "model_id": call.model_id,
+                                "brand_id": call.brand_id,
                                 "call_kind": call.call_kind,
                                 "bucket": call.bucket,
                                 "query_id": "Q1" if call.call_kind == "account" else "QX",
@@ -427,9 +427,9 @@ class RunPipeline:
                         )
                         continue
 
-                    # v1.6: for intent calls, reclassify model_id +
+                    # v1.6: for intent calls, reclassify brand_id +
                     # source_query_id per tweet from the text content.
-                    # For account calls, the model_id is the brand and
+                    # For account calls, the brand_id is the brand and
                     # source_query_id is "Q1" (release).
                     if call.call_kind == "intent":
                         classified = 0
@@ -441,7 +441,7 @@ class RunPipeline:
                                 staff_handles,
                             )
                             if brand:
-                                it["model_id"] = brand
+                                it["brand_id"] = brand
                                 classified += 1
                             else:
                                 # No brand match: drop the tweet rather
@@ -456,16 +456,16 @@ class RunPipeline:
                             it for it in items if not it.get("_unattributed")
                         ]
                         log.info(
-                            "intent call model_id=%s bucket=%s n_results=%d "
+                            "intent call brand_id=%s bucket=%s n_results=%d "
                             "n_classified=%d",
-                            call.model_id, call.bucket, len(items) + sum(
+                            call.brand_id, call.bucket, len(items) + sum(
                                 1 for it in items if it.get("_unattributed")
                             ),
                             classified,
                         )
                     else:
                         for it in items:
-                            it["model_id"] = call.model_id
+                            it["brand_id"] = call.brand_id
                             it["source_query_id"] = "Q1"
 
                     # The existing v1.2 filter + review-queue machinery
@@ -476,11 +476,11 @@ class RunPipeline:
                     #   intent calls  -> the signal-derived QID
                     synth_q = _planned_call_to_query(call)
                     # The filter is per-model, but the tweets now span
-                    # potentially many models. We partition by model_id
+                    # potentially many models. We partition by brand_id
                     # and filter each subset.
                     by_model: dict[str, list[dict]] = {}
                     for it in items:
-                        m_id = it.get("model_id") or "unknown"
+                        m_id = it.get("brand_id") or "unknown"
                         by_model.setdefault(m_id, []).append(it)
                     kept_all: list[dict] = []
                     n_filtered_total = 0
@@ -509,14 +509,14 @@ class RunPipeline:
                     log.info(
                         "call model=%s kind=%s bucket=%s n_results=%d "
                         "n_kept=%d n_dropped=%d reasons=%s n_review=%d",
-                        call.model_id, call.call_kind, call.bucket,
+                        call.brand_id, call.call_kind, call.bucket,
                         len(items), len(kept_all), n_filtered_total,
                         reasons_total, n_review_total,
                     )
 
                     summary["queries"].append(
                         {
-                            "model_id": call.model_id,
+                            "brand_id": call.brand_id,
                             "call_kind": call.call_kind,
                             "bucket": call.bucket,
                             "query_id": synth_q.id,
@@ -551,7 +551,7 @@ class RunPipeline:
             return summary
 
     def _update_accounts(self, store: Store, summary: dict[str, Any]) -> None:
-        """Regenerate accounts/<model_id>.yaml-derived upserts from posts."""
+        """Regenerate accounts/<brand_id>.yaml-derived upserts from posts."""
         for m in self.config.enabled_models:
             try:
                 seed = load_accounts(m, self.accounts_dir)
@@ -560,7 +560,7 @@ class RunPipeline:
             # Always re-upsert seeded accounts (roles, last_seen_at).
             for a in seed:
                 store.upsert_account(
-                    model_id=m,
+                    brand_id=m,
                     handle=a.handle,
                     role=a.role,
                     engagement_tier=a.engagement_tier,
@@ -604,7 +604,7 @@ class RunPipeline:
                     1 for p in info["posts"] if p.get("in_reply_to_user_id")
                 )
                 store.upsert_account(
-                    model_id=m,
+                    brand_id=m,
                     handle=handle,
                     role=role,
                     engagement_tier=("high" if info["multi_posts"] >= 5 else "low"),

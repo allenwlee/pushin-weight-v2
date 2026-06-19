@@ -46,13 +46,13 @@ def test_migration_003_applies_on_fresh_db(tmp_path):
         assert "text_en" in cols
         assert "text_zh_cn" in cols
         assert "lang_detected" in cols
-        assert "signal" in cols
+        # migration 004 dropped posts.signal (per Decision 1, R6d); columns that were here are now in post_brand_signals
         # Confirm the migration was actually recorded.
         applied = {
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         }
-        assert 3 in applied
+        assert 3 in applied and 4 in applied
     finally:
         s.close()
 
@@ -92,7 +92,7 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
         n = s.insert_posts([
             {
                 "id": "t1",
-                "model_id": "minimax",
+                "brand_id": "minimax",
                 "author_handle": "u1",
                 "text": "海螺AI 最新版本",
                 "text_en": "Hailuo AI latest version",
@@ -109,7 +109,7 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
         assert row["text_en"] == "Hailuo AI latest version"
         assert row["text_zh_cn"] == "海螺AI 最新版本"
         assert row["lang_detected"] == "zh-Hans"
-        assert row["signal"] == "release"
+        # signal moved to post_brand_signals in migration 004 (R6d, Decision 18)
     finally:
         s.close()
 
@@ -124,7 +124,7 @@ def test_insert_posts_without_translation_columns_stores_null(tmp_path):
         s.insert_posts([
             {
                 "id": "t2",
-                "model_id": "minimax",
+                "brand_id": "minimax",
                 "author_handle": "u2",
                 "text": "minimax is great",
                 # no text_en / text_zh_cn / lang_detected / signal
@@ -137,7 +137,7 @@ def test_insert_posts_without_translation_columns_stores_null(tmp_path):
         assert row["text_en"] is None
         assert row["text_zh_cn"] is None
         assert row["lang_detected"] is None
-        assert row["signal"] is None
+        # signal moved to post_brand_signals in migration 004
     finally:
         s.close()
 
@@ -153,9 +153,9 @@ def test_bulk_update_translations_updates_rows(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         s.insert_posts([
-            {"id": "t1", "model_id": "minimax", "text": "海螺AI"},
-            {"id": "t2", "model_id": "qwen", "text": "Qwen is great"},
-            {"id": "t3", "model_id": "deepseek", "text": "DeepSeek-V3"},
+            {"id": "t1", "brand_id": "minimax", "text": "海螺AI"},
+            {"id": "t2", "brand_id": "qwen", "text": "Qwen is great"},
+            {"id": "t3", "brand_id": "deepseek", "text": "DeepSeek-V3"},
         ])
         updated = s.bulk_update_translations([
             {
@@ -200,7 +200,7 @@ def test_bulk_update_translations_idempotent(tmp_path):
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
-        s.insert_posts([{"id": "t1", "model_id": "minimax", "text": "x"}])
+        s.insert_posts([{"id": "t1", "brand_id": "minimax", "text": "x"}])
         rows = [{
             "tweet_id": "t1",
             "text_en": "x",
@@ -238,7 +238,7 @@ def test_bulk_update_translations_skips_missing_tweet_id(tmp_path):
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
-        s.insert_posts([{"id": "t1", "model_id": "minimax", "text": "x"}])
+        s.insert_posts([{"id": "t1", "brand_id": "minimax", "text": "x"}])
         n = s.bulk_update_translations([
             {
                 "tweet_id": "t_does_not_exist",
@@ -296,11 +296,11 @@ def test_get_posts_missing_translations_en(tmp_path):
     try:
         # 3 posts, t1 oldest, t3 newest. t3 has text_en pre-filled.
         s.insert_posts([
-            {"id": "t1", "model_id": "minimax", "text": "a",
+            {"id": "t1", "brand_id": "minimax", "text": "a",
              "created_at": "2026-06-17T01:00:00+00:00"},
-            {"id": "t2", "model_id": "qwen", "text": "b",
+            {"id": "t2", "brand_id": "qwen", "text": "b",
              "created_at": "2026-06-17T02:00:00+00:00"},
-            {"id": "t3", "model_id": "deepseek", "text": "c",
+            {"id": "t3", "brand_id": "deepseek", "text": "c",
              "created_at": "2026-06-17T03:00:00+00:00"},
         ])
         s.bulk_update_translations([
@@ -331,7 +331,7 @@ def test_get_posts_missing_translations_zh_cn(tmp_path):
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
-        s.insert_posts([{"id": "t1", "model_id": "minimax", "text": "a"}])
+        s.insert_posts([{"id": "t1", "brand_id": "minimax", "text": "a"}])
         s.bulk_update_translations([
             {
                 "tweet_id": "t1",
@@ -356,7 +356,7 @@ def test_get_posts_missing_translations_respects_limit(tmp_path):
     try:
         for i in range(5):
             s.insert_posts([
-                {"id": f"t{i}", "model_id": "minimax", "text": f"text{i}"}
+                {"id": f"t{i}", "brand_id": "minimax", "text": f"text{i}"}
             ])
         missing = s.get_posts_missing_translations("en", limit=3)
         assert len(missing) == 3

@@ -70,7 +70,7 @@ class ReviewQueue:
         tweet_id: str,
         reason: str,
         note: str = "",
-        model_id: str | None = None,
+        brand_id: str | None = None,
     ) -> dict:
         def op() -> dict:
             items = self._read_unlocked()
@@ -80,8 +80,8 @@ class ReviewQueue:
                     it["reason"] = reason
                     it["note"] = note
                     it["updated_at"] = _now_iso()
-                    if model_id:
-                        it["model_id"] = model_id
+                    if brand_id:
+                        it["brand_id"] = brand_id
                     self._write_unlocked(items)
                     return it
             entry = {
@@ -89,7 +89,7 @@ class ReviewQueue:
                 "reason": reason,
                 "note": note,
                 "status": "open",
-                "model_id": model_id,
+                "brand_id": brand_id,
                 "created_at": _now_iso(),
                 "updated_at": _now_iso(),
             }
@@ -124,11 +124,11 @@ class ReviewQueue:
         self,
         tweet_id: str,
         reason: str,
-        model_id: str,
+        brand_id: str,
         rule: str = "",
     ) -> None:
         """Pipeline-side: append a rule-derived match.
 
         Distinguishes from operator `--add` by setting 'rule' field.
         """
-        self.add(tweet_id=tweet_id, reason=reason, note=rule, model_id=model_id)
+        self.add(tweet_id=tweet_id, reason=reason, note=rule, brand_id=brand_id)

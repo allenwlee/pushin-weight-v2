@@ -44,7 +44,7 @@ daily_ceiling: 333
             assert m in c.enabled_models
 
 
-def test_rejects_unknown_model_id():
+def test_rejects_unknown_brand_id():
     with tempfile.TemporaryDirectory() as d:
         path = _write(
             Path(d),

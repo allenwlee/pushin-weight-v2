@@ -14,7 +14,7 @@ Two responsibilities:
     community_question, criticism, commenter_capture, praise, other).
     First-match-wins in priority order.
   - `attribute_to_brand(text, author_handle, ...)`: pick the most likely
-    model_id for a tweet, preferring author_handle membership in a
+    brand_id for a tweet, preferring author_handle membership in a
     brand's official/staff list, then text-contains of brand tokens
     (ASCII word-boundary, CJK substring).
 
@@ -156,7 +156,7 @@ def attribute_to_brand(
     compiled_brand_pattern: re.Pattern[str] | None = None,
     token_to_brand: dict[str, str] | None = None,
 ) -> str | None:
-    """Pick the most likely model_id for a tweet.
+    """Pick the most likely brand_id for a tweet.
 
     Priority:
     1. If author_handle is in a brand's official/staff list (casefolded

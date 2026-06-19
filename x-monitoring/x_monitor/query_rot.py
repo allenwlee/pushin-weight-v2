@@ -18,10 +18,10 @@ def read_run_zero_result_streaks(
     runs_dir: Path,
     lookback_days: int = 7,
 ) -> dict[tuple[str, str], int]:
-    """Walk data/runs/*.json and return (model_id, query_id) -> consecutive
+    """Walk data/runs/*.json and return (brand_id, query_id) -> consecutive
     zero-result streak ending at the most recent run.
 
-    We process runs in mtime-DESCENDING order, and for each (model_id,
+    We process runs in mtime-DESCENDING order, and for each (brand_id,
     query_id), we count the streak until we see a run with non-zero results
     (streak breaks) or until we run out of recent runs.
     """
@@ -52,7 +52,7 @@ def read_run_zero_result_streaks(
         if run_date < cutoff:
             continue
         for q in data.get("queries") or []:
-            key = (q.get("model_id", ""), q.get("query_id", ""))
+            key = (q.get("brand_id", ""), q.get("query_id", ""))
             if key in finished:
                 continue
             if q.get("status") not in ("completed", "skipped_budget"):
@@ -66,8 +66,8 @@ def read_run_zero_result_streaks(
     return streaks
 
 
-def threshold_for(model_id: str, per_model: dict[str, int], default: int) -> int:
-    return per_model.get(model_id, default)
+def threshold_for(brand_id: str, per_model: dict[str, int], default: int) -> int:
+    return per_model.get(brand_id, default)
 
 
 def detect_rot(
@@ -76,13 +76,13 @@ def detect_rot(
     default_threshold: int,
     per_model: dict[str, int],
 ) -> list[tuple[str, str, int]]:
-    """Return list of (model_id, query_id, streak) for queries that should
+    """Return list of (brand_id, query_id, streak) for queries that should
     be flipped to enabled=false."""
     streaks = read_run_zero_result_streaks(runs_dir)
     flipped: list[tuple[str, str, int]] = []
-    for (model_id, query_id), streak in streaks.items():
-        if streak >= threshold_for(model_id, per_model, default_threshold):
-            flipped.append((model_id, query_id, streak))
+    for (brand_id, query_id), streak in streaks.items():
+        if streak >= threshold_for(brand_id, per_model, default_threshold):
+            flipped.append((brand_id, query_id, streak))
     return flipped
 
 
@@ -90,11 +90,11 @@ def apply_rot(
     queries_root: Path,
     flips: Iterable[tuple[str, str, int]],
 ) -> int:
-    """Update data/queries/<model_id>.yaml to set enabled=false on flipped
+    """Update data/queries/<brand_id>.yaml to set enabled=false on flipped
     queries. Returns the number of files updated."""
     files_touched: set[Path] = set()
-    for model_id, query_id, _ in flips:
-        path = queries_root / f"{model_id}.yaml"
+    for brand_id, query_id, _ in flips:
+        path = queries_root / f"{brand_id}.yaml"
         if not path.exists():
             continue
         try:

@@ -102,11 +102,11 @@ def build_translation_prompt(
         )
 
     # Embed the tweets as a JSON array so the LLM can reference them
-    # by tweet_id. Each tweet is {tweet_id, text, model_id?}.
+    # by tweet_id. Each tweet is {tweet_id, text, brand_id?}.
     tweet_payload = json.dumps(
         [{"tweet_id": t.get("tweet_id") or t.get("id"),
           "text": t.get("text", ""),
-          "model_id": t.get("model_id")}
+          "brand_id": t.get("brand_id")}
          for t in tweets],
         ensure_ascii=False,
     )
@@ -188,7 +188,7 @@ def _empty_row(tweet: dict[str, Any], failed: bool = False,
     (failed LLM call, malformed response, or dry-run stub)."""
     row: dict[str, Any] = {
         "tweet_id": str(tweet.get("tweet_id") or tweet.get("id")),
-        "model_id": tweet.get("model_id"),
+        "brand_id": tweet.get("brand_id"),
         "text_en": None,
         "text_zh_cn": None,
         "lang_detected": None,
@@ -212,7 +212,7 @@ def translate_batch(
 
     Args:
         tweets: list of dicts with at least `tweet_id` and `text`.
-            May also include `model_id` (used in the prompt context).
+            May also include `brand_id` (used in the prompt context).
         target_locales: list of locale codes (e.g. ["en", "zh_cn"]).
             The columns filled in the output are `text_<locale>`.
         client: an object implementing the `ClaudeClient` protocol
@@ -226,7 +226,7 @@ def translate_batch(
 
     Returns:
         A list of dicts, one per input tweet (same order). Each dict
-        has: `tweet_id`, `model_id`, `text_en`, `text_zh_cn`,
+        has: `tweet_id`, `brand_id`, `text_en`, `text_zh_cn`,
         `lang_detected`, plus optional `translation_failed` (bool)
         or `dry_run` (bool). On failure, text_en/text_zh_cn are NULL.
     """
@@ -260,7 +260,7 @@ def translate_batch(
         for t, p in zip(batch, parsed):
             out.append({
                 "tweet_id": str(p.get("tweet_id") or t.get("tweet_id") or t.get("id")),
-                "model_id": t.get("model_id"),
+                "brand_id": t.get("brand_id"),
                 "text_en": p.get("text_en"),
                 "text_zh_cn": p.get("text_zh_cn"),
                 "lang_detected": p.get("lang_detected"),

@@ -67,7 +67,7 @@ class Edge(BaseModel):
     to_handle: str
     weight: int = 1
     post_id: str | None = None
-    model_id: str
+    brand_id: str
 
 
 class Cluster(BaseModel):
@@ -75,20 +75,20 @@ class Cluster(BaseModel):
 
     commenters: list[str]
     post_ids: list[str]
-    model_id: str
+    brand_id: str
 
 
 # --- YAML load ------------------------------------------------------------
 
 
-def load_accounts(model_id: str, root: Path) -> list[Account]:
+def load_accounts(brand_id: str, root: Path) -> list[Account]:
     """Load seeded accounts for one model.
 
     root is the data/ directory of x-monitoring.
     """
-    if model_id not in KNOWN_MODELS:
-        raise ValueError(f"unknown model_id '{model_id}'")
-    path = root / "accounts" / f"{model_id}.yaml"
+    if brand_id not in KNOWN_MODELS:
+        raise ValueError(f"unknown brand_id '{brand_id}'")
+    path = root / "accounts" / f"{brand_id}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"missing account file: {path}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -105,17 +105,17 @@ def load_accounts(model_id: str, root: Path) -> list[Account]:
     return accounts
 
 
-def load_staff(model_id: str, root: Path) -> list[StaffAccount]:
+def load_staff(brand_id: str, root: Path) -> list[StaffAccount]:
     """Load the manually-curated staff list for a model (v1.6).
 
     root is the data/ directory. The list lives under the `staff:` key
-    in data/accounts/<model_id>.yaml; if the key is missing, an empty
+    in data/accounts/<brand_id>.yaml; if the key is missing, an empty
     list is returned. The list is never derived from posts — only the
     operator (or a future v1.7 audit) adds entries here.
     """
-    if model_id not in KNOWN_MODELS:
-        raise ValueError(f"unknown model_id '{model_id}'")
-    path = root / "accounts" / f"{model_id}.yaml"
+    if brand_id not in KNOWN_MODELS:
+        raise ValueError(f"unknown brand_id '{brand_id}'")
+    path = root / "accounts" / f"{brand_id}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"missing account file: {path}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -130,14 +130,14 @@ def load_staff(model_id: str, root: Path) -> list[StaffAccount]:
 # --- Edge derivation (R11) -------------------------------------------------
 
 
-def derive_edges(posts: list[dict], model_id: str) -> list[Edge]:
+def derive_edges(posts: list[dict], brand_id: str) -> list[Edge]:
     """Derive edges from post SOURCE FIELDS only (R11 contract).
 
     Inputs are dicts with at least: id, author_id, in_reply_to_user_id,
     quoted_status_id, entities (with user_mentions[]), conversation_id.
     """
-    if model_id not in KNOWN_MODELS:
-        raise ValueError(f"unknown model_id '{model_id}'")
+    if brand_id not in KNOWN_MODELS:
+        raise ValueError(f"unknown brand_id '{brand_id}'")
     edges: list[Edge] = []
 
     for post in posts:
@@ -155,7 +155,7 @@ def derive_edges(posts: list[dict], model_id: str) -> list[Edge]:
                     from_handle=str(author),
                     to_handle=str(in_reply),
                     post_id=str(pid) if pid else None,
-                    model_id=model_id,
+                    brand_id=brand_id,
                 )
             )
 
@@ -171,7 +171,7 @@ def derive_edges(posts: list[dict], model_id: str) -> list[Edge]:
                     from_handle=str(author),
                     to_handle=str(quoted_author),
                     post_id=str(pid) if pid else None,
-                    model_id=model_id,
+                    brand_id=brand_id,
                 )
             )
 
@@ -187,7 +187,7 @@ def derive_edges(posts: list[dict], model_id: str) -> list[Edge]:
                         from_handle=str(author),
                         to_handle=str(mid),
                         post_id=str(pid) if pid else None,
-                        model_id=model_id,
+                        brand_id=brand_id,
                     )
                 )
 
@@ -211,7 +211,7 @@ def derive_edges(posts: list[dict], model_id: str) -> list[Edge]:
                         edge_type="co_appears_in_thread",
                         from_handle=a,
                         to_handle=b,
-                        model_id=model_id,
+                        brand_id=brand_id,
                     )
                 )
 
@@ -248,9 +248,9 @@ def find_clusters(
             official_to_combos[str(in_reply)].add((str(author), str(pid)))
 
     clusters: list[Cluster] = []
-    # We don't have model_id on posts here; caller passes it via edges[0] if
+    # We don't have brand_id on posts here; caller passes it via edges[0] if
     # any. We use "unknown" as a fallback; callers can rewrite.
-    inferred_model = edges[0].model_id if edges else "unknown"
+    inferred_model = edges[0].brand_id if edges else "unknown"
     for official, combos in official_to_combos.items():
         if len(combos) < min_posts:
             continue
@@ -270,7 +270,7 @@ def find_clusters(
             Cluster(
                 commenters=commenters,
                 post_ids=post_ids,
-                model_id=inferred_model,
+                brand_id=inferred_model,
             )
         )
     return clusters
@@ -307,9 +307,9 @@ def role_tag(
     if posts_for_account:
         n = len(posts_for_account)
         if n >= 3:
-            avg_faves = sum(p.get("favorite_count", 0) for p in posts_for_account) / n
+            avg_likes = sum(p.get("like_count", 0) for p in posts_for_account) / n
             n_replies = sum(1 for p in posts_for_account if p.get("in_reply_to_user_id"))
             bio = (posts_for_account[0].get("author_bio") or "").strip()
-            if avg_faves > 10 and n_replies == 0 and not bio:
+            if avg_likes > 10 and n_replies == 0 and not bio:
                 return "suspicious_actor"
     return "unknown"

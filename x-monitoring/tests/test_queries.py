@@ -23,12 +23,12 @@ from x_monitor.queries import (
 
 def _write_query_yaml(
     tmp: Path,
-    model_id: str,
+    brand_id: str,
     body: str,
 ) -> Path:
     qdir = tmp / "queries"
     qdir.mkdir(exist_ok=True)
-    p = qdir / f"{model_id}.yaml"
+    p = qdir / f"{brand_id}.yaml"
     p.write_text(body, encoding="utf-8")
     return p
 

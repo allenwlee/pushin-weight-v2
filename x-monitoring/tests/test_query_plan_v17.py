@@ -261,7 +261,7 @@ def test_v17_planned_call_call_kind_is_union():
 
     p = PlannedCall(
         call_kind="brand_wide",  # type: ignore[arg-type]
-        model_id="*",
+        brand_id="*",
         bucket=None,
         query_string="(x) min_faves:0",
         expected_signal="other",

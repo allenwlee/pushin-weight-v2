@@ -27,7 +27,7 @@ def test_serialize_grid_card_no_posts():
         store = Store(Path(d) / "x.db")
         try:
             card = serialize_grid_card("minimax", [], window_days=14, latest_run=None)
-            assert card["model_id"] == "minimax"
+            assert card["brand_id"] == "minimax"
             chart = card["chart"]
             assert len(chart["days"]) == 14
             for series in chart["series"].values():
@@ -48,10 +48,10 @@ def test_serialize_grid_card_with_posts_and_cookies_degraded():
             posts = [
                 {
                     "tweet_id": f"t{i}",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": f"hello {i}",
-                    "favorite_count": i,
+                    "like_count": i,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 }
@@ -74,7 +74,7 @@ def test_serialize_grid_card_query_rot_sentinel():
         latest = {
             "degraded": {},
             "queries": [
-                {"model_id": "minimax", "query_id": "Q3", "status": "error", "n_results": 0}
+                {"brand_id": "minimax", "query_id": "Q3", "status": "error", "n_results": 0}
             ],
         }
         card = serialize_grid_card("minimax", [], window_days=14, latest_run=latest)
@@ -94,7 +94,7 @@ def test_dashboard_grid_renders_all_known_cards():
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         for m in cfg.enabled_models:
-            assert f'data-model-id="{m}"' in body
+            assert f'data-brand-id="{m}"' in body
         # Exactly len(MODEL_DISPLAY_NAMES) model cards
         assert body.count('class="model-card"') == len(MODEL_DISPLAY_NAMES)
 
@@ -114,7 +114,7 @@ def test_dashboard_api_grid_json_returns_cards():
         assert len(body["cards"]) == 2
         for card in body["cards"]:
             for key in (
-                "model_id",
+                "brand_id",
                 "chart",
                 "signal_breakdown",
                 "top3_posts",
@@ -136,7 +136,7 @@ def test_dashboard_unknown_model_returns_404():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        resp = client.get("/model/bogus")
+        resp = client.get("/brand/bogus")
         assert resp.status_code == 404
 
 
@@ -148,7 +148,7 @@ def test_dashboard_known_model_drilldown_renders_4_tabs():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        resp = client.get("/model/minimax")
+        resp = client.get("/brand/minimax")
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         # 4 tab buttons
@@ -176,7 +176,7 @@ def test_dashboard_drilldown_known_model_200():
 
         app = DashboardApp(cfg, data, db_path=data / "x.db")
         client = app.app.test_client()
-        resp = client.get("/model/minimax")
+        resp = client.get("/brand/minimax")
         assert resp.status_code == 200
 
 
@@ -206,10 +206,10 @@ def test_serialize_grid_card_chart_six_series_aligned_to_window():
         posts.append(
             {
                 "tweet_id": f"t{i}",
-                "model_id": "minimax",
+                "brand_id": "minimax",
                 "author_handle": f"u{i}",
                 "text": f"hello {i}",
-                "favorite_count": i,
+                "like_count": i,
                 "created_at": ts,
                 "source_query_id": qid,
             }
@@ -244,8 +244,8 @@ def test_serialize_grid_card_chart_unknown_qid_dropped():
 
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
-        {"tweet_id": "t1", "model_id": "minimax", "author_handle": "u1",
-         "text": "?", "favorite_count": 0, "created_at": now_iso,
+        {"tweet_id": "t1", "brand_id": "minimax", "author_handle": "u1",
+         "text": "?", "like_count": 0, "created_at": now_iso,
          "source_query_id": "Q99"},
     ]
     card = serialize_grid_card("minimax", posts, window_days=14)
@@ -368,14 +368,14 @@ def test_serialize_grid_card_q6_maps_to_praise():
     # Use a recent timestamp so it falls inside the 14-day window
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
-        {"tweet_id": "t1", "model_id": "minimax", "source_query_id": "Q6",
-         "text": "amazing!", "favorite_count": 10, "created_at": now_iso,
+        {"tweet_id": "t1", "brand_id": "minimax", "source_query_id": "Q6",
+         "text": "amazing!", "like_count": 10, "created_at": now_iso,
          "author_handle": "u1"},
-        {"tweet_id": "t2", "model_id": "minimax", "source_query_id": "Q6",
-         "text": "best!", "favorite_count": 5, "created_at": now_iso,
+        {"tweet_id": "t2", "brand_id": "minimax", "source_query_id": "Q6",
+         "text": "best!", "like_count": 5, "created_at": now_iso,
          "author_handle": "u2"},
-        {"tweet_id": "t3", "model_id": "minimax", "source_query_id": "Q2",
-         "text": "how does X work?", "favorite_count": 1, "created_at": now_iso,
+        {"tweet_id": "t3", "brand_id": "minimax", "source_query_id": "Q2",
+         "text": "how does X work?", "like_count": 1, "created_at": now_iso,
          "author_handle": "u3"},
     ]
     card = serialize_grid_card("minimax", posts)
@@ -389,8 +389,8 @@ def test_serialize_grid_card_unknown_query_id_does_not_count():
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
-        {"tweet_id": "t1", "model_id": "minimax", "source_query_id": "Q99",
-         "text": "???", "favorite_count": 0, "created_at": now_iso,
+        {"tweet_id": "t1", "brand_id": "minimax", "source_query_id": "Q99",
+         "text": "???", "like_count": 0, "created_at": now_iso,
          "author_handle": "u1"},
     ]
     card = serialize_grid_card("minimax", posts)
@@ -456,7 +456,7 @@ class TestTrendChartAssets:
 
             app = DashboardApp(cfg, data, db_path=data / "x.db")
             client = app.app.test_client()
-            body = client.get("/model/minimax").get_data(as_text=True)
+            body = client.get("/brand/minimax").get_data(as_text=True)
             assert "chart.js" in body
             assert "trend-chart.js" in body
 
@@ -474,7 +474,7 @@ class TestTrendChartAssets:
             body = client.get("/api/grid.html").get_data(as_text=True)
             assert 'class="card-link"' not in body
             # Each card should have a data-href for the JS click handler
-            assert body.count('data-href="/model/') == 2
+            assert body.count('data-href="/brand/') == 2
 
     def test_grid_html_top3_items_are_first_class_anchors(self):
         """Each top-3 <li> must wrap its content in an <a class="top3-link">
@@ -497,8 +497,8 @@ class TestTrendChartAssets:
             from datetime import datetime, timezone
             now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
             posts = [
-                {"tweet_id": "t1", "model_id": "minimax", "author_handle": "u1",
-                 "text": "hello", "favorite_count": 7, "created_at": now_iso,
+                {"tweet_id": "t1", "brand_id": "minimax", "author_handle": "u1",
+                 "text": "hello", "like_count": 7, "created_at": now_iso,
                  "source_query_id": "Q5"},
             ]
             from jinja2 import Environment
@@ -528,11 +528,11 @@ def test_serialize_grid_card_top3_exposes_like_count_not_favorite_count():
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
-        {"tweet_id": "t1", "model_id": "minimax", "author_handle": "u1",
-         "text": "hi", "favorite_count": 42, "created_at": now_iso,
+        {"tweet_id": "t1", "brand_id": "minimax", "author_handle": "u1",
+         "text": "hi", "like_count": 42, "created_at": now_iso,
          "source_query_id": "Q5"},
-        {"tweet_id": "t2", "model_id": "minimax", "author_handle": "u2",
-         "text": "wow", "favorite_count": 7, "created_at": now_iso,
+        {"tweet_id": "t2", "brand_id": "minimax", "author_handle": "u2",
+         "text": "wow", "like_count": 7, "created_at": now_iso,
          "source_query_id": "Q6"},
     ]
     card = serialize_grid_card("minimax", posts)
@@ -588,7 +588,7 @@ def test_top3_includes_headline_when_present():
             "text": "https://t.co/abc",
             "headline": "Real Article Title",
             "headline_source": "fetched",
-            "favorite_count": 100,
+            "like_count": 100,
             "created_at": (now - timedelta(days=1)).isoformat(),
         },
     ]
@@ -612,7 +612,7 @@ def test_top3_falls_back_to_text_when_no_headline():
             "tweet_id": "t1",
             "author_handle": "u1",
             "text": "minimax M3 is amazing",
-            "favorite_count": 50,
+            "like_count": 50,
             "created_at": (now - timedelta(days=1)).isoformat(),
         },
     ]
@@ -639,28 +639,28 @@ class TestSerializeGridCardDualWindows:
             # 2h ago -> in 24h, in 7d, in 14d
             {
                 "tweet_id": "a", "author_handle": "u1", "text": "hi",
-                "favorite_count": 5,
+                "like_count": 5,
                 "created_at": (now - timedelta(hours=2)).isoformat(),
                 "source_query_id": "Q5",
             },
             # 3d ago -> in 7d, in 14d, NOT in 24h
             {
                 "tweet_id": "b", "author_handle": "u2", "text": "wow",
-                "favorite_count": 3,
+                "like_count": 3,
                 "created_at": (now - timedelta(days=3)).isoformat(),
                 "source_query_id": "Q6",
             },
             # 10d ago -> in 14d, NOT in 7d, NOT in 24h
             {
                 "tweet_id": "c", "author_handle": "u3", "text": "cool",
-                "favorite_count": 1,
+                "like_count": 1,
                 "created_at": (now - timedelta(days=10)).isoformat(),
                 "source_query_id": "Q1",
             },
             # 30d ago -> NOT in 14d
             {
                 "tweet_id": "d", "author_handle": "u4", "text": "old",
-                "favorite_count": 99,
+                "like_count": 99,
                 "created_at": (now - timedelta(days=30)).isoformat(),
                 "source_query_id": "Q6",
             },
@@ -680,19 +680,19 @@ class TestSerializeGridCardDualWindows:
         posts = [
             {
                 "tweet_id": "a", "author_handle": "u1", "text": "hi",
-                "favorite_count": 5,
+                "like_count": 5,
                 "created_at": (now - timedelta(hours=2)).isoformat(),
                 "source_query_id": "Q5",
             },
             {
                 "tweet_id": "b", "author_handle": "u2", "text": long_text,
-                "favorite_count": 3,
+                "like_count": 3,
                 "created_at": (now - timedelta(days=3)).isoformat(),
                 "source_query_id": "Q6",
             },
             {
                 "tweet_id": "c", "author_handle": "u3", "text": "truncate me too",
-                "favorite_count": 1,
+                "like_count": 1,
                 "created_at": (now - timedelta(days=4)).isoformat(),
                 "source_query_id": "Q1",
             },
@@ -721,11 +721,11 @@ class TestSerializeGridCardDualWindows:
         posts = [
             {
                 "tweet_id": "a", "author_handle": "u1", "text": "fresh",
-                "favorite_count": 1, "created_at": ts_23h, "source_query_id": "Q5",
+                "like_count": 1, "created_at": ts_23h, "source_query_id": "Q5",
             },
             {
                 "tweet_id": "b", "author_handle": "u2", "text": "stale",
-                "favorite_count": 2, "created_at": ts_25h, "source_query_id": "Q5",
+                "like_count": 2, "created_at": ts_25h, "source_query_id": "Q5",
             },
         ]
         card = serialize_grid_card("minimax", posts, now=fixed_now)
@@ -747,7 +747,7 @@ class TestSerializeGridCardDualWindows:
         ts_2h_before_run = "2026-06-10T17:28:05+00:00"
         posts = [{
             "tweet_id": "x", "author_handle": "u1", "text": "recent vs run",
-            "favorite_count": 1, "created_at": ts_2h_before_run,
+            "like_count": 1, "created_at": ts_2h_before_run,
             "source_query_id": "Q5",
         }]
         latest_run = {"finished_at": run_finished}
@@ -764,7 +764,7 @@ class TestSerializeGridCardDualWindows:
 
 
 class TestBrandColorize:
-    """v1.5: Jinja filter `brand_colorize` colors model_id matches with
+    """v1.5: Jinja filter `brand_colorize` colors brand_id matches with
     the brand's accent color, escaping HTML first."""
 
     def test_brand_colorize_colors_known_brand_with_correct_hex(self):
@@ -997,7 +997,7 @@ class TestTreemapRoutes:
         assert len(body["tiles"]) == 2
         for t in body["tiles"]:
             for key in (
-                "model_id", "display_name", "accent_color",
+                "brand_id", "display_name", "accent_color",
                 "area_weight", "polarity_score",
             ):
                 assert key in t
@@ -1021,9 +1021,9 @@ class TestTreemapRoutes:
         body = r.get_json()
         # Tiles are sorted by (-area_weight, display_name) per R13. With no
         # data, the secondary sort is display_name asc — so we just check
-        # the set of model_ids is the set of enabled models, not order.
+        # the set of brand_ids is the set of enabled models, not order.
         assert len(body["tiles"]) == len(enabled)
-        got = {t["model_id"] for t in body["tiles"]}
+        got = {t["brand_id"] for t in body["tiles"]}
         assert got == set(enabled)
 
     def test_treemap_validates_enabled_models_at_startup(self, tmp_path):
@@ -1072,10 +1072,10 @@ class TestTreemapRoutes:
                 all_posts.append(
                     {
                         "tweet_id": f"t_{m}_{i}",
-                        "model_id": m,
+                        "brand_id": m,
                         "author_handle": f"u_{i}",
                         "text": "x",
-                        "favorite_count": 0,
+                        "like_count": 0,
                         "created_at": (anchor - timedelta(hours=i + 1))
                         .strftime("%a %b %d %H:%M:%S %z %Y"),
                         "source_query_id": qid,
@@ -1094,7 +1094,7 @@ class TestTreemapRoutes:
         r = client.get("/api/treemap.json")
         tiles = r.get_json()["tiles"]
         # minimax first (highest area), then qwen + deepseek tied on area
-        assert tiles[0]["model_id"] == "minimax"
+        assert tiles[0]["brand_id"] == "minimax"
         # qwen and deepseek are tied on area=5; sort falls back to
         # display_name asc per R13. Make the intent explicit (don't
         # rely on a coincidental alphabetical match).
@@ -1137,10 +1137,10 @@ class TestTreemapRoutes:
             all_posts.append(
                 {
                     "tweet_id": f"in_{i}",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u",
                     "text": "x",
-                    "favorite_count": 0,
+                    "like_count": 0,
                     "created_at": (anchor - timedelta(hours=i + 1))
                     .strftime("%a %b %d %H:%M:%S %z %Y"),
                     "source_query_id": in_window_signals[i % 6],
@@ -1150,10 +1150,10 @@ class TestTreemapRoutes:
             all_posts.append(
                 {
                     "tweet_id": f"out_{i}",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u",
                     "text": "x",
-                    "favorite_count": 0,
+                    "like_count": 0,
                     "created_at": (anchor - timedelta(days=30, hours=i + 1))
                     .strftime("%a %b %d %H:%M:%S %z %Y"),
                     "source_query_id": "Q4",  # would have counted under old formula
@@ -1164,10 +1164,10 @@ class TestTreemapRoutes:
             all_posts.append(
                 {
                     "tweet_id": f"qwen_{i}",
-                    "model_id": "qwen",
+                    "brand_id": "qwen",
                     "author_handle": "u",
                     "text": "x",
-                    "favorite_count": 0,
+                    "like_count": 0,
                     "created_at": (anchor - timedelta(hours=i + 1))
                     .strftime("%a %b %d %H:%M:%S %z %Y"),
                     "source_query_id": "Q5",
@@ -1186,7 +1186,7 @@ class TestTreemapRoutes:
         client = app.app.test_client()
         r = client.get("/api/treemap.json")
         tiles = r.get_json()["tiles"]
-        by_id = {t["model_id"]: t for t in tiles}
+        by_id = {t["brand_id"]: t for t in tiles}
         # Cumulative: minimax 13 (in-window + out-of-window), qwen 3.
         # NOT 4 (old Q1+Q4-windowed formula would have given us that).
         assert by_id["minimax"]["area_weight"] == 13.0

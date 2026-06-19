@@ -75,12 +75,12 @@ class Query(BaseModel):
         return v
 
 
-def load_queries(model_id: str, root: Path) -> list[Query]:
+def load_queries(brand_id: str, root: Path) -> list[Query]:
     """Load and validate the 6 queries (Q1-Q6) for one model.
 
     root is the data/ directory of x-monitoring.
     """
-    path = root / "queries" / f"{model_id}.yaml"
+    path = root / "queries" / f"{brand_id}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"missing query file: {path}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

@@ -132,14 +132,14 @@ def cmd_review(args, paths) -> int:
         for it in items:
             print(
                 f"{it.get('status','?'):9s} {it.get('tweet_id','?'):20s} "
-                f"{it.get('reason','?'):20s} {it.get('model_id','')}"
+                f"{it.get('reason','?'):20s} {it.get('brand_id','')}"
             )
         return 0
     if args.review_action == "add":
         if not args.tweet_id or not args.reason:
             print("--add requires --tweet-id and --reason", file=sys.stderr)
             return 2
-        e = q.add(args.tweet_id, reason=args.reason, note=args.note or "", model_id=args.model)
+        e = q.add(args.tweet_id, reason=args.reason, note=args.note or "", brand_id=args.model)
         print(json.dumps(e, indent=2, ensure_ascii=False))
         return 0
     if args.review_action == "resolve":
@@ -307,7 +307,7 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             )
         print()
         print(
-            "Hint: edit data/filters/<model_id>.yaml to add canonical_handles, "
+            "Hint: edit data/filters/<brand_id>.yaml to add canonical_handles, "
             "must_have_any, must_have_none, cjk_tokens."
         )
         return 0
@@ -369,7 +369,7 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         }
         target = args.model if hasattr(args, "model") and args.model else None
         models = [target] if target else sorted(fixtures)
-        # Build model_id -> items list
+        # Build brand_id -> items list
         for m in models:
             if m not in fixtures:
                 print(f"unknown model: {m}", file=sys.stderr)
@@ -684,12 +684,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_run = sub.add_parser("run", help="Run the daily harvest")
     p_run.add_argument("--dry-run", action="store_true")
-    p_run.add_argument("--models", help="comma-separated model_id filter")
+    p_run.add_argument("--models", help="comma-separated brand_id filter")
     p_run.add_argument("--queries", help="comma-separated query_id filter (Q1..Q6)")
     p_run.set_defaults(func=cmd_run)
 
     p_dr = sub.add_parser("dry-run", help="Alias for `run --dry-run`")
-    p_dr.add_argument("--models", help="comma-separated model_id filter")
+    p_dr.add_argument("--models", help="comma-separated brand_id filter")
     p_dr.set_defaults(func=cmd_dry_run)
 
     p_dash = sub.add_parser("dashboard", help="Start/stop/status the dashboard")

@@ -115,12 +115,12 @@ def test_serialize_grid_card_uses_text_en_by_default():
             store.insert_posts([
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": "minimax is great",
                     "text_en": "minimax is great",
                     "text_zh_cn": "minimax很棒",
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 },
@@ -148,12 +148,12 @@ def test_serialize_grid_card_display_locale_zh_cn():
             store.insert_posts([
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": "minimax is great",
                     "text_en": "minimax is great",
                     "text_zh_cn": "minimax很棒",
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 },
@@ -181,12 +181,12 @@ def test_serialize_grid_card_fallback_when_translation_null():
             store.insert_posts([
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": "minimax is great",
                     "text_en": "minimax is great",
                     "text_zh_cn": None,  # not yet translated
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 },
@@ -215,12 +215,12 @@ def test_serialize_grid_card_unsupported_locale_defaults_to_en(caplog):
             store.insert_posts([
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": "minimax is great",
                     "text_en": "minimax is great",
                     "text_zh_cn": "minimax很棒",
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 },
@@ -252,12 +252,12 @@ def test_serialize_grid_card_top3_7d_24h_use_locale():
             store.insert_posts([
                 {
                     "tweet_id": "t1",
-                    "model_id": "minimax",
+                    "brand_id": "minimax",
                     "author_handle": "u1",
                     "text": "src",
                     "text_en": "english",
                     "text_zh_cn": "中文",
-                    "favorite_count": 5,
+                    "like_count": 5,
                     "created_at": now_iso,
                     "source_query_id": "Q1",
                 },
