@@ -171,18 +171,48 @@
         // Hover handler: when a total line is hovered, reveal the 6
         // overlay datasets for that brand. When no dataset is hovered,
         // hide all overlays.
+        //
+        // With 11 brand lines and intersect:false, Chart.js returns ALL
+        // 11 total lines in activeElements when the cursor is anywhere
+        // over the chart. We pick the closest total line to the cursor
+        // Y by computing the pixel distance from cursor to each line's
+        // data point at activeElements[0].index.
         onHover: function (event, activeElements, chart) {
           var hoveredBrandIndex = -1;
           if (activeElements && activeElements.length > 0) {
-            // Find the first hovered TOTAL line (skip overlay datasets
-            // — they're not interactively hoverable because they sit
-            // beneath the total lines).
-            for (var i = 0; i < activeElements.length; i++) {
-              var dsIdx = activeElements[i].datasetIndex;
-              var ds = chart.data.datasets[dsIdx];
-              if (ds && ds._isTotalLine) {
-                hoveredBrandIndex = ds._brandIndex;
-                break;
+            // Cursor position in CSS pixels (event may be a native MouseEvent
+            // or a Chart.js fake event with x/y already in chart coords).
+            var cursorY = (event && event.y != null) ? event.y : null;
+            if (cursorY != null && activeElements[0].index != null) {
+              var dataIdx = activeElements[0].index;
+              var yScale = chart.scales.y;
+              var bestDist = Infinity;
+              var bestBrand = -1;
+              // Iterate all hovered total-line datasets, compute each
+              // one's pixel Y at dataIdx, and pick the closest to cursorY.
+              for (var i = 0; i < activeElements.length; i++) {
+                var dsIdx2 = activeElements[i].datasetIndex;
+                var ds2 = chart.data.datasets[dsIdx2];
+                if (!ds2 || !ds2._isTotalLine) continue;
+                var value = ds2.data[dataIdx];
+                if (value == null) continue;
+                var linePixelY = yScale.getPixelForValue(value);
+                var dist = Math.abs(cursorY - linePixelY);
+                if (dist < bestDist) {
+                  bestDist = dist;
+                  bestBrand = ds2._brandIndex;
+                }
+              }
+              hoveredBrandIndex = bestBrand;
+            } else {
+              // Fallback: pick the first hovered TOTAL line.
+              for (var j = 0; j < activeElements.length; j++) {
+                var dsIdx = activeElements[j].datasetIndex;
+                var ds = chart.data.datasets[dsIdx];
+                if (ds && ds._isTotalLine) {
+                  hoveredBrandIndex = ds._brandIndex;
+                  break;
+                }
               }
             }
           }
