@@ -83,7 +83,14 @@ def test_migration_003_idempotent(tmp_path):
 
 
 def test_insert_posts_accepts_translation_columns(tmp_path):
-    """insert_posts accepts posts with text_en, text_zh_cn, lang_detected, signal."""
+    """insert_posts accepts posts with text_en, text_zh_cn, lang_detected.
+
+    v1.8 (R16): the v1.7 per-post `signal` column was dropped in
+    migration 004 (R6d, Decision 18) — the per-brand signal now lives
+    in `post_brand_signals(post_id, brand_id, signal)`. The
+    `signals` dict (when supplied) writes to that table via the
+    `_extract_per_brand_signals` helper.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -98,18 +105,26 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
                 "text_en": "Hailuo AI latest version",
                 "text_zh_cn": "海螺AI 最新版本",  # noop (already zh-CN)
                 "lang_detected": "zh-Hans",
-                "signal": "release",
+                # v1.8: signals is a dict[brand_id, signal]. Inserted
+                # into post_brand_signals(post_id, brand_id, signal).
+                "signals": {"minimax": "release"},
             }
         ])
         assert n == 1
         row = s._conn.execute(
-            "SELECT text_en, text_zh_cn, lang_detected, signal "
+            "SELECT text_en, text_zh_cn, lang_detected "
             "FROM posts WHERE tweet_id = 't1'"
         ).fetchone()
         assert row["text_en"] == "Hailuo AI latest version"
         assert row["text_zh_cn"] == "海螺AI 最新版本"
         assert row["lang_detected"] == "zh-Hans"
-        # signal moved to post_brand_signals in migration 004 (R6d, Decision 18)
+        # Verify the per-brand signal landed in post_brand_signals.
+        sig_row = s._conn.execute(
+            "SELECT signal FROM post_brand_signals "
+            "WHERE post_id = 't1' AND brand_id = 'minimax'"
+        ).fetchone()
+        assert sig_row is not None
+        assert sig_row["signal"] == "release"
     finally:
         s.close()
 
@@ -127,17 +142,16 @@ def test_insert_posts_without_translation_columns_stores_null(tmp_path):
                 "brand_id": "minimax",
                 "author_handle": "u2",
                 "text": "minimax is great",
-                # no text_en / text_zh_cn / lang_detected / signal
+                # no text_en / text_zh_cn / lang_detected / signals
             }
         ])
         row = s._conn.execute(
-            "SELECT text_en, text_zh_cn, lang_detected, signal "
+            "SELECT text_en, text_zh_cn, lang_detected "
             "FROM posts WHERE tweet_id = 't2'"
         ).fetchone()
         assert row["text_en"] is None
         assert row["text_zh_cn"] is None
         assert row["lang_detected"] is None
-        # signal moved to post_brand_signals in migration 004
     finally:
         s.close()
 
@@ -377,3 +391,45 @@ def test_get_posts_missing_translations_invalid_locale_raises(tmp_path):
             s.get_posts_missing_translations("en'; DROP TABLE posts; --", limit=10)
     finally:
         s.close()
+
+
+# --- v1.8: migration 004 brands seed -------------------------------
+
+
+def test_migration_004_brands_seeded(tmp_path):
+    """Migration 004 seeds 12 brands incl. _unattributed (is_sentinel=1).
+
+    Per the brand-model plan: 11 real brand_ids (minimax, qwen, deepseek,
+    glm, xiaomi_mimo, moonshot_kimi, inclusionai, mistral, stepfun,
+    ernie, hunyuan) + the `_unattributed` sentinel. read_brands()
+    returns them as BrandRow dataclasses.
+    """
+    from x_monitor.store import BrandRow, Store
+
+    db = tmp_path / "x.db"
+    s = Store(db, auto_migrate=True)
+    try:
+        brands = s.read_brands()
+        assert len(brands) == 12, f"expected 12 brands, got {len(brands)}"
+        # Sentinel present and correctly flagged.
+        sentinels = [b for b in brands if b.is_sentinel]
+        assert len(sentinels) == 1
+        assert sentinels[0].brand_id == "_unattributed"
+        # Real brand slugs present.
+        real_ids = {b.brand_id for b in brands if not b.is_sentinel}
+        for required in {
+            "minimax", "qwen", "deepseek", "glm", "xiaomi_mimo",
+            "moonshot_kimi", "inclusionai", "mistral", "stepfun",
+            "ernie", "hunyuan",
+        }:
+            assert required in real_ids, f"missing brand_id: {required}"
+        # All rows are BrandRow dataclass instances.
+        for b in brands:
+            assert isinstance(b, BrandRow)
+        # accent_color is a hex color string.
+        for b in brands:
+            assert b.accent_color.startswith("#")
+            assert len(b.accent_color) == 7
+    finally:
+        s.close()
+

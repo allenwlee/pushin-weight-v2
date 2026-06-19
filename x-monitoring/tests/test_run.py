@@ -768,7 +768,19 @@ def test_intent_call_reclassifies_brand_id(monkeypatch):
     """v1.6 intent call: a tweet mentioning "minimax" is attributed to
     the minimax brand via attribute_to_brand, even if the call came
     from a multi-brand split that started with a different brand_id.
+
+    v1.8 (R15) extension: the same tweet named "Qwen 3 vs DeepSeek V3"
+    is attributed to BOTH qwen and deepseek via the multi-brand
+    `attribute_to_brands` orchestrator, returning one MentionRow per
+    brand. The legacy `classify_signal` is preserved as a compat
+    shim (DeprecationWarning suppressed in this test).
     """
+    import warnings
+    from x_monitor.attribution import (
+        UNATTRIBUTED_BRAND_ID,
+        attribute_to_brands,
+        compute_post_brands,
+    )
     from x_monitor.intent_classifier import attribute_to_brand, classify_signal
     # Direct test: tweet mentions "minimax" and the author is a
     # known minimax official -> brand = minimax.
@@ -792,9 +804,260 @@ def test_intent_call_reclassifies_brand_id(monkeypatch):
         is None
     )
     # Signal classifier maps praise -> praise.
-    assert classify_signal("minimax 太强了") == "praise"
-    assert classify_signal("minimax 翻车了") == "criticism"
-    assert classify_signal("") == "other"
+    # v1.8: classify_signal emits DeprecationWarning; suppress here
+    # because we're testing the legacy contract, not the warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        assert classify_signal("minimax 太强了") == "praise"
+        assert classify_signal("minimax 翻车了") == "criticism"
+        assert classify_signal("") == "other"
+    # v1.8 multi-brand assertion: a tweet naming two brands yields
+    # one MentionRow per brand (qwen, deepseek) via body_keyword.
+    from x_monitor.intent_classifier import compile_keyword_index
+    index = compile_keyword_index(
+        [
+            ("qwen", "Qwen", 0),
+            ("deepseek", "DeepSeek", 0),
+        ]
+    )
+    post = {
+        "id": "multi1",
+        "text": "Qwen 3 vs DeepSeek V3 — both are strong",
+        "created_at": "2026-06-19T00:00:00+00:00",
+        "entities": {},
+    }
+    mentions = attribute_to_brands(
+        post,
+        brand_accounts={},
+        brand_hashtags={},
+        compiled_keyword_index=index,
+        search_query=[],
+        brand_search_terms={},
+    )
+    brand_set = {m.brand_id for m in mentions}
+    assert brand_set == {"qwen", "deepseek"}
+    # compute_post_brands returns equal weights summing to 1.0.
+    brands = compute_post_brands(post, mentions)
+    assert sorted(b for b, _ in brands) == ["deepseek", "qwen"]
+    assert abs(sum(w for _, w in brands) - 1.0) < 1e-9
+    assert brands == [("deepseek", 0.5), ("qwen", 0.5)]
+
+
+def test_intent_call_classifies_multi_brand(monkeypatch):
+    """v1.8 (R15): a synthetic intent call returns a 2-brand post;
+    the pipeline populates `it["brand_ids"]` with BOTH brands and
+    `it["mentions"]` with one MentionRow per (brand, source) pair.
+    """
+    from x_monitor.attribution import MentionRow
+    monkeypatch.setattr(
+        "x_monitor.run.plan_calls",
+        lambda *a, **kw: _stub_plan_calls(["minimax"]),
+    )
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "accounts" / "minimax.yaml").write_text(
+            "accounts: []\n",
+            encoding="utf-8",
+        )
+        # v1.8 multi-brand query: includes both qwen + deepseek tokens
+        # so the body_keyword extractor matches both brands.
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: '(Qwen OR DeepSeek)'\n    expected_signal: release\n    enabled: true\n"
+            "  - id: Q2\n    query_string: '(Qwen OR DeepSeek) how'\n    expected_signal: community_question\n    enabled: true\n"
+            "  - id: Q3\n    query_string: '(Qwen OR DeepSeek) broken'\n    expected_signal: criticism\n    enabled: true\n"
+            "  - id: Q4\n    query_string: '(Qwen OR DeepSeek)'\n    expected_signal: commenter_capture\n    enabled: true\n"
+            "  - id: Q5\n    query_string: '(Qwen OR DeepSeek)'\n    expected_signal: other\n    enabled: true\n"
+            "  - id: Q6\n    query_string: '(Qwen OR DeepSeek)'\n    expected_signal: praise\n    enabled: true\n",
+            encoding="utf-8",
+        )
+        # Filter with permissive must-have so the post survives the
+        # relevance filter; we only assert on attribution fields.
+        _write_filter_yaml(
+            data, "minimax",
+            {
+                "canonical_handles": [],
+                "must_have_any": ["Qwen", "DeepSeek"],
+                "must_have_none": [],
+            },
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        # account call: 0 items; intent call: 1 multi-brand post.
+        apify.run_search.side_effect = [
+            [],
+            [
+                {"id": "mb1", "text": "Qwen 3 vs DeepSeek V3",
+                 "author_handle": "comparator",
+                 "like_count": 10,
+                 "brand_id": "minimax",
+                 "source_query_id": "Q5"},
+            ],
+        ]
+        # Patch Store.insert_posts to capture the items it receives.
+        captured: dict[str, list] = {"items": []}
+        from x_monitor.store import Store
+        orig_insert = Store.insert_posts
+        def _capture(self, items):
+            captured["items"] = list(items)
+            return orig_insert(self, items)
+        monkeypatch.setattr(Store, "insert_posts", _capture)
+        summary = p.execute(apify, model_filter=["minimax"])
+        assert len(captured["items"]) == 1
+        kept = captured["items"][0]
+        # The new v1.8 multi-brand fields are populated.
+        assert "brand_ids" in kept, f"brand_ids missing: {kept.keys()}"
+        assert sorted(kept["brand_ids"]) == ["deepseek", "qwen"]
+        # brand_id (singular) is the first detected brand.
+        assert kept["brand_id"] in {"qwen", "deepseek"}
+        # mentions has one row per (brand, source) pair — at least
+        # one for qwen and one for deepseek via body_keyword.
+        assert "mentions" in kept
+        brands_in_mentions = {m.brand_id for m in kept["mentions"]}
+        assert "qwen" in brands_in_mentions
+        assert "deepseek" in brands_in_mentions
+        # Each MentionRow is a real MentionRow instance.
+        for m in kept["mentions"]:
+            assert isinstance(m, MentionRow)
+        # signals has one entry per detected brand.
+        assert "signals" in kept
+        assert set(kept["signals"].keys()) == {"qwen", "deepseek"}
+        # signal values are from the known 6-bucket vocabulary.
+        for s in kept["signals"].values():
+            assert s in {
+                "release", "community_question", "criticism",
+                "commenter_capture", "other", "praise",
+            }
+
+
+def test_intent_call_passes_mentions_to_insert_posts(monkeypatch):
+    """v1.8 (R15): the pipeline populates `it["mentions"]` on every
+    kept post so `Store.insert_posts` receives a non-empty list.
+    """
+    monkeypatch.setattr(
+        "x_monitor.run.plan_calls",
+        lambda *a, **kw: _stub_plan_calls(["minimax"]),
+    )
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "accounts" / "minimax.yaml").write_text(
+            "accounts: []\n",
+            encoding="utf-8",
+        )
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: 'minimax'\n    expected_signal: release\n    enabled: true\n"
+            "  - id: Q2\n    query_string: 'minimax how'\n    expected_signal: community_question\n    enabled: true\n"
+            "  - id: Q3\n    query_string: 'minimax broken'\n    expected_signal: criticism\n    enabled: true\n"
+            "  - id: Q4\n    query_string: 'minimax'\n    expected_signal: commenter_capture\n    enabled: true\n"
+            "  - id: Q5\n    query_string: 'minimax'\n    expected_signal: other\n    enabled: true\n"
+            "  - id: Q6\n    query_string: 'minimax'\n    expected_signal: praise\n    enabled: true\n",
+            encoding="utf-8",
+        )
+        _write_filter_yaml(
+            data, "minimax",
+            {
+                "canonical_handles": [],
+                "must_have_any": ["minimax"],
+                "must_have_none": [],
+            },
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        apify.run_search.side_effect = [
+            [],
+            [
+                {"id": "p1", "text": "minimax is great",
+                 "author_handle": "u1", "like_count": 10,
+                 "brand_id": "minimax", "source_query_id": "Q5"},
+            ],
+        ]
+        captured: dict[str, list] = {"items": []}
+        from x_monitor.store import Store
+        orig_insert = Store.insert_posts
+        def _capture(self, items):
+            captured["items"] = list(items)
+            return orig_insert(self, items)
+        monkeypatch.setattr(Store, "insert_posts", _capture)
+        p.execute(apify, model_filter=["minimax"])
+        assert len(captured["items"]) == 1
+        kept = captured["items"][0]
+        assert "mentions" in kept
+        assert isinstance(kept["mentions"], list)
+        # The body_keyword extractor should have emitted at least one
+        # MentionRow for the "minimax" token.
+        assert len(kept["mentions"]) >= 1
+        sources = {m.source for m in kept["mentions"]}
+        assert "body_keyword" in sources
+
+
+def test_intent_call_passes_signals_to_insert_posts(monkeypatch):
+    """v1.8 (R15): the pipeline populates `it["signals"]` (a dict
+    keyed by brand_id) on every kept post.
+    """
+    monkeypatch.setattr(
+        "x_monitor.run.plan_calls",
+        lambda *a, **kw: _stub_plan_calls(["minimax"]),
+    )
+    with tempfile.TemporaryDirectory() as d:
+        data = Path(d)
+        (data / "queries").mkdir()
+        (data / "accounts").mkdir()
+        (data / "accounts" / "minimax.yaml").write_text(
+            "accounts: []\n",
+            encoding="utf-8",
+        )
+        (data / "queries" / "minimax.yaml").write_text(
+            "queries:\n"
+            "  - id: Q1\n    query_string: 'minimax'\n    expected_signal: release\n    enabled: true\n"
+            "  - id: Q2\n    query_string: 'minimax how'\n    expected_signal: community_question\n    enabled: true\n"
+            "  - id: Q3\n    query_string: 'minimax broken'\n    expected_signal: criticism\n    enabled: true\n"
+            "  - id: Q4\n    query_string: 'minimax'\n    expected_signal: commenter_capture\n    enabled: true\n"
+            "  - id: Q5\n    query_string: 'minimax'\n    expected_signal: other\n    enabled: true\n"
+            "  - id: Q6\n    query_string: 'minimax'\n    expected_signal: praise\n    enabled: true\n",
+            encoding="utf-8",
+        )
+        _write_filter_yaml(
+            data, "minimax",
+            {
+                "canonical_handles": [],
+                "must_have_any": ["minimax"],
+                "must_have_none": [],
+            },
+        )
+        cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
+        p = RunPipeline(cfg, data, db_path=data / "x.db")
+        apify = MagicMock()
+        apify.run_search.side_effect = [
+            [],
+            [
+                {"id": "s1", "text": "minimax 太强了",
+                 "author_handle": "u1", "like_count": 10,
+                 "brand_id": "minimax", "source_query_id": "Q6"},
+            ],
+        ]
+        captured: dict[str, list] = {"items": []}
+        from x_monitor.store import Store
+        orig_insert = Store.insert_posts
+        def _capture(self, items):
+            captured["items"] = list(items)
+            return orig_insert(self, items)
+        monkeypatch.setattr(Store, "insert_posts", _capture)
+        p.execute(apify, model_filter=["minimax"])
+        assert len(captured["items"]) == 1
+        kept = captured["items"][0]
+        assert "signals" in kept
+        assert isinstance(kept["signals"], dict)
+        # The tweet is detected as brand "minimax" with signal "praise"
+        # (CJK term "太强了" → praise).
+        assert "minimax" in kept["signals"]
+        assert kept["signals"]["minimax"] == "praise"
 
 
 def test_pipeline_applies_filter_before_insert_v16(monkeypatch):

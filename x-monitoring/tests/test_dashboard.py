@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -1533,3 +1534,200 @@ class TestPolarityWindowToggle:
         # Footer label still shows the clamped value
         assert "14d window" in html, "footer should reflect clamped computation window"
 
+
+
+
+# ---------- v1.8 Unit 4: polarity SQL JOIN (R17, Decision 18) ----------------
+
+
+def test_polarity_uses_join_not_subquery():
+    """R17 / Decision 18: compute_polarity_signal_breakdown's EXPLAIN
+    QUERY PLAN must use the post_brand_signals + post_brands + posts
+    indexes (no SCAN, no SORT).
+    """
+    from x_monitor.treemap import POLARITY_SQL, compute_polarity_signal_breakdown
+    from datetime import datetime, timezone, timedelta
+
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            window_start = (
+                datetime.now(timezone.utc) - timedelta(days=7)
+            ).isoformat()
+            # Insert a post + post_brands + post_brand_signals so the
+            # indexes have at least one row to seek against.
+            store._conn.execute(
+                """INSERT INTO posts (tweet_id, author_handle, text, lang,
+                   created_at, fetched_at, like_count, retweet_count,
+                   reply_count, quote_count, entities, raw) VALUES
+                   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("u4_p1", "u1", "hello", "en", now_iso, now_iso,
+                 0, 0, 0, 0, "{}", "{}"),
+            )
+            store.insert_post_brands("u4_p1", "minimax", 1.0)
+            store.insert_post_brand_signals("u4_p1", "minimax", "praise")
+
+            bd = compute_polarity_signal_breakdown(
+                store._conn, "minimax", window_start,
+            )
+            assert bd == {"praise": 1.0}, f"unexpected breakdown: {bd}"
+
+            # EXPLAIN QUERY PLAN: must use indexes, no SCAN, no SORT
+            plan = store._conn.execute(
+                "EXPLAIN QUERY PLAN " + POLARITY_SQL,
+                ("minimax", window_start),
+            ).fetchall()
+            plan_str = " ".join(str(dict(r)) for r in plan).upper()
+            assert "USING INDEX" in plan_str, (
+                f"query plan should use indexes; got: {plan_str}"
+            )
+            assert "SCAN" not in plan_str, (
+                f"query plan should not SCAN; got: {plan_str}"
+            )
+            assert "SORT" not in plan_str, (
+                f"query plan should not SORT; got: {plan_str}"
+            )
+        finally:
+            store.close()
+
+
+def test_unattributed_excluded_from_polarity():
+    """Decision 15: compute_polarity_signal_breakdown('_unattributed')
+    returns empty dict (filtered by WHERE clause).
+    """
+    from x_monitor.treemap import compute_polarity_signal_breakdown, compute_polarity_from_db
+    from datetime import datetime, timezone, timedelta
+
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            window_start = (
+                datetime.now(timezone.utc) - timedelta(days=7)
+            ).isoformat()
+            # Insert an _unattributed row (would otherwise pollute the
+            # breakdown if the filter is missing).
+            store._conn.execute(
+                """INSERT INTO posts (tweet_id, author_handle, text, lang,
+                   created_at, fetched_at, like_count, retweet_count,
+                   reply_count, quote_count, entities, raw) VALUES
+                   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("u4_p_u", "u1", "noise", "en", now_iso, now_iso,
+                 0, 0, 0, 0, "{}", "{}"),
+            )
+            store.insert_post_brands("u4_p_u", "_unattributed", 1.0)
+            # _unattributed has no post_brand_signals row (CHECK constraint)
+
+            bd = compute_polarity_signal_breakdown(
+                store._conn, "_unattributed", window_start,
+            )
+            assert bd == {}, (
+                f"_unattributed should be excluded by Decision 15 filter, "
+                f"got: {bd}"
+            )
+            # Also: compute_polarity_from_db returns None for _unattributed.
+            score = compute_polarity_from_db(
+                store._conn, "_unattributed", window_days=7,
+            )
+            assert score is None, (
+                f"_unattributed polarity should be None (no-data), got: {score}"
+            )
+        finally:
+            store.close()
+
+
+def test_grid_card_uses_post_brand_signals_multi_brand_weighted():
+    """R18: serialize_grid_card reads post_brand_signals (not
+    posts.source_query_id). A 2-brand post produces weighted counts
+    in BOTH brands' cards.
+    """
+    from x_monitor.dashboard import _read_signal_breakdown_for_brand
+
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            window_start_iso = (
+                datetime.now(timezone.utc) - timedelta(days=14)
+            ).isoformat()
+            # Synthetic 2-brand post: brands "qwen" + "deepseek" each
+            # get weight=0.5 (1/N per Decision 9).
+            store._conn.execute(
+                """INSERT INTO posts (tweet_id, author_handle, text, lang,
+                   created_at, fetched_at, like_count, retweet_count,
+                   reply_count, quote_count, entities, raw) VALUES
+                   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("u4_2b", "u1", "hello qwen deepseek", "en",
+                 now_iso, now_iso, 5, 0, 0, 0, "{}", "{}"),
+            )
+            store.insert_post_brands("u4_2b", "qwen", 0.5)
+            store.insert_post_brands("u4_2b", "deepseek", 0.5)
+            store.insert_post_brand_signals("u4_2b", "qwen", "release")
+            store.insert_post_brand_signals("u4_2b", "deepseek", "praise")
+
+            # Read breakdown for qwen: should see "release" with weight 0.5
+            qwen_total, qwen_days = _read_signal_breakdown_for_brand(
+                store._conn, "qwen", window_start_iso,
+            )
+            assert qwen_total.get("release") == 0.5, (
+                f"qwen total.release should be 0.5 (weighted), got {qwen_total}"
+            )
+
+            # Read breakdown for deepseek: should see "praise" with weight 0.5
+            ds_total, ds_days = _read_signal_breakdown_for_brand(
+                store._conn, "deepseek", window_start_iso,
+            )
+            assert ds_total.get("praise") == 0.5, (
+                f"deepseek total.praise should be 0.5 (weighted), got {ds_total}"
+            )
+
+            # Neither brand should see the OTHER's signal.
+            assert "praise" not in qwen_total, (
+                f"qwen should NOT see deepseek's praise signal: {qwen_total}"
+            )
+            assert "release" not in ds_total, (
+                f"deepseek should NOT see qwen's release signal: {ds_total}"
+            )
+
+            # The day grid should also reflect the weights.
+            today = now_iso[:10]
+            assert qwen_days.get(today, {}).get("release") == 0.5
+            assert ds_days.get(today, {}).get("praise") == 0.5
+        finally:
+            store.close()
+
+
+def test_treemap_polarity_with_db_driven_post_brand_signals():
+    """R17: compute_polarity_from_db reads post_brand_signals + post_brands
+    and produces a non-zero score when current window has weighted signals.
+    """
+    from x_monitor.treemap import compute_polarity_from_db
+    from datetime import datetime, timezone, timedelta
+
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            now = datetime.now(timezone.utc)
+            current_ts = (now - timedelta(hours=2)).isoformat()
+            # 1 current praise post -> score = 1.0 (sparse-data guard 2)
+            store._conn.execute(
+                """INSERT INTO posts (tweet_id, author_handle, text, lang,
+                   created_at, fetched_at, like_count, retweet_count,
+                   reply_count, quote_count, entities, raw) VALUES
+                   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("u4_p_praise", "u1", "great", "en",
+                 current_ts, now.isoformat(), 0, 0, 0, 0, "{}", "{}"),
+            )
+            store.insert_post_brands("u4_p_praise", "minimax", 1.0)
+            store.insert_post_brand_signals("u4_p_praise", "minimax", "praise")
+
+            score = compute_polarity_from_db(
+                store._conn, "minimax", window_days=7, now=now,
+            )
+            assert score is not None and abs(score - 1.0) < 0.001, (
+                f"expected 1.0 (1 praise / 1 total in current, prior empty), "
+                f"got {score}"
+            )
+        finally:
+            store.close()

@@ -4,9 +4,22 @@
 Public surface:
 - build_treemap_svg(tiles, *, width, height) -> str
 - compute_polarity(posts, current_window, prior_window) -> float | None
+    LEGACY (v1.7): reads post-level source_query_id + posts.created_at.
+    Still used by tests that predate the v1.8 multi-brand rewrite.
+    New code should call compute_polarity_from_db (the SQL-backed version).
+- compute_polarity_from_db(conn, brand_id, window_days, *, now=None) -> float | None
+    v1.8 (Unit 4 / R17): reads post_brand_signals + post_brands via the
+    JOIN shape from Decision 18. Filters _unattributed (Decision 15).
+- compute_polarity_signal_breakdown(conn, brand_id, window_start_iso, *,
+                                     window_end_iso=None) -> dict[str, float]
+    v1.8 (Unit 4 / R17): raw signal -> weighted_count breakdown per
+    brand in [window_start_iso, window_end_iso). The dryrun
+    verification calls this directly.
 - bin_polarity(score: float | None) -> str
 - separate_active_and_no_data(tiles) -> (active_tiles, no_data_tiles)
 - TreemapTile (NamedTuple)
+- POLARITY_SQL (str constant): the SQL string passed to sqlite3 for
+    the polarity breakdown. Single source of truth for EXPLAIN tests.
 
 The treemap is one level deep: one <a> per enabled model, wrapped around
 a <rect>. Tile area encodes tweet volume (Q1 + Q4 in the current N-day
@@ -210,12 +223,202 @@ def bin_polarity(score: float | None) -> str:
     return polarity_fill(score, 1.0)
 
 
+# --- v1.8: SQL-backed polarity (Unit 4, R17, Decision 18) -------------------
+
+# The polarity SQL, factored as a module-level constant so EXPLAIN QUERY PLAN
+# tests can reference the same string the production code runs.
+# - Decision 18 (JOIN not IN subquery): the query planner can use the
+#   post_brand_signals(brand_id, signal) and post_brands(brand_id, post_id)
+#   indexes to seek by brand, then join posts(tweet_id) for the time-window
+#   filter. EXPLAIN should show all three indexes used (no SORT or SCAN).
+# - Decision 15 (_unattributed filter): the WHERE clause excludes the
+#   sentinel brand so the treemap's "unattributed" bin doesn't pollute
+#   the polarity score.
+# - weight = SUM(pb.weight): a 2-brand post contributes 0.5 to each brand
+#   (per Decision 9, fractional weight).
+POLARITY_SQL: str = (
+    "SELECT pbs.signal, SUM(pb.weight) AS weighted_count "
+    "FROM post_brand_signals pbs "
+    "JOIN post_brands pb "
+    "  ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id "
+    "JOIN posts p ON p.tweet_id = pbs.post_id "
+    "WHERE pbs.brand_id = ? "
+    "  AND pbs.brand_id != '_unattributed' "
+    "  AND p.created_at >= ? "
+    "GROUP BY pbs.signal"
+)
+
+
+def compute_polarity_signal_breakdown(
+    conn,
+    brand_id: str,
+    window_start_iso: str,
+    *,
+    window_end_iso: str | None = None,
+) -> dict[str, float]:
+    """Return {signal: weighted_count} for one brand.
+
+    Implements Unit 4 / R17 / Decision 18 of the call-path attribution
+    pipeline. Reads from post_brand_signals + post_brands + posts via
+    the JOIN shape (no IN subquery). The _unattributed brand is excluded
+    by the WHERE clause (Decision 15); pass `_unattributed` explicitly
+    returns an empty dict by the same mechanism (the != filter).
+
+    Args:
+        conn: a sqlite3.Connection (the Store's _conn).
+        brand_id: the brand slug (e.g. "minimax"). "_unattributed"
+            returns an empty dict by the same WHERE filter.
+        window_start_iso: ISO-8601 string for the lower bound. Posts
+            with created_at >= window_start_iso are included.
+        window_end_iso: optional ISO-8601 upper bound (exclusive). When
+            None, the SQL omits the upper-bound filter and the result
+            includes all posts from window_start_iso forward. The
+            polarity score uses this to slice [now-2N, now-N) precisely.
+
+    Returns:
+        A dict mapping signal name (release / community_question /
+        criticism / commenter_capture / praise / other) to weighted
+        count. Weights are 1/N for multi-brand posts per Decision 9.
+
+    Notes:
+        - Indexes used: idx_post_brand_signals_brand_signal,
+          idx_post_brands_brand_post, posts (PK). EXPLAIN should show
+          no SCAN or SORT on a populated DB.
+    """
+    if window_end_iso is None:
+        rows = conn.execute(
+            POLARITY_SQL, (brand_id, window_start_iso),
+        ).fetchall()
+    else:
+        # POLARITY_SQL ends with "GROUP BY pbs.signal"; insert the
+        # upper-bound filter BEFORE the GROUP BY so it is applied
+        # before aggregation. Splitting on "GROUP BY" and re-appending
+        # keeps the constant a single source of truth.
+        head, tail = POLARITY_SQL.rsplit("GROUP BY", 1)
+        sql_with_upper = head + "AND p.created_at < ? GROUP BY" + tail
+        rows = conn.execute(
+            sql_with_upper,
+            (brand_id, window_start_iso, window_end_iso),
+        ).fetchall()
+    return {r["signal"]: float(r["weighted_count"]) for r in rows}
+
+
+def _score_from_breakdown(
+    current: dict[str, float],
+    prior: dict[str, float],
+) -> float | None:
+    """Compute the polarity score from two signal breakdowns.
+
+    Same sparse-data guards as the legacy compute_polarity() function:
+      - both windows empty (no praise/criticism AND no total) -> 0.0
+      - prior empty but current has data -> current_praise_rate -
+        current_criticism_rate (no NaN propagation)
+      - current empty but prior had data -> None (the "went dark" sentinel)
+      - normal path -> (current_praise_rate - current_criticism_rate) -
+        (prior_praise_rate - prior_criticism_rate), clamped to [-1, 1]
+
+    `total` is computed as the sum of all signals in the breakdown.
+    This matches the legacy definition (Q1+Q2+Q3+Q4+Q5+Q6 signal counts)
+    when the breakdown covers all 6 signals. With per-brand signals
+    from post_brand_signals, the breakdown only includes the 6 v1
+    signal names, so the totals are equivalent.
+    """
+    current_total = sum(current.values())
+    prior_total = sum(prior.values())
+    current_praise = current.get("praise", 0.0)
+    current_criticism = current.get("criticism", 0.0)
+    prior_praise = prior.get("praise", 0.0)
+    prior_criticism = prior.get("criticism", 0.0)
+
+    # Sparse-data guard 1: both windows empty -> 0.0
+    if current_total == 0 and prior_total == 0:
+        return 0.0
+
+    # Sparse-data guard 2: prior empty but current has data
+    if prior_total == 0:
+        current_rate = (current_praise - current_criticism) / current_total
+        return max(-1.0, min(1.0, current_rate))
+
+    # Sparse-data guard 3: current empty but prior had data -> went dark
+    if current_total == 0:
+        return None
+
+    # Normal path
+    current_rate = (current_praise - current_criticism) / current_total
+    prior_rate = (prior_praise - prior_criticism) / prior_total
+    score = current_rate - prior_rate
+    return max(-1.0, min(1.0, score))
+
+
+def compute_polarity_from_db(
+    conn,
+    brand_id: str,
+    window_days: int,
+    *,
+    now=None,
+) -> float | None:
+    """Compute the polarity score for one brand from the DB.
+
+    v1.8 (Unit 4 / R17). Reads post_brand_signals + post_brands via the
+    JOIN shape from Decision 18. Splits the window into [now-N, now) and
+    [now-2N, now-N); the score is the rate-of-change between them.
+
+    Args:
+        conn: a sqlite3.Connection.
+        brand_id: the brand slug (e.g. "minimax"). "_unattributed"
+            returns None (no-data tile per Decision 15).
+        window_days: the polarity window in days (N). The prior window
+            is [now-2N, now-N); the current window is [now-N, now).
+        now: anchor datetime (test seam). Defaults to
+            datetime.now(timezone.utc). Accepts naive datetimes
+            (treated as UTC) for convenience.
+
+    Returns:
+        A float in [-1.0, +1.0] or None for the "went dark" sentinel.
+        For `_unattributed`, returns None (no-data tile).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    if brand_id == "_unattributed":
+        # Per Decision 15, the sentinel has no meaningful polarity;
+        # treat as no-data.
+        return None
+
+    # Compute ISO-8601 window start strings. posts.created_at is stored
+    # as ISO-8601 with timezone (see _now_iso in store.py); a naive
+    # string comparison is safe because both sides are sorted by the
+    # SQLite collation and ISO-8601 sorts lexicographically.
+    current_start_iso = (now - timedelta(days=window_days)).isoformat()
+    prior_start_iso = (now - timedelta(days=2 * window_days)).isoformat()
+
+    # Current window: [now-N, now). Prior window: [now-2N, now-N).
+    # The breakdown helper accepts an optional upper bound for the
+    # windowed prior slice, so we can run two clean queries that
+    # don't overlap. Without window_end_iso=current_start_iso the prior
+    # slice would include the current window's posts (the SQL has only
+    # a lower bound by default).
+    current = compute_polarity_signal_breakdown(
+        conn, brand_id, current_start_iso,
+    )
+    prior = compute_polarity_signal_breakdown(
+        conn, brand_id, prior_start_iso,
+        window_end_iso=current_start_iso,
+    )
+
+    return _score_from_breakdown(current, prior)
+
+
 def compute_polarity(
     posts: Iterable[dict],
     current_window: tuple,
     prior_window: tuple,
 ) -> float | None:
-    """Compute the polarity score for one model.
+    """Compute the polarity score for one model (LEGACY v1.7 path).
 
     polarity = (praise_rate_current - criticism_rate_current)
              - (praise_rate_prior - criticism_rate_prior)

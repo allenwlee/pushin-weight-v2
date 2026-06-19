@@ -27,6 +27,7 @@ from .treemap import (
     TreemapTile,
     build_treemap_svg,
     compute_polarity,
+    compute_polarity_from_db,
 )
 
 log = logging.getLogger(__name__)
@@ -261,6 +262,51 @@ def _qid_to_signal(qid: str) -> str | None:
     return _QID_TO_SIGNAL.get(qid)
 
 
+def _read_signal_breakdown_for_brand(
+    conn,
+    brand_id: str,
+    window_start_iso: str,
+) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    """Read post_brand_signals for one brand grouped by (day, signal).
+
+    v1.8 (Unit 4 / R18). JOINs post_brand_signals + post_brands + posts
+    per Decision 18 (no IN subquery). The _unattributed sentinel is
+    excluded by the WHERE clause (Decision 15). Weights are honored
+    (1/N for multi-brand posts per Decision 9).
+
+    Returns:
+        (totals, per_day) where:
+          totals[signal] = float (weighted_count)
+          per_day[iso_date][signal] = float (weighted_count)
+    """
+    rows = conn.execute(
+        """
+        SELECT substr(p.created_at, 1, 10) AS day,
+               pbs.signal AS signal,
+               SUM(pb.weight) AS weighted_count
+        FROM post_brand_signals pbs
+        JOIN post_brands pb
+          ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id
+        JOIN posts p ON p.tweet_id = pbs.post_id
+        WHERE pbs.brand_id = ?
+          AND pbs.brand_id != '_unattributed'
+          AND p.created_at >= ?
+        GROUP BY day, pbs.signal
+        """,
+        (brand_id, window_start_iso),
+    ).fetchall()
+    totals: dict[str, float] = {}
+    per_day: dict[str, dict[str, float]] = {}
+    for r in rows:
+        sig = r["signal"]
+        w = float(r["weighted_count"])
+        totals[sig] = totals.get(sig, 0.0) + w
+        per_day.setdefault(r["day"], {})[sig] = (
+            per_day.setdefault(r["day"], {}).get(sig, 0.0) + w
+        )
+    return totals, per_day
+
+
 def serialize_grid_card(
     brand_id: str,
     posts: list[dict[str, Any]],
@@ -269,6 +315,8 @@ def serialize_grid_card(
     latest_run: dict[str, Any] | None = None,
     now: datetime | None = None,
     display_locale: str = "en",
+    signal_breakdown: dict[str, float] | None = None,
+    day_signal_counts: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Return the per-model grid card payload.
 
@@ -313,20 +361,29 @@ def serialize_grid_card(
             in_24h.append(p)
 
     # Per-day per-signal counts. day_signal_counts[iso_date][signal] = int.
-    # A single pass populates both the totals (sig_counts) and the per-day
-    # grid that powers the stacked area chart.
+    #
+    # v1.8 (Unit 4 / R18): when the caller passes `signal_breakdown` and
+    # `day_signal_counts` (read from post_brand_signals via the JOIN
+    # shape from Decision 18), use them directly. Otherwise fall back to
+    # the legacy post-level inference from posts[i]["source_query_id"]
+    # (kept for backwards compat with tests that build synthetic post
+    # lists without a DB).
     sig_counts: Counter[str] = Counter()
     day_signal_counts: dict[str, Counter[str]] = {}
-    for p in in_window:
-        sqid = p.get("source_query_id") or ""
-        signal = _qid_to_signal(sqid)
-        if signal is None:
-            continue
-        sig_counts[signal] += 1
-        dt = _parse_post_timestamp(p.get("created_at"))
-        if dt is None:
-            continue
-        day_signal_counts.setdefault(dt.date().isoformat(), Counter())[signal] += 1
+    if signal_breakdown is not None and day_signal_counts is not None:
+        sig_counts = Counter(signal_breakdown)
+        day_signal_counts = {d: Counter(c) for d, c in day_signal_counts.items()}
+    else:
+        for p in in_window:
+            sqid = p.get("source_query_id") or ""
+            signal = _qid_to_signal(sqid)
+            if signal is None:
+                continue
+            sig_counts[signal] += 1
+            dt = _parse_post_timestamp(p.get("created_at"))
+            if dt is None:
+                continue
+            day_signal_counts.setdefault(dt.date().isoformat(), Counter())[signal] += 1
 
     # Materialize the per-day grid into the response shape Chart.js wants:
     # `days` is a list of ISO date strings (oldest -> newest), and each series
@@ -510,12 +567,32 @@ class DashboardApp:
         locale = self._resolve_locale()
         store = Store(db_path)
         try:
+            # v1.8 (Unit 4 / R18): compute the signal breakdown once per
+            # model from post_brand_signals via the JOIN shape from
+            # Decision 18. The cutoff is anchored to the latest run's
+            # finished_at (matching serialize_grid_card's "now" seam) so
+            # the 14d window is stable across cycles.
+            anchored_now = datetime.now(timezone.utc)
+            if latest_run and latest_run.get("finished_at"):
+                try:
+                    anchored_now = datetime.fromisoformat(
+                        latest_run["finished_at"].replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    pass
+            window_days = self.config.dashboard.window_days
+            cutoff_iso = (anchored_now - timedelta(days=window_days)).isoformat()
             for m in self.config.enabled_models:
                 posts = store.get_all_posts(m)
+                sig_breakdown, day_sigs = _read_signal_breakdown_for_brand(
+                    store._conn, m, cutoff_iso,
+                )
                 cards.append(
                     serialize_grid_card(
-                        m, posts, window_days=self.config.dashboard.window_days,
+                        m, posts, window_days=window_days,
                         latest_run=latest_run, display_locale=locale,
+                        signal_breakdown=sig_breakdown,
+                        day_signal_counts=day_sigs,
                     )
                 )
         finally:
@@ -584,20 +661,40 @@ class DashboardApp:
         try:
             for m in self.config.enabled_models:
                 try:
-                    posts = store.get_all_posts(m)
-                    # area_weight = total posts to-date (cumulative). Windowing
-                    # is reserved for polarity, where rate-of-change is the
-                    # right signal.
-                    area_weight = len(posts)
-                    polarity = compute_polarity(posts, current_window, prior_window)
-                    # v1.8 — count posts inside the current polarity window for
-                    # the native <title> tooltip. Same filter compute_polarity
-                    # uses internally; we recompute here because we only need
-                    # the count, not the signal breakdown.
-                    posts_in_window = sum(
-                        1 for post in posts
-                        if (current_window[0] <= (_ts := _parse_post_timestamp(post.get("created_at")) or current_window[0]) < current_window[1])
+                    # v1.8 (Unit 4 / R17): polarity now reads from
+                    # post_brand_signals + post_brands via the JOIN shape
+                    # from Decision 18. _unattributed is excluded at the
+                    # SQL layer (Decision 15). The score is a float in
+                    # [-1, +1] or None for the "went dark" sentinel.
+                    polarity = compute_polarity_from_db(
+                        store._conn, m, polarity_window_days, now=now,
                     )
+                    # v1.8 — area_weight is still cumulative (the v1.7
+                    # behavior); we read post_brands count via a focused
+                    # SQL query instead of fetching every post via
+                    # get_all_posts.
+                    area_row = store._conn.execute(
+                        "SELECT COUNT(*) AS n FROM post_brands WHERE brand_id = ?",
+                        (m,),
+                    ).fetchone()
+                    area_weight = int(area_row["n"]) if area_row else 0
+                    # v1.8 — posts_in_window: count of distinct posts in
+                    # [now-N, now) for the brand. JOIN through post_brands
+                    # to honor multi-brand weighting (1/N); we count
+                    # distinct post_ids so a 2-brand post is counted once
+                    # per brand.
+                    n_row = store._conn.execute(
+                        """
+                        SELECT COUNT(DISTINCT pb.post_id) AS n
+                        FROM post_brands pb
+                        JOIN posts p ON p.tweet_id = pb.post_id
+                        WHERE pb.brand_id = ?
+                          AND pb.brand_id != '_unattributed'
+                          AND p.created_at >= ?
+                        """,
+                        (m, current_window[0].isoformat()),
+                    ).fetchone()
+                    posts_in_window = int(n_row["n"]) if n_row else 0
                 except Exception as e:
                     log.warning(
                         "treemap tile build failed for %s: %s — rendering as no-data",
