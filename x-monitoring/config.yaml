@@ -58,3 +58,6 @@ dashboard:
   poll_seconds: 30
   # Window of post history rendered on the grid cards.
   window_days: 14
+
+# v1.7: x.com list ID for Call A (list-based fan-in). See plan 2026-06-17-001 §"Call A — list-based fan-in".
+x_monitor_list_id: 2067062923525275922

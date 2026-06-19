@@ -10,7 +10,7 @@
     <array>
         <string>/bin/zsh</string>
         <string>-c</string>
-        <string>source ~/.env.secrets &amp;&amp; exec python3 -m x_monitor run</string>
+        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/deploy/run-pipeline-watchpaths.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
