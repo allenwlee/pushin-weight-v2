@@ -279,3 +279,19 @@ body {
   outline: 2px solid var(--link);
   outline-offset: 2px;
 }
+
+/* Combined chart (Unit 4, v2.0 plan): vertical stretch makes hover
+   hitboxes easier to land on when 11 brand lines bunch together at
+   low activity periods. Width stays responsive (full viewport). */
+.combined-chart-wrap {
+  width: 100%;
+  /* 4x vertical stretch vs the auto-sized default. Capped at 80vh so
+     very wide viewports don't blow up the page. */
+  height: min(calc(100vh - 80px) * 1, 1800px);
+  min-height: 1000px;
+}
+.combined-chart {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
