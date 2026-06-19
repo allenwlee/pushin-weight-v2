@@ -322,3 +322,87 @@ def test_v17_fast_path_does_not_match_empty_text():
         token_to_brand=t2b,
     )
     assert brand is None
+
+
+# --- v1.8 compat-shim tests (R20) ----------------------------------------
+
+
+def test_attribute_to_brand_legacy_compat():
+    """v1.8: the legacy single-brand `attribute_to_brand` (R20) must
+    still pass all the v1.7 contract tests. This is the "no
+    regression" assertion for the compat shim.
+    """
+    from x_monitor.intent_classifier import attribute_to_brand
+
+    # Author-handle priority: known staff -> that brand.
+    assert (
+        attribute_to_brand(
+            "minimax is amazing",
+            "kimi_devs",
+            brand_tokens=V17_BRAND_TOKENS,
+            staff_handles=V17_STAFF_HANDLES,
+        )
+        == "minimax"
+    )
+    # Body keyword match (CJK): "Kimi" in text -> moonshot_kimi.
+    assert (
+        attribute_to_brand(
+            "Kimi is great",
+            "random_user",
+            brand_tokens=V17_BRAND_TOKENS,
+            staff_handles=V17_STAFF_HANDLES,
+        )
+        == "moonshot_kimi"
+    )
+    # No match -> None.
+    assert (
+        attribute_to_brand(
+            "completely unrelated",
+            "random_user",
+            brand_tokens=V17_BRAND_TOKENS,
+            staff_handles=V17_STAFF_HANDLES,
+        )
+        is None
+    )
+
+
+def test_classify_signal_deprecation_warning():
+    """v1.8: the legacy `classify_signal` (R20) emits a
+    DeprecationWarning on every call. New callers should use
+    `classify_signals_per_brand` from x_monitor.attribution.
+    """
+    import warnings
+    from x_monitor.intent_classifier import classify_signal
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        classify_signal("minimax 太强了")
+    # At least one DeprecationWarning fired and the message mentions
+    # the new per-brand API.
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(deprecations) >= 1
+    msg = str(deprecations[0].message)
+    assert "classify_signals_per_brand" in msg
+    # The function still returns the legacy single string.
+    assert deprecations[0].message is not None
+
+
+def test_attribution_module_re_exports_intent_classifier():
+    """v1.8: `x_monitor.attribution` re-exports the v1.8 multi-brand
+    API from `x_monitor.intent_classifier`. The same objects (e.g.
+    MentionRow) are exposed under both names so run.py can import
+    from the canonical location.
+    """
+    from x_monitor import attribution
+    from x_monitor.intent_classifier import (
+        MentionRow as IC_MentionRow,
+        attribute_to_brands as ic_attribute_to_brands,
+        compute_post_brands as ic_compute_post_brands,
+    )
+
+    assert attribution.MentionRow is IC_MentionRow
+    assert attribution.attribute_to_brands is ic_attribute_to_brands
+    assert attribution.compute_post_brands is ic_compute_post_brands
+    # The v1.8 source-type literal is exposed.
+    from x_monitor.attribution import SourceType, UNATTRIBUTED_BRAND_ID
+    assert UNATTRIBUTED_BRAND_ID == "_unattributed"

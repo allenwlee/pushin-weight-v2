@@ -20,7 +20,7 @@ from .apify import (
     TwitterApiRateLimitError,
     TwitterApiServerError,
 )
-from .config import Config
+from .config import KNOWN_MODELS, Config
 from .queries import (
     Query,
     assert_under_operator_cap,
@@ -29,7 +29,21 @@ from .queries import (
     load_queries,
 )
 from .query_plan import plan_calls
-from .intent_classifier import classify_signal, attribute_to_brand
+# v1.8 (R15, R20): the per-tweet classification seam now uses the
+# multi-brand `attribute_to_brands` from `x_monitor.attribution`.
+# The legacy `classify_signal` (single-string) is kept via the
+# compat shim for the `source_query_id` derivation; it emits a
+# DeprecationWarning on every call, so we suppress the warning here
+# (the pipeline is the one remaining legitimate user of the legacy
+# path until the per-brand LLM classifier is wired in).
+import warnings as _warnings
+from .intent_classifier import classify_signal as _legacy_classify_signal
+from .attribution import (
+    UNATTRIBUTED_BRAND_ID,
+    MentionRow,
+    attribute_to_brands,
+    compile_keyword_index,
+)
 from .relevance import RelevanceConfig, filter_posts, load_filter
 from .review import ReviewQueue
 from .store import Store
@@ -37,10 +51,8 @@ from .headlines import HeadlinesCache, enrich_posts
 
 log = logging.getLogger(__name__)
 
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
 
 def filter_and_review(
     items: list[dict[str, Any]],
@@ -110,10 +122,8 @@ def filter_and_review(
             stats.setdefault(k, v)
     return kept, stats
 
-
 class PipelineLockBusy(Exception):
     """Raised when another run is already in-flight."""
-
 
 @contextlib.contextmanager
 def pipeline_lock(lock_path: Path, *, blocking: bool = False):
@@ -141,7 +151,6 @@ def pipeline_lock(lock_path: Path, *, blocking: bool = False):
                 pass
         fd.close()
 
-
 def _signal_to_qid(signal: str) -> str:
     """Map a classified signal to the legacy Q1-Q6 source_query_id.
 
@@ -157,7 +166,6 @@ def _signal_to_qid(signal: str) -> str:
         "other": "Q5",
         "praise": "Q6",
     }.get(signal, "Q5")
-
 
 def _planned_call_to_query(call: "PlannedCall") -> Query:
     """Synthesize a Query object for the v1.2 filter_and_review helper.
@@ -182,7 +190,6 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
         min_faves=min_faves,
     )
 
-
 def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
     """Build {brand_id: [brand_token, ...]} from data/queries/<m>.yaml.
 
@@ -191,7 +198,6 @@ def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, li
     """
     from .query_plan import _load_brand_tokens_per_model
     return _load_brand_tokens_per_model(enabled_models, data_dir / "queries")
-
 
 def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
     """Build {brand_id: [handle, ...]} for staff/official attribution.
@@ -215,7 +221,6 @@ def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, l
             staff = []
         out[m] = handles + [s.handle for s in staff]
     return out
-
 
 class RunPipeline:
     """The x-monitor daily collection pipeline."""
@@ -427,31 +432,198 @@ class RunPipeline:
                         )
                         continue
 
-                    # v1.6: for intent calls, reclassify brand_id +
-                    # source_query_id per tweet from the text content.
+                    # v1.8 (R15): for intent calls, reclassify each tweet
+                    # via the multi-brand pipeline. Populate
+                    #   - it["brand_id"]      (legacy compat: first match)
+                    #   - it["brand_ids"]     (list of all detected brands)
+                    #   - it["mentions"]      (list of MentionRow instances)
+                    #   - it["signals"]       (dict[brand_id, signal])
+                    # source_query_id is derived from the legacy single-bucket
+                    # classifier (compat path) so the per-tweet Q1-Q6 mapping
+                    # for the dashboard stays consistent with v1.7.
+                    #
                     # For account calls, the brand_id is the brand and
                     # source_query_id is "Q1" (release).
                     if call.call_kind == "intent":
                         classified = 0
+                        # Build a v1.8 detection-registry view of the
+                        # per-cycle brand_tokens dict. The v1.7 yaml
+                        # stores tokens under the MODEL key (e.g.
+                        # {"minimax": ["Qwen", "DeepSeek"]}), but the
+                        # actual brand_ids detected should be the
+                        # canonical brand_ids ("qwen", "deepseek"). We
+                        # map each token to its canonical brand_id by
+                        # lowercasing and checking against KNOWN_MODELS;
+                        # tokens that don't match a known brand are
+                        # checked against an alias map (e.g. "kimi"
+                        # → "moonshot_kimi") before being dropped.
+                        #
+                        # Fallback: if the per-model brand_tokens map
+                        # is empty (yaml query strings don't have
+                        # `(brand_a OR brand_b)` paren groups — legacy
+                        # `'minimax'` queries, or models without a
+                        # yaml), seed the keyword index with the model
+                        # name itself so the self-brand is still
+                        # detected via body_keyword. This matches the
+                        # v1.7 contract where the model name == the
+                        # brand_id.
+                        # Per-model alias map: short tokens that v1.7
+                        # yamls use to refer to the canonical brand_id.
+                        # These tokens appear in v1.7 query OR-groups
+                        # like `(kimi OR moonshot OR k2)` but don't
+                        # match the canonical brand_id
+                        # `moonshot_kimi` (with underscore). The alias
+                        # map bridges the gap until the yamls are
+                        # migrated to canonical brand_ids (v1.9).
+                        _BRAND_ALIASES: dict[str, str] = {
+                            "kimi": "moonshot_kimi",
+                            "moonshot": "moonshot_kimi",
+                            "k2": "moonshot_kimi",
+                            "mimo": "xiaomi_mimo",
+                            "xiaomi": "xiaomi_mimo",
+                            "ling": "inclusionai",
+                            "ring": "inclusionai",
+                            "ming": "inclusionai",
+                            "chatglm": "glm",
+                            "智谱": "glm",
+                            "通义千问": "qwen",
+                            "通义": "qwen",
+                            "深度求索": "deepseek",
+                            "海螺": "minimax",
+                            "hailuo": "minimax",
+                        }
+                        keyword_triples: list[tuple[str, str, bool]] = []
+                        for model_id, toks in brand_tokens.items():
+                            for tok in toks:
+                                canonical = tok.strip().lower()
+                                if not canonical:
+                                    continue
+                                if canonical in KNOWN_MODELS:
+                                    keyword_triples.append(
+                                        (canonical, tok, False)
+                                    )
+                                elif canonical in _BRAND_ALIASES:
+                                    keyword_triples.append(
+                                        (
+                                            _BRAND_ALIASES[canonical],
+                                            tok,
+                                            False,
+                                        )
+                                    )
+                                # else: token doesn't map to a known
+                                # brand; drop it. (v1.7 used model_id
+                                # as the brand_id, but v1.8's
+                                # multi-brand attribution wants the
+                                # actual brand_id.)
+                        # Seed self-brand detection for each enabled
+                        # model that doesn't already have any tokens.
+                        for m in models:
+                            if m in KNOWN_MODELS and not any(
+                                t[0] == m for t in keyword_triples
+                            ):
+                                keyword_triples.append((m, m, False))
+                        index = compile_keyword_index(keyword_triples)
+                        # Build brand_search_terms from the same triples
+                        # so search-term matches resolve to the same
+                        # canonical brand_ids.
+                        brand_search_terms: dict[str, str] = {
+                            tok.lower(): bid for bid, tok, _ in keyword_triples
+                        }
                         for it in items:
-                            brand = attribute_to_brand(
-                                it.get("text", ""),
-                                it.get("author_handle", ""),
-                                brand_tokens,
-                                staff_handles,
+                            # The MentionRow dataclass requires a
+                            # non-empty `mentioned_at` (it stores ISO
+                            # timestamps). When the post lacks a
+                            # `created_at` (e.g. apify mock returns
+                            # bare dicts in tests), fall back to the
+                            # pipeline's "now" so the extractors can
+                            # emit MentionRows. Real API responses
+                            # always include `created_at`.
+                            from datetime import datetime as _dt, timezone as _tz
+                            _fallback_created_at = _dt.now(_tz.utc).isoformat(
+                                timespec="seconds"
                             )
-                            if brand:
-                                it["brand_id"] = brand
-                                classified += 1
-                            else:
-                                # No brand match: drop the tweet rather
-                                # than letting it land in the wrong brand
-                                # bucket. Mark with a sentinel so we can
-                                # count drops below.
+                            post_like = {
+                                "tweet_id": it.get("id", ""),
+                                "id": it.get("id", ""),
+                                "text": it.get("text", ""),
+                                "created_at": (
+                                    it.get("created_at") or _fallback_created_at
+                                ),
+                                "entities": it.get("entities", {}),
+                            }
+                            # Per-source MentionRows via the v1.8
+                            # multi-brand orchestrator. Returns
+                            # `list[MentionRow]` (deduped by
+                            # `(brand_id, source)`). user_mention /
+                            # hashtag would require populating the
+                            # detection tables, which the pipeline
+                            # doesn't do (the compat path is offline);
+                            # body_keyword + search_term are populated
+                            # by passing the per-cycle keyword index
+                            # and the empty brand_search_terms map.
+                            mentions: list[MentionRow] = list(
+                                attribute_to_brands(
+                                    post_like,
+                                    brand_accounts={},
+                                    brand_hashtags={},
+                                    compiled_keyword_index=index,
+                                    search_query=[],
+                                    brand_search_terms=brand_search_terms,
+                                )
+                            )
+                            # brand_ids: union of non-sentinel, non-None
+                            # brands from the MentionRow set.
+                            brand_ids: list[str] = []
+                            seen_brand: set[str] = set()
+                            for m in mentions:
+                                if (
+                                    m.brand_id
+                                    and m.brand_id != UNATTRIBUTED_BRAND_ID
+                                    and m.brand_id not in seen_brand
+                                ):
+                                    brand_ids.append(m.brand_id)
+                                    seen_brand.add(m.brand_id)
+                            if not brand_ids:
+                                # No brand matched: drop the tweet.
                                 it["_unattributed"] = True
-                            it["source_query_id"] = _signal_to_qid(
-                                classify_signal(it.get("text", ""))
-                            )
+                                it["brand_ids"] = []
+                                it["brand_id"] = UNATTRIBUTED_BRAND_ID
+                                it["mentions"] = mentions
+                                it["signals"] = {}
+                            else:
+                                # Legacy compat: brand_id is the first
+                                # detected brand. The downstream
+                                # `by_model` partition key uses this.
+                                it["brand_id"] = brand_ids[0]
+                                it["brand_ids"] = brand_ids
+                                it["mentions"] = mentions
+                                # signals: per-brand bucket via the
+                                # legacy single-bucket classifier
+                                # (no anthropic_client in this path).
+                                # Emit the SAME signal for every
+                                # detected brand — the per-brand
+                                # decomposition is the v1.8 follow-up.
+                                with _warnings.catch_warnings():
+                                    _warnings.simplefilter(
+                                        "ignore", DeprecationWarning,
+                                    )
+                                    sig = _legacy_classify_signal(
+                                        it.get("text", "")
+                                    )
+                                it["signals"] = {b: sig for b in brand_ids}
+                                classified += 1
+                            # source_query_id still uses the legacy
+                            # single-bucket classifier for Q1-Q6
+                            # routing (no per-brand signal yet).
+                            with _warnings.catch_warnings():
+                                _warnings.simplefilter(
+                                    "ignore", DeprecationWarning,
+                                )
+                                it["source_query_id"] = _signal_to_qid(
+                                    _legacy_classify_signal(
+                                        it.get("text", "")
+                                    )
+                                )
                         items = [
                             it for it in items if not it.get("_unattributed")
                         ]
@@ -466,6 +638,9 @@ class RunPipeline:
                     else:
                         for it in items:
                             it["brand_id"] = call.brand_id
+                            it["brand_ids"] = [call.brand_id]
+                            it["mentions"] = []
+                            it["signals"] = {call.brand_id: "release"}
                             it["source_query_id"] = "Q1"
 
                     # The existing v1.2 filter + review-queue machinery
@@ -499,9 +674,28 @@ class RunPipeline:
                             reasons_total[k] = reasons_total.get(k, 0) + v
                         n_review_total += drop_stats["n_soft_dropped"]
 
-                    # Persist raw of the KEPT set.
+                    # Persist raw of the KEPT set. MentionRow
+                    # dataclasses are not JSON-serializable by
+                    # default; coerce them to dicts via `vars()`
+                    # before dumping so the raw file can be re-read
+                    # by the resume path (which expects plain
+                    # dicts).
+                    def _jsonable_post(it: dict[str, Any]) -> dict[str, Any]:
+                        out = dict(it)
+                        ms = out.get("mentions")
+                        if isinstance(ms, list):
+                            out["mentions"] = [
+                                m if isinstance(m, dict) else vars(m)
+                                for m in ms
+                            ]
+                        return out
+
                     raw_path.write_text(
-                        json.dumps(kept_all, ensure_ascii=False, default=str),
+                        json.dumps(
+                            [_jsonable_post(it) for it in kept_all],
+                            ensure_ascii=False,
+                            default=str,
+                        ),
                         encoding="utf-8",
                     )
                     n_inserted = store.insert_posts(kept_all)

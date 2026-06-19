@@ -62,3 +62,40 @@ x-monitor dashboard start
   Restart with `x-monitor dashboard start`.
 
 See `deploy/README.md` for LaunchAgent install/uninstall and log locations.
+
+## v1.8 — Call-Path Attribution
+
+v1.8 (2026-06-19) replaces v1.7's first-match-wins single-brand
+classifier with a multi-brand extraction pipeline. A single tweet
+naming two brands now produces one row per detected brand in
+`post_brands` / `post_mentions` / `post_brand_signals` (replaces the
+old `posts.brand_id` + `posts.signal` columns).
+
+### New modules
+
+- `x_monitor/attribution.py` — multi-brand extractors
+  (`extract_user_mentions`, `extract_hashtag_mentions`,
+  `extract_body_keywords`, `extract_search_term_match`),
+  `compute_post_brands` consolidator, `classify_signal` per-brand
+  signal classifier (Claude Haiku).
+- `x_monitor/reattribute.py` — `python -m x_monitor reattribute
+  --since YYYY-MM-DD` backfill subcommand for historical posts.
+- `x_monitor/intent_classifier.py` — kept as a thin compat shim that
+  re-exports the v1.8 names and emits `DeprecationWarning` on its
+  legacy function bodies. A follow-up commit deletes it.
+
+### Public API
+
+`from x_monitor import Store, attribute_to_brands, classify_signal, ...` —
+see `x_monitor/__all__` for the stable import surface. See
+`x_monitor/CHANGELOG.md` for the full v1.8 change list.
+
+### Operator deploy sequence
+
+1. Apply migration 004 (already done 2026-06-19).
+2. Land this code (Units 1-6).
+3. Run `python -m x_monitor reattribute --since 2026-01-01` on the
+   live DB. Expect 5-10 min for ~2,000 posts.
+4. Verify the dashboard renders with real data.
+5. Restart the LaunchAgent + dashboard.
+

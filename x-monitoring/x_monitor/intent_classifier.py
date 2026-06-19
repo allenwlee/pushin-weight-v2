@@ -1,47 +1,75 @@
 # {{AGENT_ATTRIBUTION}}
-"""Post-fetch classification for the v1.6 OR-collapsed pipeline.
+"""Compat shim for v1.7 `intent_classifier` API surface (R20).
 
-In the v1.5 architecture, every tweet carried a `source_query_id` (Q1-Q6)
-that came for free from the per-query loop: the Q1 call returned release
-tweets, the Q3 call returned criticism tweets, etc. In v1.6 we collapse
-calls across brands (one account call per brand; 1-3 bucketed intent
-calls across all brands), so the per-tweet signal + brand have to be
-recovered from the text content after the API call comes back.
+In v1.7, `x_monitor.intent_classifier` owned two responsibilities:
+  - `classify_signal(text)` - first-match-wins per-bucket signal map.
+  - `attribute_to_brand(text, ...)` - first-match-wins single brand.
 
-Two responsibilities:
-  - `classify_signal(text)`: deterministic classifier that maps a
-    tweet's text to one of the existing 6 signal buckets (release,
-    community_question, criticism, commenter_capture, praise, other).
-    First-match-wins in priority order.
-  - `attribute_to_brand(text, author_handle, ...)`: pick the most likely
-    brand_id for a tweet, preferring author_handle membership in a
-    brand's official/staff list, then text-contains of brand tokens
-    (ASCII word-boundary, CJK substring).
+In v1.8 the canonical home moved to `x_monitor.attribution`:
+  - `classify_signal(text, brand_ids, brand_registry, anthropic_client)`
+    now returns a per-brand signal dict (the per-brand decomposition).
+  - `attribute_to_brands(...)` returns all detected brands with
+    confidence scores.
 
-Both functions are pure-Python + deterministic + unit-testable. They
-run on every returned tweet of every intent call; total cost is
-sub-millisecond per batch.
+This shim preserves the v1.7 public API (so legacy callers and tests
+still pass) by:
+  - Re-exporting the v1.8 names from `attribution` under the v1.7
+    names that callers expect (MentionRow, attribute_to_brands,
+    compute_post_brands, compile_keyword_index, etc.).
+  - Keeping the legacy `classify_signal(text)` (single-string) shim,
+    which emits a `DeprecationWarning` on every call directing
+    callers to `classify_signal` in `x_monitor.attribution`.
+  - Keeping the legacy `attribute_to_brand(text, ...)` (single
+    brand) shim which calls the v1.8 `attribute_to_brands` and
+    returns the first match (or None).
+
+The legacy `build_compiled_brand_pattern` and `_is_cjk` helpers are
+also kept for callers that still use them.
+
+A follow-up commit (not this one) deletes this file once all
+callers migrate.
 """
 
 from __future__ import annotations
 
 import re
-from typing import Literal
+import warnings
 
 
-Signal = Literal[
-    "release",
-    "community_question",
-    "criticism",
-    "commenter_capture",
-    "other",
-    "praise",
-]
+# --- Re-exports from x_monitor.attribution (R20) ------------------------
+
+# The canonical v1.8 names. Tests in test_intent_classifier_v17.py
+# import these from `x_monitor.intent_classifier` and assert they
+# are the SAME objects as those in `x_monitor.attribution` (so the
+# compat shim does not duplicate the dataclass identity).
+from x_monitor.attribution import (  # noqa: F401  (re-exports)
+    MentionRow,
+    BrandRow,
+    validate_raw_token,
+    compile_keyword_index,
+    extract_user_mentions,
+    extract_hashtag_mentions,
+    extract_body_keywords,
+    extract_search_term_match,
+    compute_post_brands,
+    attribute_to_brands,
+    AnthropicClaudeClient,
+    BRAND_SOURCE_PRIORITY,
+    UNATTRIBUTED_BRAND_ID,
+    Source,
+    SourceType,
+)
 
 
-# ASCII terms use a word-boundary regex (`\\b`). CJK terms use a plain
-# substring match because `\\b` does not anchor correctly between CJK and
-# Latin/space characters. Praise-only emoji are handled separately.
+# --- Legacy compat: classify_signal (text-only, single bucket) ----------
+
+# Aliases for tests / callers that referenced the original names.
+Signal = SourceType
+
+
+# Legacy v1.7 priority order. Kept here so the legacy `classify_signal`
+# body is independent of `attribution.py` (which no longer carries
+# these terms).
 _ASCII_SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
     "praise":             ("amazing", "incredible", "love it",
                            "mind-blowing", "mind blowing", "好强"),
@@ -51,23 +79,19 @@ _ASCII_SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
                            "code", "release"),
 }
 _CJK_SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
-    "praise":             ("太强了", "太强", "卧槽", "牛"),
+    "praise":             ("太强了", "太强", "占嘑", "牛"),
     "criticism":          ("翻车", "不行", "不好", "失望"),
     "community_question": ("教程", "怎么", "如何", "请问"),
     "other":              ("开源",),
 }
-_PRAISE_EMOJI = "🤯"
-
-# First match wins. Praise > criticism > community_question > other.
+_PRAISE_EMOJI = "\U0001F92F"
 _SIGNAL_PRIORITY: tuple[str, ...] = (
     "praise",
     "criticism",
     "community_question",
     "other",
 )
-
-# Pre-compile the ASCII word-boundary patterns at import time.
-_ASCII_SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {
+_ASCII_SIGNAL_PATTERNS: dict[str, "re.Pattern[str]"] = {
     sig: re.compile(
         r"\b(?:" + "|".join(re.escape(t) for t in terms) + r")\b",
         re.IGNORECASE,
@@ -77,13 +101,27 @@ _ASCII_SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {
 }
 
 
-def classify_signal(text: str) -> Signal:
-    """Return the best-guess signal for a tweet's text.
+def classify_signal(text: str) -> str:  # type: ignore[override]
+    """Legacy v1.7 single-string signal classifier.
 
-    First-match wins in the priority order above. Unrecognized text
-    returns "other" as the safe default. Pure-Python (no API), so it's
-    free and runs on every returned tweet.
+    First-match-wins in `_SIGNAL_PRIORITY`. Returns one of:
+      release, community_question, criticism, commenter_capture,
+      praise, other.
+
+    .. deprecated::
+        v1.8: use `x_monitor.attribution.classify_signal(text, brand_ids,
+        brand_registry, anthropic_client)` for the per-brand
+        decomposition. This shim remains for callers that don't have
+        brand context (ad-hoc rendering, headline classification).
     """
+    warnings.warn(
+        "x_monitor.intent_classifier.classify_signal is deprecated; "
+        "use x_monitor.attribution.classify_signals_per_brand "
+        "(or x_monitor.attribution.classify_signal with brand_ids) "
+        "for the v1.8 per-brand signal decomposition.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not text:
         return "other"
     for sig in _SIGNAL_PRIORITY:
@@ -98,6 +136,9 @@ def classify_signal(text: str) -> Signal:
     return "other"
 
 
+# --- Legacy compat: attribute_to_brand (single brand) ------------------
+
+
 def _is_cjk(token: str) -> bool:
     """Return True if the token contains any CJK Unified Ideograph."""
     return any("一" <= ch <= "鿿" for ch in token)
@@ -105,37 +146,21 @@ def _is_cjk(token: str) -> bool:
 
 def build_compiled_brand_pattern(
     brand_tokens: dict[str, list[str]],
-) -> tuple[re.Pattern[str] | None, dict[str, str]]:
+) -> "tuple[re.Pattern[str] | None, dict[str, str]]":
     """Build a single alternation regex over all deduped brand tokens.
 
-    v1.7 fast-path: instead of looping `re.search()` per brand per token
-    per tweet (v1.6: ~4,200 iterations/cycle at 7 brands), we compile
-    ONE regex that matches any brand token and walk each tweet with
-    a single `regex.search()`. The matched text is mapped back to its
-    brand via the returned `token_to_brand` lookup.
-
-    The alternation preserves brand iteration order (NOT alphabetical)
-    so the first-match-wins contract from v1.6 holds. CJK tokens use
-    substring (no \b); ASCII tokens use word boundary. ASCII tokens
-    are casefolded at match time via `re.IGNORECASE`.
-
-    Dedup rule: if the same token appears in two brands, the FIRST
-    brand in the input iteration order wins. This matches v1.6's
-    first-match-wins semantics.
-
-    Returns (None, {}) when `brand_tokens` is empty. The caller
-    (typically run.py) passes both back into `attribute_to_brand` as
-    the `compiled_brand_pattern` and `token_to_brand` kwargs.
-
-    See docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
-    §"Compiled-regex fast-path for wide-net brand attribution" (Decision 3).
+    Legacy v1.7 helper. Re-implemented here so callers that still
+    import `build_compiled_brand_pattern` from
+    `x_monitor.intent_classifier` keep working without duplicating
+    the logic in `attribution.compile_keyword_index` (which has a
+    different signature: `(brand_id, pattern, is_regex)` triples
+    loaded from the DB).
     """
     parts: list[str] = []
     token_to_brand: dict[str, str] = {}
     for brand, toks in brand_tokens.items():
         for tok in toks:
             if tok in token_to_brand:
-                # Dedup: keep the FIRST brand seen for each token.
                 continue
             token_to_brand[tok] = brand
             if _is_cjk(tok):
@@ -153,38 +178,29 @@ def attribute_to_brand(
     brand_tokens: dict[str, list[str]],
     staff_handles: dict[str, list[str]],
     *,
-    compiled_brand_pattern: re.Pattern[str] | None = None,
-    token_to_brand: dict[str, str] | None = None,
+    compiled_brand_pattern: "re.Pattern[str] | None" = None,
+    token_to_brand: "dict[str, str] | None" = None,
 ) -> str | None:
-    """Pick the most likely brand_id for a tweet.
+    """Legacy v1.7 single-brand classifier (compat shim).
+
+    First-match-wins. Returns the brand_id string (e.g. "minimax")
+    or None when no brand matches.
 
     Priority:
-    1. If author_handle is in a brand's official/staff list (casefolded
-       equality) -> that brand.
-    2. If text contains a brand's tokens (casefolded; ASCII word-boundary,
-       CJK substring) -> that brand (first match wins in brand_tokens
-       iteration order).
-    3. None if neither matches (caller drops the tweet or routes to review).
+      1. author_handle in a brand's staff_handles list.
+      2. text contains a brand's token (ASCII word-boundary, CJK
+         substring) using the compiled regex fast-path when both
+         `compiled_brand_pattern` and `token_to_brand` are provided.
+      3. None.
 
-    v1.7 fast-path: when `compiled_brand_pattern` and `token_to_brand`
-    are both provided, step 2 uses a single `re.search()` over a
-    pre-compiled alternation regex instead of looping per brand per
-    token. The caller (run.py) builds the pattern once per cycle via
-    `build_compiled_brand_pattern(brand_tokens)` and passes it in.
-    When either kwarg is None/empty, the legacy Python loop is used
-    (unchanged from v1.6) — this preserves backward compatibility for
-    tests and any callers that haven't migrated to the fast-path yet.
-
-    `staff_handles` is a {brand: [handle, ...]} map; for v1.6 the official
-    handles are also folded in by the caller. A None for either map is
-    treated as empty.
+    Kept identical to the v1.7 implementation so existing tests
+    (test_intent_classifier_v17.py) pass without modification.
     """
     h = (author_handle or "").casefold()
     for brand, handles in (staff_handles or {}).items():
         for hh in handles:
             if h and h == hh.casefold():
                 return brand
-    # v1.7 fast-path: when a compiled pattern is provided, use it.
     if compiled_brand_pattern is not None:
         if not text:
             return None
@@ -192,24 +208,16 @@ def attribute_to_brand(
         if m is None:
             return None
         matched_text = m.group(0)
-        # Map the matched text back to its brand via token_to_brand.
-        # Case-insensitive equality because the regex is re.IGNORECASE.
         if token_to_brand:
             cf = matched_text.casefold()
             for tok, brand in token_to_brand.items():
                 if tok.casefold() == cf:
                     return brand
-        # Defensive fallback (should not fire if pattern was built
-        # by build_compiled_brand_pattern): scan brand_tokens for
-        # substring match. This handles the case where a caller
-        # constructed the regex by hand and the token_to_brand map
-        # was missed.
         for brand, tokens in (brand_tokens or {}).items():
             for tok in tokens:
                 if tok and tok in matched_text:
                     return brand
         return None
-    # Legacy v1.6 path: per-brand, per-token loop.
     t = (text or "").casefold()
     for brand, tokens in (brand_tokens or {}).items():
         for tok in tokens:
@@ -223,3 +231,29 @@ def attribute_to_brand(
                 if re.search(r"\b" + re.escape(tt) + r"\b", t):
                     return brand
     return None
+
+
+__all__ = [
+    # Re-exports from x_monitor.attribution
+    "MentionRow",
+    "BrandRow",
+    "validate_raw_token",
+    "compile_keyword_index",
+    "extract_user_mentions",
+    "extract_hashtag_mentions",
+    "extract_body_keywords",
+    "extract_search_term_match",
+    "compute_post_brands",
+    "attribute_to_brands",
+    "AnthropicClaudeClient",
+    "BRAND_SOURCE_PRIORITY",
+    "UNATTRIBUTED_BRAND_ID",
+    "Source",
+    "SourceType",
+    # Legacy compat
+    "Signal",
+    "classify_signal",
+    "attribute_to_brand",
+    "build_compiled_brand_pattern",
+    "_is_cjk",
+]

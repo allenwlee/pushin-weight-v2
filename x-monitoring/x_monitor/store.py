@@ -6,11 +6,32 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator
 
 from .config import KNOWN_MODELS
+
+if TYPE_CHECKING:
+    from .attribution import MentionRow
+
+
+@dataclass(frozen=True)
+class BrandRow:
+    """A single row from the `brands` table.
+
+    v1.8 (R12): the canonical brand registry lives in DB, not in
+    KNOWN_MODELS. Read via `Store.read_brands()`. The sentinel brand
+    (`brand_id = '_unattributed'`) has `is_sentinel = True`; all other
+    brands have `is_sentinel = False`. Callers should filter sentinels
+    at the read side per Decision 15.
+    """
+
+    brand_id: str
+    display_name: str
+    accent_color: str
+    is_sentinel: bool
 
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -40,6 +61,27 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _coerce_for_json_dump(p: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-friendly copy of post dict `p`.
+
+    Coerces `mentions` (v1.8) entries from MentionRow dataclass
+    instances to plain dicts so `json.dumps` doesn't fail. Other
+    nested values are passed through (the encoder's `default=str`
+    catches the rest).
+    """
+    out = dict(p)
+    ms = out.get("mentions")
+    if isinstance(ms, list):
+        out["mentions"] = [
+            m if isinstance(m, dict) else (
+                dict(vars(m)) if hasattr(m, "__dataclass_fields__")
+                else m
+            )
+            for m in ms
+        ]
+    return out
+
+
 class Store:
     """Thin wrapper around the x_monitoring.db SQLite file.
 
@@ -56,6 +98,10 @@ class Store:
         self._ensure_migrations_table()
         if auto_migrate:
             self.apply_migrations()
+        # v1.8 (R12): cache for read_brands() — populated lazily, never
+        # invalidated within a Store instance (operators can call
+        # store.close() and re-open if they mutate the brands table).
+        self._brand_cache: list[BrandRow] | None = None
 
     def close(self) -> None:
         self._conn.close()
@@ -125,15 +171,23 @@ class Store:
     def insert_posts(self, posts: list[dict[str, Any]]) -> int:
         """Idempotent insert. Returns number of NEWLY inserted rows.
 
-        Uses INSERT OR IGNORE — re-inserting the same tweet_id is a no-op.
+        v1.8 (R16): writes to 4 tables in ONE transaction (posts,
+        post_brands, post_mentions, post_brand_signals). Re-inserting
+        the same tweet_id is a no-op (INSERT OR IGNORE on posts).
 
-        v1.8: posts.brand_id and posts.signal are dropped (migration 004).
-        Attribution moves to post_brands(brand_id, post_id, weight); per-brand
-        signal moves to post_brand_signals(post_id, brand_id, signal). The
-        post dict still carries `brand_id` and `signal` keys (from the
-        caller / TwitterAPI.io response) — we extract them here and write
-        to the join tables. Posts with no brand_id get a sentinel
-        `_unattributed` row so the treemap's "unattributed" bin still works.
+        Per-post dict fields (R2, R3, R6, R8, R15, R16):
+          - brand_ids: list[str]     (v1.8 multi-brand)
+          - mentions: list[MentionRow] (4-source decomposition)
+          - signals: dict[brand_id, signal] (per-brand signal)
+
+        Backward-compat: if `brand_id` (str|list) and/or `signal` (str|
+        list[dict|tuple]) are present, derive v1.8 fields from them so
+        legacy callers (Unit 3) continue to work.
+
+        Posts with no brand_id get a sentinel `_unattributed` row in
+        post_brands so the treemap's "unattributed" bin still works.
+        `_unattributed` is BLOCKED from post_brand_signals by the
+        schema's CHECK constraint (Decision 15).
         """
         if not posts:
             return 0
@@ -144,22 +198,15 @@ class Store:
                 if not tweet_id:
                     continue
                 tweet_id_str = str(tweet_id)
-                brand_id = p.get("brand_id")
-                # Per R1: attribution moves to post_brands. The post dict
-                # may carry a single brand_id (legacy callers) or a list
-                # (v1.8 multi-brand). Normalize to a list of brand_ids
-                # with equal weight = 1/N.
-                if isinstance(brand_id, list):
-                    raw_brands = [b for b in brand_id if b]
-                elif brand_id:
-                    raw_brands = [brand_id]
-                else:
-                    raw_brands = []
-                # Filter to known brands + sentinel; unknown slugs get
-                # bucketed into `_unattributed` so they still surface
-                # somewhere.
+                # Normalize brand_ids (R2, R15). v1.8 callers pass
+                # brand_ids: list[str]. Legacy callers pass brand_id:
+                # str | list[str].
+                brand_ids: list[str] = self._extract_brand_ids(p)
+                # Compute weights: 1/N per distinct brand, or 1.0 for
+                # the sentinel. Unknown brand slugs collapse into
+                # `_unattributed` so the treemap still surfaces them.
                 valid_brands: list[str] = []
-                for b in raw_brands:
+                for b in brand_ids:
                     if b in KNOWN_MODELS:
                         valid_brands.append(b)
                 if not valid_brands:
@@ -193,7 +240,15 @@ class Store:
                         p.get("conversation_id"),
                         json.dumps(p.get("entities") or {}),
                         p.get("source_query_id"),
-                        json.dumps(p),
+                        # v1.8: `mentions` may contain MentionRow
+                        # dataclass instances (or their dict form
+                        # from JSON reload). Coerce to dict so the
+                        # JSON encoder doesn't choke. `default=str`
+                        # covers anything else we didn't anticipate.
+                        json.dumps(
+                            _coerce_for_json_dump(p),
+                            default=str,
+                        ),
                         p.get("headline"),
                         p.get("headline_source"),
                         # v1.7: per-locale translation columns.
@@ -209,55 +264,142 @@ class Store:
                     # re-inserts must not duplicate (post_brands PK is
                     # (brand_id, post_id)).
                     for b in valid_brands:
+                        # R9: ON CONFLICT DO UPDATE so reattribution can
+                        # refresh weight. The `weight` column MUST be in
+                        # the INSERT column list (top-gun ON CONFLICT
+                        # gotcha — only INSERT-listed columns update).
                         conn.execute(
                             """
-                            INSERT OR IGNORE INTO post_brands(
+                            INSERT INTO post_brands(
                                 brand_id, post_id, weight
                             ) VALUES (?, ?, ?)
+                            ON CONFLICT(brand_id, post_id) DO UPDATE SET
+                                weight = excluded.weight
                             """,
                             (b, tweet_id_str, weight),
                         )
-                    # Per-brand signal: one row per (post, brand) tuple.
-                    # Legacy callers passed a single `signal` string; v1.8
-                    # callers may pass a list of (brand_id, signal) tuples.
-                    signal_raw = p.get("signal")
-                    per_brand_signals: list[tuple[str, str]] = []
-                    if isinstance(signal_raw, list):
-                        for item in signal_raw:
-                            if (
-                                isinstance(item, tuple)
-                                and len(item) == 2
-                                and isinstance(item[0], str)
-                                and isinstance(item[1], str)
-                            ):
-                                per_brand_signals.append((item[0], item[1]))
-                            elif (
-                                isinstance(item, dict)
-                                and "brand_id" in item
-                                and "signal" in item
-                            ):
-                                per_brand_signals.append(
-                                    (item["brand_id"], item["signal"])
-                                )
-                    elif isinstance(signal_raw, str) and signal_raw:
-                        # Legacy single-signal path: emit one row per brand
-                        # in the attribution list.
-                        for b in valid_brands:
-                            per_brand_signals.append((b, signal_raw))
+                    # Per-brand signals: v1.8 callers pass signals as a
+                    # dict[brand_id, signal]. Legacy callers pass a
+                    # single `signal` string OR a list of
+                    # (brand_id, signal) tuples.
+                    per_brand_signals: list[tuple[str, str]] = (
+                        self._extract_per_brand_signals(p, valid_brands)
+                    )
                     for b, sig in per_brand_signals:
                         if b == "_unattributed":
-                            # CHECK constraint on post_brand_signals excludes
-                            # the sentinel (Decision 15). Skip silently.
+                            # CHECK constraint on post_brand_signals
+                            # excludes the sentinel (Decision 15). Skip.
                             continue
+                        # R11: ON CONFLICT DO UPDATE.
                         conn.execute(
                             """
-                            INSERT OR IGNORE INTO post_brand_signals(
+                            INSERT INTO post_brand_signals(
                                 post_id, brand_id, signal
                             ) VALUES (?, ?, ?)
+                            ON CONFLICT(post_id, brand_id) DO UPDATE SET
+                                signal = excluded.signal
                             """,
                             (tweet_id_str, b, sig),
                         )
+                    # Mentions (R10). v1.8 callers pass `mentions` as a
+                    # list of MentionRow-like dicts/dataclasses. Legacy
+                    # callers don't pass mentions at all (no rows
+                    # written). The `brand_id` may be NULL (un-attributed
+                    # user mentions preserved with raw_token).
+                    mentions = p.get("mentions") or []
+                    for m in mentions:
+                        if isinstance(m, dict):
+                            m_brand = m.get("brand_id")
+                            m_source = m.get("source")
+                            m_token = m.get("raw_token")
+                            m_at = m.get("mentioned_at") or p.get(
+                                "created_at"
+                            ) or _now_iso()
+                        else:
+                            # Dataclass / NamedTuple (MentionRow from
+                            # attribution.py). Field order is the
+                            # canonical v1.8 shape: post_id, brand_id,
+                            # source, raw_token, mentioned_at.
+                            m_brand = getattr(m, "brand_id", None)
+                            m_source = getattr(m, "source", None)
+                            m_token = getattr(m, "raw_token", None)
+                            m_at = getattr(m, "mentioned_at", None) or (
+                                p.get("created_at") or _now_iso()
+                            )
+                        if not m_source or not m_token:
+                            continue
+                        conn.execute(
+                            """
+                            INSERT INTO post_mentions(
+                                post_id, brand_id, source, raw_token, mentioned_at
+                            ) VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
+                                raw_token = excluded.raw_token
+                            """,
+                            (
+                                tweet_id_str,
+                                m_brand,
+                                m_source,
+                                m_token,
+                                m_at,
+                            ),
+                        )
         return n_new
+
+    def _extract_brand_ids(self, p: dict[str, Any]) -> list[str]:
+        """Normalize the post dict's brand-id field(s) to a list[str].
+
+        v1.8 callers pass `brand_ids: list[str]`. Legacy callers pass
+        `brand_id: str | list[str]`. Empty / missing / unknown values
+        collapse to `[]`; the caller decides whether to surface the
+        `_unattributed` sentinel.
+        """
+        if "brand_ids" in p and p["brand_ids"] is not None:
+            val = p["brand_ids"]
+            if isinstance(val, list):
+                return [b for b in val if b]
+            return [val] if val else []
+        if "brand_id" in p and p["brand_id"] is not None:
+            val = p["brand_id"]
+            if isinstance(val, list):
+                return [b for b in val if b]
+            return [val] if val else []
+        return []
+
+    def _extract_per_brand_signals(
+        self, p: dict[str, Any], valid_brands: list[str]
+    ) -> list[tuple[str, str]]:
+        """Normalize the post dict's signal field(s) to list[(brand_id, signal)].
+
+        v1.8 callers pass `signals: dict[brand_id, signal]`. Legacy
+        callers pass `signal: str | list[(brand_id, signal)] | list[dict]`.
+        The legacy single-string path emits one signal per brand in
+        `valid_brands`.
+        """
+        if "signals" in p and isinstance(p["signals"], dict) and p["signals"]:
+            return [(b, s) for b, s in p["signals"].items() if b and s]
+        signal_raw = p.get("signal")
+        per_brand: list[tuple[str, str]] = []
+        if isinstance(signal_raw, list):
+            for item in signal_raw:
+                if (
+                    isinstance(item, tuple)
+                    and len(item) == 2
+                    and isinstance(item[0], str)
+                    and isinstance(item[1], str)
+                ):
+                    per_brand.append((item[0], item[1]))
+                elif (
+                    isinstance(item, dict)
+                    and "brand_id" in item
+                    and "signal" in item
+                ):
+                    per_brand.append((item["brand_id"], item["signal"]))
+        elif isinstance(signal_raw, str) and signal_raw:
+            # Legacy single-signal path: emit one row per brand.
+            for b in valid_brands:
+                per_brand.append((b, signal_raw))
+        return per_brand
 
     # --- v1.7: per-locale translation helpers -----------------------------
 
@@ -627,3 +769,166 @@ class Store:
             )
         except sqlite3.IntegrityError:
             pass
+
+    # --- v1.8: per-row write methods (R9, R10, R11) -----------------------
+
+    def insert_post_brands(self, post_id: str, brand_id: str, weight: float) -> None:
+        """Upsert one row into post_brands (R9).
+
+        ON CONFLICT(brand_id, post_id) DO UPDATE SET weight = excluded.weight
+        per Decision 14 — reattribution MUST overwrite stale weights when
+        the detection registry evolves.
+
+        Top-gun ON CONFLICT gotcha: the `weight` column MUST be in the
+        INSERT column list (the SET clause can only update columns the
+        INSERT actually wrote).
+        """
+        self._conn.execute(
+            """
+            INSERT INTO post_brands(brand_id, post_id, weight)
+            VALUES (?, ?, ?)
+            ON CONFLICT(brand_id, post_id) DO UPDATE SET
+                weight = excluded.weight
+            """,
+            (brand_id, post_id, float(weight)),
+        )
+
+    def insert_post_mentions(
+        self,
+        post_id: str,
+        brand_id: str | None,
+        source: str,
+        raw_token: str,
+        mentioned_at: str,
+    ) -> None:
+        """Upsert one row into post_mentions (R10).
+
+        ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
+        raw_token = excluded.raw_token.
+
+        `brand_id` may be NULL (un-attributed user mentions preserved
+        with raw_token for later backfill). The PK allows NULLs in
+        non-INTEGER-PRIMARY-KEY columns.
+
+        Top-gun ON CONFLICT gotcha: the `raw_token` column MUST be in
+        the INSERT column list.
+        """
+        self._conn.execute(
+            """
+            INSERT INTO post_mentions(
+                post_id, brand_id, source, raw_token, mentioned_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
+                raw_token = excluded.raw_token
+            """,
+            (post_id, brand_id, source, raw_token, mentioned_at),
+        )
+
+    def insert_post_brand_signals(
+        self, post_id: str, brand_id: str, signal: str
+    ) -> None:
+        """Upsert one row into post_brand_signals (R11).
+
+        ON CONFLICT(post_id, brand_id) DO UPDATE SET signal = excluded.signal.
+
+        `_unattributed` is BLOCKED by the schema's CHECK constraint
+        (Decision 15). Passes a non-sentinel brand_id.
+
+        Top-gun ON CONFLICT gotcha: the `signal` column MUST be in the
+        INSERT column list.
+        """
+        self._conn.execute(
+            """
+            INSERT INTO post_brand_signals(post_id, brand_id, signal)
+            VALUES (?, ?, ?)
+            ON CONFLICT(post_id, brand_id) DO UPDATE SET
+                signal = excluded.signal
+            """,
+            (post_id, brand_id, signal),
+        )
+
+    # --- v1.8: detection-registry read methods (R12, R13) -----------------
+
+    def read_brands(self) -> list[BrandRow]:
+        """Return all rows from the `brands` table (R12).
+
+        Includes the `_unattributed` sentinel (is_sentinel=True). Result
+        is cached in `self._brand_cache` for the lifetime of the Store
+        instance so callers (attribution.py, dashboard.py) don't
+        re-query on every ingest cycle.
+        """
+        if self._brand_cache is not None:
+            return self._brand_cache
+        rows = self._conn.execute(
+            """
+            SELECT brand_id, display_name, accent_color, is_sentinel
+            FROM brands
+            ORDER BY display_name
+            """
+        ).fetchall()
+        result = [
+            BrandRow(
+                brand_id=r["brand_id"],
+                display_name=r["display_name"],
+                accent_color=r["accent_color"],
+                is_sentinel=bool(r["is_sentinel"]),
+            )
+            for r in rows
+        ]
+        self._brand_cache = result
+        return result
+
+    def read_brand_accounts(self) -> dict[str, str]:
+        """Return {author_id: brand_id} for all brand-account edges (R13).
+
+        Consumed by `attribution.extract_user_mentions` to resolve
+        `entities.user_mentions[].id` (numeric X user id) to a
+        `brand_id`.
+        """
+        rows = self._conn.execute(
+            "SELECT author_id, brand_id FROM brand_accounts"
+        ).fetchall()
+        return {r["author_id"]: r["brand_id"] for r in rows}
+
+    def read_brand_hashtags(self) -> dict[str, str]:
+        """Return {tag: brand_id} for all brand_hashtags rows (R13).
+
+        Keys are stored lowercase (per migration 004). The attribution
+        extractor also lowercases the entity tag before lookup.
+        """
+        rows = self._conn.execute(
+            "SELECT tag, brand_id FROM brand_hashtags"
+        ).fetchall()
+        return {r["tag"]: r["brand_id"] for r in rows}
+
+    def read_brand_keywords(self) -> list[tuple[str, str, bool]]:
+        """Return [(brand_id, pattern, is_regex)] for all brand_keywords (R13).
+
+        Consumed by `attribution.extract_body_keywords` to build a
+        compiled-regex index. `is_regex` is a SQLite INTEGER (0/1);
+        converted to bool here.
+        """
+        rows = self._conn.execute(
+            "SELECT brand_id, pattern, is_regex FROM brand_keywords"
+        ).fetchall()
+        return [
+            (r["brand_id"], r["pattern"], bool(r["is_regex"])) for r in rows
+        ]
+
+    def read_brand_search_terms(self) -> dict[str, str]:
+        """Return {term: brand_id} for all brand_search_terms (R13).
+
+        Consumed by `attribution.extract_search_term_match` to resolve
+        each search-query keyword to a brand_id.
+        """
+        rows = self._conn.execute(
+            "SELECT term, brand_id FROM brand_search_terms"
+        ).fetchall()
+        return {r["term"]: r["brand_id"] for r in rows}
+
+__all__ = [
+    # Dataclasses
+    "BrandRow",
+    # Core
+    "Store",
+]

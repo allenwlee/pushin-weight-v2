@@ -678,6 +678,61 @@ def _dispatch_relevance(args, action: str, paths) -> int:
     return 2
 
 
+
+def cmd_reattribute(args, paths) -> int:
+    """Re-run v1.8 attribution on every post in the DB (Unit 5, R19).
+
+    Walks all rows in  (filtered by --model if supplied) and
+    re-runs the v1.8 multi-brand attribution pipeline on each. Writes
+    to , , and  via
+    Store methods that upsert (ON CONFLICT DO UPDATE). The CLI target
+    is the 2,008 historical posts that have empty attribution rows
+    after migration 004 dropped .
+
+    Flags:
+      --batch-size N   posts per progress-log chunk (default 100)
+      --dry-run        do not write; print what would have been written
+      --limit N        cap on posts processed (default: all)
+      --model BRAND    only reattribute posts attributed to BRAND
+                       (joins post_brands)
+      --with-llm       enable per-brand signal classification via
+                       Claude Haiku (requires ANTHROPIC_API_KEY in env)
+
+    Returns 0 on success; 2 on config/env errors.
+    """
+    from x_monitor.reattribute import (
+        reattribute_all_posts,
+        build_anthropic_client_from_env,
+    )
+
+    db_path = paths["db"]
+    if not db_path.exists():
+        print(f"reattribute: db not found at {db_path}", file=sys.stderr)
+        return 2
+
+    anthropic_client = None
+    if getattr(args, "with_llm", False):
+        anthropic_client = build_anthropic_client_from_env()
+        if anthropic_client is None:
+            print(
+                "reattribute: --with-llm requested but ANTHROPIC_API_KEY "
+                "is not set or the anthropic SDK is missing; "
+                "running without signal classification",
+                file=sys.stderr,
+            )
+
+    counts = reattribute_all_posts(
+        db_path=db_path,
+        batch_size=args.batch_size,
+        dry_run=args.dry_run,
+        limit=args.limit,
+        brand_filter=args.model,
+        anthropic_client=anthropic_client,
+    )
+    print(json.dumps(counts, indent=2, ensure_ascii=False))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="x-monitor", description="x-monitor CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -771,6 +826,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Stamp verified_at on data/filters/<model>.yaml after audit-handles",
     )
     p_rel.set_defaults(func=cmd_relevance)
+
+    p_reatt = sub.add_parser(
+        "reattribute",
+        help="Re-run v1.8 attribution on every post in the DB (Unit 5)",
+    )
+    p_reatt.add_argument(
+        "--batch-size", type=int, default=100,
+        help="Posts per progress-log chunk (default: 100)",
+    )
+    p_reatt.add_argument(
+        "--dry-run", action="store_true",
+        help="Do not write; print what would have been written",
+    )
+    p_reatt.add_argument(
+        "--limit", type=int, default=None,
+        help="Cap on posts processed (default: all)",
+    )
+    p_reatt.add_argument(
+        "--model", dest="model", default=None,
+        help="Only reattribute posts attributed to this brand_id "
+             "(joins post_brands)",
+    )
+    p_reatt.add_argument(
+        "--with-llm", action="store_true",
+        help="Enable per-brand signal classification via Claude Haiku "
+             "(requires ANTHROPIC_API_KEY in env)",
+    )
+    p_reatt.set_defaults(func=cmd_reattribute)
 
     return p
 
