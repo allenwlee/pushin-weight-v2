@@ -1,0 +1,9 @@
+{# {{AGENT_ATTRIBUTION}} #}
+{# htmx partial: just the chart wrapper, no topbar. The wrapping
+   <main id="combined-chart"> on the initial page persists so the
+   hx-trigger attribute stays attached and polling continues. #}
+<div class="combined-chart-wrap"
+     data-combined='{{ payload|tojson }}'>
+  <canvas class="combined-chart"
+          aria-label="Daily total posts per brand, last {{ combined_window_days }} days"></canvas>
+</div>
