@@ -961,12 +961,19 @@ class DashboardApp:
                 min_commenters=self.config.clustering.min_commenters,
                 min_posts=self.config.clustering.min_posts,
             )
-            # Build graph nodes from accounts; if empty (first run), fall back
-            # to unique authors in posts.
-            nodes = list(accounts)
+            # Build graph nodes from accounts. store.get_accounts returns
+            # dicts (the v1.8 schema uses author_id PK, not (model_id, handle));
+            # build_force_directed expects Account objects with .handle, so
+            # convert dicts to Account. If accounts is empty, fall back to
+            # unique authors in posts.
+            from .accounts import Account as _Acc
+            nodes: list[_Acc] = []
+            for a in accounts:
+                h = a.get("handle") or a.get("author_handle")
+                if not h:
+                    continue
+                nodes.append(_Acc(handle=h, display_name=a.get("display_name") or "", role=a.get("role") or "unknown", verified=bool(a.get("verified"))))
             if not nodes:
-                from .accounts import Account as _Acc
-
                 seen: set[str] = set()
                 for p in posts:
                     h = p.get("author_handle")
