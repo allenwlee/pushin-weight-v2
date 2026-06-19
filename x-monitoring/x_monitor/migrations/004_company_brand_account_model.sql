@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS search_queries (
 --    filter it out (Decision 15, P0 review fix).
 -- ===========================================================================
 
-INSERT INTO brands (brand_id, display_name, accent_color, is_sentinel, created_at) VALUES
+INSERT OR IGNORE INTO brands (brand_id, display_name, accent_color, is_sentinel, created_at) VALUES
     ('minimax',         'MiniMax AI',       '#3b82f6', 0, '2026-06-19T00:00:00+00:00'),
     ('qwen',            'Qwen',             '#f97316', 0, '2026-06-19T00:00:00+00:00'),
     ('deepseek',        'DeepSeek',         '#10b981', 0, '2026-06-19T00:00:00+00:00'),
@@ -197,7 +197,7 @@ INSERT INTO brands (brand_id, display_name, accent_color, is_sentinel, created_a
 -- 5. Seed companies (6-8 known parents + 4-5 standalones) and brand_companies
 -- ===========================================================================
 
-INSERT INTO companies (company_id, display_name, hq_country, created_at) VALUES
+INSERT OR IGNORE INTO companies (company_id, display_name, hq_country, created_at) VALUES
     ('alibaba',     'Alibaba',           'CN', '2026-06-19T00:00:00+00:00'),
     ('baidu',       'Baidu',             'CN', '2026-06-19T00:00:00+00:00'),
     ('tencent',     'Tencent',           'CN', '2026-06-19T00:00:00+00:00'),
@@ -209,7 +209,7 @@ INSERT INTO companies (company_id, display_name, hq_country, created_at) VALUES
     ('inclusion_ai','Inclusion AI',      'CN', '2026-06-19T00:00:00+00:00'),
     ('deepseek_co', 'DeepSeek',          'CN', '2026-06-19T00:00:00+00:00');
 
-INSERT INTO brand_companies (brand_id, company_id, ownership_pct) VALUES
+INSERT OR IGNORE INTO brand_companies (brand_id, company_id, ownership_pct) VALUES
     ('qwen',          'alibaba',       1.0),
     ('ernie',         'baidu',         1.0),
     ('hunyuan',       'tencent',       1.0),
