@@ -714,12 +714,16 @@ def _resolve_signal_model() -> str:
 
     Minimax proxy (ANTHROPIC_BASE_URL points at api.minimax.io/anthropic):
     the proxy only routes the operator's registered model id
-    (ANTHROPIC_MODEL env, typically "MiniMax-M2.7"). Passing
-    "claude-haiku-4-5" through the proxy returns 401/404.
+    (ANTHROPIC_MODEL env). Default to "MiniMax-M3.0" — it does NOT emit
+    a thinking block for structured JSON (6 output tokens per request).
+    "MiniMax-M2.7" still works but emits ~150 tokens of thinking per
+    call (5.5x slower) — the operator's ~/.env.secrets previously had
+    ANTHROPIC_MODEL=MiniMax-M2.7 set, which silently triggered that
+    slower path.
 
     Resolution order:
       1. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
-      2. "MiniMax-M2.7" if ANTHROPIC_BASE_URL routes through api.minimax.io
+      2. "MiniMax-M3.0" if ANTHROPIC_BASE_URL routes through api.minimax.io
       3. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
@@ -728,7 +732,7 @@ def _resolve_signal_model() -> str:
         return explicit
     base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
     if "minimax.io" in base_url:
-        return "MiniMax-M2.7"
+        return "MiniMax-M3.0"
     return "claude-haiku-4-5"
 
 
