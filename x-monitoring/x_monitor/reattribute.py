@@ -358,22 +358,45 @@ __all__ = [
 
 
 def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
-    """Return an `AnthropicClaudeClient` if `ANTHROPIC_API_KEY` is set.
+    """Return an `AnthropicClaudeClient` honoring the operator's proxy config.
 
-    Used by the CLI subcommand. Returns None when the env var is
-    absent so the reattribute falls back to non-LLM mode. The
+    Resolution:
+      * If ANTHROPIC_BASE_URL contains "minimax.io", the operator is
+        routing through the minimax proxy. The proxy accepts only
+        MINIMAX_API_TOKEN (the `sk-cp-uh…` token from `~/.env.secrets`)
+        and the operator-registered model id (ANTHROPIC_MODEL, typically
+        "MiniMax-M2.7"). ANTHROPIC_API_KEY is silently rejected (401).
+      * Otherwise, talk to api.anthropic.com directly using
+        ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
+
+    Used by the CLI subcommand. Returns None when no auth credential is
+    available so the reattribute falls back to non-LLM mode. The
     Anthropic SDK import is deferred to the call site to keep
     `x_monitor.reattribute` importable in environments without the
     SDK (e.g. the test env, which has no anthropic installed).
     """
     import os
-    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get(
-        "ANTHROPIC_KEY"
-    )
-    if not api_key:
-        return None
+    base_url = os.environ.get("ANTHROPIC_BASE_URL")
+    use_minimax_proxy = bool(base_url) and "minimax.io" in base_url
+
+    if use_minimax_proxy:
+        api_key = os.environ.get("MINIMAX_API_TOKEN")
+        if not api_key:
+            logger.warning(
+                "reattribute: ANTHROPIC_BASE_URL routes through the minimax "
+                "proxy but MINIMAX_API_TOKEN is not set; running without "
+                "signal classification"
+            )
+            return None
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get(
+            "ANTHROPIC_KEY"
+        )
+        if not api_key:
+            return None
+
     try:
-        return AnthropicClaudeClient(api_key=api_key)
+        return AnthropicClaudeClient(api_key=api_key, base_url=base_url)
     except ImportError:
         logger.warning(
             "reattribute: anthropic SDK not installed; "

@@ -706,7 +706,33 @@ class ClaudeClient(Protocol):
     def messages_create(self, **kwargs: Any) -> dict[str, Any]: ...
 
 
-_SIGNAL_MODEL = "claude-haiku-4-5"
+def _resolve_signal_model() -> str:
+    """Return the model id for signal classification.
+
+    Direct Anthropic API: "claude-haiku-4-5" (cheapest Claude, fits the
+    structured-JSON signal task).
+
+    Minimax proxy (ANTHROPIC_BASE_URL points at api.minimax.io/anthropic):
+    the proxy only routes the operator's registered model id
+    (ANTHROPIC_MODEL env, typically "MiniMax-M2.7"). Passing
+    "claude-haiku-4-5" through the proxy returns 401/404.
+
+    Resolution order:
+      1. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
+      2. "MiniMax-M2.7" if ANTHROPIC_BASE_URL routes through api.minimax.io
+      3. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
+    """
+    import os
+    explicit = os.environ.get("ANTHROPIC_MODEL")
+    if explicit:
+        return explicit
+    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+    if "minimax.io" in base_url:
+        return "MiniMax-M2.7"
+    return "claude-haiku-4-5"
+
+
+_SIGNAL_MODEL = _resolve_signal_model()
 _MAX_RETRIES = 3
 _BACKOFF_BASE_SECONDS = 1.0
 
