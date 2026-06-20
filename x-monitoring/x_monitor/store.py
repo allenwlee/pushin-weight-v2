@@ -290,6 +290,16 @@ class Store:
                             # CHECK constraint on post_brand_signals
                             # excludes the sentinel (Decision 15). Skip.
                             continue
+                        # Guard against LLM hallucinations: per_brand_signals
+                        # comes from the LLM and may contain a brand_id not
+                        # in the brands table. Without this check, the
+                        # post_brand_signals.brand_id FK raises IntegrityError
+                        # and the whole insert_posts transaction aborts,
+                        # leaving the post in an inconsistent state.
+                        # Regression: cron hot path crashed at this site on
+                        # 2026-06-20 (cycle 20260620T081403_0000-).
+                        if b not in valid_brands:
+                            continue
                         # R11: ON CONFLICT DO UPDATE.
                         conn.execute(
                             """

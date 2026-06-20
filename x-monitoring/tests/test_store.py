@@ -262,6 +262,67 @@ def test_insert_posts_writes_post_brand_signals():
             store.close()
 
 
+def test_insert_posts_drops_hallucinated_brand_signals():
+    """insert_posts must not crash when signals include a brand_id
+    not in KNOWN_MODELS (LLM hallucination). The known brand's signal
+    lands; the unknown brand's signal is silently dropped (logged).
+
+    Regression: v1.8 hot path crashed with sqlite3.IntegrityError FK
+    failure on post_brand_signals when the LLM returned a brand_id
+    that wasn't in the brands table. The fix intersects
+    `per_brand_signals` against `valid_brands` before INSERT.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            store.insert_posts([
+                {
+                    "id": "p1",
+                    "tweet_id": "p1",
+                    "brand_id": ["qwen", "deepseek"],
+                    "author_handle": "u1",
+                    "author_id": "u1",
+                    "text": "Qwen vs DeepSeek, also mentioned fake_brand",
+                    "lang": "en",
+                    "created_at": "2026-06-07T00:00:00+00:00",
+                    "entities": {"user_mentions": []},
+                    # `fake_brand` is not in KNOWN_MODELS. The LLM
+                    # might still return it as a signal — the post
+                    # itself is attributed to {qwen, deepseek} but the
+                    # signal map can include extras.
+                    "signals": {
+                        "qwen": "praise",
+                        "deepseek": "criticism",
+                        "fake_brand": "release",
+                    },
+                }
+            ])
+            # Post should still be inserted.
+            n_posts = store._conn.execute(
+                "SELECT COUNT(*) FROM posts WHERE tweet_id = 'p1'"
+            ).fetchone()[0]
+            assert n_posts == 1
+            # post_brand_signals must contain exactly the 2 known
+            # brands — the hallucinated `fake_brand` is dropped.
+            rows = store._conn.execute(
+                "SELECT brand_id, signal FROM post_brand_signals "
+                "WHERE post_id = 'p1' ORDER BY brand_id"
+            ).fetchall()
+            assert len(rows) == 2
+            assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
+            assert rows[0]["signal"] == "criticism"
+            assert rows[1]["signal"] == "praise"
+            # post_brands should also only have the known brands
+            # (already filtered by valid_brands — this confirms no
+            # regression in the post_brands path).
+            n_brands = store._conn.execute(
+                "SELECT COUNT(*) FROM post_brands WHERE post_id = 'p1'"
+            ).fetchone()[0]
+            assert n_brands == 2
+        finally:
+            store.close()
+
+
 def test_insert_post_brands_upsert_on_conflict():
     """insert_post_brands on conflict overwrites weight (Decision 14)."""
     with tempfile.TemporaryDirectory() as d:
