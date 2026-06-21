@@ -617,3 +617,35 @@ class TestAttributeToBrands:
         )
         # No brand detected -> empty per-brand confidence map.
         assert self._per_brand_confidence(mentions) == {}
+
+
+def test_resolve_signal_model_resolution_ladder(monkeypatch):
+    """_resolve_signal_model env-var resolution order (P1 #2 regression
+    guard for the M2.7 -> M3.0 default).
+
+      1. ANTHROPIC_MODEL env wins always.
+      2. else, MiniMax-M3.0 if ANTHROPIC_BASE_URL routes through minimax.io.
+      3. else, claude-haiku-4-5 (direct api.anthropic.com).
+    """
+    from x_monitor.attribution import _resolve_signal_model
+
+    # (env unset, no proxy) -> claude-haiku-4-5
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    assert _resolve_signal_model() == "claude-haiku-4-5"
+
+    # (env unset, minimax proxy) -> MiniMax-M3.0 (the fix's default)
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    assert _resolve_signal_model() == "MiniMax-M3.0"
+
+    # (env=M2.7, proxy) -> M2.7 (env wins; operator can still opt into the
+    # slower thinking-block model if they want)
+    monkeypatch.setenv("ANTHROPIC_MODEL", "MiniMax-M2.7")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    assert _resolve_signal_model() == "MiniMax-M2.7"
+
+    # (env=haiku, no proxy) -> haiku
+    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    assert _resolve_signal_model() == "claude-haiku-4-5"

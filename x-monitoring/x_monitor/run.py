@@ -426,6 +426,8 @@ class RunPipeline:
                 "n_queries_run": 0,
                 "n_results": 0,
                 "n_inserted": 0,
+                "n_signals_written": 0,
+                "n_signals_dropped": 0,
                 "n_headlines_fetched": 0,
                 "n_headlines_cached": 0,
             },
@@ -655,6 +657,8 @@ class RunPipeline:
                         encoding="utf-8",
                     )
                     n_inserted = store.insert_posts(kept_all)
+                    summary["totals"]["n_signals_written"] += store._signals_written
+                    summary["totals"]["n_signals_dropped"] += store._signals_dropped
 
                     log.info(
                         "call model=%s kind=%s bucket=%s n_results=%d "

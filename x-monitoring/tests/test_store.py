@@ -323,6 +323,125 @@ def test_insert_posts_drops_hallucinated_brand_signals():
             store.close()
 
 
+def test_insert_posts_keeps_cross_mention_signal():
+    """Cross-mention: a signal for a brand in the brands table but NOT
+    in the post's own brand_ids must be KEPT (P1 #3 regression guard).
+
+    Before the known_ids fix, the guard used valid_brands (the post's
+    own brand_ids) and dropped cross-mention signals. Now it uses the
+    brands-table source of truth, so a post attributed to {qwen} that
+    also carries a deepseek signal keeps both.
+
+    Note: deepseek must be in the brands table (migration 004 seeds it).
+    We add the post to post_brands only for qwen, but the signal map
+    includes deepseek — the signal should still land.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            store.insert_posts([
+                {
+                    "id": "p1",
+                    "tweet_id": "p1",
+                    "brand_id": ["qwen"],  # post attributed to qwen only
+                    "author_handle": "u1",
+                    "author_id": "u1",
+                    "text": "Qwen is great, also DeepSeek is interesting",
+                    "lang": "en",
+                    "created_at": "2026-06-07T00:00:00+00:00",
+                    "entities": {"user_mentions": []},
+                    # cross-mention: deepseek is NOT in brand_ids but IS
+                    # a real brand. The known_ids guard keeps it.
+                    "signals": {
+                        "qwen": "praise",
+                        "deepseek": "criticism",
+                    },
+                }
+            ])
+            rows = store._conn.execute(
+                "SELECT brand_id, signal FROM post_brand_signals "
+                "WHERE post_id = 'p1' ORDER BY brand_id"
+            ).fetchall()
+            # Both signals land — deepseek is a real brand even though
+            # the post is only attributed to qwen.
+            assert len(rows) == 2
+            assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
+        finally:
+            store.close()
+
+
+def test_insert_posts_all_hallucinated_signals():
+    """When every signal brand_id is unknown, none land but the post
+    still inserts (P2 #6 edge case)."""
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            store.insert_posts([
+                {
+                    "id": "p1",
+                    "tweet_id": "p1",
+                    "brand_id": ["qwen"],
+                    "author_handle": "u1",
+                    "author_id": "u1",
+                    "text": "qwen text",
+                    "lang": "en",
+                    "created_at": "2026-06-07T00:00:00+00:00",
+                    "entities": {"user_mentions": []},
+                    "signals": {
+                        "fake1": "praise",
+                        "fake2": "criticism",
+                    },
+                }
+            ])
+            n_posts = store._conn.execute(
+                "SELECT COUNT(*) FROM posts WHERE tweet_id='p1'"
+            ).fetchone()[0]
+            assert n_posts == 1
+            n_sigs = store._conn.execute(
+                "SELECT COUNT(*) FROM post_brand_signals WHERE post_id='p1'"
+            ).fetchone()[0]
+            assert n_sigs == 0
+        finally:
+            store.close()
+
+
+def test_insert_posts_legacy_signal_string_broadcast():
+    """Legacy `signal` (str) path broadcasts one signal per brand in
+    valid_brands (P2 #6 — covers the _extract_per_brand_signals legacy
+    branch, store.py ~408)."""
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            store.insert_posts([
+                {
+                    "id": "p1",
+                    "tweet_id": "p1",
+                    "brand_id": ["qwen", "deepseek"],
+                    "author_handle": "u1",
+                    "author_id": "u1",
+                    "text": "Qwen vs DeepSeek",
+                    "lang": "en",
+                    "created_at": "2026-06-07T00:00:00+00:00",
+                    "entities": {"user_mentions": []},
+                    "signal": "praise",  # legacy single-string form
+                }
+            ])
+            rows = store._conn.execute(
+                "SELECT brand_id FROM post_brand_signals "
+                "WHERE post_id='p1' ORDER BY brand_id"
+            ).fetchall()
+            assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
+            assert all(
+                store._conn.execute(
+                    "SELECT signal FROM post_brand_signals WHERE post_id='p1' AND brand_id=?",
+                    (r["brand_id"],),
+                ).fetchone()["signal"] == "praise"
+                for r in rows
+            )
+        finally:
+            store.close()
+
+
 def test_insert_post_brands_upsert_on_conflict():
     """insert_post_brands on conflict overwrites weight (Decision 14)."""
     with tempfile.TemporaryDirectory() as d:

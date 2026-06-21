@@ -106,6 +106,10 @@ class Store:
         # invalidated within a Store instance (operators can call
         # store.close() and re-open if they mutate the brands table).
         self._brand_cache: list[BrandRow] | None = None
+        # Per-insert_posts counters, read by the cron caller to surface
+        # in summary.totals. Reset at the start of each insert_posts call.
+        self._signals_written: int = 0
+        self._signals_dropped: int = 0
 
     def close(self) -> None:
         self._conn.close()
@@ -202,6 +206,10 @@ class Store:
         # and v1.8 brands (mistral/stepfun/ernie/hunyuan) are not
         # dropped. See store._known_brand_ids().
         known_ids: set[str] = self._known_brand_ids()
+        # Reset per-call counters so the caller reads only this call's
+        # write/drop totals.
+        self._signals_written = 0
+        self._signals_dropped = 0
         n_new = 0
         with self.transaction() as conn:
             for p in posts:
@@ -309,6 +317,7 @@ class Store:
                         # survive. Regression: cron hot path crashed at this
                         # site on 2026-06-20 (cycle 20260620T081403_0000-).
                         if b not in known_ids:
+                            self._signals_dropped += 1
                             _log.warning(
                                 "insert_posts: dropping signal for "
                                 "brand_id=%r not in brands table "
@@ -327,6 +336,7 @@ class Store:
                             """,
                             (tweet_id_str, b, sig),
                         )
+                        self._signals_written += 1
                     # Mentions (R10). v1.8 callers pass `mentions` as a
                     # list of MentionRow-like dicts/dataclasses. Legacy
                     # callers don't pass mentions at all (no rows
