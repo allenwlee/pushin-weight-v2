@@ -1,0 +1,586 @@
+---
+title: Combined multi-brand chart page with overlay hover area
+type: feat
+status: completed
+date: 2026-06-19
+attribution: "{{AGENT_ATTRIBUTION}}"
+origin: feature description "(1) new feature: 1 card grid - this takes all the posts of all the brands at once onto one chart (like a stock market chart comparing multiple stocks). same style/format as 9 card grid, except we're combining all. original look will just show a line per brand for the total posts day to day (sum of q1-16). However, upon hover over a particular line, will display the same area chart as 9-card grid (with q1-6 separated). this chart should take up half of the top of the page."
+revision:
+  - 2026-06-19 — User confirmed: (a) the combined chart is a brand-new dedicated
+    page (3rd topbar tab) at `/combined`, NOT an insertion into `/grid`.
+    (b) 9-card grid stays untouched — additive change only.
+    (c) Window toggle is stock-chart style: 1 / 7 / 14 / 30 / 60 / 90 / 180 / 360
+    days. (d) On hover, the 6-signal stacked area chart for the hovered brand
+    appears IN PLACE under the total line (overlay, same chart canvas, same
+    day-axis), not as a separate panel or tooltip. (e) Lines for ALL
+    `enabled_models` (current 11), no operator filter.
+---
+
+# Combined multi-brand chart page
+
+## Overview
+
+Add a 3rd topbar tab **"Combined"** that renders a single Chart.js line
+chart with one total-posts-per-day line per enabled brand, sharing the
+same day-axis as the per-card chart. On hover, the hovered brand's
+6-signal stacked area chart fades in overlaid in place (same chart
+canvas, same day-axis). Stock-chart-style window toggle (1d / 7d /
+14d / 30d / 60d / 90d / 180d / 360d). The 9-card grid and treemap
+views are **not changed**.
+
+## Problem Frame
+
+Today the dashboard splits brand context across 11 isolated cards
+(`/grid`) or a polarity treemap (`/`). Operators who want to compare
+brand-to-brand posting volume over time have to mentally stack 11
+stacked-area charts. A combined line chart solves the "which brand is
+accelerating right now" question at a glance. The 6-signal hover overlay
+keeps the per-signal breakdown one hover away, matching the visual
+grammar of the existing 9-card chart so operators don't learn a new
+mental model.
+
+## Requirements Trace
+
+- R1. New `/combined` route + topbar tab renders a full-page chart
+  (no `/grid` content, no treemap content).
+- R2. One visible line per `enabled_models` brand, plotting the day's
+  total post count (sum of Q1-Q6 signals) on the y-axis, ISO date on
+  the x-axis. Each line uses the brand's `MODEL_ACCENT_COLORS[brand]`
+  as stroke color (matches 9-card chart stroke convention).
+- R3. Chart.js v4.4.0 is already loaded on every page; the combined
+  page reuses it. No new CDN dependencies.
+- R4. Window toggle in the topbar shows: 1d / 7d / 14d / 30d / 60d /
+  90d / 180d / 360d. Default 30d. Selection persists across polls via a
+  `combined_window` cookie (mirrors `polarity_window` cookie pattern).
+- R5. On mouseover of any line: render the hovered brand's per-day
+  6-signal stacked area chart OVERLAID IN PLACE under the total line
+  (same canvas, same day-axis). On mouseout: revert to total-only.
+  Only the hovered brand's area is shown; the other 10 lines remain
+  visible so the operator retains comparison context.
+- R6. The 9-card grid and treemap views are unchanged. Both routes
+  still respond, both topbar tabs still work.
+- R7. htmx polling on the chart canvas (same `poll_seconds` from
+  `config.dashboard.poll_seconds`). The chart canvas persists across
+  polls (`hx-swap="innerHTML"` on a wrapping `<main>`, same pattern
+  as `/` and `/grid`).
+- R8. `serialize_combined_chart(...)` returns
+  `{days: [...ISO dates...], series: {brand: [int×N]}, stacked: {brand: {signal: [int×N]}}}`.
+  Same `_qid_to_signal` and `chart_series_keys` ordering as
+  `serialize_grid_card`. Same `MODEL_DISPLAY_NAMES` / `MODEL_ACCENT_COLORS`
+  lookups. Same `_parse_post_timestamp` and `latest_run["finished_at"]`
+  anchor pattern.
+- R9. htmx poll must destroy + re-init Chart.js instance on swap
+  (mirrors `trend-chart.js` defensive destroy pattern).
+
+## Scope Boundaries
+
+- **NOT changing**: `_build_cards` (9-card data assembly),
+  `_build_treemap_tiles`, treemap polarity math, locale translation
+  flow, `Store` API, `config.py` schema (window toggle is a new
+  cookie-backed field, not a new config knob).
+- **NOT adding**: a new topbar `view-tabs` dropdown, brand filter UI,
+  per-line click-to-pin behavior, panel/tooltip hover. The hover is
+  an in-place overlay only.
+- **NOT refactoring**: `serialize_grid_card` — it shares no code with
+  the new `serialize_combined_chart`. We may extract a helper for the
+  per-day bucketing IF it would simplify both call sites (deferred to
+  implementation); otherwise the new function stands alone.
+
+## Context & Research
+
+### Relevant Code and Patterns
+
+- `x_monitor/dashboard.py::serialize_grid_card` (lines ~318-455):
+  the per-model 14-day bucketing loop (`day_signal_counts`,
+  `chart_days`, `chart_series`) is the data shape to clone for the
+  combined chart. The combined chart extends it from 1 brand to N
+  brands and from a fixed 14d window to 1-360d.
+- `x_monitor/dashboard.py::_build_cards` (line ~500): the route-
+  level "fetch posts per brand + locale + latest_run" sequence.
+  Combined chart route follows the same pattern.
+- `x_monitor/dashboard.py::DashboardApp._register_routes`: the
+  existing 4 routes + 4 htmx partials pattern. New route + new
+  htmx partial + new JSON endpoint. Topbar tab strip lives in
+  `templates/grid.html.j2` and `templates/treemap.html.j2`; both
+  need a 3rd `<a class="view-tab">` entry.
+- `x_monitor/static/trend-chart.js`: defensive destroy-before-create
+  pattern (`var prior = Chart.getChart(canvas); if (prior) prior.destroy()`)
+  MUST be copied into the new combined-chart module verbatim.
+- `x_monitor/templates/_model_card.html.j2`: the canvas + data-chart
+  JSON attribute + aria-label pattern.
+- `x_monitor/dashboard.py::_resolve_polarity_window` and
+  `_clamp_polarity_window`: cookie-read + clamp helpers. Reused
+  in spirit for the new `combined_window` cookie (but the values
+  and ceiling differ).
+
+### Institutional Learnings
+
+- `docs/plans/2026-06-17-002-feat-finviz-treemap-front-page-plan.md`:
+  precedent for adding a 3rd visual layer while preserving existing
+  routes. The treemap was added as a new front page with no effect on
+  the 9-card grid at `/grid`. Same additive discipline applies here.
+- `docs/solutions/` (none applicable — no prior learning on Chart.js
+  multi-dataset overlay behavior).
+- v1.6 already established the "all-cards-destroyed-and-rebuilt on
+  htmx poll" pattern (`trend-chart.js::renderOne`). The combined chart
+  must do the same or risk Chart.js v4 memory leak across polls.
+
+### External References
+
+- Chart.js v4 docs (already pinned in CDN `<script>` tag):
+  - Mixed chart types (line + bar/area) — handled by multiple datasets
+    on the same `<canvas>` with `type: 'line'` for the totals and
+    `type: 'line'` with `fill: true` for the stacked signals.
+  - `interaction.mode = 'index'` lets one tooltip cover all datasets
+    on the hovered x-index.
+  - `onHover(event, activeElements, chart)` is the hook for the
+    overlay reveal — we capture `activeElements[0].datasetIndex` and
+    cross-reference our brand→stacked-datasets map.
+
+## Key Technical Decisions
+
+- **D1: Same data window default = 30 days** (matches the treemap's
+  default `treemap_volume_window_days=30`). The 1-360 toggle gives
+  operators finer control without forcing them into the treemap's
+  1d/7d/30d polarity window.
+- **D2: Combined chart data assembly is a NEW function**
+  `serialize_combined_chart(brands, posts_by_brand, *, window_days,
+  latest_run, now)`. We do NOT extend `serialize_grid_card` with a
+  `combined=True` flag — the shape is different (N brands, not 1) and
+  coupling would make both harder to read. The new function calls the
+  same private helpers (`_qid_to_signal`, `_parse_post_timestamp`).
+- **D3: Hover overlay uses Chart.js dataset toggling**, NOT a second
+  canvas or a separate panel. On mouseover a brand line, we set the
+  6-signal datasets' `hidden = false` and their `pointRadius = 0`;
+  on mouseout we set them back to `hidden = true`. The total line
+  remains drawn the whole time (z-order: totals above signals so the
+  silhouette stays legible). All 6 signal datasets are pre-created
+  with `hidden: true` so the render is instant on hover.
+- **D4: Window cookie name = `combined_window`**, separate from
+  `polarity_window`. Clamping: the combined chart window is bound
+  only by the `LATEST.json` `finished_at` anchor — there is no
+  prior-window comparison here, so the ceiling is the date of the
+  LATEST run minus window_days. With a 14d default dashboard
+  `window_days`, picking 360d from the toggle may render empty days
+  early in the series; we still honor the choice (no clamp) so the
+  user sees their own data sparsity. If `latest_run` is None, we
+  fall back to wall-clock UTC.
+- **D5: Topbar nav strip becomes 3 tabs in both `/grid` and
+  `/treemap` AND `/combined` templates**. Each tab's `is-active`
+  class is set by the existing `request_endpoint` context processor.
+  No change to that processor.
+- **D6: Locale is NOT applied to the combined chart's top posts**
+  (the chart has no top posts). The locale cookie/param is still
+  read by `_resolve_locale` for consistency with other routes, but
+  it only affects downstream UI elements if any are added later.
+- **D7: Polling cycle = `poll_seconds` (default 900s/15min)** from
+  `config.dashboard.poll_seconds`, identical to the other two pages.
+  No new config knob.
+
+## Open Questions
+
+### Resolved During Planning
+
+- Q: Where does the chart live? A: New 3rd tab, route `/combined`.
+- Q: What does hover reveal? A: The hovered brand's 6-signal stacked
+  area chart, overlaid in place under the total line (same canvas).
+- Q: Does the 9-card grid change? A: No, untouched.
+- Q: Window toggle range? A: 1/7/14/30/60/90/180/360 days (stock-chart
+  style).
+- Q: Which brands? A: All `enabled_models` (current 11).
+
+### Deferred to Implementation
+
+- The exact tooltip format on hover (currently no tooltip — the
+  overlay is purely visual; a tiny text label like
+  "MiniMax AI · 2026-06-17 · 23 posts" may be added via Chart.js
+  `interaction` config if it improves clarity, but no spec yet).
+- Whether to add a `total_lines_opacity` slider for visual stacking
+  on dense datasets (NOT in v1 — defer to user feedback).
+- Whether the window cookie should reset to 30d on schema migration
+  (defer — there is no migration; the cookie is new and absent-cookie
+  → default 30d).
+
+## High-Level Technical Design
+
+> *This illustrates the intended approach and is directional guidance for review, not implementation specification.*
+
+```
++------------------------------------------------------------------+
+| Topbar: [Treemap] [Combined*] [9-Card Grid]    window: 1d 7d 14d 30d 60d 90d 180d 360d   last updated: ... |
++------------------------------------------------------------------+
+|                                                                  |
+|  y: posts/day                                                    |
+|     ^                                                            |
+|     |         ________                                           |
+|     |        /        \                                          |
+|     |    ___/          \____                                     |
+|     |   /                   \                                    |
+|     |__/                     \____________________________       |
+|     |________________________________________________________>   |
+|     |  MiniMax (orange)        Qwen (blue)        DeepSeek (green)|
+|     |  Zhipu (purple) ...                                        |
+|                                                                  |
+|     HOVER MiniMax line → 6-signal area fades in under that line  |
+|                                                                  |
++------------------------------------------------------------------+
+```
+
+Dataset layout (one Chart.js chart, N+6 datasets):
+
+```
+datasets: [
+  // Per-brand total lines (always visible)
+  { label: 'MiniMax AI (total)', type: 'line', data: [...], borderColor: '#3b82f6', fill: false, hidden: false, order: 1 },
+  { label: 'Qwen (total)',        type: 'line', data: [...], borderColor: '#f97316', fill: false, hidden: false, order: 1 },
+  ... 9 more ...
+
+  // Per-brand 6-signal overlays (hidden until hover)
+  // 11 brands × 6 signals = 66 datasets, all hidden: true at boot.
+  // On hover of brand X: set the 6 datasets for X to hidden: false.
+  { label: 'MiniMax release',         type: 'line', data: [...], fill: 'origin', backgroundColor: ..., hidden: true, order: 2 },
+  { label: 'MiniMax community',       type: 'line', data: [...], fill: '-1',    backgroundColor: ..., hidden: true, order: 2 },
+  { label: 'MiniMax criticism',       type: 'line', data: [...], fill: '-1',    backgroundColor: ..., hidden: true, order: 2 },
+  { label: 'MiniMax commenter_cap',   type: 'line', data: [...], fill: '-1',    backgroundColor: ..., hidden: true, order: 2 },
+  { label: 'MiniMax other',           type: 'line', data: [...], fill: '-1',    backgroundColor: ..., hidden: true, order: 2 },
+  { label: 'MiniMax praise',          type: 'line', data: [...], fill: '-1',    backgroundColor: ..., hidden: true, order: 2 },
+  ... 60 more (5 brands × 6 signals each) ...
+]
+```
+
+Chart.js `onHover` handler resolves `activeElements[0].datasetIndex` →
+maps back to a brand (since each brand's 6 datasets occupy a known
+contiguous range in the dataset array, computed at render time).
+For that brand, toggle its 6 overlay datasets from `hidden: true` to
+`hidden: false` and call `chart.update()`.
+
+## Implementation Units
+
+- [x] **Unit 1: Backend serializer for combined chart**
+
+**Goal:** Build the data shape `serialize_combined_chart` returns:
+`{days: [...ISO dates...], series: {brand: [int×N]}, stacked: {brand: {signal: [int×N]}}}`,
+window-aware (1-360 days), locale-independent, using the existing
+`_qid_to_signal` + `_parse_post_timestamp` helpers and the same
+`latest_run["finished_at"]` anchor pattern as `serialize_grid_card`.
+
+**Requirements:** R8
+
+**Dependencies:** None (uses existing helpers in `dashboard.py`)
+
+**Files:**
+- Modify: `x-monitoring/x_monitor/dashboard.py` (add new function
+  after `serialize_grid_card`)
+- Test: `x-monitoring/tests/test_combined_chart.py` (new file)
+
+**Approach:**
+- Single pass over all posts for all enabled brands; build a
+  `brand_day_signal_counts[brand][iso_date][signal] = int` nested dict.
+- Materialize per-brand per-day `series[brand]` = sum across signals,
+  and `stacked[brand][signal]` = per-signal counts.
+- Return all three (`days`, `series`, `stacked`) so the JS module can
+  wire datasets without re-aggregation.
+- Default `window_days=30` (matches treemap default); caller overrides
+  from the cookie.
+
+**Patterns to follow:**
+- `serialize_grid_card` (lines ~318-455 of dashboard.py): mirror the
+  per-day bucketing loop, `latest_run` anchor, `now` test seam.
+
+**Test scenarios:**
+- Happy path — 11 brands × 30 days of mixed signals → `days` length
+  is 30, `series` has 11 entries, each `stacked` entry has 6 signals.
+- Edge case — brand with zero posts in window: `series[brand]` is
+  list of 30 zeros, `stacked[brand]` is dict of 6 zero-lists. NOT
+  omitted from the chart (the line is drawn at y=0).
+- Edge case — post whose `created_at` is unparseable: silently
+  skipped (matches `_parse_post_timestamp` contract).
+- Edge case — window_days=360 with only 14 days of history: `days`
+  length is 360, early days are zero-filled, no error.
+- Error path — `latest_run` is None: anchor to `datetime.now(utc)`,
+  no exception.
+- Integration — `_resolve_locale` returns "zh-CN" but combined chart
+  ignores locale for the data shape (D6).
+
+**Verification:** `pytest tests/test_combined_chart.py -q` passes;
+hand-test via `from x_monitor.dashboard import serialize_combined_chart;
+serialize_combined_chart(['minimax'], [], window_days=14)` returns a
+dict with `len(days) == 14`.
+
+- [x] **Unit 2: Cookie + window toggle helpers**
+
+**Goal:** `_resolve_combined_window(req, default)` and
+`_ALLOWED_COMBINED_WINDOWS = (1, 7, 14, 30, 60, 90, 180, 360)`,
+mirroring `_resolve_polarity_window` but with the wider window set
+and no clamp (D4).
+
+**Requirements:** R4
+
+**Dependencies:** None
+
+**Files:**
+- Modify: `x-monitoring/x_monitor/dashboard.py` (add the constant
+  and the helper, near `ALLOWED_POLARITY_WINDOWS`)
+
+**Approach:**
+- Module-level constant `ALLOWED_COMBINED_WINDOWS` is the single
+  source of truth for both the route validator and the topbar
+  template loop (mirrors `ALLOWED_POLARITY_WINDOWS` precedent).
+- `_resolve_combined_window(req, default=30)` reads the
+  `combined_window` cookie; falls back to `default` for absent,
+  malformed, or out-of-range values. Does NOT clamp to `window_days`
+  (D4: we honor the choice, let empty days render).
+- No `_clamp_combined_window` helper — the clamp doesn't apply.
+
+**Patterns to follow:**
+- `_resolve_polarity_window` (line ~262 of dashboard.py)
+
+**Test scenarios:**
+- Happy path — cookie `combined_window=30` → returns 30.
+- Edge case — cookie absent → returns default.
+- Edge case — cookie `combined_window=abc` → returns default (no
+  raise, no log spam).
+- Edge case — cookie `combined_window=400` → returns default (out
+  of allowed range).
+- Edge case — cookie `combined_window=180` → returns 180.
+
+**Verification:** `pytest tests/test_combined_chart.py -q` for the
+helper-specific tests; hand-test `curl /api/combined.html?combined_window=30`
+sets cookie on response.
+
+- [x] **Unit 3: Combined chart route + htmx partial + JSON endpoint** (audited 2026-06-19: 11/11 checks pass; deviations: <main id="combined-chart"> not "combined", test file is test_combined_routes.py not test_dashboard_routes.py, JSON \ is an object not flat int. Tests: 20/20 pass.)
+
+**Goal:** Wire `/combined` (initial render), `/api/combined.html`
+(htmx partial), and `/api/combined.json` (structured payload). All
+three share the same `_build_combined_payload(db_path, window_days)`
+helper to avoid drift.
+
+**Requirements:** R1, R3, R7
+
+**Dependencies:** Unit 1, Unit 2
+
+**Files:**
+- Modify: `x-monitoring/x_monitor/dashboard.py` (add `_build_combined_payload`,
+  add 3 routes under `_register_routes`)
+- Modify: `x-monitoring/x_monitor/templates/treemap.html.j2` (add
+  the 3rd `<a class="view-tab">`)
+- Modify: `x-monitoring/x_monitor/templates/grid.html.j2` (same)
+- Modify: `x-monitoring/x_monitor/templates/combined.html.j2` (NEW)
+- Test: `x-monitoring/tests/test_dashboard_routes.py` (extend existing)
+
+**Approach:**
+- `_build_combined_payload(db_path, window_days)` mirrors
+  `_build_cards`: opens `Store`, fetches posts per enabled model,
+  calls `serialize_combined_chart`, returns the payload + latest_run.
+- `/combined` route: reads the `combined_window` cookie via
+  `_resolve_combined_window`, calls `_build_combined_payload`,
+  renders `combined.html.j2` with the JSON payload and window metadata.
+- `/api/combined.html` partial: same flow but renders `_combined_chart.html.j2`
+  partial (just the `<main>` content, no `<header>` or topbar).
+- `/api/combined.json`: returns the payload as JSON for external
+  consumers.
+- Topbar `view-tabs` nav strip gains a 3rd `<a>` element in both
+  `treemap.html.j2` and `grid.html.j2`. `combined.html.j2` includes
+  the same topbar with its own `is-active` class.
+- Window toggle: render an 8-button topbar widget
+  (`1d / 7d / 14d / 30d / 60d / 90d / 180d / 360d`) that links to
+  `/api/combined_window/<int:days>` (a new route that sets the cookie
+  and redirects back to `/combined`). Active state from the cookie.
+
+**Patterns to follow:**
+- `_build_cards`, `_resolve_polarity_window`, the 3-route triplet
+  pattern (initial / partial / JSON), the topbar `view-tabs` markup
+  in `grid.html.j2`.
+
+**Test scenarios:**
+- Happy path — `GET /combined` returns 200, HTML contains
+  `<main id="combined">` and the canvas.
+- Happy path — `GET /api/combined.html` returns 200, HTML contains
+  the canvas with `data-combined='{...}'` JSON.
+- Happy path — `GET /api/combined.json` returns 200, JSON has
+  `{days, series, stacked, window, fetched_at}` keys.
+- Happy path — `GET /api/combined_window/60` sets
+  `combined_window=60` cookie and 302s to `/combined`.
+- Edge case — `GET /api/combined_window/400` returns 400 (out of
+  range).
+- Integration — `GET /combined` with `combined_window=360` cookie
+  uses 360d window in `serialize_combined_chart` (verify via the
+  `len(days)` in the JSON payload).
+
+**Verification:** `pytest tests/test_dashboard_routes.py -q` passes;
+hand-test `curl /api/combined.json | jq '.days | length'` returns the
+expected window.
+
+- [x] **Unit 4: Combined chart JS module with hover overlay**
+
+**Goal:** New `static/combined-chart.js` that builds the Chart.js
+instance from `data-combined` JSON, handles total-lines + hidden
+overlay datasets, and wires `onHover` to toggle the 6-signal
+overlay for the hovered brand.
+
+**Requirements:** R2, R5, R9
+
+**Dependencies:** Unit 3 (route delivers the data)
+
+**Files:**
+- Modify: `x-monitoring/x_monitor/templates/combined.html.j2` (load
+  the new script after `chart.js@4.4.0`)
+- Create: `x-monitoring/x_monitor/static/combined-chart.js`
+- Create: `x-monitoring/x_monitor/static/combined-chart.css`
+  (chart container styling)
+- Test: `x-monitoring/tests/test_combined_chart_js.py` (new file;
+  JS-side testing via the existing pattern, if any)
+
+**Approach:**
+- Module bootstrap: read `data-combined` from `.combined-chart-wrap`,
+  parse JSON, build the dataset array as described in High-Level
+  Technical Design.
+- All 66 overlay datasets (11 brands × 6 signals) start `hidden: true`.
+- All 11 total lines start `hidden: false`, stroke 2px, pointRadius 0,
+  tension 0 (stock-chart crisp look).
+- `onHover(event, activeElements, chart)`:
+  - If `activeElements.length === 0`: hide ALL overlay datasets
+    (revert to total-only).
+  - Else: get the brand from `activeElements[0].datasetIndex`
+    (mapping: indices 0..10 are total lines; index N's overlays
+    occupy indices 11 + N*6 .. 11 + N*6 + 5).
+  - For each brand, set `hidden = (brand !== hoveredBrand)` on its
+    6 overlay datasets.
+  - `chart.update('none')` (no animation — feels instant).
+- Defensive destroy on htmx swap (same pattern as `trend-chart.js`):
+  `var prior = Chart.getChart(canvas); if (prior) prior.destroy();`
+  then create new instance.
+- Color tokens: read `--bar-release`, `--bar-community`, `--bar-criticism`,
+  `--bar-other`, `--bar-praise`, `--bar-commenters` from
+  `:root` via `getComputedStyle(document.documentElement)` (same
+  pattern as `trend-chart.js::colorFor`).
+- Brand stroke colors come from `MODEL_ACCENT_COLORS` via the server
+  (each total-line dataset's `borderColor` is set server-side in the
+  payload).
+
+**Patterns to follow:**
+- `trend-chart.js` (entire file): defensive destroy, `data-chart`
+  JSON parse, CSS-var color reading.
+
+**Test scenarios:**
+- Happy path — page load with empty DB: 11 total lines all drawn at
+  y=0 (visible as a flat baseline), no overlay.
+- Happy path — page load with 30d of mixed data: 11 lines with
+  varying daily totals.
+- Happy path — hover MiniMax line: 6 overlay datasets visible for
+  MiniMax only, other 10 brands' overlays still hidden.
+- Happy path — mouseout: all overlays hidden again.
+- Integration — htmx poll fires while MiniMax hover is active: chart
+  re-inits, hover state lost (acceptable — the new poll supersedes
+  the prior chart, just like the 9-card grid).
+
+**Verification:** `pytest tests/test_combined_chart_js.py -q` passes;
+hand-test in browser by loading `/combined`, hovering a line, seeing
+the 6-signal breakdown fade in.
+
+- [ ] **Unit 5: 9-card grid + treemap unchanged, but topbar nav updated**
+
+**Goal:** Both `treemap.html.j2` and `grid.html.j2` gain a 3rd
+`<a class="view-tab">` entry pointing to `/combined`, with
+`is-active` set server-side based on `request.endpoint == 'combined'`.
+
+**Requirements:** R6
+
+**Dependencies:** None (topbar markup is independent of routes)
+
+**Files:**
+- Modify: `x-monitoring/x_monitor/templates/treemap.html.j2`
+- Modify: `x-monitoring/x_monitor/templates/grid.html.j2`
+
+**Approach:**
+- Insert a new `<a class="view-tab">` between the existing two tabs.
+- `is-active` class set via the same Jinja `{% if %}` pattern as the
+  other tabs. `aria-current="page"` likewise.
+
+**Test scenarios:**
+- Test expectation: none — pure markup change; covered by the visual
+  smoke test in Unit 3's verification.
+
+**Verification:** `curl /grid | grep -c 'class="view-tab'` returns 3.
+
+**Audit 2026-06-19 (worktree code PASS, live curl FAIL):**
+- Worktree templates: both `treemap.html.j2` and `grid.html.j2` have exactly
+  3 `<a class="view-tab ...>` entries (verified via Jinja render and via
+  `grep -c '<a class="view-tab'`); the new 3rd tab uses the same
+  `{% if request_endpoint == 'combined' %}` pattern as the existing tabs
+  for `is-active` and `aria-current="page"`. Visualization code below the
+  topbar nav is untouched (only `_combined_chart.html.j2`, `combined.html.j2`
+  and v1.8 model_id/like_count→favorite_count rename also land on the
+  branch but are unrelated to Unit 5).
+- Live curl against `fuchitalee:5000` returns 2 tabs on both `/` and
+  `/grid` (not 3) because the running dashboard's CWD is
+  `/Users/fuchitalee/development/minimax-marketing/x-monitoring` (the
+  main-branch checkout, PID 81679), not the combined-chart worktree. The
+  worktree `.venv` is a symlink and the same DB is shared, so the
+  fix is `lsof -nP -iTCP:5000 -sTCP:LISTEN -t | xargs kill` then
+  `cd worktrees/combined-chart/x-monitoring && .venv/bin/python -c
+  "from x_monitor.dashboard import DashboardApp; ..."`. Until that
+  re-launch happens, checks 7 & 8 fail on the running server even though
+  the worktree code is correct. Re-run curl after re-launch to flip
+  this checkbox.
+
+## System-Wide Impact
+
+- **Interaction graph:** 1 new chart instance (`Chart.getChart(canvas)`)
+  is created on page load; on every htmx poll the previous instance is
+  destroyed. No callbacks fire on data changes; no observers.
+- **Error propagation:** If `Store.get_all_posts(m)` raises for one
+  brand, that brand renders as a zero-totals line (no exception
+  bubbles up). Same per-brand resilience as `_build_treemap_tiles`.
+- **State lifecycle risks:** The 66 overlay datasets per Chart instance
+  are small (each is a `list[int]` of length 1-360). Memory footprint
+  is ~24KB per instance. After destroy, Chart.js v4 GCs them. No leak.
+- **API surface parity:** The 3 new routes (`/combined`, `/api/combined.html`,
+  `/api/combined.json`) mirror the 3 existing treemap routes and the
+  2 existing grid routes. Same shape, same htmx partial pattern.
+- **Integration coverage:** A new integration test exercises the
+  `/combined` → `/api/combined.html` poll cycle end-to-end (cookie
+  set → payload shape → destroy + re-init). No mocks for the layers
+  that interact.
+- **Unchanged invariants:**
+  - `serialize_grid_card` is untouched.
+  - `_build_treemap_tiles` is untouched.
+  - `_resolve_polarity_window` / `_clamp_polarity_window` are untouched.
+  - `polarity_window` cookie is untouched.
+  - `MODEL_DISPLAY_NAMES` / `MODEL_ACCENT_COLORS` are read but not
+    modified.
+  - The CSS custom properties (`--bar-*`, `--red`, `--green`, etc.)
+    are read but not modified.
+
+## Risks & Dependencies
+
+| Risk | Mitigation |
+|------|------------|
+| Chart.js v4 perf with 11 line + 66 overlay datasets on a 360-day window | Test with `window_days=360` and 11 brands × 2000 posts; render time should be < 200ms. If slow, switch overlay datasets to `pointRadius: 0` (default) and consider `parsing: false` with pre-typed arrays. |
+| Hover overlay visually clashes with adjacent brands' lines | Apply 50% opacity to overlay fills so the underlying total line stays legible. Signal colors come from existing `--bar-*` tokens which are already palette-tuned for the dark bg. |
+| User picks 360d with only 14d of history → mostly empty chart | No clamp (D4). Document in the topbar that "window may exceed available history." Zero-fill is correct behavior. |
+| 11 lines + 6 signals on hover is busy | Defer to user feedback. If real users complain, add `total_lines_opacity` slider (out of scope for v1). |
+| Locale cookie not applied to combined chart | Documented in D6. Top posts aren't shown in the combined chart, so no locale leak. |
+
+## Documentation / Operational Notes
+
+- Update `docs/solutions/` if any non-obvious debugging happened during
+  implementation (e.g., Chart.js v4 hover event quirks).
+- Topbar nav now has 3 tabs; update any external docs/screenshots that
+  reference "2 tabs."
+- Window toggle is a cookie, not a config setting — operators who
+  want a different default across all users would need to set the
+  cookie via a JS init snippet (NOT in scope for v1).
+
+## Sources & References
+
+- **Origin document:** this plan (no upstream requirements doc;
+  feature came in as a one-line user description in the latest session).
+- Related code: `x_monitor/dashboard.py::serialize_grid_card`,
+  `x_monitor/static/trend-chart.js`, `x_monitor/templates/grid.html.j2`,
+  `x_monitor/templates/treemap.html.j2`.
+- Related plans:
+  [docs/plans/2026-06-17-002-feat-finviz-treemap-front-page-plan.md](docs/plans/2026-06-17-002-feat-finviz-treemap-front-page-plan.md) (precedent for additive visual layer).
+  [docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md](docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md) (precedent for htmx poll + locale cookie pattern).
+- External docs: Chart.js v4.4.0 docs (https://www.chartjs.org/docs/4.4.0/)
+  for `mixed` chart types, `interaction.mode`, `onHover`.
