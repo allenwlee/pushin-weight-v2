@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -15,6 +16,9 @@ from .config import KNOWN_MODELS
 
 if TYPE_CHECKING:
     from .attribution import MentionRow
+
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -191,6 +195,13 @@ class Store:
         """
         if not posts:
             return 0
+        # Source of truth for the post_brand_signals / post_mentions FK
+        # guards: the brand_ids actually present in the `brands` table
+        # (cached). This is wider than the per-post `valid_brands` list
+        # (which is brand_ids ∩ KNOWN_MODELS) so cross-mention signals
+        # and v1.8 brands (mistral/stepfun/ernie/hunyuan) are not
+        # dropped. See store._known_brand_ids().
+        known_ids: set[str] = self._known_brand_ids()
         n_new = 0
         with self.transaction() as conn:
             for p in posts:
@@ -292,13 +303,18 @@ class Store:
                             continue
                         # Guard against LLM hallucinations: per_brand_signals
                         # comes from the LLM and may contain a brand_id not
-                        # in the brands table. Without this check, the
-                        # post_brand_signals.brand_id FK raises IntegrityError
-                        # and the whole insert_posts transaction aborts,
-                        # leaving the post in an inconsistent state.
-                        # Regression: cron hot path crashed at this site on
-                        # 2026-06-20 (cycle 20260620T081403_0000-).
-                        if b not in valid_brands:
+                        # in the brands table. Checked against the
+                        # brands-table source of truth (known_ids), NOT the
+                        # per-post valid_brands, so cross-mention signals
+                        # survive. Regression: cron hot path crashed at this
+                        # site on 2026-06-20 (cycle 20260620T081403_0000-).
+                        if b not in known_ids:
+                            _log.warning(
+                                "insert_posts: dropping signal for "
+                                "brand_id=%r not in brands table "
+                                "(post_id=%s signal=%r)",
+                                b, tweet_id_str, sig,
+                            )
                             continue
                         # R11: ON CONFLICT DO UPDATE.
                         conn.execute(
@@ -337,6 +353,17 @@ class Store:
                                 p.get("created_at") or _now_iso()
                             )
                         if not m_source or not m_token:
+                            continue
+                        # post_mentions.brand_id may be NULL (un-attributed
+                        # user mentions). Only guard non-null unknowns
+                        # against the same FK (migration 004:117).
+                        if m_brand is not None and m_brand not in known_ids:
+                            _log.warning(
+                                "insert_posts: dropping mention for "
+                                "brand_id=%r not in brands table "
+                                "(post_id=%s source=%r)",
+                                m_brand, tweet_id_str, m_source,
+                            )
                             continue
                         conn.execute(
                             """
@@ -846,7 +873,19 @@ class Store:
 
         Top-gun ON CONFLICT gotcha: the `signal` column MUST be in the
         INSERT column list.
+
+        Guards brand_id against the brands table (the FK target) so the
+        reattribute path can't raise IntegrityError. Unknown brand_ids
+        are dropped with a warning rather than aborting the caller's
+        transaction.
         """
+        if brand_id not in self._known_brand_ids():
+            _log.warning(
+                "insert_post_brand_signals: dropping signal for "
+                "brand_id=%r not in brands table (post_id=%s)",
+                brand_id, post_id,
+            )
+            return
         self._conn.execute(
             """
             INSERT INTO post_brand_signals(post_id, brand_id, signal)
@@ -887,6 +926,17 @@ class Store:
         ]
         self._brand_cache = result
         return result
+
+    def _known_brand_ids(self) -> set[str]:
+        """Cached set of brand_ids present in the `brands` table.
+
+        The source of truth for the post_brand_signals / post_mentions
+        FK guards. Wider than KNOWN_MODELS (which is a 7-entry hardcoded
+        frozenset) because it reflects whatever migration 004 seeded
+        (12 brands) plus any operator-added rows. Includes the
+        `_unattributed` sentinel row.
+        """
+        return {row.brand_id for row in self.read_brands()}
 
     def read_brand_accounts(self) -> dict[str, str]:
         """Return {author_id: brand_id} for all brand-account edges (R13).
