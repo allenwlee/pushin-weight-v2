@@ -242,8 +242,12 @@ def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, l
 # (dead in v1.7) intent branch so the unified attribution path can use it.
 _BRAND_ALIASES: dict[str, str] = {
     "kimi": "moonshot_kimi",
-    "moonshot": "moonshot_kimi",
+    # bare "moonshot" REMOVED: it matches the Moonshot crypto exchange
+    # (spam: "$X on the Moonshot Top 100 Leaderboard"), not Moonshot AI.
+    # Legit posts match via "kimi", "k2", or the CJK name below.
     "k2": "moonshot_kimi",
+    "月之暗面": "moonshot_kimi",
+    "暗面": "moonshot_kimi",
     "mimo": "xiaomi_mimo",
     "xiaomi": "xiaomi_mimo",
     "ling": "inclusionai",
@@ -765,6 +769,16 @@ class RunPipeline:
                         summary.setdefault("quote_tweets", {})[
                             "official_error"
                         ] = str(e)
+                    try:
+                        daily_out = self._capture_nonofficial_quote_tweets_daily(
+                            apify, store, qt_index, qt_bst, qt_staff,
+                        )
+                        summary.setdefault("quote_tweets", {}).update(daily_out)
+                    except Exception as e:  # never abort the run over QT capture
+                        log.warning("daily QT capture failed: %s", e)
+                        summary.setdefault("quote_tweets", {})[
+                            "daily_error"
+                        ] = str(e)
             finally:
                 store.close()
 
@@ -870,6 +884,133 @@ class RunPipeline:
             official_n_calls=n_calls,
             official_n_qts_fetched=n_qts,
             official_n_ingested=n_ingested,
+        )
+        return out
+
+    def _capture_nonofficial_quote_tweets_daily(
+        self,
+        apify: TwitterApiClient,
+        store: Store,
+        index: Any,
+        brand_search_terms: dict[str, str],
+        staff_handles: dict[str, list[str]],
+    ) -> dict[str, Any]:
+        """Once-per-day QT capture for non-official posts.
+
+        Date-gated via `data/_qt_daily_marker` (runs at most once per UTC
+        day). Selects recent non-official posts (created within
+        `quote_tweets.daily_recency_days`, author NOT a staff/official
+        handle), batched-refreshes their current `quote_count`, and for any
+        with new growth (`delta >= 1`) fetches + ingests the new QTs.
+        `daily_call_budget` caps the fetch CALLS. Older posts age out of the
+        recency window, so the daily poll set stays bounded.
+
+        Tracking advances for every checked post (growth or not) so a stable
+        post isn't re-fetched, and `sinceTime` resumes correctly.
+        """
+        cfg = self.config.quote_tweets
+        out: dict[str, Any] = {"daily_ran": False}
+        if not cfg.daily_enabled:
+            return out
+        today = datetime.now(timezone.utc).date().isoformat()
+        marker = self.data_dir / "_qt_daily_marker"
+        if marker.exists() and marker.read_text(encoding="utf-8").strip() == today:
+            return out  # already ran today
+        staff_set = {h for hs in staff_handles.values() for h in hs}
+        cutoff_epoch = (
+            int(datetime.now(timezone.utc).timestamp())
+            - cfg.daily_recency_days * 86400
+        )
+        # Non-official = author NOT in the staff/official set. LIMIT caps the
+        # refresh candidate set so a huge recent-post volume can't drain the
+        # budget on count-lookups alone.
+        if staff_set:
+            rows = store._conn.execute(
+                "SELECT tweet_id, text, last_quote_count_seen, last_quote_fetched_at "
+                f"FROM posts WHERE created_at_epoch >= ? "
+                f"AND author_handle NOT IN ({','.join('?' for _ in staff_set)}) "
+                "ORDER BY created_at_epoch DESC LIMIT 500",
+                (cutoff_epoch, *staff_set),
+            ).fetchall()
+        else:
+            rows = store._conn.execute(
+                "SELECT tweet_id, text, last_quote_count_seen, last_quote_fetched_at "
+                "FROM posts WHERE created_at_epoch >= ? "
+                "ORDER BY created_at_epoch DESC LIMIT 500",
+                (cutoff_epoch,),
+            ).fetchall()
+        out["daily_n_candidates"] = len(rows)
+        if not rows:
+            # See the post-loop comment for why we always write the marker.
+            marker.write_text(today, encoding="utf-8")
+            out["daily_ran"] = True
+            return out
+        try:
+            fresh = apify.get_tweets_by_ids([r["tweet_id"] for r in rows])
+        except Exception as e:
+            log.warning("daily QT refresh failed: %s", e)
+            out["daily_refresh_error"] = str(e)
+            return out  # no marker write -> retries next cycle
+        n_calls = 0
+        n_qts = 0
+        n_ingested = 0
+        for r in rows:
+            tid = r["tweet_id"]
+            info = fresh.get(tid)
+            if not info:
+                continue
+            fresh_qc = int(info.get("quote_count") or 0)
+            delta = fresh_qc - int(r["last_quote_count_seen"] or 0)
+            if delta >= 1:
+                since_time = _iso_to_epoch(r["last_quote_fetched_at"])
+                try:
+                    qts = apify.get_quote_tweets(
+                        tid, since_time=since_time, max_pages=cfg.max_pages
+                    )
+                except Exception as e:
+                    log.warning("daily QT fetch failed for %s: %s", tid, e)
+                    continue
+                n_calls += 1
+                if qts:
+                    try:
+                        ingested = _ingest_quote_tweets(
+                            qts, tid, r["text"] or "",
+                            index=index,
+                            brand_search_terms=brand_search_terms,
+                            store=store,
+                        )
+                    except Exception as e:
+                        log.warning("daily QT ingest failed for %s: %s", tid, e)
+                        ingested = 0
+                    n_ingested += ingested
+                    n_qts += len(qts)
+                    # Only advance tracking on a successful ingest; if
+                    # `ingested == 0` (raised or all filtered), keep the
+                    # prior `last_quote_count_seen` so the next cycle
+                    # re-fetches the missed QTs instead of treating them
+                    # as already-seen.
+                    if ingested > 0:
+                        store.update_quote_tracking(tid, fresh_qc, _now_iso())
+                else:
+                    # No new QTs reported by the API — record the observed
+                    # count so we do not keep polling this stable post.
+                    store.update_quote_tracking(tid, fresh_qc, _now_iso())
+                if n_calls >= cfg.daily_call_budget:
+                    break
+            else:
+                # No new growth — advance tracking so we don't re-check a
+                # stable post's count every day (cheap local UPDATE).
+                store.update_quote_tracking(tid, fresh_qc, _now_iso())
+        # Marker is written unconditionally (incl. on budget break). Same-day
+        # resume is safe because per-post `update_quote_tracking` above
+        # persists the observed `quote_count` and `last_quote_fetched_at`;
+        # the marker only gates the *next* UTC day, not retries within today.
+        marker.write_text(today, encoding="utf-8")
+        out.update(
+            daily_ran=True,
+            daily_n_calls=n_calls,
+            daily_n_qts_fetched=n_qts,
+            daily_n_ingested=n_ingested,
         )
         return out
 

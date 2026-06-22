@@ -1551,18 +1551,18 @@ def test_polarity_uses_join_not_subquery():
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
-            now_iso = datetime.now(timezone.utc).isoformat()
-            window_start = (
-                datetime.now(timezone.utc) - timedelta(days=7)
-            ).isoformat()
+            now_dt = datetime.now(timezone.utc)
+            now_iso = now_dt.isoformat()
+            now_epoch = int(now_dt.timestamp())
+            window_start = now_epoch - 7 * 86400  # epoch lower bound (Unit 6)
             # Insert a post + post_brands + post_brand_signals so the
             # indexes have at least one row to seek against.
             store._conn.execute(
                 """INSERT INTO posts (tweet_id, author_handle, text, lang,
-                   created_at, fetched_at, like_count, retweet_count,
-                   reply_count, quote_count, entities, raw) VALUES
-                   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                ("u4_p1", "u1", "hello", "en", now_iso, now_iso,
+                   created_at, fetched_at, created_at_epoch, like_count,
+                   retweet_count, reply_count, quote_count, entities, raw)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("u4_p1", "u1", "hello", "en", now_iso, now_iso, now_epoch,
                  0, 0, 0, 0, "{}", "{}"),
             )
             store.insert_post_brands("u4_p1", "minimax", 1.0)
@@ -1709,15 +1709,18 @@ def test_treemap_polarity_with_db_driven_post_brand_signals():
         store = Store(Path(d) / "x.db")
         try:
             now = datetime.now(timezone.utc)
-            current_ts = (now - timedelta(hours=2)).isoformat()
+            current = now - timedelta(hours=2)
+            current_ts = current.isoformat()
+            current_epoch = int(current.timestamp())  # Unit 6: epoch window
             # 1 current praise post -> score = 1.0 (sparse-data guard 2)
             store._conn.execute(
                 """INSERT INTO posts (tweet_id, author_handle, text, lang,
-                   created_at, fetched_at, like_count, retweet_count,
-                   reply_count, quote_count, entities, raw) VALUES
-                   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   created_at, fetched_at, created_at_epoch, like_count,
+                   retweet_count, reply_count, quote_count, entities, raw)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 ("u4_p_praise", "u1", "great", "en",
-                 current_ts, now.isoformat(), 0, 0, 0, 0, "{}", "{}"),
+                 current_ts, now.isoformat(), current_epoch,
+                 0, 0, 0, 0, "{}", "{}"),
             )
             store.insert_post_brands("u4_p_praise", "minimax", 1.0)
             store.insert_post_brand_signals("u4_p_praise", "minimax", "praise")

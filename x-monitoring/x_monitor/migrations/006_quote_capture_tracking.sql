@@ -23,3 +23,9 @@
 ALTER TABLE posts ADD COLUMN last_quote_count_seen INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE posts ADD COLUMN last_quote_fetched_at TEXT;
 ALTER TABLE posts ADD COLUMN created_at_epoch INTEGER;
+
+-- Index for the polarity time-window filter (treemap.POLARITY_SQL filters
+-- `created_at_epoch >= ?` on every dashboard render) and the QT daily-pass
+-- recency query. Without it the join plan can SCAN posts.
+CREATE INDEX IF NOT EXISTS idx_posts_created_at_epoch
+    ON posts(created_at_epoch);

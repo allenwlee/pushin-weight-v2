@@ -522,3 +522,135 @@ class TestSquarifyLayoutPadding:
         # Shrink factor should be roughly (1 - padding/total_w) * (1 - padding/total_h),
         # i.e. ~95% of the original. Tolerate 1% rounding.
         assert abs(visible_area - 57036) < 100
+
+
+# ---------- Unit 6: RT fold + created_at_epoch window (2026-06-22) ---------
+
+
+def _seed_brand_posts(store, brand, posts):
+    """Direct-insert (posts, post_brands, post_brand_signals) for polarity-SQL
+    tests. `posts` = list of (tweet_id, signal, retweet_count, epoch). The
+    `brand` must already exist (migration 004 seeds KNOWN_MODELS like 'glm')."""
+    c = store._conn
+    for tid, signal, rt, epoch in posts:
+        c.execute(
+            "INSERT INTO posts(tweet_id, fetched_at, created_at_epoch, retweet_count, author_handle) "
+            "VALUES (?, '2026-01-01T00:00:00+00:00', ?, ?, 'u')",
+            (tid, epoch, rt),
+        )
+        c.execute(
+            "INSERT INTO post_brands(brand_id, post_id, weight) VALUES (?, ?, 1.0)",
+            (brand, tid),
+        )
+        c.execute(
+            "INSERT INTO post_brand_signals(post_id, brand_id, signal) VALUES (?, ?, ?)",
+            (tid, brand, signal),
+        )
+
+
+def test_polarity_breakdown_rt_fold(tmp_path):
+    """Each post's signal is weighted by (1 + retweet_count): an RT inherits
+    the original's signal ("each utterance = one vote")."""
+    from x_monitor.store import Store
+    from x_monitor.treemap import compute_polarity_signal_breakdown
+    now_ep = int(datetime.now(timezone.utc).timestamp())
+    store = Store(tmp_path / "x.db")
+    try:
+        _seed_brand_posts(store, "glm", [
+            ("A", "praise", 9, now_ep),      # 1 * (1+9) = 10
+            ("B", "praise", 0, now_ep),      # 1 * (1+0) = 1
+            ("C", "criticism", 4, now_ep),   # 1 * (1+4) = 5
+        ])
+        bd = compute_polarity_signal_breakdown(store._conn, "glm", 0)
+        assert bd["praise"] == 11.0
+        assert bd["criticism"] == 5.0
+    finally:
+        store.close()
+
+
+def test_polarity_breakdown_window_excludes_old(tmp_path):
+    """The time window filters on created_at_epoch (unix seconds), excluding
+    posts older than the bound — the fix for the pre-006 ISO-vs-Twitter-format
+    bug that silently ignored the window."""
+    from x_monitor.store import Store
+    from x_monitor.treemap import compute_polarity_signal_breakdown
+    now_ep = int(datetime.now(timezone.utc).timestamp())
+    old_ep = now_ep - 30 * 86400  # 30 days ago, outside a 7-day window
+    store = Store(tmp_path / "x.db")
+    try:
+        _seed_brand_posts(store, "glm", [
+            ("RECENT", "praise", 0, now_ep),
+            ("OLD", "praise", 0, old_ep),
+        ])
+        cutoff = now_ep - 7 * 86400
+        bd_7d = compute_polarity_signal_breakdown(store._conn, "glm", cutoff)
+        assert bd_7d["praise"] == 1.0  # OLD excluded
+        bd_all = compute_polarity_signal_breakdown(store._conn, "glm", 0)
+        assert bd_all["praise"] == 2.0  # both included all-time
+    finally:
+        store.close()
+
+
+def test_compute_polarity_from_db_returns_score(tmp_path):
+    """End-to-end: with data only in the current window, the score reduces to
+    the current (praise - criticism) rate (prior-empty guard)."""
+    from x_monitor.store import Store
+    from x_monitor.treemap import compute_polarity_from_db
+    now_ep = int(datetime.now(timezone.utc).timestamp())
+    store = Store(tmp_path / "x.db")
+    try:
+        _seed_brand_posts(store, "glm", [
+            ("P1", "praise", 0, now_ep),
+            ("P2", "praise", 0, now_ep),
+            ("C1", "criticism", 0, now_ep),
+        ])
+        score = compute_polarity_from_db(store._conn, "glm", window_days=7)
+        # current = {praise:2, criticism:1}, prior empty -> (2-1)/3 ~= 0.333
+        assert score is not None
+        assert abs(score - (1.0 / 3.0)) < 1e-9
+    finally:
+        store.close()
+
+
+
+def test_polarity_index_created_at_epoch_exists(tmp_path):
+    """The `idx_posts_created_at_epoch` index must exist in `posts`.
+    migration 006 creates it; a future migration that drops or renames
+    the index would silently regress the dashboard to a full posts SCAN.
+    Pinning the index name here catches that at test time.
+
+    (We pin the schema, not the EXPLAIN plan, because SQLite's planner
+    picks SCAN vs. INDEX-BY-idx on a 50-row table even with ANALYZE — the
+    plan is data-dependent and not a stable invariant to assert.)"""
+    from x_monitor.store import Store
+    store = Store(tmp_path / "x.db")
+    try:
+        rows = store._conn.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type = 'index' AND tbl_name = 'posts' "
+            "AND name = 'idx_posts_created_at_epoch'"
+        ).fetchall()
+        assert rows, (
+            "idx_posts_created_at_epoch missing on posts; "
+            "migration 006 may have been dropped or renamed."
+        )
+        # Sanity: the DDL references the column we filter on.
+        assert "created_at_epoch" in rows[0]["sql"]
+    finally:
+        store.close()
+
+
+def test_polarity_sql_window_filters_by_epoch_not_string():
+    """Regression: pre-migration-006 the POLARITY_SQL compared ISO bounds
+    against Twitter-format `created_at` strings, which sort incorrectly
+    (the entire corpus looked "in window"). The fix is to filter on
+    `created_at_epoch` (integer). This test pins that the SQL body
+    references the epoch column.
+
+    Note: the SQL uses positional `?` placeholders; the *Python variable*
+    is named `window_start_epoch`, but the literal string does not appear
+    in the SQL. We only pin the column-name invariant here."""
+    from x_monitor.treemap import POLARITY_SQL
+    assert "created_at_epoch" in POLARITY_SQL
+    # The window filter compares created_at_epoch against a parameter.
+    assert "p.created_at_epoch >=" in POLARITY_SQL

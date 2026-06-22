@@ -1317,3 +1317,105 @@ def test_capture_official_qt_excludes_non_official_authors(tmp_path):
         assert out["official_n_tracked"] == 0  # excluded — not staff
     finally:
         store.close()
+
+
+# --- Unit 5: non-official daily QT pass (2026-06-22) ----------------------
+
+
+def test_capture_daily_qt_runs_once_per_day(tmp_path):
+    pipe, store, (index, bst) = _qt_pipeline(tmp_path)
+    try:
+        fake = _FakeApify(fresh={}, quotes={})
+        out1 = pipe._capture_nonofficial_quote_tweets_daily(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        out2 = pipe._capture_nonofficial_quote_tweets_daily(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        assert out1["daily_ran"] is True
+        assert out2["daily_ran"] is False  # date-gated: marker matches today
+    finally:
+        store.close()
+
+
+def test_capture_daily_qt_fetches_growth_skips_stale(tmp_path):
+    from datetime import datetime, timezone
+    pipe, store, (index, bst) = _qt_pipeline(tmp_path)
+    try:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # Post A: stored 0, fresh 5 -> delta 5 -> fetch+ingest.
+        store.insert_posts([{
+            "id": "A", "tweet_id": "A", "brand_ids": ["glm"],
+            "author_handle": "random_user", "text": "GLM launched",
+            "created_at": now, "quote_count": 0, "entities": {},
+        }])
+        # Post B: tracking already at 5, fresh 5 -> delta 0 -> skip fetch.
+        store.insert_posts([{
+            "id": "B", "tweet_id": "B", "brand_ids": ["glm"],
+            "author_handle": "other_user", "text": "GLM launched",
+            "created_at": now, "quote_count": 5, "entities": {},
+        }])
+        store.update_quote_tracking("B", 5, now)
+        fake = _FakeApify(
+            fresh={
+                "A": {"quote_count": 5, "retweet_count": 0, "reply_count": 0, "like_count": 0},
+                "B": {"quote_count": 5, "retweet_count": 0, "reply_count": 0, "like_count": 0},
+            },
+            quotes={"A": [{
+                "id": "QA", "tweet_id": "QA", "text": "glm wow",
+                "quoted_status_id": "A", "created_at": now,
+                "entities": {}, "author_handle": "rep", "lang": "en",
+            }]},
+        )
+        out = pipe._capture_nonofficial_quote_tweets_daily(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        assert out["daily_ran"] is True
+        assert out["daily_n_calls"] == 1  # only A (B had no growth)
+        assert out["daily_n_ingested"] == 1
+        # Both posts' tracking advanced to the fresh count.
+        for tid, qc in (("A", 5), ("B", 5)):
+            row = store._conn.execute(
+                "SELECT last_quote_count_seen FROM posts WHERE tweet_id=?",
+                (tid,),
+            ).fetchone()
+            assert row["last_quote_count_seen"] == qc
+    finally:
+        store.close()
+
+
+def test_capture_daily_qt_excludes_official_authors(tmp_path):
+    from datetime import datetime, timezone
+    pipe, store, (index, bst) = _qt_pipeline(tmp_path)
+    try:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        store.insert_posts([{
+            "id": "OFF", "tweet_id": "OFF", "brand_ids": ["glm"],
+            "author_handle": "official_glm", "text": "GLM launched",
+            "created_at": now, "quote_count": 100, "entities": {},
+        }])
+        fake = _FakeApify(fresh={}, quotes={})
+        out = pipe._capture_nonofficial_quote_tweets_daily(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        assert out["daily_n_candidates"] == 0  # official excluded from daily
+    finally:
+        store.close()
+
+
+def test_capture_daily_qt_disabled_is_noop(tmp_path):
+    from x_monitor.config import QuoteTweetConfig
+    cfg = Config(
+        enabled_models=["glm"], daily_ceiling=10, x_monitor_list_id=1,
+        quote_tweets=QuoteTweetConfig(daily_enabled=False),
+    )
+    pipe = RunPipeline(cfg, tmp_path, tmp_path / "x.db")
+    from x_monitor.store import Store
+    store = Store(tmp_path / "x.db")
+    try:
+        out = pipe._capture_nonofficial_quote_tweets_daily(
+            _FakeApify(fresh={}, quotes={}), store, {}, {}, {"glm": []},
+        )
+        assert out["daily_ran"] is False
+    finally:
+        store.close()

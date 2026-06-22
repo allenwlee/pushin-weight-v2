@@ -10,7 +10,9 @@ canonical_handles:
 
 must_have_any:
   - kimi
-  - moonshot
+  # bare 'moonshot' removed: matches Moonshot crypto-exchange spam
+  # ("Moonshot Top 100 Leaderboard"), not Moonshot AI. Legit posts
+  # still match via 'kimi', 'moonshot ai', '月之暗面', 'k2', etc.
   - k2
   - k2.5
   - kimi k

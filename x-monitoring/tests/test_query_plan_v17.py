@@ -83,9 +83,11 @@ def test_plan_calls_v17_call_b_is_brand_wide_paren_grouped(v17_data_dir):
     n_brand_groups = inner.count("(")
     assert n_brand_groups == 7, f"expected 7 brand paren groups; got {n_brand_groups}"
     assert call_b.query_string.endswith(" min_faves:0")
-    # 224 chars at the current 7-brand token set (verified empirically 2026-06-17).
-    assert len(call_b.query_string) == 224, (
-        f"Call B expected 224 chars; got {len(call_b.query_string)}. "
+    # Char count is sensitive to per-brand token changes (e.g. the moonshot
+    # disambig that removed bare "Moonshot" and added 月之暗面 shrank Call B
+    # from 224 -> 212). Pin a range, not a magic number.
+    assert 180 <= len(call_b.query_string) <= 256, (
+        f"Call B length {len(call_b.query_string)} outside expected range. "
         f"Query: {call_b.query_string!r}"
     )
 
@@ -104,7 +106,7 @@ def test_plan_calls_v17_call_b_uses_yaml_brand_tokens(v17_data_dir):
         "deepseek":      ["DeepSeek", "深度求索"],
         "glm":           ["GLM", "智谱", "ChatGLM"],
         "xiaomi_mimo":   ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
-        "moonshot_kimi": ["Kimi", "Moonshot", "月之暗面"],
+        "moonshot_kimi": ["Kimi", "月之暗面"],  # bare "Moonshot" removed by disambig
         "inclusionai":   ["InclusionAI", "Ling", "Ring", "Ming"],
     }
     for model, toks in expected_tokens.items():

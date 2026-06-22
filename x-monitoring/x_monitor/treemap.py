@@ -10,10 +10,10 @@ Public surface:
 - compute_polarity_from_db(conn, brand_id, window_days, *, now=None) -> float | None
     v1.8 (Unit 4 / R17): reads post_brand_signals + post_brands via the
     JOIN shape from Decision 18. Filters _unattributed (Decision 15).
-- compute_polarity_signal_breakdown(conn, brand_id, window_start_iso, *,
-                                     window_end_iso=None) -> dict[str, float]
+- compute_polarity_signal_breakdown(conn, brand_id, window_start_epoch, *,
+                                     window_end_epoch=None) -> dict[str, float]
     v1.8 (Unit 4 / R17): raw signal -> weighted_count breakdown per
-    brand in [window_start_iso, window_end_iso). The dryrun
+    brand in [window_start_epoch, window_end_epoch). The dryrun
     verification calls this directly.
 - bin_polarity(score: float | None) -> str
 - separate_active_and_no_data(tiles) -> (active_tiles, no_data_tiles)
@@ -234,17 +234,23 @@ def bin_polarity(score: float | None) -> str:
 # - Decision 15 (_unattributed filter): the WHERE clause excludes the
 #   sentinel brand so the treemap's "unattributed" bin doesn't pollute
 #   the polarity score.
-# - weight = SUM(pb.weight): a 2-brand post contributes 0.5 to each brand
-#   (per Decision 9, fractional weight).
+# - weight = SUM(pb.weight * (1 + p.retweet_count)): each post's signal is
+#   amplified by its pure-retweet count — an RT inherits the original's
+#   signal ("each utterance = one vote"). A 2-brand post contributes
+#   0.5*(1+rt) to each brand (Decision 9 fractional weight x RT fold).
+# - the window filters on created_at_epoch (unix seconds), NOT the
+#   Twitter-format created_at: ISO-bound string comparison against the
+#   weekday-leading Twitter format sorted incorrectly and silently ignored
+#   the time window pre-migration-006.
 POLARITY_SQL: str = (
-    "SELECT pbs.signal, SUM(pb.weight) AS weighted_count "
+    "SELECT pbs.signal, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
     "FROM post_brand_signals pbs "
     "JOIN post_brands pb "
     "  ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id "
     "JOIN posts p ON p.tweet_id = pbs.post_id "
     "WHERE pbs.brand_id = ? "
     "  AND pbs.brand_id != '_unattributed' "
-    "  AND p.created_at >= ? "
+    "  AND p.created_at_epoch >= ? "
     "GROUP BY pbs.signal"
 )
 
@@ -252,9 +258,9 @@ POLARITY_SQL: str = (
 def compute_polarity_signal_breakdown(
     conn,
     brand_id: str,
-    window_start_iso: str,
+    window_start_epoch: str,
     *,
-    window_end_iso: str | None = None,
+    window_end_epoch: str | None = None,
 ) -> dict[str, float]:
     """Return {signal: weighted_count} for one brand.
 
@@ -268,11 +274,11 @@ def compute_polarity_signal_breakdown(
         conn: a sqlite3.Connection (the Store's _conn).
         brand_id: the brand slug (e.g. "minimax"). "_unattributed"
             returns an empty dict by the same WHERE filter.
-        window_start_iso: ISO-8601 string for the lower bound. Posts
-            with created_at >= window_start_iso are included.
-        window_end_iso: optional ISO-8601 upper bound (exclusive). When
+        window_start_epoch: unix-second epoch for the lower bound. Posts
+            with created_at_epoch >= window_start_epoch are included.
+        window_end_epoch: optional unix-second upper bound (exclusive). When
             None, the SQL omits the upper-bound filter and the result
-            includes all posts from window_start_iso forward. The
+            includes all posts from window_start_epoch forward. The
             polarity score uses this to slice [now-2N, now-N) precisely.
 
     Returns:
@@ -285,9 +291,9 @@ def compute_polarity_signal_breakdown(
           idx_post_brands_brand_post, posts (PK). EXPLAIN should show
           no SCAN or SORT on a populated DB.
     """
-    if window_end_iso is None:
+    if window_end_epoch is None:
         rows = conn.execute(
-            POLARITY_SQL, (brand_id, window_start_iso),
+            POLARITY_SQL, (brand_id, window_start_epoch),
         ).fetchall()
     else:
         # POLARITY_SQL ends with "GROUP BY pbs.signal"; insert the
@@ -295,10 +301,10 @@ def compute_polarity_signal_breakdown(
         # before aggregation. Splitting on "GROUP BY" and re-appending
         # keeps the constant a single source of truth.
         head, tail = POLARITY_SQL.rsplit("GROUP BY", 1)
-        sql_with_upper = head + "AND p.created_at < ? GROUP BY" + tail
+        sql_with_upper = head + "AND p.created_at_epoch < ? GROUP BY" + tail
         rows = conn.execute(
             sql_with_upper,
-            (brand_id, window_start_iso, window_end_iso),
+            (brand_id, window_start_epoch, window_end_epoch),
         ).fetchall()
     return {r["signal"]: float(r["weighted_count"]) for r in rows}
 
@@ -389,25 +395,26 @@ def compute_polarity_from_db(
         # treat as no-data.
         return None
 
-    # Compute ISO-8601 window start strings. posts.created_at is stored
-    # as ISO-8601 with timezone (see _now_iso in store.py); a naive
-    # string comparison is safe because both sides are sorted by the
-    # SQLite collation and ISO-8601 sorts lexicographically.
-    current_start_iso = (now - timedelta(days=window_days)).isoformat()
-    prior_start_iso = (now - timedelta(days=2 * window_days)).isoformat()
+    # Compute epoch bounds for the window queries. posts.created_at_epoch
+    # is a unix-second integer (populated by insert_posts / backfilled by
+    # the migration-006 script); filtering on it fixes the pre-006 bug where
+    # ISO-bound string comparison against the Twitter-format created_at
+    # sorted incorrectly and silently ignored the time window.
+    current_start_epoch = int((now - timedelta(days=window_days)).timestamp())
+    prior_start_epoch = int((now - timedelta(days=2 * window_days)).timestamp())
 
     # Current window: [now-N, now). Prior window: [now-2N, now-N).
     # The breakdown helper accepts an optional upper bound for the
     # windowed prior slice, so we can run two clean queries that
-    # don't overlap. Without window_end_iso=current_start_iso the prior
+    # don't overlap. Without window_end_epoch=current_start_epoch the prior
     # slice would include the current window's posts (the SQL has only
     # a lower bound by default).
     current = compute_polarity_signal_breakdown(
-        conn, brand_id, current_start_iso,
+        conn, brand_id, current_start_epoch,
     )
     prior = compute_polarity_signal_breakdown(
-        conn, brand_id, prior_start_iso,
-        window_end_iso=current_start_iso,
+        conn, brand_id, prior_start_epoch,
+        window_end_epoch=current_start_epoch,
     )
 
     return _score_from_breakdown(current, prior)
