@@ -41,17 +41,75 @@ def v17_data_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "data"
 
 
-def test_plan_calls_v17_returns_exactly_two_calls(v17_data_dir):
-    """plan_calls(data, 7_models, x_monitor_list_id=...) must emit 2 calls."""
+def test_plan_calls_v17_returns_exactly_two_calls_by_default(v17_data_dir):
+    """plan_calls(data, 7_models, x_monitor_list_id=...) with no call_c_specs
+    must emit exactly 2 calls (Call A + Call B). The v1.7 2-call baseline is
+    preserved when the operator has not configured any Call C specs."""
     from x_monitor.query_plan import plan_calls
 
     calls = plan_calls(
         v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID
     )
     assert len(calls) == 2, (
-        f"v1.7 must emit exactly 2 calls; got {len(calls)}: "
+        f"v1.7 default must emit exactly 2 calls; got {len(calls)}: "
         f"{[c.call_kind for c in calls]}"
     )
+    assert calls[0].call_id == "A"
+    assert calls[1].call_id == "B"
+
+
+def test_plan_calls_v17_emits_call_c_when_spec_provided(v17_data_dir):
+    """v1.7.x: plan_calls with a non-empty call_c_specs list emits one extra
+    PlannedCall per spec, in order, with stable call_id C1, C2, ..."""
+    from x_monitor.query_plan import plan_calls, CallCBrandSpec
+
+    specs = [
+        CallCBrandSpec(
+            brand_id="xiaomi_mimo",
+            tokens=["MiMo", "Xiaomi MiMo", "小米 MiMo"],
+            co_occurrence=["api", "llm", "model", "xiaomi", "小米"],
+        ),
+    ]
+    calls = plan_calls(
+        v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID,
+        call_c_specs=specs,
+    )
+    assert len(calls) == 3, (
+        f"expected 2 + 1 Call C; got {len(calls)}: "
+        f"{[c.call_id for c in calls]}"
+    )
+    assert [c.call_id for c in calls] == ["A", "B", "C1"]
+    call_c = calls[2]
+    assert call_c.call_kind == "brand_wide"
+    assert call_c.brand_id == "xiaomi_mimo"
+    assert call_c.expected_signal == "other"
+    # Shape: (<tokens>) (<co_occurrence>) min_faves:0
+    assert call_c.query_string == (
+        "(MiMo OR Xiaomi MiMo OR 小米 MiMo) "
+        "(api OR llm OR model OR xiaomi OR 小米) min_faves:0"
+    )
+    assert call_c.query_length < 512
+
+
+def test_plan_calls_v17_call_c_length_cap_raises(v17_data_dir):
+    """An over-cap Call C query (e.g., 600 chars) must raise ValueError from
+    assert_under_length_cap. Verifies the cap is enforced per Call C spec,
+    not just on Call A / Call B."""
+    import pytest
+    from x_monitor.query_plan import plan_calls, CallCBrandSpec
+
+    # Construct a Call C that's guaranteed over the 512-char cap.
+    huge = ["x" * 200] * 10  # 10x200 = 2000 chars in tokens alone
+    specs = [CallCBrandSpec(
+        brand_id="oversized",
+        tokens=huge,
+        co_occurrence=["api", "llm", "model", "xiaomi", "小米"],
+    )]
+    with pytest.raises(ValueError, match="length"):
+        plan_calls(
+            v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID,
+            call_c_specs=specs,
+        )
 
 
 def test_plan_calls_v17_call_a_is_list_query(v17_data_dir):
@@ -262,6 +320,7 @@ def test_v17_planned_call_call_kind_is_union():
     from x_monitor.query_plan import PlannedCall
 
     p = PlannedCall(
+        call_id="B",
         call_kind="brand_wide",  # type: ignore[arg-type]
         brand_id="*",
         bucket=None,

@@ -573,7 +573,9 @@ class RunPipeline:
                         "fan-in' for the operator steps to create the list."
                     )
                 plan = plan_calls(
-                    self.data_dir, models, x_monitor_list_id=self.config.x_monitor_list_id
+                    self.data_dir, models,
+                    x_monitor_list_id=self.config.x_monitor_list_id,
+                    call_c_specs=self.config.call_c_specs or None,
                 )
                 # Pre-load brand-token + staff-handle maps for
                 # attribute_to_brand (intent calls only). These are

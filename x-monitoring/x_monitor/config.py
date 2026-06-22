@@ -9,6 +9,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
+from .query_plan import CallCBrandSpec
+
 
 # Canonical model registry — adding a model here is the only "code change" needed.
 # The data/queries/<brand_id>.yaml and data/accounts/<brand_id>.yaml files
@@ -114,6 +116,10 @@ class Config(BaseModel):
     # docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
     # §"Call A — list-based fan-in".
     x_monitor_list_id: int | None = None
+    # v1.7.x: optional Call C co-occurrence-constrained brand-wide
+    # queries. See x_monitor.query_plan.CallCBrandSpec. Default empty
+    # (no Call C; v1.7's 2-call baseline is preserved).
+    call_c_specs: list[CallCBrandSpec] = Field(default_factory=list)
     dashboard: DashboardConfig = DashboardConfig()
 
     @field_validator("enabled_models")

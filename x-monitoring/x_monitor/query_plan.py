@@ -10,7 +10,7 @@ real cap is **character length** (~512, per docs.x.com), not operator
 count — and that the `list:<id>` operator (~12 chars) returns tweets
 from any list (public or private) without scaling the query string.
 
-v1.7 collapses all per-cycle work to **2 calls**:
+v1.7 collapses all per-cycle work to **2 calls** by default:
 
   Call A (account):   (list:<x_monitor_list_id>) min_faves:1
                        — picks up everything from list members,
@@ -22,6 +22,13 @@ v1.7 collapses all per-cycle work to **2 calls**:
                          yaml-defined brands, regardless of list
                          membership. Catches the long tail of
                          mentions not from the curated handles.
+
+v1.7.x adds an optional **Call C** — a per-brand brand-wide query with
+a co-occurrence constraint — for brands whose tokens collide with
+unrelated common nouns. Shape: `(<tokens>) (<co_occurrence>) min_faves:N`
+— implicit AND between the two groups, so every result matches BOTH
+a brand token AND at least one co-occurrence term. Configured via
+`call_c_specs:` in config.yaml; default empty list emits no Call C.
 
 Signal classification is post-fetch in `intent_classifier.classify_signal`
 and `attribute_to_brand` (Unit 2). The query shape no longer encodes
@@ -55,31 +62,80 @@ class PlannedCall:
     """A single API call to fire this cycle.
 
     Attributes:
+        call_id: human label for the call ("A", "B", "C1", "C2", ...).
+            Stable across cycles; useful for logging/dedup/raw-file
+            naming alongside brand_id+call_kind.
         call_kind: "account" = list-based fan-in (Call A in v1.7);
-            "brand_wide" = paren-grouped brand-token OR-chain (Call B).
+            "brand_wide" = paren-grouped brand-token OR-chain (Call B
+            or Call C variants).
         brand_id: brand this call is attributed to. For Call A
             (list-based), this is "*" because the list spans all
             brands — post-fetch `attribute_to_brand` reassigns. For
             Call B, this is the FIRST brand in the input order (used
             as a placeholder for `source_query_id`; same reassignment
-            applies).
+            applies). For Call C, this is the spec's brand_id (the
+            call's primary target).
         bucket: None for both v1.7 call kinds. Retained for schema
             stability with the v1.6 contract.
         query_string: the actual X advanced-search query.
         expected_signal: signal bucket this call primarily targets.
             Call A targets "release" (faved official posts).
             Call B targets "other" (the long tail; classifier may
-            upgrade to criticism/praise/etc).
+            upgrade to criticism/praise/etc). Call C defaults to
+            "other" per the spec.
         query_length: len(query_string) in characters. Verified under
             `X_LENGTH_CAP` (512) before being returned.
     """
 
+    call_id: str
     call_kind: CallKind
     brand_id: str
     bucket: str | None
     query_string: str
     expected_signal: str
     query_length: int
+
+
+@dataclass
+class CallCBrandSpec:
+    """Per-brand spec for an optional Call C co-occurrence-constrained
+    brand-wide query.
+
+    Read from config.yaml `call_c_specs:` (not from data/queries/) so
+    the spec stays operator-tunable in the same PR-reviewable file as
+    other config. Each spec emits one extra API call per cycle.
+
+    Attributes:
+        brand_id: the brand this call attributes to. Must match an
+            enabled model (Call B's regex post-fetch will only land
+            posts here if the brand_id is recognised).
+        tokens: list of brand tokens to OR-join in the primary group.
+        co_occurrence: list of co-occurrence terms to OR-join in the
+            secondary group. Posts must match at least one term from
+            each group (implicit AND between the two parenthesised
+            groups in X advanced-search syntax).
+        expected_signal: signal bucket this call primarily targets.
+            "other" by default (long tail; classifier may upgrade).
+        min_faves: lower bound on the call's min_faves. 0 by default
+            (no lower bound).
+    """
+    brand_id: str
+    tokens: list[str]
+    co_occurrence: list[str]
+    expected_signal: str = "other"
+    min_faves: int = 0
+
+
+def _build_call_c_query(spec: CallCBrandSpec) -> str:
+    """Compose one Call C from a CallCBrandSpec.
+
+    Shape: `(<tokens>) (<co_occurrence>) min_faves:N` — implicit AND
+    between the two paren groups. Length-cap assertion is the caller's
+    responsibility (mirrors _build_brand_wide_query).
+    """
+    primary = f"({' OR '.join(spec.tokens)})"
+    secondary = f"({' OR '.join(spec.co_occurrence)})"
+    return f"{primary} {secondary} min_faves:{spec.min_faves}"
 
 
 def _load_brand_tokens_per_model(
@@ -167,8 +223,9 @@ def plan_calls(
     enabled_models: list[str],
     *,
     x_monitor_list_id: int | str,
+    call_c_specs: list[CallCBrandSpec] | None = None,
 ) -> list[PlannedCall]:
-    """Build the per-cycle call list (v1.7: exactly 2 calls).
+    """Build the per-cycle call list (v1.7: 2 calls; v1.7.x: 2 + N).
 
     Call A — `(list:<x_monitor_list_id>) min_faves:1` — fans in all
     curated list members in one go. The list is operator-managed (see
@@ -182,6 +239,10 @@ def plan_calls(
     because we have well under 17 brands (the threshold where Call B
     would need splitting — see queries.py:212 docstring).
 
+    Call C (optional, one per CallCBrandSpec) — `(<tokens>) (<co_occurrence>)
+    min_faves:N` — per-brand co-occurrence-constrained brand-wide query
+    for brands whose bare tokens collide with unrelated common nouns.
+
     Args:
         data_dir: project data/ directory (yaml files live under
             data/queries/<model>.yaml).
@@ -191,13 +252,17 @@ def plan_calls(
             v1.7 does not operate without a list, because Call A is
             the only place we get "faved by official handles" signal
             at scale.
+        call_c_specs: optional list of CallCBrandSpec. Each spec emits
+            one extra API call per cycle. Default: empty (no Call C;
+            v1.7 stays at 2 calls).
 
     Returns:
-        [Call A, Call B]. Each call has already been length-capped.
+        [Call A, Call B, *Call C specs]. Each call has already been
+        length-capped.
 
     Raises:
         TypeError: if x_monitor_list_id is not provided.
-        ValueError: if either emitted query exceeds 512 chars
+        ValueError: if any emitted query exceeds 512 chars
             (propagated from `assert_under_length_cap`).
     """
     if x_monitor_list_id is None:
@@ -215,8 +280,9 @@ def plan_calls(
     call_b_query = _build_brand_wide_query(brand_tokens, enabled_models)
     assert_under_length_cap(call_b_query)
 
-    return [
+    result: list[PlannedCall] = [
         PlannedCall(
+            call_id="A",
             call_kind="account",
             brand_id="*",
             bucket=None,
@@ -225,6 +291,7 @@ def plan_calls(
             query_length=len(call_a_query),
         ),
         PlannedCall(
+            call_id="B",
             call_kind="brand_wide",
             brand_id=enabled_models[0] if enabled_models else "*",
             bucket=None,
@@ -233,6 +300,21 @@ def plan_calls(
             query_length=len(call_b_query),
         ),
     ]
+    for i, spec in enumerate(call_c_specs or []):
+        call_c_query = _build_call_c_query(spec)
+        assert_under_length_cap(call_c_query)
+        result.append(
+            PlannedCall(
+                call_id=f"C{i+1}",
+                call_kind="brand_wide",
+                brand_id=spec.brand_id,
+                bucket=None,
+                query_string=call_c_query,
+                expected_signal=spec.expected_signal,
+                query_length=len(call_c_query),
+            )
+        )
+    return result
 
 
 # Retired v1.6 symbols — referenced in tests as `hasattr() == False`.

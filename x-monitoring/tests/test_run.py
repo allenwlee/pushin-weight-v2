@@ -698,6 +698,7 @@ def _stub_plan_calls(enabled_models):
     out = []
     for m in enabled_models:
         out.append(PlannedCall(
+            call_id="A",
             call_kind="account",
             brand_id=m,
             bucket=None,
@@ -706,6 +707,7 @@ def _stub_plan_calls(enabled_models):
             query_length=1,
         ))
         out.append(PlannedCall(
+            call_id="X",
             call_kind="intent",
             brand_id=m,
             bucket="howto_criticism",

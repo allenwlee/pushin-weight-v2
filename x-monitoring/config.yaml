@@ -61,3 +61,25 @@ dashboard:
 
 # v1.7: x.com list ID for Call A (list-based fan-in). See plan 2026-06-17-001 §"Call A — list-based fan-in".
 x_monitor_list_id: 2067062923525275922
+
+# v1.7.x: Optional Call C — per-brand brand-wide queries with a
+# co-occurrence constraint. Use for brands whose tokens collide with
+# unrelated common nouns ("mimo" matches the studio app; "kimi" matches
+# the F1 driver; etc.). Each spec emits one extra API call per cycle.
+#
+# Shape: `(<tokens>) (<co_occurrence>) min_faves:<N>` — implicit AND
+# between the token group and the co-occurrence group, so every result
+# matches BOTH a brand token AND at least one co-occurrence term. Tokens
+# are joined with OR; co_occurrence are joined with OR.
+#
+# Default is empty (no Call C emitted; v1.7 stays at 2 calls).
+call_c_specs:
+  - brand_id: xiaomi_mimo
+    tokens: [MiMo, Xiaomi MiMo, 小米 MiMo]
+    co_occurrence: [api, llm, model, xiaomi, 小米]
+    expected_signal: other
+    min_faves: 0
+    notes: |
+      MiMo shares the bare token "mimo" with Mimo Studio (a kids' video
+      app), and "xiaomi" alone matches phone posts. The co-occurrence
+      constraint keeps the call's recall tight on AI/ML discussion.
