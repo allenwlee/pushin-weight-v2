@@ -1,7 +1,7 @@
 ---
 title: HF orgs belong to companies, not brands
 type: refactor
-status: active
+status: completed
 date: 2026-06-22
 origin: docs/plans/2026-06-21-001-feat-hf-products-crawler-plan.md
 ---
