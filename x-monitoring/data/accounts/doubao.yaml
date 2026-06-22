@@ -1,0 +1,13 @@
+# {AGENT_ATTRIBUTION}
+accounts:
+  - handle: doubaoAi
+    display_name: "Doubao (ByteDance)"
+    role: official
+    verified: false
+    notes: Placeholder; operator must confirm ByteDance's official Doubao handle. '豆包' is also a literal Chinese snack word; co_occurrence gate in Call C helps.
+
+# Manual staff list (you curate). v1.6 OR-collapse: these
+# handles are folded into the per-brand account call alongside the
+# official handle. Empty by default — add as you discover PM/dev
+# accounts that should represent the brand.
+staff: []

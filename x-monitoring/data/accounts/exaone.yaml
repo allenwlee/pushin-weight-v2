@@ -1,0 +1,13 @@
+# {AGENT_ATTRIBUTION}
+accounts:
+  - handle: LGAIResearch
+    display_name: "LG AI Research"
+    role: official
+    verified: false
+    notes: Placeholder; operator must confirm LG AI Research's official EXAONE handle.
+
+# Manual staff list (you curate). v1.6 OR-collapse: these
+# handles are folded into the per-brand account call alongside the
+# official handle. Empty by default — add as you discover PM/dev
+# accounts that should represent the brand.
+staff: []

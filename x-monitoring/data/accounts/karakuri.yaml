@@ -1,0 +1,13 @@
+# {AGENT_ATTRIBUTION}
+accounts:
+  - handle: karakuri_ai
+    display_name: "Karakuri"
+    role: official
+    verified: false
+    notes: Placeholder; operator must confirm Karakuri's official handle. 'Karakuri' is Japanese for a mechanical puppet — collides with anime/dining/figure posts.
+
+# Manual staff list (you curate). v1.6 OR-collapse: these
+# handles are folded into the per-brand account call alongside the
+# official handle. Empty by default — add as you discover PM/dev
+# accounts that should represent the brand.
+staff: []

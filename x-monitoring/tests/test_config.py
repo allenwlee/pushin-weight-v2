@@ -35,6 +35,15 @@ enabled_models:
   - stepfun
   - ernie
   - hunyuan
+  - llama
+  - nvidia_nemo
+  - doubao
+  - yi
+  - sensechat
+  - exaone
+  - karakuri
+  - kuaishou
+  - upstage
 daily_ceiling: 333
 """,
         )

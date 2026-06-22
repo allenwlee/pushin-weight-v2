@@ -286,8 +286,71 @@ def test_plan_calls_v17_handles_missing_brand_query_yaml(v17_data_dir, tmp_path)
     inner = call_b.strip()[1:call_b.rindex(")")]
     assert inner.count("(") == 5, (
         f"expected 5 brand paren groups in inner; got {inner.count('(')}. "
-        f"Inner: {inner!r}"
+        f"Inner: {call_b!r}"
     )
+
+
+# --- v1.7.x: call_b_groups split into N Call Bs ------------------------
+
+
+def test_plan_calls_v17_default_emits_single_call_b(v17_data_dir):
+    """Without call_b_groups, plan_calls emits exactly one Call B (legacy v1.7 behavior)."""
+    from x_monitor.query_plan import plan_calls
+
+    calls = plan_calls(v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID)
+    # Call A + Call B = 2 calls (no Call C in this default)
+    assert len(calls) == 2
+    assert calls[0].call_id == "A"
+    assert calls[1].call_id == "B"
+
+
+def test_plan_calls_v17_call_b_groups_emits_n_calls(v17_data_dir):
+    """With call_b_groups of 3 lists, plan_calls emits 3 Call Bs labeled B1/B2/B3."""
+    from x_monitor.query_plan import plan_calls
+
+    groups = [
+        ["minimax", "qwen"],
+        ["deepseek", "glm"],
+        ["xiaomi_mimo", "moonshot_kimi", "inclusionai"],
+    ]
+    calls = plan_calls(v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID, call_b_groups=groups)
+    # Call A + 3 Call Bs = 4 calls
+    assert len(calls) == 4
+    assert calls[0].call_id == "A"
+    assert [c.call_id for c in calls[1:]] == ["B1", "B2", "B3"]
+
+
+def test_plan_calls_v17_call_b_groups_each_under_cap(v17_data_dir):
+    """Each Call B in a multi-group split must be under the 512-char cap."""
+    from x_monitor.query_plan import plan_calls
+
+    groups = [
+        ["minimax", "qwen", "deepseek", "glm"],
+        ["xiaomi_mimo", "moonshot_kimi", "inclusionai"],
+    ]
+    calls = plan_calls(v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID, call_b_groups=groups)
+    for c in calls[1:]:
+        assert len(c.query_string) <= 512, (
+            f"{c.call_id} is {len(c.query_string)} chars; cap is 512. Query: {c.query_string!r}"
+        )
+
+
+def test_plan_calls_v17_call_b_groups_contain_only_grouped_brands(v17_data_dir):
+    """Call B1 must only contain brand tokens for brands in group 1, not group 2."""
+    from x_monitor.query_plan import plan_calls
+
+    groups = [
+        ["minimax"],
+        ["glm"],
+    ]
+    calls = plan_calls(v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID, call_b_groups=groups)
+    b1, b2 = calls[1].query_string, calls[2].query_string
+    # B1 has MiniMax/海螺/Hailuo (from minimax.yaml), not GLM/智谱/ChatGLM
+    assert "MiniMax" in b1
+    assert "GLM" not in b1
+    # B2 has GLM/智谱/ChatGLM, not minimax tokens
+    assert "GLM" in b2
+    assert "MiniMax" not in b2
 
 
 # --- v1.7 helpers: assert_under_length_cap ------------------------------

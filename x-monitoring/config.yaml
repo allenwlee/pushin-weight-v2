@@ -17,6 +17,31 @@ enabled_models:
   - stepfun
   - ernie
   - hunyuan
+  - llama
+  - nvidia_nemo
+  - doubao
+  - yi
+  - sensechat
+  - exaone
+  - karakuri
+  - kuaishou
+  - upstage
+# v1.7.x Call B group split. The union of all enabled_models' brand
+# tokens (loaded from data/queries/<brand>.yaml Q2/Q3/Q5/Q6 first
+# paren) exceeds the 512-char X advanced-search cap once we add the
+# 9 new brands (Llama, NeMo, Doubao, Yi, SenseChat, EXAONE, Karakuri,
+# Kuaishou, Upstage). Splitting into three semantic groups keeps each
+# Call B under cap:
+#   B1: top-presence / global brands (8 brands, ~280 chars)
+#   B2: Chinese-language brands (7 brands, ~360 chars)
+#   B3: specialized / smaller brands (5 brands, ~245 chars)
+# When `call_b_groups` is absent or null, plan_calls emits one Call B
+# spanning all enabled_models (legacy v1.7 behavior). Set to null to
+# disable the split.
+call_b_groups:
+  - [llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan]
+  - [doubao, glm, moonshot_kimi, xiaomi_mimo, sensechat, yi, inclusionai]
+  - [nvidia_nemo, exaone, karakuri, kuaishou, upstage]
 
 # Daily TwitterAPI.io budget (pay-per-use). Each unit = 1 tweet returned by
 # advanced_search. 333/day gives 6x headroom over the 9x5x50=2250 upper bound
@@ -82,9 +107,12 @@ call_c_specs:
   # (over-permissive vs. the per-brand intersection; the post-fetch
   # regex still routes correctly).
   - brands:
-      xiaomi_mimo:   [MiMo, Xiaomi MiMo, 小米 MiMo]
-      moonshot_kimi: [Kimi, Moonshot AI, 月之暗面, 暗面]
-    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot]
+      xiaomi_mimo:   [MiMo, "Xiaomi MiMo", "小米 MiMo"]
+      moonshot_kimi: [Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]
+      yi:            [Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]
+      upstage:       [Upstage, Solar, "Solar Pro"]
+      llama:         [Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama]
     expected_signal: other
     min_faves: 0
     call_id: C1

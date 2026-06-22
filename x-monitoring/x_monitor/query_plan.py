@@ -252,6 +252,7 @@ def plan_calls(
     *,
     x_monitor_list_id: int | str,
     call_c_specs: list[CallCBrandSpec] | None = None,
+    call_b_groups: list[list[str]] | None = None,
 ) -> list[PlannedCall]:
     """Build the per-cycle call list (v1.7: 2 calls; v1.7.x: 2 + N).
 
@@ -305,8 +306,14 @@ def plan_calls(
     brand_tokens = _load_brand_tokens_per_model(
         enabled_models, data_dir / "queries"
     )
-    call_b_query = _build_brand_wide_query(brand_tokens, enabled_models)
-    assert_under_length_cap(call_b_query)
+
+    # Resolve Call B groups: explicit (operator-set) list-of-lists wins;
+    # otherwise one Call B spanning all enabled_models. Each group's
+    # emitted query is the OR of ORs of the brands in the group.
+    if call_b_groups is None:
+        b_groups = [list(enabled_models)]
+    else:
+        b_groups = [list(g) for g in call_b_groups]
 
     result: list[PlannedCall] = [
         PlannedCall(
@@ -318,16 +325,22 @@ def plan_calls(
             expected_signal="release",
             query_length=len(call_a_query),
         ),
-        PlannedCall(
-            call_id="B",
-            call_kind="brand_wide",
-            brand_id=enabled_models[0] if enabled_models else "*",
-            bucket=None,
-            query_string=call_b_query,
-            expected_signal="other",
-            query_length=len(call_b_query),
-        ),
     ]
+    for i, group in enumerate(b_groups):
+        group_b_query = _build_brand_wide_query(brand_tokens, group)
+        assert_under_length_cap(group_b_query)
+        b_label = "B" if len(b_groups) == 1 else f"B{i+1}"
+        result.append(
+            PlannedCall(
+                call_id=b_label,
+                call_kind="brand_wide",
+                brand_id=group[0] if group else "*",
+                bucket=None,
+                query_string=group_b_query,
+                expected_signal="other",
+                query_length=len(group_b_query),
+            )
+        )
     for i, spec in enumerate(call_c_specs or []):
         call_c_query = _build_call_c_query(spec)
         assert_under_length_cap(call_c_query)

@@ -28,6 +28,15 @@ KNOWN_MODELS: frozenset[str] = frozenset(
         "stepfun",
         "ernie",
         "hunyuan",
+        "llama",
+        "nvidia_nemo",
+        "doubao",
+        "yi",
+        "sensechat",
+        "exaone",
+        "karakuri",
+        "kuaishou",
+        "upstage",
     }
 )
 
@@ -120,7 +129,39 @@ class Config(BaseModel):
     # queries. See x_monitor.query_plan.CallCBrandSpec. Default empty
     # (no Call C; v1.7's 2-call baseline is preserved).
     call_c_specs: list[CallCBrandSpec] = Field(default_factory=list)
+    # v1.7.x: optional Call B group split. When None (default), one
+    # Call B is emitted spanning all enabled_models (legacy v1.7
+    # behavior). When set, one Call B is emitted per inner list, in
+    # the order given — each Call B's query is the OR of ORs of the
+    # brands in its group. Use when the union of all enabled_models'
+    # brand tokens exceeds the 512-char X advanced-search cap.
+    # Each brand_id in a group must be in enabled_models and in
+    # KNOWN_MODELS. Brands not in any group are skipped from Call B.
+    call_b_groups: list[list[str]] | None = None
     dashboard: DashboardConfig = DashboardConfig()
+
+    @field_validator("call_b_groups")
+    @classmethod
+    def _validate_call_b_groups(cls, v: list[list[str]] | None) -> list[list[str]] | None:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("call_b_groups must be None or non-empty list of lists")
+        seen: set[str] = set()
+        for i, grp in enumerate(v):
+            if not isinstance(grp, list) or not grp:
+                raise ValueError(f"call_b_groups[{i}] must be a non-empty list of brand_ids")
+            for b in grp:
+                if b not in KNOWN_MODELS:
+                    raise ValueError(
+                        f"call_b_groups[{i}]: unknown brand_id '{b}'. Known: {sorted(KNOWN_MODELS)}"
+                    )
+                if b in seen:
+                    raise ValueError(
+                        f"call_b_groups: brand_id '{b}' appears in more than one group"
+                    )
+                seen.add(b)
+        return v
 
     @field_validator("enabled_models")
     @classmethod
