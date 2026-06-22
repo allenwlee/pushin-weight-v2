@@ -70,11 +70,33 @@ class DashboardConfig(BaseModel):
         return self
 
 
+class QuoteTweetConfig(BaseModel):
+    """Quote-tweet capture knobs (2026-06-22). All optional with defaults;
+    the QT-capture regimes run with no config.yaml entry."""
+
+    # Official/staff regime (adaptive, every cycle): fetch a post's new QTs
+    # when its quote_count grew by >= official_delta since the last fetch.
+    official_delta: int = Field(default=5, ge=1)
+    # How long (days) to keep refreshing an official post's quote_count after
+    # it was created. Bounds the tracked set; old posts stop being polled.
+    track_recency_days: int = Field(default=14, ge=1)
+    # Max pages (20 QTs each) per get_quote_tweets call — bounds mega-floods.
+    max_pages: int = Field(default=5, ge=1)
+    # Hard cap on QT-fetch CALLS per cycle for the official regime.
+    official_call_budget: int = Field(default=20, ge=0)
+
+    # Non-official regime (daily pass; see plan Unit 5).
+    daily_enabled: bool = True
+    daily_recency_days: int = Field(default=7, ge=1)
+    daily_call_budget: int = Field(default=50, ge=0)
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
     apify_actor: str = "automation-lab/twitter-scraper"
     clustering: ClusteringConfig = ClusteringConfig()
+    quote_tweets: QuoteTweetConfig = QuoteTweetConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))

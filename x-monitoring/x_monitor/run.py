@@ -54,6 +54,21 @@ log = logging.getLogger(__name__)
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+
+def _iso_to_epoch(value: str | None) -> int | None:
+    """Parse an ISO-8601 timestamp to unix seconds, or None.
+
+    Used to turn a post's `last_quote_fetched_at` (ISO) into the unix
+    `sinceTime` for the next /twitter/tweet/quotes call.
+    """
+    if not value:
+        return None
+    try:
+        return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
 def filter_and_review(
     items: list[dict[str, Any]],
     q: Query,
@@ -353,6 +368,41 @@ def _attribute_call_items(
                 _legacy_classify_signal(it.get("text", ""))
             )
     return classified
+
+
+def _ingest_quote_tweets(
+    qt_items: list[dict[str, Any]],
+    parent_tweet_id: str,
+    parent_text: str,
+    *,
+    index: Any,
+    brand_search_terms: dict[str, str],
+    store: Store,
+) -> int:
+    """Ingest captured quote-tweets through the SAME attribution +
+    classification path as original posts.
+
+    For each QT: if it carries no `quoted_text` AND its `quoted_status_id`
+    equals the parent, attach the parent's text (the D5 invariant — only
+    when the QT actually quotes this parent; a QT nesting a different quote
+    is classified on commentary alone). Then `_attribute_call_items` folds
+    commentary + quoted_text for `attribute_to_brands` and classifies the
+    signal on the commentary only. Multi-brand QTs inherit 1/N-weighted
+    `post_brands`/`post_brand_signals` via `store.insert_posts`. Idempotent:
+    re-ingesting a QT (same tweet_id) is a no-op (INSERT OR IGNORE + ON
+    CONFLICT). Returns the number of QTs newly inserted.
+    """
+    parent_id_str = str(parent_tweet_id or "")
+    for qt in qt_items:
+        if not qt.get("quoted_text") and str(
+            qt.get("quoted_status_id") or ""
+        ) == parent_id_str:
+            qt["quoted_text"] = parent_text
+    _attribute_call_items(qt_items, index, brand_search_terms)
+    kept = [it for it in qt_items if not it.get("_unattributed")]
+    if not kept:
+        return 0
+    return store.insert_posts(kept)
 
 
 class RunPipeline:
@@ -697,6 +747,24 @@ class RunPipeline:
 
                 if summary["status"] == "aborted":
                     pass  # already handled in the inner break
+
+                # v1.9 (2026-06-22): quote-tweet capture. Runs after the
+                # main harvest so newly-attributed posts are in the DB.
+                # Skipped on dry_run / abort. See plan Units 4 & 5.
+                if not dry_run and summary["status"] != "aborted":
+                    qt_brand_tokens = _brand_tokens_map(models, self.data_dir)
+                    qt_index, qt_bst = _build_brand_index(qt_brand_tokens, models)
+                    qt_staff = _staff_handles_map(models, self.data_dir)
+                    try:
+                        qt_out = self._capture_official_quote_tweets(
+                            apify, store, qt_index, qt_bst, qt_staff,
+                        )
+                        summary.setdefault("quote_tweets", {}).update(qt_out)
+                    except Exception as e:  # never abort the run over QT capture
+                        log.warning("official QT capture failed: %s", e)
+                        summary.setdefault("quote_tweets", {})[
+                            "official_error"
+                        ] = str(e)
             finally:
                 store.close()
 
@@ -709,6 +777,101 @@ class RunPipeline:
             self._write_summary(run_id, summary)
             self._update_latest_symlink(run_id, running=False)
             return summary
+
+    def _capture_official_quote_tweets(
+        self,
+        apify: TwitterApiClient,
+        store: Store,
+        index: Any,
+        brand_search_terms: dict[str, str],
+        staff_handles: dict[str, list[str]],
+    ) -> dict[str, Any]:
+        """Adaptive every-cycle QT capture for official/staff posts.
+
+        Tracks recent official/staff posts (created within
+        `quote_tweets.track_recency_days`), batched-refreshes their current
+        `quote_count`, and for any whose `quote_count` grew by >=
+        `official_delta` since the last fetch, pulls the new QTs and ingests
+        them. Velocity is emergent: a flooding post crosses the threshold
+        every cycle; a quiet one never does.
+
+        `update_quote_tracking` runs AFTER a successful fetch (and ingest),
+        so a failed ingest retries the same `sinceTime` window next cycle
+        (idempotent via tweet_id dedup). A successful ingest whose tracking
+        update fails simply re-fetches next cycle — safe, never double-counted.
+        """
+        cfg = self.config.quote_tweets
+        staff_set = {h for hs in staff_handles.values() for h in hs}
+        out: dict[str, Any] = {"official_n_tracked": 0}
+        if not staff_set:
+            return out
+        cutoff_epoch = (
+            int(datetime.now(timezone.utc).timestamp())
+            - cfg.track_recency_days * 86400
+        )
+        placeholders = ",".join("?" for _ in staff_set)
+        rows = store._conn.execute(
+            "SELECT tweet_id, text, last_quote_count_seen, last_quote_fetched_at "
+            f"FROM posts WHERE author_handle IN ({placeholders}) "
+            "AND created_at_epoch >= ?",
+            (*staff_set, cutoff_epoch),
+        ).fetchall()
+        out["official_n_tracked"] = len(rows)
+        if not rows:
+            return out
+        # Batched refresh: one chunked call for every tracked post's counts.
+        try:
+            fresh = apify.get_tweets_by_ids([r["tweet_id"] for r in rows])
+        except Exception as e:
+            log.warning("official QT refresh failed: %s", e)
+            out["official_refresh_error"] = str(e)
+            return out
+        n_calls = 0
+        n_qts = 0
+        n_ingested = 0
+        for r in rows:
+            tid = r["tweet_id"]
+            info = fresh.get(tid)
+            if not info:
+                continue
+            fresh_qc = int(info.get("quote_count") or 0)
+            delta = fresh_qc - int(r["last_quote_count_seen"] or 0)
+            if delta < cfg.official_delta:
+                continue
+            since_time = _iso_to_epoch(r["last_quote_fetched_at"])
+            try:
+                qts = apify.get_quote_tweets(
+                    tid, since_time=since_time, max_pages=cfg.max_pages
+                )
+            except Exception as e:
+                log.warning("official QT fetch failed for %s: %s", tid, e)
+                continue
+            n_calls += 1
+            if qts:
+                try:
+                    ingested = _ingest_quote_tweets(
+                        qts, tid, r["text"] or "",
+                        index=index,
+                        brand_search_terms=brand_search_terms,
+                        store=store,
+                    )
+                except Exception as e:
+                    log.warning("official QT ingest failed for %s: %s", tid, e)
+                    ingested = 0
+                n_ingested += ingested
+                n_qts += len(qts)
+            # Advance tracking after a successful fetch even when 0 new QTs
+            # came back, so a post that crossed the threshold but had no new
+            # quotes doesn't re-bill the 15-tweet floor every cycle.
+            store.update_quote_tracking(tid, fresh_qc, _now_iso())
+            if n_calls >= cfg.official_call_budget:
+                break
+        out.update(
+            official_n_calls=n_calls,
+            official_n_qts_fetched=n_qts,
+            official_n_ingested=n_ingested,
+        )
+        return out
 
     def _update_accounts(self, store: Store, summary: dict[str, Any]) -> None:
         """Regenerate accounts/<brand_id>.yaml-derived upserts from posts."""

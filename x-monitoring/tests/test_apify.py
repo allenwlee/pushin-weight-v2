@@ -569,3 +569,86 @@ class TestRunSearch:
         ):
             out = client.run_search("from:x", max_results=50)
         assert len(out) == 30
+
+
+# --- get_quote_tweets / get_tweets_by_ids (2026-06-22) --------------------
+
+
+def _qt(tid, text="q"):
+    return {"id": tid, "text": text, "quoteCount": 0, "retweetCount": 0,
+            "replyCount": 0, "likeCount": 0, "author": {"userName": "u"}}
+
+
+def test_get_quote_tweets_single_page_normalizes_and_params():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    body = {"tweets": [_qt("111", "hello")], "has_next_page": False}
+    with patch.object(requests, "get", return_value=_mock_response(200, body)) as mg:
+        out = client.get_quote_tweets("999")
+    assert out and out[0]["id"] == "111" and out[0]["text"] == "hello"
+    params = mg.call_args.kwargs["params"]
+    assert params["tweetId"] == "999"
+    assert params["includeReplies"] == "false"
+    assert "sinceTime" not in params  # None default -> omitted
+
+
+def test_get_quote_tweets_passes_since_time_as_unix():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": [], "has_next_page": False})) as mg:
+        client.get_quote_tweets("999", since_time=1780000000)
+    assert mg.call_args.kwargs["params"]["sinceTime"] == 1780000000
+
+
+def test_get_quote_tweets_paginates_via_cursor():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    p1 = {"tweets": [_qt("1"), _qt("2")], "has_next_page": True, "next_cursor": "c1"}
+    p2 = {"tweets": [_qt("3")], "has_next_page": False}
+    with patch.object(client, "_get", side_effect=[p1, p2]):
+        out = client.get_quote_tweets("999")
+    assert [t["id"] for t in out] == ["1", "2", "3"]
+
+
+def test_get_quote_tweets_stops_on_empty_page_despite_has_next():
+    """The has_next_page lie: an empty tweets list must stop iteration even
+    when has_next_page is true (documented platform inconsistency)."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    p1 = {"tweets": [_qt("1")], "has_next_page": True, "next_cursor": "c1"}
+    p2 = {"tweets": [], "has_next_page": True, "next_cursor": "c2"}  # empty!
+    with patch.object(client, "_get", side_effect=[p1, p2, {"tweets": [_qt("x")]}]) as mg:
+        out = client.get_quote_tweets("999")
+    assert [t["id"] for t in out] == ["1"]
+    assert mg.call_count == 2  # stopped at the empty page, no third call
+
+
+def test_get_quote_tweets_max_pages_cap():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    page = {"tweets": [_qt("1")], "has_next_page": True, "next_cursor": "c"}
+    with patch.object(client, "_get", side_effect=[page, page, page, page]) as mg:
+        client.get_quote_tweets("999", max_pages=2)
+    assert mg.call_count == 2
+
+
+def test_get_tweets_by_ids_returns_metrics_map():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    body = {"tweets": [
+        {"id": "a", "quoteCount": 5, "retweetCount": 9, "replyCount": 1, "likeCount": 2},
+        {"id": "b", "quoteCount": 0, "retweetCount": 3, "replyCount": 0, "likeCount": 0},
+    ]}
+    with patch.object(requests, "get", return_value=_mock_response(200, body)) as mg:
+        out = client.get_tweets_by_ids(["a", "b"])
+    assert out["a"]["quote_count"] == 5
+    assert out["b"]["retweet_count"] == 3
+    assert mg.call_args.kwargs["params"]["tweet_ids"] == "a,b"
+
+
+def test_get_tweets_by_ids_chunks_long_list():
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    def fake(path, params):
+        # Echo back the requested ids with zero counts.
+        ids = params["tweet_ids"].split(",")
+        return {"tweets": [{"id": i, "quoteCount": 0, "retweetCount": 0,
+                            "replyCount": 0, "likeCount": 0} for i in ids]}
+    ids = [str(i) for i in range(125)]  # > TWEETS_BY_IDS_CHUNK (50)
+    with patch.object(client, "_get", side_effect=fake) as mg:
+        out = client.get_tweets_by_ids(ids)
+    assert mg.call_count == 3  # 50 + 50 + 25
+    assert set(out.keys()) == set(ids)

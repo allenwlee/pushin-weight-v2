@@ -1211,3 +1211,109 @@ def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
         items = review.list()
         assert any(it.get("tweet_id") == "f1" for it in items)
         store.close()
+
+
+# --- Unit 4: official/staff adaptive QT capture (2026-06-22) --------------
+
+
+class _FakeApify:
+    def __init__(self, fresh, quotes):
+        self._fresh = fresh
+        self._quotes = quotes
+
+    def get_tweets_by_ids(self, ids):
+        return self._fresh
+
+    def get_quote_tweets(self, tweet_id, *, since_time=None, max_pages=5, include_replies=False):
+        return self._quotes.get(tweet_id, [])
+
+
+def _qt_pipeline(tmp_path):
+    from x_monitor.run import _build_brand_index
+    from x_monitor.store import Store
+    cfg = Config(enabled_models=["glm"], daily_ceiling=10, x_monitor_list_id=1)
+    pipe = RunPipeline(cfg, tmp_path, tmp_path / "x.db")
+    return pipe, Store(tmp_path / "x.db"), _build_brand_index({"glm": ["glm"]}, ["glm"])
+
+
+def test_capture_official_qt_threshold_fetch_ingest_track(tmp_path):
+    from datetime import datetime, timezone
+    pipe, store, (index, bst) = _qt_pipeline(tmp_path)
+    try:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        store.insert_posts([{
+            "id": "P1", "tweet_id": "P1", "brand_ids": ["glm"],
+            "author_handle": "official_glm", "text": "GLM 5.2 launched",
+            "created_at": now, "quote_count": 10, "entities": {},
+        }])
+        fake = _FakeApify(
+            fresh={"P1": {"quote_count": 10, "retweet_count": 0,
+                          "reply_count": 0, "like_count": 0}},
+            quotes={"P1": [{
+                "id": "Q1", "tweet_id": "Q1", "text": "glm is great",
+                "quoted_status_id": "P1", "created_at": now,
+                "entities": {}, "author_handle": "reposter", "lang": "en",
+            }]},
+        )
+        out = pipe._capture_official_quote_tweets(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        assert out["official_n_tracked"] == 1
+        assert out["official_n_calls"] == 1
+        assert out["official_n_ingested"] == 1
+        row = store._conn.execute(
+            "SELECT last_quote_count_seen FROM posts WHERE tweet_id='P1'"
+        ).fetchone()
+        assert row["last_quote_count_seen"] == 10
+        n = store._conn.execute(
+            "SELECT COUNT(*) c FROM posts WHERE tweet_id='Q1'"
+        ).fetchone()["c"]
+        assert n == 1
+    finally:
+        store.close()
+
+
+def test_capture_official_qt_below_threshold_no_fetch(tmp_path):
+    from datetime import datetime, timezone
+    pipe, store, (index, bst) = _qt_pipeline(tmp_path)
+    try:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        store.insert_posts([{
+            "id": "P2", "tweet_id": "P2", "brand_ids": ["glm"],
+            "author_handle": "official_glm", "text": "GLM 5.2 launched",
+            "created_at": now, "quote_count": 10, "entities": {},
+        }])
+        store.update_quote_tracking("P2", 8, now)  # delta = 10-8 = 2 < 5
+        fake = _FakeApify(
+            fresh={"P2": {"quote_count": 10, "retweet_count": 0,
+                          "reply_count": 0, "like_count": 0}},
+            quotes={"P2": [{"id": "Qx", "tweet_id": "Qx", "text": "glm",
+                            "quoted_status_id": "P2", "created_at": now}]},
+        )
+        out = pipe._capture_official_quote_tweets(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        assert out["official_n_tracked"] == 1
+        assert out["official_n_calls"] == 0  # below threshold -> skipped
+        assert out["official_n_ingested"] == 0
+    finally:
+        store.close()
+
+
+def test_capture_official_qt_excludes_non_official_authors(tmp_path):
+    from datetime import datetime, timezone
+    pipe, store, (index, bst) = _qt_pipeline(tmp_path)
+    try:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        store.insert_posts([{
+            "id": "P3", "tweet_id": "P3", "brand_ids": ["glm"],
+            "author_handle": "random_user", "text": "GLM 5.2 launched",
+            "created_at": now, "quote_count": 100, "entities": {},
+        }])
+        fake = _FakeApify(fresh={}, quotes={})
+        out = pipe._capture_official_quote_tweets(
+            fake, store, index, bst, {"glm": ["official_glm"]},
+        )
+        assert out["official_n_tracked"] == 0  # excluded — not staff
+    finally:
+        store.close()

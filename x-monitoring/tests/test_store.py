@@ -93,7 +93,7 @@ def test_migrations_apply_forward_only_and_idempotent():
             # what matters is that 1 and 2 are both in the set.
             assert 1 in applied_first
             assert 2 in applied_first
-            assert store.applied_migrations() == [1, 2, 3, 4, 5]
+            assert store.applied_migrations() == [1, 2, 3, 4, 5, 6]
             # Re-apply is a no-op
             applied_second = store.apply_migrations()
             assert applied_second == []
@@ -524,6 +524,72 @@ def test_read_brand_accounts_returns_dict():
             assert d["handle:bob"] == "qwen"
             assert d["handle:carol"] == "deepseek"
             assert len(d) == 3
+        finally:
+            store.close()
+
+
+def test_migration_006_adds_tracking_and_epoch_columns():
+    """Migration 006 adds last_quote_count_seen, last_quote_fetched_at,
+    and created_at_epoch to posts."""
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            cols = {
+                r["name"]
+                for r in store._conn.execute("PRAGMA table_info(posts)")
+            }
+            assert "last_quote_count_seen" in cols
+            assert "last_quote_fetched_at" in cols
+            assert "created_at_epoch" in cols
+        finally:
+            store.close()
+
+
+def test_insert_posts_writes_created_at_epoch_twitter_format():
+    """insert_posts parses the Twitter-format created_at into an integer
+    epoch on created_at_epoch (the basis for time-window queries)."""
+    from x_monitor.store import _created_at_epoch
+
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            tw = "Mon Jun 08 22:25:20 +0000 2026"
+            store.insert_posts([_make_post("1", created_at=tw)])
+            row = store._conn.execute(
+                "SELECT created_at_epoch FROM posts WHERE tweet_id='1'"
+            ).fetchone()
+            assert row["created_at_epoch"] == _created_at_epoch(tw)
+            assert row["created_at_epoch"] is not None
+        finally:
+            store.close()
+
+
+def test_update_quote_tracking_roundtrip_and_unclobbered():
+    """update_quote_tracking writes the two tracking columns and survives a
+    subsequent INSERT OR IGNORE re-insert of the same post (which must not
+    reset them)."""
+    with tempfile.TemporaryDirectory() as d:
+        store = Store(Path(d) / "x.db")
+        try:
+            store.insert_posts([_make_post("1")])
+            store.update_quote_tracking("1", 42, "2026-06-22T00:00:00+00:00")
+            row = store._conn.execute(
+                "SELECT last_quote_count_seen, last_quote_fetched_at "
+                "FROM posts WHERE tweet_id='1'"
+            ).fetchone()
+            assert row["last_quote_count_seen"] == 42
+            assert row["last_quote_fetched_at"] == "2026-06-22T00:00:00+00:00"
+
+            # Re-insert the same post (INSERT OR IGNORE) — tracking must be
+            # preserved, not reset to defaults.
+            store.insert_posts([_make_post("1", text="changed")])
+            row = store._conn.execute(
+                "SELECT last_quote_count_seen, last_quote_fetched_at, text "
+                "FROM posts WHERE tweet_id='1'"
+            ).fetchone()
+            assert row["last_quote_count_seen"] == 42
+            assert row["last_quote_fetched_at"] == "2026-06-22T00:00:00+00:00"
+            assert row["text"] == "hello"
         finally:
             store.close()
 

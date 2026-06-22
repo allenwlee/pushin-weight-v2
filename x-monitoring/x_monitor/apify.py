@@ -38,6 +38,18 @@ ARTICLE_PATH = "/twitter/article"
 #   Always ask for 200 — the price-per-item is the cheapest.
 FOLLOWERS_MAX_PER_PAGE = 200
 
+# Quote-tweet capture (2026-06-22): /twitter/tweet/quotes returns the
+# quote-tweets OF a given tweet (20/page, newest-first). Used by the
+# reactive (official) and daily (non-official) QT-capture regimes.
+QUOTES_PATH = "/twitter/tweet/quotes"
+QUOTES_MAX_PER_PAGE = 20
+# Batched tweet lookup by ID (2026-06-22): the cheap quote_count refresh —
+# one call returns current quoteCount/retweetCount for many tweet IDs, so
+# the QT regimes can observe growth without the search re-surfacing posts.
+TWEETS_BY_IDS_PATH = "/twitter/tweets"
+# /twitter/tweets takes a comma-separated id list; cap to keep URLs sane.
+TWEETS_BY_IDS_CHUNK = 50
+
 
 class TwitterApiAuthError(RuntimeError):
     """Raised on HTTP 401 (X-API-Key missing or invalid)."""
@@ -226,6 +238,88 @@ class TwitterApiClient:
         if since and "since:" not in query:
             effective_query = f"{query} since:{since}"
         return self._walk_search(effective_query, max_results, max_pages=5)
+
+    def get_quote_tweets(
+        self,
+        tweet_id: str,
+        *,
+        since_time: int | None = None,
+        max_pages: int = 5,
+        include_replies: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Fetch the quote-tweets of `tweet_id` via /twitter/tweet/quotes.
+
+        Returns normalized QTs (via _normalize_tweet), newest-first, up to
+        `max_pages * QUOTES_MAX_PER_PAGE`. `since_time` is a unix-second
+        timestamp; only QTs created on/after it are returned (seeds the
+        incremental sinceTime resume between captures). `include_replies`
+        defaults False (we want quotes, not replies).
+
+        Pagination stops on EITHER an empty page OR `has_next_page=false`:
+        the TwitterAPI.io docs warn `has_next_page` can return true even
+        when no more data exists (subsequent calls return empty), so the
+        empty-page guard is load-bearing. `max_pages` bounds mega-floods.
+        """
+        out: list[dict[str, Any]] = []
+        cursor: str | None = None
+        for _ in range(max(1, max_pages)):
+            params: dict[str, Any] = {
+                "tweetId": str(tweet_id),
+                "includeReplies": "true" if include_replies else "false",
+            }
+            if since_time is not None:
+                params["sinceTime"] = int(since_time)
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get(QUOTES_PATH, params)
+            tweets = data.get("tweets") or []
+            if not tweets:
+                # has_next_page can lie (per docs) — an empty page means
+                # stop regardless of the flag.
+                break
+            for t in tweets:
+                out.append(_normalize_tweet(t))
+            if not data.get("has_next_page"):
+                break
+            cursor = data.get("next_cursor")
+            if not cursor:
+                break
+        return out
+
+    def get_tweets_by_ids(
+        self,
+        tweet_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Batched tweet lookup via /twitter/tweets?tweet_ids=<csv>.
+
+        The cheap quote_count refresh: one call returns the current
+        public_metrics (quoteCount, retweetCount, ...) for many tweet IDs,
+        so the QT-capture regimes can observe growth without the search
+        re-surfacing each post (which ages out of "Latest" after ~1-2
+        days, and whose stored quote_count is frozen by INSERT OR IGNORE).
+
+        Returns ``{tweet_id: {"quote_count": N, "retweet_count": N, ...}}``.
+        ID lists longer than TWEETS_BY_IDS_CHUNK are split across calls.
+        Missing/invalid IDs are simply absent from the result.
+        """
+        out: dict[str, dict[str, Any]] = {}
+        ids = [str(t) for t in tweet_ids if t]
+        for i in range(0, len(ids), TWEETS_BY_IDS_CHUNK):
+            chunk = ids[i : i + TWEETS_BY_IDS_CHUNK]
+            data = self._get(
+                TWEETS_BY_IDS_PATH, {"tweet_ids": ",".join(chunk)}
+            )
+            for t in data.get("tweets") or []:
+                tid = str(t.get("id") or "")
+                if not tid:
+                    continue
+                out[tid] = {
+                    "quote_count": int(t.get("quoteCount") or 0),
+                    "retweet_count": int(t.get("retweetCount") or 0),
+                    "reply_count": int(t.get("replyCount") or 0),
+                    "like_count": int(t.get("likeCount") or 0),
+                }
+        return out
 
     def run_followers(
         self,

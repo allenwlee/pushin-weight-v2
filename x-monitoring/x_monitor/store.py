@@ -61,6 +61,22 @@ def _parse_post_created_at(value):
         return None
 
 
+def _created_at_epoch(value) -> int | None:
+    """Unix-second epoch for a `posts.created_at` value, or None.
+
+    Populates `posts.created_at_epoch` so time-window queries (polarity
+    windows in treemap.POLARITY_SQL; the QT daily-pass recency window) can
+    filter on a parseable integer. String-comparing the Twitter-format
+    `created_at` against ISO bounds sorts incorrectly (weekday-leading
+    strings sort after any ``2...`` ISO bound), which silently ignored the
+    polarity time window pre-migration-006.
+    """
+    dt = _parse_post_created_at(value)
+    if dt is None:
+        return None
+    return int(dt.timestamp())
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -239,8 +255,9 @@ class Store:
                         reply_count, quote_count, in_reply_to_user_id,
                         quoted_status_id, conversation_id, entities,
                         source_query_id, raw, headline, headline_source,
-                        text_en, text_zh_cn, lang_detected, quoted_text
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        text_en, text_zh_cn, lang_detected, quoted_text,
+                        created_at_epoch
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         tweet_id_str,
@@ -276,6 +293,7 @@ class Store:
                         p.get("text_zh_cn"),
                         p.get("lang_detected"),
                         p.get("quoted_text"),
+                        _created_at_epoch(p.get("created_at")),
                     ),
                 )
                 if cur.rowcount > 0:
@@ -393,6 +411,39 @@ class Store:
                             ),
                         )
         return n_new
+
+    def update_quote_tracking(
+        self,
+        tweet_id: str,
+        quote_count: int,
+        fetched_at: str | None,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        """Record the latest observed `quote_count` and QT-fetch timestamp.
+
+        Written separately from `insert_posts` because `posts` is INSERT OR
+        IGNORE (re-inserts update nothing) and these values change every
+        cycle. Call this in the SAME transaction as the QT ingest batch so
+        a failed ingest does not advance `last_quote_count_seen` /
+        `last_quote_fetched_at` (which would silently skip un-fetched
+        QTs); on failure the caller's transaction rolls back and the next
+        cycle retries the same `sinceTime` window idempotently.
+
+        Pass `conn=` to join an existing transaction (e.g. a
+        `with store.transaction() as c:` block wrapping ingest + this
+        call); omit it to use the Store's connection directly.
+        """
+        c = conn if conn is not None else self._conn
+        c.execute(
+            """
+            UPDATE posts SET
+                last_quote_count_seen = ?,
+                last_quote_fetched_at = ?
+            WHERE tweet_id = ?
+            """,
+            (int(quote_count or 0), fetched_at, str(tweet_id)),
+        )
 
     def _extract_brand_ids(self, p: dict[str, Any]) -> list[str]:
         """Normalize the post dict's brand-id field(s) to a list[str].
