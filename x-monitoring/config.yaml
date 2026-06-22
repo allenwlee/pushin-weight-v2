@@ -74,12 +74,29 @@ x_monitor_list_id: 2067062923525275922
 #
 # Default is empty (no Call C emitted; v1.7 stays at 2 calls).
 call_c_specs:
-  - brand_id: xiaomi_mimo
-    tokens: [MiMo, Xiaomi MiMo, 小米 MiMo]
-    co_occurrence: [api, llm, model, xiaomi, 小米]
+  # Multi-brand spec — covers both MiMo and Kimi in one Call C. The
+  # primary group uses Call B's per-brand paren structure (one paren
+  # per brand) so the post-fetch attribute_to_brands regex can route
+  # each result to the right brand by which per-brand paren matched.
+  # Co-occurrence is the union of both brands' preferred terms
+  # (over-permissive vs. the per-brand intersection; the post-fetch
+  # regex still routes correctly).
+  - brands:
+      xiaomi_mimo:   [MiMo, Xiaomi MiMo, 小米 MiMo]
+      moonshot_kimi: [Kimi, Moonshot AI, 月之暗面, 暗面]
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot]
     expected_signal: other
     min_faves: 0
+    call_id: C1
     notes: |
-      MiMo shares the bare token "mimo" with Mimo Studio (a kids' video
-      app), and "xiaomi" alone matches phone posts. The co-occurrence
-      constraint keeps the call's recall tight on AI/ML discussion.
+      MiMo: bare "mimo" matches Mimo Studio (kids' video app); "xiaomi"
+      alone matches phone posts. xiaomi/小米 co-occurrence terms exclude
+      phone-only false positives.
+      Kimi: "kimi" is a Turkish interrogative ("who?") and a Japanese
+      second-person pronoun (きみ); both are common-word false
+      positives. moonshot/chatbot co-occurrence terms exclude
+      non-AI uses. F1 driver Kimi Antonelli hijack is mitigated by
+      data/filters/moonshot_kimi.yaml must_have_none (F1, antonelli,
+      mercedes, ...). Bare "moonshot" is intentionally absent from
+      the brand group — matches Moonshot crypto exchange spam, not
+      Moonshot AI.

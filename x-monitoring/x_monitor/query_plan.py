@@ -98,42 +98,70 @@ class PlannedCall:
 
 @dataclass
 class CallCBrandSpec:
-    """Per-brand spec for an optional Call C co-occurrence-constrained
+    """Multi-brand spec for an optional Call C co-occurrence-constrained
     brand-wide query.
 
     Read from config.yaml `call_c_specs:` (not from data/queries/) so
     the spec stays operator-tunable in the same PR-reviewable file as
     other config. Each spec emits one extra API call per cycle.
 
+    Structure mirrors Call B: the primary group is a paren-grouped
+    OR-of-ORs with one outer paren per brand. Post-fetch attribution
+    (`attribute_to_brands`) routes each result to the brand whose
+    tokens matched, so multiple brands in one spec is the natural
+    shape — same as Call B.
+
     Attributes:
-        brand_id: the brand this call attributes to. Must match an
-            enabled model (Call B's regex post-fetch will only land
-            posts here if the brand_id is recognised).
-        tokens: list of brand tokens to OR-join in the primary group.
+        brands: {brand_id: [tokens, ...]} mapping. One entry per brand
+            to include in this call's primary group. Each brand's
+            tokens are OR-joined inside a paren; the per-brand paren
+            groups are then OR-joined into the outer primary group.
+            This is identical to Call B's per-brand grouping.
         co_occurrence: list of co-occurrence terms to OR-join in the
-            secondary group. Posts must match at least one term from
-            each group (implicit AND between the two parenthesised
-            groups in X advanced-search syntax).
+            secondary group. Shared across all brands in this spec.
+            Posts must match at least one term from the primary group
+            AND at least one term from the co-occurrence group
+            (implicit AND between the two parenthesised groups in X
+            advanced-search syntax).
         expected_signal: signal bucket this call primarily targets.
             "other" by default (long tail; classifier may upgrade).
         min_faves: lower bound on the call's min_faves. 0 by default
             (no lower bound).
+        call_id: stable label for this spec ("C1", "C2", ...). Optional;
+            planner auto-assigns C1/C2/... if empty.
     """
-    brand_id: str
-    tokens: list[str]
+    brands: dict[str, list[str]]
     co_occurrence: list[str]
     expected_signal: str = "other"
     min_faves: int = 0
+    call_id: str = ""
 
 
 def _build_call_c_query(spec: CallCBrandSpec) -> str:
     """Compose one Call C from a CallCBrandSpec.
 
-    Shape: `(<tokens>) (<co_occurrence>) min_faves:N` — implicit AND
-    between the two paren groups. Length-cap assertion is the caller's
-    responsibility (mirrors _build_brand_wide_query).
+    Shape: `((brand1_tok1 OR brand1_tok2) OR (brand2_tok1 OR ...))
+    (<co_occurrence>) min_faves:N` — same per-brand paren-group shape
+    as Call B, with a shared co-occurrence group. Implicit AND between
+    the primary and co-occurrence groups; implicit OR inside each
+    group. Length-cap assertion is the caller's responsibility
+    (mirrors _build_brand_wide_query).
+
+    Brands with empty token lists are skipped (defensive — should not
+    happen in practice).
     """
-    primary = f"({' OR '.join(spec.tokens)})"
+    parts: list[str] = []
+    for brand_id, toks in spec.brands.items():
+        if not toks:
+            continue
+        parts.append(f"({' OR '.join(toks)})")
+    if not parts:
+        # Defensive — should not happen at the operator baseline, but
+        # an all-empty configuration still returns a syntactically
+        # valid (if useless) query.
+        primary = "(empty)"
+    else:
+        primary = f"({' OR '.join(parts)})"
     secondary = f"({' OR '.join(spec.co_occurrence)})"
     return f"{primary} {secondary} min_faves:{spec.min_faves}"
 
@@ -303,11 +331,21 @@ def plan_calls(
     for i, spec in enumerate(call_c_specs or []):
         call_c_query = _build_call_c_query(spec)
         assert_under_length_cap(call_c_query)
+        # Call C may cover multiple brands (mirrors Call B's per-brand
+        # grouping). Pick a placeholder brand_id for raw-file naming
+        # (one raw file per call) — prefer an explicit `call_id` from
+        # the spec, else the first brand in iteration order, else "*".
+        if spec.call_id:
+            c_label = spec.call_id
+            c_brand_placeholder = next(iter(spec.brands), "*")
+        else:
+            c_label = f"C{i+1}"
+            c_brand_placeholder = next(iter(spec.brands), "*")
         result.append(
             PlannedCall(
-                call_id=f"C{i+1}",
+                call_id=c_label,
                 call_kind="brand_wide",
-                brand_id=spec.brand_id,
+                brand_id=c_brand_placeholder,
                 bucket=None,
                 query_string=call_c_query,
                 expected_signal=spec.expected_signal,

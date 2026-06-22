@@ -59,15 +59,21 @@ def test_plan_calls_v17_returns_exactly_two_calls_by_default(v17_data_dir):
 
 
 def test_plan_calls_v17_emits_call_c_when_spec_provided(v17_data_dir):
-    """v1.7.x: plan_calls with a non-empty call_c_specs list emits one extra
-    PlannedCall per spec, in order, with stable call_id C1, C2, ..."""
+    """v1.7.x: plan_calls with a non-empty call_c_specs list emits one
+    PlannedCall per spec. Each spec is multi-brand (mirrors Call B's
+    per-brand paren grouping) and the post-fetch attribute_to_brands
+    routes results to the right brand by token match."""
     from x_monitor.query_plan import plan_calls, CallCBrandSpec
 
+    # Single spec covering both MiMo and Kimi — same shape as a
+    # multi-brand Call B.
     specs = [
         CallCBrandSpec(
-            brand_id="xiaomi_mimo",
-            tokens=["MiMo", "Xiaomi MiMo", "小米 MiMo"],
-            co_occurrence=["api", "llm", "model", "xiaomi", "小米"],
+            brands={
+                "xiaomi_mimo":  ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
+                "moonshot_kimi": ["Kimi", "月之暗面", "暗面"],
+            },
+            co_occurrence=["api", "llm", "model"],
         ),
     ]
     calls = plan_calls(
@@ -81,14 +87,53 @@ def test_plan_calls_v17_emits_call_c_when_spec_provided(v17_data_dir):
     assert [c.call_id for c in calls] == ["A", "B", "C1"]
     call_c = calls[2]
     assert call_c.call_kind == "brand_wide"
-    assert call_c.brand_id == "xiaomi_mimo"
+    # brand_id is a placeholder (one raw file per call); actual routing
+    # is via post-fetch attribute_to_brands matching the per-brand
+    # paren group.
+    assert call_c.brand_id in {"xiaomi_mimo", "moonshot_kimi"}
     assert call_c.expected_signal == "other"
-    # Shape: (<tokens>) (<co_occurrence>) min_faves:0
-    assert call_c.query_string == (
-        "(MiMo OR Xiaomi MiMo OR 小米 MiMo) "
-        "(api OR llm OR model OR xiaomi OR 小米) min_faves:0"
+    # Shape: ((brand1) OR (brand2)) (co_occurrence) min_faves:0
+    # Brand group order is dict-insertion order (py3.7+); both brands
+    # are in the outer paren, joined with OR.
+    expected = (
+        "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR 月之暗面 OR 暗面)) "
+        "(api OR llm OR model) min_faves:0"
+    )
+    assert call_c.query_string == expected, (
+        f"unexpected query string:\n  got:      {call_c.query_string!r}\n"
+        f"  expected: {expected!r}"
     )
     assert call_c.query_length < 512
+
+
+def test_plan_calls_v17_call_c_per_brand_paren_grouping(v17_data_dir):
+    """Call C with multiple brands must put each brand's tokens in its
+    own paren group (Call B's structure), NOT a flat OR of all tokens.
+    This is what makes post-fetch attribute_to_brands work — the regex
+    matcher needs the per-brand paren boundaries to know which brand a
+    given post's token matched."""
+    from x_monitor.query_plan import plan_calls, CallCBrandSpec
+
+    specs = [CallCBrandSpec(
+        brands={
+            "a": ["alpha", "al"],
+            "b": ["beta", "be"],
+        },
+        co_occurrence=["ctx"],
+    )]
+    calls = plan_calls(
+        v17_data_dir, ["a", "b"], x_monitor_list_id=V17_LIST_ID,
+        call_c_specs=specs,
+    )
+    q = calls[2].query_string
+    # Per-brand paren groups: (alpha OR al) and (beta OR be)
+    assert "(alpha OR al)" in q
+    assert "(beta OR be)" in q
+    # Outer primary paren wraps the per-brand groups
+    assert q.startswith("((")
+    # Co-occurrence group
+    assert "(ctx)" in q
+    assert q.endswith(" min_faves:0")
 
 
 def test_plan_calls_v17_call_c_length_cap_raises(v17_data_dir):
@@ -101,8 +146,7 @@ def test_plan_calls_v17_call_c_length_cap_raises(v17_data_dir):
     # Construct a Call C that's guaranteed over the 512-char cap.
     huge = ["x" * 200] * 10  # 10x200 = 2000 chars in tokens alone
     specs = [CallCBrandSpec(
-        brand_id="oversized",
-        tokens=huge,
+        brands={"oversized": huge},
         co_occurrence=["api", "llm", "model", "xiaomi", "小米"],
     )]
     with pytest.raises(ValueError, match="length"):
