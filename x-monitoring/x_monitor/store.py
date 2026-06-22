@@ -1410,6 +1410,111 @@ class Store:
         ).fetchall()
         return {r["term"]: r["brand_id"] for r in rows}
 
+    def read_brand_hf_orgs(
+        self, brand_id: str, *, confirmed_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return the brand's HuggingFace org rows from `brand_hf_orgs`.
+
+        Each row is a dict: {brand_id, hf_org, is_primary, confirmed,
+        discovered_via, added_at}. With `confirmed_only=True` (default) only
+        curated/operator-confirmed orgs are returned — the orgs the crawler
+        scrapes. Discovered candidates (confirmed=0) are excluded so a wrong
+        org is never silently scraped.
+        """
+        sql = (
+            "SELECT brand_id, hf_org, is_primary, confirmed, discovered_via, "
+            "added_at FROM brand_hf_orgs WHERE brand_id = ?"
+        )
+        if confirmed_only:
+            sql += " AND confirmed = 1"
+        sql += " ORDER BY is_primary DESC, hf_org"
+        rows = self._conn.execute(sql, (brand_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def upsert_brand_hf_org(
+        self,
+        brand_id: str,
+        hf_org: str,
+        *,
+        confirmed: int = 0,
+        is_primary: int = 0,
+        discovered_via: str = "search",
+    ) -> None:
+        """Insert a brand→HF-org edge, or update without downgrading.
+
+        Discovery uses confirmed=0 (candidates flagged for operator review).
+        On conflict, `confirmed` is never demoted (a curated/confirmed org
+        survives a re-discovery) and a `curated` provenance is preserved.
+        """
+        with self.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO brand_hf_orgs (
+                    brand_id, hf_org, is_primary, confirmed, discovered_via, added_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(brand_id, hf_org) DO UPDATE SET
+                    confirmed = CASE
+                        WHEN excluded.confirmed > brand_hf_orgs.confirmed
+                        THEN excluded.confirmed
+                        ELSE brand_hf_orgs.confirmed
+                    END,
+                    discovered_via = CASE
+                        WHEN brand_hf_orgs.discovered_via = 'curated'
+                        THEN brand_hf_orgs.discovered_via
+                        ELSE excluded.discovered_via
+                    END
+                """,
+                (brand_id, hf_org, is_primary, confirmed, discovered_via, _now_iso()),
+            )
+
+    def upsert_product(self, row: dict[str, Any]) -> None:
+        """Insert a product row, or refresh mutable stats on conflict (repo_id PK).
+
+        `row` must carry every product column. On conflict only the mutable
+        stats refresh (downloads, downloads_all_time, download_velocity, likes,
+        trending_score, last_modified, *_json, raw_json, updated_at); brand_id,
+        hf_org, hf_type, display_name, collected_at stay stable so re-runs are
+        idempotent and a brand assignment survives a refresh.
+        """
+        cols = [
+            "repo_id", "brand_id", "hf_org", "hf_type", "display_name", "author",
+            "sha", "private", "gated", "disabled", "pipeline_tag", "library_name",
+            "downloads", "downloads_all_time", "download_velocity", "likes",
+            "trending_score", "paperswithcode_id", "created_at", "last_modified",
+            "tags_json", "siblings_json", "card_data_json", "config_json",
+            "spaces_json", "raw_json", "collected_at", "updated_at",
+        ]
+        mutable = {
+            "downloads", "downloads_all_time", "download_velocity", "likes",
+            "trending_score", "last_modified", "tags_json", "siblings_json",
+            "card_data_json", "config_json", "spaces_json", "raw_json", "updated_at",
+        }
+        assert set(mutable) <= set(cols), "mutable references unknown product column"
+        set_clause = ", ".join(f"{c}=excluded.{c}" for c in cols if c in mutable)
+        sql = (
+            f"INSERT INTO products ({', '.join(cols)}) "
+            f"VALUES ({', '.join('?' for _ in cols)}) "
+            f"ON CONFLICT(repo_id) DO UPDATE SET {set_clause}"
+        )
+        with self.transaction() as conn:
+            conn.execute(sql, tuple(row.get(c) for c in cols))
+
+    def read_products(
+        self, brand_id: str | None = None, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Return product rows, optionally filtered by brand, downloads-desc."""
+        sql = "SELECT * FROM products"
+        params: tuple[Any, ...] = ()
+        if brand_id is not None:
+            sql += " WHERE brand_id = ?"
+            params = (brand_id,)
+        sql += " ORDER BY downloads DESC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = params + (limit,)
+        rows = self._conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
 __all__ = [
     # Dataclasses
     "BrandRow",

@@ -62,6 +62,25 @@ def reattribute_all_posts(*args, **kwargs):
     return _impl(*args, **kwargs)
 
 
+def collect_all(*args, **kwargs):
+    """Collect HuggingFace models per brand into the products table.
+
+    Thin re-export of ``x_monitor.hf_products.collect_all``. Import is
+    deferred so callers that don't need the HF crawler avoid loading httpx.
+    """
+    from x_monitor.hf_products import collect_all as _impl
+    return _impl(*args, **kwargs)
+
+
+def resolve_hf_orgs(*args, **kwargs):
+    """Resolve a brand's HuggingFace orgs (hybrid curated + discover-and-flag).
+
+    Thin re-export of ``x_monitor.hf_products.resolve_hf_orgs``.
+    """
+    from x_monitor.hf_products import resolve_hf_orgs as _impl
+    return _impl(*args, **kwargs)
+
+
 __all__ = [
     # Version
     "__version__",
@@ -88,4 +107,7 @@ __all__ = [
     "Store",
     # Backfill CLI
     "reattribute_all_posts",
+    # HuggingFace products crawler
+    "collect_all",
+    "resolve_hf_orgs",
 ]
