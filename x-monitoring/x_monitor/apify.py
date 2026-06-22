@@ -326,6 +326,14 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
     retweet_count, author_handle, in_reply_to_user_id, entities.
     """
     author = item.get("author") or {}
+    # TwitterAPI.io signals a quote/retweet via a nested `quoted_tweet` /
+    # `retweeted_tweet` object — NOT via the top-level isQuote/isRetweet
+    # booleans (which it never sets). Detect from object presence so quote
+    # tweets (~32% of brand-wide results) are recognized, and surface the
+    # quoted post's id + text for attribution/display. Without this the
+    # quoted body is fetched, held in `raw`, then discarded on write.
+    quoted = item.get("quoted_tweet") or {}
+    retweeted = item.get("retweeted_tweet") or {}
     return {
         "id": str(item.get("id") or ""),
         "text": item.get("text") or "",
@@ -337,9 +345,14 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "quote_count": int(item.get("quoteCount") or 0),
         "bookmark_count": int(item.get("bookmarkCount") or 0),
         "is_reply": bool(item.get("isReply")),
-        "is_retweet": bool(item.get("isRetweet")),
-        "is_quote": bool(item.get("isQuote")),
+        "is_retweet": bool(item.get("isRetweet") or retweeted),
+        "is_quote": bool(item.get("isQuote") or quoted),
         "in_reply_to_user_id": item.get("inReplyToUserId") or None,
+        "quoted_status_id": str(quoted["id"]) if quoted.get("id") else None,
+        "quoted_text": quoted.get("text") or None,
+        "quoted_author_handle": (
+            (quoted.get("author") or {}).get("userName") or None
+        ),
         "author_handle": (
             author.get("userName")
             or author.get("screen_name")

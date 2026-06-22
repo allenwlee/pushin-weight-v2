@@ -299,10 +299,16 @@ def _attribute_call_items(
     classified = 0
     for it in items:
         _fallback_created_at = _dt.now(_tz.utc).isoformat(timespec="seconds")
+        # Fold the quoted tweet's text into the body that attribute_to_brands
+        # matches (it reads post["text"], attribution.py). A quote-repost of a
+        # brand tweet should attribute even when the reposter's commentary lacks
+        # the keyword. Stored posts.text stays commentary-only (store.insert).
+        _body = it.get("text", "") or ""
+        _quoted = it.get("quoted_text") or ""
         post_like = {
             "tweet_id": it.get("id", ""),
             "id": it.get("id", ""),
-            "text": it.get("text", ""),
+            "text": (_body + "\n" + _quoted) if _quoted else _body,
             "created_at": it.get("created_at") or _fallback_created_at,
             "entities": it.get("entities", {}),
         }

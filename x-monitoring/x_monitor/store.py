@@ -239,8 +239,8 @@ class Store:
                         reply_count, quote_count, in_reply_to_user_id,
                         quoted_status_id, conversation_id, entities,
                         source_query_id, raw, headline, headline_source,
-                        text_en, text_zh_cn, lang_detected
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        text_en, text_zh_cn, lang_detected, quoted_text
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         tweet_id_str,
@@ -275,6 +275,7 @@ class Store:
                         p.get("text_en"),
                         p.get("text_zh_cn"),
                         p.get("lang_detected"),
+                        p.get("quoted_text"),
                     ),
                 )
                 if cur.rowcount > 0:
