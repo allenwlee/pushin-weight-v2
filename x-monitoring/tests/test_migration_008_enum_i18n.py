@@ -215,8 +215,9 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-008 (quote-tweets 005/006 already on main; i18n 007+008) — no 005 (HF products lives on unmerged branch).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8], f"unexpected versions: {applied}"
+        # 001-009 (quote-tweets 005/006 already on main; i18n 007/008;
+        # HF products 009 on this branch)
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9], f"unexpected versions: {applied}"
     finally:
         s.close()
 

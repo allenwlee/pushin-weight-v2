@@ -37,6 +37,18 @@ class BrandRow:
     accent_color: str
     is_sentinel: bool
 
+@dataclass(frozen=True)
+class CompanyRow:
+    """A single row from the `companies` table.
+
+    The corporate-parent registry. A company may own zero, one, or many
+    HuggingFace orgs (via the `hf_orgs` 1:N edge added in migration 005).
+    """
+
+    company_id: str
+    display_name: str
+    hq_country: str | None
+
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -1362,6 +1374,48 @@ class Store:
                 return row["label"]
         return value
 
+    def read_companies(self) -> list["CompanyRow"]:
+        """Return all rows from the `companies` table.
+
+        No cache (low cardinality: ~10 rows) — re-query on each call.
+        Used by `hf_products.collect_all` to walk the 1:N companies→HF-orgs
+        edge.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT company_id, display_name, hq_country
+            FROM companies
+            ORDER BY display_name
+            """
+        ).fetchall()
+        return [
+            CompanyRow(
+                company_id=r["company_id"],
+                display_name=r["display_name"],
+                hq_country=r["hq_country"],
+            )
+            for r in rows
+        ]
+
+    def read_brand_companies_for_company(
+        self, company_id: str
+    ) -> list[str]:
+        """Return the brand_ids that belong to `company_id` via brand_companies.
+
+        Brands without a brand_companies edge (e.g. `_unattributed`) are
+        never returned — they're corporate-parent-less and intentionally
+        excluded from HF coverage.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT brand_id FROM brand_companies
+            WHERE company_id = ?
+            ORDER BY brand_id
+            """,
+            (company_id,),
+        ).fetchall()
+        return [r["brand_id"] for r in rows]
+
     def read_brand_accounts(self) -> dict[str, str]:
         """Return {author_id: brand_id} for all brand-account edges (R13).
 
@@ -1410,61 +1464,64 @@ class Store:
         ).fetchall()
         return {r["term"]: r["brand_id"] for r in rows}
 
-    def read_brand_hf_orgs(
-        self, brand_id: str, *, confirmed_only: bool = True
+    def read_hf_orgs(
+        self, company_id: str, *, confirmed_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Return the brand's HuggingFace org rows from `brand_hf_orgs`.
+        """Return the company's HuggingFace org rows from `hf_orgs`.
 
-        Each row is a dict: {brand_id, hf_org, is_primary, confirmed,
-        discovered_via, added_at}. With `confirmed_only=True` (default) only
+        Each row is a dict: {id, company_id, confirmed, discovered_via,
+        added_at}. With `confirmed_only=True` (default) only
         curated/operator-confirmed orgs are returned — the orgs the crawler
         scrapes. Discovered candidates (confirmed=0) are excluded so a wrong
         org is never silently scraped.
         """
         sql = (
-            "SELECT brand_id, hf_org, is_primary, confirmed, discovered_via, "
-            "added_at FROM brand_hf_orgs WHERE brand_id = ?"
+            "SELECT id, company_id, confirmed, discovered_via, added_at "
+            "FROM hf_orgs WHERE company_id = ?"
         )
         if confirmed_only:
             sql += " AND confirmed = 1"
-        sql += " ORDER BY is_primary DESC, hf_org"
-        rows = self._conn.execute(sql, (brand_id,)).fetchall()
+        sql += " ORDER BY id"
+        rows = self._conn.execute(sql, (company_id,)).fetchall()
         return [dict(r) for r in rows]
 
-    def upsert_brand_hf_org(
+    def upsert_hf_org(
         self,
-        brand_id: str,
-        hf_org: str,
+        hf_org_id: str,
+        company_id: str,
         *,
         confirmed: int = 0,
-        is_primary: int = 0,
         discovered_via: str = "search",
     ) -> None:
-        """Insert a brand→HF-org edge, or update without downgrading.
+        """Insert a company→HF-org edge, or update without downgrading.
 
         Discovery uses confirmed=0 (candidates flagged for operator review).
         On conflict, `confirmed` is never demoted (a curated/confirmed org
         survives a re-discovery) and a `curated` provenance is preserved.
+        `hf_org_id` is the HF namespace string itself (e.g. "MiniMaxAI") and
+        is the table's PRIMARY KEY; the FK to `companies.company_id` is
+        created by migration 005.
         """
         with self.transaction() as conn:
             conn.execute(
                 """
-                INSERT INTO brand_hf_orgs (
-                    brand_id, hf_org, is_primary, confirmed, discovered_via, added_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(brand_id, hf_org) DO UPDATE SET
+                INSERT INTO hf_orgs (
+                    id, company_id, confirmed, discovered_via, added_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    company_id = excluded.company_id,
                     confirmed = CASE
-                        WHEN excluded.confirmed > brand_hf_orgs.confirmed
+                        WHEN excluded.confirmed > hf_orgs.confirmed
                         THEN excluded.confirmed
-                        ELSE brand_hf_orgs.confirmed
+                        ELSE hf_orgs.confirmed
                     END,
                     discovered_via = CASE
-                        WHEN brand_hf_orgs.discovered_via = 'curated'
-                        THEN brand_hf_orgs.discovered_via
+                        WHEN hf_orgs.discovered_via = 'curated'
+                        THEN hf_orgs.discovered_via
                         ELSE excluded.discovered_via
                     END
                 """,
-                (brand_id, hf_org, is_primary, confirmed, discovered_via, _now_iso()),
+                (hf_org_id, company_id, confirmed, discovered_via, _now_iso()),
             )
 
     def upsert_product(self, row: dict[str, Any]) -> None:
@@ -1473,11 +1530,11 @@ class Store:
         `row` must carry every product column. On conflict only the mutable
         stats refresh (downloads, downloads_all_time, download_velocity, likes,
         trending_score, last_modified, *_json, raw_json, updated_at); brand_id,
-        hf_org, hf_type, display_name, collected_at stay stable so re-runs are
+        hf_org_id, hf_type, display_name, collected_at stay stable so re-runs are
         idempotent and a brand assignment survives a refresh.
         """
         cols = [
-            "repo_id", "brand_id", "hf_org", "hf_type", "display_name", "author",
+            "repo_id", "brand_id", "hf_org_id", "hf_type", "display_name", "author",
             "sha", "private", "gated", "disabled", "pipeline_tag", "library_name",
             "downloads", "downloads_all_time", "download_velocity", "likes",
             "trending_score", "paperswithcode_id", "created_at", "last_modified",
@@ -1518,6 +1575,7 @@ class Store:
 __all__ = [
     # Dataclasses
     "BrandRow",
+    "CompanyRow",
     # Core
     "Store",
 ]

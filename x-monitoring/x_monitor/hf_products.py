@@ -49,23 +49,28 @@ def _bool_int(v: Any) -> int | None:
 
 
 def resolve_hf_orgs(
-    brand_id: str,
+    company_id: str,
     display_name: str,
     store: "Store",
     *,
     client: "httpx.Client | None" = None,
     persist: bool = True,
 ) -> list[dict[str, Any]]:
-    """Return confirmed HF orgs for a brand (hybrid curated + discover-and-flag).
+    """Return confirmed HF orgs for a company (hybrid curated + discover-and-flag).
 
-    Reads confirmed orgs from `brand_hf_orgs` first. If none exist and
-    ``persist`` is True (default), searches HF for candidates and persists them
-    with confirmed=0 (flagged for operator review) — they are NOT scraped this
+    Reads confirmed orgs from `hf_orgs` first. If none exist and ``persist``
+    is True (default), searches HF for candidates and persists them with
+    confirmed=0 (flagged for operator review) — they are NOT scraped this
     run. With ``persist=False`` the function is fully read-only (no discovery,
     no writes) — used by ``--dry-run`` so it has no side effects. Returns the
     confirmed orgs only (possibly empty).
+
+    Companies are the corporate-parent axis: an HF namespace belongs to
+    exactly one company. The brand→company hop (via `brand_companies`) is
+    handled by `collect_all`; this function operates one level higher, on
+    companies.
     """
-    confirmed = store.read_brand_hf_orgs(brand_id, confirmed_only=True)
+    confirmed = store.read_hf_orgs(company_id, confirmed_only=True)
     if confirmed:
         return confirmed
     if not persist:
@@ -82,19 +87,18 @@ def resolve_hf_orgs(
         )
         if not org:
             continue
-        store.upsert_brand_hf_org(
-            brand_id,
+        store.upsert_hf_org(
             org,
+            company_id,
             confirmed=0,
-            is_primary=0,
             discovered_via=f"search:{display_name}",
         )
     if kept:
         _log.info(
-            "hf_products: discovered %d candidate org(s) for brand %r — "
-            "promote via brand_hf_orgs.confirmed=1 to scrape",
+            "hf_products: discovered %d candidate org(s) for company %r — "
+            "promote via hf_orgs.confirmed=1 to scrape",
             len(kept),
-            brand_id,
+            company_id,
         )
     return []
 
@@ -102,12 +106,16 @@ def resolve_hf_orgs(
 # --- enrich + persist ---------------------------------------------------
 
 
-def _model_to_product_row(brand_id: str, org: str, m: dict[str, Any]) -> dict[str, Any]:
+def _model_to_product_row(
+    brand_id: str, hf_org_id: str, m: dict[str, Any]
+) -> dict[str, Any]:
     """Map an HF model object onto a `products` row dict.
 
     Scalar fields → typed columns; nested/list/object fields → JSON columns;
     the full payload is kept verbatim in raw_json. Handles both camelCase
-    (REST) and snake_case field names defensively.
+    (REST) and snake_case field names defensively. `hf_org_id` is the HF
+    namespace string (e.g. "MiniMaxAI"); it must already exist in the
+    `hf_orgs` table (FK enforced at INSERT).
     """
     repo_id = m.get("id") or m.get("modelId") or ""
     display_name = repo_id.split("/", 1)[1] if "/" in repo_id else repo_id
@@ -123,7 +131,7 @@ def _model_to_product_row(brand_id: str, org: str, m: dict[str, Any]) -> dict[st
     return {
         "repo_id": repo_id,
         "brand_id": brand_id,
-        "hf_org": m.get("author") or org,
+        "hf_org_id": m.get("author") or hf_org_id,
         "hf_type": "model",
         "display_name": display_name,
         "author": m.get("author"),
@@ -217,26 +225,32 @@ def collect_all(
     max: int | None = None,
     dry_run: bool = False,
 ) -> list[dict[str, Any]]:
-    """Collect products for every enabled brand (or a `companies` subset).
+    """Collect products for every enabled company (or a `companies` subset).
 
-    Per-org isolation: one failing org is recorded and skipped; the rest of the
-    run completes. `companies` accepts brand_ids or display names; unknown names
-    are logged and skipped. `dry_run` resolves orgs only — fully read-only (no
-    discovery writes, no product writes).
+    The outer loop iterates **companies** (the corporate-parent axis); for
+    each company we read its HF orgs via `hf_orgs` (1:N) and its brands via
+    `brand_companies` (M:N). A company with zero HF coverage is logged and
+    skipped; a brand with no `brand_companies` edge (e.g. `_unattributed`)
+    is naturally excluded.
+
+    Per-org isolation: one failing org is recorded and skipped; the rest of
+    the run completes. `companies` accepts `company_id` or display name;
+    unknown values are logged and skipped. `dry_run` resolves orgs only —
+    fully read-only (no discovery writes, no product writes).
     """
-    brands = {b.brand_id: b for b in store.read_brands() if not b.is_sentinel}
+    company_rows = {c.company_id: c for c in store.read_companies()}
 
     if companies:
         wanted: set[str] = set()
         for c in companies:
-            if c in brands:
+            if c in company_rows:
                 wanted.add(c)
                 continue
             match = next(
                 (
-                    bid
-                    for bid, b in brands.items()
-                    if b.display_name.lower() == c.lower()
+                    cid
+                    for cid, cr in company_rows.items()
+                    if cr.display_name.lower() == c.lower()
                 ),
                 None,
             )
@@ -244,28 +258,51 @@ def collect_all(
                 wanted.add(match)
             else:
                 _log.warning("hf_products: unknown company %r — skipped", c)
-        brands = {bid: b for bid, b in brands.items() if bid in wanted}
+        company_rows = {cid: cr for cid, cr in company_rows.items() if cid in wanted}
 
     results: list[dict[str, Any]] = []
-    for bid, b in brands.items():
+    for cid, c in company_rows.items():
         # dry_run → read-only resolve (no discovery writes)
-        orgs = resolve_hf_orgs(bid, b.display_name, store, client=client, persist=not dry_run)
+        orgs = resolve_hf_orgs(cid, c.display_name, store, client=client, persist=not dry_run)
+        brand_ids = store.read_brand_companies_for_company(cid)
         if not orgs:
             results.append(
-                {"brand_id": bid, "resolved": [], "note": "no confirmed HF org"}
+                {
+                    "company_id": cid,
+                    "brand_ids": brand_ids,
+                    "resolved": [],
+                    "note": "no confirmed HF org",
+                }
             )
             continue
         for org_row in orgs:
-            org = org_row["hf_org"]
+            org_id = org_row["id"]
             if dry_run:
-                results.append({"brand_id": bid, "org": org, "dry_run": True})
-                continue
-            try:
-                r = collect_products_for_org(bid, org, store, client=client, max=max)
-                results.append({"brand_id": bid, **r})
-            except Exception as e:  # per-org isolation
-                _log.exception("hf_products: collect failed for %s/%s", bid, org)
                 results.append(
-                    {"brand_id": bid, "org": org, "ok": False, "error": f"{type(e).__name__}: {e}"}
+                    {
+                        "company_id": cid,
+                        "brand_ids": brand_ids,
+                        "org": org_id,
+                        "dry_run": True,
+                    }
                 )
+                continue
+            # For each HF org, attribute products to each brand the company owns.
+            # (Most companies own a single brand; multi-brand companies like
+            # alibaba→qwen will see products spread across brands.)
+            for bid in brand_ids:
+                try:
+                    r = collect_products_for_org(bid, org_id, store, client=client, max=max)
+                    results.append({"company_id": cid, "brand_id": bid, **r})
+                except Exception as e:  # per-org isolation
+                    _log.exception("hf_products: collect failed for %s/%s", bid, org_id)
+                    results.append(
+                        {
+                            "company_id": cid,
+                            "brand_id": bid,
+                            "org": org_id,
+                            "ok": False,
+                            "error": f"{type(e).__name__}: {e}",
+                        }
+                    )
     return results

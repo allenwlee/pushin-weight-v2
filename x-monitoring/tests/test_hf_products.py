@@ -1,5 +1,10 @@
 # {{AGENT_ATTRIBUTION}}
-"""Tests for x_monitor.hf_products: resolver + collector + Store product methods."""
+"""Tests for x_monitor.hf_products: resolver + collector + Store product methods.
+
+Company-centric redesign (migration 005): HF orgs belong to **companies**, not
+brands. The brand→company hop (via `brand_companies`) is handled by
+`collect_all`; the resolver + collector operate one level higher, on companies.
+"""
 
 from __future__ import annotations
 
@@ -24,11 +29,7 @@ def _model(repo: str, author: str, **kw):
 
 
 def _org_client(models):
-    """Mock client serving LIST at /api/models and DETAIL at /api/models/{id}.
-
-    The detail response is the list model enriched with cardData/config (what
-    the real HF detail endpoint adds over the lean list payload).
-    """
+    """Mock client serving LIST at /api/models and DETAIL at /api/models/{id}."""
     by_id = {m["id"]: m for m in models}
 
     def handler(req):
@@ -48,53 +49,65 @@ def _org_client(models):
     return _mock_client(handler)
 
 
-# --- Store.read_brand_hf_orgs / upsert_brand_hf_org --------------------
+# --- Store.read_hf_orgs / upsert_hf_org ---------------------------------
 
 
-def test_read_brand_hf_orgs_curated(tmp_path):
+def test_read_hf_orgs_curated(tmp_path):
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        rows = s.read_brand_hf_orgs("deepseek")
-        assert [r["hf_org"] for r in rows] == ["deepseek-ai"]
+        rows = s.read_hf_orgs("deepseek_co")
+        assert [r["id"] for r in rows] == ["deepseek-ai"]
         assert all(r["confirmed"] == 1 for r in rows)
     finally:
         s.close()
 
 
-def test_read_brand_hf_orgs_confirmed_only_filter(tmp_path):
+def test_read_hf_orgs_confirmed_only_filter(tmp_path):
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s.upsert_brand_hf_org(
-            "deepseek", "deepseek-labs", confirmed=0, discovered_via="search:x"
+        s.upsert_hf_org(
+            "deepseek-labs", "deepseek_co", confirmed=0, discovered_via="search:x"
         )
-        confirmed = s.read_brand_hf_orgs("deepseek", confirmed_only=True)
-        assert {r["hf_org"] for r in confirmed} == {"deepseek-ai"}
-        all_rows = s.read_brand_hf_orgs("deepseek", confirmed_only=False)
-        assert {r["hf_org"] for r in all_rows} == {"deepseek-ai", "deepseek-labs"}
+        confirmed = s.read_hf_orgs("deepseek_co", confirmed_only=True)
+        assert {r["id"] for r in confirmed} == {"deepseek-ai"}
+        all_rows = s.read_hf_orgs("deepseek_co", confirmed_only=False)
+        assert {r["id"] for r in all_rows} == {"deepseek-ai", "deepseek-labs"}
     finally:
         s.close()
 
 
-def test_upsert_brand_hf_org_does_not_demote_confirmed(tmp_path):
+def test_upsert_hf_org_does_not_demote_confirmed(tmp_path):
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s.upsert_brand_hf_org(
-            "deepseek", "deepseek-ai", confirmed=0, discovered_via="search:x"
+        # Re-upsert the already-curated deepseek-ai row with confirmed=0.
+        s.upsert_hf_org(
+            "deepseek-ai", "deepseek_co", confirmed=0, discovered_via="search:x"
         )
-        rows = s.read_brand_hf_orgs("deepseek", confirmed_only=True)
-        assert any(r["hf_org"] == "deepseek-ai" and r["confirmed"] == 1 for r in rows)
+        rows = s.read_hf_orgs("deepseek_co", confirmed_only=True)
+        assert any(r["id"] == "deepseek-ai" and r["confirmed"] == 1 for r in rows)
     finally:
         s.close()
 
 
-def test_upsert_brand_hf_org_idempotent(tmp_path):
+def test_upsert_hf_org_preserves_curated_provenance(tmp_path):
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s.upsert_brand_hf_org("deepseek", "deepseek-labs", confirmed=0, discovered_via="search:x")
-        s.upsert_brand_hf_org("deepseek", "deepseek-labs", confirmed=0, discovered_via="search:x")
+        s.upsert_hf_org(
+            "deepseek-ai", "deepseek_co", confirmed=0, discovered_via="search:x"
+        )
+        rows = s.read_hf_orgs("deepseek_co", confirmed_only=False)
+        assert rows[0]["discovered_via"] == "curated"
+    finally:
+        s.close()
+
+
+def test_upsert_hf_org_idempotent(tmp_path):
+    s = Store(tmp_path / "x.db", auto_migrate=True)
+    try:
+        s.upsert_hf_org("deepseek-labs", "deepseek_co", confirmed=0, discovered_via="search:x")
+        s.upsert_hf_org("deepseek-labs", "deepseek_co", confirmed=0, discovered_via="search:x")
         n = s._conn.execute(
-            "SELECT COUNT(*) FROM brand_hf_orgs "
-            "WHERE brand_id='deepseek' AND hf_org='deepseek-labs'"
+            "SELECT COUNT(*) FROM hf_orgs WHERE id='deepseek-labs'"
         ).fetchone()[0]
         assert n == 1
     finally:
@@ -115,9 +128,9 @@ def test_resolve_hf_orgs_curated_skips_search(monkeypatch, tmp_path):
             return httpx.Response(200, json=[])
 
         result = hf_products.resolve_hf_orgs(
-            "deepseek", "DeepSeek", s, client=_mock_client(handler)
+            "deepseek_co", "DeepSeek", s, client=_mock_client(handler)
         )
-        assert [r["hf_org"] for r in result] == ["deepseek-ai"]
+        assert [r["id"] for r in result] == ["deepseek-ai"]
         assert calls["n"] == 0
     finally:
         s.close()
@@ -127,7 +140,8 @@ def test_resolve_hf_orgs_discovers_and_flags(monkeypatch, tmp_path):
     monkeypatch.setattr(hf_client, "_sleep", lambda s: None)
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s._conn.execute("DELETE FROM brand_hf_orgs WHERE brand_id='qwen'")
+        # Remove the curated alibaba→Qwen seed so discovery is exercised.
+        s._conn.execute("DELETE FROM hf_orgs WHERE company_id='alibaba'")
         calls = {"n": 0}
 
         def handler(req):
@@ -135,12 +149,12 @@ def test_resolve_hf_orgs_discovers_and_flags(monkeypatch, tmp_path):
             assert req.url.path == "/api/organizations"
             return httpx.Response(200, json=[{"name": "Qwen"}, {"name": "Qwen-org"}])
 
-        result = hf_products.resolve_hf_orgs("qwen", "Qwen", s, client=_mock_client(handler))
+        result = hf_products.resolve_hf_orgs("alibaba", "Alibaba", s, client=_mock_client(handler))
         assert result == []
         assert calls["n"] == 1
-        cand = {r["hf_org"]: r for r in s.read_brand_hf_orgs("qwen", confirmed_only=False)}
+        cand = {r["id"]: r for r in s.read_hf_orgs("alibaba", confirmed_only=False)}
         assert cand["Qwen"]["confirmed"] == 0
-        assert cand["Qwen"]["discovered_via"] == "search:Qwen"
+        assert cand["Qwen"]["discovered_via"] == "search:Alibaba"
     finally:
         s.close()
 
@@ -150,16 +164,16 @@ def test_resolve_hf_orgs_read_only_skips_discovery(monkeypatch, tmp_path):
     monkeypatch.setattr(hf_client, "_sleep", lambda s: None)
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s._conn.execute("DELETE FROM brand_hf_orgs WHERE brand_id='qwen'")
+        s._conn.execute("DELETE FROM hf_orgs WHERE company_id='alibaba'")
         calls = {"n": 0}
         client = _mock_client(
             lambda req: (calls.__setitem__("n", calls["n"] + 1), httpx.Response(200, json=[{"name": "Qwen"}]))[1]
         )
-        result = hf_products.resolve_hf_orgs("qwen", "Qwen", s, client=client, persist=False)
+        result = hf_products.resolve_hf_orgs("alibaba", "Alibaba", s, client=client, persist=False)
         assert result == []
         assert calls["n"] == 0  # no search performed
         n = s._conn.execute(
-            "SELECT COUNT(*) FROM brand_hf_orgs WHERE brand_id='qwen'"
+            "SELECT COUNT(*) FROM hf_orgs WHERE company_id='alibaba'"
         ).fetchone()[0]
         assert n == 0  # no candidate persisted
     finally:
@@ -170,12 +184,12 @@ def test_resolve_hf_orgs_discovery_idempotent(monkeypatch, tmp_path):
     monkeypatch.setattr(hf_client, "_sleep", lambda s: None)
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s._conn.execute("DELETE FROM brand_hf_orgs WHERE brand_id='qwen'")
+        s._conn.execute("DELETE FROM hf_orgs WHERE company_id='alibaba'")
         client = _mock_client(lambda req: httpx.Response(200, json=[{"name": "Qwen"}]))
-        hf_products.resolve_hf_orgs("qwen", "Qwen", s, client=client)
-        hf_products.resolve_hf_orgs("qwen", "Qwen", s, client=client)
+        hf_products.resolve_hf_orgs("alibaba", "Alibaba", s, client=client)
+        hf_products.resolve_hf_orgs("alibaba", "Alibaba", s, client=client)
         n = s._conn.execute(
-            "SELECT COUNT(*) FROM brand_hf_orgs WHERE brand_id='qwen' AND hf_org='Qwen'"
+            "SELECT COUNT(*) FROM hf_orgs WHERE id='Qwen'"
         ).fetchone()[0]
         assert n == 1
     finally:
@@ -198,7 +212,7 @@ def test_model_to_product_row_maps_fields():
     row = hf_products._model_to_product_row("deepseek", "org", m)
     assert row["repo_id"] == "org/Name"
     assert row["display_name"] == "Name"
-    assert row["hf_org"] == "org"
+    assert row["hf_org_id"] == "org"
     assert row["hf_type"] == "model"
     assert row["brand_id"] == "deepseek"
     assert row["downloads"] == 42 and row["downloads_all_time"] == 420
@@ -405,10 +419,14 @@ def _collect_all_handler():
 
 
 def test_collect_all_scopes_to_companies(monkeypatch, tmp_path):
+    """Passing --companies deepseek_co scopes to the deepseek brand via company hop."""
     monkeypatch.setattr(hf_client, "_sleep", lambda s: None)
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        hf_products.collect_all(s, companies=["deepseek"], client=_mock_client(_collect_all_handler()))
+        hf_products.collect_all(
+            s, companies=["deepseek_co"], client=_mock_client(_collect_all_handler())
+        )
+        # deepseek_co → deepseek-ai org → deepseek brand (via brand_companies)
         brands = {p["brand_id"] for p in s.read_products()}
         assert brands == {"deepseek"}
     finally:
@@ -420,7 +438,7 @@ def test_collect_all_dry_run_no_writes(monkeypatch, tmp_path):
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
         res = hf_products.collect_all(
-            s, companies=["deepseek"], client=_mock_client(_collect_all_handler()), dry_run=True
+            s, companies=["deepseek_co"], client=_mock_client(_collect_all_handler()), dry_run=True
         )
         assert any(r.get("dry_run") for r in res)
         assert s.read_products() == []
@@ -429,11 +447,11 @@ def test_collect_all_dry_run_no_writes(monkeypatch, tmp_path):
 
 
 def test_collect_all_dry_run_read_only_on_unconfirmed(monkeypatch, tmp_path):
-    """dry_run on a brand with NO confirmed org writes nothing (no discovery)."""
+    """dry_run on a company with NO confirmed org writes nothing (no discovery)."""
     monkeypatch.setattr(hf_client, "_sleep", lambda s: None)
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
-        s._conn.execute("DELETE FROM brand_hf_orgs WHERE brand_id='deepseek'")
+        s._conn.execute("DELETE FROM hf_orgs WHERE company_id='deepseek_co'")
         calls = {"n": 0}
 
         def handler(req):
@@ -441,12 +459,12 @@ def test_collect_all_dry_run_read_only_on_unconfirmed(monkeypatch, tmp_path):
             return httpx.Response(200, json=[{"name": "deepseek-ai"}])  # would-be candidates
 
         hf_products.collect_all(
-            s, companies=["deepseek"], client=_mock_client(handler), dry_run=True
+            s, companies=["deepseek_co"], client=_mock_client(handler), dry_run=True
         )
         # No discovery search, no candidate persisted, no products.
         assert calls["n"] == 0
         n = s._conn.execute(
-            "SELECT COUNT(*) FROM brand_hf_orgs WHERE brand_id='deepseek'"
+            "SELECT COUNT(*) FROM hf_orgs WHERE company_id='deepseek_co'"
         ).fetchone()[0]
         assert n == 0
         assert s.read_products() == []
@@ -467,11 +485,41 @@ def test_collect_all_org_isolation(monkeypatch, tmp_path):
             return base(req)
 
         res = hf_products.collect_all(
-            s, companies=["deepseek", "qwen"], client=_mock_client(handler)
+            s, companies=["deepseek_co", "alibaba"],
+            client=_mock_client(handler),
         )
-        by_brand = {r["brand_id"]: r for r in res}
-        assert by_brand["deepseek"].get("ok") is True
-        assert by_brand["qwen"].get("ok") is False
-        assert "error" in by_brand["qwen"]
+        # Result rows are now keyed by (company_id, brand_id).
+        by_company = {}
+        for r in res:
+            by_company.setdefault(r["company_id"], []).append(r)
+        assert any(r.get("ok") is True for r in by_company["deepseek_co"])
+        assert any(r.get("ok") is False and "error" in r for r in by_company["alibaba"])
+    finally:
+        s.close()
+
+
+# --- company-level helpers ---------------------------------------------
+
+
+def test_read_brand_companies_for_company(tmp_path):
+    """The brand→company hop returns the brand_ids linked via brand_companies."""
+    s = Store(tmp_path / "x.db", auto_migrate=True)
+    try:
+        # alibaba owns the qwen brand (per migration 004 seed).
+        brands = s.read_brand_companies_for_company("alibaba")
+        assert brands == ["qwen"]
+    finally:
+        s.close()
+
+
+def test_read_companies_returns_all_seeded(tmp_path):
+    """read_companies() returns 11 companies (10 from 004 + minimax from 005)."""
+    s = Store(tmp_path / "x.db", auto_migrate=True)
+    try:
+        companies = s.read_companies()
+        assert len(companies) == 11
+        ids = {c.company_id for c in companies}
+        assert "minimax" in ids
+        assert "alibaba" in ids
     finally:
         s.close()
