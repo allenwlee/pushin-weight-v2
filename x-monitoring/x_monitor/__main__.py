@@ -734,17 +734,21 @@ def cmd_reattribute(args, paths) -> int:
 
 
 def cmd_hf_products(args, paths) -> int:
-    """Collect HuggingFace models for each enabled brand into `products`.
+    """Collect HuggingFace models for each enabled company into `products`.
 
     Flags:
-      --companies a,b   comma-separated brand_ids or display names (default: all)
-      --brand BRAND     single brand_id / display name (alias for --companies)
+      --companies a,b   comma-separated company_ids or display names (default: all)
+      --brand BRAND     single company_id / display name (alias for --companies)
       --max N           cap models per org
       --dry-run         resolve orgs only; write nothing
 
-    Discovery is automatic: brands lacking a confirmed HF org are searched and
-    their candidates are persisted flagged for review (not scraped this run).
-    HF auth uses HF_TOKEN from the environment (anonymous if unset).
+    The outer loop iterates companies (corporate parent), then for each
+    company iterates its HF orgs (1:N) and brands (M:N). Products are
+    attributed to the company’s brands via the brand_companies edge.
+    Discovery is automatic: companies lacking a confirmed HF org are
+    searched and their candidates are persisted flagged for review (not
+    scraped this run). HF auth uses HF_TOKEN from the environment
+    (anonymous if unset).
     """
     from x_monitor import hf_products
     from x_monitor.store import Store

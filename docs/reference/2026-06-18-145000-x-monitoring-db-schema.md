@@ -1,10 +1,10 @@
 # x-monitoring DB schema (ASCII)
 
 `x-monitoring/data/x_monitoring.db`
-(SQLite 3, ~19 MB on disk as of 2026-06-19, 2,008 rows in `posts`)
+(SQLite 3, ~36 MB on disk as of 2026-06-22, 4,191 rows in `posts`)
 
-Source files: `x_monitor/migrations/00{1,2,3,4}_*.sql`
-Migration ledger: `_migrations` (versions 1 / 2 / 3 / 4 applied).
+Source files: `x_monitor/migrations/00{1,2,3,4,5,6}_*.sql`
+Migration ledger: `_migrations` (versions 1 / 2 / 3 / 4 / 5 / 6 applied on production; the redesigned migration 005 from the `feat/hf-products-crawler` worktree is not yet on production).
 
 Conventions used in the diagrams:
 
@@ -441,6 +441,159 @@ search_queries
 ├── plan_calls_run_id  TEXT                  ← the run that produced this query (nullable)
 └── created_at*        TEXT                  ← ISO-8601 UTC
 ```
+
+---
+
+## Pending (worktree-only) tables
+
+The two tables in this section are part of the in-development HF products
+crawler (branch `feat/hf-products-crawler`, worktree DB at
+`worktrees/hf-products/x-monitoring/data/x_monitoring.db`). They are NOT
+applied to the production `x-monitoring/data/x_monitoring.db` until that
+work merges. The numbers, indexes, and FK behavior documented here
+reflect the worktree DB.
+
+### `hf_orgs` (11 rows; seeded by migration 005 on worktree DB only)
+
+1:N edge from `companies` to HuggingFace namespaces. A real associative
+entity, not a pure join table — it carries three attributes beyond the
+FK pair (`confirmed`, `discovered_via`, `added_at`). `is_primary` was
+dropped: with one company owning the org, all rows for that company are
+equally canonical.
+
+```
+hf_orgs
+├── id*              TEXT  PK                   ← HF namespace, e.g. "MiniMaxAI", "deepseek-ai"
+├── company_id*      TEXT                       ← FK → companies.company_id  ON DELETE CASCADE
+├── confirmed*       INTEGER DEFAULT 0          ← 1 = curated/operator-confirmed (scraped)
+                                                    0 = runtime-discovered candidate (review)
+├── discovered_via*  TEXT  DEFAULT 'curated'    ← 'curated' | 'search:<query>'
+└── added_at*        TEXT                       ← ISO-8601 UTC
+```
+
+Seed rows (11 — one per company that has a corporate parent in
+`companies`; the `_unattributed` brand is intentionally excluded — it
+has no corporate parent and no HF coverage):
+
+```
+id              company_id     confirmed   discovered_via
+------------    ------------   ----------  --------------
+MiniMaxAI       minimax        1           curated
+Qwen            alibaba        1           curated
+THUDM           zhipu          1           curated
+XiaomiMiMo      xiaomi         1           curated
+baidu           baidu          1           curated
+deepseek-ai     deepseek_co    1           curated
+inclusionAI     inclusion_ai   1           curated
+mistralai       mistral_ai     1           curated
+moonshotai      moonshot       1           curated
+stepfun-ai      stepfun_inc    1           curated
+tencent         tencent        1           curated
+```
+
+Foreign keys:
+
+```
+FOREIGN KEY(company_id) REFERENCES companies(company_id) ON DELETE CASCADE
+```
+
+Indexes:
+
+```
+idx_hf_orgs_company  (company_id)
+```
+
+Runtime writes go through `x_monitor.store.upsert_hf_org`, which never
+demotes `confirmed = 1` rows and preserves `discovered_via = 'curated'`
+when updating an existing curated edge. The HF-org resolution path
+(`x_monitor.hf_products.resolve_hf_orgs`) is hybrid: it first reads from
+this table (`confirmed_only=True`), and only if nothing is found does it
+call `hf_client.search_organizations` and write new candidate edges
+(`confirmed = 0`) for operator review — those are **flagged, not
+scraped**, until promoted.
+
+---
+
+### `products` (509 rows on worktree DB; 0 on production)
+
+The HuggingFace product catalog. One row per HF model (today);
+`hf_type` is reserved by CHECK for future datasets and spaces.
+Mirrors `posts` in spirit (a fact row + a brand FK + rich JSON columns)
+but for HF artifacts instead of X posts.
+
+```
+products
+├── repo_id*              TEXT  PK                   ← HF model id, e.g. "MiniMaxAI/MiniMax-M1"
+├── brand_id              TEXT                       ← FK → brands.brand_id  ON DELETE SET NULL
+├── hf_org_id             TEXT                       ← FK → hf_orgs.id       ON DELETE SET NULL
+├── hf_type*              TEXT  DEFAULT 'model'      ← CHECK (hf_type IN ('model','dataset','space'))
+├── display_name          TEXT                       ← repo name part (after the '/')
+├── author                TEXT                       ← HF `author` field
+├── sha                   TEXT                       ← git revision
+├── private               INTEGER                    ← 0/1
+├── gated                 TEXT                       ← 'auto' | 'manual' | 'false' | NULL
+├── disabled              INTEGER                    ← 0/1
+├── pipeline_tag          TEXT                       ← HF task, e.g. "text-generation"
+├── library_name          TEXT                       ← e.g. "transformers"
+├── downloads             INTEGER                    ← 30-day count (canonical public metric)
+├── downloads_all_time    INTEGER                    ← not exposed by HF API (always NULL)
+├── download_velocity     REAL                       ← not exposed by HF API (always NULL)
+├── likes                 INTEGER
+├── trending_score        REAL
+├── paperswithcode_id     TEXT
+├── created_at            TEXT                       ← HF ISO-8601
+├── last_modified         TEXT                       ← HF ISO-8601
+├── tags_json             TEXT  JSON                 ← HF tags array
+├── siblings_json         TEXT  JSON                 ← [{rfilename[, size]}, ...]
+├── card_data_json        TEXT  JSON                 ← license, language, base_model, …
+├── config_json           TEXT  JSON                 ← architectures, model_type, quantization_config, …
+├── spaces_json           TEXT  JSON                 ← dependent Spaces array
+├── raw_json              TEXT  JSON                 ← verbatim HF ModelInfo payload (lossless archive)
+├── collected_at*         TEXT                       ← ISO-8601; set on first upsert, stable
+└── updated_at*           TEXT                       ← ISO-8601; rewritten on every upsert
+```
+
+`brand_id` uses `ON DELETE SET NULL`; `hf_org_id` also uses `ON DELETE
+SET NULL` (added in the redesigned migration 005). The crawl path is
+brand → company (via `brand_companies`) → HF orgs (via `hf_orgs`) →
+products, so a single company can produce rows for each of its brands.
+
+Foreign keys:
+
+```
+FOREIGN KEY(brand_id)  REFERENCES brands(brand_id)  ON DELETE SET NULL
+FOREIGN KEY(hf_org_id) REFERENCES hf_orgs(id)       ON DELETE SET NULL
+```
+
+Indexes:
+
+```
+idx_products_brand       (brand_id)
+idx_products_hf_org_id    (hf_org_id)
+```
+
+**Stable vs mutable columns.** `repo_id`, `brand_id`, `hf_org_id`,
+`hf_type`, `display_name`, `author`, `created_at`, `collected_at` are
+identity-stable — re-running the crawler does not touch them. Everything
+else (`sha`, `downloads`, `likes`, `last_modified`, the `*_json`
+columns, `updated_at`) is refreshed on each upsert via
+`store.upsert_product`'s `ON CONFLICT(repo_id) DO UPDATE SET` clause.
+
+**`hf_type` CHECK constraint.** The CHECK
+(`'model' | 'dataset' | 'space'`) is enforced at INSERT — invalid
+artifact kinds fail at the upsert, not silently downstream. Today's
+crawler only emits `hf_type = 'model'`; the dataset/space arms are
+reserved by the constraint for when the crawler is extended.
+
+**List vs detail.** The HF list endpoint
+(`/api/models?author=…&full=true`) is lean: it returns downloads /
+likes / tags / siblings / pipeline_tag / library_name / sha /
+timestamps only. The license, base_model, language, architectures,
+model_type, quantization_config, and dependent Spaces are populated by
+a per-model `GET /api/models/{id}` call and persisted as JSON text
+columns so new fields can be added without re-scraping.
+`downloads_all_time` and `download_velocity` are **not** exposed by
+the HF API at all and stay NULL.
 
 ---
 
