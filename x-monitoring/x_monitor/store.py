@@ -122,6 +122,13 @@ class Store:
         # invalidated within a Store instance (operators can call
         # store.close() and re-open if they mutate the brands table).
         self._brand_cache: list[BrandRow] | None = None
+        # v1.8 (Unit 3): caches for the i18n enum-key sets
+        # (signal_keys, role_keys, engagement_tier_keys). Same lazy /
+        # not-invalidated lifecycle as _brand_cache — the *_keys tables
+        # are seeded once by migration 007 and not mutated at runtime.
+        self._signal_keys_cache: set[str] | None = None
+        self._role_keys_cache: set[str] | None = None
+        self._engagement_tier_keys_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
         self._signals_written: int = 0
@@ -343,6 +350,19 @@ class Store:
                                 "(post_id=%s signal=%r)",
                                 b, tweet_id_str, sig,
                             )
+                            continue
+                        # v1.8 (Unit 3): signal is now FK-validated against
+                        # signal_keys (migration 007). Hallucinated signal
+                        # values would raise IntegrityError; drop them to
+                        # the dead-letter log instead.
+                        if sig not in self._known_signal_keys():
+                            self._dead_letter_enum(
+                                "signal", sig,
+                                table="post_brand_signals",
+                                post_id=tweet_id_str,
+                                brand_id=b,
+                            )
+                            self._signals_dropped += 1
                             continue
                         # R11: ON CONFLICT DO UPDATE.
                         conn.execute(
@@ -761,6 +781,31 @@ class Store:
         """
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
+        # v1.8 (Unit 3): enum FK guards. engagement_tier is FK-validated
+        # against engagement_tier_keys (migration 007). Unknown tiers
+        # would raise IntegrityError; coerce to the schema default 'low'
+        # (which IS in engagement_tier_keys) and dead-letter the original.
+        if engagement_tier not in self._known_engagement_tier_keys():
+            self._dead_letter_enum(
+                "engagement_tier", engagement_tier,
+                table="accounts",
+                author_id=f"handle:{handle}",
+            )
+            engagement_tier = "low"
+        # role is FK-validated against role_keys. Legacy callers pass
+        # role="unknown" which is NOT in role_keys (only official /
+        # community / researcher / press / vendor are). In that case,
+        # skip the brand_accounts edge write — the per-brand role is
+        # unknowable, so the edge has no information. The accounts row
+        # is still upserted (no role column there post-migration 004).
+        role_known = role in self._known_role_keys()
+        if not role_known:
+            self._dead_letter_enum(
+                "role", role,
+                table="brand_accounts",
+                brand_id=brand_id,
+                author_id=f"handle:{handle}",
+            )
         author_id = f"handle:{handle}"
         now = _now_iso()
         # Upsert into accounts (author_id PK). We drop multi_brand_voice
@@ -796,16 +841,22 @@ class Store:
             ),
         )
         # Upsert the per-brand edge in brand_accounts (the per-brand role).
-        self._conn.execute(
-            """
-            INSERT INTO brand_accounts(
-                brand_id, author_id, role, added_at
-            ) VALUES (?,?,?,?)
-            ON CONFLICT(brand_id, author_id) DO UPDATE SET
-                role = excluded.role
-            """,
-            (brand_id, author_id, role, now),
-        )
+        # Skipped when role was unknown to role_keys — see dead-letter
+        # guard above. This preserves pre-v1.8 semantics: an unknown role
+        # did not write a brand_accounts row either (the old DEFAULT was
+        # 'community', so callers passing role='unknown' would have hit
+        # the schema's TEXT convention with no enforcement).
+        if role_known:
+            self._conn.execute(
+                """
+                INSERT INTO brand_accounts(
+                    brand_id, author_id, role, added_at
+                ) VALUES (?,?,?,?)
+                ON CONFLICT(brand_id, author_id) DO UPDATE SET
+                    role = excluded.role
+                """,
+                (brand_id, author_id, role, now),
+            )
 
     def get_account(self, brand_id: str, handle: str) -> dict[str, Any] | None:
         if brand_id not in KNOWN_MODELS:
@@ -948,6 +999,17 @@ class Store:
                 brand_id, post_id,
             )
             return
+        # v1.8 (Unit 3): enum FK guard. signal is now FK-validated against
+        # signal_keys (migration 007). Unknown signal values would raise
+        # IntegrityError; drop them to the dead-letter log instead.
+        if signal not in self._known_signal_keys():
+            self._dead_letter_enum(
+                "signal", signal,
+                table="post_brand_signals",
+                post_id=post_id,
+                brand_id=brand_id,
+            )
+            return
         self._conn.execute(
             """
             INSERT INTO post_brand_signals(post_id, brand_id, signal)
@@ -999,6 +1061,157 @@ class Store:
         `_unattributed` sentinel row.
         """
         return {row.brand_id for row in self.read_brands()}
+
+    # --- i18n (Unit 3): enum FK guards + per-locale helpers ---------------
+    #
+    # Cached sets of valid keys for the three enum families introduced
+    # by migration 007. Used by insert_post_brand_signals (signal),
+    # upsert_account (engagement_tier, brand_accounts.role) to drop
+    # unknown values to the dead-letter log BEFORE SQLite raises
+    # IntegrityError on the FK.
+    #
+    # Cache lifecycle: populated on first call after Store.__init__.
+    # Lookup-table seeds are fixed by migration 007, so the cache never
+    # needs to be invalidated within a Store instance lifetime.
+    # Operators who mutate the *_keys tables outside the migration
+    # loader should call store.close() + re-open to refresh the cache.
+
+    def _known_signal_keys(self) -> set[str]:
+        if self._signal_keys_cache is None:
+            self._signal_keys_cache = {
+                r["key"]
+                for r in self._conn.execute("SELECT key FROM signal_keys").fetchall()
+            }
+        return self._signal_keys_cache
+
+    def _known_role_keys(self) -> set[str]:
+        if self._role_keys_cache is None:
+            self._role_keys_cache = {
+                r["key"]
+                for r in self._conn.execute("SELECT key FROM role_keys").fetchall()
+            }
+        return self._role_keys_cache
+
+    def _known_engagement_tier_keys(self) -> set[str]:
+        if self._engagement_tier_keys_cache is None:
+            self._engagement_tier_keys_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM engagement_tier_keys"
+                ).fetchall()
+            }
+        return self._engagement_tier_keys_cache
+
+    def _dead_letter_enum(
+        self, family: str, value: str, **context: Any
+    ) -> None:
+        """Append a JSONL record to the dead-letter log for unknown enum FKs.
+
+        Migration 007 converts the four enum TEXT columns (signal, role,
+        engagement_tier, role) into FKs pointing at *_keys tables. Any
+        write that supplies a value outside the seeded set would raise
+        IntegrityError at the SQLite layer. The application-level
+        intersect-before-INSERT guard catches this first and writes the
+        rejected value here so operators can audit dropped rows after
+        the fact.
+
+        File layout: `<db_path.parent>/runs/<YYYY-MM-DD>/enum_dead_letter.jsonl`.
+        One file per calendar day. Created lazily on first drop.
+
+        Args:
+            family: one of "signal" / "role" / "engagement_tier".
+            value: the unknown enum string that was rejected.
+            **context: extra fields (table, post_id, author_id, ...) so
+                the postmortem reader can find the offending row.
+        """
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        run_dir = self.db_path.parent / "runs" / day
+        run_dir.mkdir(parents=True, exist_ok=True)
+        log_path = run_dir / "enum_dead_letter.jsonl"
+        record = {
+            "ts": _now_iso(),
+            "family": family,
+            "value": value,
+            **context,
+        }
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+        _log.warning(
+            "dead-letter enum: family=%s value=%r context=%r (logged to %s)",
+            family, value, context, log_path,
+        )
+
+    @staticmethod
+    def _pick_i18n_text(
+        row: dict[str, Any], column: str, locale: str
+    ) -> tuple[str | None, bool]:
+        """Return `(display_text, is_translated)` for a registry row.
+
+        Pure function: no DB access. Mirrors the shape of
+        `dashboard._pick_text` (which is the post-text equivalent).
+
+        Fallback chain (per plan D6):
+            1. `<column>_<locale-suffix>` if non-NULL.
+            2. `<column>_en` if non-NULL.
+            3. `<column>` (source) — always present.
+
+        The locale-to-suffix mapping mirrors dashboard._LOCALE_TO_COLUMN
+        but is kept inline here so store.py stays self-contained.
+
+        `is_translated` is False whenever the function fell back to the
+        English column or the source column. Templates use the flag to
+        render the "source fallback" badge.
+        """
+        suffix = {"en": "en", "zh-CN": "zh_cn", "zh_cn": "zh_cn"}.get(locale, "en")
+        localized = row.get(f"{column}_{suffix}")
+        if localized:
+            return localized, True
+        en_val = row.get(f"{column}_en")
+        if en_val:
+            return en_val, False
+        return row.get(column), False
+
+    def _pick_enum_label(
+        self, family: str, value: str | None, locale: str
+    ) -> str:
+        """Return the localized label for an enum key, or the raw key on miss.
+
+        Lookup order:
+            1. `<family>_labels(key=?, locale=?)`
+            2. `<family>_labels(key=?, locale='en')`
+            3. The raw `value` (canonical English key)
+
+        `family` must be one of "signal" / "role" / "engagement_tier".
+        Unknown family raises ValueError. Returns "" when value is
+        None/empty (templates render nothing for missing signals).
+        """
+        if value is None or value == "":
+            return ""
+        labels_table = {
+            "signal": "signal_labels",
+            "role": "role_labels",
+            "engagement_tier": "engagement_tier_labels",
+        }.get(family)
+        if labels_table is None:
+            raise ValueError(
+                f"unknown enum family {family!r}; expected "
+                "'signal' / 'role' / 'engagement_tier'"
+            )
+        suffix = {"en": "en", "zh-CN": "zh_cn", "zh_cn": "zh_cn"}.get(locale, "en")
+        row = self._conn.execute(
+            f"SELECT label FROM {labels_table} WHERE key = ? AND locale = ?",
+            (value, suffix),
+        ).fetchone()
+        if row is not None:
+            return row["label"]
+        if suffix != "en":
+            row = self._conn.execute(
+                f"SELECT label FROM {labels_table} WHERE key = ? AND locale = 'en'",
+                (value,),
+            ).fetchone()
+            if row is not None:
+                return row["label"]
+        return value
 
     def read_brand_accounts(self) -> dict[str, str]:
         """Return {author_id: brand_id} for all brand-account edges (R13).

@@ -65,7 +65,10 @@ def test_upsert_account_updates_last_seen_and_tier():
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
-            store.upsert_account("minimax", "alice", role="unknown", engagement_tier="low")
+            # v1.8 (Unit 3): role must be a valid role_key post-migration 007;
+            # 'unknown' is no longer seeded. Use 'community' for the first
+            # upsert, then update to verify tier promotion.
+            store.upsert_account("minimax", "alice", role="community", engagement_tier="low")
             a1 = store.get_account("minimax", "alice")
             assert a1 is not None
             assert a1["engagement_tier"] == "low"
@@ -523,9 +526,11 @@ def test_read_brand_accounts_returns_dict():
         store = Store(Path(d) / "x.db")
         try:
             # Use the upsert_account helper to seed brand_accounts.
+            # v1.8 (Unit 3): role is FK-validated against role_keys, so
+            # use a seeded role ('staff' is no longer valid post-007).
             store.upsert_account("qwen", "alice", role="community")
-            store.upsert_account("qwen", "bob", role="staff")
-            store.upsert_account("deepseek", "carol", role="staff")
+            store.upsert_account("qwen", "bob", role="official")
+            store.upsert_account("deepseek", "carol", role="researcher")
             d = store.read_brand_accounts()
             assert d["handle:alice"] == "qwen"
             assert d["handle:bob"] == "qwen"
