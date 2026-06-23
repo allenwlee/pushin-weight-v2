@@ -4,7 +4,7 @@
       <h2>{{ card.display_name }}</h2>
       <span class="model-id muted">{{ card.brand_id }}</span>
     </header>
-    <div class="trend-chart-wrap" data-chart='{{ card.chart|tojson }}'>
+    <div class="trend-chart-wrap" data-chart='{{ card.chart|tojson }}'{% if card.signal_labels_json %} data-signal-labels='{{ card.signal_labels_json }}'{% endif %}>
       <canvas class="trend-chart"
               data-brand-id="{{ card.brand_id }}"
               aria-label="Daily tweet volume by signal, last 14 days"></canvas>
