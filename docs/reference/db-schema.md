@@ -1,40 +1,10 @@
 # x-monitoring DB schema (ASCII)
 
 `x-monitoring/data/x_monitoring.db`
-(SQLite 3, ~36 MB on disk as of 2026-06-22, **4,191 rows in `posts`**)
+(SQLite 3, ~36 MB on disk as of 2026-06-22, 4,191 rows in `posts`)
 
 Source files: `x_monitor/migrations/00{1,2,3,4,5,6}_*.sql`
-Migration ledger: `_migrations` (**6 rows** — versions 1–6 applied).
-
-```
-version  applied_at                 migration
--------  -------------------------  ----------------------------------------
-1        2026-06-08T22:53:57+00:00  001_initial.sql
-2        2026-06-11T05:52:02+00:00  002_post_headline.sql
-3        2026-06-17T04:22:26+00:00  003_translation_columns.sql
-4        2026-06-19T06:41:47+00:00  004_company_brand_account_model.sql
-5        2026-06-22T01:59:44+00:00  005_quoted_text.sql
-6        2026-06-22T05:03:47+00:00  006_quote_capture_tracking.sql
-```
-
-> **Two parallel "005"s.** Production migration 005 is
-> `005_quoted_text.sql` (a 1-line `ALTER TABLE posts ADD COLUMN
-> quoted_text TEXT` for quote-tweet content capture, branch
-> `feat/capture-quote-tweets`). A *different* migration also named
-> `005_products.sql` exists on the `feat/hf-products-crawler`
-> worktree (`worktrees/hf-products/x-monitoring/`); it adds
-> `brand_hf_orgs` + `products` and is the in-development PR #6
-> feature. They don't collide because they live on different
-> branches — only `005_quoted_text.sql` has been applied to the
-> production DB. See `docs/reference/minimax-hf-products-2026-06-22.md`
-> for the HF product catalog data; plan at
-> `docs/plans/2026-06-21-001-feat-hf-products-crawler-plan.md`.
->
-> **`brand_hf_orgs` and `products` are NOT documented as production
-> tables.** They live only on the worktree DB. They are described
-> in the "Pending (worktree-only) tables" section below; the row
-> counts, indexes, and FK behavior there reflect the worktree DB,
-> not production.
+Migration ledger: `_migrations` (versions 1 / 2 / 3 / 4 / 5 / 6 applied on production; the redesigned migration 005 from the `feat/hf-products-crawler` worktree is not yet on production).
 
 Conventions used in the diagrams:
 
@@ -51,47 +21,39 @@ Conventions used in the diagrams:
 
 ## Tables
 
-### `posts` (4,191 rows)
+### `posts` (2,008 rows)
 
 The core fact table. One row per kept tweet (after the per-model
 relevance filter in Unit 4 of the v1.7 plan). In v1.8 the brand and
 signal columns were dropped (moved to `post_brands` /
 `post_brand_signals`); `favorite_count` was renamed to `like_count`
-(per R9 / Decision 3, the user-facing name). Migrations 005 and 006
-added quote-tweet content + capture-tracking columns
-(`feat/capture-quote-tweets`).
+(per R9 / Decision 3, the user-facing name).
 
 ```
 posts
-├── tweet_id*              TEXT  PK                       ← Twitter/X status id (str)
-├── author_handle*         TEXT                            ← @handle
-├── author_id              TEXT                            ← numeric X user id (str), FK → accounts.author_id (logical only)
-├── text                   TEXT                            ← original post text
-├── lang                   TEXT                            ← X-declared BCP-47 (often wrong; see lang_detected)
-├── created_at             TEXT                            ← Twitter-format created_at (string; sorts incorrectly for time-window queries — see created_at_epoch)
-├── fetched_at*            TEXT                            ← ISO-8601 UTC, when the run ingested it
-├── like_count             INTEGER  DEFAULT 0              ← (migration 004) renamed from favorite_count
-├── retweet_count          INTEGER  DEFAULT 0
-├── reply_count            INTEGER  DEFAULT 0
-├── quote_count            INTEGER  DEFAULT 0
-├── in_reply_to_user_id    TEXT                            ← nullable
-├── quoted_status_id       TEXT                            ← nullable; populated for quote tweets (also see quoted_text)
-├── conversation_id        TEXT                            ← nullable
-├── entities               TEXT  JSON                      ← X entities payload (mentions, urls, hashtags)
-├── source_query_id        TEXT                            ← which search_queries row fetched this post (R6c storage fork)
-├── raw                    TEXT  JSON                      ← full Apify response row, for replay
-├── headline               TEXT                            ← (migration 002) article title from URL
-├── headline_source        TEXT                            ← (migration 002) "fetched"|"cached"|"url_only"|"fetch_failed"
-├── text_en                TEXT                            ← (migration 003) English translation
-├── text_zh_cn             TEXT                            ← (migration 003) Simplified Chinese translation
-├── lang_detected          TEXT                            ← (migration 003) post-fetch detected lang, e.g. "zh-Hans"
-                                                              (migration 004 also backfills from existing text_en/text_zh_cn rows)
-├── quoted_text            TEXT                            ← (migration 005) quoted tweet's text (was held in memory & discarded pre-005)
-├── last_quote_count_seen* INTEGER  DEFAULT 0              ← (migration 006) most recent quote_count observed on this post
-├── last_quote_fetched_at  TEXT                            ← (migration 006) ISO-8601; seeds sinceTime for next /twitter/tweet/quotes call
-└── created_at_epoch       INTEGER                         ← (migration 006) unix-second epoch parsed from Twitter-format created_at
-                                                              (existing rows backfilled by scripts/2026-06-22-140225-backfill-created-at-epoch.py;
-                                                              SQLite can't parse the Twitter format in pure SQL)
+├── tweet_id*           TEXT  PK                       ← Twitter/X status id (str)
+├── author_handle*      TEXT                            ← @handle
+├── author_id           TEXT                            ← numeric X user id (str), FK → accounts.author_id (logical only)
+├── text                TEXT                            ← original post text
+├── lang                TEXT                            ← X-declared BCP-47 (often wrong; see lang_detected)
+├── created_at          TEXT                            ← ISO-8601 UTC
+├── fetched_at*         TEXT                            ← ISO-8601 UTC, when the run ingested it
+├── like_count          INTEGER  DEFAULT 0              ← (migration 004) renamed from favorite_count
+├── retweet_count       INTEGER  DEFAULT 0
+├── reply_count         INTEGER  DEFAULT 0
+├── quote_count         INTEGER  DEFAULT 0
+├── in_reply_to_user_id TEXT                            ← nullable
+├── quoted_status_id    TEXT                            ← nullable
+├── conversation_id     TEXT                            ← nullable
+├── entities            TEXT  JSON                      ← X entities payload (mentions, urls, hashtags)
+├── source_query_id     TEXT                            ← which search_queries row fetched this post (R6c storage fork)
+├── raw                 TEXT  JSON                      ← full Apify response row, for replay
+├── headline            TEXT                            ← (migration 002) article title from URL
+├── headline_source     TEXT                            ← (migration 002) "fetched"|"cached"|"url_only"|"fetch_failed"
+├── text_en             TEXT                            ← (migration 003) English translation
+├── text_zh_cn          TEXT                            ← (migration 003) Simplified Chinese translation
+└── lang_detected       TEXT                            ← (migration 003) post-fetch detected lang, e.g. "zh-Hans"
+                                                         (migration 004 also backfills from existing text_en/text_zh_cn rows)
 ```
 
 **DROPPED in v1.8 (migration 004):**
@@ -128,20 +90,9 @@ re-created with the new lang-aware predicates (Decision 8,
 P1 review fix #30 — `'und'` is treated as eligible for both
 translations).
 
-> **Known drift on production (2026-06-22):** migration 006 also
-> creates `idx_posts_created_at_epoch (created_at_epoch)` for the
-> polarity time-window filter and the QT daily-pass recency query,
-> but **this index is missing from the production DB** even though
-> the migration's `INSERT INTO _migrations` row is present (verified
-> 2026-06-22 via `SELECT name FROM sqlite_master`). The polarity
-> query path can therefore SCAN `posts` until the index is
-> recreated. Recreate with:
-> `CREATE INDEX IF NOT EXISTS idx_posts_created_at_epoch ON posts(created_at_epoch);`
-> (matches the `006_quote_capture_tracking.sql` declaration).
-
 ---
 
-### `accounts` (1,522 rows; backfilled by migration 004 from `posts.author_id`)
+### `accounts` (≥1 row; backfilled by migration 004 from `posts.author_id`)
 
 Per-handle authoritative + community accounts. PK is now the
 immutable X `author_id` (was `(model_id, handle)` in v1.7). The
@@ -311,8 +262,9 @@ inclusionai      inclusion_ai
 deepseek         deepseek_co
 ```
 
+---
 
-### `brand_accounts` (19 rows; application-seeded)
+### `brand_accounts` (0 rows; application-seeded)
 
 M:N edge between brands and accounts. The per-brand `role` lives
 here (moved off `accounts.role` in v1.8; Decision 10).
@@ -348,7 +300,7 @@ company_accounts
 
 ---
 
-### `post_brands` (5,053 rows; populated by `x_monitor.reattribute`)
+### `post_brands` (≥0 rows; populated by `x_monitor.reattribute`)
 
 Per-(post, brand) attribution with fractional weight (Decision 9,
 Option C). `weight = 1.0 / N` for a post naming N distinct brands;
@@ -372,7 +324,7 @@ idx_post_brands_brand_post  (brand_id, post_id)      — polarity JOIN (Decision
 
 ---
 
-### `post_mentions` (4,428 rows; populated by `x_monitor.reattribute`)
+### `post_mentions` (≥0 rows; populated by `x_monitor.reattribute`)
 
 Per-mention provenance: how was each brand named on each post?
 The PK `(post_id, brand_id, source)` preserves the 4-source
@@ -399,7 +351,7 @@ idx_post_mentions_post                 (post_id)                              �
 
 ---
 
-### `post_brand_signals` (4,303 rows; backfilled from `posts.signal` by migration 004)
+### `post_brand_signals` (≥2,008 rows; backfilled from `posts.signal` by migration 004)
 
 Per-(post, brand) signal classification (R6d / Decision 18).
 Replaces the v1.7 post-level `posts.signal` column. A post naming
@@ -438,7 +390,7 @@ brand_hashtags
 
 ---
 
-### `brand_keywords` (88 rows; detection registry, R6b)
+### `brand_keywords` (≥0 rows; detection registry, R6b)
 
 Detection registry: literal substrings or regex patterns that
 trigger a brand mention via the `body_keyword` source. `is_regex`
@@ -494,88 +446,86 @@ search_queries
 
 ## Pending (worktree-only) tables
 
-The two tables in this section are part of PR #6
-(`feat/hf-products-crawler`) and exist on the **worktree DB**
-(`worktrees/hf-products/x-monitoring/data/x_monitoring.db`) used
-to develop + smoke-test the HF products crawler. They are NOT
-applied to the production `x-monitoring/data/x_monitoring.db`
-yet. The numbers, indexes, and FK behavior documented here
-reflect the worktree DB. Once PR #6 merges and the migration is
-run on production, these tables will move into the main "Tables"
-section above and the worktree-only flag will be removed.
+The two tables in this section are part of the in-development HF products
+crawler (branch `feat/hf-products-crawler`, worktree DB at
+`worktrees/hf-products/x-monitoring/data/x_monitoring.db`). They are NOT
+applied to the production `x-monitoring/data/x_monitoring.db` until that
+work merges. The numbers, indexes, and FK behavior documented here
+reflect the worktree DB.
 
-### `brand_hf_orgs` (11 rows; seeded by migration 005 on worktree DB only)
+### `hf_orgs` (11 rows; seeded by migration 005 on worktree DB only)
 
-M:N edge between brands and their HuggingFace orgs/usernames.
-Same shape as `brand_companies` — a real associative entity, not
-a pure join table: it carries four attributes beyond the FK pair
-(`is_primary`, `confirmed`, `discovered_via`, `added_at`).
+1:N edge from `companies` to HuggingFace namespaces. A real associative
+entity, not a pure join table — it carries three attributes beyond the
+FK pair (`confirmed`, `discovered_via`, `added_at`). `is_primary` was
+dropped: with one company owning the org, all rows for that company are
+equally canonical.
 
 ```
-brand_hf_orgs
-├── brand_id*         TEXT  PK[1]                ← FK → brands.brand_id      ON DELETE CASCADE
-├── hf_org*           TEXT  PK[2]                ← HF namespace, e.g. "deepseek-ai"
-├── is_primary*       INTEGER DEFAULT 0          ← 1 = primary HF org for the brand
-├── confirmed*        INTEGER DEFAULT 0          ← 1 = curated/operator-confirmed (scraped)
-                                                   0 = runtime-discovered candidate (review)
-├── discovered_via*   TEXT  DEFAULT 'curated'    ← 'curated' | 'search:<query>'
-└── added_at*         TEXT                       ← ISO-8601 UTC
+hf_orgs
+├── id*              TEXT  PK                   ← HF namespace, e.g. "MiniMaxAI", "deepseek-ai"
+├── company_id*      TEXT                       ← FK → companies.company_id  ON DELETE CASCADE
+├── confirmed*       INTEGER DEFAULT 0          ← 1 = curated/operator-confirmed (scraped)
+                                                    0 = runtime-discovered candidate (review)
+├── discovered_via*  TEXT  DEFAULT 'curated'    ← 'curated' | 'search:<query>'
+└── added_at*        TEXT                       ← ISO-8601 UTC
 ```
 
-Seed rows (11 — one per tracked brand):
+Seed rows (11 — one per company that has a corporate parent in
+`companies`; the `_unattributed` brand is intentionally excluded — it
+has no corporate parent and no HF coverage):
 
 ```
-brand_id         hf_org              is_primary   confirmed   discovered_via
------------      ----------------    -----------  ----------  --------------
-minimax          MiniMaxAI           1            1           curated
-qwen             Qwen                1            1           curated
-deepseek         deepseek-ai         1            1           curated
-glm              THUDM               1            1           curated
-xiaomi_mimo      XiaomiMiMo          1            1           curated
-moonshot_kimi    moonshotai          1            1           curated
-inclusionai      inclusionAI         1            1           curated
-mistral          mistralai           1            1           curated
-stepfun          stepfun-ai          1            1           curated
-ernie            baidu               1            1           curated
-hunyuan          tencent             1            1           curated
+id              company_id     confirmed   discovered_via
+------------    ------------   ----------  --------------
+MiniMaxAI       minimax        1           curated
+Qwen            alibaba        1           curated
+THUDM           zhipu          1           curated
+XiaomiMiMo      xiaomi         1           curated
+baidu           baidu          1           curated
+deepseek-ai     deepseek_co    1           curated
+inclusionAI     inclusion_ai   1           curated
+mistralai       mistral_ai     1           curated
+moonshotai      moonshot       1           curated
+stepfun-ai      stepfun_inc    1           curated
+tencent         tencent        1           curated
 ```
 
 Foreign keys:
 
 ```
-FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+FOREIGN KEY(company_id) REFERENCES companies(company_id) ON DELETE CASCADE
 ```
 
 Indexes:
 
 ```
-idx_brand_hf_orgs_brand  (brand_id)
+idx_hf_orgs_company  (company_id)
 ```
 
-Runtime writes go through `x_monitor.store.upsert_brand_hf_org`,
-which never demotes `confirmed = 1` rows and preserves
-`discovered_via = 'curated'` when updating an existing curated
-edge. The HF-org resolution path
-(`x_monitor.hf_products.resolve_hf_orgs`) is hybrid: it first
-reads from this table (`confirmed_only=True`), and only if
-nothing is found does it call `hf_client.search_organizations`
-and write new candidate edges (`confirmed = 0`) for operator
-review — those are **flagged, not scraped**, until promoted.
+Runtime writes go through `x_monitor.store.upsert_hf_org`, which never
+demotes `confirmed = 1` rows and preserves `discovered_via = 'curated'`
+when updating an existing curated edge. The HF-org resolution path
+(`x_monitor.hf_products.resolve_hf_orgs`) is hybrid: it first reads from
+this table (`confirmed_only=True`), and only if nothing is found does it
+call `hf_client.search_organizations` and write new candidate edges
+(`confirmed = 0`) for operator review — those are **flagged, not
+scraped**, until promoted.
 
 ---
 
-### `products` (19 rows on worktree DB; 0 on production)
+### `products` (509 rows on worktree DB; 0 on production)
 
 The HuggingFace product catalog. One row per HF model (today);
 `hf_type` is reserved by CHECK for future datasets and spaces.
-Mirrors `posts` in spirit (a fact row + a brand FK + rich JSON
-columns) but for HF artifacts instead of X posts.
+Mirrors `posts` in spirit (a fact row + a brand FK + rich JSON columns)
+but for HF artifacts instead of X posts.
 
 ```
 products
 ├── repo_id*              TEXT  PK                   ← HF model id, e.g. "MiniMaxAI/MiniMax-M1"
 ├── brand_id              TEXT                       ← FK → brands.brand_id  ON DELETE SET NULL
-├── hf_org*               TEXT                       ← authoring namespace, e.g. "MiniMaxAI"
+├── hf_org_id             TEXT                       ← FK → hf_orgs.id       ON DELETE SET NULL
 ├── hf_type*              TEXT  DEFAULT 'model'      ← CHECK (hf_type IN ('model','dataset','space'))
 ├── display_name          TEXT                       ← repo name part (after the '/')
 ├── author                TEXT                       ← HF `author` field
@@ -603,55 +553,51 @@ products
 └── updated_at*           TEXT                       ← ISO-8601; rewritten on every upsert
 ```
 
-`brand_id` uses `ON DELETE SET NULL` (not CASCADE): deleting a
-brand keeps the product row but nulls its `brand_id` — `repo_id`
-rows are never cascaded because HF model identity is global.
+`brand_id` uses `ON DELETE SET NULL`; `hf_org_id` also uses `ON DELETE
+SET NULL` (added in the redesigned migration 005). The crawl path is
+brand → company (via `brand_companies`) → HF orgs (via `hf_orgs`) →
+products, so a single company can produce rows for each of its brands.
 
 Foreign keys:
 
 ```
-FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE SET NULL
+FOREIGN KEY(brand_id)  REFERENCES brands(brand_id)  ON DELETE SET NULL
+FOREIGN KEY(hf_org_id) REFERENCES hf_orgs(id)       ON DELETE SET NULL
 ```
 
 Indexes:
 
 ```
-idx_products_brand   (brand_id)
-idx_products_hf_org  (hf_org)
+idx_products_brand       (brand_id)
+idx_products_hf_org_id    (hf_org_id)
 ```
 
-**Stable vs mutable columns.** `repo_id`, `brand_id`, `hf_org`,
-`hf_type`, `display_name`, `author`, `created_at`, `collected_at`
-are identity-stable — re-running the crawler does not touch them.
-Everything else (`sha`, `downloads`, `likes`, `last_modified`,
-the `*_json` columns, `updated_at`) is refreshed on each upsert
-via `store.upsert_product`'s `ON CONFLICT(repo_id) DO UPDATE SET`
-clause.
+**Stable vs mutable columns.** `repo_id`, `brand_id`, `hf_org_id`,
+`hf_type`, `display_name`, `author`, `created_at`, `collected_at` are
+identity-stable — re-running the crawler does not touch them. Everything
+else (`sha`, `downloads`, `likes`, `last_modified`, the `*_json`
+columns, `updated_at`) is refreshed on each upsert via
+`store.upsert_product`'s `ON CONFLICT(repo_id) DO UPDATE SET` clause.
 
 **`hf_type` CHECK constraint.** The CHECK
 (`'model' | 'dataset' | 'space'`) is enforced at INSERT — invalid
-artifact kinds fail at the upsert, not silently downstream.
-Today's crawler only emits `hf_type = 'model'`; the dataset/space
-arms are reserved by the constraint for when the crawler is
-extended.
+artifact kinds fail at the upsert, not silently downstream. Today's
+crawler only emits `hf_type = 'model'`; the dataset/space arms are
+reserved by the constraint for when the crawler is extended.
 
 **List vs detail.** The HF list endpoint
-(`/api/models?author=…&full=true`) is lean: it returns
-downloads / likes / tags / siblings / pipeline_tag / library_name
-/ sha / timestamps only. The license, base_model, language,
-architectures, model_type, quantization_config, and dependent
-Spaces are populated by a per-model `GET /api/models/{id}` call
-and persisted as JSON text columns so new fields can be added
-without re-scraping. `downloads_all_time` and `download_velocity`
-are **not** exposed by the HF API at all and stay NULL.
-
-See `docs/reference/minimax-hf-products-2026-06-22.md` for the
-live 19-product MiniMax catalog written from this table on the
-worktree DB.
+(`/api/models?author=…&full=true`) is lean: it returns downloads /
+likes / tags / siblings / pipeline_tag / library_name / sha /
+timestamps only. The license, base_model, language, architectures,
+model_type, quantization_config, and dependent Spaces are populated by
+a per-model `GET /api/models/{id}` call and persisted as JSON text
+columns so new fields can be added without re-scraping.
+`downloads_all_time` and `download_velocity` are **not** exposed by
+the HF API at all and stay NULL.
 
 ---
 
-### `_migrations` (6 rows)
+### `_migrations` (4 rows)
 
 Tracks which SQL files have been applied. Written by
 `x_monitor/store.py::_apply_migration`.
@@ -659,20 +605,18 @@ Tracks which SQL files have been applied. Written by
 ```
 _migrations
 ├── version*    INTEGER  PK                   ← matches the "00N_" prefix on the migration filename
-└── applied_at* TEXT                          ← ISO-8601 timestamp with offset (e.g. "2026-06-22T05:03:47+00:00")
+└── applied_at* TEXT                          ← ISO-8601 timestamp with offset (e.g. "2026-06-19T06:41:47+00:00")
 ```
 
 Rows currently in this DB:
 
 ```
-version  applied_at                 migration
--------  -------------------------  ----------------------------------------
-1        2026-06-08T22:53:57+00:00  001_initial.sql
-2        2026-06-11T05:52:02+00:00  002_post_headline.sql
-3        2026-06-17T04:22:26+00:00  003_translation_columns.sql
-4        2026-06-19T06:41:47+00:00  004_company_brand_account_model.sql
-5        2026-06-22T01:59:44+00:00  005_quoted_text.sql
-6        2026-06-22T05:03:47+00:00  006_quote_capture_tracking.sql
+version  applied_at
+-------  -------------------
+1        2026-06-08T22:53:57+00:00    ← 001_initial.sql
+2        2026-06-11T05:52:02+00:00    ← 002_post_headline.sql
+3        2026-06-17T04:22:26+00:00    ← 003_translation_columns.sql
+4        2026-06-19T06:41:47+00:00    ← 004_company_brand_account_model.sql
 ```
 
 ---
@@ -721,7 +665,7 @@ version  applied_at                 migration
 ┌───▼────┐  ┌────▼──────────┐
 │companies│  │  accounts     │
 │PK id    │  │ PK author_id  │
-│(10 rows)│  │ (1,522 rows)  │
+│(10 rows)│  │  (≥1 row)     │
 └────┬────┘  └────┬──────────┘
      │            │
      │ 1          │ 1
@@ -792,10 +736,6 @@ Logical (un-FK'd) edges:
   per-account appearance log (which accounts posted or were
   mentioned on which tweets), populated lazily by
   `account_graph`.
-- `brand_hf_orgs` + `products` are NOT in this ER diagram —
-  they are worktree-only tables (PR #6 pending). See the
-  "Pending (worktree-only) tables" section above and
-  `docs/reference/minimax-hf-products-2026-06-22.md`.
 
 ---
 
@@ -853,52 +793,11 @@ Logical (un-FK'd) edges:
    ├── CREATE idx_post_mentions_post
    ├── CREATE idx_post_brand_signals_brand_signal
    └── CREATE idx_post_brand_signals_post
-
-005_quoted_text.sql                       (branch `feat/capture-quote-tweets`; APPLIED on production 2026-06-22)
-   └── ALTER posts +quoted_text TEXT   ← TwitterAPI.io quote-tweet referenced body (was discarded pre-005)
-
-006_quote_capture_tracking.sql           (branch `feat/capture-quote-tweets`; APPLIED on production 2026-06-22)
-   ├── ALTER posts +last_quote_count_seen INTEGER NOT NULL DEFAULT 0   ← reactive QT trigger state
-   ├── ALTER posts +last_quote_fetched_at TEXT                          ← seeds sinceTime for next /twitter/tweet/quotes call
-   ├── ALTER posts +created_at_epoch INTEGER                           ← unix-second epoch (for time-window queries; Twitter-format created_at sorts wrong)
-   └── CREATE idx_posts_created_at_epoch   ← polarity window + QT daily-pass recency
-                                                  ⚠ MISSING FROM PRODUCTION (see posts section note above)
 ```
 
-The `posts` table grew in two stages and then SHRANK in v1.8, then GREW again in v1.8 + QT:
+The `posts` table grew in two stages and then SHRANK in v1.8:
 - **v1.2 (migration 002):** article headlines for URL-only posts
 - **v1.7 (migration 003):** LLM translation columns + post-fetch signal classification
 - **v1.8 (migration 004):** dropped `model_id` + `signal` (moved to
   join tables); renamed `favorite_count` → `like_count`; tightened
   the translation backfill indexes with lang-aware predicates.
-- **v1.8 + quote-tweets (migrations 005–006):** added `quoted_text`
-  + per-post QT capture tracking (`last_quote_count_seen` /
-  `last_quote_fetched_at`) + `created_at_epoch` for correct
-  time-window filtering. New columns only — no existing columns
-  changed and no rows are backfilled (existing posts keep NULL /
-  `0` defaults; the `created_at_epoch` backfill is a separate
-  Python script because SQLite can't parse the Twitter format
-  in pure SQL).
-
-### Worktree-only migrations (NOT applied to production)
-
-```
-005_products.sql                         (branch `feat/hf-products-crawler`; worktree DB only — PR #6 pending)
-   ├── CREATE brand_hf_orgs        (M:N brands ↔ HF-orgs; PK (brand_id, hf_org); FK → brands CASCADE; 11 seed rows)
-   ├── CREATE products             (HF artifact catalog; PK repo_id; FK → brands SET NULL; hf_type CHECK)
-   ├── CREATE idx_brand_hf_orgs_brand
-   ├── CREATE idx_products_brand
-   └── CREATE idx_products_hf_org
-```
-
-These tables exist on the worktree DB
-(`worktrees/hf-products/x-monitoring/data/x_monitoring.db`) used
-to develop + smoke-test the HF products crawler. They are
-**documented in this file's "Pending (worktree-only) tables"
-section** but are NOT in the production migration history above
-because they have not been merged. The row counts, indexes, and
-FK behavior in that section reflect the worktree DB, not
-production. See `docs/reference/minimax-hf-products-2026-06-22.md`
-for the live 19-product MiniMax catalog and
-`docs/plans/2026-06-21-001-feat-hf-products-crawler-plan.md` for
-the plan.

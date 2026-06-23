@@ -861,6 +861,46 @@ def cmd_translate_registry(args, paths) -> int:
         store.close()
 
 
+def cmd_hf_products(args, paths) -> int:
+    """Collect HuggingFace models for each enabled company into `products`.
+
+    Flags:
+      --companies a,b   comma-separated company_ids or display names (default: all)
+      --brand BRAND     single company_id / display name (alias for --companies)
+      --max N           cap models per org
+      --dry-run         resolve orgs only; write nothing
+
+    The outer loop iterates companies (corporate parent), then for each
+    company iterates its HF orgs (1:N) and brands (M:N). Products are
+    attributed to the company’s brands via the brand_companies edge.
+    Discovery is automatic: companies lacking a confirmed HF org are
+    searched and their candidates are persisted flagged for review (not
+    scraped this run). HF auth uses HF_TOKEN from the environment
+    (anonymous if unset).
+    """
+    from x_monitor import hf_products
+    from x_monitor.store import Store
+
+    store = Store(paths["db"], auto_migrate=True)
+    try:
+        companies = None
+        if args.companies:
+            companies = [c.strip() for c in args.companies.split(",") if c.strip()]
+        elif args.brand:
+            companies = [args.brand]
+
+        results = hf_products.collect_all(
+            store,
+            companies=companies,
+            max=args.max,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return 0
+    finally:
+        store.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="x-monitor", description="x-monitor CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1008,6 +1048,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the LLM and DB writes; print the row count only.",
     )
     p_tr.set_defaults(func=cmd_translate_registry)
+
+    p_hf = sub.add_parser(
+        "hf-products",
+        help="Collect HuggingFace models per brand into the products table",
+    )
+    p_hf.add_argument(
+        "--companies",
+        help="comma-separated brand_ids or display names (default: all)",
+    )
+    p_hf.add_argument("--brand", help="single brand_id / display name")
+    p_hf.add_argument("--max", type=int, default=None, help="cap models per org")
+    p_hf.add_argument(
+        "--dry-run", action="store_true", help="resolve orgs only; write nothing"
+    )
+    p_hf.set_defaults(func=cmd_hf_products)
 
     return p
 
