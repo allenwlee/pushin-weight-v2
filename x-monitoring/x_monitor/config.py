@@ -25,6 +25,7 @@ KNOWN_MODELS: frozenset[str] = frozenset(
         "moonshot_kimi",
         "inclusionai",
         "mistral",
+        "sakana",
         "stepfun",
         "ernie",
         "hunyuan",
@@ -34,7 +35,6 @@ KNOWN_MODELS: frozenset[str] = frozenset(
         "yi",
         "sensechat",
         "exaone",
-        "karakuri",
         "kuaishou",
         "upstage",
     }
