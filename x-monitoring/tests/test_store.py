@@ -93,7 +93,13 @@ def test_migrations_apply_forward_only_and_idempotent():
             # what matters is that 1 and 2 are both in the set.
             assert 1 in applied_first
             assert 2 in applied_first
-            assert store.applied_migrations() == [1, 2, 3, 4]
+            # Migration 005 (HF products) lives on branch feat/hf-products-crawler
+            # (unmerged); this worktree doesn't see it. Migration 006 (i18n locale
+            # columns) is present. The exact list grows as migrations are added;
+            # assert the invariant subset, not the whole list.
+            applied = store.applied_migrations()
+            assert {1, 2, 3, 4}.issubset(set(applied))
+            assert 6 in applied
             # Re-apply is a no-op
             applied_second = store.apply_migrations()
             assert applied_second == []
