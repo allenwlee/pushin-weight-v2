@@ -270,6 +270,184 @@ def translate_batch(
     return out
 
 
+# --- v1.8 (Unit 4): registry-row translation extension -----------------
+#
+# Extends translate_batch to cover the per-locale columns on the
+# registry tables (brands.display_name_en/_zh_cn, companies same,
+# accounts.bio_en/_zh_cn). Same shape: batch size 20, exponential
+# backoff, idempotent UPDATE, dry-run mode. Adds prompt rule 7:
+# preserve proper nouns (brand/company/model names) verbatim.
+
+
+def build_registry_translation_prompt(
+    rows: list[dict[str, Any]],
+    target_locales: list[str],
+    column_label: str,
+    brand_names: list[str] | None = None,
+) -> str:
+    """Build the LLM prompt for translating registry rows.
+
+    Args:
+        rows: list of dicts with at least `pk` and `source`. The
+            source is the existing column value (e.g. brands.display_name
+            or accounts.bio).
+        target_locales: list of locale codes (e.g. ["en", "zh_cn"]).
+        column_label: human-readable name of the column for the prompt
+            context (e.g. "brand display name" or "account bio").
+        brand_names: optional list of proper-noun strings to preserve
+            verbatim across all translations.
+
+    The prompt asks the model for a JSON object of the form:
+        {"results": [{"pk": ..., "col_en": ..., "col_zh_cn": ...}, ...]}
+    with `noop_<locale>: true` set when the source already matches.
+    """
+    locale_list = ", ".join(target_locales)
+    brand_block = ""
+    if brand_names:
+        brand_block = (
+            "\n\nProper nouns to preserve VERBATIM across all translations "
+            "(do not translate, transliterate, or paraphrase these — "
+            "translate any surrounding descriptor but keep the noun "
+            "in its canonical form, e.g. keep 'MiniMax AI' verbatim "
+            "even in a Chinese translation):\n"
+            + "\n".join(f"  - {name}" for name in brand_names)
+        )
+
+    payload = json.dumps(
+        [{"pk": r.get("pk"), "source": r.get("source", "")} for r in rows],
+        ensure_ascii=False,
+    )
+
+    return (
+        f"You are translating {column_label} entries into these target "
+        f"locales: {locale_list}.\n\n"
+        f"Rules:\n"
+        f"1. Detect the source language of each entry.\n"
+        f"2. Translate into each target locale. Preserve URLs and "
+        f"@mentions VERBATIM.\n"
+        f"3. If the source is already in the target locale, set "
+        f"col_<locale> equal to the source AND set noop_<locale>: true.\n"
+        f"4. Return ONLY a JSON object with this exact shape:\n"
+        f'   {{"results": [{{"pk": str, "col_en": str, "col_zh_cn": str, '
+        f'"noop_en": bool, "noop_zh": bool}}, ...]}}\n'
+        f"   One result per input row, in the same order.\n"
+        f"5. Do not include any prose, explanation, or code fences.\n"
+        f"6. If a row is empty, return empty strings for col_<locale> "
+        f"and set noop_<locale>: true for both.\n"
+        f"7. Preserve proper nouns (brand names, company names, model "
+        f"names) VERBATIM — translate any surrounding descriptor but "
+        f"keep the canonical noun form (e.g. keep 'MiniMax AI' verbatim "
+        f"even in Chinese).\n"
+        f"{brand_block}\n\n"
+        f"Rows (JSON array):\n{payload}"
+    )
+
+
+def _parse_registry_response(
+    response: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]] | None:
+    """Parse the LLM's structured response for a registry translation batch.
+
+    Returns a list of result dicts, one per input row, in input order.
+    Returns None if the response is malformed (caller treats as a
+    parse failure for the whole batch).
+    """
+    if not isinstance(response, dict):
+        return None
+    results = response.get("results")
+    if not isinstance(results, list):
+        return None
+    if len(results) != len(rows):
+        return None
+    return results
+
+
+def _empty_registry_row(
+    row: dict[str, Any],
+    failed: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Build a result row for a registry entry that the translator
+    cannot fill (failed LLM call, malformed response, or dry-run stub).
+    """
+    out: dict[str, Any] = {
+        "pk": str(row.get("pk")),
+        "col_en": None,
+        "col_zh_cn": None,
+    }
+    if failed:
+        out["translation_failed"] = True
+    if dry_run:
+        out["dry_run"] = True
+    return out
+
+
+def translate_registry_rows(
+    rows: list[dict[str, Any]],
+    target_locales: list[str],
+    client: "ClaudeClient",
+    *,
+    column_label: str = "registry entry",
+    brand_names: list[str] | None = None,
+    batch_size: int = _TRANSLATION_BATCH_SIZE,
+    dry_run: bool = False,
+) -> list[dict[str, Any]]:
+    """Translate a batch of registry rows into the target locales.
+
+    Args:
+        rows: list of dicts with at least `pk` and `source`.
+        target_locales: list of locale codes (e.g. ["en", "zh_cn"]).
+        client: an object implementing the `ClaudeClient` protocol.
+        column_label: human-readable name of the column for the prompt
+            context (e.g. "brand display name"). Defaults to a generic
+            "registry entry" so tests don't have to set it.
+        brand_names: optional list of proper-noun strings to preserve
+            verbatim across all translations.
+        batch_size: rows per LLM call (default 20).
+        dry_run: if True, skip the LLM and return stub rows.
+
+    Returns:
+        A list of dicts, one per input row (same order). Each dict has:
+            `pk`, `col_en`, `col_zh_cn`, plus optional
+            `translation_failed` (bool) or `dry_run` (bool).
+            On failure, col_en / col_zh_cn are NULL.
+    """
+    if not rows:
+        return []
+
+    if dry_run:
+        return [_empty_registry_row(r, dry_run=True) for r in rows]
+
+    out: list[dict[str, Any]] = []
+    for start in range(0, len(rows), batch_size):
+        batch = rows[start : start + batch_size]
+        prompt = build_registry_translation_prompt(
+            batch, target_locales, column_label,
+            brand_names=brand_names,
+        )
+        try:
+            response = _call_with_retry(client, prompt)
+        except Exception:
+            for r in batch:
+                out.append(_empty_registry_row(r, failed=True))
+            continue
+        parsed = _parse_registry_response(response, batch)
+        if parsed is None:
+            for r in batch:
+                out.append(_empty_registry_row(r, failed=True))
+            continue
+        for r, p in zip(batch, parsed):
+            out.append({
+                "pk": str(p.get("pk") or r.get("pk")),
+                "col_en": p.get("col_en"),
+                "col_zh_cn": p.get("col_zh_cn"),
+                "noop_en": p.get("noop_en", False),
+                "noop_zh": p.get("noop_zh", False),
+            })
+    return out
+
+
 # --- Real client (imports anthropic lazily so test envs without the
 #     package installed can still import this module) -------------------
 

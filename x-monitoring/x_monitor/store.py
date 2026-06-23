@@ -578,6 +578,155 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # --- v1.8 (Unit 4): registry-row translation helpers -----------------
+    #
+    # Mirrors bulk_update_translations / get_posts_missing_translations
+    # for the per-locale columns on brands / companies / accounts. The
+    # closed-set dicts below are the only way callers can pick a table +
+    # column + PK; the column/table names are interpolated into SQL so
+    # the closed-set is the SQL-injection defense.
+
+    _REGISTRY_TABLES: frozenset[str] = frozenset({"brands", "companies", "accounts"})
+    _REGISTRY_COLUMNS: frozenset[str] = frozenset({"display_name", "bio"})
+    _REGISTRY_PK: dict[str, str] = {
+        "brands": "brand_id",
+        "companies": "company_id",
+        "accounts": "author_id",
+    }
+    # Registry locale-to-column-suffix. Unlike posts.text_en / text_zh_cn,
+    # the registry columns are `<col>_en` / `<col>_zh_cn` where `<col>` is
+    # the source column name (display_name or bio), NOT a fixed prefix.
+    # So the "suffix" here is the column suffix (en / zh_cn), which is
+    # what gets appended to `<col>` to form the actual column name.
+    _REGISTRY_LOCALE_SUFFIX: dict[str, str] = {
+        "en": "en",
+        "zh_cn": "zh_cn",
+    }
+
+    def get_registry_missing_translations(
+        self,
+        table: str,
+        column: str,
+        locale: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return registry rows where `<column>_<locale>` IS NULL.
+
+        Used by the `x-monitor translate-registry` backfill subcommand
+        to find rows that the translator hasn't populated yet. Mirrors
+        `get_posts_missing_translations` (Unit 4 / D6 in the plan).
+
+        Args:
+            table: one of "brands" / "companies" / "accounts".
+            column: one of "display_name" / "bio". `bio` is only valid
+                for "accounts" (brands/companies have no bio column).
+            locale: one of "en" / "zh_cn".
+            limit: cap on result count.
+
+        Returns:
+            List of dicts with the PK column + `<column>` (source) +
+                `<column>_en` + `<column>_zh_cn` so the translator can
+                build its prompt and write back the result.
+        """
+        if table not in self._REGISTRY_TABLES:
+            raise ValueError(
+                f"table must be one of {sorted(self._REGISTRY_TABLES)}, "
+                f"got {table!r}"
+            )
+        if column not in self._REGISTRY_COLUMNS:
+            raise ValueError(
+                f"column must be one of {sorted(self._REGISTRY_COLUMNS)}, "
+                f"got {column!r}"
+            )
+        if locale not in self._TRANSLATION_LOCALES:
+            raise ValueError(
+                f"locale must be one of {sorted(self._TRANSLATION_LOCALES)}, "
+                f"got {locale!r}"
+            )
+        pk_col = self._REGISTRY_PK[table]
+        # bio only exists on accounts; bail loudly if the caller asks
+        # for an unsupported combo so we don't generate a SQL error
+        # mid-test.
+        if column == "bio" and table != "accounts":
+            raise ValueError(
+                f"column 'bio' is only valid for table 'accounts', "
+                f"got table={table!r}"
+            )
+        col = self._REGISTRY_LOCALE_SUFFIX[locale]  # 'en' or 'zh_cn'
+        rows = self._conn.execute(
+            f"""
+            SELECT {pk_col} AS pk, {column} AS source,
+                   {column}_en AS col_en,
+                   {column}_zh_cn AS col_zh_cn
+            FROM {table}
+            WHERE {column}_{col} IS NULL
+              AND {column} IS NOT NULL
+            ORDER BY {pk_col}
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def bulk_update_registry_translations(
+        self,
+        table: str,
+        column: str,
+        rows: list[dict[str, Any]],
+    ) -> int:
+        """Update `<column>_en` and `<column>_zh_cn` for a batch of rows.
+
+        Each row dict MUST have `pk` (the PK column value); the other 2
+        fields (`col_en`, `col_zh_cn`) are optional and default to NULL.
+
+        Empty input list is a no-op returning 0. Rows whose PK does not
+        exist in the table are silently skipped (UPDATE matches 0 rows).
+
+        Used by the registry translator (Unit 4). Mirrors
+        `bulk_update_translations` for posts.
+        """
+        if table not in self._REGISTRY_TABLES:
+            raise ValueError(
+                f"table must be one of {sorted(self._REGISTRY_TABLES)}, "
+                f"got {table!r}"
+            )
+        if column not in self._REGISTRY_COLUMNS:
+            raise ValueError(
+                f"column must be one of {sorted(self._REGISTRY_COLUMNS)}, "
+                f"got {column!r}"
+            )
+        if column == "bio" and table != "accounts":
+            raise ValueError(
+                f"column 'bio' is only valid for table 'accounts', "
+                f"got table={table!r}"
+            )
+        if not rows:
+            return 0
+        for r in rows:
+            if "pk" not in r:
+                raise KeyError(
+                    f"bulk_update_registry_translations: row missing 'pk': "
+                    f"{r!r}"
+                )
+        pk_col = self._REGISTRY_PK[table]
+        n_updated = 0
+        with self.transaction() as conn:
+            for r in rows:
+                cur = conn.execute(
+                    f"""
+                    UPDATE {table}
+                    SET {column}_en = ?, {column}_zh_cn = ?
+                    WHERE {pk_col} = ?
+                    """,
+                    (
+                        r.get("col_en"),
+                        r.get("col_zh_cn"),
+                        str(r["pk"]),
+                    ),
+                )
+                n_updated += cur.rowcount
+        return n_updated
+
     def get_posts_for_digest(
         self, brand_id: str, since_iso: str | None = None, limit: int = 200
     ) -> list[dict[str, Any]]:
