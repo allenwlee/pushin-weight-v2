@@ -23,8 +23,8 @@ enabled_models:
   - yi
   - sensechat
   - exaone
-  - karakuri
   - kuaishou
+  - sakana
   - upstage
 # v1.7.x Call B group split. The union of all enabled_models' brand
 # tokens (loaded from data/queries/<brand>.yaml Q2/Q3/Q5/Q6 first
@@ -41,7 +41,7 @@ enabled_models:
 call_b_groups:
   - [llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan]
   - [doubao, glm, moonshot_kimi, xiaomi_mimo, sensechat, yi, inclusionai]
-  - [nvidia_nemo, exaone, karakuri, kuaishou, upstage]
+  - [nvidia_nemo, exaone, sakana, kuaishou, upstage]
 
 # Daily TwitterAPI.io budget (pay-per-use). Each unit = 1 tweet returned by
 # advanced_search. 333/day gives 6x headroom over the 9x5x50=2250 upper bound

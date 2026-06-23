@@ -1,10 +1,10 @@
 # {AGENT_ATTRIBUTION}
 accounts:
-  - handle: karakuri_ai
-    display_name: "Karakuri"
+  - handle: SakanaAILabs
+    display_name: "Sakana AI"
     role: official
     verified: false
-    notes: Placeholder; operator must confirm Karakuri's official handle. 'Karakuri' is Japanese for a mechanical puppet — collides with anime/dining/figure posts.
+    notes: Placeholder; operator must confirm Sakana AI's official handle. 'Sakana' is Japanese for 'fish' — collides with food/restaurant/fishing posts; min_faves floors help but a brand-relevance filter may be needed after first cycle.
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

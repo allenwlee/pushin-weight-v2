@@ -41,7 +41,7 @@ enabled_models:
   - yi
   - sensechat
   - exaone
-  - karakuri
+  - sakana
   - kuaishou
   - upstage
 daily_ceiling: 333

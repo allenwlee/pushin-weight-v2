@@ -273,7 +273,7 @@ def test_read_run_zero_result_streaks(tmp_path):
     (runs / "run1.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-15T00:00:00+00:00",
+                "started_at": "2026-06-21T00:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
                     {"brand_id": "m", "query_id": "Q2", "status": "completed", "n_results": 5},
@@ -288,7 +288,7 @@ def test_read_run_zero_result_streaks(tmp_path):
     (runs / "run2.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-15T01:00:00+00:00",
+                "started_at": "2026-06-21T01:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
                     {"brand_id": "m", "query_id": "Q2", "status": "completed", "n_results": 3},
@@ -309,7 +309,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
     (runs / "run1.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-15T00:00:00+00:00",
+                "started_at": "2026-06-21T00:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
@@ -319,7 +319,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
     (runs / "run2.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-15T01:00:00+00:00",
+                "started_at": "2026-06-21T01:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
@@ -329,7 +329,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
     (runs / "run3.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-15T02:00:00+00:00",
+                "started_at": "2026-06-21T02:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
