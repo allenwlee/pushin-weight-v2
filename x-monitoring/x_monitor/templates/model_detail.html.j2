@@ -86,7 +86,7 @@
         {% if total > 0 %}
           {% for role, count in role_counts.items() %}
             <div class="role-bar" style="width: {{ (count / total * 100)|round(1) }}%" data-role="{{ role }}">
-              <span>{{ role }} · {{ count }}</span>
+              <span>{{ role_labels.get(role, role) }} · {{ count }}</span>
             </div>
           {% endfor %}
         {% else %}
