@@ -132,7 +132,7 @@ def test_migration_006_full_stack_apply(tmp_path):
         )
         # 001-006 should all be present; HF 005 is on a different branch,
         # so it's NOT in this worktree.
-        assert applied == [1, 2, 3, 4, 6], f"unexpected versions: {applied}"
+        assert applied == [1, 2, 3, 4, 6, 7], f"unexpected versions: {applied}"
         # Verify the brand seed from migration 004 still readable.
         row = s._conn.execute(
             "SELECT brand_id, display_name FROM brands WHERE brand_id = 'minimax'"
