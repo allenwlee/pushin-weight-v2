@@ -150,7 +150,8 @@ def test_migration_013_full_stack_apply(tmp_path):
         # 016 = trim role values to {official, staff, community};
         # 017 = brand_search_terms hybrid by design (no-op DDL).
         # 018 = INTEGER PKs for enum tables (signals, roles).
-        assert applied == list(range(1, 19)), (
+        # 019 = post_types + sentiments taxonomy (additive columns).
+        assert applied == list(range(1, 20)), (
             f"unexpected versions: {applied}"
         )
 

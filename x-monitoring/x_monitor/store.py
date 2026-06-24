@@ -140,6 +140,11 @@ class Store:
         # by migration 008 and not mutated at runtime.
         self._signals_cache: set[str] | None = None
         self._roles_cache: set[str] | None = None
+        # U9: caches for the new enum families introduced by
+        # migration 019 (post_type_keys, sentiment_keys). Same
+        # lazy / not-invalidated lifecycle as the signals/roles caches.
+        self._post_type_cache: set[str] | None = None
+        self._sentiment_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
         self._signals_written: int = 0
@@ -1126,17 +1131,29 @@ class Store:
         )
 
     def insert_posts_brands_signals(
-        self, post_id: str, brand_id: str, signal: str
+        self,
+        post_id: str,
+        brand_id: str,
+        signal: str | None = None,
+        post_type: str | None = None,
+        sentiment: str | None = None,
     ) -> None:
         """Upsert one row into posts_brands_signals (R11).
 
-        ON CONFLICT(post_id, brand_id) DO UPDATE SET signal = excluded.signal.
+        ON CONFLICT(post_id, brand_id) DO UPDATE SET signal_id =
+        excluded.signal_id, post_type = excluded.post_type, sentiment =
+        excluded.sentiment.
 
         `_unattributed` is BLOCKED by the schema's CHECK constraint
         (Decision 15). Passes a non-sentinel brand_id.
 
-        Top-gun ON CONFLICT gotcha: the `signal` column MUST be in the
+        Top-gun ON CONFLICT gotcha: all written columns MUST be in the
         INSERT column list.
+
+        Migration 019 (Unit 9) added the optional post_type + sentiment
+        columns. Legacy callers pass only `signal`; new callers (the
+        post-U9 classifier) pass post_type + sentiment instead. Both
+        shapes are supported.
 
         Guards brand_id against the brands table (the FK target) so the
         reattribute path can't raise IntegrityError. Unknown brand_ids
@@ -1150,10 +1167,12 @@ class Store:
                 brand_id, post_id,
             )
             return
-        # v1.8 (Unit 3): enum FK guard. signal is now FK-validated against
+        # v1.8 (Unit 3): enum FK guard. signal is FK-validated against
         # signals (renamed from signal_keys in 014). Unknown signal values
-        # would raise IntegrityError; drop them to the dead-letter log instead.
-        if signal not in self._known_signal_keys():
+        # would raise IntegrityError; drop them to the dead-letter log
+        # instead. None is allowed (post-U9 rows where the classifier
+        # emitted post_type + sentiment but not signal).
+        if signal is not None and signal not in self._known_signal_keys():
             self._dead_letter_enum(
                 "signal", signal,
                 table="posts_brands_signals",
@@ -1161,14 +1180,34 @@ class Store:
                 brand_id=brand_id,
             )
             return
+        # U9: post_type FK guard.
+        if post_type is not None and post_type not in self._known_post_type_keys():
+            self._dead_letter_enum(
+                "post_type", post_type,
+                table="posts_brands_signals",
+                post_id=post_id,
+                brand_id=brand_id,
+            )
+            return
+        # U9: sentiment FK guard.
+        if sentiment is not None and sentiment not in self._known_sentiment_keys():
+            self._dead_letter_enum(
+                "sentiment", sentiment,
+                table="posts_brands_signals",
+                post_id=post_id,
+                brand_id=brand_id,
+            )
+            return
         self._conn.execute(
             """
-            INSERT INTO posts_brands_signals(post_id, brand_id, signal_id)
-            VALUES (?, ?, ?)
+            INSERT INTO posts_brands_signals(post_id, brand_id, signal_id, post_type, sentiment)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                signal_id = excluded.signal_id
+                signal_id = excluded.signal_id,
+                post_type = excluded.post_type,
+                sentiment = excluded.sentiment
             """,
-            (post_id, brand_id, signal),
+            (post_id, brand_id, signal, post_type, sentiment),
         )
 
     # --- v1.8: detection-registry read methods (R12, R13) -----------------
@@ -1255,6 +1294,38 @@ class Store:
             }
         return self._roles_cache
 
+    def _known_post_type_keys(self) -> set[str]:
+        """Return the set of canonical post_type keys (cached).
+
+        U9: reads from the `post_type_keys` table added by
+        migration 019. Used by insert_posts_brands_signals as the FK
+        guard for posts_brands_signals.post_type.
+        """
+        if self._post_type_cache is None:
+            self._post_type_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM post_type_keys"
+                ).fetchall()
+            }
+        return self._post_type_cache
+
+    def _known_sentiment_keys(self) -> set[str]:
+        """Return the set of canonical sentiment keys (cached).
+
+        U9: reads from the `sentiment_keys` table added by
+        migration 019. Used by insert_posts_brands_signals as the FK
+        guard for posts_brands_signals.sentiment.
+        """
+        if self._sentiment_cache is None:
+            self._sentiment_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM sentiment_keys"
+                ).fetchall()
+            }
+        return self._sentiment_cache
+
     def _dead_letter_enum(
         self, family: str, value: str, **context: Any
     ) -> None:
@@ -1271,7 +1342,7 @@ class Store:
         One file per calendar day. Created lazily on first drop.
 
         Args:
-            family: one of "signal" / "role".
+            family: one of "signal" / "role" / "post_type" / "sentiment".
             value: the unknown enum string that was rejected.
             **context: extra fields (table, post_id, author_id, ...) so
                 the postmortem reader can find the offending row.

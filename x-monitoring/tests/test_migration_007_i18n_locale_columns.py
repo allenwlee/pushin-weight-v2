@@ -150,7 +150,9 @@ def test_migration_007_full_stack_apply(tmp_path):
         # 015 = rename role_keys to roles.
         # 016 = trim role values to {official, staff, community}.
         # 017 = brand_search_terms hybrid by design (no-op DDL).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], f"unexpected versions: {applied}"
+        # 018 = INTEGER PKs for enum tables (signals, roles).
+        # 019 = post_types + sentiments taxonomy (additive columns).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], f"unexpected versions: {applied}"
         # Verify the brand seed from migration 004 still readable.
         row = s._conn.execute(
             "SELECT brand_id, display_name FROM brands WHERE brand_id = 'minimax'"

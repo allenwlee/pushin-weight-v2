@@ -219,7 +219,7 @@ def test_migration_015_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 19)), (
+        assert applied == list(range(1, 20)), (
             f"unexpected versions: {applied}"
         )
         # Both singular enum tables are in effect.
