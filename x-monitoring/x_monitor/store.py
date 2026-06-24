@@ -135,10 +135,10 @@ class Store:
         # store.close() and re-open if they mutate the brands table).
         self._brand_cache: list[BrandRow] | None = None
         # v1.8 (Unit 3): caches for the i18n enum-key sets
-        # (signal_keys, role_keys). Same lazy / not-invalidated
-        # lifecycle as _brand_cache — the *_keys tables are seeded once
+        # (signals, role_keys). Same lazy / not-invalidated
+        # lifecycle as _brand_cache — the *enum tables are seeded once
         # by migration 008 and not mutated at runtime.
-        self._signal_keys_cache: set[str] | None = None
+        self._signals_cache: set[str] | None = None
         self._role_keys_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
@@ -363,9 +363,10 @@ class Store:
                             )
                             continue
                         # v1.8 (Unit 3): signal is now FK-validated against
-                        # signal_keys (migration 007). Hallucinated signal
-                        # values would raise IntegrityError; drop them to
-                        # the dead-letter log instead.
+                        # signals (renamed from signal_keys in 014).
+                        # Hallucinated signal values would raise
+                        # IntegrityError; drop them to the dead-letter
+                        # log instead.
                         if sig not in self._known_signal_keys():
                             self._dead_letter_enum(
                                 "signal", sig,
@@ -379,10 +380,10 @@ class Store:
                         conn.execute(
                             """
                             INSERT INTO posts_brands_signals(
-                                post_id, brand_id, signal
+                                post_id, brand_id, signal_id
                             ) VALUES (?, ?, ?)
                             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                                signal = excluded.signal
+                                signal_id = excluded.signal_id
                             """,
                             (tweet_id_str, b, sig),
                         )
@@ -1147,8 +1148,8 @@ class Store:
             )
             return
         # v1.8 (Unit 3): enum FK guard. signal is now FK-validated against
-        # signal_keys (migration 007). Unknown signal values would raise
-        # IntegrityError; drop them to the dead-letter log instead.
+        # signals (renamed from signal_keys in 014). Unknown signal values
+        # would raise IntegrityError; drop them to the dead-letter log instead.
         if signal not in self._known_signal_keys():
             self._dead_letter_enum(
                 "signal", signal,
@@ -1159,10 +1160,10 @@ class Store:
             return
         self._conn.execute(
             """
-            INSERT INTO posts_brands_signals(post_id, brand_id, signal)
+            INSERT INTO posts_brands_signals(post_id, brand_id, signal_id)
             VALUES (?, ?, ?)
             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                signal = excluded.signal
+                signal_id = excluded.signal_id
             """,
             (post_id, brand_id, signal),
         )
@@ -1224,12 +1225,18 @@ class Store:
     # loader should call store.close() + re-open to refresh the cache.
 
     def _known_signal_keys(self) -> set[str]:
-        if self._signal_keys_cache is None:
-            self._signal_keys_cache = {
+        """Return the set of canonical signal keys (cached).
+
+        Reads from the `signals` table (renamed from `signal_keys` in
+        migration 014). Used by insert_posts_brands_signals as the FK
+        guard for posts_brands_signals.signal_id.
+        """
+        if self._signals_cache is None:
+            self._signals_cache = {
                 r["key"]
-                for r in self._conn.execute("SELECT key FROM signal_keys").fetchall()
+                for r in self._conn.execute("SELECT key FROM signals").fetchall()
             }
-        return self._signal_keys_cache
+        return self._signals_cache
 
     def _known_role_keys(self) -> set[str]:
         if self._role_keys_cache is None:

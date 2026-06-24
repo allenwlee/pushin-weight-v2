@@ -22,13 +22,13 @@ import pytest
 
 
 def test_migration_008_creates_signal_keys_and_labels(tmp_path):
-    """signal_keys has 6 rows; signal_labels has 12 (6 × 2 locales)."""
+    """signals (renamed from signal_keys in 014) has 6 rows; signal_labels has 12 (6 × 2 locales)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
-        keys = {r[0] for r in s._conn.execute("SELECT key FROM signal_keys").fetchall()}
+        keys = {r[0] for r in s._conn.execute("SELECT key FROM signals").fetchall()}
         assert keys == {"release", "community_question", "criticism",
                         "commenter_capture", "praise", "other"}
 
@@ -78,8 +78,8 @@ def test_migration_008_posts_brands_signals_signal_is_fk(tmp_path):
             "SELECT * FROM pragma_foreign_key_list('posts_brands_signals')"
         ).fetchall()
         fk_targets = {(r[2], r[3]) for r in fks}  # (table, from_col) -> table
-        # The signal FK references signal_keys.
-        assert any(r[2] == "signal_keys" and r[3] == "signal" for r in fks), (
+        # The signal_id FK references signals (renamed from signal_keys in 014).
+        assert any(r[2] == "signals" and r[3] == "signal_id" for r in fks), (
             f"signal FK missing from posts_brands_signals. FKs found: {fks}"
         )
     finally:
@@ -157,7 +157,7 @@ def test_migration_008_idempotent(tmp_path):
         ]
         assert applied.count(7) == 1
         # Lookup-table row counts unchanged.
-        n_keys = s2._conn.execute("SELECT COUNT(*) FROM signal_keys").fetchone()[0]
+        n_keys = s2._conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
         assert n_keys == 6
         n_labels = s2._conn.execute("SELECT COUNT(*) FROM signal_labels").fetchone()[0]
         assert n_labels == 12
@@ -179,17 +179,18 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-013 (quote-tweets 005/006 already on main; i18n 007/008;
+        # 001-014 (quote-tweets 005/006 already on main; i18n 007/008;
         # HF products 009; M:N rename to plural-plural 010 on this branch;
         # 011 = rename locale to lang; 012 = drop engagement_tier tables;
-        # 013 = rename post_mentions to posts_brands_mentions).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], f"unexpected versions: {applied}"
+        # 013 = rename post_mentions to posts_brands_mentions;
+        # 014 = rename signal_keys to signals).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], f"unexpected versions: {applied}"
     finally:
         s.close()
 
 
 def test_migration_008_round_trip_posts_brands_signals(tmp_path):
-    """Inserting a posts_brands_signals row with a valid signal succeeds;
+    """Inserting a posts_brands_signals row with a valid signal_id succeeds;
     the FK is honored at write time."""
     from x_monitor.store import Store
 
@@ -206,13 +207,13 @@ def test_migration_008_round_trip_posts_brands_signals(tmp_path):
         )
         # Insert a valid posts_brands_signals row.
         s._conn.execute(
-            "INSERT INTO posts_brands_signals (post_id, brand_id, signal) "
+            "INSERT INTO posts_brands_signals (post_id, brand_id, signal_id) "
             "VALUES (?, ?, ?)",
             ("t_fk_007", "minimax", "release"),
         )
         row = s._conn.execute(
-            "SELECT signal FROM posts_brands_signals WHERE post_id = ?", ("t_fk_007",)
+            "SELECT signal_id FROM posts_brands_signals WHERE post_id = ?", ("t_fk_007",)
         ).fetchone()
-        assert row["signal"] == "release"
+        assert row["signal_id"] == "release"
     finally:
         s.close()

@@ -297,10 +297,10 @@ def test_insert_posts_brands_signals_valid_signal_writes(tmp_path):
         )
         s.insert_posts_brands_signals("t_valid_signal", "minimax", "release")
         row = s._conn.execute(
-            "SELECT signal FROM posts_brands_signals WHERE post_id = ?",
+            "SELECT signal_id FROM posts_brands_signals WHERE post_id = ?",
             ("t_valid_signal",),
         ).fetchone()
-        assert row["signal"] == "release"
+        assert row["signal_id"] == "release"
         # No dead-letter entry.
         log_files = list((tmp_path / "runs").rglob("enum_dead_letter.jsonl"))
         assert log_files == []
@@ -455,10 +455,10 @@ def test_insert_posts_drops_unknown_signal_via_bulk_path(tmp_path):
         s.insert_posts(posts)
         # Valid signal is written.
         ok = s._conn.execute(
-            "SELECT signal FROM posts_brands_signals WHERE post_id = ?",
+            "SELECT signal_id FROM posts_brands_signals WHERE post_id = ?",
             ("t_bulk_sig_ok",),
         ).fetchone()
-        assert ok["signal"] == "release"
+        assert ok["signal_id"] == "release"
         # Invalid signal was dropped — no row written.
         bad = s._conn.execute(
             "SELECT * FROM posts_brands_signals WHERE post_id = ?",

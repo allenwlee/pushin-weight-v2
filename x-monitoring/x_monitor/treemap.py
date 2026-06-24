@@ -228,7 +228,7 @@ def bin_polarity(score: float | None) -> str:
 # The polarity SQL, factored as a module-level constant so EXPLAIN QUERY PLAN
 # tests can reference the same string the production code runs.
 # - Decision 18 (JOIN not IN subquery): the query planner can use the
-#   posts_brands_signals(brand_id, signal) and posts_brands(brand_id, post_id)
+#   posts_brands_signals(brand_id, signal_id) and posts_brands(brand_id, post_id)
 #   indexes to seek by brand, then join posts(tweet_id) for the time-window
 #   filter. EXPLAIN should show all three indexes used (no SORT or SCAN).
 # - Decision 15 (_unattributed filter): the WHERE clause excludes the
@@ -243,7 +243,7 @@ def bin_polarity(score: float | None) -> str:
 #   weekday-leading Twitter format sorted incorrectly and silently ignored
 #   the time window pre-migration-006.
 POLARITY_SQL: str = (
-    "SELECT pbs.signal, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
+    "SELECT pbs.signal_id, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
     "FROM posts_brands_signals pbs "
     "JOIN posts_brands pb "
     "  ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id "
@@ -251,7 +251,7 @@ POLARITY_SQL: str = (
     "WHERE pbs.brand_id = ? "
     "  AND pbs.brand_id != '_unattributed' "
     "  AND p.created_at_epoch >= ? "
-    "GROUP BY pbs.signal"
+    "GROUP BY pbs.signal_id"
 )
 
 
@@ -287,7 +287,7 @@ def compute_polarity_signal_breakdown(
         count. Weights are 1/N for multi-brand posts per Decision 9.
 
     Notes:
-        - Indexes used: idx_posts_brands_signals_brand_signal,
+        - Indexes used: idx_posts_brands_signals_brand_id_signal_id,
           idx_posts_brands_brand_post, posts (PK). EXPLAIN should show
           no SCAN or SORT on a populated DB.
     """
@@ -296,7 +296,7 @@ def compute_polarity_signal_breakdown(
             POLARITY_SQL, (brand_id, window_start_epoch),
         ).fetchall()
     else:
-        # POLARITY_SQL ends with "GROUP BY pbs.signal"; insert the
+        # POLARITY_SQL ends with "GROUP BY pbs.signal_id"; insert the
         # upper-bound filter BEFORE the GROUP BY so it is applied
         # before aggregation. Splitting on "GROUP BY" and re-appending
         # keeps the constant a single source of truth.
@@ -306,7 +306,7 @@ def compute_polarity_signal_breakdown(
             sql_with_upper,
             (brand_id, window_start_epoch, window_end_epoch),
         ).fetchall()
-    return {r["signal"]: float(r["weighted_count"]) for r in rows}
+    return {r["signal_id"]: float(r["weighted_count"]) for r in rows}
 
 
 def _score_from_breakdown(

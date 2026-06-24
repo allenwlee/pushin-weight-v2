@@ -189,13 +189,14 @@ def test_migration_012_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-013: 005/006 = quote-tweets; 007 = i18n locale columns;
+        # 001-014: 005/006 = quote-tweets; 007 = i18n locale columns;
         # 008 = enum i18n lookup tables; 009 = products;
         # 010 = M:N rename to plural-plural;
         # 011 = rename locale to lang;
         # 012 = drop engagement_tier tables;
-        # 013 = rename post_mentions to posts_brands_mentions.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], (
+        # 013 = rename post_mentions to posts_brands_mentions;
+        # 014 = rename signal_keys to signals.
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], (
             f"unexpected versions: {applied}"
         )
 
@@ -207,7 +208,9 @@ def test_migration_012_full_stack_apply(tmp_path):
             assert rows == [], f"{tbl} still exists: {rows}"
 
         # Remaining 4 i18n tables are intact.
-        for tbl in ("signal_keys", "signal_labels", "role_keys", "role_labels"):
+        # (signal_keys was renamed to signals in 014; role_keys is still
+        # role_keys because U5 hasn't run yet.)
+        for tbl in ("signals", "signal_labels", "role_keys", "role_labels"):
             rows = s._conn.execute(
                 "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
             ).fetchall()

@@ -543,7 +543,7 @@ def _seed_brand_posts(store, brand, posts):
             (brand, tid),
         )
         c.execute(
-            "INSERT INTO posts_brands_signals(post_id, brand_id, signal) VALUES (?, ?, ?)",
+            "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) VALUES (?, ?, ?)",
             (tid, brand, signal),
         )
 

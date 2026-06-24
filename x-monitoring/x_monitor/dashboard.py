@@ -345,7 +345,7 @@ def _read_signal_breakdown_for_brand(
     brand_id: str,
     window_start_iso: str,
 ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Read posts_brands_signals for one brand grouped by (day, signal).
+    """Read posts_brands_signals for one brand grouped by (day, signal_id).
 
     v1.8 (Unit 4 / R18). JOINs posts_brands_signals + posts_brands + posts
     per Decision 18 (no IN subquery). The _unattributed sentinel is
@@ -360,7 +360,7 @@ def _read_signal_breakdown_for_brand(
     rows = conn.execute(
         """
         SELECT substr(p.created_at, 1, 10) AS day,
-               pbs.signal AS signal,
+               pbs.signal_id AS signal,
                SUM(pb.weight) AS weighted_count
         FROM posts_brands_signals pbs
         JOIN posts_brands pb
@@ -369,7 +369,7 @@ def _read_signal_breakdown_for_brand(
         WHERE pbs.brand_id = ?
           AND pbs.brand_id != '_unattributed'
           AND p.created_at >= ?
-        GROUP BY day, pbs.signal
+        GROUP BY day, pbs.signal_id
         """,
         (brand_id, window_start_iso),
     ).fetchall()

@@ -145,7 +145,7 @@ def test_migration_007_full_stack_apply(tmp_path):
         # M:N rename to plural-plural 010 added on this branch.
         # 011 = rename locale to lang.
         # 012 = drop engagement_tier tables.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], f"unexpected versions: {applied}"
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], f"unexpected versions: {applied}"
         # Verify the brand seed from migration 004 still readable.
         row = s._conn.execute(
             "SELECT brand_id, display_name FROM brands WHERE brand_id = 'minimax'"

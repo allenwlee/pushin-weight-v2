@@ -257,14 +257,14 @@ def test_insert_posts_writes_posts_brands_signals():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, signal FROM posts_brands_signals "
+                "SELECT brand_id, signal_id FROM posts_brands_signals "
                 "WHERE post_id = 'p1' ORDER BY brand_id"
             ).fetchall()
             assert len(rows) == 2
             assert rows[0]["brand_id"] == "deepseek"
-            assert rows[0]["signal"] == "criticism"
+            assert rows[0]["signal_id"] == "criticism"
             assert rows[1]["brand_id"] == "qwen"
-            assert rows[1]["signal"] == "praise"
+            assert rows[1]["signal_id"] == "praise"
         finally:
             store.close()
 
@@ -312,13 +312,13 @@ def test_insert_posts_drops_hallucinated_brand_signals():
             # posts_brands_signals must contain exactly the 2 known
             # brands — the hallucinated `fake_brand` is dropped.
             rows = store._conn.execute(
-                "SELECT brand_id, signal FROM posts_brands_signals "
+                "SELECT brand_id, signal_id FROM posts_brands_signals "
                 "WHERE post_id = 'p1' ORDER BY brand_id"
             ).fetchall()
             assert len(rows) == 2
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
-            assert rows[0]["signal"] == "criticism"
-            assert rows[1]["signal"] == "praise"
+            assert rows[0]["signal_id"] == "criticism"
+            assert rows[1]["signal_id"] == "praise"
             # posts_brands should also only have the known brands
             # (already filtered by valid_brands — this confirms no
             # regression in the posts_brands path).
@@ -366,7 +366,7 @@ def test_insert_posts_keeps_cross_mention_signal():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, signal FROM posts_brands_signals "
+                "SELECT brand_id, signal_id FROM posts_brands_signals "
                 "WHERE post_id = 'p1' ORDER BY brand_id"
             ).fetchall()
             # Both signals land — deepseek is a real brand even though
@@ -440,9 +440,9 @@ def test_insert_posts_legacy_signal_string_broadcast():
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
             assert all(
                 store._conn.execute(
-                    "SELECT signal FROM posts_brands_signals WHERE post_id='p1' AND brand_id=?",
+                    "SELECT signal_id FROM posts_brands_signals WHERE post_id='p1' AND brand_id=?",
                     (r["brand_id"],),
-                ).fetchone()["signal"] == "praise"
+                ).fetchone()["signal_id"] == "praise"
                 for r in rows
             )
         finally:
