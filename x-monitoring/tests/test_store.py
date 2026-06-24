@@ -77,7 +77,7 @@ def test_upsert_account_updates_last_seen_and_tier():
                 role="community",
             )
             a2 = store.get_account("minimax", "alice")
-            assert a2["role"] == "community"
+            assert a2["role_id"] == "community"
             assert a2["last_seen_at"] >= a1["last_seen_at"]
         finally:
             store.close()

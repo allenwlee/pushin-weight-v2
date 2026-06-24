@@ -203,15 +203,15 @@ def _load_signal_labels(store: Store, locale: str) -> dict[str, str]:
 
 
 def _load_role_labels(
-    store: Store, locale: str, role_keys: list[str]
+    store: Store, locale: str, role_ids: list[str]
 ) -> dict[str, str]:
-    """Return {role_key: localized_label} for the role bars on /brand/<id>.
+    """Return {role_id: localized_label} for the role bars on /brand/<id>.
 
     Defensive: empty input → empty dict.
     """
     suffix = _LOCALE_TO_COLUMN.get(locale, "en")
     out: dict[str, str] = {}
-    for key in role_keys:
+    for key in role_ids:
         out[key] = store._pick_enum_label("role", key, suffix) or key
     return out
 
@@ -1064,7 +1064,7 @@ class DashboardApp:
                     store, detail_locale
                 )
                 role_counts: Counter[str] = Counter(
-                    a.get("role", "unknown") for a in accounts
+                    a.get("role_id", "unknown") for a in accounts
                 )
                 role_labels = _load_role_labels(
                     store, detail_locale, list(role_counts.keys())

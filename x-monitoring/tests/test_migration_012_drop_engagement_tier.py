@@ -189,14 +189,15 @@ def test_migration_012_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-014: 005/006 = quote-tweets; 007 = i18n locale columns;
+        # 001-015: 005/006 = quote-tweets; 007 = i18n locale columns;
         # 008 = enum i18n lookup tables; 009 = products;
         # 010 = M:N rename to plural-plural;
         # 011 = rename locale to lang;
         # 012 = drop engagement_tier tables;
         # 013 = rename post_mentions to posts_brands_mentions;
-        # 014 = rename signal_keys to signals.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], (
+        # 014 = rename signal_keys to signals;
+        # 015 = rename role_keys to roles.
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (
             f"unexpected versions: {applied}"
         )
 
@@ -209,8 +210,8 @@ def test_migration_012_full_stack_apply(tmp_path):
 
         # Remaining 4 i18n tables are intact.
         # (signal_keys was renamed to signals in 014; role_keys is still
-        # role_keys because U5 hasn't run yet.)
-        for tbl in ("signals", "signal_labels", "role_keys", "role_labels"):
+        # role_keys was renamed to roles in 015.)
+        for tbl in ("signals", "signal_labels", "roles", "role_labels"):
             rows = s._conn.execute(
                 "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
             ).fetchall()
@@ -243,10 +244,10 @@ def test_migration_012_upsert_account_works_without_engagement_tier(tmp_path):
 
         # brands_accounts edge was written for the known role.
         ba = s._conn.execute(
-            "SELECT role FROM brands_accounts WHERE author_id = ?",
+            "SELECT role_id FROM brands_accounts WHERE author_id = ?",
             ("handle:u_post_012",),
         ).fetchone()
-        assert ba["role"] == "official"
+        assert ba["role_id"] == "official"
     finally:
         s.close()
 

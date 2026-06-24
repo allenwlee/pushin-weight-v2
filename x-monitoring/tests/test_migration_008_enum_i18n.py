@@ -45,13 +45,13 @@ def test_migration_008_creates_signal_keys_and_labels(tmp_path):
 
 
 def test_migration_008_creates_role_keys_and_labels(tmp_path):
-    """role_keys has 5 rows; role_labels has 10 (5 × 2 locales)."""
+    """roles (renamed from role_keys in 015) has 5 rows; role_labels has 10 (5 × 2 locales)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
-        keys = {r[0] for r in s._conn.execute("SELECT key FROM role_keys").fetchall()}
+        keys = {r[0] for r in s._conn.execute("SELECT key FROM roles").fetchall()}
         assert keys == {"official", "community", "researcher", "press", "vendor"}
 
         labels = {(r[0], r[1]): r[2] for r in s._conn.execute(
@@ -106,7 +106,7 @@ def test_migration_008_posts_brands_signals_check_constraint_preserved(tmp_path)
 
 
 def test_migration_008_brands_accounts_role_is_fk(tmp_path):
-    """brands_accounts.role references role_keys."""
+    """brands_accounts.role_id references roles (renamed from role_keys in 015)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -115,15 +115,15 @@ def test_migration_008_brands_accounts_role_is_fk(tmp_path):
         fks = s._conn.execute(
             "SELECT * FROM pragma_foreign_key_list('brands_accounts')"
         ).fetchall()
-        assert any(r[2] == "role_keys" and r[3] == "role" for r in fks), (
-            f"role FK missing from brands_accounts. FKs found: {fks}"
+        assert any(r[2] == "roles" and r[3] == "role_id" for r in fks), (
+            f"role_id FK missing from brands_accounts. FKs found: {fks}"
         )
     finally:
         s.close()
 
 
 def test_migration_008_companies_accounts_role_is_fk(tmp_path):
-    """companies_accounts.role references role_keys."""
+    """companies_accounts.role_id references roles."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -132,7 +132,7 @@ def test_migration_008_companies_accounts_role_is_fk(tmp_path):
         fks = s._conn.execute(
             "SELECT * FROM pragma_foreign_key_list('companies_accounts')"
         ).fetchall()
-        assert any(r[2] == "role_keys" and r[3] == "role" for r in fks)
+        assert any(r[2] == "roles" and r[3] == "role_id" for r in fks)
     finally:
         s.close()
 
@@ -179,12 +179,13 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-014 (quote-tweets 005/006 already on main; i18n 007/008;
+        # 001-015 (quote-tweets 005/006 already on main; i18n 007/008;
         # HF products 009; M:N rename to plural-plural 010 on this branch;
         # 011 = rename locale to lang; 012 = drop engagement_tier tables;
         # 013 = rename post_mentions to posts_brands_mentions;
-        # 014 = rename signal_keys to signals).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], f"unexpected versions: {applied}"
+        # 014 = rename signal_keys to signals;
+        # 015 = rename role_keys to roles).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], f"unexpected versions: {applied}"
     finally:
         s.close()
 

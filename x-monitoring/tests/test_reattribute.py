@@ -61,7 +61,7 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
              "2026-06-19T00:00:00+00:00"),
         )
         store._conn.execute(
-            "INSERT INTO brands_accounts(brand_id, author_id, role, added_at) "
+            "INSERT INTO brands_accounts(brand_id, author_id, role_id, added_at) "
             "VALUES (?, ?, ?, ?)",
             (brand_id, author_id, "official", "2026-06-19T00:00:00+00:00"),
         )

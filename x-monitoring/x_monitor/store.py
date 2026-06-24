@@ -135,11 +135,11 @@ class Store:
         # store.close() and re-open if they mutate the brands table).
         self._brand_cache: list[BrandRow] | None = None
         # v1.8 (Unit 3): caches for the i18n enum-key sets
-        # (signals, role_keys). Same lazy / not-invalidated
+        # (signals, roles). Same lazy / not-invalidated
         # lifecycle as _brand_cache — the *enum tables are seeded once
         # by migration 008 and not mutated at runtime.
         self._signals_cache: set[str] | None = None
-        self._role_keys_cache: set[str] | None = None
+        self._roles_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
         self._signals_written: int = 0
@@ -942,12 +942,13 @@ class Store:
         """
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
-        # role is FK-validated against role_keys. Legacy callers pass
-        # role="unknown" which is NOT in role_keys (only official /
-        # community / researcher / press / vendor are). In that case,
-        # skip the brands_accounts edge write — the per-brand role is
-        # unknowable, so the edge has no information. The accounts row
-        # is still upserted (no role column there post-migration 004).
+        # role is FK-validated against roles (renamed from role_keys in
+        # 015). Legacy callers pass role="unknown" which is NOT in roles
+        # (only official / community / researcher / press / vendor are).
+        # In that case, skip the brands_accounts edge write — the
+        # per-brand role is unknowable, so the edge has no information.
+        # The accounts row is still upserted (no role column there
+        # post-migration 004).
         role_known = role in self._known_role_keys()
         if not role_known:
             self._dead_letter_enum(
@@ -989,7 +990,7 @@ class Store:
             ),
         )
         # Upsert the per-brand edge in brands_accounts (the per-brand role).
-        # Skipped when role was unknown to role_keys — see dead-letter
+        # Skipped when role was unknown to roles — see dead-letter
         # guard above. This preserves pre-v1.8 semantics: an unknown role
         # did not write a brands_accounts row either (the old DEFAULT was
         # 'community', so callers passing role='unknown' would have hit
@@ -998,10 +999,10 @@ class Store:
             self._conn.execute(
                 """
                 INSERT INTO brands_accounts(
-                    brand_id, author_id, role, added_at
+                    brand_id, author_id, role_id, added_at
                 ) VALUES (?,?,?,?)
                 ON CONFLICT(brand_id, author_id) DO UPDATE SET
-                    role = excluded.role
+                    role_id = excluded.role_id
                 """,
                 (brand_id, author_id, role, now),
             )
@@ -1013,7 +1014,7 @@ class Store:
         # alongside the account row.
         row = self._conn.execute(
             """
-            SELECT a.*, ba.role
+            SELECT a.*, ba.role_id
             FROM accounts a
             JOIN brands_accounts ba ON ba.author_id = a.author_id
             WHERE ba.brand_id = ? AND a.handle = ?
@@ -1029,7 +1030,7 @@ class Store:
         # live behind brands_accounts JOIN.
         rows = self._conn.execute(
             """
-            SELECT a.*, ba.role
+            SELECT a.*, ba.role_id
             FROM accounts a
             JOIN brands_accounts ba ON ba.author_id = a.author_id
             WHERE ba.brand_id = ?
@@ -1214,7 +1215,7 @@ class Store:
     #
     # Cached sets of valid keys for the two enum families introduced
     # by migration 008. Used by insert_posts_brands_signals (signal)
-    # and upsert_account (brands_accounts.role) to drop unknown values
+    # and upsert_account (brands_accounts.role_id) to drop unknown values
     # to the dead-letter log BEFORE SQLite raises IntegrityError on
     # the FK.
     #
@@ -1239,12 +1240,18 @@ class Store:
         return self._signals_cache
 
     def _known_role_keys(self) -> set[str]:
-        if self._role_keys_cache is None:
-            self._role_keys_cache = {
+        """Return the set of canonical role keys (cached).
+
+        Reads from the `roles` table (renamed from `role_keys` in
+        migration 015). Used by upsert_account as the FK guard for
+        brands_accounts.role_id.
+        """
+        if self._roles_cache is None:
+            self._roles_cache = {
                 r["key"]
-                for r in self._conn.execute("SELECT key FROM role_keys").fetchall()
+                for r in self._conn.execute("SELECT key FROM roles").fetchall()
             }
-        return self._role_keys_cache
+        return self._roles_cache
 
     def _dead_letter_enum(
         self, family: str, value: str, **context: Any

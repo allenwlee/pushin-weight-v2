@@ -61,7 +61,7 @@ for bid, yn in brand_yaml.items():
     for handle in (data.get('canonical_handles') or []):
         aid = 'synthetic:' + handle.lower()
         cur = conn.execute(
-            'INSERT OR IGNORE INTO brands_accounts (brand_id, author_id, role, added_at) VALUES (?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO brands_accounts (brand_id, author_id, role_id, added_at) VALUES (?, ?, ?, ?)',
             (bid, aid, 'official', now))
         total_ba += cur.rowcount
 conn.commit()

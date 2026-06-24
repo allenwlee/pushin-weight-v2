@@ -355,10 +355,10 @@ def test_upsert_account_known_role_writes_brands_accounts_edge(tmp_path):
             role="official",
         )
         ba = s._conn.execute(
-            "SELECT role FROM brands_accounts WHERE author_id = ?",
+            "SELECT role_id FROM brands_accounts WHERE author_id = ?",
             ("handle:u_role_official",),
         ).fetchone()
-        assert ba["role"] == "official"
+        assert ba["role_id"] == "official"
         # No dead-letter entries.
         assert list((tmp_path / "runs").rglob("enum_dead_letter.jsonl")) == []
     finally:

@@ -166,9 +166,8 @@ def test_migration_014_idempotent(tmp_path):
 
 
 def test_migration_014_full_stack_apply(tmp_path):
-    """All migrations 001-014 apply on a fresh DB; the singular-noun
-    enum table convention is in effect (signals, role_keys still
-    because U5 hasn't run yet)."""
+    """All migrations 001-015 apply on a fresh DB; the singular-noun
+    enum table convention is in effect (signals + roles)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -178,20 +177,21 @@ def test_migration_014_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 15)), (
+        assert applied == list(range(1, 16)), (
             f"unexpected versions: {applied}"
         )
-        # signals table is in effect; role_keys still exists (U5 next).
-        for tbl in ("signals", "signal_labels", "role_keys", "role_labels"):
+        # Both singular enum tables are in effect.
+        for tbl in ("signals", "signal_labels", "roles", "role_labels"):
             rows = s._conn.execute(
                 "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
             ).fetchall()
             assert rows, f"{tbl} missing"
-        # signal_keys is gone.
-        rows = s._conn.execute(
-            "SELECT name FROM sqlite_master WHERE name = 'signal_keys'"
-        ).fetchall()
-        assert rows == [], "signal_keys still exists after 014"
+        # Both old names are gone.
+        for old in ("signal_keys", "role_keys"):
+            rows = s._conn.execute(
+                "SELECT name FROM sqlite_master WHERE name = ?", (old,)
+            ).fetchall()
+            assert rows == [], f"{old} still exists after 014/015"
     finally:
         s.close()
 
