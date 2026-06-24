@@ -120,11 +120,11 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
         assert row["lang_detected"] == "zh-Hans"
         # Verify the per-brand signal landed in posts_brands_signals.
         sig_row = s._conn.execute(
-            "SELECT signal FROM posts_brands_signals "
+            "SELECT signal_id FROM posts_brands_signals "
             "WHERE post_id = 't1' AND brand_id = 'minimax'"
         ).fetchone()
         assert sig_row is not None
-        assert sig_row["signal"] == "release"
+        assert sig_row["signal_id"] == "release"
     finally:
         s.close()
 
