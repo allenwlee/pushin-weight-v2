@@ -309,7 +309,7 @@ def test_brand_detail_renders_localized_role_labels_zh_cn(tmp_path):
         # (author_id must be "handle:<handle>" by v1.8 schema).
         s.upsert_account(
             "minimax", "u_role_zh",
-            role="official", engagement_tier="low",
+            role="official",
         )
     finally:
         s.close()
@@ -333,7 +333,7 @@ def test_brand_detail_falls_back_to_en_when_zh_cn_label_missing(tmp_path):
     try:
         s.upsert_account(
             "minimax", "u_fallback",
-            role="official", engagement_tier="low",
+            role="official",
         )
         # Wipe the zh_cn label for "official" to simulate operator
         # override removal. The dashboard should fall back to "Official".

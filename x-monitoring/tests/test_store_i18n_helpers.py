@@ -3,9 +3,9 @@
 Plan: docs/plans/2026-06-23-001-feat-i18n-locale-columns-plan.md (Unit 3).
 
 Verifies:
-- `_known_signal_keys` / `_known_role_keys` / `_known_engagement_tier_keys`
-  cached loaders return the seeded key sets and are idempotent across
-  repeated calls (cache works).
+- `_known_signal_keys` / `_known_role_keys` cached loaders return the
+  seeded key sets and are idempotent across repeated calls (cache works).
+  (engagement_tier was dropped in migration 012.)
 - `_pick_i18n_text` fallback chain: locale col → en col → source col.
 - `_pick_enum_label` lookup: zh_cn → en → raw value.
 - FK guards drop unknown values to the dead-letter JSONL log without
@@ -47,18 +47,6 @@ def test_known_role_keys_returns_seeded_set(tmp_path):
     try:
         keys = s._known_role_keys()
         assert keys == {"official", "community", "researcher", "press", "vendor"}
-    finally:
-        s.close()
-
-
-def test_known_engagement_tier_keys_returns_seeded_set(tmp_path):
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        keys = s._known_engagement_tier_keys()
-        assert keys == {"low", "medium", "high"}
     finally:
         s.close()
 
@@ -356,36 +344,6 @@ def test_upsert_account_unknown_role_skips_brands_accounts_edge(tmp_path):
         s.close()
 
 
-def test_upsert_account_unknown_engagement_tier_coerced_to_low(tmp_path):
-    """Unknown engagement_tier is dead-lettered AND coerced to 'low'
-    so the accounts INSERT can proceed without IntegrityError."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        s.upsert_account(
-            "minimax", "u_bad_tier",
-            role="community", engagement_tier="super_high",
-        )
-        # accounts row exists with tier='low'.
-        acc = s._conn.execute(
-            "SELECT engagement_tier FROM accounts WHERE author_id = ?",
-            ("handle:u_bad_tier",),
-        ).fetchone()
-        assert acc["engagement_tier"] == "low"
-        # Dead-letter log has the engagement_tier record.
-        log_files = list((tmp_path / "runs").rglob("enum_dead_letter.jsonl"))
-        assert len(log_files) == 1
-        record = json.loads(
-            log_files[0].read_text(encoding="utf-8").strip().splitlines()[0]
-        )
-        assert record["family"] == "engagement_tier"
-        assert record["value"] == "super_high"
-    finally:
-        s.close()
-
-
 def test_upsert_account_known_role_writes_brands_accounts_edge(tmp_path):
     from x_monitor.store import Store
 
@@ -394,7 +352,7 @@ def test_upsert_account_known_role_writes_brands_accounts_edge(tmp_path):
     try:
         s.upsert_account(
             "minimax", "u_role_official",
-            role="official", engagement_tier="high",
+            role="official",
         )
         ba = s._conn.execute(
             "SELECT role FROM brands_accounts WHERE author_id = ?",

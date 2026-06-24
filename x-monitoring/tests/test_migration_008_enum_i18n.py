@@ -3,11 +3,13 @@
 Plan: docs/plans/2026-06-23-001-feat-i18n-locale-columns-plan.md (Unit 2).
 
 Verifies:
-- 6 new tables created (signal_keys, signal_labels, role_keys, role_labels,
-  engagement_tier_keys, engagement_tier_labels).
+- 4 new tables created (signal_keys, signal_labels, role_keys, role_labels).
+  The 5th pair (engagement_tier_keys / engagement_tier_labels) was created
+  by 008 but dropped in migration 012 — see test_migration_012 for the
+  drop tests.
 - Seed rows present for all keys × both locales.
-- The 4 enum columns (posts_brands_signals.signal, brands_accounts.role,
-  companies_accounts.role, accounts.engagement_tier) are now FK-validated.
+- The 3 remaining enum columns (posts_brands_signals.signal,
+  brands_accounts.role, companies_accounts.role) are FK-validated.
 - The posts_brands_signals CHECK (brand_id <> '_unattributed') survived the
   table rebuild (P0 review fix from migration 004 history).
 - Idempotency on re-apply.
@@ -58,27 +60,6 @@ def test_migration_008_creates_role_keys_and_labels(tmp_path):
         assert len(labels) == 10
         assert labels[("official", "zh_cn")] == "官方"
         assert labels[("researcher", "zh_cn")] == "研究者"
-    finally:
-        s.close()
-
-
-def test_migration_008_creates_engagement_tier_keys_and_labels(tmp_path):
-    """engagement_tier_keys has 3 rows; labels has 6."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        keys = {r[0] for r in s._conn.execute(
-            "SELECT key FROM engagement_tier_keys"
-        ).fetchall()}
-        assert keys == {"low", "medium", "high"}
-
-        labels = {(r[0], r[1]): r[2] for r in s._conn.execute(
-            "SELECT key, lang, label FROM engagement_tier_labels"
-        ).fetchall()}
-        assert len(labels) == 6
-        assert labels[("high", "zh_cn")] == "高"
     finally:
         s.close()
 
@@ -156,23 +137,6 @@ def test_migration_008_companies_accounts_role_is_fk(tmp_path):
         s.close()
 
 
-def test_migration_008_accounts_engagement_tier_is_fk(tmp_path):
-    """accounts.engagement_tier references engagement_tier_keys."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        fks = s._conn.execute(
-            "SELECT * FROM pragma_foreign_key_list('accounts')"
-        ).fetchall()
-        assert any(
-            r[2] == "engagement_tier_keys" and r[3] == "engagement_tier" for r in fks
-        ), f"engagement_tier FK missing. FKs found: {fks}"
-    finally:
-        s.close()
-
-
 # --- idempotency -------------------------------------------------------
 
 
@@ -215,10 +179,10 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-011 (quote-tweets 005/006 already on main; i18n 007/008;
+        # 001-012 (quote-tweets 005/006 already on main; i18n 007/008;
         # HF products 009; M:N rename to plural-plural 010 on this branch;
-        # 011 = rename locale to lang).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], f"unexpected versions: {applied}"
+        # 011 = rename locale to lang; 012 = drop engagement_tier tables).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], f"unexpected versions: {applied}"
     finally:
         s.close()
 

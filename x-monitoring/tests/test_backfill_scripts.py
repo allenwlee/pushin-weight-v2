@@ -169,7 +169,6 @@ def test_seed_zh_cn_labels_upserts_defaults(tmp_path):
         for family, expected in {
             "signal": ["发布", "社区提问", "批评", "评论互动", "称赞", "其他"],
             "role": ["官方", "社区", "研究者", "媒体", "厂商"],
-            "engagement_tier": ["低", "中", "高"],
         }.items():
             table = f"{family}_labels"
             rows = s._conn.execute(
@@ -217,7 +216,6 @@ def test_seed_zh_cn_labels_partial_override(tmp_path):
         assert s._pick_enum_label("signal", "praise", "zh_cn") == "称赞"
         # Untouched families stay at the defaults.
         assert s._pick_enum_label("role", "official", "zh_cn") == "官方"
-        assert s._pick_enum_label("engagement_tier", "high", "zh_cn") == "高"
     finally:
         s.close()
 
@@ -257,10 +255,10 @@ def test_seed_zh_cn_labels_idempotent_on_rerun(tmp_path):
             cwd=tmp_path,
         )
         assert result.returncode == 0, result.stderr
-    # Verify row counts: 6 signals + 5 roles + 3 tiers = 14 zh_cn rows.
+    # Verify row counts: 6 signals + 5 roles = 11 zh_cn rows.
     s = Store(db_path)
     try:
-        for family, expected_n in [("signal", 6), ("role", 5), ("engagement_tier", 3)]:
+        for family, expected_n in [("signal", 6), ("role", 5)]:
             n = s._conn.execute(
                 f"SELECT COUNT(*) AS n FROM {family}_labels WHERE lang = 'zh_cn'"
             ).fetchone()["n"]

@@ -61,31 +61,6 @@ def test_migration_011_role_labels_has_lang_column(tmp_path):
         s.close()
 
 
-def test_migration_011_engagement_tier_labels_has_lang_column(tmp_path):
-    """engagement_tier_labels has a `lang` column and no `locale` column
-    (the table itself is dropped in migration 012, but the column is
-    renamed here first for consistency)."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        cols = {
-            r[1]
-            for r in s._conn.execute(
-                "PRAGMA table_info(engagement_tier_labels)"
-            ).fetchall()
-        }
-        assert "lang" in cols, (
-            f"engagement_tier_labels missing `lang` column. cols={cols}"
-        )
-        assert "locale" not in cols, (
-            f"engagement_tier_labels still has `locale` column. cols={cols}"
-        )
-    finally:
-        s.close()
-
-
 # --- happy path: composite PK preserved + seed rows intact -----------
 
 
@@ -181,15 +156,17 @@ def test_migration_011_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-011: 005/006 = quote-tweets (already on this branch's base);
+        # 001-012: 005/006 = quote-tweets (already on this branch's base);
         # 007 = i18n locale columns; 008 = enum i18n lookup tables;
         # 009 = products; 010 = M:N rename to plural-plural;
-        # 011 = rename locale to lang.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], (
+        # 011 = rename locale to lang; 012 = drop engagement_tier tables.
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], (
             f"unexpected versions: {applied}"
         )
 
-        for tbl in ("signal_labels", "role_labels", "engagement_tier_labels"):
+        # After 012, engagement_tier_labels is dropped; only signal_labels
+        # and role_labels should still have the `lang` column.
+        for tbl in ("signal_labels", "role_labels"):
             cols = {
                 r[1] for r in s._conn.execute(f"PRAGMA table_info({tbl})").fetchall()
             }

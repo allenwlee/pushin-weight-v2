@@ -66,20 +66,17 @@ def test_upsert_account_updates_last_seen_and_tier():
         store = Store(Path(d) / "x.db")
         try:
             # v1.8 (Unit 3): role must be a valid role_key post-migration 007;
-            # 'unknown' is no longer seeded. Use 'community' for the first
-            # upsert, then update to verify tier promotion.
-            store.upsert_account("minimax", "alice", role="community", engagement_tier="low")
+            # 'unknown' is no longer seeded. Use 'community' for the
+            # upsert; engagement_tier was removed in migration 012.
+            store.upsert_account("minimax", "alice", role="community")
             a1 = store.get_account("minimax", "alice")
             assert a1 is not None
-            assert a1["engagement_tier"] == "low"
             store.upsert_account(
                 "minimax",
                 "alice",
                 role="community",
-                engagement_tier="high",
             )
             a2 = store.get_account("minimax", "alice")
-            assert a2["engagement_tier"] == "high"
             assert a2["role"] == "community"
             assert a2["last_seen_at"] >= a1["last_seen_at"]
         finally:
