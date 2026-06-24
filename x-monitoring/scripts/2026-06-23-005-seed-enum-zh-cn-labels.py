@@ -120,9 +120,9 @@ def main() -> int:
                 # zh_cn through this script.
                 cur = conn.execute(
                     f"""
-                    INSERT INTO {labels_table} (key, locale, label)
+                    INSERT INTO {labels_table} (key, lang, label)
                     VALUES (?, 'zh_cn', ?)
-                    ON CONFLICT(key, locale) DO UPDATE SET label = excluded.label
+                    ON CONFLICT(key, lang) DO UPDATE SET label = excluded.label
                     """,
                     (key, label),
                 )
@@ -133,7 +133,7 @@ def main() -> int:
         for family in labels:
             table = f"{family}_labels"
             rows = conn.execute(
-                f"SELECT key, label FROM {table} WHERE locale = 'zh_cn' "
+                f"SELECT key, label FROM {table} WHERE lang = 'zh_cn' "
                 f"ORDER BY key"
             ).fetchall()
             print(f"  {table} (zh_cn):")

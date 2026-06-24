@@ -1338,8 +1338,8 @@ class Store:
         """Return the localized label for an enum key, or the raw key on miss.
 
         Lookup order:
-            1. `<family>_labels(key=?, locale=?)`
-            2. `<family>_labels(key=?, locale='en')`
+            1. `<family>_labels(key=?, lang=?)`
+            2. `<family>_labels(key=?, lang='en')`
             3. The raw `value` (canonical English key)
 
         `family` must be one of "signal" / "role" / "engagement_tier".
@@ -1360,14 +1360,14 @@ class Store:
             )
         suffix = {"en": "en", "zh-CN": "zh_cn", "zh_cn": "zh_cn"}.get(locale, "en")
         row = self._conn.execute(
-            f"SELECT label FROM {labels_table} WHERE key = ? AND locale = ?",
+            f"SELECT label FROM {labels_table} WHERE key = ? AND lang = ?",
             (value, suffix),
         ).fetchone()
         if row is not None:
             return row["label"]
         if suffix != "en":
             row = self._conn.execute(
-                f"SELECT label FROM {labels_table} WHERE key = ? AND locale = 'en'",
+                f"SELECT label FROM {labels_table} WHERE key = ? AND lang = 'en'",
                 (value,),
             ).fetchone()
             if row is not None:

@@ -139,11 +139,12 @@ def test_migration_007_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-010 should all be present on a fresh DB. Quote-tweets migrations
+        # 001-011 should all be present on a fresh DB. Quote-tweets migrations
         # 005 + 006 are now part of main (merged 2026-06-23). HF 009 lives on
         # feat/hf-products-crawler (this branch, just rebased + renumbered).
         # M:N rename to plural-plural 010 added on this branch.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], f"unexpected versions: {applied}"
+        # 011 = rename locale to lang (this PR).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], f"unexpected versions: {applied}"
         # Verify the brand seed from migration 004 still readable.
         row = s._conn.execute(
             "SELECT brand_id, display_name FROM brands WHERE brand_id = 'minimax'"

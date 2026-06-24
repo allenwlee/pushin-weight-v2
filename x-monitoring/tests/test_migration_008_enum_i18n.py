@@ -31,7 +31,7 @@ def test_migration_008_creates_signal_keys_and_labels(tmp_path):
                         "commenter_capture", "praise", "other"}
 
         labels = {(r[0], r[1]): r[2] for r in s._conn.execute(
-            "SELECT key, locale, label FROM signal_labels"
+            "SELECT key, lang, label FROM signal_labels"
         ).fetchall()}
         assert len(labels) == 12
         # Spot-check best-guess zh-CN seeds (operator-overridable via JSON).
@@ -53,7 +53,7 @@ def test_migration_008_creates_role_keys_and_labels(tmp_path):
         assert keys == {"official", "community", "researcher", "press", "vendor"}
 
         labels = {(r[0], r[1]): r[2] for r in s._conn.execute(
-            "SELECT key, locale, label FROM role_labels"
+            "SELECT key, lang, label FROM role_labels"
         ).fetchall()}
         assert len(labels) == 10
         assert labels[("official", "zh_cn")] == "官方"
@@ -75,7 +75,7 @@ def test_migration_008_creates_engagement_tier_keys_and_labels(tmp_path):
         assert keys == {"low", "medium", "high"}
 
         labels = {(r[0], r[1]): r[2] for r in s._conn.execute(
-            "SELECT key, locale, label FROM engagement_tier_labels"
+            "SELECT key, lang, label FROM engagement_tier_labels"
         ).fetchall()}
         assert len(labels) == 6
         assert labels[("high", "zh_cn")] == "高"
@@ -215,9 +215,10 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-010 (quote-tweets 005/006 already on main; i18n 007/008;
-        # HF products 009; M:N rename to plural-plural 010 on this branch)
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], f"unexpected versions: {applied}"
+        # 001-011 (quote-tweets 005/006 already on main; i18n 007/008;
+        # HF products 009; M:N rename to plural-plural 010 on this branch;
+        # 011 = rename locale to lang).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], f"unexpected versions: {applied}"
     finally:
         s.close()
 

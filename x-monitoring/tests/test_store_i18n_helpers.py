@@ -182,7 +182,7 @@ def test_pick_enum_label_falls_back_to_en_when_zh_cn_missing(tmp_path):
     try:
         # Wipe the zh_cn label for "release" to simulate override removal.
         s._conn.execute(
-            "DELETE FROM signal_labels WHERE key = ? AND locale = ?",
+            "DELETE FROM signal_labels WHERE key = ? AND lang = ?",
             ("release", "zh_cn"),
         )
         assert s._pick_enum_label("signal", "release", "zh_cn") == "Release"

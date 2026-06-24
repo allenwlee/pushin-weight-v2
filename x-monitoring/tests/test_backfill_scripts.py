@@ -173,7 +173,7 @@ def test_seed_zh_cn_labels_upserts_defaults(tmp_path):
         }.items():
             table = f"{family}_labels"
             rows = s._conn.execute(
-                f"SELECT label FROM {table} WHERE locale = 'zh_cn' ORDER BY key"
+                f"SELECT label FROM {table} WHERE lang = 'zh_cn' ORDER BY key"
             ).fetchall()
             labels = [r["label"] for r in rows]
             assert sorted(labels) == sorted(expected), (
@@ -262,7 +262,7 @@ def test_seed_zh_cn_labels_idempotent_on_rerun(tmp_path):
     try:
         for family, expected_n in [("signal", 6), ("role", 5), ("engagement_tier", 3)]:
             n = s._conn.execute(
-                f"SELECT COUNT(*) AS n FROM {family}_labels WHERE locale = 'zh_cn'"
+                f"SELECT COUNT(*) AS n FROM {family}_labels WHERE lang = 'zh_cn'"
             ).fetchone()["n"]
             assert n == expected_n, f"{family} expected {expected_n} zh_cn rows, got {n}"
     finally:
