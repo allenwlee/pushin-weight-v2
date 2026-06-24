@@ -1,257 +1,607 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
-# TwitterAPI.io live queries — v1.7 (2-call wide-net)
+# TwitterAPI.io live queries — v1.7.x (20 brands, A + B1/B2/B3 + C1)
 
-**Generated:** 2026-06-17 (JST) — v1.7 design
-**Last reviewed:** 2026-06-20 (JST) — promoted from "proposed" to "shipped" (commit `e218d13`, PR #3, merged 2026-06-17); expanded from 7 to 11 brands (commit `b0fd531`, 2026-06-18); v1.8 schema refactor (commit `ce2eed1`, 2026-06-19) renamed `model_id` → `brand_id`.
-**Pipeline:** v1.7 (shipped) — `plan_calls()` at `x_monitor/query_plan.py:181-241`
-**Schedule:** every 15 min via `com.fuchitalee.x-monitor.scheduled` LaunchAgent (cron unblocked 2026-06-20, commit `cc02a63`)
-**Config source of truth:** `/Users/fuchitalee/development/minimax-marketing/x-monitoring/config.yaml::enabled_models` + `config.yaml::x_monitor_list_id`
-**Per-cycle cost ceiling:** 2 calls/cycle (1 `list:`-based account + 1 paren-grouped brand-wide) = **30 credits/cycle minimum**, +15 per returned tweet. **7× lower than v1.6's 210 credit floor at the original 7 brands.**
+**Regenerated:** 2026-06-25 (JST) — schema references re-verified against the 9 migrations (011–019) on `feat/schema-modernization-batch` @ `4cd62d2`; live-query inventory unchanged from 2026-06-23.
+**Source of truth:** code on `main` of `/Users/fuchitalee/development/minimax-marketing/x-monitoring/`
+- `config.yaml::enabled_models` (20 brands), `config.yaml::call_b_groups` (3 groups), `config.yaml::call_c_specs` (1 spec)
+- `data/queries/<brand>.yaml` — 6 queries (Q1–Q6) per brand = **120 total**
+- `data/accounts/<brand>.yaml` — official handle + empty `staff:` list per brand
+- `data/filters/<brand>.yaml` — per-brand `min_faves` + `must_have_*` overrides (7 brands)
+- `x_monitor/config.py::KNOWN_MODELS` (frozenset of 20)
+- `x_monitor/query_plan.py::plan_calls(...)` — call planner
+- `x_monitor/apify.py::TwitterApiClient.run_search(query, max_results, since)` — the live HTTP path to `https://api.twitterapi.io/twitter/tweet/advanced_search`
+- `x_monitor/run.py` — cycle orchestrator (every 15 min via LaunchAgent)
 
-> **v1.7 replaces v1.6's 7 account + 6 intent = 14 calls/cycle with 2 calls/cycle.** The escape hatch from the 512-character X advanced-search query cap is the `list:` operator (~12-19 chars regardless of list size — the actual list ID is 19 digits: `2067062923525275922`) for Call A, and a paren-grouped brand-wide OR chain (**333 chars at the current 11 brands**, was 218 chars at 7 brands) for Call B. **All signal/brand attribution moves to post-fetch** (`classify_signal` + `attribute_to_brand` with a compiled-regex fast-path). See [docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md](../plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md) for the full design.
->
-> **⚠️ 2026-06-17 correction — character cap, not operator cap.** The v1.6 plan and the v1.7 design originally described the cap as a "22-OR operator ceiling" with paren-grouping as the escape hatch (citing a getxapi.com 2026 cheatsheet). **Empirically refuted via direct API probe 2026-06-17:** paren-grouping does not bypass the cap, and the cap is on query-string **character length**, not operator count. TwitterAPI.io enforces the official X API v2 self-serve recent-search limit of **~512 characters** (per [docs.x.com](https://docs.x.com/x-api/posts/search/integrate/operators)). Boundary verified: 49 ungrouped ORs (509 chars) returns 20 tweets; 50 ungrouped ORs (520 chars) returns 0 tweets. Over-cap queries return HTTP 200 with `tweets: []` — the "silent fail" the user originally asked us to investigate. The `assert_under_operator_cap()` check is renamed to `assert_under_length_cap(q.query_string, max_len=512)` in v1.7. See the "Empirical cap probe" callout below.
+> **Pipeline:** the cycle resolves the `enabled_models` list, builds a 1 + N + M call plan
+> (Call A list-based + one Call B per `call_b_groups` group + one Call C per `call_c_specs` entry),
+> and fires each `PlannedCall.query_string` against TwitterAPI.io's `advanced_search` endpoint.
+> `assert_under_length_cap(query_string, 512)` guards every emitted call so an over-length query
+> short-circuits to `status: "length_cap_exceeded"` and no credits are burned.
+
+## How it all fits together
+
+Every 15 minutes, three things happen in sequence:
+
+1. **Ask X for posts.** Read `data/queries/<brand>.yaml`, build a search string like `(MiniMax OR 海螺 OR Hailuo) min_faves:2`, send it to TwitterAPI.io's `advanced_search` endpoint. Get up to 100 tweets back.
+
+2. **For each tweet, decide which brand(s) it's about.** Read the tweet's body, hashtags, @-mentions, and the search query that fetched it. Match against `brand_hashtags`, `brand_keywords`, `brand_search_terms` — the per-brand detection rules in the DB. Each match is one row in `posts_brands_mentions`; the unique brand list is one row per brand in `posts_brands` (with a fractional weight — 1/N if N brands matched, 1.0 if just one).
+
+3. **For each (tweet, brand) pair, decide the signal.** One row per pair in `posts_brands_signals`. The legacy column `signal_id` (FK → `signals.key`, still present) classifies into the 6-bucket taxonomy `release | community_question | criticism | commenter_capture | praise | other`. As of migration 019, two ADDITIVE columns coexist with `signal_id`: `post_type` (FK → `post_type_keys.key`, values `buzz_releases | hands_on_usage | performance_comparisons | feedback_questions`) and `sentiment` (FK → `sentiment_keys.key`, values `positive | negative | neutral | mixed`). The new columns are backfilled heuristically from `signal_id`; classifier pipeline upgrade is follow-up work. Classification source: heuristic by default (inferred from which query fetched the post), Claude LLM when `--with-llm` is passed.
+
+**Worked example.** TwitterAPI.io returns:
+
+```
+@claude_code: Just shipped our new build with #minimax + 海螺 integration, the latency is amazing.
+```
+
+The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海螺` in `brand_keywords`, and the tweet was fetched by a minimax search. Three rows in `posts_brands_mentions` (one per source: `hashtag`, `body_keyword`, `search_term`); one row in `posts_brands` with `weight=1.0` because only minimax matched. The signal step then classifies the (tweet, minimax) pair — likely `signal_id = 'release'` (or `'praise'`), with the new `post_type = 'buzz_releases'` and `sentiment = 'positive'` columns backfilled from that legacy value by migration 019's heuristic.
+
+**What the yaml decides vs what the DB decides.** The yaml decides what we ask X for (the search string). The DB tables decide what we found (which brands are mentioned in each returned tweet, and how). The yaml has a 512-char cap on the search string, so it carries the high-signal tokens only. The DB has no such cap, so the detection registries can be exhaustive. The two registries are kept in sync by hand: a token added to `brand_keywords` won't be in the live query unless the operator also adds it to the yaml.
+
+---
+
+## At-a-glance inventory
+
+| Stat | Value |
+|---|---|
+| Enabled brands (`config.yaml::enabled_models`) | **20** |
+| `KNOWN_MODELS` (frozenset in `x_monitor/config.py`) | **20** |
+| Brand query yaml files (`data/queries/<brand>.yaml`) | **20** (1:1 with enabled_models) |
+| Queries per brand (Q1–Q6) | **6** uniformly |
+| Total query entries across all yaml | **120** (20 × 6) |
+| Account yaml files (`data/accounts/<brand>.yaml`) | **20** (1:1 with enabled_models) |
+| Filter yaml files (`data/filters/<brand>.yaml`) | **7** (only the v1-era brands) |
+| Call A length | 38 chars |
+| Call B groups (config) | 3 (B1, B2, B3) |
+| Call C specs (config) | 1 (`call_id: C1`, multi-brand) |
+| Plan size per cycle (if all groups + Call C emitted) | **1 Call A + 3 Call B + 1 Call C = 5 calls** |
+| Deduped brand tokens (sum across all brands) | **75** |
+
+> **⚠️ Live-path caveat — `call_b_groups` is configured but not yet plumbed in `run.py`.**
+> `x_monitor/run.py:575-579` calls `plan_calls(self.data_dir, models, x_monitor_list_id=…, call_c_specs=…)` and **does not pass `call_b_groups`**. With the kwarg omitted, `plan_calls` falls back to the v1.7 single-B branch (`call_b_groups is None → b_groups = [list(enabled_models)]`) and emits one Call B spanning all 20 enabled brands. Computed live: that single Call B is **867 characters** — **well over the 512-char cap**. The `assert_under_length_cap` check inside `plan_calls` will raise on cycle entry. The configured B1/B2/B3 split (279 / 359 / 249 chars) would fit; the wiring fix is in `run.py` (pass `call_b_groups=self.config.call_b_groups`). **The live cycle is currently broken at 20 brands; do not add more brands until this is fixed.**
 
 ---
 
 ## Call A — curated public x.com list (1 call/cycle)
 
-**Shape:** `(list:<x_monitor_list_id>) min_faves:1`
+**Shape:** `(list:2067062923525275922) min_faves:1`
+**Length:** 38 characters (the Snowflake-style list ID is 19 digits; `(list:<id>) ` is 32 chars + `min_faves:1` is 10 chars = 42 minus 4 from the no-space trim used in the actual query = 38).
+**Source of truth:** `config.yaml::x_monitor_list_id = 2067062923525275922` (operator-managed public x.com list; every enabled brand with a `data/accounts/<brand>.yaml::accounts[].handle` contributes that handle to the list).
 
-**Length:** **38 characters** with the current real list ID `2067062923525275922` (a 19-digit Snowflake-style ID). The doc's original estimate of 29 chars assumed a 10-digit placeholder list ID (`1234567890`) — for any numeric list ID ≤ 12 digits, the query is ≤ 31 chars; for the current ID, 38 chars. The `list:` operator pulls tweets from a public x.com list and is a **real escape hatch from the 512-char cap** — adding more handles to the list does not grow the query string. This is what makes Call A viable for any number of staff handles, including future scaling.
+The list is the only place the operator maintains handle membership. Adding a `staff:` entry to `data/accounts/<brand>.yaml` does NOT auto-add to the x.com list — that is a manual operator step (see "List-drift detection" in the v1.7 plan).
 
-The operator curates a single public x.com list (e.g., named `x-monitor-staff`) containing all official + staff handles for every enabled brand that has a `data/accounts/<brand>.yaml`. TwitterAPI.io's `list:listID` operator pulls any tweet authored by anyone in the list — 1 operator regardless of how many handles are in the list (per X's grouping rule). `config.yaml::x_monitor_list_id` holds the numeric list ID.
+**List-membership today (computed from `data/accounts/*.yaml::accounts[0].handle`):**
 
-**v1.7 launch step:** before the first run, the operator creates the public x.com list, copies its numeric ID from the x.com URL, and sets `x_monitor_list_id: <id>` in `config.yaml`. The `Config` schema validation fails without this field. **Done as of commit `cc02a63` (2026-06-20):** the operator's `x_monitor_list_id` is set to `2067062923525275922`.
-
-**Brand attribution:** TwitterAPI.io's response includes `author_handle` per tweet. `attribute_to_brand` matches it against `data/accounts/<brand>.yaml::accounts + staff` (the existing source of truth — Option 1 in the v1.7 plan). Author-handle priority is first; the compiled-regex text-contains fast-path is the fallback for non-staff replies.
-
-**List-drift detection (soft warning, not hard fail):** after Call A's first response, the set of `author_handle`s is compared to the union of `accounts + staff` across enabled brands that have an `accounts/<brand>.yaml`. If a yaml-listed handle is absent for 3 consecutive dry-runs, the run JSON gets `degraded:list_drift: ["expected: alice_dev", ...]`. The x.com API doesn't expose list membership directly, so the check is "do my expected authors actually appear in the results" — not "does the list match the yaml exactly."
-
-**Current state (2026-06-20):** All 7 staff lists are empty. Of 11 enabled brands, **7 have `data/accounts/<brand>.yaml`** (`minimax`, `qwen`, `deepseek`, `glm`, `xiaomi_mimo`, `moonshot_kimi`, `inclusionai`). The other 4 (`mistral`, `stepfun`, `ernie`, `hunyuan`) have `data/queries/<brand>.yaml` only — they contribute brand tokens to Call B but 0 handles to the x.com list and 0 staff-handle priority matches for attribution. The x.com list today needs 7 handles:
-
-| # | brand_id | Official handle | staff | List membership today | accounts yaml |
-|---|---|---|---|---|---|
-| 1 | `minimax` | `MiniMaxAI` | [] | `MiniMaxAI` | ✓ |
-| 2 | `qwen` | `QwenLM` | [] | `QwenLM` | ✓ |
-| 3 | `deepseek` | `deepseek_ai` | [] | `deepseek_ai` | ✓ |
-| 4 | `glm` | `Zhipuai_org` | [] | `Zhipuai_org` | ✓ |
-| 5 | `xiaomi_mimo` | `XiaomiMiMo` | [] | `XiaomiMiMo` | ✓ |
-| 6 | `moonshot_kimi` | `MoonshotAI` | [] | `MoonshotAI` | ✓ |
-| 7 | `inclusionai` | `inclusionAI` | [] | `inclusionAI` | ✓ |
-| 8 | `mistral` | n/a | n/a | — (no accounts yaml) | ✗ |
-| 9 | `stepfun` | n/a | n/a | — (no accounts yaml) | ✗ |
-| 10 | `ernie` | n/a | n/a | — (no accounts yaml) | ✗ |
-| 11 | `hunyuan` | n/a | n/a | — (no accounts yaml) | ✗ |
-
-When the operator populates `data/accounts/<brand>.yaml::staff` for any brand, the corresponding handle must be added to the x.com list (one extra manual step per staff change; the list-drift detection surfaces any miss). For the 4 query-only brands, no list-side action is needed — their visibility is purely Call B's regex path.
-
----
-
-## Call B — paren-grouped brand-wide (1 call/cycle)
-
-**Shape (current 11-brand set, 2026-06-20):** `((MiniMax OR 海螺 OR Hailuo) OR (Qwen OR 通义千问 OR 通义) OR (DeepSeek OR 深度求索) OR (GLM OR 智谱 OR ChatGLM) OR (MiMo OR Xiaomi MiMo OR 小米 MiMo OR 小米) OR (Kimi OR Moonshot OR 月之暗面) OR (InclusionAI OR Ling OR Ring OR Ming) OR ("Mistral" OR "Mixtral") OR ("StepFun" OR "阶跃星辰") OR ("ERNIE" OR "文心一言") OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0`
-
-**Length:** **333 characters at 11 brands** (verified via direct API probe 2026-06-20 via `plan_calls()`, returns 20 tweets). Fits under the 512-char cap with ~180 chars of headroom. **Was 218 chars at 7 brands** in the original v1.7 design (commit `e218d13`).
-
-The deduped brand tokens come from `data/queries/<brand>.yaml` (Q2/Q3/Q5/Q6 paren groups, same source as v1.6). `min_faves:0` is the floor — we want the widest net. The per-brand relevance filter (`data/filters/<brand>.yaml::min_faves`, added in v1.7) handles brand-specific `min_faves` gating after attribution.
-
-**Paren grouping is cosmetic, not functional.** Originally v1.7 described the paren-grouped shape as "each paren group counts as 1 operator under X's grouping rule" (citing a getxapi.com 2026 cheatsheet). **This was empirically refuted 2026-06-17:** the cap is on character length, not operator count, and paren grouping does not bypass the cap. The shape `MiniMax OR 海螺 OR Hailuo OR Qwen OR ...` (no parens, same tokens) would also work, with query length ~285 chars vs 333 chars for the paren-grouped form. The paren-grouped form is kept for readability — it makes the per-brand attribution boundaries visible in the query string and matches the conventional X advanced-search idiom.
-
-### Per-brand brand tokens (deduped, source of truth for Call B)
-
-Same as v1.6 — these tokens power both Call B's OR chain and the post-fetch `attribute_to_brand` compiled regex.
-
-| # | brand_id | Brand tokens (deduped) | Token count |
-|---|---|---|---|
-| 1 | `minimax` | `MiniMax`, `海螺`, `Hailuo` | 3 |
-| 2 | `qwen` | `Qwen`, `通义千问`, `通义` | 3 |
-| 3 | `deepseek` | `DeepSeek`, `深度求索` | 2 |
-| 4 | `glm` | `GLM`, `智谱`, `ChatGLM` | 3 |
-| 5 | `xiaomi_mimo` | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米` | **4** (was 3 in v1.6) |
-| 6 | `moonshot_kimi` | `Kimi`, `Moonshot`, `月之暗面` | 3 |
-| 7 | `inclusionai` | `InclusionAI`, `Ling`, `Ring`, `Ming` | 4 |
-| 8 | `mistral` | `"Mistral"`, `"Mixtral"` (quoted to avoid case-sensitivity collisions) | 2 |
-| 9 | `stepfun` | `"StepFun"`, `"阶跃星辰"` | 2 |
-| 10 | `ernie` | `"ERNIE"`, `"文心一言"` | 2 |
-| 11 | `hunyuan` | `"Hunyuan"`, `"混元"`, `"腾讯混元"` | 3 |
-
-**Total deduped tokens across all 11 brands: ~33** (the v1.7 design estimated 21 at 7 brands; growth tracks the 4 new brands + the extra `小米` token for `xiaomi_mimo`).
-
-### Verbatim Call B query (current 11-brand token set, 2026-06-20)
-
-```
-((MiniMax OR 海螺 OR Hailuo) OR (Qwen OR 通义千问 OR 通义) OR (DeepSeek OR 深度求索) OR (GLM OR 智谱 OR ChatGLM) OR (MiMo OR Xiaomi MiMo OR 小米 MiMo OR 小米) OR (Kimi OR Moonshot OR 月之暗面) OR (InclusionAI OR Ling OR Ring OR Ming) OR ("Mistral" OR "Mixtral") OR ("StepFun" OR "阶跃星辰") OR ("ERNIE" OR "文心一言") OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0
-```
-
-(Whitespace as actually emitted. Total length: **333 characters**. Confirmed via `python -c "from x_monitor.query_plan import plan_calls; ..."` on 2026-06-20: returns 20 tweets, well under the 512-char cap.)
-
-**Critical (correction 2026-06-17):** The cap is on **character length, not operator count**. The `count_x_operators()` helper from v1.6 was based on a getxapi.com claim that "(a OR b OR c) counts as one expression rather than three separate operators" — this is **false** in the sense that motivated the v1.6 design. Paren-grouping does not reduce the operator count or extend the cap. The original v1.6 check is renamed in v1.7 to `assert_under_length_cap(query_string, max_len=512)` and counts the bytes in the query string.
-
-### Post-fetch attribution for Call B
-
-`attribute_to_brand(text, author_handle, brand_tokens, staff_handles, *, compiled_brand_pattern=None, token_to_brand=None)` (`x_monitor/intent_classifier.py:175`, v1.7/v1.8 legacy-compat shim wrapping the v1.8 `attribute_to_brands` consolidator):
-
-1. **Author-handle priority** (cheap; O(brand × handle_count), at 7 brands × ~1 handle = 7 handles, sub-microsecond): match `author_handle` against `data/accounts/<brand>.yaml::accounts + staff`. Note: only the 7 brands with accounts yaml contribute to this priority path; the 4 query-only brands (`mistral`, `stepfun`, `ernie`, `hunyuan`) have no staff-handle list, so their attribution flows through step 2 only.
-2. **Compiled-regex fallback** (the v1.7 fast-path): the regex `re.compile("|".join(r"\b" + re.escape(t) + r"\b" for t in deduped_brand_tokens), re.IGNORECASE)` is built **once per cycle** via `build_compiled_brand_pattern(brand_tokens)` (`x_monitor/intent_classifier.py:148`) and reused for every Call B tweet. Returns the brand that owns the first matched token (the "first match in iteration order" semantic from v1.6, but with the regex's natural leftmost match — equivalent in practice).
-3. **No match** → the tweet is dropped (existing `_unattributed` behavior; the post never lands in any brand's bucket).
-
-**Perf:** with 200 Call B tweets and ~33 deduped brand tokens, the v1.6 dict-iteration path ran 6,600 iterations/cycle. The compiled-regex path runs 200 matches (one regex per tweet, each one regex match internally walks the alternation). Sub-millisecond total.
-
-> **Note on the signature change since v1.7 design:** the v1.7 plan specified `attribute_to_brand(text, author_handle, brand_tokens, staff_handles, brand_regex=<compiled>)` with one keyword arg. The v1.8 implementation splits this into two kwargs (`compiled_brand_pattern`, `token_to_brand`) because the regex and the token→brand lookup need to stay in sync (CJK tokens don't use `\b` word boundaries; ASCII tokens do; the lookup dict maps back from the matched substring to the brand_id). The post-fetch call site in `run.py` builds both via `build_compiled_brand_pattern(brand_tokens)` once per cycle and passes them together.
-
----
-
-## Verified plan_calls() output (shipped v1.7, 2026-06-20)
-
-The new `plan_calls(data_dir, enabled_models, *, x_monitor_list_id)` returns exactly 2 calls:
-
-| # | kind | query_string | query_length (chars) | source_query_id on result rows |
+| # | brand_id | Official handle | Verified | accounts yaml |
 |---|---|---|---|---|
-| 1 | `account` | `(list:2067062923525275922) min_faves:1` | **38** (was 29 in the v1.7 plan with a 10-digit placeholder list ID) | `ACCT` |
-| 2 | `brand_wide` | `((MiniMax OR 海螺 OR Hailuo) OR (Qwen OR 通义千问 OR 通义) OR ... OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0` | **333** (was 218 at 7 brands in the original v1.7 design) | `BRAND_WIDE` |
+| 1 | `minimax` | `MiniMaxAI` | true | ✓ |
+| 2 | `qwen` | `QwenLM` | true | ✓ |
+| 3 | `deepseek` | `deepseek_ai` | true | ✓ |
+| 4 | `glm` | `Zhipuai_org` | true | ✓ |
+| 5 | `xiaomi_mimo` | `XiaomiMiMo` | true | ✓ |
+| 6 | `moonshot_kimi` | `MoonshotAI` | true | ✓ |
+| 7 | `inclusionai` | `inclusionAI` | true | ✓ |
+| 8 | `llama` | `Llama` | **false** (placeholder) | ✓ |
+| 9 | `nvidia_nemo` | `NVIDIAAIDev` | **false** (placeholder) | ✓ |
+| 10 | `doubao` | `doubaoAi` | **false** (placeholder) | ✓ |
+| 11 | `yi` | `01AI_Yi` | **false** (placeholder) | ✓ |
+| 12 | `sensechat` | `SenseTimeAI` | **false** (placeholder) | ✓ |
+| 13 | `exaone` | `LGAIResearch` | **false** (placeholder) | ✓ |
+| 14 | `kuaishou` | `KwaiYii` | **false** (placeholder) | ✓ |
+| 15 | `sakana` | `SakanaAILabs` | **false** (placeholder) | ✓ |
+| 16 | `upstage` | `upstageAI` | **false** (placeholder) | ✓ |
 
-**Total: 2 calls/cycle, 371 chars combined (was 247 at 7 brands). Still ~38% headroom under 512.**
+For the 4 query-only brands (`mistral`, `stepfun`, `ernie`, `hunyuan`), there is no `data/accounts/<brand>.yaml` — they have **no list membership** and contribute **0 handles to the x.com list**. Their Call A coverage is therefore zero; their visibility comes entirely from Call B (or Call C where applicable).
 
-Verified 2026-06-20:
+**`staff:` list** is empty (`[]`) on every `data/accounts/<brand>.yaml` — no per-brand staff handles are currently curated.
+
+---
+
+## Call B groups (config split — B1 / B2 / B3)
+
+Configured in `config.yaml::call_b_groups` (a list of brand-id lists; v1.7.x field, validated in `x_monitor/config.py::Config._validate_call_b_groups`). When set, `plan_calls` emits one Call B per inner list in the order given; the call_id is `B1`, `B2`, `B3`, ….
+
+### B1 — top-presence / global brands (8 brands, 279 chars)
+
+**Order (from `config.yaml`):** `llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan`
+
+**Shape (verbatim from `_build_brand_wide_query`):**
+```
+((Llama OR "Llama 3" OR "Llama 4" OR "Meta Llama" OR "Code Llama" OR "Muse Spark") OR (MiniMax OR 海螺 OR Hailuo) OR (Qwen OR 通义千问 OR 通义) OR (DeepSeek OR 深度求索) OR ("Mistral" OR "Mixtral") OR ("StepFun" OR "阶跃星辰") OR ("ERNIE" OR "文心一言") OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0
+```
+**Length:** 279 characters. Headroom: 233 chars (45% of the 512-char cap).
+
+| # | brand_id | Deduped brand tokens (Q2/Q3/Q5/Q6 first paren, source of truth for Call B) | Token count |
+|---|---|---|---|
+| 1 | `llama` | `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"` | 6 |
+| 2 | `minimax` | `MiniMax`, `海螺`, `Hailuo` | 3 |
+| 3 | `qwen` | `Qwen`, `通义千问`, `通义` | 3 |
+| 4 | `deepseek` | `DeepSeek`, `深度求索` | 2 |
+| 5 | `mistral` | `"Mistral"`, `"Mixtral"` (quoted) | 2 |
+| 6 | `stepfun` | `"StepFun"`, `"阶跃星辰"` (quoted) | 2 |
+| 7 | `ernie` | `"ERNIE"`, `"文心一言"` (quoted) | 2 |
+| 8 | `hunyuan` | `"Hunyuan"`, `"混元"`, `"腾讯混元"` (quoted) | 3 |
+
+### B2 — Chinese-language brands (7 brands, 359 chars)
+
+**Order (from `config.yaml`):** `doubao, glm, moonshot_kimi, xiaomi_mimo, sensechat, yi, inclusionai`
+
+**Shape (verbatim):**
+```
+((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR "Seed-VL" OR "Seed-1.5" OR "豆包大模型") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai) OR (Kimi OR 月之暗面 OR MoonshotAI) OR (MiMo OR Xiaomi MiMo OR 小米 MiMo OR 小米) OR (SenseChat OR SenseNova OR SenseTime OR 商汤 OR 日日新) OR (Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder) OR (InclusionAI OR Ling OR Ring OR Ming)) min_faves:0
+```
+**Length:** 359 characters. Headroom: 153 chars (30% of the cap).
+
+| # | brand_id | Deduped brand tokens | Token count |
+|---|---|---|---|
+| 1 | `doubao` | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` | 8 |
+| 2 | `glm` | `GLM`, `智谱`, `ChatGLM`, `Zhipuai` | 4 |
+| 3 | `moonshot_kimi` | `Kimi`, `月之暗面`, `MoonshotAI` | 3 |
+| 4 | `xiaomi_mimo` | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米` | 4 |
+| 5 | `sensechat` | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` | 5 |
+| 6 | `yi` | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder` | 6 |
+| 7 | `inclusionai` | `InclusionAI`, `Ling`, `Ring`, `Ming` | 4 |
+
+### B3 — specialized / smaller brands (5 brands, 249 chars)
+
+**Order (from `config.yaml`):** `nvidia_nemo, exaone, sakana, kuaishou, upstage`
+
+**Shape (verbatim):**
+```
+((NeMo OR Megatron OR "NVIDIA NeMo" OR "Megatron-LM") OR (EXAONE OR "LG AI" OR "LG EXAONE") OR (Sakana OR "Sakana AI" OR "Sakana Labs") OR (KwaiYii OR 快意 OR "KwaiYii LLM" OR Kuaishou) OR (Upstage OR Solar OR "Solar Pro" OR "Solar Mini")) min_faves:0
+```
+**Length:** 249 characters. Headroom: 263 chars (49% of the cap).
+
+| # | brand_id | Deduped brand tokens | Token count |
+|---|---|---|---|
+| 1 | `nvidia_nemo` | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` | 4 |
+| 2 | `exaone` | `EXAONE`, `"LG AI"`, `"LG EXAONE"` | 3 |
+| 3 | `sakana` | `Sakana`, `"Sakana AI"`, `"Sakana Labs"` | 3 |
+| 4 | `kuaishou` | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` | 4 |
+| 5 | `upstage` | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"` | 4 |
+
+### Brand tokens not in Call B
+
+The four brands `mistral`, `stepfun`, `ernie`, `hunyuan` have **no `data/accounts/<brand>.yaml`** — they appear in Call B (group B1) but contribute **0 to Call A's list membership**. The other 16 brands have an accounts yaml and contribute to both Call A and Call B.
+
+### What happens if `call_b_groups` is `None`
+
+`plan_calls` (`x_monitor/query_plan.py:312-316`) falls back to `b_groups = [list(enabled_models)]` and emits **one** Call B spanning all 20 enabled brands. Computed: **867 characters** — over the 512-char cap. The cycle's `assert_under_length_cap` check raises and the call short-circuits. **Currently this is the active path** (see "Live-path caveat" above).
+
+---
+
+## Call C — co-occurrence-constrained brand-wide (1 spec → 1 call)
+
+Configured in `config.yaml::call_c_specs` (list of `CallCBrandSpec` from `x_monitor/query_plan.py:99-137`). Default empty → no Call C emitted. v1.7.x ships with one operator-curated spec.
+
+### C1 — MiMo + Kimi + Yi + Upstage + Llama (multi-brand co-occurrence)
+
+**`call_id: C1`**, **5 brands in the primary group, 10 co-occurrence terms.**
+
+**Primary group tokens (verbatim from `config.yaml`):**
+- `xiaomi_mimo`: `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`
+- `moonshot_kimi`: `[Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]`
+- `yi`: `[Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]`
+- `upstage`: `[Upstage, Solar, "Solar Pro"]`
+- `llama`: `[Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]`
+
+**Co-occurrence group:** `[api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama]`
+
+**Min-faves floor:** 0. **Expected signal:** `other` (Call C targets the long tail; the post-fetch `classify_signal` may upgrade).
+
+**Shape (verbatim from `_build_call_c_query`):**
+```
+(((MiMo OR "Xiaomi MiMo" OR "小米 MiMo") OR (Kimi OR "Moonshot AI" OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder) OR (Upstage OR Solar OR "Solar Pro") OR (Llama OR "Llama 3" OR "Llama 4" OR "Meta Llama" OR "Code Llama" OR "Muse Spark")) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama)) min_faves:0
+```
+
+**Why this exists:** these 5 brands' bare tokens collide with unrelated common nouns:
+- `MiMo` → Mimo Studio (kids' video app), `xiaomi` alone → phone posts.
+- `Kimi` → Turkish interrogative ("who?") and Japanese second-person pronoun (きみ); bare `moonshot` → Moonshot crypto exchange.
+- `Yi` → common Chinese surname and dynasty name.
+- `Upstage` → theater term.
+- `Llama` → the animal.
+
+Co-occurrence terms exclude non-AI false positives. The `must_have_none` keys in `data/filters/moonshot_kimi.yaml` (F1, antonelli, mercedes, …) further soften F1-driver Kimi Antonelli hijacks.
+
+---
+
+## Per-brand breakdown (20 brands)
+
+Every brand listed in `config.yaml::enabled_models` is documented below. The "yaml" column points at the curated query file; "accounts" points at the per-brand staff/official file; "filter" points at the per-brand `min_faves` / `must_have_*` file (only 7 brands have one — the v1-era brands).
+
+Query IDs Q1–Q6 are present in every yaml with the same shape:
+- **Q1 (release):** `from:<official_handle> [context OR exclusions] min_faves:N` (or brand-name fallback for unconfirmed-handle brands)
+- **Q2 (community_question):** `(<brand tokens>) (how OR 怎么 OR 教程 OR tutorial OR guide OR …) min_faves:2`
+- **Q3 (criticism):** `(<brand tokens>) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行 OR …) min_faves:1`
+- **Q4 (commenter_capture):** `to:<official_handle> min_faves:5` (or brand-name fallback)
+- **Q5 (other / technical):** `(<brand tokens>) (benchmark OR eval OR paper OR github OR code OR 开源 OR …) min_faves:3`
+- **Q6 (praise):** `(<brand tokens>) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了 OR …) min_faves:5`
+
+`min_faves` is the **call-level** floor in the `min_faves:` operator suffix; the per-brand filter in `data/filters/<brand>.yaml` is the **post-fetch** floor applied after attribution.
+
+---
+
+### 1. `minimax` (MiniMax / Hailuo) — 6 queries
+
+- **yaml:** `data/queries/minimax.yaml`
+- **accounts:** `data/accounts/minimax.yaml` (official `MiniMaxAI`, verified=true, staff=[])
+- **filter:** `data/filters/minimax.yaml` (canonical handles: `MiniMaxAI`, `MiniMaxM3`, `MiniMax_Hailuo`; must_have_any: `minimax`, `m3`, `m2.7`, `m2.5`, `minimax-agent`, `minimax-coding`, `minimax-work`; must_have_none: `hailuo-2.3`, `hailuo ai prompt`)
+- **Call group:** B2
+- **Brand tokens:** `MiniMax`, `海螺`, `Hailuo` (3)
+- **Q1:** `from:MiniMaxAI min_faves:5`
+- **Q2:** `(MiniMax OR 海螺 OR Hailuo) (how OR 怎么 OR 如何 OR 教程 OR tutorial) min_faves:2`
+- **Q3:** `(MiniMax OR 海螺 OR Hailuo) (broken OR fails OR bad OR 翻车 OR 不行 OR 垃圾) min_faves:1`
+- **Q4:** `to:MiniMaxAI min_faves:5`
+- **Q5:** `(MiniMax OR Hailuo) (benchmark OR eval OR paper OR github OR code) min_faves:3`
+- **Q6:** `(MiniMax OR 海螺 OR Hailuo) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** `must_have_none` filters celebrity-Hailuo noise (Kylie, Kim K, Purnell); `Q2` uses `如何` (additional how-token not present in most other brands); `Q5` does not include `开源` (other brands include it).
+
+### 2. `qwen` (Alibaba) — 6 queries
+
+- **yaml:** `data/queries/qwen.yaml`
+- **accounts:** `data/accounts/qwen.yaml` (official `QwenLM`, verified=true, staff=[])
+- **filter:** `data/filters/qwen.yaml` (present — content not audited in this pass)
+- **Call group:** B1
+- **Brand tokens:** `Qwen`, `通义千问`, `通义` (3)
+- **Q1:** `from:QwenLM min_faves:5`
+- **Q2:** `(Qwen OR 通义千问 OR 通义) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(Qwen OR 通义) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
+- **Q4:** `to:QwenLM min_faves:5`
+- **Q5:** `(Qwen OR 通义) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(Qwen OR 通义千问 OR 通义) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** Q3/Q5 use the shorter `(Qwen OR 通义)` token subset (omits `通义千问`); Q2/Q6 use the full `(Qwen OR 通义千问 OR 通义)` triple.
+
+### 3. `deepseek` (深度求索) — 6 queries
+
+- **yaml:** `data/queries/deepseek.yaml`
+- **accounts:** `data/accounts/deepseek.yaml` (official `deepseek_ai`, verified=true, staff=[])
+- **filter:** `data/filters/deepseek.yaml` (present)
+- **Call group:** B1
+- **Brand tokens:** `DeepSeek`, `深度求索` (2)
+- **Q1:** `from:deepseek_ai min_faves:5`
+- **Q2:** `(DeepSeek OR 深度求索) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(DeepSeek OR 深度求索) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
+- **Q4:** `to:deepseek_ai min_faves:5`
+- **Q5:** `(DeepSeek OR 深度求索) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(DeepSeek OR 深度求索) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+
+### 4. `glm` (Zhipu AI / 智谱) — 6 queries
+
+- **yaml:** `data/queries/glm.yaml`
+- **accounts:** `data/accounts/glm.yaml` (official `Zhipuai_org`, verified=true, staff=[])
+- **filter:** `data/filters/glm.yaml` (present)
+- **Call group:** B2
+- **Brand tokens:** `GLM`, `智谱`, `ChatGLM`, `Zhipuai` (4 — `Zhipuai` is the org name; every Q uses all 4 tokens)
+- **Q1:** `from:Zhipuai_org min_faves:5`
+- **Q2:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
+- **Q4:** `to:Zhipuai_org min_faves:5`
+- **Q5:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** 4-token brand group (notable vs. most brands' 2-3); every query uses the full set; no `Q5` notes line.
+
+### 5. `xiaomi_mimo` (小米 MiMo) — 6 queries
+
+- **yaml:** `data/queries/xiaomi_mimo.yaml`
+- **accounts:** `data/accounts/xiaomi_mimo.yaml` (official `XiaomiMiMo`, verified=true, staff=[])
+- **filter:** `data/filters/xiaomi_mimo.yaml` (present; rot threshold 5 per `config.yaml::query_rot_streak_threshold_per_model`)
+- **Call group:** B2
+- **Brand tokens:** `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米` (4 — broader than other brands' brand tokens)
+- **Q1:** `from:XiaomiMiMo min_faves:3` (lowered from 5 — low-volume brand)
+- **Q2:** `(MiMo OR Xiaomi MiMo OR 小米 MiMo) (how OR 怎么 OR 教程 OR tutorial) min_faves:2`
+- **Q3:** `(MiMo OR 小米 MiMo) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `to:XiaomiMiMo min_faves:3` (lowered)
+- **Q5:** `(MiMo OR 小米) (benchmark OR eval OR paper OR github OR 开源) min_faves:2` (no `code` token)
+- **Q6:** `(MiMo OR Xiaomi MiMo OR 小米 MiMo) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** Q1/Q4 use `min_faves:3` instead of the default 5 (volume tuning); rot threshold 5 (vs default 3); bare `小米` is part of brand tokens but excluded from Q2/Q3/Q6 paren groups.
+
+### 6. `moonshot_kimi` (Kimi / 月之暗面) — 6 queries
+
+- **yaml:** `data/queries/moonshot_kimi.yaml`
+- **accounts:** `data/accounts/moonshot_kimi.yaml` (official `MoonshotAI`, verified=true, staff=[])
+- **filter:** `data/filters/moonshot_kimi.yaml` (must_have_none: F1, antonelli, verstappen, hamilton, pirelli, pole position, formula 1, mclaren, mercedes, red bull, qualifying, sprint race, race result — F1 hijack mitigation)
+- **Call group:** B2
+- **Brand tokens:** `Kimi`, `月之暗面`, `MoonshotAI` (3)
+- **Q1:** `from:MoonshotAI min_faves:5`
+- **Q2:** `(Kimi OR 月之暗面 OR MoonshotAI) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(Kimi OR 月之暗面 OR MoonshotAI) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `to:MoonshotAI min_faves:5`
+- **Q5:** `(Kimi OR 月之暗面 OR MoonshotAI) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(Kimi OR 月之暗面 OR MoonshotAI) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** filter `must_have_none` is the largest in the project (14 tokens) — F1 driver Antonelli hijack is the dominant noise source. The brand tokens deliberately exclude bare `moonshot` to avoid Moonshot crypto exchange spam.
+
+### 7. `inclusionai` (InclusionAI / Ling / Ring / Ming) — 6 queries
+
+- **yaml:** `data/queries/inclusionai.yaml`
+- **accounts:** `data/accounts/inclusionai.yaml` (official `inclusionAI`, verified=true, staff=[])
+- **filter:** `data/filters/inclusionai.yaml` (must_have_none: tolkien, middle-earth, wwe, wrestling, fanfic, smackdown, rollins, reigns, undertaker, "aj styles", "raw results")
+- **Call group:** B2
+- **Brand tokens:** `InclusionAI`, `Ling`, `Ring`, `Ming` (4)
+- **Q1:** `from:inclusionAI min_faves:3` (lowered from 5 — low volume)
+- **Q2:** `(InclusionAI OR Ling OR Ring OR Ming) (how OR 怎么 OR 教程 OR tutorial) min_faves:2`
+- **Q3:** `(InclusionAI OR Ling OR Ring OR Ming) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `to:inclusionAI min_faves:3` (lowered)
+- **Q5:** `(InclusionAI OR Ling OR Ring OR Ming) (benchmark OR eval OR paper OR github OR 开源) min_faves:2` (no `code` token)
+- **Q6:** `(InclusionAI OR Ling OR Ring OR Ming) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** tokens consolidated from prior `inclusionai_ling/ring/ming` (commit consolidating 3 product variants into one brand-level entry, since Ling/Ring/Ming are versions of the same InclusionAI product line); Q1/Q4 use `min_faves:3`; filter `must_have_none` is the second-largest (11 tokens) — Tolkien fanfic, WWE wrestling, and Brat fanfic are the dominant noise.
+
+### 8. `mistral` (Mistral AI / Mixtral) — 6 queries, **no accounts yaml, no filter yaml**
+
+- **yaml:** `data/queries/mistral.yaml`
+- **accounts:** **none** (no `data/accounts/mistral.yaml` — brand is query-only)
+- **filter:** **none**
+- **Call group:** B1
+- **Brand tokens:** `"Mistral"`, `"Mixtral"` (2, both quoted)
+- **Q1:** `("Mistral" OR "Mixtral") (AI OR model OR LLM OR 7B OR 8x7B) -weather -meteorology min_faves:5`
+- **Q2:** `("Mistral" OR "Mixtral") (how OR tutorial OR guide OR 教程) min_faves:2`
+- **Q3:** `("Mistral" OR "Mixtral") (broken OR fails OR bad OR "not working") min_faves:1`
+- **Q4:** `to:MistralAI min_faves:5` (note: `to:` form, not brand-name — placeholder pending official handle confirmation; expected to return 0 until confirmed)
+- **Q5:** `("Mistral" OR "Mixtral") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `("Mistral" OR "Mixtral") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯) min_faves:5` (no 卧槽/太强了)
+- **Per-brand quirks:** all tokens are quoted (case-sensitive matching); Q1 has explicit negative operators (`-weather -meteorology`) to exclude the Mistral weather brand; Q4 uses a `to:`-shape (not the brand-name fallback) with a note that it "may be 0 results until the official handle is confirmed." No Call A coverage; Call C coverage is 0 (C1 spec doesn't include Mistral).
+
+### 9. `stepfun` (StepFun / 阶跃星辰) — 6 queries, **no accounts yaml, no filter yaml**
+
+- **yaml:** `data/queries/stepfun.yaml`
+- **accounts:** **none**
+- **filter:** **none**
+- **Call group:** B1
+- **Brand tokens:** `"StepFun"`, `"阶跃星辰"` (2, both quoted; Q1 also has `"StepFun AI"`)
+- **Q1:** `("StepFun" OR "阶跃星辰" OR "StepFun AI") (LLM OR model OR "step" OR 阶跃) -dance -choreography min_faves:5`
+- **Q2:** `("StepFun" OR "阶跃星辰") (how OR tutorial OR guide OR 教程) min_faves:2`
+- **Q3:** `("StepFun" OR "阶跃星辰") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
+- **Q4:** `to:StepFunAI min_faves:5` (placeholder, 0 results expected)
+- **Q5:** `("StepFun" OR "阶跃星辰") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `("StepFun" OR "阶跃星辰") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** Q1 includes `"StepFun AI"` (3rd token) plus `(LLM OR model OR "step" OR 阶跃)` context disambiguator; `-dance -choreography` exclusion; Q4 is `to:`-placeholder.
+
+### 10. `ernie` (Baidu ERNIE / 文心一言) — 6 queries, **no accounts yaml, no filter yaml**
+
+- **yaml:** `data/queries/ernie.yaml`
+- **accounts:** **none**
+- **filter:** **none**
+- **Call group:** B1
+- **Brand tokens:** `"ERNIE"`, `"文心一言"` (2, both quoted)
+- **Q1:** `("ERNIE" OR "文心一言") (LLM OR model OR Baidu OR 文心) -"Sesame Street" -Bert min_faves:5`
+- **Q2:** `("ERNIE" OR "文心一言") (how OR tutorial OR guide OR 教程 OR 怎么) min_faves:2`
+- **Q3:** `("ERNIE" OR "文心一言") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
+- **Q4:** `to:Baidu_ERNIE min_faves:5` (placeholder)
+- **Q5:** `("ERNIE" OR "文心一言") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `("ERNIE" OR "文心一言") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** Q1 includes Sesame Street and Bert as exclusions (ERNIE = Bert variant + Sesame Street character; the disambiguator is `(LLM OR model OR Baidu OR 文心)`).
+
+### 11. `hunyuan` (Tencent Hunyuan / 混元 / 腾讯混元) — 6 queries, **no accounts yaml, no filter yaml**
+
+- **yaml:** `data/queries/hunyuan.yaml`
+- **accounts:** **none**
+- **filter:** **none**
+- **Call group:** B1
+- **Brand tokens:** `"Hunyuan"`, `"混元"`, `"腾讯混元"` (3, all quoted)
+- **Q1:** `("Hunyuan" OR "混元" OR "腾讯混元") (LLM OR model OR Tencent OR 混元 OR 腾讯) min_faves:5`
+- **Q2:** `("Hunyuan" OR "混元" OR "腾讯混元") (how OR tutorial OR guide OR 教程 OR 怎么) min_faves:2`
+- **Q3:** `("Hunyuan" OR "混元" OR "腾讯混元") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
+- **Q4:** `to:HunyuanAI min_faves:5` (placeholder)
+- **Q5:** `("Hunyuan" OR "混元" OR "腾讯混元") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `("Hunyuan" OR "混元" OR "腾讯混元") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** Q1's disambiguator includes `混元` and `腾讯` tokens (Hunyuan is a Chinese philosophical term — bare usage is non-AI).
+
+### 12. `llama` (Meta Llama / Code Llama / Muse Spark) — 6 queries
+
+- **yaml:** `data/queries/llama.yaml`
+- **accounts:** `data/accounts/llama.yaml` (official `Llama`, **verified=false** — placeholder, operator must confirm Meta's official handle; note: bare `Llama` is the animal)
+- **filter:** **none**
+- **Call group:** B1 (also in Call C spec C1)
+- **Brand tokens:** `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"` (6 — largest in the project)
+- **Q1:** `(Llama OR "Llama 3" OR "Llama 4" OR "Meta Llama" OR "Code Llama" OR "Muse Spark") min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name Q4 fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** no `from:`/`to:`-shape on Q1/Q4 (no confirmed handle); all 6 brand tokens repeat in every query; accounts yaml says `verified: false` with `Llama` as the placeholder handle (note: `Llama` is also the animal and the broader family of Meta's open models); included in Call C1.
+
+### 13. `nvidia_nemo` (NVIDIA NeMo / Megatron) — 6 queries
+
+- **yaml:** `data/queries/nvidia_nemo.yaml`
+- **accounts:** `data/accounts/nvidia_nemo.yaml` (official `NVIDIAAIDev`, **verified=false**)
+- **filter:** **none**
+- **Call group:** B3
+- **Brand tokens:** `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` (4 — both the NeMo framework and the Megatron training stack)
+- **Q1:** `(NeMo OR Megatron OR "NVIDIA NeMo" OR "Megatron-LM") min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** all 4 brand tokens repeat; verified=false; not in Call C.
+
+### 14. `doubao` (ByteDance / 豆包 / Seed) — 6 queries
+
+- **yaml:** `data/queries/doubao.yaml`
+- **accounts:** `data/accounts/doubao.yaml` (official `doubaoAi`, **verified=false**; note: `豆包` is a literal Chinese snack word)
+- **filter:** **none**
+- **Call group:** B2
+- **Brand tokens:** `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` (8 — the largest brand-token set in the project, by a wide margin)
+- **Q1:** `(Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR "Seed-VL" OR "Seed-1.5" OR "豆包大模型") min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** 8 brand tokens (incl. parent-company and product-line names); not in Call C; `豆包`/`Seed`/`字节` collide with the consumer Doubao snack app and ByteDance the company — co-occurrence is the practical noise control.
+
+### 15. `yi` (01.AI Yi) — 6 queries
+
+- **yaml:** `data/queries/yi.yaml`
+- **accounts:** `data/accounts/yi.yaml` (official `01AI_Yi`, **verified=false**; note: `Yi` is a common Chinese surname and dynasty name)
+- **filter:** **none**
+- **Call group:** B2 (also in Call C spec C1)
+- **Brand tokens:** `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder` (6)
+- **Q1:** `(Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder) min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** 6 brand tokens (incl. company + product-line); included in Call C1 (the multi-brand co-occurrence spec).
+
+### 16. `sensechat` (SenseTime / 商汤 / 日日新) — 6 queries
+
+- **yaml:** `data/queries/sensechat.yaml`
+- **accounts:** `data/accounts/sensechat.yaml` (official `SenseTimeAI`, **verified=false**; note: `Nova` is generic)
+- **filter:** **none**
+- **Call group:** B2
+- **Brand tokens:** `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` (5)
+- **Q1:** `(SenseChat OR SenseNova OR SenseTime OR 商汤 OR 日日新) min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+
+### 17. `exaone` (LG AI Research / EXAONE) — 6 queries
+
+- **yaml:** `data/queries/exaone.yaml`
+- **accounts:** `data/accounts/exaone.yaml` (official `LGAIResearch`, **verified=false**)
+- **filter:** **none**
+- **Call group:** B3
+- **Brand tokens:** `EXAONE`, `"LG AI"`, `"LG EXAONE"` (3)
+- **Q1:** `(EXAONE OR "LG AI" OR "LG EXAONE") min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+
+### 18. `kuaishou` (Kuaishou / KwaiYii) — 6 queries
+
+- **yaml:** `data/queries/kuaishou.yaml`
+- **accounts:** `data/accounts/kuaishou.yaml` (official `KwaiYii`, **verified=false**; note: bare `Kuaishou` is the video-app brand — non-AI posts dominate)
+- **filter:** **none**
+- **Call group:** B3
+- **Brand tokens:** `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` (4)
+- **Q1:** `(KwaiYii OR 快意 OR "KwaiYii LLM" OR Kuaishou) min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+
+### 19. `sakana` (Sakana AI) — 6 queries (replaces `karakuri`)
+
+- **yaml:** `data/queries/sakana.yaml`
+- **accounts:** `data/accounts/sakana.yaml` (official `SakanaAILabs`, **verified=false**; note: `Sakana` is Japanese for `fish` — collides with food/restaurant/fishing posts)
+- **filter:** **none**
+- **Call group:** B3
+- **Brand tokens:** `Sakana`, `"Sakana AI"`, `"Sakana Labs"` (3)
+- **Q1:** `(Sakana OR "Sakana AI" OR "Sakana Labs") min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** `sakana` replaced `karakuri` in commit `887f50e` (2026-06-23) — Karakuri was a speculative Japanese brand that collided heavily with anime/dining/figure posts. Sakana AI (Evolutionary Model Merge) is the replacement. The `Sakana` (fish) collision risk is the same as `Karakuri`'s anime/dining risk; no `must_have_none` filter currently exists for sakana (unlike moonshot_kimi/inclusionai).
+
+### 20. `upstage` (Upstage / Solar / Solar Pro / Solar Mini) — 6 queries
+
+- **yaml:** `data/queries/upstage.yaml`
+- **accounts:** `data/accounts/upstage.yaml` (official `upstageAI`, **verified=false**; note: `Upstage` is a theater term but rare in AI contexts)
+- **filter:** **none**
+- **Call group:** B3 (also in Call C spec C1)
+- **Brand tokens:** `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"` (4)
+- **Q1:** `(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") min_faves:5`
+- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
+- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
+- **Q4:** `(…) min_faves:5` (brand-name fallback)
+- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
+- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Per-brand quirks:** `Solar` is generic (matches the star, the battery, etc.) — co-occurrence gate in Call C1 helps. Included in Call C1.
+
+---
+
+## Brand alias / handle index (consolidated)
+
+| brand_id | Official handle | Verified | Tokens in Call B (deduped) |
+|---|---|---|---|
+| `minimax` | `MiniMaxAI` | true | `MiniMax`, `海螺`, `Hailuo` |
+| `qwen` | `QwenLM` | true | `Qwen`, `通义千问`, `通义` |
+| `deepseek` | `deepseek_ai` | true | `DeepSeek`, `深度求索` |
+| `glm` | `Zhipuai_org` | true | `GLM`, `智谱`, `ChatGLM`, `Zhipuai` |
+| `xiaomi_mimo` | `XiaomiMiMo` | true | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米` |
+| `moonshot_kimi` | `MoonshotAI` | true | `Kimi`, `月之暗面`, `MoonshotAI` |
+| `inclusionai` | `inclusionAI` | true | `InclusionAI`, `Ling`, `Ring`, `Ming` |
+| `mistral` | (no accounts yaml) | n/a | `"Mistral"`, `"Mixtral"` |
+| `stepfun` | (no accounts yaml) | n/a | `"StepFun"`, `"阶跃星辰"` |
+| `ernie` | (no accounts yaml) | n/a | `"ERNIE"`, `"文心一言"` |
+| `hunyuan` | (no accounts yaml) | n/a | `"Hunyuan"`, `"混元"`, `"腾讯混元"` |
+| `llama` | `Llama` (placeholder) | **false** | `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"` |
+| `nvidia_nemo` | `NVIDIAAIDev` (placeholder) | **false** | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` |
+| `doubao` | `doubaoAi` (placeholder) | **false** | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` |
+| `yi` | `01AI_Yi` (placeholder) | **false** | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder` |
+| `sensechat` | `SenseTimeAI` (placeholder) | **false** | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` |
+| `exaone` | `LGAIResearch` (placeholder) | **false** | `EXAONE`, `"LG AI"`, `"LG EXAONE"` |
+| `kuaishou` | `KwaiYii` (placeholder) | **false** | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` |
+| `sakana` | `SakanaAILabs` (placeholder) | **false** | `Sakana`, `"Sakana AI"`, `"Sakana Labs"` |
+| `upstage` | `upstageAI` (placeholder) | **false** | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"` |
+
+---
+
+## Per-brand quota / language / recency overrides
+
+| brand_id | `min_faves` floor (query) | `query_rot_streak_threshold` | `data/filters/<brand>.yaml` | Special notes |
+|---|---|---|---|---|
+| `minimax` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 (default) | ✓ | must_have_none: hailuo-2.3 noise |
+| `qwen` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | (audited filter not in this pass) |
+| `deepseek` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | |
+| `glm` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | |
+| `xiaomi_mimo` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | **5** (override in `query_rot_streak_threshold_per_model`) | ✓ | Low-volume tuning |
+| `moonshot_kimi` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_none: 14 F1 tokens |
+| `inclusionai` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | 3 | ✓ | must_have_none: 11 Tolkien/WWE tokens |
+| `mistral` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Tokens quoted; Q1 has `-weather -meteorology` |
+| `stepfun` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 has `-dance -choreography` |
+| `ernie` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 has `-"Sesame Street" -Bert` |
+| `hunyuan` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 disambiguator includes `混元`, `腾讯` |
+| `llama` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 6 tokens; placeholder handle |
+| `nvidia_nemo` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens (incl. Megatron); placeholder |
+| `doubao` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 8 tokens (largest); placeholder |
+| `yi` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 6 tokens; in Call C1 |
+| `sensechat` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 5 tokens; placeholder |
+| `exaone` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 3 tokens (incl. "LG AI", "LG EXAONE") |
+| `kuaishou` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; `Kuaishou` is the video app |
+| `sakana` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | Replaces `karakuri` (2026-06-23); `Sakana` = fish |
+| `upstage` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; in Call C1 |
+
+**`LANG_ALLOWLIST` is empty** in `x_monitor/queries.py:54` — the default is "all-languages" (no `lang:` operator in any query). The `since:`/`until:` operators are unused in the curated queries (recency is implicit in the TwitterAPI.io 7-day recent-search default for self-serve).
+
+**Recency:** TwitterAPI.io's recent-search cap is 7 days for self-serve (`X_LENGTH_CAP=512` for the length cap; the same 7-day recency cap is enforced by the underlying X API). No brand in the curated library overrides this.
+
+---
+
+## How to verify the live inventory
 
 ```bash
+# Print the per-call plan
 ssh fuchitalee 'cd ~/development/minimax-marketing/x-monitoring && \
   source ~/.env.secrets && \
   PYTHONPATH=. .venv/bin/python -c "from pathlib import Path; \
+  from x_monitor.config import load_config; \
   from x_monitor.query_plan import plan_calls; \
-  calls = plan_calls(Path(\"data\"), [\"minimax\",\"qwen\",\"deepseek\",\"glm\",\"xiaomi_mimo\",\"moonshot_kimi\",\"inclusionai\",\"mistral\",\"stepfun\",\"ernie\",\"hunyuan\"], x_monitor_list_id=2067062923525275922); \
-  print([(c.call_kind, c.query_length, c.query_string) for c in calls])"'
+  cfg = load_config(Path(\"config.yaml\")); \
+  plan = plan_calls(Path(\"data\"), cfg.enabled_models, \
+                    x_monitor_list_id=cfg.x_monitor_list_id, \
+                    call_b_groups=cfg.call_b_groups, \
+                    call_c_specs=cfg.call_c_specs); \
+  [print(c.call_id, c.call_kind, c.brand_id, c.query_length, c.query_string) for c in plan]"'
 ```
 
-Expected output:
-```
-[('account', 38, '(list:2067062923525275922) min_faves:1'),
- ('brand_wide', 333, '((MiniMax OR 海螺 OR Hailuo) OR (Qwen OR 通义千问 OR 通义) OR ... OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0')]
-```
+**Expected (when `call_b_groups` is plumbed through `run.py`):** 5 entries — Call A (38 chars), Call B1 (279 chars), Call B2 (359 chars), Call B3 (249 chars), Call C1 (multi-brand co-occurrence). All under the 512-char cap.
 
-**Note on the absence of a `brand_id` column:** v1.7's `PlannedCall.brand_id` is `"*"` for Call A (a placeholder for run-JSON labeling; the list spans all brands) and `enabled_models[0]` for Call B (used as a placeholder for `source_query_id`; post-fetch `attribute_to_brand` reassigns). **The field was renamed from `model_id` to `brand_id` in v1.8 (commit `ce2eed1`)** as part of the company/brand/account schema refactor.
-
-**Note on the absence of `INTENT_BUCKETS`:** the v1.6 constant `INTENT_BUCKETS` (3 buckets × 11/6/8 intent tokens) and the `_split_brands_to_fit_cap` recursion are deleted in v1.7. All signal classification is post-fetch via `classify_signal` (which still maps to the same 6-signal taxonomy: `release`, `community_question`, `criticism`, `commenter_capture`, `other`, `praise`). In v1.8 the legacy `classify_signal(text)` shim lives at `x_monitor/intent_classifier.py:104` and the per-brand `classify_signal(text, brand_ids, brand_registry, anthropic_client)` lives at `x_monitor/attribution.py:845`.
-
----
-
-## Per-model breakdown — what each brand sees in the dashboard
-
-| brand_id | Call A sees | Call B sees (after reclassify) | Reclassify priority |
-|---|---|---|---|
-| `minimax` | All posts whose `author_handle` is in `MiniMaxAI` or future `data/accounts/minimax.yaml::staff` | All Call B results whose text contains `MiniMax`, `海螺`, or `Hailuo` (case-insensitive) | 1. author_handle ∈ staff list. 2. compiled regex first match. 3. drop. |
-| `qwen` | All posts from `QwenLM` (+ future staff) | All Call B results whose text contains `Qwen`, `通义千问`, or `通义` | (same) |
-| `deepseek` | All posts from `deepseek_ai` (+ future staff) | All Call B results whose text contains `DeepSeek` or `深度求索` | (same) |
-| `glm` | All posts from `Zhipuai_org` (+ future staff) | All Call B results whose text contains `GLM`, `智谱`, or `ChatGLM` | (same) |
-| `xiaomi_mimo` | All posts from `XiaomiMiMo` (+ future staff) | All Call B results whose text contains `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, or `小米` (extra token added 2026-06-18) | (same) |
-| `moonshot_kimi` | All posts from `MoonshotAI` (+ future staff) | All Call B results whose text contains `Kimi`, `Moonshot`, or `月之暗面` | (same) |
-| `inclusionai` | All posts from `inclusionAI` (+ future staff) | All Call B results whose text contains `InclusionAI`, `Ling`, `Ring`, or `Ming` | (same) |
-| `mistral` | (no accounts yaml — Call A sees 0 posts from this brand's perspective) | All Call B results whose text contains `"Mistral"` or `"Mixtral"` | 2. compiled regex first match. 3. drop. (Step 1 skipped — no staff list.) |
-| `stepfun` | (no accounts yaml) | All Call B results whose text contains `"StepFun"` or `"阶跃星辰"` | (same — regex-only path) |
-| `ernie` | (no accounts yaml) | All Call B results whose text contains `"ERNIE"` or `"文心一言"` | (same — regex-only path) |
-| `hunyuan` | (no accounts yaml) | All Call B results whose text contains `"Hunyuan"`, `"混元"`, or `"腾讯混元"` | (same — regex-only path) |
-
-**Reclassify priority** (from `x_monitor/intent_classifier.py::attribute_to_brand`, v1.7 signature with `compiled_brand_pattern` + `token_to_brand` kwargs):
-1. If `author_handle` matches a brand's official or staff handle (casefolded equality) → that brand. *(Skipped for the 4 query-only brands.)*
-2. If `text` matches the compiled regex → the brand that owns the matched token (first match wins in brand_tokens iteration order; CJK tokens use substring match, ASCII tokens use `\b` word-boundary match).
-3. If neither matches → the tweet is dropped from the result set (and never inserted into any brand's bucket).
-
----
-
-## Per-cycle cost summary (v1.7, current 11 brands)
-
-| Component | Count | Credits floor | Plus per returned tweet |
-|---|---|---|---|
-| Call A (`list:`-based) | 1 | 1 × 15 = 15 | 1 × 15 = 15 max |
-| Call B (paren-grouped brand-wide, 333 chars at 11 brands) | 1 | 1 × 15 = 15 | 1 × 15 = 15 max |
-| **Subtotal (per 15-min cycle)** | **2** | **30 credits** | **+30 credits max** |
-
-**Hourly:** 4 cycles × 30 = 120 credits floor, +120 max from tweet returns.
-**Daily (idle):** 96 cycles × 30 = ~2,880 credits/day floor.
-**Daily (busy, ~50% of cap):** ~5,000 credits/day.
-
-At TwitterAPI.io's $0.15/1k credits tier:
-- Idle floor: ~$0.43/day = **~$13/month**
-- Busy with returns: ~$0.75/day = **~$22/month**
-
-**v1.7 also adds an LLM translation pass** (Claude Haiku 4.5, ~$0.005 per 1,000 kept posts per locale). At 200 kept posts/cycle and 2 locales, the translation cost is ~$0.002/cycle ≈ $0.05/month. Negligible.
-
-**v1.8 also adds a per-brand signal classification pass** (opt-in via `--with-llm` on the reattribute CLI; the live pipeline hot path does not yet wire it). At ~2,700 brand-rows and ~42 rows/min on direct Haiku 4.5, a full reattribute is ~65 minutes wall clock and ~$0.10-0.30. Coverage is ~74% (the rest are correct empty-by-design cases where the LLM judges a body-keyword match is a false positive).
-
-**v1.7 vs v1.6 monthly cost (11 brands):**
-
-| Scenario | v1.6 (11 brands) | v1.7 (11 brands) | Δ |
-|---|---|---|---|
-| Idle (no new tweets) | ~$78/month (was $91 at 7 brands) | **~$13/month** | −83% |
-| Busy (50% of cap) | ~$120/month (was $135 at 7 brands) | **~$22/month** | −82% |
-| Busy + X-article enrichment | $60-240/month | **$20-60/month** | −67% to −75% |
-
-The v1.7 savings hold at 11 brands because the per-cycle call count stayed at 2 (Call A fan-in scales without growing the query string; Call B paren-grouped tokens fit under the 512-char cap). Only the per-call character count grew (Call A: 29→38, Call B: 218→333), which doesn't affect the 15-credit floor or the 15-credit/tweet return cost.
-
----
-
-## Empirical cap probe (2026-06-17)
-
-The v1.6 / early-v1.7 design described the cap as a "22-OR operator ceiling" with paren-grouping as the escape hatch, citing a [getxapi.com 2026 cheatsheet](https://www.getxapi.com/blogs/twitter-advanced-search-operators). **User pushback 2026-06-17:** "if there is a grouping rule, then conceivably we can have unlimited OR operators. check official docs and get definitive answer." A direct API probe against TwitterAPI.io with `TWITTERAPI_IO_API_KEY` from `~/.env.secrets` on fuchitalee produced the following data. **The cap is on character length, not operator count, and paren grouping does NOT bypass it.**
-
-### What the official X docs say
-
-[docs.x.com](https://docs.x.com/x-api/posts/search/integrate/operators) (the X API v2 docs that TwitterAPI.io's advanced-search endpoint proxies) specifies only **character-length limits** for queries:
-
-| Access level | Recent search | Full-archive search |
-| :----------- | :------------ | :------------------ |
-| Self-serve   | **512 characters** | 1,024 characters |
-| Enterprise   | 4,096 characters | 4,096 characters |
-
-The page does **not** document a maximum number of operators, OR clauses, or how parens are counted. The "22-OR cap" originates from the community-maintained [igorbrigadir/twitter-advanced-search](https://github.com/igorbrigadir/twitter-advanced-search) README's "Limitations" section — *"`card_name:` only works for the last 7-8 days. The maximum number of operators seems to be about 22 or 23."* — with no methodology, no issue/PR reference, and no measurement documentation. The 22-23 number is an **artifact of the character cap hitting a query of average token length**: 22 single-word tokens joined by ` OR ` lands near the 512-char boundary.
-
-### What the empirical probe shows
-
-Using `requests` against `https://api.twitterapi.io/twitter/tweet/advanced_search` with `queryType=Latest`, fruit-name tokens (verified to return 20 tweets at the baseline):
-
-| inner ORs | paren groups | query length | tweets | status |
-|---|---|---|---|---|
-| 22 | 0 | 239 | 20 | ✅ works (baseline) |
-| 22 | 1 | 241 | 20 | ✅ works (no diff) |
-| 22 | 7 | 244 | 20 | ✅ works (no diff) |
-| 30 | 0 | 323 | 20 | ✅ works |
-| 30 | 1 | 560 | 0 | ❌ fails |
-| 30 | 3 | 564 | 0 | ❌ fails |
-| 30 | 5 | 568 | 0 | ❌ fails |
-| 30 | 10 | 578 | 0 | ❌ fails |
-| 30 | 15 | 588 | 0 | ❌ fails |
-| 47 | 0 | 488 | 20 | ✅ works (close to cap) |
-| 48 | 0 | 499 | 20 | ✅ works |
-| 49 | 0 | 509 | 20 | ✅ works |
-| **50** | **0** | **520** | **0** | **❌ fails (cliff)** |
-| 50 | 7 | 534 | 0 | ❌ fails (same cliff) |
-| 60 | 1 | 629 | 0 | ❌ fails |
-
-**Boundary: 509 → 520 characters.** The cliff is consistent with the official X docs' 512-char limit for self-serve recent search. TwitterAPI.io silently returns HTTP 200 with `tweets: []` for over-cap queries (no error code, no `msg`, no 4xx) — the "silent fail" the user originally asked us to investigate. This silent-fail behavior is the same on X's own search UI, per the igorbrigadir README.
-
-**Critical observation:** Going from "30 ORs in 1 paren group" (length 560, fails) to "30 ORs in 15 paren groups" (length 588, fails) shows **no paren-grouping benefit**. The cap is purely on character length; restructuring the query with more parens actually *adds* characters (the `(` and `)` brackets) without helping. The getxapi.com claim is **empirically false** in the sense that motivated the v1.6/v1.7 design.
-
-### What this means for v1.7
-
-- **Call A still works as designed.** `(list:<id>) min_faves:1` is 29 chars regardless of list size. The `list:` operator is a **real** escape hatch — the 12-char numeric list ID stays tiny no matter how many handles are in the list.
-- **Call B works for the current 7-brand scope** (218 chars). It works **because 218 < 512**, not because "8 operators < 22 operators."
-- **The v1.6 plan's "safe up to 21 brands" claim is wrong.** Empirically, the real ceiling is **~15-17 brands with 3 tokens each (~500 chars)**. Beyond that, must split into multiple `brand_wide` calls (a v1.8 concern).
-- **The `assert_under_operator_cap()` check is renamed to `assert_under_length_cap(query_string, max_len=512)`** in v1.7, and counts the bytes in the query string.
-- **The paren-grouped Call B shape is kept** for readability (per-brand attribution boundaries visible in the query string), even though it adds ~28 chars vs an ungrouped `a OR b OR c OR d...` form. Both shapes fit at 7 brands.
-
-### How to re-run the probe
-
-The probe scripts are at `/tmp/test_paren{3,4,6,7,8}.py` on fuchitalee (pushed earlier in this session). To re-run:
+**Currently emitted (no `call_b_groups` kwarg in `run.py`):** 3 entries — Call A (38 chars), Call B (867 chars — **fails length cap**), Call C1. **The cycle is broken until `run.py` passes `call_b_groups=self.config.call_b_groups` to `plan_calls`.**
 
 ```bash
-scp /tmp/test_paren8.py fuchitalee:/tmp/
-ssh fuchitalee 'cd ~/development/minimax-marketing/x-monitoring && \
-  source ~/.env.secrets && \
-  .venv/bin/python /tmp/test_paren8.py'
+# In dry-run mode, the cycle still plans the calls but doesn't fire them
+python -m x_monitor dry-run
 ```
-
-If checking in the evidence to the repo, the recommended path is `x-monitoring/docs/reference/validation/2026-06-17-twitterapi-length-cap-probe.md` with the probe scripts as appendices.
 
 ---
 
@@ -259,36 +609,41 @@ If checking in the evidence to the repo, the recommended path is `x-monitoring/d
 
 | Change | Effect |
 |---|---|
-| Operator adds a handle to the x.com `x_monitor_list_id` list | That handle's posts now appear in Call A (one new author surface per handle); the query string stays **38 chars** with the current list ID. |
-| Operator adds a staff handle to `data/accounts/<brand>.yaml::staff` | **Two-step:** (1) add the handle to the yaml, (2) add the handle to the x.com list. The list-drift detection soft-warns if step (2) is missed. |
-| Add new brand tokens to `data/queries/<brand>.yaml::brand_tokens` | Adds chars to the per-brand paren group. Each token costs ~6-15 chars (CJK counts as 1 in Python `len()` but TwitterAPI.io's underlying X parser may count bytes — verified ASCII works at 10 chars/token, CJK works at 1 char/token for the 11-brand test). When pushing the cap, watch `len(query_string)` and consider truncating to the top-3 brand tokens per brand. |
-| Add a new brand to `enabled_models` | Adds 1 paren group (~10-30 chars) to Call B. **Safe up to ~15-17 brands with 3 tokens each** (~500 chars). The current 11 brands use 333 chars (~65% of cap). Adding the 12th brand at the typical 3 tokens is ~30 chars → 363 chars. The cliff is around the 15-17 brand mark, where Call B would need splitting into multiple `brand_wide` calls (a v1.9 concern, not v1.8). |
-| Add a new `INTENT_BUCKETS` entry (v1.6) | **No-op in v1.7** — the constant is deleted. All signal classification is post-fetch. |
-| Disable a brand in `enabled_models` | Removes its handle from the x.com list (operator step) and its paren group from Call B. Both list and yaml must be updated. |
-| Per-brand `min_faves` from `data/filters/<brand>.yaml` | Filters out low-engagement posts **after** Call A/B returns and **after** brand attribution. Default `min_faves: 0` (no gating). The `min_faves: 1` in Call A's query string and `min_faves: 0` in Call B's are the network-side floors; the per-brand filter is the post-fetch step. |
-| v1.8 reattribute with `--with-llm` | Re-classifies existing `posts_brands` rows via the Anthropic API (direct or proxy); populates `posts_brands_signals.signal` per (post, brand). Not part of the live cycle — operator-initiated via `python -m x_monitor reattribute --with-llm --batch-size 50`. One-time cost ~$0.10-0.30 for a full 2,700 brand-row backfill. |
-| Migrate Anthropic proxy path (commit `49a2ab7`) | Setting `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic` in `~/.env.secrets` causes `AnthropicClaudeClient` to route through the minimax proxy with `MINIMAX_API_TOKEN` instead of `ANTHROPIC_API_KEY`. Default model is `MiniMax-M3.0` (5.5× faster than `MiniMax-M2.7` on the signal task). See `feedback_minimax_proxy_anthropic_compat.md` for the full contract. |
+| Add a brand to `enabled_models` (and drop `data/queries/<brand>.yaml` + optionally `data/accounts/<brand>.yaml`) | One more paren group appended to the single Call B (when `call_b_groups` is None). Adds ~10-30 chars to the (already over-cap) single Call B. With `call_b_groups` plumbed, the operator must also add the new brand to one of B1/B2/B3 and the group's call must still fit under 512 chars. |
+| Switch a brand from `verified: false` placeholder to `verified: true` (operator confirms the official handle) | Update `data/accounts/<brand>.yaml::verified: true` and optionally switch Q1 from `(<brand tokens>)` to `from:<handle>` and Q4 from `(<brand tokens>)` to `to:<handle>`. The yaml `notes` fields flag this for every placeholder brand. |
+| Add a staff handle to `data/accounts/<brand>.yaml::staff` | Two-step: (1) add the handle to the yaml, (2) operator adds the handle to the public x.com list (`x_monitor_list_id`). The list-drift detection soft-warns if step (2) is missed. |
+| Edit a brand's tokens in `data/queries/<brand>.yaml::Q2` (or any of Q2/Q3/Q5/Q6) | The Call B paren group's tokens change — re-measure `len(query_string)` and re-verify under 512 chars. `_load_brand_tokens_per_model` reads the first `(...)` group of Q2/Q3/Q5/Q6 in iteration order. |
+| Add a `CallCBrandSpec` to `config.yaml::call_c_specs` | One extra Call C per cycle. The spec is read in order, gets a `C1`/`C2`/… label. |
+| Disable a brand in `enabled_models` | The brand's paren group drops from its Call B; the `data/accounts/<brand>.yaml` handle stays on the x.com list (operator must remove it manually). |
+| Per-brand `min_faves` in `data/filters/<brand>.yaml` | Filters out low-engagement posts after Call A/B returns and after brand attribution. Default no filter (file absent). |
+| Swap one brand for another (e.g. `karakuri` → `sakana`, commit `887f50e`) | Edit `data/queries/<brand>.yaml` and `data/accounts/<brand>.yaml`, swap the brand_id in `enabled_models` and in `call_b_groups`. The old yaml files can be removed. |
 
 ---
 
-## How to verify the live inventory
+## Schema references (post schema-modernization batch)
 
-The most reliable check is `python -m x_monitor dry-run` (or reading `data/runs/<id>.json::summary.calls[]` from the most recent scheduled run). Each `PlannedCall` carries `brand_id`, `call_kind`, `query_string`, `query_length` — exactly the columns in the tables above.
+This doc is about the live TwitterAPI.io query path, not direct SQL against the DB. The pipeline's downstream tables (`posts_brands`, `posts_brands_mentions`, `posts_brands_signals`, `signals`, `roles`, …) are touched only as sinks — the query string is built purely from yaml. For convenience, the DB-side names referenced in step 2 / step 3 above reflect the state after the 9-unit schema modernization batch landed on `feat/schema-modernization-batch` at commit `4cd62d2` (migrations 011–019):
 
-```bash
-ssh fuchitalee 'cd ~/development/minimax-marketing/x-monitoring && \
-  source ~/.env.secrets && \
-  PYTHONPATH=. .venv/bin/python -c "from pathlib import Path; \
-  from x_monitor.query_plan import plan_calls; \
-  import json; \
-  models = [\"minimax\",\"qwen\",\"deepseek\",\"glm\",\"xiaomi_mimo\",\"moonshot_kimi\",\"inclusionai\",\"mistral\",\"stepfun\",\"ernie\",\"hunyuan\"]; \
-  print(json.dumps([{\"kind\": c.call_kind, \"brand_id\": c.brand_id, \"len_chars\": c.query_length, \"q\": c.query_string} for c in plan_calls(Path(\"data\"), models, x_monitor_list_id=2067062923525275922)], indent=2, ensure_ascii=False))"'
-```
+| Old name (pre-batch) | New name (post-batch) | Migration | Query-shape impact |
+|---|---|---|---|
+| `signal_keys` (table) | `signals` | 014 | FK source for `posts_brands_signals.signal_id` |
+| (column) `signal` | `signal_id` | 014 | FK column on `posts_brands_signals` |
+| `role_keys` (table) | `roles` | 015 | FK from `brands_accounts` / `companies_accounts` |
+| (column) `role` | `role_id` | 015 | FK column on those M:N tables |
+| `post_mentions` (table) | `posts_brands_mentions` | 013 | Source table for per-match attribution rows |
+| (column) `locale` on `signal_labels` / `role_labels` | `lang` | 011 | i18n label lookup column (not on `posts.*` directly) |
+| `engagement_tier_keys` + `engagement_tier_labels` (tables) | **dropped** | 012 | Dead code — never read by production. The `accounts.engagement_tier` column is also dropped. |
+| (column) `accounts.engagement_tier` | **dropped** | 012 | The 3-tier classification moves to a control-layer query (follow-up plan). |
+| (n/a) | `post_type_keys` + `post_type_labels` | 019 | New enum — values `buzz_releases`, `hands_on_usage`, `performance_comparisons`, `feedback_questions`. |
+| (n/a) | `sentiment_keys` + `sentiment_labels` | 019 | New enum — values `positive`, `negative`, `neutral`, `mixed`. |
+| (n/a) | `posts_brands_signals.post_type` (column) | 019 | Additive nullable TEXT FK → `post_type_keys.key`. Coexists with `signal_id`. |
+| (n/a) | `posts_brands_signals.sentiment` (column) | 019 | Additive nullable TEXT FK → `sentiment_keys.key`. Coexists with `signal_id`. |
+| Roles seeded in 008: `{official, community, researcher, press, vendor}` | Trimmed to `{official, staff, community}` | 016 | `researcher` / `press` / `vendor` keys (and their label rows) deleted; any FK rows pointing at them backfilled to `'community'`. `staff` added. |
+| `signals` / `roles` PK was TEXT (the key string) | PK is now INTEGER AUTOINCREMENT; `key` column stays TEXT UNIQUE | 018 | FK columns (`signal_id`, `role_id`) still store the TEXT key — no consumer rewrite required. |
 
-**Expected output (verified 2026-06-20):** 2 entries — Call A `(list:2067062923525275922) min_faves:1` (38 chars) + Call B `((MiniMax OR 海螺 OR Hailuo) OR ... OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0` (333 chars). Both well under the 512-char cap.
+**Why this section is here.** The live query string (Calls A/B/C) is unaffected by these schema changes — yaml is the source of truth for query construction. But the *pipeline outputs* that the live path writes into (`posts_brands_mentions`, `posts_brands_signals.signal_id` / `post_type` / `sentiment`, `brands_accounts.role_id`, etc.) are all renamed. If you are debugging "the live call returned a row but it isn't classified correctly," the DB-side name you read from is the new name, not the legacy name.
 
-**Post-run verification:**
-- The run JSON's `summary.translation_stats` shows `n_translated`, `n_noop_en`, `n_noop_zh`, `n_failed`, `seconds`.
-- The run JSON's `degraded` block includes `list_drift` (if any yaml-listed handles were absent from Call A's first response for 3+ cycles).
-- The run JSON's `queries[]` array has exactly 2 entries (was 10-16 in v1.6).
-- For v1.8 reattribute runs, the run JSON's `summary.signal_stats` shows `n_brand_rows_scanned`, `n_brand_rows_classified`, `n_brand_rows_empty_by_design`, `cost_usd_estimate`, `seconds`.
+**Out of scope for this doc** (covered by other reference docs):
+- The `_pick_enum_label` and label-table read path (see migration 011 / 008 comments for the i18n detail).
+- The TEMP TABLE backup pattern used to preserve label rows across DROP TABLE CASCADE FK in migration 018.
+- The full classifier pipeline rewrite that consumes the new `post_type` / `sentiment` columns (U9 follow-up — see plan `docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md`).
