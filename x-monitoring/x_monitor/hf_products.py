@@ -66,7 +66,7 @@ def resolve_hf_orgs(
     confirmed orgs only (possibly empty).
 
     Companies are the corporate-parent axis: an HF namespace belongs to
-    exactly one company. The brand→company hop (via `brand_companies`) is
+    exactly one company. The brand→company hop (via `brands_companies`) is
     handled by `collect_all`; this function operates one level higher, on
     companies.
     """
@@ -229,8 +229,8 @@ def collect_all(
 
     The outer loop iterates **companies** (the corporate-parent axis); for
     each company we read its HF orgs via `hf_orgs` (1:N) and its brands via
-    `brand_companies` (M:N). A company with zero HF coverage is logged and
-    skipped; a brand with no `brand_companies` edge (e.g. `_unattributed`)
+    `brands_companies` (M:N). A company with zero HF coverage is logged and
+    skipped; a brand with no `brands_companies` edge (e.g. `_unattributed`)
     is naturally excluded.
 
     Per-org isolation: one failing org is recorded and skipped; the rest of
@@ -264,7 +264,7 @@ def collect_all(
     for cid, c in company_rows.items():
         # dry_run → read-only resolve (no discovery writes)
         orgs = resolve_hf_orgs(cid, c.display_name, store, client=client, persist=not dry_run)
-        brand_ids = store.read_brand_companies_for_company(cid)
+        brand_ids = store.read_brands_companies_for_company(cid)
         if not orgs:
             results.append(
                 {

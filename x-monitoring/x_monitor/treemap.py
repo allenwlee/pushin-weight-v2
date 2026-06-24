@@ -8,7 +8,7 @@ Public surface:
     Still used by tests that predate the v1.8 multi-brand rewrite.
     New code should call compute_polarity_from_db (the SQL-backed version).
 - compute_polarity_from_db(conn, brand_id, window_days, *, now=None) -> float | None
-    v1.8 (Unit 4 / R17): reads post_brand_signals + post_brands via the
+    v1.8 (Unit 4 / R17): reads posts_brands_signals + posts_brands via the
     JOIN shape from Decision 18. Filters _unattributed (Decision 15).
 - compute_polarity_signal_breakdown(conn, brand_id, window_start_epoch, *,
                                      window_end_epoch=None) -> dict[str, float]
@@ -228,7 +228,7 @@ def bin_polarity(score: float | None) -> str:
 # The polarity SQL, factored as a module-level constant so EXPLAIN QUERY PLAN
 # tests can reference the same string the production code runs.
 # - Decision 18 (JOIN not IN subquery): the query planner can use the
-#   post_brand_signals(brand_id, signal) and post_brands(brand_id, post_id)
+#   posts_brands_signals(brand_id, signal) and posts_brands(brand_id, post_id)
 #   indexes to seek by brand, then join posts(tweet_id) for the time-window
 #   filter. EXPLAIN should show all three indexes used (no SORT or SCAN).
 # - Decision 15 (_unattributed filter): the WHERE clause excludes the
@@ -244,8 +244,8 @@ def bin_polarity(score: float | None) -> str:
 #   the time window pre-migration-006.
 POLARITY_SQL: str = (
     "SELECT pbs.signal, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
-    "FROM post_brand_signals pbs "
-    "JOIN post_brands pb "
+    "FROM posts_brands_signals pbs "
+    "JOIN posts_brands pb "
     "  ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id "
     "JOIN posts p ON p.tweet_id = pbs.post_id "
     "WHERE pbs.brand_id = ? "
@@ -265,7 +265,7 @@ def compute_polarity_signal_breakdown(
     """Return {signal: weighted_count} for one brand.
 
     Implements Unit 4 / R17 / Decision 18 of the call-path attribution
-    pipeline. Reads from post_brand_signals + post_brands + posts via
+    pipeline. Reads from posts_brands_signals + posts_brands + posts via
     the JOIN shape (no IN subquery). The _unattributed brand is excluded
     by the WHERE clause (Decision 15); pass `_unattributed` explicitly
     returns an empty dict by the same mechanism (the != filter).
@@ -287,8 +287,8 @@ def compute_polarity_signal_breakdown(
         count. Weights are 1/N for multi-brand posts per Decision 9.
 
     Notes:
-        - Indexes used: idx_post_brand_signals_brand_signal,
-          idx_post_brands_brand_post, posts (PK). EXPLAIN should show
+        - Indexes used: idx_posts_brands_signals_brand_signal,
+          idx_posts_brands_brand_post, posts (PK). EXPLAIN should show
           no SCAN or SORT on a populated DB.
     """
     if window_end_epoch is None:
@@ -326,7 +326,7 @@ def _score_from_breakdown(
     `total` is computed as the sum of all signals in the breakdown.
     This matches the legacy definition (Q1+Q2+Q3+Q4+Q5+Q6 signal counts)
     when the breakdown covers all 6 signals. With per-brand signals
-    from post_brand_signals, the breakdown only includes the 6 v1
+    from posts_brands_signals, the breakdown only includes the 6 v1
     signal names, so the totals are equivalent.
     """
     current_total = sum(current.values())
@@ -365,7 +365,7 @@ def compute_polarity_from_db(
 ) -> float | None:
     """Compute the polarity score for one brand from the DB.
 
-    v1.8 (Unit 4 / R17). Reads post_brand_signals + post_brands via the
+    v1.8 (Unit 4 / R17). Reads posts_brands_signals + posts_brands via the
     JOIN shape from Decision 18. Splits the window into [now-N, now) and
     [now-2N, now-N); the score is the rate-of-change between them.
 

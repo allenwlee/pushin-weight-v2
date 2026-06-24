@@ -215,7 +215,7 @@ class Store:
         """Idempotent insert. Returns number of NEWLY inserted rows.
 
         v1.8 (R16): writes to 4 tables in ONE transaction (posts,
-        post_brands, post_mentions, post_brand_signals). Re-inserting
+        posts_brands, post_mentions, posts_brands_signals). Re-inserting
         the same tweet_id is a no-op (INSERT OR IGNORE on posts).
 
         Per-post dict fields (R2, R3, R6, R8, R15, R16):
@@ -228,13 +228,13 @@ class Store:
         legacy callers (Unit 3) continue to work.
 
         Posts with no brand_id get a sentinel `_unattributed` row in
-        post_brands so the treemap's "unattributed" bin still works.
-        `_unattributed` is BLOCKED from post_brand_signals by the
+        posts_brands so the treemap's "unattributed" bin still works.
+        `_unattributed` is BLOCKED from posts_brands_signals by the
         schema's CHECK constraint (Decision 15).
         """
         if not posts:
             return 0
-        # Source of truth for the post_brand_signals / post_mentions FK
+        # Source of truth for the posts_brands_signals / post_mentions FK
         # guards: the brand_ids actually present in the `brands` table
         # (cached). This is wider than the per-post `valid_brands` list
         # (which is brand_ids ∩ KNOWN_MODELS) so cross-mention signals
@@ -318,7 +318,7 @@ class Store:
                 if cur.rowcount > 0:
                     n_new += 1
                     # Only write attribution rows for newly-inserted posts;
-                    # re-inserts must not duplicate (post_brands PK is
+                    # re-inserts must not duplicate (posts_brands PK is
                     # (brand_id, post_id)).
                     for b in valid_brands:
                         # R9: ON CONFLICT DO UPDATE so reattribution can
@@ -327,7 +327,7 @@ class Store:
                         # gotcha — only INSERT-listed columns update).
                         conn.execute(
                             """
-                            INSERT INTO post_brands(
+                            INSERT INTO posts_brands(
                                 brand_id, post_id, weight
                             ) VALUES (?, ?, ?)
                             ON CONFLICT(brand_id, post_id) DO UPDATE SET
@@ -344,7 +344,7 @@ class Store:
                     )
                     for b, sig in per_brand_signals:
                         if b == "_unattributed":
-                            # CHECK constraint on post_brand_signals
+                            # CHECK constraint on posts_brands_signals
                             # excludes the sentinel (Decision 15). Skip.
                             continue
                         # Guard against LLM hallucinations: per_brand_signals
@@ -370,7 +370,7 @@ class Store:
                         if sig not in self._known_signal_keys():
                             self._dead_letter_enum(
                                 "signal", sig,
-                                table="post_brand_signals",
+                                table="posts_brands_signals",
                                 post_id=tweet_id_str,
                                 brand_id=b,
                             )
@@ -379,7 +379,7 @@ class Store:
                         # R11: ON CONFLICT DO UPDATE.
                         conn.execute(
                             """
-                            INSERT INTO post_brand_signals(
+                            INSERT INTO posts_brands_signals(
                                 post_id, brand_id, signal
                             ) VALUES (?, ?, ?)
                             ON CONFLICT(post_id, brand_id) DO UPDATE SET
@@ -624,7 +624,7 @@ class Store:
         # the caller; route it through _LOCALE_TO_COLUMN only.
         #
         # v1.8: posts.brand_id is dropped (migration 004). Attribution
-        # moves to post_brands(brand_id, post_id, weight). We pick any
+        # moves to posts_brands(brand_id, post_id, weight). We pick any
         # one brand_id per post (the first by lexicographic brand_id) so
         # the translation pipeline still has SOME brand to attribute
         # the post to for translation-prompt context. The translation
@@ -633,7 +633,7 @@ class Store:
             f"""
             SELECT p.tweet_id, pb.brand_id, p.text, p.author_handle, p.created_at
             FROM posts p
-            JOIN post_brands pb ON pb.post_id = p.tweet_id
+            JOIN posts_brands pb ON pb.post_id = p.tweet_id
             WHERE p.{col} IS NULL
             ORDER BY p.created_at DESC
             LIMIT ?
@@ -797,7 +797,7 @@ class Store:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
         # v1.8: posts.brand_id is dropped (migration 004). Attribution
-        # moves to post_brands(brand_id, post_id, weight). The returned
+        # moves to posts_brands(brand_id, post_id, weight). The returned
         # dicts keep the `brand_id` key (with weight on the side) so
         # downstream code that does `p.get("brand_id")` continues to
         # work unchanged.
@@ -806,7 +806,7 @@ class Store:
                 """
                 SELECT p.*, pb.weight
                 FROM posts p
-                JOIN post_brands pb ON pb.post_id = p.tweet_id
+                JOIN posts_brands pb ON pb.post_id = p.tweet_id
                 WHERE pb.brand_id = ? AND p.created_at >= ?
                 ORDER BY p.created_at DESC
                 LIMIT ?
@@ -818,7 +818,7 @@ class Store:
                 """
                 SELECT p.*, pb.weight
                 FROM posts p
-                JOIN post_brands pb ON pb.post_id = p.tweet_id
+                JOIN posts_brands pb ON pb.post_id = p.tweet_id
                 WHERE pb.brand_id = ?
                 ORDER BY p.created_at DESC
                 LIMIT ?
@@ -837,13 +837,13 @@ class Store:
         # detail page render 5-day-old posts at the top. Sort in Python by
         # parsed timestamp instead.
         #
-        # v1.8: posts.brand_id is dropped (migration 004); JOIN post_brands
+        # v1.8: posts.brand_id is dropped (migration 004); JOIN posts_brands
         # to filter by brand.
         rows = self._conn.execute(
             """
             SELECT p.*, pb.weight
             FROM posts p
-            JOIN post_brands pb ON pb.post_id = p.tweet_id
+            JOIN posts_brands pb ON pb.post_id = p.tweet_id
             WHERE pb.brand_id = ?
             """,
             (brand_id,),
@@ -932,9 +932,9 @@ class Store:
 
         v1.8: accounts table loses the brand_id/handle PK and the per-account
         role/multi_brand_voice columns (migration 004, Decision 10). The
-        per-brand role now lives in `brand_accounts(brand_id, author_id,
+        per-brand role now lives in `brands_accounts(brand_id, author_id,
         role)`. The `multi_brand_voice` column is dropped (R12) — that
-        derivation moves to a query against brand_accounts.
+        derivation moves to a query against brands_accounts.
 
         For callers that don't have a real author_id (yaml-derived accounts
         in `data/brands/<brand>/accounts.yaml`), we synthesize a stable
@@ -956,14 +956,14 @@ class Store:
         # role is FK-validated against role_keys. Legacy callers pass
         # role="unknown" which is NOT in role_keys (only official /
         # community / researcher / press / vendor are). In that case,
-        # skip the brand_accounts edge write — the per-brand role is
+        # skip the brands_accounts edge write — the per-brand role is
         # unknowable, so the edge has no information. The accounts row
         # is still upserted (no role column there post-migration 004).
         role_known = role in self._known_role_keys()
         if not role_known:
             self._dead_letter_enum(
                 "role", role,
-                table="brand_accounts",
+                table="brands_accounts",
                 brand_id=brand_id,
                 author_id=f"handle:{handle}",
             )
@@ -1001,16 +1001,16 @@ class Store:
                 notes,
             ),
         )
-        # Upsert the per-brand edge in brand_accounts (the per-brand role).
+        # Upsert the per-brand edge in brands_accounts (the per-brand role).
         # Skipped when role was unknown to role_keys — see dead-letter
         # guard above. This preserves pre-v1.8 semantics: an unknown role
-        # did not write a brand_accounts row either (the old DEFAULT was
+        # did not write a brands_accounts row either (the old DEFAULT was
         # 'community', so callers passing role='unknown' would have hit
         # the schema's TEXT convention with no enforcement).
         if role_known:
             self._conn.execute(
                 """
-                INSERT INTO brand_accounts(
+                INSERT INTO brands_accounts(
                     brand_id, author_id, role, added_at
                 ) VALUES (?,?,?,?)
                 ON CONFLICT(brand_id, author_id) DO UPDATE SET
@@ -1022,13 +1022,13 @@ class Store:
     def get_account(self, brand_id: str, handle: str) -> dict[str, Any] | None:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
-        # v1.8: JOIN brand_accounts so we can return the per-brand role
+        # v1.8: JOIN brands_accounts so we can return the per-brand role
         # alongside the account row.
         row = self._conn.execute(
             """
             SELECT a.*, ba.role
             FROM accounts a
-            JOIN brand_accounts ba ON ba.author_id = a.author_id
+            JOIN brands_accounts ba ON ba.author_id = a.author_id
             WHERE ba.brand_id = ? AND a.handle = ?
             """,
             (brand_id, handle),
@@ -1039,12 +1039,12 @@ class Store:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
         # v1.8: accounts no longer has brand_id. The per-brand accounts
-        # live behind brand_accounts JOIN.
+        # live behind brands_accounts JOIN.
         rows = self._conn.execute(
             """
             SELECT a.*, ba.role
             FROM accounts a
-            JOIN brand_accounts ba ON ba.author_id = a.author_id
+            JOIN brands_accounts ba ON ba.author_id = a.author_id
             WHERE ba.brand_id = ?
             """,
             (brand_id,),
@@ -1083,8 +1083,8 @@ class Store:
 
     # --- v1.8: per-row write methods (R9, R10, R11) -----------------------
 
-    def insert_post_brands(self, post_id: str, brand_id: str, weight: float) -> None:
-        """Upsert one row into post_brands (R9).
+    def insert_posts_brands(self, post_id: str, brand_id: str, weight: float) -> None:
+        """Upsert one row into posts_brands (R9).
 
         ON CONFLICT(brand_id, post_id) DO UPDATE SET weight = excluded.weight
         per Decision 14 — reattribution MUST overwrite stale weights when
@@ -1096,7 +1096,7 @@ class Store:
         """
         self._conn.execute(
             """
-            INSERT INTO post_brands(brand_id, post_id, weight)
+            INSERT INTO posts_brands(brand_id, post_id, weight)
             VALUES (?, ?, ?)
             ON CONFLICT(brand_id, post_id) DO UPDATE SET
                 weight = excluded.weight
@@ -1135,10 +1135,10 @@ class Store:
             (post_id, brand_id, source, raw_token, mentioned_at),
         )
 
-    def insert_post_brand_signals(
+    def insert_posts_brands_signals(
         self, post_id: str, brand_id: str, signal: str
     ) -> None:
-        """Upsert one row into post_brand_signals (R11).
+        """Upsert one row into posts_brands_signals (R11).
 
         ON CONFLICT(post_id, brand_id) DO UPDATE SET signal = excluded.signal.
 
@@ -1155,7 +1155,7 @@ class Store:
         """
         if brand_id not in self._known_brand_ids():
             _log.warning(
-                "insert_post_brand_signals: dropping signal for "
+                "insert_posts_brands_signals: dropping signal for "
                 "brand_id=%r not in brands table (post_id=%s)",
                 brand_id, post_id,
             )
@@ -1166,14 +1166,14 @@ class Store:
         if signal not in self._known_signal_keys():
             self._dead_letter_enum(
                 "signal", signal,
-                table="post_brand_signals",
+                table="posts_brands_signals",
                 post_id=post_id,
                 brand_id=brand_id,
             )
             return
         self._conn.execute(
             """
-            INSERT INTO post_brand_signals(post_id, brand_id, signal)
+            INSERT INTO posts_brands_signals(post_id, brand_id, signal)
             VALUES (?, ?, ?)
             ON CONFLICT(post_id, brand_id) DO UPDATE SET
                 signal = excluded.signal
@@ -1215,7 +1215,7 @@ class Store:
     def _known_brand_ids(self) -> set[str]:
         """Cached set of brand_ids present in the `brands` table.
 
-        The source of truth for the post_brand_signals / post_mentions
+        The source of truth for the posts_brands_signals / post_mentions
         FK guards. Wider than KNOWN_MODELS (which is a 7-entry hardcoded
         frozenset) because it reflects whatever migration 004 seeded
         (12 brands) plus any operator-added rows. Includes the
@@ -1226,8 +1226,8 @@ class Store:
     # --- i18n (Unit 3): enum FK guards + per-locale helpers ---------------
     #
     # Cached sets of valid keys for the three enum families introduced
-    # by migration 007. Used by insert_post_brand_signals (signal),
-    # upsert_account (engagement_tier, brand_accounts.role) to drop
+    # by migration 007. Used by insert_posts_brands_signals (signal),
+    # upsert_account (engagement_tier, brands_accounts.role) to drop
     # unknown values to the dead-letter log BEFORE SQLite raises
     # IntegrityError on the FK.
     #
@@ -1397,18 +1397,18 @@ class Store:
             for r in rows
         ]
 
-    def read_brand_companies_for_company(
+    def read_brands_companies_for_company(
         self, company_id: str
     ) -> list[str]:
-        """Return the brand_ids that belong to `company_id` via brand_companies.
+        """Return the brand_ids that belong to `company_id` via brands_companies.
 
-        Brands without a brand_companies edge (e.g. `_unattributed`) are
+        Brands without a brands_companies edge (e.g. `_unattributed`) are
         never returned — they're corporate-parent-less and intentionally
         excluded from HF coverage.
         """
         rows = self._conn.execute(
             """
-            SELECT brand_id FROM brand_companies
+            SELECT brand_id FROM brands_companies
             WHERE company_id = ?
             ORDER BY brand_id
             """,
@@ -1416,7 +1416,7 @@ class Store:
         ).fetchall()
         return [r["brand_id"] for r in rows]
 
-    def read_brand_accounts(self) -> dict[str, str]:
+    def read_brands_accounts(self) -> dict[str, str]:
         """Return {author_id: brand_id} for all brand-account edges (R13).
 
         Consumed by `attribution.extract_user_mentions` to resolve
@@ -1424,7 +1424,7 @@ class Store:
         `brand_id`.
         """
         rows = self._conn.execute(
-            "SELECT author_id, brand_id FROM brand_accounts"
+            "SELECT author_id, brand_id FROM brands_accounts"
         ).fetchall()
         return {r["author_id"]: r["brand_id"] for r in rows}
 

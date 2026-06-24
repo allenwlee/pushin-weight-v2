@@ -11,7 +11,7 @@ Verifies:
 - FK guards drop unknown values to the dead-letter JSONL log without
   raising IntegrityError, and the corresponding row is not written.
 - FK guards DO write rows with valid values.
-- Bulk integration: 1000 post_brand_signals rows with 0.1% unknown
+- Bulk integration: 1000 posts_brands_signals rows with 0.1% unknown
   signal values → 990 succeed, 10 go to dead-letter.
 """
 
@@ -238,7 +238,7 @@ def test_dead_letter_enum_writes_jsonl(tmp_path):
     try:
         s._dead_letter_enum(
             "signal", "ghost_signal",
-            table="post_brand_signals",
+            table="posts_brands_signals",
             post_id="t1",
             brand_id="minimax",
         )
@@ -251,17 +251,17 @@ def test_dead_letter_enum_writes_jsonl(tmp_path):
         record = json.loads(line)
         assert record["family"] == "signal"
         assert record["value"] == "ghost_signal"
-        assert record["table"] == "post_brand_signals"
+        assert record["table"] == "posts_brands_signals"
         assert record["post_id"] == "t1"
         assert "ts" in record
     finally:
         s.close()
 
 
-# --- FK guards on insert_post_brand_signals -----------------------------
+# --- FK guards on insert_posts_brands_signals -----------------------------
 
 
-def test_insert_post_brand_signals_unknown_signal_goes_to_dead_letter(tmp_path):
+def test_insert_posts_brands_signals_unknown_signal_goes_to_dead_letter(tmp_path):
     """An unknown signal value does NOT raise IntegrityError; it lands in
     the dead-letter log and the row is not written."""
     from x_monitor.store import Store
@@ -277,12 +277,12 @@ def test_insert_post_brand_signals_unknown_signal_goes_to_dead_letter(tmp_path):
             ("t_signal_guard", "u_signal", "2026-06-23T00:00:00+00:00"),
         )
         # Unknown signal — must NOT raise.
-        s.insert_post_brand_signals(
+        s.insert_posts_brands_signals(
             "t_signal_guard", "minimax", "ghost_signal",
         )
         # Row not written.
         row = s._conn.execute(
-            "SELECT * FROM post_brand_signals WHERE post_id = ?",
+            "SELECT * FROM posts_brands_signals WHERE post_id = ?",
             ("t_signal_guard",),
         ).fetchone()
         assert row is None
@@ -296,7 +296,7 @@ def test_insert_post_brand_signals_unknown_signal_goes_to_dead_letter(tmp_path):
         s.close()
 
 
-def test_insert_post_brand_signals_valid_signal_writes(tmp_path):
+def test_insert_posts_brands_signals_valid_signal_writes(tmp_path):
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -307,9 +307,9 @@ def test_insert_post_brand_signals_valid_signal_writes(tmp_path):
             "VALUES (?, ?, ?)",
             ("t_valid_signal", "u_sig", "2026-06-23T00:00:00+00:00"),
         )
-        s.insert_post_brand_signals("t_valid_signal", "minimax", "release")
+        s.insert_posts_brands_signals("t_valid_signal", "minimax", "release")
         row = s._conn.execute(
-            "SELECT signal FROM post_brand_signals WHERE post_id = ?",
+            "SELECT signal FROM posts_brands_signals WHERE post_id = ?",
             ("t_valid_signal",),
         ).fetchone()
         assert row["signal"] == "release"
@@ -323,9 +323,9 @@ def test_insert_post_brand_signals_valid_signal_writes(tmp_path):
 # --- FK guards on upsert_account ---------------------------------------
 
 
-def test_upsert_account_unknown_role_skips_brand_accounts_edge(tmp_path):
+def test_upsert_account_unknown_role_skips_brands_accounts_edge(tmp_path):
     """Legacy callers pass role='unknown', which is NOT in role_keys.
-    The accounts row is still upserted; the brand_accounts edge is not
+    The accounts row is still upserted; the brands_accounts edge is not
     written; a dead-letter record is created."""
     from x_monitor.store import Store
 
@@ -339,9 +339,9 @@ def test_upsert_account_unknown_role_skips_brand_accounts_edge(tmp_path):
             ("handle:u_role_unknown",),
         ).fetchone()
         assert acc is not None
-        # brand_accounts row NOT written.
+        # brands_accounts row NOT written.
         ba = s._conn.execute(
-            "SELECT * FROM brand_accounts WHERE author_id = ?",
+            "SELECT * FROM brands_accounts WHERE author_id = ?",
             ("handle:u_role_unknown",),
         ).fetchone()
         assert ba is None
@@ -386,7 +386,7 @@ def test_upsert_account_unknown_engagement_tier_coerced_to_low(tmp_path):
         s.close()
 
 
-def test_upsert_account_known_role_writes_brand_accounts_edge(tmp_path):
+def test_upsert_account_known_role_writes_brands_accounts_edge(tmp_path):
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -397,7 +397,7 @@ def test_upsert_account_known_role_writes_brand_accounts_edge(tmp_path):
             role="official", engagement_tier="high",
         )
         ba = s._conn.execute(
-            "SELECT role FROM brand_accounts WHERE author_id = ?",
+            "SELECT role FROM brands_accounts WHERE author_id = ?",
             ("handle:u_role_official",),
         ).fetchone()
         assert ba["role"] == "official"
@@ -411,7 +411,7 @@ def test_upsert_account_known_role_writes_brand_accounts_edge(tmp_path):
 
 
 def test_bulk_insert_signals_with_1_percent_unknown(tmp_path):
-    """Bulk integration: 1000 post_brand_signals inserts with 1%
+    """Bulk integration: 1000 posts_brands_signals inserts with 1%
     unknown signal values → 990 succeed, 10 land in dead-letter."""
     from x_monitor.store import Store
 
@@ -426,8 +426,8 @@ def test_bulk_insert_signals_with_1_percent_unknown(tmp_path):
         # 'minimax' and 'qwen' are seeded by migration 004.
         # Build 1000 posts + signals with 1% unknown signal values.
         # We can't use insert_posts (it expects many other fields), so we
-        # bulk-insert into posts + post_brand_signals directly. The guard
-        # only fires on insert_post_brand_signals.
+        # bulk-insert into posts + posts_brands_signals directly. The guard
+        # only fires on insert_posts_brands_signals.
         valid_signals = ["release", "criticism", "praise", "other"]
         unknown_signal = "totally_made_up"
         rows = []
@@ -443,11 +443,11 @@ def test_bulk_insert_signals_with_1_percent_unknown(tmp_path):
             )
         # Run all 1000 inserts through the guarded method.
         for tid, brand_id, sig in rows:
-            s.insert_post_brand_signals(tid, brand_id, sig)
+            s.insert_posts_brands_signals(tid, brand_id, sig)
 
         # Count written vs dropped.
         n_written = s._conn.execute(
-            "SELECT COUNT(*) AS n FROM post_brand_signals"
+            "SELECT COUNT(*) AS n FROM posts_brands_signals"
         ).fetchone()["n"]
         assert n_written == 990
         # Dead-letter log: 10 entries.
@@ -497,13 +497,13 @@ def test_insert_posts_drops_unknown_signal_via_bulk_path(tmp_path):
         s.insert_posts(posts)
         # Valid signal is written.
         ok = s._conn.execute(
-            "SELECT signal FROM post_brand_signals WHERE post_id = ?",
+            "SELECT signal FROM posts_brands_signals WHERE post_id = ?",
             ("t_bulk_sig_ok",),
         ).fetchone()
         assert ok["signal"] == "release"
         # Invalid signal was dropped — no row written.
         bad = s._conn.execute(
-            "SELECT * FROM post_brand_signals WHERE post_id = ?",
+            "SELECT * FROM posts_brands_signals WHERE post_id = ?",
             ("t_bulk_sig_bad",),
         ).fetchone()
         assert bad is None

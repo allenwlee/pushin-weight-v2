@@ -694,7 +694,7 @@ def cmd_reattribute(args, paths) -> int:
       --dry-run        do not write; print what would have been written
       --limit N        cap on posts processed (default: all)
       --model BRAND    only reattribute posts attributed to BRAND
-                       (joins post_brands)
+                       (joins posts_brands)
       --with-llm       enable per-brand signal classification via
                        Claude Haiku (requires ANTHROPIC_API_KEY in env)
 
@@ -872,7 +872,7 @@ def cmd_hf_products(args, paths) -> int:
 
     The outer loop iterates companies (corporate parent), then for each
     company iterates its HF orgs (1:N) and brands (M:N). Products are
-    attributed to the company’s brands via the brand_companies edge.
+    attributed to the company’s brands via the brands_companies edge.
     Discovery is automatic: companies lacking a confirmed HF org are
     searched and their candidates are persisted flagged for review (not
     scraped this run). HF auth uses HF_TOKEN from the environment
@@ -1014,7 +1014,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_reatt.add_argument(
         "--model", dest="model", default=None,
         help="Only reattribute posts attributed to this brand_id "
-             "(joins post_brands)",
+             "(joins posts_brands)",
     )
     p_reatt.add_argument(
         "--with-llm", action="store_true",

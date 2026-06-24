@@ -166,11 +166,11 @@ def test_account_post_appearances_fk_to_unknown_handle_ignored():
             store.close()
 
 
-# --- v1.8: post_brands / post_mentions / post_brand_signals writes ----
+# --- v1.8: posts_brands / post_mentions / posts_brands_signals writes ----
 
 
-def test_insert_posts_writes_post_brands():
-    """A 2-brand post writes 2 rows to post_brands; weights sum to 1.0."""
+def test_insert_posts_writes_posts_brands():
+    """A 2-brand post writes 2 rows to posts_brands; weights sum to 1.0."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
@@ -178,7 +178,7 @@ def test_insert_posts_writes_post_brands():
                 _make_post("p1", brand_id=["qwen", "deepseek"]),
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, weight FROM post_brands WHERE post_id = 'p1' "
+                "SELECT brand_id, weight FROM posts_brands WHERE post_id = 'p1' "
                 "ORDER BY brand_id"
             ).fetchall()
             assert len(rows) == 2
@@ -240,8 +240,8 @@ def test_insert_posts_writes_post_mentions():
             store.close()
 
 
-def test_insert_posts_writes_post_brand_signals():
-    """A post with 2-brand signals writes 2 rows to post_brand_signals."""
+def test_insert_posts_writes_posts_brands_signals():
+    """A post with 2-brand signals writes 2 rows to posts_brands_signals."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
@@ -260,7 +260,7 @@ def test_insert_posts_writes_post_brand_signals():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, signal FROM post_brand_signals "
+                "SELECT brand_id, signal FROM posts_brands_signals "
                 "WHERE post_id = 'p1' ORDER BY brand_id"
             ).fetchall()
             assert len(rows) == 2
@@ -278,7 +278,7 @@ def test_insert_posts_drops_hallucinated_brand_signals():
     lands; the unknown brand's signal is silently dropped (logged).
 
     Regression: v1.8 hot path crashed with sqlite3.IntegrityError FK
-    failure on post_brand_signals when the LLM returned a brand_id
+    failure on posts_brands_signals when the LLM returned a brand_id
     that wasn't in the brands table. The fix intersects
     `per_brand_signals` against `valid_brands` before INSERT.
     """
@@ -312,21 +312,21 @@ def test_insert_posts_drops_hallucinated_brand_signals():
                 "SELECT COUNT(*) FROM posts WHERE tweet_id = 'p1'"
             ).fetchone()[0]
             assert n_posts == 1
-            # post_brand_signals must contain exactly the 2 known
+            # posts_brands_signals must contain exactly the 2 known
             # brands — the hallucinated `fake_brand` is dropped.
             rows = store._conn.execute(
-                "SELECT brand_id, signal FROM post_brand_signals "
+                "SELECT brand_id, signal FROM posts_brands_signals "
                 "WHERE post_id = 'p1' ORDER BY brand_id"
             ).fetchall()
             assert len(rows) == 2
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
             assert rows[0]["signal"] == "criticism"
             assert rows[1]["signal"] == "praise"
-            # post_brands should also only have the known brands
+            # posts_brands should also only have the known brands
             # (already filtered by valid_brands — this confirms no
-            # regression in the post_brands path).
+            # regression in the posts_brands path).
             n_brands = store._conn.execute(
-                "SELECT COUNT(*) FROM post_brands WHERE post_id = 'p1'"
+                "SELECT COUNT(*) FROM posts_brands WHERE post_id = 'p1'"
             ).fetchone()[0]
             assert n_brands == 2
         finally:
@@ -343,7 +343,7 @@ def test_insert_posts_keeps_cross_mention_signal():
     also carries a deepseek signal keeps both.
 
     Note: deepseek must be in the brands table (migration 004 seeds it).
-    We add the post to post_brands only for qwen, but the signal map
+    We add the post to posts_brands only for qwen, but the signal map
     includes deepseek — the signal should still land.
     """
     with tempfile.TemporaryDirectory() as d:
@@ -369,7 +369,7 @@ def test_insert_posts_keeps_cross_mention_signal():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, signal FROM post_brand_signals "
+                "SELECT brand_id, signal FROM posts_brands_signals "
                 "WHERE post_id = 'p1' ORDER BY brand_id"
             ).fetchall()
             # Both signals land — deepseek is a real brand even though
@@ -408,7 +408,7 @@ def test_insert_posts_all_hallucinated_signals():
             ).fetchone()[0]
             assert n_posts == 1
             n_sigs = store._conn.execute(
-                "SELECT COUNT(*) FROM post_brand_signals WHERE post_id='p1'"
+                "SELECT COUNT(*) FROM posts_brands_signals WHERE post_id='p1'"
             ).fetchone()[0]
             assert n_sigs == 0
         finally:
@@ -437,13 +437,13 @@ def test_insert_posts_legacy_signal_string_broadcast():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id FROM post_brand_signals "
+                "SELECT brand_id FROM posts_brands_signals "
                 "WHERE post_id='p1' ORDER BY brand_id"
             ).fetchall()
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
             assert all(
                 store._conn.execute(
-                    "SELECT signal FROM post_brand_signals WHERE post_id='p1' AND brand_id=?",
+                    "SELECT signal FROM posts_brands_signals WHERE post_id='p1' AND brand_id=?",
                     (r["brand_id"],),
                 ).fetchone()["signal"] == "praise"
                 for r in rows
@@ -452,35 +452,35 @@ def test_insert_posts_legacy_signal_string_broadcast():
             store.close()
 
 
-def test_insert_post_brands_upsert_on_conflict():
-    """insert_post_brands on conflict overwrites weight (Decision 14)."""
+def test_insert_posts_brands_upsert_on_conflict():
+    """insert_posts_brands on conflict overwrites weight (Decision 14)."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
             store.insert_posts([_make_post("p1", brand_id="qwen")])
-            store.insert_post_brands("p1", "qwen", 0.5)
-            store.insert_post_brands("p1", "qwen", 0.7)
+            store.insert_posts_brands("p1", "qwen", 0.5)
+            store.insert_posts_brands("p1", "qwen", 0.7)
             row = store._conn.execute(
-                "SELECT weight FROM post_brands WHERE post_id='p1' AND brand_id='qwen'"
+                "SELECT weight FROM posts_brands WHERE post_id='p1' AND brand_id='qwen'"
             ).fetchone()
             assert row["weight"] == 0.7
             # Only 1 row, not 2.
             n = store._conn.execute(
-                "SELECT COUNT(*) FROM post_brands WHERE post_id='p1' AND brand_id='qwen'"
+                "SELECT COUNT(*) FROM posts_brands WHERE post_id='p1' AND brand_id='qwen'"
             ).fetchone()[0]
             assert n == 1
         finally:
             store.close()
 
 
-def test_insert_post_brand_signals_rejects_unattributed():
-    """insert_post_brand_signals rejects brand_id='_unattributed' (CHECK)."""
+def test_insert_posts_brands_signals_rejects_unattributed():
+    """insert_posts_brands_signals rejects brand_id='_unattributed' (CHECK)."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
             store.insert_posts([_make_post("p1", brand_id="qwen")])
             with pytest.raises(sqlite3.IntegrityError):
-                store.insert_post_brand_signals("p1", "_unattributed", "praise")
+                store.insert_posts_brands_signals("p1", "_unattributed", "praise")
         finally:
             store.close()
 
@@ -520,18 +520,18 @@ def test_read_brands_returns_12_rows():
             store.close()
 
 
-def test_read_brand_accounts_returns_dict():
-    """read_brand_accounts returns {author_id: brand_id} dict."""
+def test_read_brands_accounts_returns_dict():
+    """read_brands_accounts returns {author_id: brand_id} dict."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
-            # Use the upsert_account helper to seed brand_accounts.
+            # Use the upsert_account helper to seed brands_accounts.
             # v1.8 (Unit 3): role is FK-validated against role_keys, so
             # use a seeded role ('staff' is no longer valid post-007).
             store.upsert_account("qwen", "alice", role="community")
             store.upsert_account("qwen", "bob", role="official")
             store.upsert_account("deepseek", "carol", role="researcher")
-            d = store.read_brand_accounts()
+            d = store.read_brands_accounts()
             assert d["handle:alice"] == "qwen"
             assert d["handle:bob"] == "qwen"
             assert d["handle:carol"] == "deepseek"

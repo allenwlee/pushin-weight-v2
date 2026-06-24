@@ -25,8 +25,8 @@ Conventions used in the diagrams:
 
 The core fact table. One row per kept tweet (after the per-model
 relevance filter in Unit 4 of the v1.7 plan). In v1.8 the brand and
-signal columns were dropped (moved to `post_brands` /
-`post_brand_signals`); `favorite_count` was renamed to `like_count`
+signal columns were dropped (moved to `posts_brands` /
+`posts_brands_signals`); `favorite_count` was renamed to `like_count`
 (per R9 / Decision 3, the user-facing name).
 
 ```
@@ -59,11 +59,11 @@ posts
 **DROPPED in v1.8 (migration 004):**
 
 - `posts.model_id` (R1 / Decision 1) — brand attribution moves to
-  `post_brands`. There is no longer a `model_id` column anywhere in
+  `posts_brands`. There is no longer a `model_id` column anywhere in
   the `posts` schema. Migration 003's `idx_posts_model_created` and
   `idx_posts_signal_model` are dropped with the column.
 - `posts.signal` (R6d) — per-brand signal moves to
-  `post_brand_signals`. A post naming 2 brands with different
+  `posts_brands_signals`. A post naming 2 brands with different
   sentiments writes 2 rows there.
 
 Indexes:
@@ -98,7 +98,7 @@ Per-handle authoritative + community accounts. PK is now the
 immutable X `author_id` (was `(model_id, handle)` in v1.7). The
 per-account `role` column is gone (P1 review fix #15): multi-brand
 accounts make per-account role meaningless; the per-brand role
-lives in `brand_accounts.role`. `bio` + `bio_fetched_at` are new
+lives in `brands_accounts.role`. `bio` + `bio_fetched_at` are new
 (R13); `multi_brand_voice` is dropped (R12).
 
 ```
@@ -120,8 +120,8 @@ accounts
 **DROPPED in v1.8 (migration 004):**
 
 - `accounts.model_id` (R13 / Decision 2) — brand/account edge lives
-  in `brand_accounts` now.
-- `accounts.role` — moved to `brand_accounts.role`.
+  in `brands_accounts` now.
+- `accounts.role` — moved to `brands_accounts.role`.
 - `accounts.multi_brand_voice` (R12).
 - The composite PK `(model_id, handle)` is replaced by single-column
   `author_id PK`. Posts with `author_id IS NULL` are filtered out
@@ -135,14 +135,14 @@ accounts
 Join table: which accounts appeared on which posts. PK is now
 `(author_id, tweet_id)` (was `(model_id, handle, tweet_id)` in
 v1.7). Per Decision 4, `accounts.author_id` is the immutable X user
-id, so the per-brand fan-in lives in `brand_accounts`, not in this
+id, so the per-brand fan-in lives in `brands_accounts`, not in this
 join.
 
 ```
 account_post_appearances
 ├── author_id*     TEXT  PK[1]                   ← FK → accounts.author_id (logical only, no declared FK in 004)
 ├── tweet_id*      TEXT  PK[2]                   ← FK → posts.tweet_id  ON DELETE CASCADE
-└── role_at_time   TEXT                          ← snapshot of the active brand_accounts.role at the time of appearance
+└── role_at_time   TEXT                          ← snapshot of the active brands_accounts.role at the time of appearance
 ```
 
 Indexes:
@@ -232,14 +232,14 @@ _unattributed    Unattributed          #6b7280        1
 
 ---
 
-### `brand_companies` (10 rows; seeded by migration 004)
+### `brands_companies` (10 rows; seeded by migration 004)
 
 M:N edge between brands and corporate parents (Decision 2).
 `ownership_pct` is `1.0` for wholly-owned brands; the column exists
 for future joint ventures (e.g. a hypothetical `0.6`).
 
 ```
-brand_companies
+brands_companies
 ├── brand_id*       TEXT  PK[1]                ← FK → brands.brand_id    ON DELETE CASCADE
 ├── company_id*     TEXT  PK[2]                ← FK → companies.company_id ON DELETE CASCADE
 └── ownership_pct*  REAL  DEFAULT 1.0
@@ -264,13 +264,13 @@ deepseek         deepseek_co
 
 ---
 
-### `brand_accounts` (0 rows; application-seeded)
+### `brands_accounts` (0 rows; application-seeded)
 
 M:N edge between brands and accounts. The per-brand `role` lives
 here (moved off `accounts.role` in v1.8; Decision 10).
 
 ```
-brand_accounts
+brands_accounts
 ├── brand_id*   TEXT  PK[1]                 ← FK → brands.brand_id    ON DELETE CASCADE
 ├── author_id*  TEXT  PK[2]                 ← FK → accounts.author_id ON DELETE CASCADE
 ├── role*       TEXT  DEFAULT 'community'   ← "official" | "community" | "researcher" | "press" | "community"
@@ -283,15 +283,15 @@ best-effort seed, but the application is authoritative).
 
 ---
 
-### `company_accounts` (0 rows; application-populated)
+### `companies_accounts` (0 rows; application-populated)
 
 M:N edge between companies and accounts. Empty by design at
 migration time (Scope Boundaries: "No new analytics"); the
 application populates it on the first `account_graph` pass that
-joins `accounts` → `brand_accounts` → `brand_companies`.
+joins `accounts` → `brands_accounts` → `brands_companies`.
 
 ```
-company_accounts
+companies_accounts
 ├── company_id*  TEXT  PK[1]                ← FK → companies.company_id ON DELETE CASCADE
 ├── author_id*   TEXT  PK[2]                ← FK → accounts.author_id   ON DELETE CASCADE
 ├── role*        TEXT  DEFAULT 'community'   ← "official" | "community" | "researcher" | "press" | "community"
@@ -300,7 +300,7 @@ company_accounts
 
 ---
 
-### `post_brands` (≥0 rows; populated by `x_monitor.reattribute`)
+### `posts_brands` (≥0 rows; populated by `x_monitor.reattribute`)
 
 Per-(post, brand) attribution with fractional weight (Decision 9,
 Option C). `weight = 1.0 / N` for a post naming N distinct brands;
@@ -309,7 +309,7 @@ sentinel row (`brand_id = '_unattributed'`, `weight = 1.0`) that
 queries filter out via `is_sentinel`.
 
 ```
-post_brands
+posts_brands
 ├── brand_id*  TEXT  PK[1]                 ← FK → brands.brand_id  ON DELETE SET NULL
 ├── post_id*   TEXT  PK[2]                 ← FK → posts.tweet_id   ON DELETE CASCADE
 └── weight*    REAL  DEFAULT 1.0
@@ -318,8 +318,8 @@ post_brands
 Indexes:
 
 ```
-idx_post_brands_brand       (brand_id)               — per-brand scans
-idx_post_brands_brand_post  (brand_id, post_id)      — polarity JOIN (Decision 18, no IN subquery)
+idx_posts_brands_brand       (brand_id)               — per-brand scans
+idx_posts_brands_brand_post  (brand_id, post_id)      — polarity JOIN (Decision 18, no IN subquery)
 ```
 
 ---
@@ -331,7 +331,7 @@ The PK `(post_id, brand_id, source)` preserves the 4-source
 decomposition (`user_mention | hashtag | body_keyword |
 search_term`). Same brand named via 3 sources produces 3 rows.
 The dedup key for polarity weight is `(post_id, brand_id)`,
-enforced on `post_brands`.
+enforced on `posts_brands`.
 
 ```
 post_mentions
@@ -351,7 +351,7 @@ idx_post_mentions_post                 (post_id)                              �
 
 ---
 
-### `post_brand_signals` (≥2,008 rows; backfilled from `posts.signal` by migration 004)
+### `posts_brands_signals` (≥2,008 rows; backfilled from `posts.signal` by migration 004)
 
 Per-(post, brand) signal classification (R6d / Decision 18).
 Replaces the v1.7 post-level `posts.signal` column. A post naming
@@ -360,7 +360,7 @@ constraint excludes the sentinel (Decision 15) — `_unattributed`
 rows have no meaningful per-brand signal.
 
 ```
-post_brand_signals
+posts_brands_signals
 ├── post_id*   TEXT  PK[1]                 ← FK → posts.tweet_id   ON DELETE CASCADE
 ├── brand_id*  TEXT  PK[2]                 ← FK → brands.brand_id  ON DELETE SET NULL
 └── signal*    TEXT                         ← release | community_question | criticism | commenter_capture | praise | other
@@ -370,8 +370,8 @@ post_brand_signals
 Indexes:
 
 ```
-idx_post_brand_signals_brand_signal  (brand_id, signal)  — per-brand polarity aggregation
-idx_post_brand_signals_post          (post_id)          — per-post signal lookup
+idx_posts_brands_signals_brand_signal  (brand_id, signal)  — per-brand polarity aggregation
+idx_posts_brands_signals_post          (post_id)          — per-post signal lookup
 ```
 
 ---
@@ -555,7 +555,7 @@ products
 
 `brand_id` uses `ON DELETE SET NULL`; `hf_org_id` also uses `ON DELETE
 SET NULL` (added in the redesigned migration 005). The crawl path is
-brand → company (via `brand_companies`) → HF orgs (via `hf_orgs`) →
+brand → company (via `brands_companies`) → HF orgs (via `hf_orgs`) →
 products, so a single company can produce rows for each of its brands.
 
 Foreign keys:
@@ -632,7 +632,7 @@ version  applied_at
                   │             │             │
                   │ N           │ N           │ N
    ┌──────────────▼──┐  ┌───────▼────────┐  ┌▼────────────────────┐
-   │ post_brands     │  │ post_mentions  │  │ post_brand_signals  │
+   │ posts_brands     │  │ post_mentions  │  │ posts_brands_signals  │
    │ PK (brand,post) │  │ PK (post,brand,│  │ PK (post,brand)     │
    │ FK → brands     │  │     source)    │  │ FK → posts          │
    │ FK → posts      │  │ FK → posts     │  │ FK → brands         │
@@ -653,7 +653,7 @@ version  applied_at
    │ N             │ N               │ N                    │ N
    ▼               ▼                 ▼                      ▼
 ┌────────┐  ┌────────────┐   ┌──────────────┐    ┌──────────────────┐
-│brand_  │  │brand_      │   │brand_        │    │ brand_search_    │
+│brands_ │  │brands_     │   │brand_        │    │ brand_search_    │
 │companies│ │accounts    │   │hashtags /    │    │ terms            │
 │PK(b,c) │  │PK(b,a)     │   │keywords      │    │ PK (brand, term) │
 │FK→brand│  │FK→brand    │   │PK (brand, *) │    │ FK → brands      │
@@ -672,7 +672,7 @@ version  applied_at
      │            │
      │ N          │ N
 ┌────▼────────────▼────┐
-│ company_accounts     │
+│ companies_accounts     │
 │ PK (company, author) │
 │ FK → companies       │
 │ FK → accounts        │
@@ -708,16 +708,16 @@ Logical (un-FK'd) edges:
   application setting the column to NULL when a query row is
   removed, not by a real FK.
 - `_unattributed` brand rows. They are seeded into `brands`
-  (`is_sentinel = 1`), they appear in `post_brands` for
+  (`is_sentinel = 1`), they appear in `posts_brands` for
   un-attributed posts (filtered at query time), but they NEVER
-  appear in `post_brand_signals` (CHECK constraint enforces this).
+  appear in `posts_brands_signals` (CHECK constraint enforces this).
   They are the only `brand_id` values that should not be rendered
   on the treemap or grid.
 - Brand source priority (R2): `user_mention` + `hashtag` are
   higher confidence than `body_keyword` + `search_term`. Multi-
   source matches take the max confidence across contributing
   sources. This is enforced by the application, not the schema.
-- `post_brand_signals.signal` enum:
+- `posts_brands_signals.signal` enum:
   `"release" | "community_question" | "criticism" | "commenter_capture" | "praise" | "other"`.
   Identical to the v1.7 `posts.signal` enum, just lifted off the
   post level and replicated per (post, brand).
@@ -730,8 +730,8 @@ Logical (un-FK'd) edges:
   dashboard reads brand colors from `brands.accent_color` instead
   of `MODEL_ACCENT_COLORS` in `treemap.py`.
 - `account_post_appearances` is no longer the multi-account fan-in
-  for brand attribution. That role moved to `post_brands` +
-  `post_mentions` + `post_brand_signals` (one row per detected
+  for brand attribution. That role moved to `posts_brands` +
+  `post_mentions` + `posts_brands_signals` (one row per detected
   brand per post). `account_post_appearances` is now the
   per-account appearance log (which accounts posted or were
   mentioned on which tweets), populated lazily by
@@ -763,17 +763,17 @@ Logical (un-FK'd) edges:
 004_company_brand_account_model.sql
    ├── CREATE companies           (10 seed rows)
    ├── CREATE brands              (12 seed rows incl. _unattributed sentinel)
-   ├── CREATE brand_companies     (10 seed rows; M:N brand ↔ company)
-   ├── CREATE brand_accounts      (M:N brand ↔ accounts; role per brand)
-   ├── CREATE company_accounts    (M:N company ↔ accounts; empty at migration time)
-   ├── CREATE post_brands         (M:N post ↔ brand with fractional weight)
+   ├── CREATE brands_companies     (10 seed rows; M:N brand ↔ company)
+   ├── CREATE brands_accounts      (M:N brand ↔ accounts; role per brand)
+   ├── CREATE companies_accounts    (M:N company ↔ accounts; empty at migration time)
+   ├── CREATE posts_brands         (M:N post ↔ brand with fractional weight)
    ├── CREATE post_mentions       (per-source mention provenance; 4 sources)
-   ├── CREATE post_brand_signals  (per-brand signal; replaces posts.signal)
+   ├── CREATE posts_brands_signals  (per-brand signal; replaces posts.signal)
    ├── CREATE brand_hashtags      (R6a detection registry)
    ├── CREATE brand_keywords      (R6b detection registry; substring or regex)
    ├── CREATE brand_search_terms  (R6c detection registry)
    ├── CREATE search_queries      (R6c storage fork; replaces soft pointer)
-   ├── INSERT post_brand_signals  (backfill from posts.model_id + posts.signal)
+   ├── INSERT posts_brands_signals  (backfill from posts.model_id + posts.signal)
    ├── UPDATE posts lang_detected (backfill from text_en/text_zh_cn rows)
    ├── DROP INDEX idx_posts_model_created
    ├── DROP INDEX idx_posts_signal_model
@@ -787,12 +787,12 @@ Logical (un-FK'd) edges:
    ├── INSERT accounts            (backfill from distinct posts.author_id + author_handle)
    ├── CREATE idx_posts_text_en_backfill     (lang-aware predicate; 004)
    ├── CREATE idx_posts_text_zh_cn_backfill  (lang-aware predicate; 004)
-   ├── CREATE idx_post_brands_brand          (single-column per-brand)
-   ├── CREATE idx_post_brands_brand_post     (polarity JOIN)
+   ├── CREATE idx_posts_brands_brand          (single-column per-brand)
+   ├── CREATE idx_posts_brands_brand_post     (polarity JOIN)
    ├── CREATE idx_post_mentions_brand_source_recent  (source-breakdown card)
    ├── CREATE idx_post_mentions_post
-   ├── CREATE idx_post_brand_signals_brand_signal
-   └── CREATE idx_post_brand_signals_post
+   ├── CREATE idx_posts_brands_signals_brand_signal
+   └── CREATE idx_posts_brands_signals_post
 ```
 
 The `posts` table grew in two stages and then SHRANK in v1.8:

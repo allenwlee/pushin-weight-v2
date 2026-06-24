@@ -334,7 +334,7 @@ def _attribute_call_items(
         mentions: list[MentionRow] = list(
             attribute_to_brands(
                 post_like,
-                brand_accounts={},
+                brands_accounts={},
                 brand_hashtags={},
                 compiled_keyword_index=index,
                 search_query=[],
@@ -392,7 +392,7 @@ def _ingest_quote_tweets(
     is classified on commentary alone). Then `_attribute_call_items` folds
     commentary + quoted_text for `attribute_to_brands` and classifies the
     signal on the commentary only. Multi-brand QTs inherit 1/N-weighted
-    `post_brands`/`post_brand_signals` via `store.insert_posts`. Idempotent:
+    `posts_brands`/`posts_brands_signals` via `store.insert_posts`. Idempotent:
     re-ingesting a QT (same tweet_id) is a no-op (INSERT OR IGNORE + ON
     CONFLICT). Returns the number of QTs newly inserted.
     """

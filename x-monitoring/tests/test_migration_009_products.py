@@ -21,7 +21,7 @@ These tests verify:
   - products.brand_id FK rejects an unknown brand; ON DELETE SET NULL clears it.
   - products.hf_org_id FK rejects an unknown hf_org; ON DELETE SET NULL clears it.
   - 009 does not disturb migration 004's 12-brand seed.
-  - 009 adds the missing `minimax` company + brand_companies edge.
+  - 009 adds the missing `minimax` company + brands_companies edge.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def test_migration_009_seeds_curated_orgs(tmp_path):
 
 
 def test_migration_009_seeds_minimax_company(tmp_path):
-    """Migration 009 also adds the missing `minimax` company + brand_companies edge."""
+    """Migration 009 also adds the missing `minimax` company + brands_companies edge."""
     from x_monitor.store import Store
 
     s = Store(tmp_path / "x.db", auto_migrate=True)
@@ -111,7 +111,7 @@ def test_migration_009_seeds_minimax_company(tmp_path):
         assert row is not None
         assert row["display_name"] == "MiniMax"
         edge = s._conn.execute(
-            "SELECT * FROM brand_companies WHERE brand_id = 'minimax' AND company_id = 'minimax'"
+            "SELECT * FROM brands_companies WHERE brand_id = 'minimax' AND company_id = 'minimax'"
         ).fetchone()
         assert edge is not None
         assert edge["ownership_pct"] == 1.0

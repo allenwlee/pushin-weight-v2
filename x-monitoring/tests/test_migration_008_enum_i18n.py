@@ -6,9 +6,9 @@ Verifies:
 - 6 new tables created (signal_keys, signal_labels, role_keys, role_labels,
   engagement_tier_keys, engagement_tier_labels).
 - Seed rows present for all keys × both locales.
-- The 4 enum columns (post_brand_signals.signal, brand_accounts.role,
-  company_accounts.role, accounts.engagement_tier) are now FK-validated.
-- The post_brand_signals CHECK (brand_id <> '_unattributed') survived the
+- The 4 enum columns (posts_brands_signals.signal, brands_accounts.role,
+  companies_accounts.role, accounts.engagement_tier) are now FK-validated.
+- The posts_brands_signals CHECK (brand_id <> '_unattributed') survived the
   table rebuild (P0 review fix from migration 004 history).
 - Idempotency on re-apply.
 """
@@ -86,26 +86,26 @@ def test_migration_008_creates_engagement_tier_keys_and_labels(tmp_path):
 # --- happy path: FK conversion -----------------------------------------
 
 
-def test_migration_008_post_brand_signals_signal_is_fk(tmp_path):
-    """post_brand_signals.signal is now FK-validated against signal_keys."""
+def test_migration_008_posts_brands_signals_signal_is_fk(tmp_path):
+    """posts_brands_signals.signal is now FK-validated against signal_keys."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         fks = s._conn.execute(
-            "SELECT * FROM pragma_foreign_key_list('post_brand_signals')"
+            "SELECT * FROM pragma_foreign_key_list('posts_brands_signals')"
         ).fetchall()
         fk_targets = {(r[2], r[3]) for r in fks}  # (table, from_col) -> table
         # The signal FK references signal_keys.
         assert any(r[2] == "signal_keys" and r[3] == "signal" for r in fks), (
-            f"signal FK missing from post_brand_signals. FKs found: {fks}"
+            f"signal FK missing from posts_brands_signals. FKs found: {fks}"
         )
     finally:
         s.close()
 
 
-def test_migration_008_post_brand_signals_check_constraint_preserved(tmp_path):
+def test_migration_008_posts_brands_signals_check_constraint_preserved(tmp_path):
     """The CHECK (brand_id <> '_unattributed') survived the table rebuild
     (P0 review fix from migration 004 history)."""
     from x_monitor.store import Store
@@ -115,41 +115,41 @@ def test_migration_008_post_brand_signals_check_constraint_preserved(tmp_path):
     try:
         # sqlite_master stores the table SQL including CHECK constraints.
         sql = s._conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='post_brand_signals'"
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='posts_brands_signals'"
         ).fetchone()[0]
         assert "brand_id <> '_unattributed'" in sql, (
-            f"CHECK constraint missing in rebuilt post_brand_signals: {sql}"
+            f"CHECK constraint missing in rebuilt posts_brands_signals: {sql}"
         )
     finally:
         s.close()
 
 
-def test_migration_008_brand_accounts_role_is_fk(tmp_path):
-    """brand_accounts.role references role_keys."""
+def test_migration_008_brands_accounts_role_is_fk(tmp_path):
+    """brands_accounts.role references role_keys."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         fks = s._conn.execute(
-            "SELECT * FROM pragma_foreign_key_list('brand_accounts')"
+            "SELECT * FROM pragma_foreign_key_list('brands_accounts')"
         ).fetchall()
         assert any(r[2] == "role_keys" and r[3] == "role" for r in fks), (
-            f"role FK missing from brand_accounts. FKs found: {fks}"
+            f"role FK missing from brands_accounts. FKs found: {fks}"
         )
     finally:
         s.close()
 
 
-def test_migration_008_company_accounts_role_is_fk(tmp_path):
-    """company_accounts.role references role_keys."""
+def test_migration_008_companies_accounts_role_is_fk(tmp_path):
+    """companies_accounts.role references role_keys."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         fks = s._conn.execute(
-            "SELECT * FROM pragma_foreign_key_list('company_accounts')"
+            "SELECT * FROM pragma_foreign_key_list('companies_accounts')"
         ).fetchall()
         assert any(r[2] == "role_keys" and r[3] == "role" for r in fks)
     finally:
@@ -215,15 +215,15 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-009 (quote-tweets 005/006 already on main; i18n 007/008;
-        # HF products 009 on this branch)
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9], f"unexpected versions: {applied}"
+        # 001-010 (quote-tweets 005/006 already on main; i18n 007/008;
+        # HF products 009; M:N rename to plural-plural 010 on this branch)
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], f"unexpected versions: {applied}"
     finally:
         s.close()
 
 
-def test_migration_008_round_trip_post_brand_signals(tmp_path):
-    """Inserting a post_brand_signals row with a valid signal succeeds;
+def test_migration_008_round_trip_posts_brands_signals(tmp_path):
+    """Inserting a posts_brands_signals row with a valid signal succeeds;
     the FK is honored at write time."""
     from x_monitor.store import Store
 
@@ -238,14 +238,14 @@ def test_migration_008_round_trip_post_brand_signals(tmp_path):
             "VALUES (?, ?, ?, ?)",
             ("t_fk_007", "u_fk_007", "2026-06-23T00:00:00+00:00", "test"),
         )
-        # Insert a valid post_brand_signals row.
+        # Insert a valid posts_brands_signals row.
         s._conn.execute(
-            "INSERT INTO post_brand_signals (post_id, brand_id, signal) "
+            "INSERT INTO posts_brands_signals (post_id, brand_id, signal) "
             "VALUES (?, ?, ?)",
             ("t_fk_007", "minimax", "release"),
         )
         row = s._conn.execute(
-            "SELECT signal FROM post_brand_signals WHERE post_id = ?", ("t_fk_007",)
+            "SELECT signal FROM posts_brands_signals WHERE post_id = ?", ("t_fk_007",)
         ).fetchone()
         assert row["signal"] == "release"
     finally:

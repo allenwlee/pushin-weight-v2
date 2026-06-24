@@ -528,7 +528,7 @@ class TestSquarifyLayoutPadding:
 
 
 def _seed_brand_posts(store, brand, posts):
-    """Direct-insert (posts, post_brands, post_brand_signals) for polarity-SQL
+    """Direct-insert (posts, posts_brands, posts_brands_signals) for polarity-SQL
     tests. `posts` = list of (tweet_id, signal, retweet_count, epoch). The
     `brand` must already exist (migration 004 seeds KNOWN_MODELS like 'glm')."""
     c = store._conn
@@ -539,11 +539,11 @@ def _seed_brand_posts(store, brand, posts):
             (tid, epoch, rt),
         )
         c.execute(
-            "INSERT INTO post_brands(brand_id, post_id, weight) VALUES (?, ?, 1.0)",
+            "INSERT INTO posts_brands(brand_id, post_id, weight) VALUES (?, ?, 1.0)",
             (brand, tid),
         )
         c.execute(
-            "INSERT INTO post_brand_signals(post_id, brand_id, signal) VALUES (?, ?, ?)",
+            "INSERT INTO posts_brands_signals(post_id, brand_id, signal) VALUES (?, ?, ?)",
             (tid, brand, signal),
         )
 

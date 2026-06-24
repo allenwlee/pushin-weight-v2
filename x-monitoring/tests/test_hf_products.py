@@ -2,7 +2,7 @@
 """Tests for x_monitor.hf_products: resolver + collector + Store product methods.
 
 Company-centric redesign (migration 005): HF orgs belong to **companies**, not
-brands. The brand→company hop (via `brand_companies`) is handled by
+brands. The brand→company hop (via `brands_companies`) is handled by
 `collect_all`; the resolver + collector operate one level higher, on companies.
 """
 
@@ -426,7 +426,7 @@ def test_collect_all_scopes_to_companies(monkeypatch, tmp_path):
         hf_products.collect_all(
             s, companies=["deepseek_co"], client=_mock_client(_collect_all_handler())
         )
-        # deepseek_co → deepseek-ai org → deepseek brand (via brand_companies)
+        # deepseek_co → deepseek-ai org → deepseek brand (via brands_companies)
         brands = {p["brand_id"] for p in s.read_products()}
         assert brands == {"deepseek"}
     finally:
@@ -501,12 +501,12 @@ def test_collect_all_org_isolation(monkeypatch, tmp_path):
 # --- company-level helpers ---------------------------------------------
 
 
-def test_read_brand_companies_for_company(tmp_path):
-    """The brand→company hop returns the brand_ids linked via brand_companies."""
+def test_read_brands_companies_for_company(tmp_path):
+    """The brand→company hop returns the brand_ids linked via brands_companies."""
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
         # alibaba owns the qwen brand (per migration 004 seed).
-        brands = s.read_brand_companies_for_company("alibaba")
+        brands = s.read_brands_companies_for_company("alibaba")
         assert brands == ["qwen"]
     finally:
         s.close()

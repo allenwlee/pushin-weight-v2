@@ -1542,7 +1542,7 @@ class TestPolarityWindowToggle:
 
 def test_polarity_uses_join_not_subquery():
     """R17 / Decision 18: compute_polarity_signal_breakdown's EXPLAIN
-    QUERY PLAN must use the post_brand_signals + post_brands + posts
+    QUERY PLAN must use the posts_brands_signals + posts_brands + posts
     indexes (no SCAN, no SORT).
     """
     from x_monitor.treemap import POLARITY_SQL, compute_polarity_signal_breakdown
@@ -1555,7 +1555,7 @@ def test_polarity_uses_join_not_subquery():
             now_iso = now_dt.isoformat()
             now_epoch = int(now_dt.timestamp())
             window_start = now_epoch - 7 * 86400  # epoch lower bound (Unit 6)
-            # Insert a post + post_brands + post_brand_signals so the
+            # Insert a post + posts_brands + posts_brands_signals so the
             # indexes have at least one row to seek against.
             store._conn.execute(
                 """INSERT INTO posts (tweet_id, author_handle, text, lang,
@@ -1565,8 +1565,8 @@ def test_polarity_uses_join_not_subquery():
                 ("u4_p1", "u1", "hello", "en", now_iso, now_iso, now_epoch,
                  0, 0, 0, 0, "{}", "{}"),
             )
-            store.insert_post_brands("u4_p1", "minimax", 1.0)
-            store.insert_post_brand_signals("u4_p1", "minimax", "praise")
+            store.insert_posts_brands("u4_p1", "minimax", 1.0)
+            store.insert_posts_brands_signals("u4_p1", "minimax", "praise")
 
             bd = compute_polarity_signal_breakdown(
                 store._conn, "minimax", window_start,
@@ -1616,8 +1616,8 @@ def test_unattributed_excluded_from_polarity():
                 ("u4_p_u", "u1", "noise", "en", now_iso, now_iso,
                  0, 0, 0, 0, "{}", "{}"),
             )
-            store.insert_post_brands("u4_p_u", "_unattributed", 1.0)
-            # _unattributed has no post_brand_signals row (CHECK constraint)
+            store.insert_posts_brands("u4_p_u", "_unattributed", 1.0)
+            # _unattributed has no posts_brands_signals row (CHECK constraint)
 
             bd = compute_polarity_signal_breakdown(
                 store._conn, "_unattributed", window_start,
@@ -1637,8 +1637,8 @@ def test_unattributed_excluded_from_polarity():
             store.close()
 
 
-def test_grid_card_uses_post_brand_signals_multi_brand_weighted():
-    """R18: serialize_grid_card reads post_brand_signals (not
+def test_grid_card_uses_posts_brands_signals_multi_brand_weighted():
+    """R18: serialize_grid_card reads posts_brands_signals (not
     posts.source_query_id). A 2-brand post produces weighted counts
     in BOTH brands' cards.
     """
@@ -1661,10 +1661,10 @@ def test_grid_card_uses_post_brand_signals_multi_brand_weighted():
                 ("u4_2b", "u1", "hello qwen deepseek", "en",
                  now_iso, now_iso, 5, 0, 0, 0, "{}", "{}"),
             )
-            store.insert_post_brands("u4_2b", "qwen", 0.5)
-            store.insert_post_brands("u4_2b", "deepseek", 0.5)
-            store.insert_post_brand_signals("u4_2b", "qwen", "release")
-            store.insert_post_brand_signals("u4_2b", "deepseek", "praise")
+            store.insert_posts_brands("u4_2b", "qwen", 0.5)
+            store.insert_posts_brands("u4_2b", "deepseek", 0.5)
+            store.insert_posts_brands_signals("u4_2b", "qwen", "release")
+            store.insert_posts_brands_signals("u4_2b", "deepseek", "praise")
 
             # Read breakdown for qwen: should see "release" with weight 0.5
             qwen_total, qwen_days = _read_signal_breakdown_for_brand(
@@ -1698,8 +1698,8 @@ def test_grid_card_uses_post_brand_signals_multi_brand_weighted():
             store.close()
 
 
-def test_treemap_polarity_with_db_driven_post_brand_signals():
-    """R17: compute_polarity_from_db reads post_brand_signals + post_brands
+def test_treemap_polarity_with_db_driven_posts_brands_signals():
+    """R17: compute_polarity_from_db reads posts_brands_signals + posts_brands
     and produces a non-zero score when current window has weighted signals.
     """
     from x_monitor.treemap import compute_polarity_from_db
@@ -1722,8 +1722,8 @@ def test_treemap_polarity_with_db_driven_post_brand_signals():
                  current_ts, now.isoformat(), current_epoch,
                  0, 0, 0, 0, "{}", "{}"),
             )
-            store.insert_post_brands("u4_p_praise", "minimax", 1.0)
-            store.insert_post_brand_signals("u4_p_praise", "minimax", "praise")
+            store.insert_posts_brands("u4_p_praise", "minimax", 1.0)
+            store.insert_posts_brands_signals("u4_p_praise", "minimax", "praise")
 
             score = compute_polarity_from_db(
                 store._conn, "minimax", window_days=7, now=now,

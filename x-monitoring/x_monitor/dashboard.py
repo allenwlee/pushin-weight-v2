@@ -345,9 +345,9 @@ def _read_signal_breakdown_for_brand(
     brand_id: str,
     window_start_iso: str,
 ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Read post_brand_signals for one brand grouped by (day, signal).
+    """Read posts_brands_signals for one brand grouped by (day, signal).
 
-    v1.8 (Unit 4 / R18). JOINs post_brand_signals + post_brands + posts
+    v1.8 (Unit 4 / R18). JOINs posts_brands_signals + posts_brands + posts
     per Decision 18 (no IN subquery). The _unattributed sentinel is
     excluded by the WHERE clause (Decision 15). Weights are honored
     (1/N for multi-brand posts per Decision 9).
@@ -362,8 +362,8 @@ def _read_signal_breakdown_for_brand(
         SELECT substr(p.created_at, 1, 10) AS day,
                pbs.signal AS signal,
                SUM(pb.weight) AS weighted_count
-        FROM post_brand_signals pbs
-        JOIN post_brands pb
+        FROM posts_brands_signals pbs
+        JOIN posts_brands pb
           ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id
         JOIN posts p ON p.tweet_id = pbs.post_id
         WHERE pbs.brand_id = ?
@@ -449,7 +449,7 @@ def serialize_grid_card(
     # Per-day per-signal counts. day_signal_counts[iso_date][signal] = int.
     #
     # v1.8 (Unit 4 / R18): when the caller passes `signal_breakdown` and
-    # `day_signal_counts` (read from post_brand_signals via the JOIN
+    # `day_signal_counts` (read from posts_brands_signals via the JOIN
     # shape from Decision 18), use them directly. Otherwise fall back to
     # the legacy post-level inference from posts[i]["source_query_id"]
     # (kept for backwards compat with tests that build synthetic post
@@ -676,7 +676,7 @@ class DashboardApp:
             brand_names = _load_brand_display_names(store, locale)
             signal_labels = _load_signal_labels(store, locale)
             # v1.8 (Unit 4 / R18): compute the signal breakdown once per
-            # model from post_brand_signals via the JOIN shape from
+            # model from posts_brands_signals via the JOIN shape from
             # Decision 18. The cutoff is anchored to the latest run's
             # finished_at (matching serialize_grid_card's "now" seam) so
             # the 14d window is stable across cycles.
@@ -776,7 +776,7 @@ class DashboardApp:
             for m in self.config.enabled_models:
                 try:
                     # v1.8 (Unit 4 / R17): polarity now reads from
-                    # post_brand_signals + post_brands via the JOIN shape
+                    # posts_brands_signals + posts_brands via the JOIN shape
                     # from Decision 18. _unattributed is excluded at the
                     # SQL layer (Decision 15). The score is a float in
                     # [-1, +1] or None for the "went dark" sentinel.
@@ -784,23 +784,23 @@ class DashboardApp:
                         store._conn, m, polarity_window_days, now=now,
                     )
                     # v1.8 — area_weight is still cumulative (the v1.7
-                    # behavior); we read post_brands count via a focused
+                    # behavior); we read posts_brands count via a focused
                     # SQL query instead of fetching every post via
                     # get_all_posts.
                     area_row = store._conn.execute(
-                        "SELECT COUNT(*) AS n FROM post_brands WHERE brand_id = ?",
+                        "SELECT COUNT(*) AS n FROM posts_brands WHERE brand_id = ?",
                         (m,),
                     ).fetchone()
                     area_weight = int(area_row["n"]) if area_row else 0
                     # v1.8 — posts_in_window: count of distinct posts in
-                    # [now-N, now) for the brand. JOIN through post_brands
+                    # [now-N, now) for the brand. JOIN through posts_brands
                     # to honor multi-brand weighting (1/N); we count
                     # distinct post_ids so a 2-brand post is counted once
                     # per brand.
                     n_row = store._conn.execute(
                         """
                         SELECT COUNT(DISTINCT pb.post_id) AS n
-                        FROM post_brands pb
+                        FROM posts_brands pb
                         JOIN posts p ON p.tweet_id = pb.post_id
                         WHERE pb.brand_id = ?
                           AND pb.brand_id != '_unattributed'
