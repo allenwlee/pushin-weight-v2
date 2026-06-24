@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Override / re-seed the Chinese labels for the 6 signals, 5 roles, 3 tiers.
+"""Override / re-seed the Chinese labels for the 6 signals and 3 roles.
 
-Unit 6 (i18n plan): migration 007 seeded operator-curated Chinese labels
-for the three enum families (signal / role / engagement_tier). This
-script is the operator's escape hatch — it UPSERTs the label rows so
-the operator can re-curate any translation without re-running the
-migration. It MUST be run BEFORE the four backfill scripts in
-U6 because the dashboard's chart labels and role bars read from
-these label tables directly.
+Unit 6 (i18n plan): migration 008 seeded operator-curated Chinese labels
+for the two remaining enum families (signal / role). This script is
+the operator's escape hatch — it UPSERTs the label rows so the operator
+can re-curate any translation without re-running the migration. It
+MUST be run BEFORE the four backfill scripts in U6 because the
+dashboard's chart labels and role bars read from these label tables
+directly.
 
-The default labels below are the same ones seeded by migration 007;
-override any value to re-curate it. The script accepts a single
-optional CLI arg: the path to a YAML file with the same shape. If
-unspecified, the defaults are written.
+(Note: the `engagement_tier` family was dropped in migration 012, and
+the `role` family was trimmed from 5 to 3 values {official, staff,
+community} in migration 016. This script reflects the post-trim
+schema.)
+
+The default labels below are the same ones seeded by migration 008
+(for signal) and migration 016 (for role); override any value to
+re-curate it. The script accepts a single optional CLI arg: the path
+to a YAML file with the same shape. If unspecified, the defaults are
+written.
 
 Usage:
     python3 scripts/2026-06-23-005-seed-enum-zh-cn-labels.py /path/to/x.db
@@ -24,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 # Default operator-curated zh_cn labels. Mirror these by changing the
-# values here; the migration 007 default seeds are below. Each
+# values here; the migration 008/016 default seeds are below. Each
 # (key, label) pair is what the dashboard renders when the locale is
 # zh_cn.
 DEFAULT_ZH_CN_LABELS: dict[str, dict[str, str]] = {
@@ -38,15 +44,8 @@ DEFAULT_ZH_CN_LABELS: dict[str, dict[str, str]] = {
     },
     "role": {
         "official": "官方",
+        "staff": "员工",
         "community": "社区",
-        "researcher": "研究者",
-        "press": "媒体",
-        "vendor": "厂商",
-    },
-    "engagement_tier": {
-        "low": "低",
-        "medium": "中",
-        "high": "高",
     },
 }
 

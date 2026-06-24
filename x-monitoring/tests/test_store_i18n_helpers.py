@@ -46,7 +46,7 @@ def test_known_role_keys_returns_seeded_set(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         keys = s._known_role_keys()
-        assert keys == {"official", "community", "researcher", "press", "vendor"}
+        assert keys == {"official", "staff", "community"}
     finally:
         s.close()
 

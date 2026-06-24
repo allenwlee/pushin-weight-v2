@@ -943,8 +943,10 @@ class Store:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
         # role is FK-validated against roles (renamed from role_keys in
-        # 015). Legacy callers pass role="unknown" which is NOT in roles
-        # (only official / community / researcher / press / vendor are).
+        # 015; trimmed to {official, staff, community} in 016). Legacy
+        # callers pass role="unknown" which is NOT in roles. In that
+        # case, skip the brands_accounts edge write — the per-brand
+        # role is unknowable, so the edge has no information.
         # In that case, skip the brands_accounts edge write — the
         # per-brand role is unknowable, so the edge has no information.
         # The accounts row is still upserted (no role column there

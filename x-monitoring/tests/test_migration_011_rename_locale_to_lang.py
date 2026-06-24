@@ -92,7 +92,7 @@ def test_migration_011_pk_preserved_signal_labels(tmp_path):
 
 def test_migration_011_pk_preserved_role_labels(tmp_path):
     """The composite PRIMARY KEY (key, lang) on role_labels is intact;
-    10 seed rows (5 keys x 2 locales) are present."""
+    6 seed rows (3 keys x 2 locales) are present (post-U6 trim in 016)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -106,9 +106,10 @@ def test_migration_011_pk_preserved_role_labels(tmp_path):
         )
 
         rows = s._conn.execute("SELECT key, lang, label FROM role_labels").fetchall()
-        assert len(rows) == 10
+        assert len(rows) == 6
         labels = {(r[0], r[1]): r[2] for r in rows}
         assert labels[("official", "zh_cn")] == "官方"
+        assert labels[("staff", "zh_cn")] == "员工"
     finally:
         s.close()
 
@@ -156,14 +157,15 @@ def test_migration_011_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-015: 005/006 = quote-tweets (already on this branch's base);
+        # 001-016: 005/006 = quote-tweets (already on this branch's base);
         # 007 = i18n locale columns; 008 = enum i18n lookup tables;
         # 009 = products; 010 = M:N rename to plural-plural;
         # 011 = rename locale to lang; 012 = drop engagement_tier tables;
         # 013 = rename post_mentions to posts_brands_mentions;
         # 014 = rename signal_keys to signals;
-        # 015 = rename role_keys to roles.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (
+        # 015 = rename role_keys to roles;
+        # 016 = trim role values to {official, staff, community}.
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], (
             f"unexpected versions: {applied}"
         )
 

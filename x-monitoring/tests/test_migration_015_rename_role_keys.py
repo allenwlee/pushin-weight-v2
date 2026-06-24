@@ -62,14 +62,16 @@ def test_migration_015_role_labels_unchanged(tmp_path):
 
 
 def test_migration_015_roles_seeded_with_five_keys(tmp_path):
-    """The 5 canonical roles are seeded: official, community, researcher, press, vendor."""
+    """The 3 canonical roles are seeded (post-U6 trim): official, staff,
+    community. Migration 008 originally seeded 5; migration 016 trimmed
+    the unused researcher/press/vendor values."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         keys = {r[0] for r in s._conn.execute("SELECT key FROM roles").fetchall()}
-        assert keys == {"official", "community", "researcher", "press", "vendor"}
+        assert keys == {"official", "staff", "community"}
     finally:
         s.close()
 
@@ -217,7 +219,7 @@ def test_migration_015_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 16)), (
+        assert applied == list(range(1, 17)), (
             f"unexpected versions: {applied}"
         )
         # Both singular enum tables are in effect.
@@ -299,14 +301,14 @@ def test_migration_015_get_account_returns_role_id(tmp_path):
 
 
 def test_migration_015_known_role_keys_returns_seeded_set(tmp_path):
-    """_known_role_keys still returns the 5-key seeded set (now from
-    the renamed roles table)."""
+    """_known_role_keys returns the 3-key trimmed set (now from the
+    renamed roles table; post-U6 trim in 016)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         keys = s._known_role_keys()
-        assert keys == {"official", "community", "researcher", "press", "vendor"}
+        assert keys == {"official", "staff", "community"}
     finally:
         s.close()

@@ -523,11 +523,14 @@ def test_read_brands_accounts_returns_dict():
         store = Store(Path(d) / "x.db")
         try:
             # Use the upsert_account helper to seed brands_accounts.
-            # v1.8 (Unit 3): role is FK-validated against role_keys, so
-            # use a seeded role ('staff' is no longer valid post-007).
+            # v1.8 (Unit 3): role is FK-validated against roles
+            # (renamed from role_keys in 015). The seeded set after
+            # U6 is {official, staff, community}; researcher/press/vendor
+            # are removed and would hit the dead-letter. Use a seeded
+            # role so the brands_accounts edge actually writes.
             store.upsert_account("qwen", "alice", role="community")
             store.upsert_account("qwen", "bob", role="official")
-            store.upsert_account("deepseek", "carol", role="researcher")
+            store.upsert_account("deepseek", "carol", role="staff")
             d = store.read_brands_accounts()
             assert d["handle:alice"] == "qwen"
             assert d["handle:bob"] == "qwen"

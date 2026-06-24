@@ -148,8 +148,8 @@ def test_backfill_script_emits_correct_translate_registry_invocation(
 
 def test_seed_zh_cn_labels_upserts_defaults(tmp_path):
     """The seed script UPSERTs the default operator-curated labels
-    for the 6 signals, 5 roles, 3 tiers (matching the migration 007
-    seed data)."""
+    for the 6 signals and 3 roles (post-migration-016 trim; the
+    engagement_tier family was dropped in 012)."""
     from x_monitor.store import Store
     db_path = tmp_path / "x.db"
     s = Store(db_path, auto_migrate=True)
@@ -168,7 +168,7 @@ def test_seed_zh_cn_labels_upserts_defaults(tmp_path):
     try:
         for family, expected in {
             "signal": ["发布", "社区提问", "批评", "评论互动", "称赞", "其他"],
-            "role": ["官方", "社区", "研究者", "媒体", "厂商"],
+            "role": ["官方", "员工", "社区"],
         }.items():
             table = f"{family}_labels"
             rows = s._conn.execute(
@@ -255,10 +255,12 @@ def test_seed_zh_cn_labels_idempotent_on_rerun(tmp_path):
             cwd=tmp_path,
         )
         assert result.returncode == 0, result.stderr
-    # Verify row counts: 6 signals + 5 roles = 11 zh_cn rows.
+    # Verify row counts: 6 signals + 3 roles = 9 zh_cn rows
+    # (post-migration-016 trim; the engagement_tier family was dropped
+    # in 012).
     s = Store(db_path)
     try:
-        for family, expected_n in [("signal", 6), ("role", 5)]:
+        for family, expected_n in [("signal", 6), ("role", 3)]:
             n = s._conn.execute(
                 f"SELECT COUNT(*) AS n FROM {family}_labels WHERE lang = 'zh_cn'"
             ).fetchone()["n"]

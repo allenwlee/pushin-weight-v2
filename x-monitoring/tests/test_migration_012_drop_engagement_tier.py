@@ -189,15 +189,16 @@ def test_migration_012_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-015: 005/006 = quote-tweets; 007 = i18n locale columns;
+        # 001-016: 005/006 = quote-tweets; 007 = i18n locale columns;
         # 008 = enum i18n lookup tables; 009 = products;
         # 010 = M:N rename to plural-plural;
         # 011 = rename locale to lang;
         # 012 = drop engagement_tier tables;
         # 013 = rename post_mentions to posts_brands_mentions;
         # 014 = rename signal_keys to signals;
-        # 015 = rename role_keys to roles.
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (
+        # 015 = rename role_keys to roles;
+        # 016 = trim role values to {official, staff, community}.
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], (
             f"unexpected versions: {applied}"
         )
 

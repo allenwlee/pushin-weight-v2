@@ -147,7 +147,7 @@ def test_migration_013_full_stack_apply(tmp_path):
         # 013 = rename post_mentions to posts_brands_mentions;
         # 014 = rename signal_keys to signals;
         # 015 = rename role_keys to roles.
-        assert applied == list(range(1, 16)), (
+        assert applied == list(range(1, 17)), (
             f"unexpected versions: {applied}"
         )
 

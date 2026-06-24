@@ -45,21 +45,23 @@ def test_migration_008_creates_signal_keys_and_labels(tmp_path):
 
 
 def test_migration_008_creates_role_keys_and_labels(tmp_path):
-    """roles (renamed from role_keys in 015) has 5 rows; role_labels has 10 (5 × 2 locales)."""
+    """roles (renamed from role_keys in 015) has 3 rows (official, staff,
+    community — trimmed from 5 in migration 016); role_labels has 6
+    (3 × 2 locales)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         keys = {r[0] for r in s._conn.execute("SELECT key FROM roles").fetchall()}
-        assert keys == {"official", "community", "researcher", "press", "vendor"}
+        assert keys == {"official", "staff", "community"}
 
         labels = {(r[0], r[1]): r[2] for r in s._conn.execute(
             "SELECT key, lang, label FROM role_labels"
         ).fetchall()}
-        assert len(labels) == 10
+        assert len(labels) == 6
         assert labels[("official", "zh_cn")] == "官方"
-        assert labels[("researcher", "zh_cn")] == "研究者"
+        assert labels[("staff", "zh_cn")] == "员工"
     finally:
         s.close()
 
@@ -185,7 +187,7 @@ def test_migration_008_full_stack_apply(tmp_path):
         # 013 = rename post_mentions to posts_brands_mentions;
         # 014 = rename signal_keys to signals;
         # 015 = rename role_keys to roles).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], f"unexpected versions: {applied}"
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], f"unexpected versions: {applied}"
     finally:
         s.close()
 
