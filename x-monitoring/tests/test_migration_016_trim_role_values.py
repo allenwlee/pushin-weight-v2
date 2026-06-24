@@ -178,7 +178,7 @@ def test_migration_016_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 17)), (
+        assert applied == list(range(1, 18)), (
             f"unexpected versions: {applied}"
         )
         # Trimmed role taxonomy.

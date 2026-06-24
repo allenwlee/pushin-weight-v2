@@ -1,0 +1,36 @@
+-- {{AGENT_ATTRIBUTION}}
+-- x-monitor migration 017: brand_search_terms hybrid by design.
+--
+-- This migration is a no-op DDL-wise — the `brand_search_terms` table
+-- was created in migration 004 and its schema is unchanged. What this
+-- slot documents is the *contract* between the yaml files
+-- (data/queries/<brand>.yaml) and the DB table:
+--
+--   yaml role (single): build the TwitterAPI.io query string.
+--                       Read by x_monitor.query_plan.plan_calls() at
+--                       cycle time.
+--
+--   DB role (single):   provide the term→brand map for the post-fetch
+--                       attribution step. Read by
+--                       x_monitor.reattribute.reattribute_all_posts()
+--                       and the live fetch path in x_monitor.run.run()
+--                       via _load_brand_search_terms_from_db(store).
+--
+--   The yaml is NOT read at attribution time. The DB is NOT used to
+--   build the query string. No data is duplicated.
+--
+-- A startup-time drift check (added in U7 code) logs a warning if the
+-- yaml terms and the DB terms disagree on coverage — informational,
+-- not a hard fail.
+--
+-- Plan: docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md
+-- Unit 7 of 9.
+--
+-- _migrations ledger is updated by Store._apply_migration AFTER this
+-- script's COMMIT. Do NOT add an INSERT INTO _migrations here.
+
+BEGIN;
+-- Intentionally empty. The hybrid-by-design contract is documented in
+-- the comments above and enforced by code, not by DDL. The version
+-- slot is reserved so the migration ledger records the U7 cutover.
+COMMIT;

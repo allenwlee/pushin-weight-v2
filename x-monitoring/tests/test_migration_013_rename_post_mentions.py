@@ -146,8 +146,10 @@ def test_migration_013_full_stack_apply(tmp_path):
         # 012 = drop engagement_tier tables;
         # 013 = rename post_mentions to posts_brands_mentions;
         # 014 = rename signal_keys to signals;
-        # 015 = rename role_keys to roles.
-        assert applied == list(range(1, 17)), (
+        # 015 = rename role_keys to roles;
+        # 016 = trim role values to {official, staff, community};
+        # 017 = brand_search_terms hybrid by design (no-op DDL).
+        assert applied == list(range(1, 18)), (
             f"unexpected versions: {applied}"
         )
 
