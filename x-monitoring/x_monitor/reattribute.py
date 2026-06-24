@@ -4,12 +4,12 @@
 Walks every row in `posts` and re-runs the v1.8 multi-brand attribution
 pipeline (`attribute_to_brands` + `compute_post_brands` +
 `classify_signal`) on each. Writes the results to `posts_brands`,
-`post_mentions`, and `posts_brands_signals` via the v1.8 Store methods,
+`posts_brands_mentions`, and `posts_brands_signals` via the v1.8 Store methods,
 which are idempotent via `ON CONFLICT DO UPDATE`.
 
 This is the backfill path that runs after migration 004 has dropped
 the `posts.brand_id` column. The migration leaves `posts_brands` /
-`post_mentions` / `posts_brands_signals` empty (or partially filled for
+`posts_brands_mentions` / `posts_brands_signals` empty (or partially filled for
 posts that pre-date the v1.8 schema); `reattribute_all_posts` walks
 all 2,008 historical posts and fills them in.
 
@@ -188,14 +188,14 @@ def reattribute_all_posts(
         Counts dict with keys:
           - posts_scanned
           - posts_brands_written
-          - post_mentions_written
+          - posts_brands_mentions_written
           - posts_brands_signals_written
           - errors
     """
     counts: dict[str, int] = {
         "posts_scanned": 0,
         "posts_brands_written": 0,
-        "post_mentions_written": 0,
+        "posts_brands_mentions_written": 0,
         "posts_brands_signals_written": 0,
         "errors": 0,
     }
@@ -284,7 +284,7 @@ def reattribute_all_posts(
 
                 if dry_run:
                     counts["posts_brands_written"] += n_posts_brands
-                    counts["post_mentions_written"] += n_mentions
+                    counts["posts_brands_mentions_written"] += n_mentions
                     counts["posts_brands_signals_written"] += n_signals
                     continue
 
@@ -311,7 +311,7 @@ def reattribute_all_posts(
                                 weight=weight,
                             )
                         for m in mentions:
-                            store.insert_post_mentions(
+                            store.insert_posts_brands_mentions(
                                 post_id=post_id,
                                 brand_id=m.brand_id,
                                 source=m.source,
@@ -327,7 +327,7 @@ def reattribute_all_posts(
                                 signal=signal,
                             )
                     counts["posts_brands_written"] += n_posts_brands
-                    counts["post_mentions_written"] += n_mentions
+                    counts["posts_brands_mentions_written"] += n_mentions
                     counts["posts_brands_signals_written"] += n_signals
                 except Exception as e:
                     logger.warning(

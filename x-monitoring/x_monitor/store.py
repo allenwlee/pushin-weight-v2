@@ -214,7 +214,7 @@ class Store:
         """Idempotent insert. Returns number of NEWLY inserted rows.
 
         v1.8 (R16): writes to 4 tables in ONE transaction (posts,
-        posts_brands, post_mentions, posts_brands_signals). Re-inserting
+        posts_brands, posts_brands_mentions, posts_brands_signals). Re-inserting
         the same tweet_id is a no-op (INSERT OR IGNORE on posts).
 
         Per-post dict fields (R2, R3, R6, R8, R15, R16):
@@ -233,7 +233,7 @@ class Store:
         """
         if not posts:
             return 0
-        # Source of truth for the posts_brands_signals / post_mentions FK
+        # Source of truth for the posts_brands_signals / posts_brands_mentions FK
         # guards: the brand_ids actually present in the `brands` table
         # (cached). This is wider than the per-post `valid_brands` list
         # (which is brand_ids ∩ KNOWN_MODELS) so cross-mention signals
@@ -414,9 +414,10 @@ class Store:
                             )
                         if not m_source or not m_token:
                             continue
-                        # post_mentions.brand_id may be NULL (un-attributed
-                        # user mentions). Only guard non-null unknowns
-                        # against the same FK (migration 004:117).
+                        # posts_brands_mentions.brand_id may be NULL
+                        # (un-attributed user mentions). Only guard
+                        # non-null unknowns against the same FK
+                        # (migration 004:117).
                         if m_brand is not None and m_brand not in known_ids:
                             _log.warning(
                                 "insert_posts: dropping mention for "
@@ -427,7 +428,7 @@ class Store:
                             continue
                         conn.execute(
                             """
-                            INSERT INTO post_mentions(
+                            INSERT INTO posts_brands_mentions(
                                 post_id, brand_id, source, raw_token, mentioned_at
                             ) VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
@@ -1089,7 +1090,7 @@ class Store:
             (brand_id, post_id, float(weight)),
         )
 
-    def insert_post_mentions(
+    def insert_posts_brands_mentions(
         self,
         post_id: str,
         brand_id: str | None,
@@ -1097,7 +1098,7 @@ class Store:
         raw_token: str,
         mentioned_at: str,
     ) -> None:
-        """Upsert one row into post_mentions (R10).
+        """Upsert one row into posts_brands_mentions (R10).
 
         ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
         raw_token = excluded.raw_token.
@@ -1111,7 +1112,7 @@ class Store:
         """
         self._conn.execute(
             """
-            INSERT INTO post_mentions(
+            INSERT INTO posts_brands_mentions(
                 post_id, brand_id, source, raw_token, mentioned_at
             ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
@@ -1200,7 +1201,7 @@ class Store:
     def _known_brand_ids(self) -> set[str]:
         """Cached set of brand_ids present in the `brands` table.
 
-        The source of truth for the posts_brands_signals / post_mentions
+        The source of truth for the posts_brands_signals / posts_brands_mentions
         FK guards. Wider than KNOWN_MODELS (which is a 7-entry hardcoded
         frozenset) because it reflects whatever migration 004 seeded
         (12 brands) plus any operator-added rows. Includes the

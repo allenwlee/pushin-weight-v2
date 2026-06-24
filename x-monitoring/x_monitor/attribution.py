@@ -4,7 +4,7 @@
 Companion to `x_monitor.intent_classifier` (v1.7 single-brand). v1.8
 replaces first-match-wins with all-matches-wins: a single tweet may
 attribute to multiple brands, and every detected brand gets its own
-row in `posts_brands`, `post_mentions`, and `posts_brands_signals`.
+row in `posts_brands`, `posts_brands_mentions`, and `posts_brands_signals`.
 
 Four extraction sources (Decision 6 in the schema plan):
   - `user_mention`   - `entities.user_mentions[].id` resolves via
@@ -161,7 +161,7 @@ def validate_raw_token(source: Source, raw_token: str) -> None:
 
 @dataclass(frozen=True)
 class MentionRow:
-    """A single (post, brand, source) triple to be written to post_mentions.
+    """A single (post, brand, source) triple to be written to posts_brands_mentions.
 
     Fields:
         post_id:       the tweet_id (string)
@@ -171,7 +171,7 @@ class MentionRow:
         source:        one of user_mention/hashtag/body_keyword/search_term
         raw_token:     per-source format (see validate_raw_token)
         mentioned_at:  ISO-8601 UTC timestamp; denormalized from
-                       posts.created_at so post_mentions is queryable
+                       posts.created_at so posts_brands_mentions is queryable
                        without a JOIN to posts.
     """
 
@@ -356,7 +356,7 @@ def extract_hashtag_mentions(
         brand_id = brand_hashtags.get(tag_lower)
         if brand_id is None:
             # Unknown hashtag: silently dropped (R4: noise is not
-            # preserved in post_mentions for the hashtag source).
+            # preserved in posts_brands_mentions for the hashtag source).
             continue
         raw_token = f"#{tag_lower}"
         out.append(MentionRow(

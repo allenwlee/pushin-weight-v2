@@ -179,10 +179,11 @@ def test_migration_008_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        # 001-012 (quote-tweets 005/006 already on main; i18n 007/008;
+        # 001-013 (quote-tweets 005/006 already on main; i18n 007/008;
         # HF products 009; M:N rename to plural-plural 010 on this branch;
-        # 011 = rename locale to lang; 012 = drop engagement_tier tables).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], f"unexpected versions: {applied}"
+        # 011 = rename locale to lang; 012 = drop engagement_tier tables;
+        # 013 = rename post_mentions to posts_brands_mentions).
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], f"unexpected versions: {applied}"
     finally:
         s.close()
 

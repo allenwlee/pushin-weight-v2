@@ -163,7 +163,7 @@ def test_account_post_appearances_fk_to_unknown_handle_ignored():
             store.close()
 
 
-# --- v1.8: posts_brands / post_mentions / posts_brands_signals writes ----
+# --- v1.8: posts_brands / posts_brands_mentions / posts_brands_signals writes ----
 
 
 def test_insert_posts_writes_posts_brands():
@@ -190,8 +190,8 @@ def test_insert_posts_writes_posts_brands():
             store.close()
 
 
-def test_insert_posts_writes_post_mentions():
-    """A post with 2 source mentions writes 2 rows to post_mentions."""
+def test_insert_posts_writes_posts_brands_mentions():
+    """A post with 2 source mentions writes 2 rows to posts_brands_mentions."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
@@ -225,7 +225,7 @@ def test_insert_posts_writes_post_mentions():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT source, raw_token FROM post_mentions "
+                "SELECT source, raw_token FROM posts_brands_mentions "
                 "WHERE post_id = 'p1' ORDER BY source"
             ).fetchall()
             assert len(rows) == 2
@@ -482,17 +482,17 @@ def test_insert_posts_brands_signals_rejects_unattributed():
             store.close()
 
 
-def test_insert_post_mentions_allows_null_brand_id():
-    """insert_post_mentions allows brand_id=NULL (un-attributed mentions)."""
+def test_insert_posts_brands_mentions_allows_null_brand_id():
+    """insert_posts_brands_mentions allows brand_id=NULL (un-attributed mentions)."""
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
             store.insert_posts([_make_post("p1", brand_id="qwen")])
-            store.insert_post_mentions(
+            store.insert_posts_brands_mentions(
                 "p1", None, "user_mention", "@unknown", "2026-06-07T00:00:00+00:00"
             )
             n = store._conn.execute(
-                "SELECT COUNT(*) FROM post_mentions "
+                "SELECT COUNT(*) FROM posts_brands_mentions "
                 "WHERE post_id='p1' AND brand_id IS NULL"
             ).fetchone()[0]
             assert n == 1

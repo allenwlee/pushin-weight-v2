@@ -146,10 +146,10 @@ def test_reattribute_idempotent(tmp_path: Path):
         _seed_db(d, posts, detection)
         counts1 = reattribute_all_posts(d / "x.db", batch_size=2)
         pb_count_1 = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
-        pm_count_1 = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        pm_count_1 = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
         counts2 = reattribute_all_posts(d / "x.db", batch_size=2)
         pb_count_2 = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
-        pm_count_2 = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        pm_count_2 = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
     assert counts1["posts_scanned"] == 5
     assert counts2["posts_scanned"] == 5
     assert pb_count_1 == pb_count_2
@@ -257,12 +257,12 @@ def test_reattribute_dry_run_no_writes(tmp_path: Path):
         d = Path(d_str)
         _seed_db(d, posts, detection)
         before_pb = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
-        before_pm = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        before_pm = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
         counts = reattribute_all_posts(
             d / "x.db", batch_size=10, dry_run=True,
         )
         after_pb = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
-        after_pm = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        after_pm = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
     assert counts["posts_scanned"] == 1
     assert counts["posts_brands_written"] >= 1
     assert before_pb == after_pb

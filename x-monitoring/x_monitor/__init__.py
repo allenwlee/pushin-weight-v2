@@ -7,7 +7,7 @@ v1.8 architecture (call-path attribution):
                                    (replaces single-brand v1.7 logic in
                                    ``x_monitor.intent_classifier``).
   - ``x_monitor.store``           SQLite store; per-post rows in
-                                   ``posts_brands`` / ``post_mentions`` /
+                                   ``posts_brands`` / ``posts_brands_mentions`` /
                                    ``posts_brands_signals`` (one row per
                                    detected brand, not one per post).
   - ``x_monitor.reattribute``     CLI subcommand to backfill the new
