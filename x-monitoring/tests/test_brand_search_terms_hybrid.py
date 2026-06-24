@@ -111,7 +111,7 @@ def test_migration_017_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 18)), (
+        assert applied == list(range(1, 19)), (
             f"unexpected versions: {applied}"
         )
         rows = s._conn.execute(
