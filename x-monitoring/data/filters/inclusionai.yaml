@@ -35,3 +35,5 @@ must_have_none:
 notes: |
   Brand name is too generic — must have one of the model products
   (ring-1, ling, ming) OR the canonical handle.
+  2026-06-25: no query token changes for inclusionai this batch
+  (per plan 2026-06-25-001). must_have_none unchanged.

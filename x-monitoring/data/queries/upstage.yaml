@@ -2,39 +2,39 @@
 # upstage query library.
 queries:
   - id: Q1
-    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") min_faves:5'
+    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") min_faves:5'
     expected_signal: release
     max_results: 50
     enabled: true
     min_faves: 5
     notes: Brand-name Q1 fallback; switch to from:upstageAI when operator confirms Upstage's official handle.
   - id: Q2
-    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2'
+    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2'
     expected_signal: community_question
     max_results: 50
     enabled: true
     min_faves: 2
   - id: Q3
-    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1'
+    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1'
     expected_signal: criticism
     max_results: 50
     enabled: true
     min_faves: 1
   - id: Q4
-    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") min_faves:5'
+    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") min_faves:5'
     expected_signal: commenter_capture
     max_results: 50
     enabled: true
     min_faves: 5
     notes: Brand-name Q4 fallback; switch to to:upstageAI when confirmed.
   - id: Q5
-    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3'
+    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3'
     expected_signal: other
     max_results: 50
     enabled: true
     min_faves: 3
   - id: Q6
-    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5'
+    query_string: '(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5'
     expected_signal: praise
     max_results: 50
     enabled: true

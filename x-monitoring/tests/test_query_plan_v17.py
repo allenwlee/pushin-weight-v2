@@ -187,8 +187,10 @@ def test_plan_calls_v17_call_b_is_brand_wide_paren_grouped(v17_data_dir):
     assert call_b.query_string.endswith(" min_faves:0")
     # Char count is sensitive to per-brand token changes (e.g. the moonshot
     # disambig that removed bare "Moonshot" and added 月之暗面 shrank Call B
-    # from 224 -> 212). Pin a range, not a magic number.
-    assert 180 <= len(call_b.query_string) <= 256, (
+    # from 224 -> 212; the 2026-06-25 widening added MiMo-V2.5-Pro/V2.5/Code/
+    # 7B/VL + GLM-5.2 + Kimi K2 + Qwen3 + DeepSeek V4, growing it to 364).
+    # Pin a range, not a magic number.
+    assert 180 <= len(call_b.query_string) <= 400, (
         f"Call B length {len(call_b.query_string)} outside expected range. "
         f"Query: {call_b.query_string!r}"
     )

@@ -110,13 +110,22 @@ call_c_specs:
       xiaomi_mimo:   [MiMo, "Xiaomi MiMo", "小米 MiMo"]
       moonshot_kimi: [Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]
       yi:            [Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]
-      upstage:       [Upstage, Solar, "Solar Pro"]
+      upstage:       [Upstage, Solar, "Solar Pro", "업스테이지"]
       llama:         [Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]
-    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama]
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
     expected_signal: other
     min_faves: 0
     call_id: C1
     notes: |
+      Co-occurrence list broadened on 2026-06-25 per plan
+      docs/plans/2026-06-25-001-refactor-b-and-c-calls-for-max-inclusion-plan.md
+      (live x_keyword_search / x_semantic_search tests surfaced relevant
+      posts that needed code / coding / agent / agentic / benchmark /
+      reasoning / release / "open source" / huggingface / inference /
+      moe / "tool calling" terms to match). The 12 new terms are
+      additive; the original 10 terms are kept for backward compat.
+      Tested length: under 512-char cap.
+
       MiMo: bare "mimo" matches Mimo Studio (kids' video app); "xiaomi"
       alone matches phone posts. xiaomi/小米 co-occurrence terms exclude
       phone-only false positives.
@@ -128,3 +137,5 @@ call_c_specs:
       mercedes, ...). Bare "moonshot" is intentionally absent from
       the brand group — matches Moonshot crypto exchange spam, not
       Moonshot AI.
+      Upstage: "업스테이지" (Korean transliteration) added on 2026-06-25
+      for Korean-language coverage.

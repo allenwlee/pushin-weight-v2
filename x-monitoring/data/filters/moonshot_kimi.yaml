@@ -52,3 +52,5 @@ must_have_none:
 notes: |
   F1 driver Kimi Antonelli hijacks Q5/Q6. Canonical handles NEED AUDIT.
   Run `x-monitor relevance audit-handles` and update verified_at.
+  2026-06-25: query widened with "Kimi K2" per plan 2026-06-25-001.
+  k2/k2.5/kimi-k2 already in must_have_any; no must_have_none impact.

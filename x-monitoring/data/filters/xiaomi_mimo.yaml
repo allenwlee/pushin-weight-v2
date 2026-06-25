@@ -21,3 +21,5 @@ cjk_tokens:
 
 notes: |
   Canonical handle works. No must_have_none needed.
+  2026-06-25: query widened with MiMo-V2.5-Pro / MiMo-V2.5 / MiMo Code /
+  MiMo-7B / MiMo-VL per plan 2026-06-25-001. No must_have_none impact.
