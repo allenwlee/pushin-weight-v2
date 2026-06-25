@@ -101,7 +101,7 @@ def test_migration_017_idempotent(tmp_path):
 
 
 def test_migration_017_full_stack_apply(tmp_path):
-    """All migrations 001-017 apply on a fresh DB; brand_search_terms
+    """All migrations 001-020 apply on a fresh DB; brand_search_terms
     is in effect as the attribution-side store."""
     from x_monitor.store import Store
 
@@ -111,7 +111,7 @@ def test_migration_017_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 20)), (
+        assert applied == list(range(1, 21)), (
             f"unexpected versions: {applied}"
         )
         rows = s._conn.execute(
@@ -141,15 +141,19 @@ def test_load_brand_search_terms_from_db_returns_seeded_map(tmp_path):
             "accent_color, is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
             ("minimax", "MiniMax", "#a855f7", 0, "2026-06-24T00:00:00+00:00"),
         )
+        # brand_search_terms.brand_id is INTEGER (FK -> brands.id) post-020
+        brand_int = s._conn.execute(
+            "SELECT id FROM brands WHERE brand_id = ?", ("minimax",)
+        ).fetchone()["id"]
         s._conn.execute(
             "INSERT INTO brand_search_terms(brand_id, term, added_at) "
             "VALUES (?, ?, ?)",
-            ("minimax", "minimax", "2026-06-24T00:00:00+00:00"),
+            (brand_int, "minimax", "2026-06-24T00:00:00+00:00"),
         )
         s._conn.execute(
             "INSERT INTO brand_search_terms(brand_id, term, added_at) "
             "VALUES (?, ?, ?)",
-            ("minimax", "海螺", "2026-06-24T00:00:00+00:00"),
+            (brand_int, "海螺", "2026-06-24T00:00:00+00:00"),
         )
         terms = _load_brand_search_terms_from_db(s)
         assert terms == {"minimax": "minimax", "海螺": "minimax"}
@@ -231,10 +235,14 @@ def test_yaml_and_db_can_diverge_for_attribution_path(tmp_path):
             ("minimax", "MiniMax", "#a855f7", 0, "2026-06-24T00:00:00+00:00"),
         )
         # DB-side: only 'minimax' is a search term.
+        # brand_search_terms.brand_id is INTEGER (FK -> brands.id) post-020
+        brand_int = s._conn.execute(
+            "SELECT id FROM brands WHERE brand_id = ?", ("minimax",)
+        ).fetchone()["id"]
         s._conn.execute(
             "INSERT INTO brand_search_terms(brand_id, term, added_at) "
             "VALUES (?, ?, ?)",
-            ("minimax", "minimax", "2026-06-24T00:00:00+00:00"),
+            (brand_int, "minimax", "2026-06-24T00:00:00+00:00"),
         )
         # _build_brand_index from yaml would add '海螺' to its map;
         # the DB-side path does not.

@@ -77,7 +77,14 @@ def test_upsert_account_updates_last_seen_and_tier():
                 role="community",
             )
             a2 = store.get_account("minimax", "alice")
-            assert a2["role_id"] == "community"
+            # U8: role_id is now INTEGER (FK to roles.id). Look up
+            # the role key via the roles table to compare against
+            # the legacy "community" string contract.
+            role_key = store._conn.execute(
+                "SELECT r.key FROM roles r WHERE r.id = ?",
+                (a2["role_id"],),
+            ).fetchone()["key"]
+            assert role_key == "community"
             assert a2["last_seen_at"] >= a1["last_seen_at"]
         finally:
             store.close()
@@ -174,9 +181,16 @@ def test_insert_posts_writes_posts_brands():
             store.insert_posts([
                 _make_post("p1", brand_id=["qwen", "deepseek"]),
             ])
+            # U8 (migration 020): post_id and brand_id are INTEGER.
+            # JOIN back to posts / brands to recover the TEXT identities
+            # the test contract cares about.
             rows = store._conn.execute(
-                "SELECT brand_id, weight FROM posts_brands WHERE post_id = 'p1' "
-                "ORDER BY brand_id"
+                "SELECT b.brand_id, pb.weight "
+                "FROM posts_brands pb "
+                "JOIN brands b ON b.id = pb.brand_id "
+                "JOIN posts p ON p.id = pb.post_id "
+                "WHERE p.tweet_id = 'p1' "
+                "ORDER BY b.brand_id"
             ).fetchall()
             assert len(rows) == 2
             assert rows[0]["brand_id"] == "deepseek"
@@ -225,8 +239,9 @@ def test_insert_posts_writes_posts_brands_mentions():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT source, raw_token FROM posts_brands_mentions "
-                "WHERE post_id = 'p1' ORDER BY source"
+                "SELECT m.source, m.raw_token FROM posts_brands_mentions m "
+                "JOIN posts p ON p.id = m.post_id "
+                "WHERE p.tweet_id = 'p1' ORDER BY m.source"
             ).fetchall()
             assert len(rows) == 2
             assert rows[0]["source"] == "hashtag"
@@ -257,8 +272,12 @@ def test_insert_posts_writes_posts_brands_signals():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, signal_id FROM posts_brands_signals "
-                "WHERE post_id = 'p1' ORDER BY brand_id"
+                "SELECT b.brand_id, s.key AS signal_id "
+                "FROM posts_brands_signals pbs "
+                "JOIN brands b ON b.id = pbs.brand_id "
+                "JOIN signals s ON s.id = pbs.signal_id "
+                "JOIN posts p ON p.id = pbs.post_id "
+                "WHERE p.tweet_id = 'p1' ORDER BY b.brand_id"
             ).fetchall()
             assert len(rows) == 2
             assert rows[0]["brand_id"] == "deepseek"
@@ -312,8 +331,12 @@ def test_insert_posts_drops_hallucinated_brand_signals():
             # posts_brands_signals must contain exactly the 2 known
             # brands — the hallucinated `fake_brand` is dropped.
             rows = store._conn.execute(
-                "SELECT brand_id, signal_id FROM posts_brands_signals "
-                "WHERE post_id = 'p1' ORDER BY brand_id"
+                "SELECT b.brand_id, s.key AS signal_id "
+                "FROM posts_brands_signals pbs "
+                "JOIN brands b ON b.id = pbs.brand_id "
+                "JOIN signals s ON s.id = pbs.signal_id "
+                "JOIN posts p ON p.id = pbs.post_id "
+                "WHERE p.tweet_id = 'p1' ORDER BY b.brand_id"
             ).fetchall()
             assert len(rows) == 2
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
@@ -323,7 +346,9 @@ def test_insert_posts_drops_hallucinated_brand_signals():
             # (already filtered by valid_brands — this confirms no
             # regression in the posts_brands path).
             n_brands = store._conn.execute(
-                "SELECT COUNT(*) FROM posts_brands WHERE post_id = 'p1'"
+                "SELECT COUNT(*) FROM posts_brands pb "
+                "JOIN posts p ON p.id = pb.post_id "
+                "WHERE p.tweet_id = 'p1'"
             ).fetchone()[0]
             assert n_brands == 2
         finally:
@@ -366,8 +391,11 @@ def test_insert_posts_keeps_cross_mention_signal():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id, signal_id FROM posts_brands_signals "
-                "WHERE post_id = 'p1' ORDER BY brand_id"
+                "SELECT b.brand_id "
+                "FROM posts_brands_signals pbs "
+                "JOIN brands b ON b.id = pbs.brand_id "
+                "JOIN posts p ON p.id = pbs.post_id "
+                "WHERE p.tweet_id = 'p1' ORDER BY b.brand_id"
             ).fetchall()
             # Both signals land — deepseek is a real brand even though
             # the post is only attributed to qwen.
@@ -405,7 +433,9 @@ def test_insert_posts_all_hallucinated_signals():
             ).fetchone()[0]
             assert n_posts == 1
             n_sigs = store._conn.execute(
-                "SELECT COUNT(*) FROM posts_brands_signals WHERE post_id='p1'"
+                "SELECT COUNT(*) FROM posts_brands_signals pbs "
+                "JOIN posts p ON p.id = pbs.post_id "
+                "WHERE p.tweet_id='p1'"
             ).fetchone()[0]
             assert n_sigs == 0
         finally:
@@ -434,17 +464,15 @@ def test_insert_posts_legacy_signal_string_broadcast():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT brand_id FROM posts_brands_signals "
-                "WHERE post_id='p1' ORDER BY brand_id"
+                "SELECT b.brand_id, s.key AS signal_id "
+                "FROM posts_brands_signals pbs "
+                "JOIN brands b ON b.id = pbs.brand_id "
+                "JOIN signals s ON s.id = pbs.signal_id "
+                "JOIN posts p ON p.id = pbs.post_id "
+                "WHERE p.tweet_id='p1' ORDER BY b.brand_id"
             ).fetchall()
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
-            assert all(
-                store._conn.execute(
-                    "SELECT signal_id FROM posts_brands_signals WHERE post_id='p1' AND brand_id=?",
-                    (r["brand_id"],),
-                ).fetchone()["signal_id"] == "praise"
-                for r in rows
-            )
+            assert all(r["signal_id"] == "praise" for r in rows)
         finally:
             store.close()
 
@@ -458,12 +486,18 @@ def test_insert_posts_brands_upsert_on_conflict():
             store.insert_posts_brands("p1", "qwen", 0.5)
             store.insert_posts_brands("p1", "qwen", 0.7)
             row = store._conn.execute(
-                "SELECT weight FROM posts_brands WHERE post_id='p1' AND brand_id='qwen'"
+                "SELECT pb.weight FROM posts_brands pb "
+                "JOIN posts p ON p.id = pb.post_id "
+                "JOIN brands b ON b.id = pb.brand_id "
+                "WHERE p.tweet_id='p1' AND b.brand_id='qwen'"
             ).fetchone()
             assert row["weight"] == 0.7
             # Only 1 row, not 2.
             n = store._conn.execute(
-                "SELECT COUNT(*) FROM posts_brands WHERE post_id='p1' AND brand_id='qwen'"
+                "SELECT COUNT(*) FROM posts_brands pb "
+                "JOIN posts p ON p.id = pb.post_id "
+                "JOIN brands b ON b.id = pb.brand_id "
+                "WHERE p.tweet_id='p1' AND b.brand_id='qwen'"
             ).fetchone()[0]
             assert n == 1
         finally:
@@ -471,13 +505,28 @@ def test_insert_posts_brands_upsert_on_conflict():
 
 
 def test_insert_posts_brands_signals_rejects_unattributed():
-    """insert_posts_brands_signals rejects brand_id='_unattributed' (CHECK)."""
+    """insert_posts_brands_signals rejects brand_id='_unattributed'.
+
+    Pre-020 (TEXT PK + schema CHECK): the schema raised
+    IntegrityError. Post-020 (INTEGER PK): the schema CHECK is
+    dropped (sentinel id is data-dependent), so the rejection moves
+    to an application-level guard that silently drops the write with
+    a warning. The contract is the same: no row should land in
+    posts_brands_signals for the sentinel brand.
+    """
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
             store.insert_posts([_make_post("p1", brand_id="qwen")])
-            with pytest.raises(sqlite3.IntegrityError):
-                store.insert_posts_brands_signals("p1", "_unattributed", "praise")
+            # U8: silent drop, not IntegrityError. Assert no row was
+            # written for the sentinel brand.
+            store.insert_posts_brands_signals("p1", "_unattributed", "praise")
+            n = store._conn.execute(
+                "SELECT COUNT(*) FROM posts_brands_signals pbs "
+                "JOIN posts p ON p.id = pbs.post_id "
+                "WHERE p.tweet_id='p1'"
+            ).fetchone()[0]
+            assert n == 0
         finally:
             store.close()
 
@@ -491,9 +540,11 @@ def test_insert_posts_brands_mentions_allows_null_brand_id():
             store.insert_posts_brands_mentions(
                 "p1", None, "user_mention", "@unknown", "2026-06-07T00:00:00+00:00"
             )
+            # U8: post_id is INTEGER; filter via JOIN.
             n = store._conn.execute(
-                "SELECT COUNT(*) FROM posts_brands_mentions "
-                "WHERE post_id='p1' AND brand_id IS NULL"
+                "SELECT COUNT(*) FROM posts_brands_mentions m "
+                "JOIN posts p ON p.id = m.post_id "
+                "WHERE p.tweet_id='p1' AND m.brand_id IS NULL"
             ).fetchone()[0]
             assert n == 1
         finally:

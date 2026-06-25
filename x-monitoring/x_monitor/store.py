@@ -149,6 +149,23 @@ class Store:
         # in summary.totals. Reset at the start of each insert_posts call.
         self._signals_written: int = 0
         self._signals_dropped: int = 0
+        # U8 (migration 020): integer-id lookup caches. These back the
+        # "string-in, INTEGER-out" pattern at the Store API — public
+        # methods still accept slug/keyword strings, but internal
+        # INSERTs convert to INTEGER ids via these maps. Populated
+        # lazily (the lookup tables are tiny: brands=12, companies=11,
+        # accounts~20, signals=6, roles=3, post_type_keys=4,
+        # sentiment_keys=4, hf_orgs=11). Caches are not invalidated
+        # within a Store instance lifetime — see the comments on
+        # _signals_cache above for the same lifecycle.
+        self._brand_id_map: dict[str, int] | None = None
+        self._company_id_map: dict[str, int] | None = None
+        self._account_id_map: dict[str, int] | None = None
+        self._hf_org_id_map: dict[str, int] | None = None
+        self._signal_id_map: dict[str, int] | None = None
+        self._role_id_map: dict[str, int] | None = None
+        self._post_type_id_map: dict[str, int] | None = None
+        self._sentiment_id_map: dict[str, int] | None = None
 
     def close(self) -> None:
         self._conn.close()
@@ -200,6 +217,16 @@ class Store:
             sql = f.read_text(encoding="utf-8")
             # executescript handles its own transactions; record migration
             # as applied AFTER all statements succeed.
+            #
+            # PRAGMA foreign_keys is a no-op inside a transaction (per
+            # SQLite docs), so we toggle it at the connection level here.
+            # FKs are disabled during the migration so that the parent→child
+            # rebuild pattern (e.g., migration 020's TEXT→INTEGER PK
+            # refactor) can drop parent tables without violating FKs in
+            # the still-to-be-rebuilt children. FKs are re-enabled in the
+            # finally clause so a failure doesn't leave the connection in
+            # an FK-off state.
+            self._conn.execute("PRAGMA foreign_keys = OFF")
             try:
                 self._conn.executescript(sql)
                 self._conn.execute(
@@ -210,6 +237,8 @@ class Store:
                 # Migration failed — surface the error but don't leave a
                 # half-applied state in the migrations table.
                 raise
+            finally:
+                self._conn.execute("PRAGMA foreign_keys = ON")
             newly.append(version)
         return newly
 
@@ -270,6 +299,19 @@ class Store:
                 if not valid_brands:
                     valid_brands = ["_unattributed"]
                 weight = 1.0 / len(valid_brands)
+                # U8 (migration 020): the `posts.author_id` column
+                # now stores the INTEGER id from accounts.id (not the
+                # TEXT author_id). Resolve via the accounts
+                # lookup. Callers still pass the TEXT author_id
+                # (X user id) on the post dict; we look it up here.
+                p_author_id_text = (
+                    p.get("author_id") or p.get("author_handle") or ""
+                )
+                p_author_id_int: int | None = None
+                if p_author_id_text:
+                    p_author_id_int = self._account_int_id(
+                        p_author_id_text
+                    )
                 cur = conn.execute(
                     """
                     INSERT OR IGNORE INTO posts(
@@ -285,7 +327,7 @@ class Store:
                     (
                         tweet_id_str,
                         p.get("author_handle") or p.get("author_id") or "",
-                        p.get("author_id"),
+                        p_author_id_int,
                         p.get("text"),
                         p.get("lang"),
                         p.get("created_at"),
@@ -321,10 +363,36 @@ class Store:
                 )
                 if cur.rowcount > 0:
                     n_new += 1
-                    # Only write attribution rows for newly-inserted posts;
-                    # re-inserts must not duplicate (posts_brands PK is
-                    # (brand_id, post_id)).
+                    # Look up the INTEGER id of the new post (the
+                    # posts.id PK that all attribution tables FK to).
+                    post_id_int = self._tweet_int_id(tweet_id_str)
+                    if post_id_int is None:
+                        # The post INSERT succeeded but the lookup
+                        # came back empty. This can only happen if a
+                        # concurrent writer rolled back; treat as a
+                        # hard failure so the caller's transaction
+                        # surfaces the inconsistency.
+                        raise RuntimeError(
+                            f"insert_posts: post just inserted "
+                            f"(tweet_id={tweet_id_str}) has no "
+                            f"INTEGER id"
+                        )
+                    # Only write attribution rows for newly-inserted
+                    # posts; re-inserts must not duplicate
+                    # (posts_brands PK is (post_id, brand_id)).
                     for b in valid_brands:
+                        brand_id_int = self._brand_int_id(b)
+                        if brand_id_int is None:
+                            # brand_id isn't in the brands table; the
+                            # FK to brands.id would fail. Drop with a
+                            # warning rather than aborting the call.
+                            _log.warning(
+                                "insert_posts: dropping posts_brands row "
+                                "for brand_id=%r not in brands table "
+                                "(post_id=%s)",
+                                b, tweet_id_str,
+                            )
+                            continue
                         # R9: ON CONFLICT DO UPDATE so reattribution can
                         # refresh weight. The `weight` column MUST be in
                         # the INSERT column list (top-gun ON CONFLICT
@@ -334,10 +402,10 @@ class Store:
                             INSERT INTO posts_brands(
                                 brand_id, post_id, weight
                             ) VALUES (?, ?, ?)
-                            ON CONFLICT(brand_id, post_id) DO UPDATE SET
+                            ON CONFLICT(post_id, brand_id) DO UPDATE SET
                                 weight = excluded.weight
                             """,
-                            (b, tweet_id_str, weight),
+                            (brand_id_int, post_id_int, weight),
                         )
                     # Per-brand signals: v1.8 callers pass signals as a
                     # dict[brand_id, signal]. Legacy callers pass a
@@ -348,8 +416,9 @@ class Store:
                     )
                     for b, sig in per_brand_signals:
                         if b == "_unattributed":
-                            # CHECK constraint on posts_brands_signals
-                            # excludes the sentinel (Decision 15). Skip.
+                            # posts_brands_signals excludes the sentinel
+                            # (the post-fetch attribution never emits a
+                            # signal for the sentinel brand). Skip.
                             continue
                         # Guard against LLM hallucinations: per_brand_signals
                         # comes from the LLM and may contain a brand_id not
@@ -367,12 +436,33 @@ class Store:
                                 b, tweet_id_str, sig,
                             )
                             continue
-                        # v1.8 (Unit 3): signal is now FK-validated against
-                        # signals (renamed from signal_keys in 014).
-                        # Hallucinated signal values would raise
+                        brand_id_int = self._brand_int_id(b)
+                        if brand_id_int is None:
+                            self._signals_dropped += 1
+                            continue
+                        # v1.8 (Unit 3): signal is now FK-validated
+                        # against signals (renamed from signal_keys in
+                        # 014). Hallucinated signal values would raise
                         # IntegrityError; drop them to the dead-letter
                         # log instead.
                         if sig not in self._known_signal_keys():
+                            self._dead_letter_enum(
+                                "signal", sig,
+                                table="posts_brands_signals",
+                                post_id=tweet_id_str,
+                                brand_id=b,
+                            )
+                            self._signals_dropped += 1
+                            continue
+                        # U8: posts_brands_signals stores INTEGER id
+                        # for the signal (not the TEXT key). Look it
+                        # up before the INSERT.
+                        signal_id_int = self._signal_int_id(sig)
+                        if signal_id_int is None:
+                            # Should be impossible — we just checked
+                            # the key is in _known_signal_keys() —
+                            # but the cache could be stale; drop to
+                            # the dead-letter log defensively.
                             self._dead_letter_enum(
                                 "signal", sig,
                                 table="posts_brands_signals",
@@ -390,7 +480,7 @@ class Store:
                             ON CONFLICT(post_id, brand_id) DO UPDATE SET
                                 signal_id = excluded.signal_id
                             """,
-                            (tweet_id_str, b, sig),
+                            (post_id_int, brand_id_int, signal_id_int),
                         )
                         self._signals_written += 1
                     # Mentions (R10). v1.8 callers pass `mentions` as a
@@ -420,18 +510,22 @@ class Store:
                             )
                         if not m_source or not m_token:
                             continue
-                        # posts_brands_mentions.brand_id may be NULL
-                        # (un-attributed user mentions). Only guard
-                        # non-null unknowns against the same FK
-                        # (migration 004:117).
-                        if m_brand is not None and m_brand not in known_ids:
-                            _log.warning(
-                                "insert_posts: dropping mention for "
-                                "brand_id=%r not in brands table "
-                                "(post_id=%s source=%r)",
-                                m_brand, tweet_id_str, m_source,
-                            )
-                            continue
+                        # U8: posts_brands_mentions stores INTEGER id
+                        # for brand_id (or NULL for un-attributed).
+                        # Resolve the integer id when m_brand is set.
+                        m_brand_int: int | None = None
+                        if m_brand is not None:
+                            if m_brand not in known_ids:
+                                _log.warning(
+                                    "insert_posts: dropping mention for "
+                                    "brand_id=%r not in brands table "
+                                    "(post_id=%s source=%r)",
+                                    m_brand, tweet_id_str, m_source,
+                                )
+                                continue
+                            m_brand_int = self._brand_int_id(m_brand)
+                            if m_brand_int is None:
+                                continue
                         conn.execute(
                             """
                             INSERT INTO posts_brands_mentions(
@@ -441,8 +535,8 @@ class Store:
                                 raw_token = excluded.raw_token
                             """,
                             (
-                                tweet_id_str,
-                                m_brand,
+                                post_id_int,
+                                m_brand_int,
                                 m_source,
                                 m_token,
                                 m_at,
@@ -635,11 +729,16 @@ class Store:
         # the translation pipeline still has SOME brand to attribute
         # the post to for translation-prompt context. The translation
         # itself does not need multi-brand precision.
+        #
+        # U8 (migration 020): posts_brands.post_id and brand_id are
+        # INTEGER. JOIN via the integer ids. Return the TEXT brand_id
+        # slug (b.brand_id) for downstream code that expects a string.
         rows = self._conn.execute(
             f"""
-            SELECT p.tweet_id, pb.brand_id, p.text, p.author_handle, p.created_at
+            SELECT p.tweet_id, b.brand_id, p.text, p.author_handle, p.created_at
             FROM posts p
-            JOIN posts_brands pb ON pb.post_id = p.tweet_id
+            JOIN posts_brands pb ON pb.post_id = p.id
+            JOIN brands b        ON b.id = pb.brand_id
             WHERE p.{col} IS NULL
             ORDER BY p.created_at DESC
             LIMIT ?
@@ -802,6 +901,11 @@ class Store:
     ) -> list[dict[str, Any]]:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
+        # U8 (migration 020): posts_brands.post_id and brand_id are
+        # INTEGER; resolve the brand slug before the JOIN.
+        brand_id_int = self._brand_int_id(brand_id)
+        if brand_id_int is None:
+            return []
         # v1.8: posts.brand_id is dropped (migration 004). Attribution
         # moves to posts_brands(brand_id, post_id, weight). The returned
         # dicts keep the `brand_id` key (with weight on the side) so
@@ -812,30 +916,34 @@ class Store:
                 """
                 SELECT p.*, pb.weight
                 FROM posts p
-                JOIN posts_brands pb ON pb.post_id = p.tweet_id
+                JOIN posts_brands pb ON pb.post_id = p.id
                 WHERE pb.brand_id = ? AND p.created_at >= ?
                 ORDER BY p.created_at DESC
                 LIMIT ?
                 """,
-                (brand_id, since_iso, limit),
+                (brand_id_int, since_iso, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
                 """
                 SELECT p.*, pb.weight
                 FROM posts p
-                JOIN posts_brands pb ON pb.post_id = p.tweet_id
+                JOIN posts_brands pb ON pb.post_id = p.id
                 WHERE pb.brand_id = ?
                 ORDER BY p.created_at DESC
                 LIMIT ?
                 """,
-                (brand_id, limit),
+                (brand_id_int, limit),
             ).fetchall()
         return [dict(r) for r in rows]
 
     def get_all_posts(self, brand_id: str) -> list[dict[str, Any]]:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
+        # U8 (migration 020): posts_brands columns are INTEGER.
+        brand_id_int = self._brand_int_id(brand_id)
+        if brand_id_int is None:
+            return []
         # The `created_at` column is TEXT and may hold either ISO 8601 or
         # Twitter legacy (e.g. "Wed Jun 10 21:31:32 +0000 2026"). A SQL
         # `ORDER BY created_at DESC` on the latter is lexicographic, not
@@ -849,10 +957,10 @@ class Store:
             """
             SELECT p.*, pb.weight
             FROM posts p
-            JOIN posts_brands pb ON pb.post_id = p.tweet_id
+            JOIN posts_brands pb ON pb.post_id = p.id
             WHERE pb.brand_id = ?
             """,
-            (brand_id,),
+            (brand_id_int,),
         ).fetchall()
         posts = [dict(r) for r in rows]
         posts.sort(
@@ -1003,6 +1111,34 @@ class Store:
         # 'community', so callers passing role='unknown' would have hit
         # the schema's TEXT convention with no enforcement).
         if role_known:
+            # U8 (migration 020): brands_accounts stores INTEGER ids
+            # (brands.id, accounts.id, roles.id), not TEXT slugs. Look
+            # each up before the INSERT.
+            brand_id_int = self._brand_int_id(brand_id)
+            author_id_int = self._account_int_id(author_id)
+            role_id_int = self._role_int_id(role)
+            if brand_id_int is None:
+                # brand_id isn't in the brands table; the FK would fail.
+                _log.warning(
+                    "upsert_account: skipping brands_accounts write; "
+                    "brand_id=%r not in brands table (author_id=%s)",
+                    brand_id, author_id,
+                )
+                return
+            if author_id_int is None:
+                # We just upserted the accounts row above, so this
+                # should always resolve. If it doesn't, the cache is
+                # stale — refresh once before giving up.
+                self._account_id_map = None
+                author_id_int = self._account_int_id(author_id)
+            if author_id_int is None or role_id_int is None:
+                # Truly unrecoverable; bail out to avoid an FK error.
+                _log.warning(
+                    "upsert_account: skipping brands_accounts write; "
+                    "unresolvable integer id (brand=%s, author=%s, role=%s)",
+                    brand_id, author_id, role,
+                )
+                return
             self._conn.execute(
                 """
                 INSERT INTO brands_accounts(
@@ -1011,38 +1147,55 @@ class Store:
                 ON CONFLICT(brand_id, author_id) DO UPDATE SET
                     role_id = excluded.role_id
                 """,
-                (brand_id, author_id, role, now),
+                (brand_id_int, author_id_int, role_id_int, now),
             )
 
     def get_account(self, brand_id: str, handle: str) -> dict[str, Any] | None:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
+        # U8 (migration 020): brands_accounts.brand_id is INTEGER
+        # (FK to brands.id) and brands_accounts.author_id is INTEGER
+        # (FK to accounts.id, the new surrogate PK). Resolve the brand
+        # slug to its id before the JOIN; join on the surrogate
+        # integer key.
+        brand_id_int = self._brand_int_id(brand_id)
+        if brand_id_int is None:
+            return None
         # v1.8: JOIN brands_accounts so we can return the per-brand role
-        # alongside the account row.
+        # alongside the account row. Also JOIN roles to expose the role
+        # key string (consumers read role_id as text; this is the
+        # integer→text bridge).
         row = self._conn.execute(
             """
-            SELECT a.*, ba.role_id
+            SELECT a.*, ba.role_id, r.key AS role_key
             FROM accounts a
-            JOIN brands_accounts ba ON ba.author_id = a.author_id
+            JOIN brands_accounts ba ON ba.author_id = a.id
+            LEFT JOIN roles r ON r.id = ba.role_id
             WHERE ba.brand_id = ? AND a.handle = ?
             """,
-            (brand_id, handle),
+            (brand_id_int, handle),
         ).fetchone()
         return dict(row) if row else None
 
     def get_accounts(self, brand_id: str) -> list[dict[str, Any]]:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
+        # U8 (migration 020): brands_accounts FK columns are INTEGER.
+        brand_id_int = self._brand_int_id(brand_id)
+        if brand_id_int is None:
+            return []
         # v1.8: accounts no longer has brand_id. The per-brand accounts
-        # live behind brands_accounts JOIN.
+        # live behind brands_accounts JOIN. LEFT JOIN roles to surface
+        # the role key string alongside the integer role_id.
         rows = self._conn.execute(
             """
-            SELECT a.*, ba.role_id
+            SELECT a.*, ba.role_id, r.key AS role_key
             FROM accounts a
-            JOIN brands_accounts ba ON ba.author_id = a.author_id
+            JOIN brands_accounts ba ON ba.author_id = a.id
+            LEFT JOIN roles r ON r.id = ba.role_id
             WHERE ba.brand_id = ?
             """,
-            (brand_id,),
+            (brand_id_int,),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -1081,22 +1234,38 @@ class Store:
     def insert_posts_brands(self, post_id: str, brand_id: str, weight: float) -> None:
         """Upsert one row into posts_brands (R9).
 
-        ON CONFLICT(brand_id, post_id) DO UPDATE SET weight = excluded.weight
+        ON CONFLICT(post_id, brand_id) DO UPDATE SET weight = excluded.weight
         per Decision 14 — reattribution MUST overwrite stale weights when
         the detection registry evolves.
 
         Top-gun ON CONFLICT gotcha: the `weight` column MUST be in the
         INSERT column list (the SET clause can only update columns the
         INSERT actually wrote).
+
+        U8 (migration 020): both `post_id` and `brand_id` are stored as
+        INTEGER ids. The public signature still takes the TEXT tweet_id
+        and TEXT brand_id slug; this method resolves each to its
+        INTEGER id before the INSERT. Drops the write with a warning
+        if either side cannot be resolved (the FK to posts.id /
+        brands.id would fail).
         """
+        post_id_int = self._tweet_int_id(post_id)
+        brand_id_int = self._brand_int_id(brand_id)
+        if post_id_int is None or brand_id_int is None:
+            _log.warning(
+                "insert_posts_brands: dropping row; unresolvable id "
+                "(post_id=%s brand_id=%s)",
+                post_id, brand_id,
+            )
+            return
         self._conn.execute(
             """
             INSERT INTO posts_brands(brand_id, post_id, weight)
             VALUES (?, ?, ?)
-            ON CONFLICT(brand_id, post_id) DO UPDATE SET
+            ON CONFLICT(post_id, brand_id) DO UPDATE SET
                 weight = excluded.weight
             """,
-            (brand_id, post_id, float(weight)),
+            (brand_id_int, post_id_int, float(weight)),
         )
 
     def insert_posts_brands_mentions(
@@ -1118,7 +1287,29 @@ class Store:
 
         Top-gun ON CONFLICT gotcha: the `raw_token` column MUST be in
         the INSERT column list.
+
+        U8 (migration 020): `post_id` is stored as INTEGER (FK to
+        posts.id) and `brand_id` (when not NULL) is stored as INTEGER
+        (FK to brands.id). `source` and `raw_token` stay TEXT.
         """
+        post_id_int = self._tweet_int_id(post_id)
+        if post_id_int is None:
+            _log.warning(
+                "insert_posts_brands_mentions: dropping row; "
+                "unresolvable post id (post_id=%s brand_id=%s source=%s)",
+                post_id, brand_id, source,
+            )
+            return
+        brand_id_int: int | None = None
+        if brand_id is not None:
+            brand_id_int = self._brand_int_id(brand_id)
+            if brand_id_int is None:
+                _log.warning(
+                    "insert_posts_brands_mentions: dropping row; "
+                    "unresolvable brand id (post_id=%s brand_id=%s source=%s)",
+                    post_id, brand_id, source,
+                )
+                return
         self._conn.execute(
             """
             INSERT INTO posts_brands_mentions(
@@ -1127,7 +1318,7 @@ class Store:
             ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
                 raw_token = excluded.raw_token
             """,
-            (post_id, brand_id, source, raw_token, mentioned_at),
+            (post_id_int, brand_id_int, source, raw_token, mentioned_at),
         )
 
     def insert_posts_brands_signals(
@@ -1155,15 +1346,41 @@ class Store:
         post-U9 classifier) pass post_type + sentiment instead. Both
         shapes are supported.
 
+        U8 (migration 020): all FK columns (post_id, brand_id,
+        signal_id, post_type, sentiment) are stored as INTEGER ids
+        (FKs to posts.id, brands.id, signals.id, post_type_keys.id,
+        sentiment_keys.id). The public signature still takes TEXT
+        slugs/keys; this method resolves each to its INTEGER id
+        before the INSERT.
+
         Guards brand_id against the brands table (the FK target) so the
         reattribute path can't raise IntegrityError. Unknown brand_ids
         are dropped with a warning rather than aborting the caller's
         transaction.
+
+        U8 (migration 020): the schema-level CHECK constraint that
+        blocked `_unattributed` (the sentinel brand) was dropped
+        because the sentinel's INTEGER id is data-dependent (insertion
+        order could change it). The block moves to an explicit
+        application-level guard here using the `is_sentinel` column.
         """
         if brand_id not in self._known_brand_ids():
             _log.warning(
                 "insert_posts_brands_signals: dropping signal for "
                 "brand_id=%r not in brands table (post_id=%s)",
+                brand_id, post_id,
+            )
+            return
+        # U8: block the sentinel brand. The pre-020 schema enforced
+        # this via a CHECK (brand_id <> '_unattributed'); the post-020
+        # schema uses an is_sentinel column on brands instead.
+        sentinel_brand_ids = {
+            b.brand_id for b in self.read_brands() if b.is_sentinel
+        }
+        if brand_id in sentinel_brand_ids:
+            _log.warning(
+                "insert_posts_brands_signals: dropping signal for "
+                "sentinel brand_id=%r (post_id=%s)",
                 brand_id, post_id,
             )
             return
@@ -1198,6 +1415,28 @@ class Store:
                 brand_id=brand_id,
             )
             return
+        # U8: resolve every FK column to its INTEGER id. Drop the
+        # write with a warning if any lookup fails (the FK would
+        # otherwise raise IntegrityError and abort the caller's
+        # transaction).
+        post_id_int = self._tweet_int_id(post_id)
+        brand_id_int = self._brand_int_id(brand_id)
+        if post_id_int is None or brand_id_int is None:
+            _log.warning(
+                "insert_posts_brands_signals: dropping row; unresolvable id "
+                "(post_id=%s brand_id=%s signal=%s)",
+                post_id, brand_id, signal,
+            )
+            return
+        signal_id_int: int | None = (
+            self._signal_int_id(signal) if signal is not None else None
+        )
+        post_type_int: int | None = (
+            self._post_type_int_id(post_type) if post_type is not None else None
+        )
+        sentiment_int: int | None = (
+            self._sentiment_int_id(sentiment) if sentiment is not None else None
+        )
         self._conn.execute(
             """
             INSERT INTO posts_brands_signals(post_id, brand_id, signal_id, post_type, sentiment)
@@ -1207,7 +1446,7 @@ class Store:
                 post_type = excluded.post_type,
                 sentiment = excluded.sentiment
             """,
-            (post_id, brand_id, signal, post_type, sentiment),
+            (post_id_int, brand_id_int, signal_id_int, post_type_int, sentiment_int),
         )
 
     # --- v1.8: detection-registry read methods (R12, R13) -----------------
@@ -1325,6 +1564,131 @@ class Store:
                 ).fetchall()
             }
         return self._sentiment_cache
+
+    # --- U8 (migration 020): integer-id lookup helpers ---------------------
+    #
+    # After migration 020, every converted table's PK is an INTEGER
+    # (id), and FK columns store the INTEGER id (not the TEXT slug). The
+    # Store API still accepts TEXT slugs from callers (so consumer
+    # code does not have to change), and converts to INTEGER id at the
+    # call site via these helpers.
+    #
+    # All helpers return None when the slug is not in the table — the
+    # caller decides what to do (skip the write, dead-letter, raise).
+    # Caches are populated once per Store instance and never
+    # invalidated; the lookup tables are small and seeded by
+    # migrations, so the cache stays correct for the lifetime of the
+    # connection. If an operator mutates a lookup table outside the
+    # migration loader they should close() and re-open the Store.
+
+    def _brand_int_id(self, brand_id: str) -> int | None:
+        """Map `brand_id` (slug) to `brands.id` (INTEGER).
+
+        Returns None if the slug is not in the brands table. Includes
+        the `_unattributed` sentinel.
+        """
+        if self._brand_id_map is None:
+            self._brand_id_map = {
+                r["brand_id"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, brand_id FROM brands"
+                ).fetchall()
+            }
+        return self._brand_id_map.get(brand_id)
+
+    def _company_int_id(self, company_id: str) -> int | None:
+        """Map `company_id` (slug) to `companies.id` (INTEGER)."""
+        if self._company_id_map is None:
+            self._company_id_map = {
+                r["company_id"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, company_id FROM companies"
+                ).fetchall()
+            }
+        return self._company_id_map.get(company_id)
+
+    def _account_int_id(self, author_id: str) -> int | None:
+        """Map `accounts.author_id` (TEXT) to `accounts.id` (INTEGER)."""
+        if self._account_id_map is None:
+            self._account_id_map = {
+                r["author_id"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, author_id FROM accounts"
+                ).fetchall()
+            }
+        return self._account_id_map.get(author_id)
+
+    def _hf_org_int_id(self, namespace: str) -> int | None:
+        """Map `hf_orgs.namespace` (TEXT) to `hf_orgs.id` (INTEGER).
+
+        Note the rename in migration 020: the original TEXT PK `id`
+        (HF namespace) is now the column `namespace`. Callers that
+        previously passed `hf_org_id` as a namespace string now pass
+        the same string under the new name.
+        """
+        if self._hf_org_id_map is None:
+            self._hf_org_id_map = {
+                r["namespace"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, namespace FROM hf_orgs"
+                ).fetchall()
+            }
+        return self._hf_org_id_map.get(namespace)
+
+    def _tweet_int_id(self, tweet_id: str) -> int | None:
+        """Map `posts.tweet_id` (TEXT UNIQUE) to `posts.id` (INTEGER).
+
+        NOT cached — the posts table grows with every ingest. Single
+        SELECT per call; cheap because the tweet_id column is UNIQUE.
+        """
+        row = self._conn.execute(
+            "SELECT id FROM posts WHERE tweet_id = ?", (tweet_id,)
+        ).fetchone()
+        return int(row["id"]) if row else None
+
+    def _signal_int_id(self, signal_key: str) -> int | None:
+        """Map `signals.key` (TEXT) to `signals.id` (INTEGER)."""
+        if self._signal_id_map is None:
+            self._signal_id_map = {
+                r["key"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM signals"
+                ).fetchall()
+            }
+        return self._signal_id_map.get(signal_key)
+
+    def _role_int_id(self, role_key: str) -> int | None:
+        """Map `roles.key` (TEXT) to `roles.id` (INTEGER)."""
+        if self._role_id_map is None:
+            self._role_id_map = {
+                r["key"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM roles"
+                ).fetchall()
+            }
+        return self._role_id_map.get(role_key)
+
+    def _post_type_int_id(self, post_type_key: str) -> int | None:
+        """Map `post_type_keys.key` (TEXT) to `post_type_keys.id` (INTEGER)."""
+        if self._post_type_id_map is None:
+            self._post_type_id_map = {
+                r["key"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM post_type_keys"
+                ).fetchall()
+            }
+        return self._post_type_id_map.get(post_type_key)
+
+    def _sentiment_int_id(self, sentiment_key: str) -> int | None:
+        """Map `sentiment_keys.key` (TEXT) to `sentiment_keys.id` (INTEGER)."""
+        if self._sentiment_id_map is None:
+            self._sentiment_id_map = {
+                r["key"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM sentiment_keys"
+                ).fetchall()
+            }
+        return self._sentiment_id_map.get(sentiment_key)
 
     def _dead_letter_enum(
         self, family: str, value: str, **context: Any
@@ -1466,12 +1830,19 @@ class Store:
         Brands without a brands_companies edge (e.g. `_unattributed`) are
         never returned — they're corporate-parent-less and intentionally
         excluded from HF coverage.
+
+        U8 (migration 020): brands_companies.brand_id and company_id
+        are INTEGER. JOIN back to the parent tables to return the TEXT
+        brand_id slugs the caller expects.
         """
         rows = self._conn.execute(
             """
-            SELECT brand_id FROM brands_companies
-            WHERE company_id = ?
-            ORDER BY brand_id
+            SELECT b.brand_id
+            FROM brands_companies bc
+            JOIN brands b   ON b.id = bc.brand_id
+            JOIN companies c ON c.id = bc.company_id
+            WHERE c.company_id = ?
+            ORDER BY b.brand_id
             """,
             (company_id,),
         ).fetchall()
@@ -1483,9 +1854,21 @@ class Store:
         Consumed by `attribution.extract_user_mentions` to resolve
         `entities.user_mentions[].id` (numeric X user id) to a
         `brand_id`.
+
+        U8 (migration 020): `brands_accounts.author_id` is INTEGER
+        (FK to accounts.id) and `brands_accounts.brand_id` is INTEGER
+        (FK to brands.id). JOIN both back to the source tables to
+        recover the TEXT identities the caller cares about — the
+        X user id (`accounts.author_id`) and the brand slug
+        (`brands.brand_id`).
         """
         rows = self._conn.execute(
-            "SELECT author_id, brand_id FROM brands_accounts"
+            """
+            SELECT a.author_id, b.brand_id
+            FROM brands_accounts ba
+            JOIN accounts a ON a.id = ba.author_id
+            JOIN brands b   ON b.id = ba.brand_id
+            """
         ).fetchall()
         return {r["author_id"]: r["brand_id"] for r in rows}
 
@@ -1519,9 +1902,17 @@ class Store:
 
         Consumed by `attribution.extract_search_term_match` to resolve
         each search-query keyword to a brand_id.
+
+        U8 (migration 020): brand_search_terms.brand_id is INTEGER
+        (FK to brands.id). JOIN back to brands to return the TEXT
+        brand_id slug the caller expects.
         """
         rows = self._conn.execute(
-            "SELECT term, brand_id FROM brand_search_terms"
+            """
+            SELECT bst.term, b.brand_id
+            FROM brand_search_terms bst
+            JOIN brands b ON b.id = bst.brand_id
+            """
         ).fetchall()
         return {r["term"]: r["brand_id"] for r in rows}
 
@@ -1530,19 +1921,25 @@ class Store:
     ) -> list[dict[str, Any]]:
         """Return the company's HuggingFace org rows from `hf_orgs`.
 
-        Each row is a dict: {id, company_id, confirmed, discovered_via,
-        added_at}. With `confirmed_only=True` (default) only
-        curated/operator-confirmed orgs are returned — the orgs the crawler
-        scrapes. Discovered candidates (confirmed=0) are excluded so a wrong
-        org is never silently scraped.
+        Each row is a dict: {namespace, company_id, confirmed,
+        discovered_via, added_at}. With `confirmed_only=True` (default)
+        only curated/operator-confirmed orgs are returned — the orgs
+        the crawler scrapes. Discovered candidates (confirmed=0) are
+        excluded so a wrong org is never silently scraped.
+
+        U8 (migration 020): the HF namespace string lives in the
+        `namespace` column (renamed from the original `id` TEXT PK to
+        avoid the type-changing-same-name ambiguity). The `id` column
+        is now the INTEGER surrogate PK. Callers receive `namespace`
+        in the dict (the public identity of the org), not `id`.
         """
         sql = (
-            "SELECT id, company_id, confirmed, discovered_via, added_at "
+            "SELECT namespace, company_id, confirmed, discovered_via, added_at "
             "FROM hf_orgs WHERE company_id = ?"
         )
         if confirmed_only:
             sql += " AND confirmed = 1"
-        sql += " ORDER BY id"
+        sql += " ORDER BY namespace"
         rows = self._conn.execute(sql, (company_id,)).fetchall()
         return [dict(r) for r in rows]
 
@@ -1559,17 +1956,25 @@ class Store:
         Discovery uses confirmed=0 (candidates flagged for operator review).
         On conflict, `confirmed` is never demoted (a curated/confirmed org
         survives a re-discovery) and a `curated` provenance is preserved.
-        `hf_org_id` is the HF namespace string itself (e.g. "MiniMaxAI") and
-        is the table's PRIMARY KEY; the FK to `companies.company_id` is
-        created by migration 005.
+        `hf_org_id` is the HF namespace string itself (e.g. "MiniMaxAI"),
+        which lives in the `namespace` column (renamed from the
+        pre-U8 TEXT PK `id` per migration 020). The INTEGER surrogate
+        PK `id` is auto-assigned by SQLite. The FK to `companies.id`
+        is INTEGER-storing-id, so the company_id slug is resolved
+        here before the INSERT.
         """
+        company_id_int = self._company_int_id(company_id)
+        if company_id_int is None:
+            raise ValueError(
+                f"upsert_hf_org: company_id={company_id!r} not in companies table"
+            )
         with self.transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO hf_orgs (
-                    id, company_id, confirmed, discovered_via, added_at
+                    namespace, company_id, confirmed, discovered_via, added_at
                 ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
+                ON CONFLICT(namespace) DO UPDATE SET
                     company_id = excluded.company_id,
                     confirmed = CASE
                         WHEN excluded.confirmed > hf_orgs.confirmed
@@ -1582,7 +1987,7 @@ class Store:
                         ELSE excluded.discovered_via
                     END
                 """,
-                (hf_org_id, company_id, confirmed, discovered_via, _now_iso()),
+                (hf_org_id, company_id_int, confirmed, discovered_via, _now_iso()),
             )
 
     def upsert_product(self, row: dict[str, Any]) -> None:
@@ -1593,6 +1998,13 @@ class Store:
         trending_score, last_modified, *_json, raw_json, updated_at); brand_id,
         hf_org_id, hf_type, display_name, collected_at stay stable so re-runs are
         idempotent and a brand assignment survives a refresh.
+
+        U8 (migration 020): `brand_id` and `hf_org_id` are now INTEGER
+        FKs. The public row dict still carries the TEXT slugs
+        (brand_id=slug, hf_org_id=namespace string) — this method
+        resolves them to INTEGER ids before the INSERT. NULLs in the
+        input row are preserved (the brand_id / hf_org_id columns
+        accept NULL with ON DELETE SET NULL semantics).
         """
         cols = [
             "repo_id", "brand_id", "hf_org_id", "hf_type", "display_name", "author",
@@ -1614,18 +2026,43 @@ class Store:
             f"VALUES ({', '.join('?' for _ in cols)}) "
             f"ON CONFLICT(repo_id) DO UPDATE SET {set_clause}"
         )
+        # Resolve brand_id and hf_org_id to INTEGER ids (or None).
+        # Other columns pass through unchanged.
+        brand_id = row.get("brand_id")
+        hf_org_id = row.get("hf_org_id")
+        brand_id_int: int | None = (
+            self._brand_int_id(brand_id) if brand_id else None
+        )
+        hf_org_id_int: int | None = (
+            self._hf_org_int_id(hf_org_id) if hf_org_id else None
+        )
+        values = list(row.get(c) for c in cols)
+        # Substitute the INTEGER ids at the brand_id / hf_org_id
+        # positions so the INSERT writes the right type.
+        values[cols.index("brand_id")] = brand_id_int
+        values[cols.index("hf_org_id")] = hf_org_id_int
         with self.transaction() as conn:
-            conn.execute(sql, tuple(row.get(c) for c in cols))
+            conn.execute(sql, tuple(values))
 
     def read_products(
         self, brand_id: str | None = None, *, limit: int | None = None
     ) -> list[dict[str, Any]]:
-        """Return product rows, optionally filtered by brand, downloads-desc."""
+        """Return product rows, optionally filtered by brand, downloads-desc.
+
+        `brand_id` is the TEXT slug (e.g. "MiniMaxAI") — the public
+        identity. The method resolves it to the INTEGER id before the
+        WHERE filter, so callers don't need to know about U8's
+        INTEGER-PK conversion.
+        """
         sql = "SELECT * FROM products"
         params: tuple[Any, ...] = ()
         if brand_id is not None:
+            brand_id_int = self._brand_int_id(brand_id)
+            if brand_id_int is None:
+                # Unknown brand slug → no products.
+                return []
             sql += " WHERE brand_id = ?"
-            params = (brand_id,)
+            params = (brand_id_int,)
         sql += " ORDER BY downloads DESC"
         if limit is not None:
             sql += " LIMIT ?"

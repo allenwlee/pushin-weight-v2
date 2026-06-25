@@ -352,26 +352,38 @@ def _read_signal_breakdown_for_brand(
     excluded by the WHERE clause (Decision 15). Weights are honored
     (1/N for multi-brand posts per Decision 9).
 
+    U8 (migration 020): posts_brands_signals FK columns are INTEGER.
+    Join via posts.id and brands.id; resolve the brand slug to its
+    INTEGER id before the WHERE filter.
+
     Returns:
         (totals, per_day) where:
           totals[signal] = float (weighted_count)
           per_day[iso_date][signal] = float (weighted_count)
     """
+    brand_id_int = conn.execute(
+        "SELECT id FROM brands WHERE brand_id = ?", (brand_id,)
+    ).fetchone()
+    if brand_id_int is None:
+        return {}, {}
+    brand_id_int = int(brand_id_int["id"])
     rows = conn.execute(
         """
         SELECT substr(p.created_at, 1, 10) AS day,
-               pbs.signal_id AS signal,
+               s.key AS signal,
                SUM(pb.weight) AS weighted_count
         FROM posts_brands_signals pbs
         JOIN posts_brands pb
           ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id
-        JOIN posts p ON p.tweet_id = pbs.post_id
+        JOIN posts p ON p.id = pbs.post_id
+        JOIN signals s ON s.id = pbs.signal_id
+        JOIN brands b ON b.id = pbs.brand_id
         WHERE pbs.brand_id = ?
-          AND pbs.brand_id != '_unattributed'
+          AND b.brand_id != '_unattributed'
           AND p.created_at >= ?
-        GROUP BY day, pbs.signal_id
+        GROUP BY day, s.key
         """,
-        (brand_id, window_start_iso),
+        (brand_id_int, window_start_iso),
     ).fetchall()
     totals: dict[str, float] = {}
     per_day: dict[str, dict[str, float]] = {}
@@ -775,6 +787,17 @@ class DashboardApp:
         try:
             for m in self.config.enabled_models:
                 try:
+                    # U8 (migration 020): posts_brands columns are INTEGER
+                    # (post_id, brand_id). Look up the brand id and pass
+                    # INTEGER to the SQL. The _unattributed check is via
+                    # brands.brand_id slug (preserved as TEXT UNIQUE).
+                    brand_id_int_row = store._conn.execute(
+                        "SELECT id FROM brands WHERE brand_id = ?", (m,)
+                    ).fetchone()
+                    if brand_id_int_row is None:
+                        # Brand slug not in brands table — skip the tile.
+                        continue
+                    brand_id_int = int(brand_id_int_row["id"])
                     # v1.8 (Unit 4 / R17): polarity now reads from
                     # posts_brands_signals + posts_brands via the JOIN shape
                     # from Decision 18. _unattributed is excluded at the
@@ -789,7 +812,7 @@ class DashboardApp:
                     # get_all_posts.
                     area_row = store._conn.execute(
                         "SELECT COUNT(*) AS n FROM posts_brands WHERE brand_id = ?",
-                        (m,),
+                        (brand_id_int,),
                     ).fetchone()
                     area_weight = int(area_row["n"]) if area_row else 0
                     # v1.8 — posts_in_window: count of distinct posts in
@@ -801,12 +824,13 @@ class DashboardApp:
                         """
                         SELECT COUNT(DISTINCT pb.post_id) AS n
                         FROM posts_brands pb
-                        JOIN posts p ON p.tweet_id = pb.post_id
+                        JOIN posts p ON p.id = pb.post_id
+                        JOIN brands b ON b.id = pb.brand_id
                         WHERE pb.brand_id = ?
-                          AND pb.brand_id != '_unattributed'
+                          AND b.brand_id != '_unattributed'
                           AND p.created_at >= ?
                         """,
-                        (m, current_window[0].isoformat()),
+                        (brand_id_int, current_window[0].isoformat()),
                     ).fetchone()
                     posts_in_window = int(n_row["n"]) if n_row else 0
                 except Exception as e:
@@ -1064,7 +1088,7 @@ class DashboardApp:
                     store, detail_locale
                 )
                 role_counts: Counter[str] = Counter(
-                    a.get("role_id", "unknown") for a in accounts
+                    a.get("role_key") or "unknown" for a in accounts
                 )
                 role_labels = _load_role_labels(
                     store, detail_locale, list(role_counts.keys())

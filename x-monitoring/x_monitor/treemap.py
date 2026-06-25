@@ -243,15 +243,17 @@ def bin_polarity(score: float | None) -> str:
 #   weekday-leading Twitter format sorted incorrectly and silently ignored
 #   the time window pre-migration-006.
 POLARITY_SQL: str = (
-    "SELECT pbs.signal_id, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
+    "SELECT s.key AS signal_id, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
     "FROM posts_brands_signals pbs "
     "JOIN posts_brands pb "
     "  ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id "
-    "JOIN posts p ON p.tweet_id = pbs.post_id "
+    "JOIN posts p ON p.id = pbs.post_id "
+    "JOIN signals s ON s.id = pbs.signal_id "
+    "JOIN brands b ON b.id = pbs.brand_id "
     "WHERE pbs.brand_id = ? "
-    "  AND pbs.brand_id != '_unattributed' "
+    "  AND b.brand_id != '_unattributed' "
     "  AND p.created_at_epoch >= ? "
-    "GROUP BY pbs.signal_id"
+    "GROUP BY s.key"
 )
 
 
@@ -291,12 +293,22 @@ def compute_polarity_signal_breakdown(
           idx_posts_brands_brand_post, posts (PK). EXPLAIN should show
           no SCAN or SORT on a populated DB.
     """
+    # U8 (migration 020): pbs.brand_id is INTEGER (FK to brands.id).
+    # Resolve the slug to its id before binding to the SQL. When the
+    # slug is unknown, the breakdown is empty (the brand has no
+    # posts_brands rows to aggregate).
+    brand_id_int = conn.execute(
+        "SELECT id FROM brands WHERE brand_id = ?", (brand_id,)
+    ).fetchone()
+    if brand_id_int is None:
+        return {}
+    brand_id_int = int(brand_id_int["id"])
     if window_end_epoch is None:
         rows = conn.execute(
-            POLARITY_SQL, (brand_id, window_start_epoch),
+            POLARITY_SQL, (brand_id_int, window_start_epoch),
         ).fetchall()
     else:
-        # POLARITY_SQL ends with "GROUP BY pbs.signal_id"; insert the
+        # POLARITY_SQL ends with "GROUP BY s.key"; insert the
         # upper-bound filter BEFORE the GROUP BY so it is applied
         # before aggregation. Splitting on "GROUP BY" and re-appending
         # keeps the constant a single source of truth.
@@ -304,7 +316,7 @@ def compute_polarity_signal_breakdown(
         sql_with_upper = head + "AND p.created_at_epoch < ? GROUP BY" + tail
         rows = conn.execute(
             sql_with_upper,
-            (brand_id, window_start_epoch, window_end_epoch),
+            (brand_id_int, window_start_epoch, window_end_epoch),
         ).fetchall()
     return {r["signal_id"]: float(r["weighted_count"]) for r in rows}
 

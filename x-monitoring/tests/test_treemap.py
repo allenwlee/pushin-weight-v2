@@ -532,19 +532,30 @@ def _seed_brand_posts(store, brand, posts):
     tests. `posts` = list of (tweet_id, signal, retweet_count, epoch). The
     `brand` must already exist (migration 004 seeds KNOWN_MODELS like 'glm')."""
     c = store._conn
+    # U8 (migration 020): posts.id / brands.id / signals.id are
+    # INTEGER. Look up each id once per call.
+    brand_int = c.execute(
+        "SELECT id FROM brands WHERE brand_id = ?", (brand,)
+    ).fetchone()["id"]
     for tid, signal, rt, epoch in posts:
         c.execute(
             "INSERT INTO posts(tweet_id, fetched_at, created_at_epoch, retweet_count, author_handle) "
             "VALUES (?, '2026-01-01T00:00:00+00:00', ?, ?, 'u')",
             (tid, epoch, rt),
         )
+        post_int = c.execute(
+            "SELECT id FROM posts WHERE tweet_id = ?", (tid,)
+        ).fetchone()["id"]
+        sig_int = c.execute(
+            "SELECT id FROM signals WHERE key = ?", (signal,)
+        ).fetchone()["id"]
         c.execute(
             "INSERT INTO posts_brands(brand_id, post_id, weight) VALUES (?, ?, 1.0)",
-            (brand, tid),
+            (brand_int, post_int),
         )
         c.execute(
             "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) VALUES (?, ?, ?)",
-            (tid, brand, signal),
+            (post_int, brand_int, sig_int),
         )
 
 
