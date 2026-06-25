@@ -8,6 +8,11 @@ backward compatibility with v1.6 callers and tests, but new code should
 use `assert_under_length_cap` / `X_LENGTH_CAP`. See
 docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
 §"Cap probe amendment" for the empirical evidence.
+
+U9 (migration 022): the `expected_signal` field was removed from the
+Query model. The legacy 6-signal taxonomy is gone; per-tweet
+classification (post_type × sentiment) happens post-fetch in
+`attribution.classify_post` and is not encoded in the query shape.
 """
 
 from __future__ import annotations
@@ -19,11 +24,6 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
-
-# Allowed expected_signal enum values.
-EXPECTED_SIGNALS: frozenset[str] = frozenset(
-    {"release", "criticism", "community_question", "commenter_capture", "praise", "other"}
-)
 
 # Allowed query IDs.
 QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
@@ -55,13 +55,17 @@ LANG_ALLOWLIST: dict[str, set[str]] = {}
 
 
 class Query(BaseModel):
-    """A single curated X advanced-search query (one of Q1-Q6 for a model)."""
+    """A single curated X advanced-search query (one of Q1-Q6 for a model).
+
+    U9 (migration 022): `expected_signal` was REMOVED. The legacy
+    6-signal taxonomy is gone; per-tweet classification
+    (post_type × sentiment) happens post-fetch and is not encoded in
+    the query shape. The query.yaml files no longer carry an
+    `expected_signal` field.
+    """
 
     id: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]
     query_string: str = Field(min_length=1)
-    expected_signal: Literal[
-        "release", "criticism", "community_question", "commenter_capture", "praise", "other"
-    ]
     max_results: int = Field(default=50, ge=1, le=200)
     enabled: bool = True
     min_faves: int = Field(default=0, ge=0)

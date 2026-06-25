@@ -148,7 +148,8 @@ def test_backfill_script_emits_correct_translate_registry_invocation(
 
 def test_seed_zh_cn_labels_upserts_defaults(tmp_path):
     """The seed script UPSERTs the default operator-curated labels
-    for the 6 signals and 3 roles (post-migration-016 trim; the
+    for the U9 enum families (post_type 4 + sentiment 4) and the
+    remaining role family (3 keys post-migration-016 trim; the
     engagement_tier family was dropped in 012)."""
     from x_monitor.store import Store
     db_path = tmp_path / "x.db"
@@ -167,7 +168,8 @@ def test_seed_zh_cn_labels_upserts_defaults(tmp_path):
     s = Store(db_path)
     try:
         for family, expected in {
-            "signal": ["发布", "社区提问", "批评", "评论互动", "称赞", "其他"],
+            "post_type": ["动态发布", "上手实测", "性能对比", "反馈与提问"],
+            "sentiment": ["正面", "负面", "中性", "复杂"],
             "role": ["官方", "员工", "社区"],
         }.items():
             table = f"{family}_labels"
@@ -192,9 +194,9 @@ def test_seed_zh_cn_labels_partial_override(tmp_path):
 
     overrides_yaml = tmp_path / "overrides.yaml"
     overrides_yaml.write_text(
-        "signal:\n"
-        "  release: \"新发布\"\n"
-        "  criticism: \"严厉批评\"\n",
+        "post_type:\n"
+        "  buzz_releases: \"新动态\"\n"
+        "  feedback_questions: \"用户提问\"\n",
         encoding="utf-8",
     )
 
@@ -209,11 +211,11 @@ def test_seed_zh_cn_labels_partial_override(tmp_path):
     assert result.returncode == 0, result.stderr
     s = Store(db_path)
     try:
-        # The two overridden signal labels are updated.
-        assert s._pick_enum_label("signal", "release", "zh_cn") == "新发布"
-        assert s._pick_enum_label("signal", "criticism", "zh_cn") == "严厉批评"
-        # Untouched signal keys stay at the defaults.
-        assert s._pick_enum_label("signal", "praise", "zh_cn") == "称赞"
+        # The two overridden post_type labels are updated.
+        assert s._pick_enum_label("post_type", "buzz_releases", "zh_cn") == "新动态"
+        assert s._pick_enum_label("post_type", "feedback_questions", "zh_cn") == "用户提问"
+        # Untouched post_type keys stay at the defaults.
+        assert s._pick_enum_label("post_type", "hands_on_usage", "zh_cn") == "上手实测"
         # Untouched families stay at the defaults.
         assert s._pick_enum_label("role", "official", "zh_cn") == "官方"
     finally:
@@ -255,12 +257,16 @@ def test_seed_zh_cn_labels_idempotent_on_rerun(tmp_path):
             cwd=tmp_path,
         )
         assert result.returncode == 0, result.stderr
-    # Verify row counts: 6 signals + 3 roles = 9 zh_cn rows
-    # (post-migration-016 trim; the engagement_tier family was dropped
-    # in 012).
+    # Verify row counts: U9 (migration 022) replaced `signal` (6 keys)
+    # with `post_type` (4 keys) + `sentiment` (4 keys); `role` is still
+    # 3 keys (post-migration-016 trim).
     s = Store(db_path)
     try:
-        for family, expected_n in [("signal", 6), ("role", 3)]:
+        for family, expected_n in [
+            ("post_type", 4),
+            ("sentiment", 4),
+            ("role", 3),
+        ]:
             n = s._conn.execute(
                 f"SELECT COUNT(*) AS n FROM {family}_labels WHERE lang = 'zh_cn'"
             ).fetchone()["n"]

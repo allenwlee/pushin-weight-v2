@@ -366,25 +366,12 @@ def test_attribute_to_brand_legacy_compat():
     )
 
 
-def test_classify_signal_deprecation_warning():
-    """v1.8: the legacy `classify_signal` (R20) emits a
-    DeprecationWarning on every call. New callers should use
-    `classify_signals_per_brand` from x_monitor.attribution.
-    """
-    import warnings
-    from x_monitor.intent_classifier import classify_signal
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        classify_signal("minimax 太强了")
-    # At least one DeprecationWarning fired and the message mentions
-    # the new per-brand API.
-    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert len(deprecations) >= 1
-    msg = str(deprecations[0].message)
-    assert "classify_signals_per_brand" in msg
-    # The function still returns the legacy single string.
-    assert deprecations[0].message is not None
+# U9 (migration 022): the legacy `classify_signal` from
+# `x_monitor.intent_classifier` was REMOVED entirely (not just
+# deprecated). The function was replaced by `classify_post` in
+# `x_monitor.attribution`, which returns (post_type, sentiment)
+# tuples per brand. The deprecation-warning test from v1.8 is
+# obsolete — see test_attribution.py for the new behavior.
 
 
 def test_attribution_module_re_exports_intent_classifier():

@@ -113,7 +113,6 @@ call_c_specs:
       upstage:       [Upstage, Solar, "Solar Pro", "업스테이지"]
       llama:         [Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]
     co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
-    expected_signal: other
     min_faves: 0
     call_id: C1
     notes: |

@@ -45,7 +45,7 @@ from x_monitor.attribution import (
     extract_search_term_match,
     compute_post_brands,
     attribute_to_brands,
-    classify_signal,
+    classify_post,
     AnthropicClaudeClient,
 )
 from x_monitor.store import Store
@@ -101,7 +101,7 @@ __all__ = [
     "extract_search_term_match",
     "compute_post_brands",
     "attribute_to_brands",
-    "classify_signal",
+    "classify_post",
     "AnthropicClaudeClient",
     # Store
     "Store",

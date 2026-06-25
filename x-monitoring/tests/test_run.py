@@ -34,27 +34,21 @@ def test_estimate_cost_reads_yaml_at_test_time():
 queries:
   - id: Q1
     query_string: 'x'
-    expected_signal: release
     max_results: 50
   - id: Q2
     query_string: 'y'
-    expected_signal: community_question
     max_results: 50
   - id: Q3
     query_string: 'z'
-    expected_signal: criticism
     max_results: 50
   - id: Q4
     query_string: 'w'
-    expected_signal: commenter_capture
     max_results: 50
   - id: Q5
     query_string: 'v'
-    expected_signal: other
     max_results: 50
   - id: Q6
     query_string: 'praise'
-    expected_signal: praise
     max_results: 50
 """,
                 encoding="utf-8",
@@ -83,7 +77,7 @@ def test_apply_skip_order_drops_in_configured_order():
         cfg = Config(enabled_models=["minimax"], daily_ceiling=50, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=Path(d) / "x.db")
         qs = [
-            Query(id=qid, query_string=qid, expected_signal=signal, max_results=50)
+            Query(id=qid, query_string=qid, max_results=50)
             for qid, signal in [
                 ("Q1", "release"),
                 ("Q2", "community_question"),
@@ -127,27 +121,21 @@ def _v15_deprecated_pipeline_writes_raw_before_db_insert():
 queries:
   - id: Q1
     query_string: 'from:MiniMaxAI'
-    expected_signal: release
     max_results: 5
   - id: Q2
     query_string: 'minimax how'
-    expected_signal: community_question
     max_results: 5
   - id: Q3
     query_string: 'minimax broken'
-    expected_signal: criticism
     max_results: 5
   - id: Q4
     query_string: 'to:MiniMaxAI'
-    expected_signal: commenter_capture
     max_results: 5
   - id: Q5
     query_string: 'minimax benchmark'
-    expected_signal: other
     max_results: 5
   - id: Q6
     query_string: 'minimax praise min_faves:5'
-    expected_signal: praise
     max_results: 5
 """,
             encoding="utf-8",
@@ -348,11 +336,9 @@ def test_apply_rot_disables_query_in_yaml(tmp_path):
 queries:
   - id: Q1
     query_string: 'x'
-    expected_signal: release
     enabled: true
   - id: Q2
     query_string: 'y'
-    expected_signal: community_question
     enabled: true
 """,
         encoding="utf-8",
@@ -621,27 +607,21 @@ def _v15_deprecated_pipeline_short_circuits_over_cap_query():
 queries:
   - id: Q1
     query_string: 'from:MiniMaxAI'
-    expected_signal: release
     max_results: 5
   - id: Q2
     query_string: 'minimax how'
-    expected_signal: community_question
     max_results: 5
   - id: Q3
     query_string: '{over_cap_q}'
-    expected_signal: criticism
     max_results: 5
   - id: Q4
     query_string: 'to:MiniMaxAI'
-    expected_signal: commenter_capture
     max_results: 5
   - id: Q5
     query_string: 'minimax benchmark'
-    expected_signal: other
     max_results: 5
   - id: Q6
     query_string: 'minimax praise min_faves:5'
-    expected_signal: praise
     max_results: 5
 """,
             encoding="utf-8",
@@ -703,7 +683,6 @@ def _stub_plan_calls(enabled_models):
             brand_id=m,
             bucket=None,
             query_string=f"(from:{m}) min_faves:1",
-            expected_signal="release",
             query_length=1,
         ))
         out.append(PlannedCall(
@@ -712,7 +691,6 @@ def _stub_plan_calls(enabled_models):
             brand_id=m,
             bucket="howto_criticism",
             query_string=f"({m}) how OR broken min_faves:0",
-            expected_signal="criticism",
             query_length=3,
         ))
     return out
@@ -774,16 +752,19 @@ def test_intent_call_reclassifies_brand_id(monkeypatch):
     v1.8 (R15) extension: the same tweet named "Qwen 3 vs DeepSeek V3"
     is attributed to BOTH qwen and deepseek via the multi-brand
     `attribute_to_brands` orchestrator, returning one MentionRow per
-    brand. The legacy `classify_signal` is preserved as a compat
-    shim (DeprecationWarning suppressed in this test).
+    brand.
+
+    U9 (R22 / migration 022): the legacy `classify_signal` 6-bucket
+    single-string API was REMOVED entirely; it is replaced by
+    `classify_post` returning `{brand_id: (post_type, sentiment)}`.
     """
-    import warnings
     from x_monitor.attribution import (
         UNATTRIBUTED_BRAND_ID,
         attribute_to_brands,
+        classify_post,
         compute_post_brands,
     )
-    from x_monitor.intent_classifier import attribute_to_brand, classify_signal
+    from x_monitor.intent_classifier import attribute_to_brand
     # Direct test: tweet mentions "minimax" and the author is a
     # known minimax official -> brand = minimax.
     assert (
@@ -805,14 +786,47 @@ def test_intent_call_reclassifies_brand_id(monkeypatch):
         )
         is None
     )
-    # Signal classifier maps praise -> praise.
-    # v1.8: classify_signal emits DeprecationWarning; suppress here
-    # because we're testing the legacy contract, not the warning.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        assert classify_signal("minimax 太强了") == "praise"
-        assert classify_signal("minimax 翻车了") == "criticism"
-        assert classify_signal("") == "other"
+    # U9: classify_post returns a per-brand (post_type, sentiment) dict.
+    # No anthropic_client => offline mode => {}.
+    from x_monitor.attribution import BrandRow
+    registry = [BrandRow("minimax", "MiniMax", "#a855f7", False)]
+    out = classify_post(
+        "minimax 太强了",
+        brand_ids=["minimax"],
+        brand_registry=registry,
+        anthropic_client=None,
+    )
+    assert out == {}
+    # With a FakeClaudeClient: positive CJK text -> (buzz_releases, positive).
+    class _FakeClaudeClient:
+        def __init__(self, response):
+            self._response = response
+            self.calls: list[dict] = []
+        def messages_create(self, **kwargs):
+            self.calls.append(kwargs)
+            return self._response
+    fake_praise = _FakeClaudeClient({
+        "classifications": [
+            {"brand_id": "minimax", "post_type": "buzz_releases", "sentiment": "positive"},
+        ]
+    })
+    assert classify_post(
+        "minimax 太强了",
+        brand_ids=["minimax"],
+        brand_registry=registry,
+        anthropic_client=fake_praise,
+    ) == {"minimax": ("buzz_releases", "positive")}
+    fake_crit = _FakeClaudeClient({
+        "classifications": [
+            {"brand_id": "minimax", "post_type": "performance_comparisons", "sentiment": "negative"},
+        ]
+    })
+    assert classify_post(
+        "minimax 翻车了",
+        brand_ids=["minimax"],
+        brand_registry=registry,
+        anthropic_client=fake_crit,
+    ) == {"minimax": ("performance_comparisons", "negative")}
     # v1.8 multi-brand assertion: a tweet naming two brands yields
     # one MentionRow per brand (qwen, deepseek) via body_keyword.
     from x_monitor.intent_classifier import compile_keyword_index
@@ -924,15 +938,21 @@ def test_intent_call_classifies_multi_brand(monkeypatch):
         # Each MentionRow is a real MentionRow instance.
         for m in kept["mentions"]:
             assert isinstance(m, MentionRow)
-        # signals has one entry per detected brand.
-        assert "signals" in kept
-        assert set(kept["signals"].keys()) == {"qwen", "deepseek"}
-        # signal values are from the known 6-bucket vocabulary.
-        for s in kept["signals"].values():
-            assert s in {
-                "release", "community_question", "criticism",
-                "commenter_capture", "other", "praise",
+        # U9: classifications (per-brand (post_type, sentiment) dict)
+        # is stamped on every kept post. In offline mode (no LLM
+        # client) the dict is empty, but the field always exists.
+        assert "classifications" in kept
+        assert isinstance(kept["classifications"], dict)
+        # When an LLM client is provided, the dict would be populated
+        # with tuples per detected brand.
+        for v in kept["classifications"].values():
+            assert isinstance(v, tuple) and len(v) == 2
+            post_type, sentiment = v
+            assert post_type in {
+                "buzz_releases", "hands_on_usage",
+                "performance_comparisons", "feedback_questions",
             }
+            assert sentiment in {"positive", "negative", "neutral", "mixed"}
 
 
 def test_intent_call_passes_mentions_to_insert_posts(monkeypatch):
@@ -1000,8 +1020,10 @@ def test_intent_call_passes_mentions_to_insert_posts(monkeypatch):
 
 
 def test_intent_call_passes_signals_to_insert_posts(monkeypatch):
-    """v1.8 (R15): the pipeline populates `it["signals"]` (a dict
-    keyed by brand_id) on every kept post.
+    """U9 (R22 / migration 022): the pipeline populates
+    `it["classifications"]` (a `{brand_id: (post_type, sentiment)}`
+    dict) on every kept post. In offline mode (no anthropic_client)
+    the dict is empty, but the field is always stamped.
     """
     monkeypatch.setattr(
         "x_monitor.run.plan_calls",
@@ -1054,12 +1076,16 @@ def test_intent_call_passes_signals_to_insert_posts(monkeypatch):
         p.execute(apify, model_filter=["minimax"])
         assert len(captured["items"]) == 1
         kept = captured["items"][0]
-        assert "signals" in kept
-        assert isinstance(kept["signals"], dict)
-        # The tweet is detected as brand "minimax" with signal "praise"
-        # (CJK term "太强了" → praise).
-        assert "minimax" in kept["signals"]
-        assert kept["signals"]["minimax"] == "praise"
+        assert "classifications" in kept
+        assert isinstance(kept["classifications"], dict)
+        # The tweet is detected as brand "minimax" via body_keyword.
+        # In offline mode the (post_type, sentiment) LLM call is
+        # skipped, so the classifications dict is empty — but the
+        # field is still attached for the Store to consume.
+        # U9: the legacy 6-bucket "signals" field is gone; the new
+        # field is `classifications` (dict of (post_type, sentiment)
+        # tuples), and the LLM-driven values only appear when an
+        # anthropic_client is wired in.
 
 
 def test_pipeline_applies_filter_before_insert_v16(monkeypatch):

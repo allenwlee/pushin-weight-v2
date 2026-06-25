@@ -15,7 +15,6 @@ from pydantic import ValidationError
 from x_monitor.config import Config
 from x_monitor.dashboard import (
     MODEL_DISPLAY_NAMES,
-    _qid_to_signal,
     _parse_post_timestamp,
     brand_colorize,
     serialize_grid_card,
@@ -117,16 +116,22 @@ def test_dashboard_api_grid_json_returns_cards():
             for key in (
                 "brand_id",
                 "chart",
-                "signal_breakdown",
+                # U9: the response includes BOTH the new sentiment_breakdown
+                # and a backwards-compat signal_breakdown key (kept so
+                # external consumers / tests don't break).
+                "sentiment_breakdown",
+                "post_type_breakdown",
                 "top3_posts",
                 "degraded_sentinels",
                 "last_run_at",
             ):
-                assert key in card
+                assert key in card, f"missing key {key} in card {card.get('brand_id')}"
             assert "days" in card["chart"]
             assert "series" in card["chart"]
             assert len(card["chart"]["days"]) == 14
-            assert len(card["chart"]["series"]) == 6
+            # U9: 4 sentiment series (positive / negative / neutral / mixed),
+            # not the legacy 6-signal taxonomy.
+            assert len(card["chart"]["series"]) == 4
 
 
 def test_dashboard_unknown_model_returns_404():
@@ -193,17 +198,26 @@ def test_dashboard_grid_htmx_script_included_exactly_once():
         # htmx script tag
         assert body.count("htmx.org") == 1
 
-def test_serialize_grid_card_chart_six_series_aligned_to_window():
-    """Feed posts on 3 different days with different Q-IDs; each series
-    must be 14 entries, with the right day indices holding the right counts."""
+def test_serialize_grid_card_chart_four_sentiment_series_aligned_to_window():
+    """Feed posts on 3 different days with different sentiments; each
+    series must be 14 entries, with the right day indices holding the
+    right counts.
+
+    U9: chart series are now sentiments (positive / negative / neutral /
+    mixed), not the legacy 6-signal taxonomy. Posts now carry
+    (post_type, sentiment) directly instead of deriving from Q-IDs.
+    """
     from datetime import datetime, timedelta, timezone
 
     now = datetime.now(timezone.utc)
     days_ago = [0, 3, 10]  # today, 3 days ago, 10 days ago
     posts = []
+    sentiment_breakdown: dict[str, float] = {}
+    day_sentiment_counts: dict[str, dict[str, float]] = {}
+    sentiments = ["positive", "negative", "mixed"]
     for i, ago in enumerate(days_ago):
         ts = (now - timedelta(days=ago)).strftime("%a %b %d %H:%M:%S %z %Y")
-        qid = ["Q1", "Q3", "Q6"][i]
+        sentiment = sentiments[i]
         posts.append(
             {
                 "tweet_id": f"t{i}",
@@ -212,47 +226,57 @@ def test_serialize_grid_card_chart_six_series_aligned_to_window():
                 "text": f"hello {i}",
                 "like_count": i,
                 "created_at": ts,
-                "source_query_id": qid,
+                "sentiment": sentiment,
+                "post_type": "buzz_releases",
             }
         )
-    card = serialize_grid_card("minimax", posts, window_days=14)
+        sentiment_breakdown[sentiment] = sentiment_breakdown.get(sentiment, 0.0) + 1.0
+        iso_day = (now - timedelta(days=ago)).date().isoformat()
+        day_sentiment_counts.setdefault(iso_day, {})[sentiment] = 1.0
+    card = serialize_grid_card(
+        "minimax", posts, window_days=14,
+        sentiment_breakdown=sentiment_breakdown,
+        day_sentiment_counts=day_sentiment_counts,
+    )
     chart = card["chart"]
     assert len(chart["days"]) == 14
     assert set(chart["series"].keys()) == {
-        "release", "community_question", "criticism",
-        "commenter_capture", "other", "praise",
+        "positive", "negative", "neutral", "mixed",
     }
     for key, expected in [
-        ("release", 1),
-        ("criticism", 1),
-        ("praise", 1),
-        ("community_question", 0),
-        ("commenter_capture", 0),
-        ("other", 0),
+        ("positive", 1),
+        ("negative", 1),
+        ("mixed", 1),
+        ("neutral", 0),
     ]:
         assert sum(chart["series"][key]) == expected, f"{key} total wrong"
-    # The Q1 post was on "today" -> index 13 (oldest is i=0)
-    assert chart["series"]["release"][13] == 1
-    # The Q3 post was 3 days ago -> index 10
-    assert chart["series"]["criticism"][10] == 1
-    # The Q6 post was 10 days ago -> index 3
-    assert chart["series"]["praise"][3] == 1
+    # Find the day index for "today" (newest, index 13) and 3 days ago (10)
+    # and 10 days ago (3). The chart's `days` array is sorted oldest-first.
+    iso_days = [d.date().isoformat() for d in [
+        now - timedelta(days=a) for a in range(13, -1, -1)
+    ]]
+    today_idx = iso_days.index((now.date()).isoformat())
+    three_day_idx = iso_days.index((now - timedelta(days=3)).date().isoformat())
+    ten_day_idx = iso_days.index((now - timedelta(days=10)).date().isoformat())
+    assert chart["series"]["positive"][today_idx] == 1
+    assert chart["series"]["negative"][three_day_idx] == 1
+    assert chart["series"]["mixed"][ten_day_idx] == 1
 
 
-def test_serialize_grid_card_chart_unknown_qid_dropped():
-    """Unknown Q-IDs (defensive) must not pollute any series."""
+def test_serialize_grid_card_chart_unknown_sentiment_dropped():
+    """Unknown sentiment values (defensive) must not pollute any series."""
     from datetime import datetime, timezone
 
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
         {"tweet_id": "t1", "brand_id": "minimax", "author_handle": "u1",
          "text": "?", "like_count": 0, "created_at": now_iso,
-         "source_query_id": "Q99"},
+         "sentiment": "BOGUS_VALUE", "post_type": "buzz_releases"},
     ]
     card = serialize_grid_card("minimax", posts, window_days=14)
     for series in card["chart"]["series"].values():
         assert sum(series) == 0
-    assert card["signal_breakdown"] == {}
+    assert card["sentiment_breakdown"] == {}
 
 
 def test_serialize_grid_card_chart_zero_posts_window():
@@ -260,21 +284,16 @@ def test_serialize_grid_card_chart_zero_posts_window():
     card = serialize_grid_card("minimax", [], window_days=14)
     chart = card["chart"]
     assert len(chart["days"]) == 14
-    for key in ("release", "community_question", "criticism",
-                "commenter_capture", "other", "praise"):
+    # U9: the chart series are now the 4-sentiment taxonomy
+    # (positive / negative / neutral / mixed), not the legacy
+    # 6-signal taxonomy.
+    for key in ("positive", "negative", "neutral", "mixed"):
         assert chart["series"][key] == [0] * 14
 
 
-def test_qid_to_signal_helper():
-    assert _qid_to_signal("Q1") == "release"
-    assert _qid_to_signal("Q2") == "community_question"
-    assert _qid_to_signal("Q3") == "criticism"
-    assert _qid_to_signal("Q4") == "commenter_capture"
-    assert _qid_to_signal("Q5") == "other"
-    assert _qid_to_signal("Q6") == "praise"
-    assert _qid_to_signal("Q99") is None
-    assert _qid_to_signal("") is None
-    assert _qid_to_signal(None) is None
+# U9: the legacy `_qid_to_signal` helper was removed when the
+# Q1-Q6 → signal mapping was killed. The function no longer exists
+# in x_monitor.dashboard; that test is deleted.
 
 
 class TestParsePostTimestamp:
@@ -363,47 +382,63 @@ class TestGridHtmlPollEndpoint:
             assert "every 30s" in body
 
 
-def test_serialize_grid_card_q6_maps_to_praise():
-    """Q6 (praise) posts must be counted under 'praise' in signal_breakdown."""
+def test_serialize_grid_card_sentiment_breakdown_counts():
+    """U9: posts now carry sentiment + post_type directly. Positive /
+    mixed / neutral / negative posts must be counted under the right
+    sentiment keys."""
     from datetime import datetime, timezone
-    # Use a recent timestamp so it falls inside the 14-day window
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
-        {"tweet_id": "t1", "brand_id": "minimax", "source_query_id": "Q6",
+        {"tweet_id": "t1", "brand_id": "minimax", "sentiment": "positive",
+         "post_type": "buzz_releases",
          "text": "amazing!", "like_count": 10, "created_at": now_iso,
          "author_handle": "u1"},
-        {"tweet_id": "t2", "brand_id": "minimax", "source_query_id": "Q6",
+        {"tweet_id": "t2", "brand_id": "minimax", "sentiment": "positive",
+         "post_type": "buzz_releases",
          "text": "best!", "like_count": 5, "created_at": now_iso,
          "author_handle": "u2"},
-        {"tweet_id": "t3", "brand_id": "minimax", "source_query_id": "Q2",
+        {"tweet_id": "t3", "brand_id": "minimax", "sentiment": "mixed",
+         "post_type": "feedback_questions",
          "text": "how does X work?", "like_count": 1, "created_at": now_iso,
          "author_handle": "u3"},
     ]
-    card = serialize_grid_card("minimax", posts)
-    assert card["signal_breakdown"].get("praise", 0) == 2
-    assert card["signal_breakdown"].get("community_question", 0) == 1
+    sentiment_breakdown = {"positive": 2.0, "mixed": 1.0}
+    card = serialize_grid_card(
+        "minimax", posts, sentiment_breakdown=sentiment_breakdown,
+    )
+    assert card["sentiment_breakdown"].get("positive", 0) == 2
+    assert card["sentiment_breakdown"].get("mixed", 0) == 1
     assert card["n_posts_in_window"] == 3
 
 
-def test_serialize_grid_card_unknown_query_id_does_not_count():
-    """Unknown Q-IDs (defensive) should not crash or be silently miscounted."""
+def test_serialize_grid_card_unknown_sentiment_does_not_count():
+    """U9: defensive — unknown sentiment values must not be silently
+    miscounted. The caller passes a pre-resolved sentiment_breakdown;
+    unknown values would be filtered out by the upstream
+    _read_classification_breakdown_for_brand SQL.
+    """
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S %z %Y")
     posts = [
-        {"tweet_id": "t1", "brand_id": "minimax", "source_query_id": "Q99",
+        {"tweet_id": "t1", "brand_id": "minimax", "sentiment": "BOGUS",
+         "post_type": "buzz_releases",
          "text": "???", "like_count": 0, "created_at": now_iso,
          "author_handle": "u1"},
     ]
+    # No breakdowns passed — defensive empty-result behavior.
     card = serialize_grid_card("minimax", posts)
-    # Q99 is unknown; it must not be bucketed into praise or any other signal
-    assert card["signal_breakdown"] == {}
+    assert card["sentiment_breakdown"] == {}
 
 
 class TestTrendChartAssets:
     def test_api_grid_html_includes_chart_canvas_per_card(self):
         """Each enabled model must get exactly one canvas.trend-chart in the
         /api/grid.html response, with a data-chart JSON payload that decodes
-        into the expected 14-day / 6-series shape."""
+        into the expected 14-day / 4-sentiment-series shape.
+
+        U9: 4 sentiment series (positive / negative / neutral / mixed),
+        not the legacy 6-signal taxonomy.
+        """
         import json as _json
         with tempfile.TemporaryDirectory() as d:
             data = Path(d)
@@ -415,12 +450,15 @@ class TestTrendChartAssets:
             body = client.get("/api/grid.html").get_data(as_text=True)
             assert body.count('class="trend-chart"') == 2
             # Each wrap must have a JSON-parseable data-chart attribute with
-            # 14 days and 6 series.
+            # 14 days and 4 sentiment series.
             import re
             for match in re.finditer(r"""data-chart='([^']+)'""", body):
                 payload = _json.loads(match.group(1))
                 assert len(payload["days"]) == 14
-                assert len(payload["series"]) == 6
+                assert len(payload["series"]) == 4
+                assert set(payload["series"].keys()) == {
+                    "positive", "negative", "neutral", "mixed",
+                }
 
     def test_grid_page_loads_chartjs_from_cdn(self):
         """The /grid page must include the Chart.js CDN script tag."""
@@ -1541,11 +1579,14 @@ class TestPolarityWindowToggle:
 
 
 def test_polarity_uses_join_not_subquery():
-    """R17 / Decision 18: compute_polarity_signal_breakdown's EXPLAIN
+    """R17 / Decision 18: compute_polarity_sentiment_breakdown's EXPLAIN
     QUERY PLAN must use the posts_brands_signals + posts_brands + posts
     indexes (no SCAN, no SORT).
+
+    U9: the breakdown is now keyed by sentiment (positive / negative /
+    neutral / mixed), not the legacy 6-signal taxonomy.
     """
-    from x_monitor.treemap import POLARITY_SQL, compute_polarity_signal_breakdown
+    from x_monitor.treemap import POLARITY_SQL, compute_polarity_sentiment_breakdown
     from datetime import datetime, timezone, timedelta
 
     with tempfile.TemporaryDirectory() as d:
@@ -1566,12 +1607,15 @@ def test_polarity_uses_join_not_subquery():
                  0, 0, 0, 0, "{}", "{}"),
             )
             store.insert_posts_brands("u4_p1", "minimax", 1.0)
-            store.insert_posts_brands_signals("u4_p1", "minimax", "praise")
+            # U9: post_type + sentiment instead of signal.
+            store.insert_posts_brands_signals(
+                "u4_p1", "minimax", post_type="buzz_releases", sentiment="positive",
+            )
 
-            bd = compute_polarity_signal_breakdown(
+            bd = compute_polarity_sentiment_breakdown(
                 store._conn, "minimax", window_start,
             )
-            assert bd == {"praise": 1.0}, f"unexpected breakdown: {bd}"
+            assert bd == {"positive": 1.0}, f"unexpected breakdown: {bd}"
 
             # EXPLAIN QUERY PLAN: must use indexes, no SCAN, no SORT
             plan = store._conn.execute(
@@ -1593,10 +1637,10 @@ def test_polarity_uses_join_not_subquery():
 
 
 def test_unattributed_excluded_from_polarity():
-    """Decision 15: compute_polarity_signal_breakdown('_unattributed')
+    """Decision 15: compute_polarity_sentiment_breakdown('_unattributed')
     returns empty dict (filtered by WHERE clause).
     """
-    from x_monitor.treemap import compute_polarity_signal_breakdown, compute_polarity_from_db
+    from x_monitor.treemap import compute_polarity_sentiment_breakdown, compute_polarity_from_db
     from datetime import datetime, timezone, timedelta
 
     with tempfile.TemporaryDirectory() as d:
@@ -1619,7 +1663,7 @@ def test_unattributed_excluded_from_polarity():
             store.insert_posts_brands("u4_p_u", "_unattributed", 1.0)
             # _unattributed has no posts_brands_signals row (CHECK constraint)
 
-            bd = compute_polarity_signal_breakdown(
+            bd = compute_polarity_sentiment_breakdown(
                 store._conn, "_unattributed", window_start,
             )
             assert bd == {}, (
@@ -1641,8 +1685,12 @@ def test_grid_card_uses_posts_brands_signals_multi_brand_weighted():
     """R18: serialize_grid_card reads posts_brands_signals (not
     posts.source_query_id). A 2-brand post produces weighted counts
     in BOTH brands' cards.
+
+    U9: the breakdown is keyed by (post_type, sentiment). The
+    helper returns a 4-tuple (sentiment_totals, sentiment_per_day,
+    post_type_totals, post_type_per_day).
     """
-    from x_monitor.dashboard import _read_signal_breakdown_for_brand
+    from x_monitor.dashboard import _read_classification_breakdown_for_brand
 
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
@@ -1663,44 +1711,65 @@ def test_grid_card_uses_posts_brands_signals_multi_brand_weighted():
             )
             store.insert_posts_brands("u4_2b", "qwen", 0.5)
             store.insert_posts_brands("u4_2b", "deepseek", 0.5)
-            store.insert_posts_brands_signals("u4_2b", "qwen", "release")
-            store.insert_posts_brands_signals("u4_2b", "deepseek", "praise")
+            # U9: post_type + sentiment instead of signal.
+            store.insert_posts_brands_signals(
+                "u4_2b", "qwen", post_type="buzz_releases", sentiment="positive",
+            )
+            store.insert_posts_brands_signals(
+                "u4_2b", "deepseek", post_type="hands_on_usage", sentiment="mixed",
+            )
 
-            # Read breakdown for qwen: should see "release" with weight 0.5
-            qwen_total, qwen_days = _read_signal_breakdown_for_brand(
+            # Read breakdown for qwen: should see sentiment=positive with
+            # weight 0.5 and post_type=buzz_releases with weight 0.5.
+            (qwen_sent_total, qwen_sent_days,
+             qwen_pt_total, qwen_pt_days) = _read_classification_breakdown_for_brand(
                 store._conn, "qwen", window_start_iso,
             )
-            assert qwen_total.get("release") == 0.5, (
-                f"qwen total.release should be 0.5 (weighted), got {qwen_total}"
+            assert qwen_sent_total.get("positive") == 0.5, (
+                f"qwen sentiment.positive should be 0.5 (weighted), "
+                f"got {qwen_sent_total}"
+            )
+            assert qwen_pt_total.get("buzz_releases") == 0.5, (
+                f"qwen post_type.buzz_releases should be 0.5 (weighted), "
+                f"got {qwen_pt_total}"
             )
 
-            # Read breakdown for deepseek: should see "praise" with weight 0.5
-            ds_total, ds_days = _read_signal_breakdown_for_brand(
+            # Read breakdown for deepseek: should see sentiment=mixed with
+            # weight 0.5 and post_type=hands_on_usage with weight 0.5.
+            (ds_sent_total, ds_sent_days,
+             ds_pt_total, ds_pt_days) = _read_classification_breakdown_for_brand(
                 store._conn, "deepseek", window_start_iso,
             )
-            assert ds_total.get("praise") == 0.5, (
-                f"deepseek total.praise should be 0.5 (weighted), got {ds_total}"
+            assert ds_sent_total.get("mixed") == 0.5, (
+                f"deepseek sentiment.mixed should be 0.5 (weighted), "
+                f"got {ds_sent_total}"
+            )
+            assert ds_pt_total.get("hands_on_usage") == 0.5, (
+                f"deepseek post_type.hands_on_usage should be 0.5 (weighted), "
+                f"got {ds_pt_total}"
             )
 
-            # Neither brand should see the OTHER's signal.
-            assert "praise" not in qwen_total, (
-                f"qwen should NOT see deepseek's praise signal: {qwen_total}"
+            # Neither brand should see the OTHER's classification.
+            assert "mixed" not in qwen_sent_total, (
+                f"qwen should NOT see deepseek's mixed sentiment: {qwen_sent_total}"
             )
-            assert "release" not in ds_total, (
-                f"deepseek should NOT see qwen's release signal: {ds_total}"
+            assert "positive" not in ds_sent_total, (
+                f"deepseek should NOT see qwen's positive sentiment: {ds_sent_total}"
             )
 
             # The day grid should also reflect the weights.
             today = now_iso[:10]
-            assert qwen_days.get(today, {}).get("release") == 0.5
-            assert ds_days.get(today, {}).get("praise") == 0.5
+            assert qwen_sent_days.get(today, {}).get("positive") == 0.5
+            assert ds_sent_days.get(today, {}).get("mixed") == 0.5
         finally:
             store.close()
 
 
 def test_treemap_polarity_with_db_driven_posts_brands_signals():
     """R17: compute_polarity_from_db reads posts_brands_signals + posts_brands
-    and produces a non-zero score when current window has weighted signals.
+    and produces a non-zero score when current window has weighted classifications.
+
+    U9: polarity is sentiment-only — score = (positive - negative) / total.
     """
     from x_monitor.treemap import compute_polarity_from_db
     from datetime import datetime, timezone, timedelta
@@ -1712,7 +1781,7 @@ def test_treemap_polarity_with_db_driven_posts_brands_signals():
             current = now - timedelta(hours=2)
             current_ts = current.isoformat()
             current_epoch = int(current.timestamp())  # Unit 6: epoch window
-            # 1 current praise post -> score = 1.0 (sparse-data guard 2)
+            # 1 current positive post -> score = 1.0 (sparse-data guard 2)
             store._conn.execute(
                 """INSERT INTO posts (tweet_id, author_handle, text, lang,
                    created_at, fetched_at, created_at_epoch, like_count,
@@ -1723,13 +1792,17 @@ def test_treemap_polarity_with_db_driven_posts_brands_signals():
                  0, 0, 0, 0, "{}", "{}"),
             )
             store.insert_posts_brands("u4_p_praise", "minimax", 1.0)
-            store.insert_posts_brands_signals("u4_p_praise", "minimax", "praise")
+            # U9: post_type + sentiment instead of signal.
+            store.insert_posts_brands_signals(
+                "u4_p_praise", "minimax",
+                post_type="buzz_releases", sentiment="positive",
+            )
 
             score = compute_polarity_from_db(
                 store._conn, "minimax", window_days=7, now=now,
             )
             assert score is not None and abs(score - 1.0) < 0.001, (
-                f"expected 1.0 (1 praise / 1 total in current, prior empty), "
+                f"expected 1.0 (1 positive / 1 total in current, prior empty), "
                 f"got {score}"
             )
         finally:

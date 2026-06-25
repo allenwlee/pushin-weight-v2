@@ -29,19 +29,16 @@ from .queries import (
     load_queries,
 )
 from .query_plan import plan_calls
-# v1.8 (R15, R20): the per-tweet classification seam now uses the
-# multi-brand `attribute_to_brands` from `x_monitor.attribution`.
-# The legacy `classify_signal` (single-string) is kept via the
-# compat shim for the `source_query_id` derivation; it emits a
-# DeprecationWarning on every call, so we suppress the warning here
-# (the pipeline is the one remaining legitimate user of the legacy
-# path until the per-brand LLM classifier is wired in).
-import warnings as _warnings
-from .intent_classifier import classify_signal as _legacy_classify_signal
+# v1.8 (R15, R20): the per-tweet classification seam uses the
+# multi-brand `attribute_to_brands` + `classify_post` from
+# `x_monitor.attribution`. U9 (migration 022) drops the legacy
+# `classify_signal` 6-bucket single-string classifier — the pipeline
+# now stamps (post_type, sentiment) tuples per brand instead.
 from .attribution import (
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
     attribute_to_brands,
+    classify_post,
     compile_keyword_index,
 )
 from .relevance import RelevanceConfig, filter_posts, load_filter
@@ -90,12 +87,13 @@ def filter_and_review(
       - Soft-dropped items are added to the review queue with
         reason="banned_token" (so the operator can promote them via
         `x-monitor review resolve` if they turn out to be real signal).
-      - Low-engagement release posts are added to the review queue with
-        reason="low_engagement" (the existing R25 rule). This rule only
-        runs on the KEPT set — the previous behavior iterated over the
-        unfiltered `items`, which meant a filter-dropped post would
-        still appear in the review queue with a tweet_id that wasn't
-        in the DB. That bug is fixed here.
+
+    U9 (migration 022): the `expected_signal == "release"` low-engagement
+    review rule was REMOVED with the 6-signal taxonomy. The rule fired
+    on Q1/release posts with like_count < 2; with `expected_signal`
+    gone, the rule cannot apply uniformly. Per-Q1 low-engagement
+    enforcement is a follow-up if needed (operators can still inspect
+    the kept set with like_count=0/1 via the dashboard).
 
     Items here are normalized post dicts (with `id`, `text`,
     `author_handle`, `like_count`, `brand_id`, `source_query_id`).
@@ -113,18 +111,6 @@ def filter_and_review(
             brand_id=brand_id,
             rule="must_have_none",
         )
-    # Low-engagement rule runs ONLY on the kept set.
-    for it in kept:
-        if (
-            q.expected_signal == "release"
-            and (it.get("like_count") or 0) < 2
-        ):
-            review.append_rule_match(
-                tweet_id=it.get("id", ""),
-                reason="low_engagement",
-                brand_id=brand_id,
-                rule="release_min_faves",
-            )
     # v1.4: enrich the kept set with article headlines (X-articles go
     # through api.get_article when both api and the URL match).
     if cache is not None:
@@ -167,39 +153,32 @@ def pipeline_lock(lock_path: Path, *, blocking: bool = False):
         fd.close()
 
 def _signal_to_qid(signal: str) -> str:
-    """Map a classified signal to the legacy Q1-Q6 source_query_id.
+    """U9 (migration 022): the Q1-Q6 source_query_id mapping is GONE.
 
-    This preserves dashboard rendering (`signal_breakdown` keys are Q1-Q6)
-    for tweets that came back from the new intent calls. Account calls
-    always stamp Q1; intent calls stamp the signal-derived QID.
+    This stub is kept only as a defensive default for the rare code
+    path that still imports it; it now returns "Q5" (the generic
+    "other" QID) for any input. New code must not call this.
     """
-    return {
-        "release": "Q1",
-        "community_question": "Q2",
-        "criticism": "Q3",
-        "commenter_capture": "Q4",
-        "other": "Q5",
-        "praise": "Q6",
-    }.get(signal, "Q5")
+    return "Q5"
+
 
 def _planned_call_to_query(call: "PlannedCall") -> Query:
     """Synthesize a Query object for the v1.2 filter_and_review helper.
 
-    The filter only reads .id, .min_faves, .query_string, and
-    .expected_signal. Account calls get Q1/release; intent calls get
-    Q5/other (the helper uses these only for logging; the per-tweet
-    source_query_id is set on the tweet itself before this is called).
+    U9 (migration 022): the Query model no longer carries
+    `expected_signal` (the 6-signal taxonomy was killed). The filter
+    only reads .id, .min_faves, .query_string. Account calls get
+    Q1 (min_faves=1, the "release-like" preset); brand_wide calls
+    get a generic Q5 (min_faves=0).
     """
     from .query_plan import PlannedCall  # local to avoid circular at import
     if call.call_kind == "account":
-        qid, signal, min_faves = "Q1", "release", 1
+        qid, min_faves = "Q1", 1
     else:
-        qid, signal = _signal_to_qid(call.expected_signal), call.expected_signal
-        min_faves = 0
+        qid, min_faves = "Q5", 0
     return Query(
         id=qid,  # type: ignore[arg-type]
         query_string=call.query_string,
-        expected_signal=signal,  # type: ignore[arg-type]
         max_results=50,
         enabled=True,
         min_faves=min_faves,
@@ -360,14 +339,30 @@ def _attribute_call_items(
     items: list[dict[str, Any]],
     index: Any,
     brand_search_terms: dict[str, str],
+    brand_registry: dict[str, Any] | None = None,
+    anthropic_client: Any = None,
 ) -> int:
-    """Stamp brand_id/brand_ids/mentions/signals/source_query_id on each
-    item via attribute_to_brands + the legacy signal classifier.
+    """Stamp brand_id/brand_ids/mentions/classifications on each item via
+    attribute_to_brands + classify_post.
+
+    U9 (migration 022): replaces the legacy single-string
+    `_legacy_classify_signal` with the new (post_type, sentiment)
+    classifier. Each item gets:
+      - it["brand_id"]      (legacy compat: first match)
+      - it["brand_ids"]     (list of all detected brands)
+      - it["mentions"]      (list of MentionRow instances)
+      - it["classifications"] (dict[brand_id, (post_type, sentiment)])
 
     user_mention / hashtag stay offline (detection tables not populated);
     attribution is body_keyword + search_term only. Items that match no
-    brand are marked _unattributed (signals={}). Returns the count of
-    items that matched at least one brand.
+    brand are marked _unattributed (classifications={}). Returns the
+    count of items that matched at least one brand.
+
+    When `brand_registry` + `anthropic_client` are provided, classify_post
+    makes an LLM call to derive (post_type, sentiment). When omitted,
+    no classifications are written (the legacy single-string signal
+    fallback is gone; the pipeline can run offline-only and skip the
+    posts_brands_signals writes).
     """
     from datetime import datetime as _dt, timezone as _tz
     classified = 0
@@ -411,21 +406,27 @@ def _attribute_call_items(
             it["brand_ids"] = []
             it["brand_id"] = UNATTRIBUTED_BRAND_ID
             it["mentions"] = mentions
-            it["signals"] = {}
+            it["classifications"] = {}
         else:
             it["brand_id"] = brand_ids[0]
             it["brand_ids"] = brand_ids
             it["mentions"] = mentions
-            with _warnings.catch_warnings():
-                _warnings.simplefilter("ignore", DeprecationWarning)
-                sig = _legacy_classify_signal(it.get("text", ""))
-            it["signals"] = {b: sig for b in brand_ids}
+            # U9: per-brand (post_type, sentiment) classification via
+            # `classify_post`. When brand_registry + anthropic_client are
+            # both provided this hits Claude Haiku; when either is
+            # missing, classify_post returns {} and the kept item still
+            # gets stored (post_type + sentiment are filled in later by
+            # the reattribute pipeline if needed).
+            classifications: dict[str, tuple[str, str]] = {}
+            if brand_registry is not None:
+                classifications = classify_post(
+                    text=it.get("text") or "",
+                    brand_ids=brand_ids,
+                    brand_registry=brand_registry,
+                    anthropic_client=anthropic_client,
+                )
+            it["classifications"] = classifications
             classified += 1
-        with _warnings.catch_warnings():
-            _warnings.simplefilter("ignore", DeprecationWarning)
-            it["source_query_id"] = _signal_to_qid(
-                _legacy_classify_signal(it.get("text", ""))
-            )
     return classified
 
 
@@ -457,7 +458,10 @@ def _ingest_quote_tweets(
             qt.get("quoted_status_id") or ""
         ) == parent_id_str:
             qt["quoted_text"] = parent_text
-    _attribute_call_items(qt_items, index, brand_search_terms)
+    _attribute_call_items(
+        qt_items, index, brand_search_terms,
+        brand_registry=None, anthropic_client=None,
+    )
     kept = [it for it in qt_items if not it.get("_unattributed")]
     if not kept:
         return 0
@@ -541,8 +545,8 @@ class RunPipeline:
                 "n_queries_run": 0,
                 "n_results": 0,
                 "n_inserted": 0,
-                "n_signals_written": 0,
-                "n_signals_dropped": 0,
+                "n_classifications_written": 0,
+                "n_classifications_dropped": 0,
                 "n_headlines_fetched": 0,
                 "n_headlines_cached": 0,
             },
@@ -725,7 +729,8 @@ class RunPipeline:
                     # attribution-side source.
                     index, _ = _build_brand_index(brand_tokens, models)
                     classified = _attribute_call_items(
-                        items, index, brand_search_terms_db
+                        items, index, brand_search_terms_db,
+                        brand_registry=None, anthropic_client=None,
                     )
                     # Drop items that matched no brand. These have no
                     # signal value for brand polarity. (v1.6 intent-branch
@@ -795,8 +800,8 @@ class RunPipeline:
                         encoding="utf-8",
                     )
                     n_inserted = store.insert_posts(kept_all)
-                    summary["totals"]["n_signals_written"] += store._signals_written
-                    summary["totals"]["n_signals_dropped"] += store._signals_dropped
+                    summary["totals"]["n_classifications_written"] += store._classifications_written
+                    summary["totals"]["n_classifications_dropped"] += store._classifications_dropped
 
                     log.info(
                         "call model=%s kind=%s bucket=%s n_results=%d "

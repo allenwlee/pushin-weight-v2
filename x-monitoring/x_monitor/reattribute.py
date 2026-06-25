@@ -3,7 +3,7 @@
 
 Walks every row in `posts` and re-runs the v1.8 multi-brand attribution
 pipeline (`attribute_to_brands` + `compute_post_brands` +
-`classify_signal`) on each. Writes the results to `posts_brands`,
+`classify_post`) on each. Writes the results to `posts_brands`,
 `posts_brands_mentions`, and `posts_brands_signals` via the v1.8 Store methods,
 which are idempotent via `ON CONFLICT DO UPDATE`.
 
@@ -13,6 +13,11 @@ the `posts.brand_id` column. The migration leaves `posts_brands` /
 posts that pre-date the v1.8 schema); `reattribute_all_posts` walks
 all 2,008 historical posts and fills them in.
 
+U9: `classify_post` replaces `classify_signal` and returns
+{brand_id: (post_type, sentiment)} tuples. The legacy `signal_id`
+column was dropped in migration 022 — this module no longer writes
+or reads it.
+
 Design notes (R19, plan Unit 5):
   - **Idempotent**: every write uses `ON CONFLICT DO UPDATE`. Running
     the function twice on the same DB produces identical row counts.
@@ -20,7 +25,7 @@ Design notes (R19, plan Unit 5):
     expensive call (regex compilation). We load the four detection
     tables once at the top of the function and pass them down for
     every post.
-  - **LLM is optional**: `classify_signal` returns `{}` when no
+  - **LLM is optional**: `classify_post` returns `{}` when no
     `anthropic_client` is supplied. Offline operation is the default.
   - **Per-post transaction**: we wrap each post's 3-table write in
     `store.transaction()`. A single post failing doesn't poison the
@@ -45,7 +50,7 @@ from .attribution import (
     AnthropicClaudeClient,
     BrandRow,
     attribute_to_brands,
-    classify_signal,
+    classify_post,
     compile_keyword_index,
     compute_post_brands,
 )
@@ -267,25 +272,25 @@ def reattribute_all_posts(
                     counts["errors"] += 1
                     continue
 
-                # 3. Per-brand signal classification (optional).
-                brand_ids_for_signal = [
+                # 3. Per-brand (post_type, sentiment) classification (optional).
+                brand_ids_for_classify = [
                     b for b, _w in posts_brands if b != UNATTRIBUTED_BRAND_ID
                 ]
-                signals = classify_signal(
+                classifications = classify_post(
                     text=normalized.get("text") or "",
-                    brand_ids=brand_ids_for_signal,
+                    brand_ids=brand_ids_for_classify,
                     brand_registry=brand_registry,
                     anthropic_client=anthropic_client,
                 )
 
                 n_posts_brands = len(posts_brands)
                 n_mentions = len(mentions)
-                n_signals = len(signals)
+                n_classifications = len(classifications)
 
                 if dry_run:
                     counts["posts_brands_written"] += n_posts_brands
                     counts["posts_brands_mentions_written"] += n_mentions
-                    counts["posts_brands_signals_written"] += n_signals
+                    counts["posts_brands_signals_written"] += n_classifications
                     continue
 
                 # Real write path. Each post in its own transaction
@@ -318,17 +323,18 @@ def reattribute_all_posts(
                                 raw_token=m.raw_token,
                                 mentioned_at=m.mentioned_at,
                             )
-                        for brand_id, signal in signals.items():
+                        for brand_id, (post_type, sentiment) in classifications.items():
                             if brand_id == UNATTRIBUTED_BRAND_ID:
                                 continue
                             store.insert_posts_brands_signals(
                                 post_id=post_id,
                                 brand_id=brand_id,
-                                signal=signal,
+                                post_type=post_type,
+                                sentiment=sentiment,
                             )
                     counts["posts_brands_written"] += n_posts_brands
                     counts["posts_brands_mentions_written"] += n_mentions
-                    counts["posts_brands_signals_written"] += n_signals
+                    counts["posts_brands_signals_written"] += n_classifications
                 except Exception as e:
                     logger.warning(
                         "reattribute: post %s failed to write: %s",

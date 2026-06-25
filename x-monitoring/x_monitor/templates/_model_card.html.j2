@@ -4,10 +4,14 @@
       <h2>{{ card.display_name }}</h2>
       <span class="model-id muted">{{ card.brand_id }}</span>
     </header>
+    {# U9 (migration 022): the chart series are sentiments (positive /
+       negative / neutral / mixed), not the legacy 6-signal taxonomy.
+       The data-signal-labels attribute name is preserved for the
+       trend-chart JS (it still reads that attribute). #}
     <div class="trend-chart-wrap" data-chart='{{ card.chart|tojson }}'{% if card.signal_labels_json %} data-signal-labels='{{ card.signal_labels_json }}'{% endif %}>
       <canvas class="trend-chart"
               data-brand-id="{{ card.brand_id }}"
-              aria-label="Daily tweet volume by signal, last 14 days"></canvas>
+              aria-label="Daily tweet volume by sentiment, last 14 days"></canvas>
     </div>
     <div class="top3-grid">
       <section class="top3-col">

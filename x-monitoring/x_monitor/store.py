@@ -135,34 +135,33 @@ class Store:
         # store.close() and re-open if they mutate the brands table).
         self._brand_cache: list[BrandRow] | None = None
         # v1.8 (Unit 3): caches for the i18n enum-key sets
-        # (signals, roles). Same lazy / not-invalidated
-        # lifecycle as _brand_cache — the *enum tables are seeded once
-        # by migration 008 and not mutated at runtime.
-        self._signals_cache: set[str] | None = None
+        # (roles). Same lazy / not-invalidated lifecycle as
+        # _brand_cache — the *enum tables are seeded once by migration
+        # 008 and not mutated at runtime. U9 removed the `signals`
+        # cache; signal tables were dropped in migration 022.
         self._roles_cache: set[str] | None = None
         # U9: caches for the new enum families introduced by
         # migration 019 (post_type_keys, sentiment_keys). Same
-        # lazy / not-invalidated lifecycle as the signals/roles caches.
+        # lazy / not-invalidated lifecycle as the roles cache.
         self._post_type_cache: set[str] | None = None
         self._sentiment_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
-        self._signals_written: int = 0
-        self._signals_dropped: int = 0
+        self._classifications_written: int = 0
+        self._classifications_dropped: int = 0
         # U8 (migration 020): integer-id lookup caches. These back the
         # "string-in, INTEGER-out" pattern at the Store API — public
         # methods still accept slug/keyword strings, but internal
         # INSERTs convert to INTEGER ids via these maps. Populated
         # lazily (the lookup tables are tiny: brands=12, companies=11,
-        # accounts~20, signals=6, roles=3, post_type_keys=4,
-        # sentiment_keys=4, hf_orgs=11). Caches are not invalidated
-        # within a Store instance lifetime — see the comments on
-        # _signals_cache above for the same lifecycle.
+        # accounts~20, roles=3, post_type_keys=4, sentiment_keys=4,
+        # hf_orgs=11). Caches are not invalidated within a Store
+        # instance lifetime — see the comments on _roles_cache above
+        # for the same lifecycle.
         self._brand_id_map: dict[str, int] | None = None
         self._company_id_map: dict[str, int] | None = None
         self._account_id_map: dict[str, int] | None = None
         self._hf_org_id_map: dict[str, int] | None = None
-        self._signal_id_map: dict[str, int] | None = None
         self._role_id_map: dict[str, int] | None = None
         self._post_type_id_map: dict[str, int] | None = None
         self._sentiment_id_map: dict[str, int] | None = None
@@ -251,33 +250,31 @@ class Store:
         posts_brands, posts_brands_mentions, posts_brands_signals). Re-inserting
         the same tweet_id is a no-op (INSERT OR IGNORE on posts).
 
-        Per-post dict fields (R2, R3, R6, R8, R15, R16):
+        Per-post dict fields (R2, R3, R6, R8, R15, R16, U9):
           - brand_ids: list[str]     (v1.8 multi-brand)
           - mentions: list[MentionRow] (4-source decomposition)
-          - signals: dict[brand_id, signal] (per-brand signal)
-
-        Backward-compat: if `brand_id` (str|list) and/or `signal` (str|
-        list[dict|tuple]) are present, derive v1.8 fields from them so
-        legacy callers (Unit 3) continue to work.
+          - post_types: dict[brand_id, post_type]  (U9: per-brand classification)
+          - sentiments: dict[brand_id, sentiment]  (U9: per-brand classification)
 
         Posts with no brand_id get a sentinel `_unattributed` row in
         posts_brands so the treemap's "unattributed" bin still works.
-        `_unattributed` is BLOCKED from posts_brands_signals by the
-        schema's CHECK constraint (Decision 15).
+        `_unattributed` is BLOCKED from posts_brands_signals at the
+        application level (post-U8 — the schema-level CHECK was
+        dropped because the sentinel's INTEGER id is data-dependent).
         """
         if not posts:
             return 0
         # Source of truth for the posts_brands_signals / posts_brands_mentions FK
         # guards: the brand_ids actually present in the `brands` table
         # (cached). This is wider than the per-post `valid_brands` list
-        # (which is brand_ids ∩ KNOWN_MODELS) so cross-mention signals
+        # (which is brand_ids ∩ KNOWN_MODELS) so cross-mention classifications
         # and v1.8 brands (mistral/stepfun/ernie/hunyuan) are not
         # dropped. See store._known_brand_ids().
         known_ids: set[str] = self._known_brand_ids()
         # Reset per-call counters so the caller reads only this call's
         # write/drop totals.
-        self._signals_written = 0
-        self._signals_dropped = 0
+        self._classifications_written = 0
+        self._classifications_dropped = 0
         n_new = 0
         with self.transaction() as conn:
             for p in posts:
@@ -407,82 +404,110 @@ class Store:
                             """,
                             (brand_id_int, post_id_int, weight),
                         )
-                    # Per-brand signals: v1.8 callers pass signals as a
-                    # dict[brand_id, signal]. Legacy callers pass a
-                    # single `signal` string OR a list of
-                    # (brand_id, signal) tuples.
-                    per_brand_signals: list[tuple[str, str]] = (
-                        self._extract_per_brand_signals(p, valid_brands)
-                    )
-                    for b, sig in per_brand_signals:
+                    # Per-brand classifications (U9): callers pass
+                    # `post_types` and `sentiments` as parallel dicts
+                    # {brand_id: post_type_key} and {brand_id: sentiment_key}.
+                    # Both must be present for a row to be written; if
+                    # either is missing for a brand, drop with a warning.
+                    post_types_map = p.get("post_types") or {}
+                    sentiments_map = p.get("sentiments") or {}
+                    classification_brands = set(post_types_map) | set(sentiments_map)
+                    for b in classification_brands:
                         if b == "_unattributed":
                             # posts_brands_signals excludes the sentinel
                             # (the post-fetch attribution never emits a
-                            # signal for the sentinel brand). Skip.
+                            # classification for the sentinel brand). Skip.
                             continue
-                        # Guard against LLM hallucinations: per_brand_signals
-                        # comes from the LLM and may contain a brand_id not
-                        # in the brands table. Checked against the
-                        # brands-table source of truth (known_ids), NOT the
-                        # per-post valid_brands, so cross-mention signals
-                        # survive. Regression: cron hot path crashed at this
-                        # site on 2026-06-20 (cycle 20260620T081403_0000-).
+                        # Guard against LLM hallucinations: the
+                        # classification dicts come from the LLM and
+                        # may contain a brand_id not in the brands
+                        # table. Checked against the brands-table
+                        # source of truth (known_ids), NOT the
+                        # per-post valid_brands, so cross-mention
+                        # classifications survive.
                         if b not in known_ids:
-                            self._signals_dropped += 1
+                            self._classifications_dropped += 1
                             _log.warning(
-                                "insert_posts: dropping signal for "
+                                "insert_posts: dropping classification for "
                                 "brand_id=%r not in brands table "
-                                "(post_id=%s signal=%r)",
-                                b, tweet_id_str, sig,
+                                "(post_id=%s)",
+                                b, tweet_id_str,
                             )
                             continue
                         brand_id_int = self._brand_int_id(b)
                         if brand_id_int is None:
-                            self._signals_dropped += 1
+                            self._classifications_dropped += 1
                             continue
-                        # v1.8 (Unit 3): signal is now FK-validated
-                        # against signals (renamed from signal_keys in
-                        # 014). Hallucinated signal values would raise
+                        pt = post_types_map.get(b)
+                        sent = sentiments_map.get(b)
+                        if not pt or not sent:
+                            # U9 (migration 022) requires BOTH columns
+                            # NOT NULL. Drop a classification if either
+                            # half is missing rather than writing a
+                            # half-populated row.
+                            self._classifications_dropped += 1
+                            _log.warning(
+                                "insert_posts: dropping classification for "
+                                "brand_id=%r — missing post_type or sentiment "
+                                "(post_id=%s pt=%r sent=%r)",
+                                b, tweet_id_str, pt, sent,
+                            )
+                            continue
+                        # U9 (migration 019/022): post_type and
+                        # sentiment are FK-validated against
+                        # post_type_keys and sentiment_keys.
+                        # Hallucinated values would raise
                         # IntegrityError; drop them to the dead-letter
                         # log instead.
-                        if sig not in self._known_signal_keys():
+                        if pt not in self._known_post_type_keys():
                             self._dead_letter_enum(
-                                "signal", sig,
+                                "post_type", pt,
                                 table="posts_brands_signals",
                                 post_id=tweet_id_str,
                                 brand_id=b,
                             )
-                            self._signals_dropped += 1
+                            self._classifications_dropped += 1
                             continue
-                        # U8: posts_brands_signals stores INTEGER id
-                        # for the signal (not the TEXT key). Look it
-                        # up before the INSERT.
-                        signal_id_int = self._signal_int_id(sig)
-                        if signal_id_int is None:
+                        if sent not in self._known_sentiment_keys():
+                            self._dead_letter_enum(
+                                "sentiment", sent,
+                                table="posts_brands_signals",
+                                post_id=tweet_id_str,
+                                brand_id=b,
+                            )
+                            self._classifications_dropped += 1
+                            continue
+                        # U8: posts_brands_signals stores INTEGER ids
+                        # for post_type and sentiment (not the TEXT
+                        # keys). Look them up before the INSERT.
+                        post_type_int = self._post_type_int_id(pt)
+                        sentiment_int = self._sentiment_int_id(sent)
+                        if post_type_int is None or sentiment_int is None:
                             # Should be impossible — we just checked
-                            # the key is in _known_signal_keys() —
-                            # but the cache could be stale; drop to
-                            # the dead-letter log defensively.
-                            self._dead_letter_enum(
-                                "signal", sig,
-                                table="posts_brands_signals",
-                                post_id=tweet_id_str,
-                                brand_id=b,
+                            # both keys against _known_*_keys() — but
+                            # the cache could be stale; drop
+                            # defensively.
+                            self._classifications_dropped += 1
+                            _log.warning(
+                                "insert_posts: dropping classification for "
+                                "brand_id=%r — unresolvable id (post_id=%s)",
+                                b, tweet_id_str,
                             )
-                            self._signals_dropped += 1
                             continue
-                        # R11: ON CONFLICT DO UPDATE.
+                        # R11 + U9: ON CONFLICT DO UPDATE; the legacy
+                        # `signal_id` column was dropped in 022.
                         conn.execute(
                             """
                             INSERT INTO posts_brands_signals(
-                                post_id, brand_id, signal_id
-                            ) VALUES (?, ?, ?)
+                                post_id, brand_id, post_type, sentiment
+                            ) VALUES (?, ?, ?, ?)
                             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                                signal_id = excluded.signal_id
+                                post_type = excluded.post_type,
+                                sentiment = excluded.sentiment
                             """,
-                            (post_id_int, brand_id_int, signal_id_int),
+                            (post_id_int, brand_id_int, post_type_int, sentiment_int),
                         )
-                        self._signals_written += 1
+                        self._classifications_written += 1
                     # Mentions (R10). v1.8 callers pass `mentions` as a
                     # list of MentionRow-like dicts/dataclasses. Legacy
                     # callers don't pass mentions at all (no rows
@@ -597,40 +622,36 @@ class Store:
             return [val] if val else []
         return []
 
-    def _extract_per_brand_signals(
-        self, p: dict[str, Any], valid_brands: list[str]
-    ) -> list[tuple[str, str]]:
-        """Normalize the post dict's signal field(s) to list[(brand_id, signal)].
+    def _extract_per_brand_classifications(
+        self, p: dict[str, Any]
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Normalize the post dict's classification fields.
 
-        v1.8 callers pass `signals: dict[brand_id, signal]`. Legacy
-        callers pass `signal: str | list[(brand_id, signal)] | list[dict]`.
-        The legacy single-string path emits one signal per brand in
-        `valid_brands`.
+        U9 callers pass:
+          - post_types: dict[brand_id, post_type_key]
+          - sentiments: dict[brand_id, sentiment_key]
+
+        Returns two parallel dicts. Brands present in only one of the
+        two dicts are filtered out downstream (U9 requires both NOT
+        NULL on the row).
         """
-        if "signals" in p and isinstance(p["signals"], dict) and p["signals"]:
-            return [(b, s) for b, s in p["signals"].items() if b and s]
-        signal_raw = p.get("signal")
-        per_brand: list[tuple[str, str]] = []
-        if isinstance(signal_raw, list):
-            for item in signal_raw:
-                if (
-                    isinstance(item, tuple)
-                    and len(item) == 2
-                    and isinstance(item[0], str)
-                    and isinstance(item[1], str)
-                ):
-                    per_brand.append((item[0], item[1]))
-                elif (
-                    isinstance(item, dict)
-                    and "brand_id" in item
-                    and "signal" in item
-                ):
-                    per_brand.append((item["brand_id"], item["signal"]))
-        elif isinstance(signal_raw, str) and signal_raw:
-            # Legacy single-signal path: emit one row per brand.
-            for b in valid_brands:
-                per_brand.append((b, signal_raw))
-        return per_brand
+        post_types = p.get("post_types") or {}
+        sentiments = p.get("sentiments") or {}
+        if not isinstance(post_types, dict):
+            post_types = {}
+        if not isinstance(sentiments, dict):
+            sentiments = {}
+        # Filter to string keys/values only; defensive against
+        # malformed LLM output.
+        pt_out: dict[str, str] = {
+            b: v for b, v in post_types.items()
+            if isinstance(b, str) and b and isinstance(v, str) and v
+        }
+        sent_out: dict[str, str] = {
+            b: v for b, v in sentiments.items()
+            if isinstance(b, str) and b and isinstance(v, str) and v
+        }
+        return pt_out, sent_out
 
     # --- v1.7: per-locale translation helpers -----------------------------
 
@@ -1325,48 +1346,40 @@ class Store:
         self,
         post_id: str,
         brand_id: str,
-        signal: str | None = None,
-        post_type: str | None = None,
-        sentiment: str | None = None,
+        post_type: str,
+        sentiment: str,
     ) -> None:
-        """Upsert one row into posts_brands_signals (R11).
+        """Upsert one row into posts_brands_signals (R11, U9).
 
-        ON CONFLICT(post_id, brand_id) DO UPDATE SET signal_id =
-        excluded.signal_id, post_type = excluded.post_type, sentiment =
-        excluded.sentiment.
+        U9: both `post_type` and `sentiment` are required (NOT NULL post-022).
+        The legacy `signal` column was dropped in migration 022 — this
+        method no longer accepts it.
 
-        `_unattributed` is BLOCKED by the schema's CHECK constraint
-        (Decision 15). Passes a non-sentinel brand_id.
+        ON CONFLICT(post_id, brand_id) DO UPDATE SET post_type =
+        excluded.post_type, sentiment = excluded.sentiment.
+
+        `_unattributed` is BLOCKED by an application-level guard
+        (Decision 15 + U8 — the schema-level CHECK was dropped because
+        the sentinel's INTEGER id is data-dependent). Passes a
+        non-sentinel brand_id.
 
         Top-gun ON CONFLICT gotcha: all written columns MUST be in the
         INSERT column list.
 
-        Migration 019 (Unit 9) added the optional post_type + sentiment
-        columns. Legacy callers pass only `signal`; new callers (the
-        post-U9 classifier) pass post_type + sentiment instead. Both
-        shapes are supported.
-
         U8 (migration 020): all FK columns (post_id, brand_id,
-        signal_id, post_type, sentiment) are stored as INTEGER ids
-        (FKs to posts.id, brands.id, signals.id, post_type_keys.id,
-        sentiment_keys.id). The public signature still takes TEXT
-        slugs/keys; this method resolves each to its INTEGER id
-        before the INSERT.
+        post_type, sentiment) are stored as INTEGER ids (FKs to
+        posts.id, brands.id, post_type_keys.id, sentiment_keys.id).
+        The public signature still takes TEXT slugs/keys; this method
+        resolves each to its INTEGER id before the INSERT.
 
         Guards brand_id against the brands table (the FK target) so the
         reattribute path can't raise IntegrityError. Unknown brand_ids
         are dropped with a warning rather than aborting the caller's
         transaction.
-
-        U8 (migration 020): the schema-level CHECK constraint that
-        blocked `_unattributed` (the sentinel brand) was dropped
-        because the sentinel's INTEGER id is data-dependent (insertion
-        order could change it). The block moves to an explicit
-        application-level guard here using the `is_sentinel` column.
         """
         if brand_id not in self._known_brand_ids():
             _log.warning(
-                "insert_posts_brands_signals: dropping signal for "
+                "insert_posts_brands_signals: dropping classification for "
                 "brand_id=%r not in brands table (post_id=%s)",
                 brand_id, post_id,
             )
@@ -1379,26 +1392,13 @@ class Store:
         }
         if brand_id in sentinel_brand_ids:
             _log.warning(
-                "insert_posts_brands_signals: dropping signal for "
+                "insert_posts_brands_signals: dropping classification for "
                 "sentinel brand_id=%r (post_id=%s)",
                 brand_id, post_id,
             )
             return
-        # v1.8 (Unit 3): enum FK guard. signal is FK-validated against
-        # signals (renamed from signal_keys in 014). Unknown signal values
-        # would raise IntegrityError; drop them to the dead-letter log
-        # instead. None is allowed (post-U9 rows where the classifier
-        # emitted post_type + sentiment but not signal).
-        if signal is not None and signal not in self._known_signal_keys():
-            self._dead_letter_enum(
-                "signal", signal,
-                table="posts_brands_signals",
-                post_id=post_id,
-                brand_id=brand_id,
-            )
-            return
         # U9: post_type FK guard.
-        if post_type is not None and post_type not in self._known_post_type_keys():
+        if post_type not in self._known_post_type_keys():
             self._dead_letter_enum(
                 "post_type", post_type,
                 table="posts_brands_signals",
@@ -1407,7 +1407,7 @@ class Store:
             )
             return
         # U9: sentiment FK guard.
-        if sentiment is not None and sentiment not in self._known_sentiment_keys():
+        if sentiment not in self._known_sentiment_keys():
             self._dead_letter_enum(
                 "sentiment", sentiment,
                 table="posts_brands_signals",
@@ -1424,29 +1424,28 @@ class Store:
         if post_id_int is None or brand_id_int is None:
             _log.warning(
                 "insert_posts_brands_signals: dropping row; unresolvable id "
-                "(post_id=%s brand_id=%s signal=%s)",
-                post_id, brand_id, signal,
+                "(post_id=%s brand_id=%s)",
+                post_id, brand_id,
             )
             return
-        signal_id_int: int | None = (
-            self._signal_int_id(signal) if signal is not None else None
-        )
-        post_type_int: int | None = (
-            self._post_type_int_id(post_type) if post_type is not None else None
-        )
-        sentiment_int: int | None = (
-            self._sentiment_int_id(sentiment) if sentiment is not None else None
-        )
+        post_type_int = self._post_type_int_id(post_type)
+        sentiment_int = self._sentiment_int_id(sentiment)
+        if post_type_int is None or sentiment_int is None:
+            _log.warning(
+                "insert_posts_brands_signals: dropping row; unresolvable id "
+                "(post_id=%s brand_id=%s post_type=%s sentiment=%s)",
+                post_id, brand_id, post_type, sentiment,
+            )
+            return
         self._conn.execute(
             """
-            INSERT INTO posts_brands_signals(post_id, brand_id, signal_id, post_type, sentiment)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO posts_brands_signals(post_id, brand_id, post_type, sentiment)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                signal_id = excluded.signal_id,
                 post_type = excluded.post_type,
                 sentiment = excluded.sentiment
             """,
-            (post_id_int, brand_id_int, signal_id_int, post_type_int, sentiment_int),
+            (post_id_int, brand_id_int, post_type_int, sentiment_int),
         )
 
     # --- v1.8: detection-registry read methods (R12, R13) -----------------
@@ -1506,18 +1505,14 @@ class Store:
     # loader should call store.close() + re-open to refresh the cache.
 
     def _known_signal_keys(self) -> set[str]:
-        """Return the set of canonical signal keys (cached).
+        """Legacy signal-key set.
 
-        Reads from the `signals` table (renamed from `signal_keys` in
-        migration 014). Used by insert_posts_brands_signals as the FK
-        guard for posts_brands_signals.signal_id.
+        Migration 022 (U9) dropped the `signals` table. This method is
+        kept as a stub that returns an empty set so callers (e.g.
+        tests) that still import it don't crash. New code must use
+        `_known_post_type_keys()` / `_known_sentiment_keys()` instead.
         """
-        if self._signals_cache is None:
-            self._signals_cache = {
-                r["key"]
-                for r in self._conn.execute("SELECT key FROM signals").fetchall()
-            }
-        return self._signals_cache
+        return set()
 
     def _known_role_keys(self) -> set[str]:
         """Return the set of canonical role keys (cached).
@@ -1647,15 +1642,14 @@ class Store:
         return int(row["id"]) if row else None
 
     def _signal_int_id(self, signal_key: str) -> int | None:
-        """Map `signals.key` (TEXT) to `signals.id` (INTEGER)."""
-        if self._signal_id_map is None:
-            self._signal_id_map = {
-                r["key"]: r["id"]
-                for r in self._conn.execute(
-                    "SELECT id, key FROM signals"
-                ).fetchall()
-            }
-        return self._signal_id_map.get(signal_key)
+        """Legacy signal-key → INTEGER-id lookup.
+
+        Migration 022 (U9) dropped the `signals` table. This method is
+        kept as a stub that returns None so callers (e.g. tests) that
+        still import it don't crash. New code must use
+        `_post_type_int_id()` / `_sentiment_int_id()` instead.
+        """
+        return None
 
     def _role_int_id(self, role_key: str) -> int | None:
         """Map `roles.key` (TEXT) to `roles.id` (INTEGER)."""
@@ -1768,20 +1762,24 @@ class Store:
             2. `<family>_labels(key=?, lang='en')`
             3. The raw `value` (canonical English key)
 
-        `family` must be one of "signal" / "role".
+        `family` must be one of "role" / "post_type" / "sentiment".
+        The "signal" family was removed in migration 022 (U9) — the
+        `signal_labels` table was dropped along with the legacy 6-signal
+        taxonomy.
         Unknown family raises ValueError. Returns "" when value is
-        None/empty (templates render nothing for missing signals).
+        None/empty (templates render nothing for missing enum labels).
         """
         if value is None or value == "":
             return ""
         labels_table = {
-            "signal": "signal_labels",
             "role": "role_labels",
+            "post_type": "post_type_labels",
+            "sentiment": "sentiment_labels",
         }.get(family)
         if labels_table is None:
             raise ValueError(
                 f"unknown enum family {family!r}; expected "
-                "'signal' / 'role'"
+                "'role' / 'post_type' / 'sentiment'"
             )
         suffix = {"en": "en", "zh-CN": "zh_cn", "zh_cn": "zh_cn"}.get(locale, "en")
         row = self._conn.execute(

@@ -4,39 +4,43 @@
 // serialize_grid_card via Jinja's tojson filter). Idempotent on htmx
 // re-renders: destroys any prior Chart.js instance on the canvas before
 // creating a new one.
+//
+// U9 (migration 022): the 6-signal series taxonomy
+// (release / community_question / criticism / commenter_capture /
+// other / praise) was REPLACED by the 4-sentiment taxonomy
+// (positive / negative / neutral / mixed). The chart keys now match
+// `_DASHBOARD_SENTIMENT_KEYS` in dashboard.py.
 
 (function () {
   'use strict';
 
-  // Six series, ordered to match the old signal-bar left-to-right.
-  // Keys must match `chart_series_keys` in dashboard.py.
+  // Four sentiment series, ordered to match the stacked-bar
+  // left-to-right convention. Keys must match `chart_series_keys`
+  // in dashboard.py.
   var SIGNAL_KEYS = [
-    'release',
-    'community_question',
-    'criticism',
-    'commenter_capture',
-    'other',
-    'praise',
+    'positive',
+    'negative',
+    'neutral',
+    'mixed',
   ];
 
   var SIGNAL_LABELS = {
-    release: 'Q1 release',
-    community_question: 'Q2 community',
-    criticism: 'Q3 criticism',
-    commenter_capture: 'Q4 commenters',
-    other: 'Q5 other',
-    praise: 'Q6 praise',
+    positive: 'positive',
+    negative: 'negative',
+    neutral: 'neutral',
+    mixed: 'mixed',
   };
 
-  // CSS custom property names per signal. Read at chart-creation time so
-  // theme changes take effect without a page reload.
+  // CSS custom property names per sentiment. Read at chart-creation
+  // time so theme changes take effect without a page reload.
+  // U9 mapping: positive = green, negative = red, neutral = muted,
+  // mixed = blue (kept distinct from neutral so the mixed segment
+  // is visually traceable).
   var SIGNAL_CSS_VARS = {
-    release: '--bar-release',
-    community_question: '--bar-community',
-    criticism: '--bar-criticism',
-    commenter_capture: '--bar-other',  // shares with Q5 — both "ambient"
-    other: '--bar-other',
-    praise: '--bar-praise',
+    positive: '--bar-positive',
+    negative: '--bar-negative',
+    neutral: '--bar-neutral',
+    mixed: '--bar-mixed',
   };
 
   function cssVar(name) {
@@ -64,13 +68,13 @@
     var days = payload.days || [];
     var series = payload.series || {};
 
-    // v1.7-i18n (Unit 5): the server emits a per-card data-signal-labels
-    // attribute when the dashboard locale resolves to a label-bearing
-    // locale. When present, it overrides SIGNAL_LABELS so the chart
-    // tooltips render in the user's selected language. Falls back to
-    // the hardcoded English labels when the attribute is missing
-    // (defensive: keeps the chart functional on partial / hand-edited
-    // cards).
+    // v1.7-i18n (Unit 5) / U9 (migration 022): the server emits a per-
+    // card data-signal-labels attribute when the dashboard locale
+    // resolves to a label-bearing locale. When present, it overrides
+    // SIGNAL_LABELS so the chart tooltips render in the user's
+    // selected language. Falls back to the hardcoded English labels
+    // when the attribute is missing (defensive: keeps the chart
+    // functional on partial / hand-edited cards).
     var labelsRaw = wrap.getAttribute('data-signal-labels');
     var labels = SIGNAL_LABELS;
     if (labelsRaw) {

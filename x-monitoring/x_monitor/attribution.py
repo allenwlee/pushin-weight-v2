@@ -19,8 +19,9 @@ Four extraction sources (Decision 6 in the schema plan):
 Plus:
   - `compute_post_brands` consolidates per-source MentionRows into
     one row per distinct brand with fractional weight (Decision 9).
-  - `classify_signal(text, brand_ids)` asks Claude Haiku for a per-brand
-    signal decomposition; hallucinates brand_ids are dropped (R8).
+  - `classify_post(text, brand_ids)` asks Claude Haiku for a per-brand
+    (post_type, sentiment) decomposition; hallucinates brand_ids are
+    dropped (R8). U9 replaces the legacy 6-signal taxonomy.
 
 This module has zero side effects on import. The Store writes happen
 in `x_monitor.store.Store.insert_posts` (Unit 2). This module is pure:
@@ -693,7 +694,12 @@ def attribute_to_brands(
     return deduped
 
 
-# --- classify_signal (R8) -----------------------------------------------
+# --- classify_post (R8, U9) ---------------------------------------------
+# U9: replaces the legacy `classify_signal` (6-bucket single-string
+# signal taxonomy) with a per-brand (post_type, sentiment) tuple
+# classification. The legacy signals table was dropped in migration 022;
+# the new `post_type_keys` + `sentiment_keys` tables are the source of
+# truth.
 
 
 class ClaudeClient(Protocol):
@@ -742,34 +748,53 @@ _BACKOFF_BASE_SECONDS = 1.0
 
 
 def build_signal_prompt(text: str, brand_ids: list[str]) -> str:
-    """Build the LLM prompt for per-brand signal classification.
+    """Build the LLM prompt for per-brand (post_type, sentiment) classification.
 
-    The prompt asks for one signal per brand_id, in order. Each signal
-    is one of: release, community_question, criticism, commenter_capture,
-    praise, other. The model is told to omit brands where the tweet
-    isn't actually about that brand.
+    U9 (replaces the legacy 6-bucket single-string signal taxonomy with
+    a (post_type × sentiment) decomposition):
+
+      post_type (4 buckets — what KIND of post):
+        - buzz_releases           (brand announced something new)
+        - hands_on_usage          (user is using / showing the brand)
+        - performance_comparisons (benchmark / eval / head-to-head)
+        - feedback_questions      (user asking how-to / help / complaint)
+
+      sentiment (4 values — the VALENCE):
+        - positive                (praise, enthusiasm)
+        - negative                (criticism, disappointment)
+        - neutral                 (informational / question)
+        - mixed                   (multiple valences in one post)
+
+    The prompt asks for one (post_type, sentiment) tuple per brand_id.
+    The model is told to OMIT brands where the tweet isn't actually
+    about that brand.
     """
     brand_list = ", ".join(brand_ids) if brand_ids else "(none)"
     return (
-        "You classify a tweet's signal toward a list of brands.\n\n"
+        "You classify a tweet's relationship to a list of brands.\n\n"
         "Tweet text:\n"
         f"\"\"\"\n{text}\n\"\"\"\n\n"
         f"Brands (in order): {brand_list}\n\n"
-        "For each brand, return a signal from this exact set:\n"
-        "  - release              (brand announced something new)\n"
-        "  - community_question   (user asking how-to / help)\n"
-        "  - criticism            (negative sentiment)\n"
-        "  - commenter_capture    (engagement-bait, low-signal)\n"
-        "  - praise               (positive sentiment)\n"
-        "  - other                (anything else, including off-topic)\n\n"
+        "For each brand, return a (post_type, sentiment) tuple from these "
+        "exact sets:\n\n"
+        "post_type:\n"
+        "  - buzz_releases           (brand announced something new)\n"
+        "  - hands_on_usage          (user is using / showing the brand)\n"
+        "  - performance_comparisons (benchmark / eval / head-to-head)\n"
+        "  - feedback_questions      (user asking how-to / help / complaint)\n\n"
+        "sentiment:\n"
+        "  - positive                (praise, enthusiasm)\n"
+        "  - negative                (criticism, disappointment)\n"
+        "  - neutral                 (informational / question)\n"
+        "  - mixed                   (multiple valences in one post)\n\n"
         "Rules:\n"
-        "1. Return ONLY a JSON object: {\"signals\": [{\"brand_id\": str, "
-        "\"signal\": str}, ...]}\n"
+        "1. Return ONLY a JSON object: {\"classifications\": "
+        "[{\"brand_id\": str, \"post_type\": str, \"sentiment\": str}, ...]}\n"
         "2. One entry per brand you classify (you may OMIT brands "
         "that don't apply).\n"
         "3. Use the EXACT brand_id strings from the list above.\n"
         "4. If the tweet is off-topic for all brands, return "
-        "{\"signals\": []}.\n"
+        "{\"classifications\": []}.\n"
         "5. No prose, no explanation, no code fences.\n"
     )
 
@@ -778,8 +803,10 @@ def _parse_signal_response(
     response: dict[str, Any],
     brand_ids: list[str],
     brand_registry_ids: set[str],
-) -> dict[str, str]:
+) -> dict[str, tuple[str, str]]:
     """Parse the LLM response, validate brand_ids, drop hallucinations.
+
+    U9: returns {brand_id: (post_type, sentiment)} tuples.
 
     Args:
         response:           the LLM response dict (already JSON-decoded)
@@ -787,37 +814,42 @@ def _parse_signal_response(
         brand_registry_ids: set of valid brand_ids (from BrandRow list)
 
     Returns:
-        {brand_id: signal} dict. Hallucinated brand_ids are dropped.
-        Unknown signal values are coerced to "other".
+        {brand_id: (post_type, sentiment)} dict. Hallucinated
+        brand_ids are dropped. Unknown post_type or sentiment values
+        are coerced to ('hands_on_usage', 'neutral') (the 019/022
+        fallback values).
     """
-    valid_signals = {
-        "release", "community_question", "criticism",
-        "commenter_capture", "praise", "other",
+    valid_post_types = {
+        "buzz_releases", "hands_on_usage",
+        "performance_comparisons", "feedback_questions",
     }
+    valid_sentiments = {"positive", "negative", "neutral", "mixed"}
     if not isinstance(response, dict):
         return {}
-    results = response.get("signals")
+    results = response.get("classifications")
     if not isinstance(results, list):
         return {}
-    out: dict[str, str] = {}
+    out: dict[str, tuple[str, str]] = {}
     asked_set = set(brand_ids)
     for item in results:
         if not isinstance(item, dict):
             continue
         b = item.get("brand_id")
-        s = item.get("signal")
-        if not isinstance(b, str) or not isinstance(s, str):
+        pt = item.get("post_type")
+        sent = item.get("sentiment")
+        if not isinstance(b, str) or not isinstance(pt, str) or not isinstance(sent, str):
             continue
         # Drop hallucinations (R8).
         if b not in brand_registry_ids:
             continue
         if b not in asked_set:
             logger.debug(
-                "classify_signal: LLM added brand %r not in asked set",
+                "classify_post: LLM added brand %r not in asked set",
                 b,
             )
-        sig = s if s in valid_signals else "other"
-        out[b] = sig
+        post_type = pt if pt in valid_post_types else "hands_on_usage"
+        sentiment = sent if sent in valid_sentiments else "neutral"
+        out[b] = (post_type, sentiment)
     return out
 
 
@@ -842,17 +874,19 @@ def _call_signal_with_retry(
     raise last_exc
 
 
-def classify_signal(
+def classify_post(
     text: str,
     brand_ids: list[str],
     brand_registry: list[BrandRow],
     anthropic_client: ClaudeClient | None = None,
-) -> dict[str, str]:
-    """Per-brand signal classification via Claude Haiku.
+) -> dict[str, tuple[str, str]]:
+    """Per-brand (post_type, sentiment) classification via Claude Haiku.
 
-    Builds the prompt, calls the LLM, parses the per-brand dict,
-    validates every brand_id against `brand_registry`, and drops
-    hallucinations. Returns `{}` on LLM failure (logged as WARN).
+    U9 (replaces the legacy `classify_signal` 6-bucket single-string
+    taxonomy with a (post_type, sentiment) decomposition). Builds the
+    prompt, calls the LLM, parses the per-brand dict, validates every
+    brand_id against `brand_registry`, and drops hallucinations.
+    Returns `{}` on LLM failure (logged as WARN).
 
     Args:
         text:            the post text (the original `posts.text`,
@@ -865,8 +899,8 @@ def classify_signal(
                          for offline operation).
 
     Returns:
-        {brand_id: signal} dict. Empty dict on LLM failure or when
-        brand_ids is empty.
+        {brand_id: (post_type, sentiment)} dict. Empty dict on LLM
+        failure or when brand_ids is empty.
     """
     if not brand_ids or not text:
         return {}
@@ -878,7 +912,7 @@ def classify_signal(
         response = _call_signal_with_retry(anthropic_client, prompt)
     except Exception as e:
         logger.warning(
-            "classify_signal: LLM call failed after %d retries: %s",
+            "classify_post: LLM call failed after %d retries: %s",
             _MAX_RETRIES,
             e,
         )
@@ -886,7 +920,7 @@ def classify_signal(
     parsed = _parse_signal_response(response, brand_ids, registry_ids)
     if not parsed:
         logger.warning(
-            "classify_signal returned no signals for text=%r brand_ids=%r",
+            "classify_post returned no classifications for text=%r brand_ids=%r",
             text[:80],
             brand_ids,
         )
@@ -966,7 +1000,8 @@ __all__ = [
     # Consolidator + classifier
     "compute_post_brands",
     "attribute_to_brands",
-    "classify_signal",
+    "classify_post",
+    "build_signal_prompt",
     # LLM client (Protocol + concrete)
     "AnthropicClaudeClient",
 ]

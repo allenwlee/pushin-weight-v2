@@ -6,8 +6,9 @@ In v1.7, `x_monitor.intent_classifier` owned two responsibilities:
   - `attribute_to_brand(text, ...)` - first-match-wins single brand.
 
 In v1.8 the canonical home moved to `x_monitor.attribution`:
-  - `classify_signal(text, brand_ids, brand_registry, anthropic_client)`
-    now returns a per-brand signal dict (the per-brand decomposition).
+  - `classify_post(text, brand_ids, brand_registry, anthropic_client)`
+    returns a per-brand (post_type, sentiment) dict (U9: replaces
+    the legacy 6-signal single-string taxonomy).
   - `attribute_to_brands(...)` returns all detected brands with
     confidence scores.
 
@@ -16,9 +17,9 @@ still pass) by:
   - Re-exporting the v1.8 names from `attribution` under the v1.7
     names that callers expect (MentionRow, attribute_to_brands,
     compute_post_brands, compile_keyword_index, etc.).
-  - Keeping the legacy `classify_signal(text)` (single-string) shim,
-    which emits a `DeprecationWarning` on every call directing
-    callers to `classify_signal` in `x_monitor.attribution`.
+  - Removing the legacy `classify_signal(text)` (single-string) shim
+    in U9 — the 6-signal taxonomy is gone. Callers must use
+    `classify_post` in `x_monitor.attribution`.
   - Keeping the legacy `attribute_to_brand(text, ...)` (single
     brand) shim which calls the v1.8 `attribute_to_brands` and
     returns the first match (or None).
@@ -53,6 +54,7 @@ from x_monitor.attribution import (  # noqa: F401  (re-exports)
     extract_search_term_match,
     compute_post_brands,
     attribute_to_brands,
+    classify_post,
     AnthropicClaudeClient,
     BRAND_SOURCE_PRIORITY,
     UNATTRIBUTED_BRAND_ID,
@@ -61,79 +63,14 @@ from x_monitor.attribution import (  # noqa: F401  (re-exports)
 )
 
 
-# --- Legacy compat: classify_signal (text-only, single bucket) ----------
-
-# Aliases for tests / callers that referenced the original names.
-Signal = SourceType
-
-
-# Legacy v1.7 priority order. Kept here so the legacy `classify_signal`
-# body is independent of `attribution.py` (which no longer carries
-# these terms).
-_ASCII_SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
-    "praise":             ("amazing", "incredible", "love it",
-                           "mind-blowing", "mind blowing", "好强"),
-    "criticism":          ("broken", "terrible", "worst", "bad", "fail"),
-    "community_question": ("how-to", "how do", "tutorial", "guide", "how to"),
-    "other":              ("benchmark", "eval", "paper", "github", "repo",
-                           "code", "release"),
-}
-_CJK_SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
-    "praise":             ("太强了", "太强", "占嘑", "牛"),
-    "criticism":          ("翻车", "不行", "不好", "失望"),
-    "community_question": ("教程", "怎么", "如何", "请问"),
-    "other":              ("开源",),
-}
-_PRAISE_EMOJI = "\U0001F92F"
-_SIGNAL_PRIORITY: tuple[str, ...] = (
-    "praise",
-    "criticism",
-    "community_question",
-    "other",
-)
-_ASCII_SIGNAL_PATTERNS: dict[str, "re.Pattern[str]"] = {
-    sig: re.compile(
-        r"\b(?:" + "|".join(re.escape(t) for t in terms) + r")\b",
-        re.IGNORECASE,
-    )
-    for sig, terms in _ASCII_SIGNAL_TERMS.items()
-    if terms
-}
-
-
-def classify_signal(text: str) -> str:  # type: ignore[override]
-    """Legacy v1.7 single-string signal classifier.
-
-    First-match-wins in `_SIGNAL_PRIORITY`. Returns one of:
-      release, community_question, criticism, commenter_capture,
-      praise, other.
-
-    .. deprecated::
-        v1.8: use `x_monitor.attribution.classify_signal(text, brand_ids,
-        brand_registry, anthropic_client)` for the per-brand
-        decomposition. This shim remains for callers that don't have
-        brand context (ad-hoc rendering, headline classification).
-    """
-    warnings.warn(
-        "x_monitor.intent_classifier.classify_signal is deprecated; "
-        "use x_monitor.attribution.classify_signals_per_brand "
-        "(or x_monitor.attribution.classify_signal with brand_ids) "
-        "for the v1.8 per-brand signal decomposition.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    if not text:
-        return "other"
-    for sig in _SIGNAL_PRIORITY:
-        pat = _ASCII_SIGNAL_PATTERNS.get(sig)
-        if pat and pat.search(text):
-            return sig
-        for term in _CJK_SIGNAL_TERMS.get(sig, ()):
-            if term in text:
-                return sig
-    if _PRAISE_EMOJI in text:
-        return "praise"
-    return "other"
+# --- U9: the legacy `classify_signal(text)` shim and the `Signal`
+# alias were REMOVED in migration 022 (U9). The 6-signal taxonomy
+# (release / community_question / criticism / commenter_capture /
+# praise / other) is gone — replaced by (post_type, sentiment). Callers
+# must use `classify_post` from `x_monitor.attribution` directly.
+# The helpers below (`attribute_to_brand`, `_is_cjk`,
+# `build_compiled_brand_pattern`) are kept for callers that still
+# use them.
 
 
 # --- Legacy compat: attribute_to_brand (single brand) ------------------

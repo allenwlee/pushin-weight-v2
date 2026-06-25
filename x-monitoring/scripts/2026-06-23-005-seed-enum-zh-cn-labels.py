@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""Override / re-seed the Chinese labels for the 6 signals and 3 roles.
+"""Override / re-seed the Chinese labels for the enum families.
 
-Unit 6 (i18n plan): migration 008 seeded operator-curated Chinese labels
-for the two remaining enum families (signal / role). This script is
-the operator's escape hatch — it UPSERTs the label rows so the operator
-can re-curate any translation without re-running the migration. It
-MUST be run BEFORE the four backfill scripts in U6 because the
-dashboard's chart labels and role bars read from these label tables
-directly.
+Unit 6 (i18n plan): migration 008 seeded operator-curated Chinese
+labels for the two remaining enum families (signal / role). U9
+(migration 022) replaced the `signal` family with two new families
+(`post_type` / `sentiment`); the operator's escape hatch now covers
+those new families plus `role`.
 
-(Note: the `engagement_tier` family was dropped in migration 012, and
-the `role` family was trimmed from 5 to 3 values {official, staff,
-community} in migration 016. This script reflects the post-trim
-schema.)
+This script UPSERTs the label rows so the operator can re-curate any
+translation without re-running the migration. It MUST be run BEFORE
+the four backfill scripts in U6 because the dashboard's chart labels
+and role bars read from these label tables directly.
 
-The default labels below are the same ones seeded by migration 008
-(for signal) and migration 016 (for role); override any value to
-re-curate it. The script accepts a single optional CLI arg: the path
-to a YAML file with the same shape. If unspecified, the defaults are
-written.
+(Note: the `engagement_tier` family was dropped in migration 012, the
+`role` family was trimmed from 5 to 3 values {official, staff,
+community} in migration 016, and the `signal` family was REPLACED by
+`post_type` + `sentiment` in U9 / migration 022. This script reflects
+the post-U9 schema.)
+
+The default labels below are the same ones seeded by migration 019
+(for post_type + sentiment) and migration 016 (for role); override
+any value to re-curate it. The script accepts a single optional CLI
+arg: the path to a YAML file with the same shape. If unspecified, the
+defaults are written.
 
 Usage:
     python3 scripts/2026-06-23-005-seed-enum-zh-cn-labels.py /path/to/x.db
@@ -30,17 +34,25 @@ from pathlib import Path
 from typing import Any
 
 # Default operator-curated zh_cn labels. Mirror these by changing the
-# values here; the migration 008/016 default seeds are below. Each
+# values here; the migration 019/016 default seeds are below. Each
 # (key, label) pair is what the dashboard renders when the locale is
 # zh_cn.
+#
+# U9: the legacy `signal` family is gone; we now expose `post_type`
+# and `sentiment` instead (each with their own label table seeded by
+# migration 019).
 DEFAULT_ZH_CN_LABELS: dict[str, dict[str, str]] = {
-    "signal": {
-        "release": "发布",
-        "community_question": "社区提问",
-        "criticism": "批评",
-        "commenter_capture": "评论互动",
-        "praise": "称赞",
-        "other": "其他",
+    "post_type": {
+        "buzz_releases": "动态发布",
+        "hands_on_usage": "上手实测",
+        "performance_comparisons": "性能对比",
+        "feedback_questions": "反馈与提问",
+    },
+    "sentiment": {
+        "positive": "正面",
+        "negative": "负面",
+        "neutral": "中性",
+        "mixed": "复杂",
     },
     "role": {
         "official": "官方",

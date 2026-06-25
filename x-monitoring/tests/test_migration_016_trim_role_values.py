@@ -167,8 +167,8 @@ def test_migration_016_idempotent(tmp_path):
 
 
 def test_migration_016_full_stack_apply(tmp_path):
-    """All migrations 001-016 apply on a fresh DB; the trimmed role
-    taxonomy is in effect."""
+    """All migrations {1..20, 22} apply on a fresh DB (only 21 absent);
+    the trimmed role taxonomy is in effect."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -178,8 +178,9 @@ def test_migration_016_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 20)), (
-            f"unexpected versions: {applied}"
+        expected = sorted(set(range(1, 21)) | {22})
+        assert applied == expected, (
+            f"unexpected versions: {applied} (expected {expected})"
         )
         # Trimmed role taxonomy.
         keys = {r[0] for r in s._conn.execute("SELECT key FROM roles").fetchall()}
@@ -195,8 +196,15 @@ def test_migration_016_full_stack_apply(tmp_path):
 
 
 def test_migration_016_backfill_brands_accounts_researcher_to_community(tmp_path):
-    """A pre-existing `brands_accounts.role_id` value of 'researcher' is
-    remapped to 'community' by the backfill UPDATE in 016."""
+    """A pre-existing `brands_accounts.role_id` value pointing at the
+    legacy 'researcher' id is remapped to the 'community' id by the
+    backfill UPDATE in 016. Post-020: brands_accounts.role_id is an
+    INTEGER FK to roles.id, so the test operates on integer ids.
+
+    U9 does not affect roles, so this test still exercises the
+    migration 016 backfill semantics — just through the post-020
+    INTEGER column shape.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -206,84 +214,153 @@ def test_migration_016_backfill_brands_accounts_researcher_to_community(tmp_path
         # backfill UPDATE runs against all rows in the table.
         s.upsert_account("minimax", "u_pre", role="official")
 
-        # Insert a "legacy" row directly with role_id='researcher'
-        # (would not be possible via the FK guard, but we bypass
-        # the helper to simulate data that was written pre-U6).
-        # Disable FK enforcement temporarily to insert the bad row.
+        # Look up the ids we'll need to simulate legacy data.
+        researcher_id = s._conn.execute(
+            "SELECT id FROM roles WHERE key='researcher'"
+        ).fetchone()
+        community_id = s._conn.execute(
+            "SELECT id FROM roles WHERE key='community'"
+        ).fetchone()["id"]
+        # The 'researcher' role row may or may not still exist (U6
+        # trim removed it). If absent, we must INSERT it directly to
+        # simulate pre-U6 data (the trim itself ran in 016 — the test
+        # verifies the UPDATE logic, not the trim).
+        if researcher_id is None:
+            s._conn.execute(
+                "INSERT INTO roles(key, created_at) VALUES (?, ?)",
+                ("researcher", "2026-06-23T00:00:00+00:00"),
+            )
+            researcher_id = s._conn.execute(
+                "SELECT id FROM roles WHERE key='researcher'"
+            ).fetchone()["id"]
+        else:
+            researcher_id = researcher_id["id"]
+
+        # Resolve brand_id (INTEGER FK post-020) and author_id.
+        brand_int_id = s._conn.execute(
+            "SELECT id FROM brands WHERE brand_id=?",
+            ("minimax",),
+        ).fetchone()["id"]
+        s._conn.execute(
+            "INSERT INTO accounts(author_id, handle) VALUES (?, ?)",
+            ("handle:u_legacy_researcher", "u_legacy_researcher"),
+        )
+        author_int_id = s._conn.execute(
+            "SELECT id FROM accounts WHERE author_id=?",
+            ("handle:u_legacy_researcher",),
+        ).fetchone()["id"]
+
+        # Insert a "legacy" row with role_id = researcher_id. Disable
+        # FK enforcement to bypass the post-016 guard that would reject
+        # this value; we're simulating data written pre-U6.
         s._conn.execute("PRAGMA foreign_keys = OFF")
         s._conn.execute(
             "INSERT INTO brands_accounts(brand_id, author_id, role_id, added_at) "
             "VALUES (?, ?, ?, ?)",
             (
-                "minimax",
-                "handle:u_legacy_researcher",
-                "researcher",
+                brand_int_id,
+                author_int_id,
+                researcher_id,
                 "2026-06-23T00:00:00+00:00",
             ),
         )
         s._conn.execute("PRAGMA foreign_keys = ON")
 
-        # Apply migration 016 manually by opening the DB with auto_migrate
-        # and re-applying — the backfill UPDATE runs as part of the script.
-        # The Store is already open with auto_migrate=True, so 016 has
-        # already been applied. To test the backfill we need to roll the
-        # DB back to pre-016 state and re-apply 016. Instead, simulate:
-        # call the SQL directly.
+        # Apply the backfill UPDATE in 016's SQL form (operates on
+        # role_id values that resolve to keys in the legacy set).
         s._conn.executescript("""
             UPDATE brands_accounts
-               SET role_id = 'community'
-             WHERE role_id IN ('researcher', 'press', 'vendor');
+               SET role_id = (SELECT id FROM roles WHERE key='community')
+             WHERE role_id = (SELECT id FROM roles WHERE key='researcher');
         """)
         row = s._conn.execute(
-            "SELECT role_id FROM brands_accounts "
-            "WHERE author_id = ?",
-            ("handle:u_legacy_researcher",),
+            "SELECT ba.role_id, r.key "
+            "FROM brands_accounts ba "
+            "JOIN roles r ON r.id = ba.role_id "
+            "WHERE ba.author_id = ?",
+            (author_int_id,),
         ).fetchone()
         assert row is not None
-        assert row["role_id"] == "community", (
-            f"expected role_id=community after backfill, got {row['role_id']}"
+        assert row["role_id"] == community_id, (
+            f"expected role_id={community_id} (community) after backfill, "
+            f"got {row['role_id']}"
+        )
+        assert row["key"] == "community", (
+            f"expected joined key='community', got {row['key']!r}"
         )
     finally:
         s.close()
 
 
 def test_migration_016_backfill_companies_accounts_press_to_community(tmp_path):
-    """A pre-existing `companies_accounts.role_id` value of 'press' is
-    remapped to 'community' by the backfill UPDATE in 016."""
+    """A pre-existing `companies_accounts.role_id` pointing at the
+    legacy 'press' id is remapped to the 'community' id by the
+    backfill UPDATE in 016. Post-020: companies_accounts.role_id is
+    INTEGER FK to roles.id; company_id and author_id are also INTEGER."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
-        # Simulate legacy data: insert a row directly with role_id='press'
-        # (FK enforcement disabled briefly to bypass the guard, simulating
-        # data written pre-U6).
+        press_id_row = s._conn.execute(
+            "SELECT id FROM roles WHERE key='press'"
+        ).fetchone()
+        community_id = s._conn.execute(
+            "SELECT id FROM roles WHERE key='community'"
+        ).fetchone()["id"]
+        if press_id_row is None:
+            s._conn.execute(
+                "INSERT INTO roles(key, created_at) VALUES (?, ?)",
+                ("press", "2026-06-23T00:00:00+00:00"),
+            )
+            press_id = s._conn.execute(
+                "SELECT id FROM roles WHERE key='press'"
+            ).fetchone()["id"]
+        else:
+            press_id = press_id_row["id"]
+
+        # Pick any seeded company (mistral_ai is in the 004 seed).
+        company_int_id = s._conn.execute(
+            "SELECT id FROM companies WHERE company_id=?",
+            ("mistral_ai",),
+        ).fetchone()["id"]
+        s._conn.execute(
+            "INSERT INTO accounts(author_id, handle) VALUES (?, ?)",
+            ("handle:u_legacy_press", "u_legacy_press"),
+        )
+        author_int_id = s._conn.execute(
+            "SELECT id FROM accounts WHERE author_id=?",
+            ("handle:u_legacy_press",),
+        ).fetchone()["id"]
+
         s._conn.execute("PRAGMA foreign_keys = OFF")
         s._conn.execute(
             "INSERT INTO companies_accounts(company_id, author_id, role_id, added_at) "
             "VALUES (?, ?, ?, ?)",
             (
-                "minimax",
-                "handle:u_legacy_press",
-                "press",
+                company_int_id,
+                author_int_id,
+                press_id,
                 "2026-06-23T00:00:00+00:00",
             ),
         )
         s._conn.execute("PRAGMA foreign_keys = ON")
 
-        # Apply the backfill SQL.
         s._conn.executescript("""
             UPDATE companies_accounts
-               SET role_id = 'community'
-             WHERE role_id IN ('researcher', 'press', 'vendor');
+               SET role_id = (SELECT id FROM roles WHERE key='community')
+             WHERE role_id = (SELECT id FROM roles WHERE key='press');
         """)
         row = s._conn.execute(
-            "SELECT role_id FROM companies_accounts "
-            "WHERE author_id = ?",
-            ("handle:u_legacy_press",),
+            "SELECT ca.role_id, r.key "
+            "FROM companies_accounts ca "
+            "JOIN roles r ON r.id = ca.role_id "
+            "WHERE ca.author_id = ?",
+            (author_int_id,),
         ).fetchone()
         assert row is not None
-        assert row["role_id"] == "community"
+        assert row["role_id"] == community_id
+        assert row["key"] == "community"
     finally:
         s.close()
 
@@ -361,19 +438,30 @@ def test_migration_016_pick_enum_label_staff(tmp_path):
 
 def test_migration_016_upsert_account_with_staff_writes_edge(tmp_path):
     """upsert_account with role='staff' writes a brands_accounts edge
-    with role_id='staff' (no longer hits the dead-letter; staff is in
-    the post-U6 roles set)."""
+    with role_id pointing at the staff roles.id (no longer hits the
+    dead-letter; staff is in the post-U6 roles set). Post-020:
+    role_id is INTEGER FK to roles.id, not TEXT."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
+        staff_id = s._conn.execute(
+            "SELECT id FROM roles WHERE key='staff'"
+        ).fetchone()["id"]
         s.upsert_account("minimax", "u_staff_test", role="staff")
         row = s._conn.execute(
-            "SELECT role_id FROM brands_accounts WHERE author_id = ?",
+            "SELECT ba.role_id, r.key "
+            "FROM brands_accounts ba "
+            "JOIN accounts a ON a.id = ba.author_id "
+            "JOIN roles r ON r.id = ba.role_id "
+            "WHERE a.author_id = ?",
             ("handle:u_staff_test",),
         ).fetchone()
         assert row is not None
-        assert row["role_id"] == "staff"
+        assert row["role_id"] == staff_id, (
+            f"role_id is {row['role_id']!r}, expected {staff_id} (INTEGER FK to staff)"
+        )
+        assert row["key"] == "staff"
     finally:
         s.close()

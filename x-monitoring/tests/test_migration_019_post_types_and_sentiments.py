@@ -186,8 +186,15 @@ def test_migration_019_sentiment_labels_seeded(tmp_path):
 
 
 def test_migration_019_posts_brands_signals_has_post_type_sentiment(tmp_path):
-    """posts_brands_signals has the new post_type + sentiment columns
-    (NULLABLE TEXT, alongside the existing signal_id)."""
+    """posts_brands_signals has the new post_type + sentiment columns.
+
+    U8 (migration 020): post_type + sentiment became INTEGER FK
+    columns (storing the id of post_type_keys / sentiment_keys
+    rows). Migration 019 added them as nullable TEXT; 020 converted
+    them to INTEGER-storing-id; 022 made them NOT NULL.
+
+    U9 (migration 022): the legacy `signal_id` column was DROPPED.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -200,18 +207,35 @@ def test_migration_019_posts_brands_signals_has_post_type_sentiment(tmp_path):
         }
         assert "post_type" in cols, "post_type column missing"
         assert "sentiment" in cols, "sentiment column missing"
-        assert "signal_id" in cols, "signal_id column missing (preserved)"
-        # New columns are TEXT and NULLABLE.
-        assert "TEXT" in cols["post_type"]["type"].upper()
-        assert cols["post_type"]["notnull"] == 0, "post_type should be nullable"
-        assert "TEXT" in cols["sentiment"]["type"].upper()
-        assert cols["sentiment"]["notnull"] == 0, "sentiment should be nullable"
+        # U9: signal_id is GONE.
+        assert "signal_id" not in cols, (
+            "signal_id column should be DROPPED post-022 (U9)"
+        )
+        # Post-020 + post-022: both columns are INTEGER FKs and
+        # NOT NULL.
+        assert "INTEGER" in cols["post_type"]["type"].upper(), (
+            f"post_type should be INTEGER FK post-020, got {cols['post_type']['type']!r}"
+        )
+        assert cols["post_type"]["notnull"] == 1, (
+            "post_type should be NOT NULL post-022"
+        )
+        assert "INTEGER" in cols["sentiment"]["type"].upper(), (
+            f"sentiment should be INTEGER FK post-020, got {cols['sentiment']['type']!r}"
+        )
+        assert cols["sentiment"]["notnull"] == 1, (
+            "sentiment should be NOT NULL post-022"
+        )
     finally:
         s.close()
 
 
 def test_migration_019_post_type_fk_references_post_type_keys(tmp_path):
-    """FK on posts_brands_signals.post_type → post_type_keys.key."""
+    """FK on posts_brands_signals.post_type → post_type_keys.id.
+
+    U8 (migration 020): the FK target became post_type_keys.id
+    (the INTEGER PK), not post_type_keys.key (the TEXT slug).
+    Migration 019 originally pointed at the TEXT key.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -221,15 +245,19 @@ def test_migration_019_post_type_fk_references_post_type_keys(tmp_path):
             "SELECT * FROM pragma_foreign_key_list('posts_brands_signals')"
         ).fetchall()
         assert any(
-            r[2] == "post_type_keys" and r[3] == "post_type" and r[4] == "key"
+            r[2] == "post_type_keys" and r[3] == "post_type" and r[4] == "id"
             for r in fks
-        ), f"post_type FK to post_type_keys.key missing. FKs: {fks}"
+        ), f"post_type FK to post_type_keys.id missing. FKs: {fks}"
     finally:
         s.close()
 
 
 def test_migration_019_sentiment_fk_references_sentiment_keys(tmp_path):
-    """FK on posts_brands_signals.sentiment → sentiment_keys.key."""
+    """FK on posts_brands_signals.sentiment → sentiment_keys.id.
+
+    U8 (migration 020): the FK target became sentiment_keys.id
+    (the INTEGER PK), not sentiment_keys.key.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -239,15 +267,21 @@ def test_migration_019_sentiment_fk_references_sentiment_keys(tmp_path):
             "SELECT * FROM pragma_foreign_key_list('posts_brands_signals')"
         ).fetchall()
         assert any(
-            r[2] == "sentiment_keys" and r[3] == "sentiment" and r[4] == "key"
+            r[2] == "sentiment_keys" and r[3] == "sentiment" and r[4] == "id"
             for r in fks
-        ), f"sentiment FK to sentiment_keys.key missing. FKs: {fks}"
+        ), f"sentiment FK to sentiment_keys.id missing. FKs: {fks}"
     finally:
         s.close()
 
 
-def test_migration_019_signal_id_fk_preserved(tmp_path):
-    """The legacy signal_id FK → signals.key is preserved through the rebuild."""
+def test_migration_019_signal_id_dropped(tmp_path):
+    """U9 (migration 022): the legacy signal_id FK is GONE.
+
+    Migration 019 originally preserved the signal_id FK → signals.key
+    because the new columns were ADDITIVE. Migration 022 completed
+    the replacement: the `signal_id` column and the `signals` table
+    are both dropped, so no signal_id FK can exist.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -256,10 +290,14 @@ def test_migration_019_signal_id_fk_preserved(tmp_path):
         fks = s._conn.execute(
             "SELECT * FROM pragma_foreign_key_list('posts_brands_signals')"
         ).fetchall()
-        assert any(
-            r[2] == "signals" and r[3] == "signal_id" and r[4] == "key"
-            for r in fks
-        ), f"signal_id FK to signals.key missing. FKs: {fks}"
+        assert not any(
+            r[3] == "signal_id" for r in fks
+        ), f"signal_id FK should be DROPPED post-022. FKs: {fks}"
+        # The `signals` table is also gone.
+        sig_row = s._conn.execute(
+            "SELECT name FROM sqlite_master WHERE name='signals'"
+        ).fetchone()
+        assert sig_row is None, "signals table should be DROPPED post-022"
     finally:
         s.close()
 
@@ -286,243 +324,21 @@ def test_migration_019_indexes_on_new_columns(tmp_path):
         assert "idx_posts_brands_signals_brand_id_sentiment" in indexes, (
             f"missing (brand_id, sentiment) index. indexes={indexes}"
         )
-        # The legacy (brand_id, signal_id) index is recreated.
-        assert "idx_posts_brands_signals_brand_id_signal_id" in indexes, (
-            f"legacy (brand_id, signal_id) index missing. indexes={indexes}"
+        # U9 (migration 022): the legacy (brand_id, signal_id) index
+        # is DROPPED — the signal_id column no longer exists.
+        assert "idx_posts_brands_signals_brand_id_signal_id" not in indexes, (
+            f"legacy (brand_id, signal_id) index should be DROPPED post-022. "
+            f"indexes={indexes}"
         )
     finally:
         s.close()
 
 
-# --- happy path: backfill mapping ----------------------------------
-
-
-def test_migration_019_backfill_release_to_buzz_neutral(tmp_path):
-    """Pre-existing signal_id='release' is backfilled to
-    (post_type='buzz_releases', sentiment='neutral')."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        s._conn.execute(
-            "INSERT INTO posts (tweet_id, author_handle, fetched_at) "
-            "VALUES (?, ?, ?)",
-            ("t_release", "u_release", "2026-06-24T00:00:00+00:00"),
-        )
-        # Insert pre-backfill row directly with FK disabled (the
-        # migration itself does the backfill; this simulates data that
-        # was inserted pre-migration 019).
-        s._conn.execute(
-            "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) "
-            "VALUES (?, ?, ?)",
-            ("t_release", "minimax", "release"),
-        )
-        # Re-run just the backfill SQL (the migration's UPDATE).
-        s._conn.executescript("""
-            UPDATE posts_brands_signals SET
-                post_type = CASE signal_id
-                    WHEN 'release'             THEN 'buzz_releases'
-                    WHEN 'praise'              THEN 'buzz_releases'
-                    WHEN 'commenter_capture'   THEN 'hands_on_usage'
-                    WHEN 'community_question'  THEN 'feedback_questions'
-                    WHEN 'criticism'           THEN 'feedback_questions'
-                    WHEN 'other'               THEN 'hands_on_usage'
-                    ELSE 'hands_on_usage'
-                END,
-                sentiment = CASE signal_id
-                    WHEN 'praise'              THEN 'positive'
-                    WHEN 'criticism'           THEN 'negative'
-                    WHEN 'community_question'  THEN 'neutral'
-                    WHEN 'release'             THEN 'neutral'
-                    WHEN 'commenter_capture'   THEN 'neutral'
-                    WHEN 'other'               THEN 'neutral'
-                    ELSE 'neutral'
-                END
-            WHERE post_type IS NULL OR sentiment IS NULL;
-        """)
-        row = s._conn.execute(
-            "SELECT post_type, sentiment FROM posts_brands_signals "
-            "WHERE post_id = ?",
-            ("t_release",),
-        ).fetchone()
-        assert row["post_type"] == "buzz_releases", (
-            f"expected buzz_releases, got {row['post_type']!r}"
-        )
-        assert row["sentiment"] == "neutral", (
-            f"expected neutral, got {row['sentiment']!r}"
-        )
-    finally:
-        s.close()
-
-
-def test_migration_019_backfill_praise_to_buzz_positive(tmp_path):
-    """Pre-existing signal_id='praise' is backfilled to
-    (post_type='buzz_releases', sentiment='positive')."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        s._conn.execute(
-            "INSERT INTO posts (tweet_id, author_handle, fetched_at) "
-            "VALUES (?, ?, ?)",
-            ("t_praise", "u_praise", "2026-06-24T00:00:00+00:00"),
-        )
-        s._conn.execute(
-            "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) "
-            "VALUES (?, ?, ?)",
-            ("t_praise", "minimax", "praise"),
-        )
-        s._conn.executescript("""
-            UPDATE posts_brands_signals SET
-                post_type = CASE signal_id
-                    WHEN 'release'             THEN 'buzz_releases'
-                    WHEN 'praise'              THEN 'buzz_releases'
-                    WHEN 'commenter_capture'   THEN 'hands_on_usage'
-                    WHEN 'community_question'  THEN 'feedback_questions'
-                    WHEN 'criticism'           THEN 'feedback_questions'
-                    WHEN 'other'               THEN 'hands_on_usage'
-                    ELSE 'hands_on_usage'
-                END,
-                sentiment = CASE signal_id
-                    WHEN 'praise'              THEN 'positive'
-                    WHEN 'criticism'           THEN 'negative'
-                    WHEN 'community_question'  THEN 'neutral'
-                    WHEN 'release'             THEN 'neutral'
-                    WHEN 'commenter_capture'   THEN 'neutral'
-                    WHEN 'other'               THEN 'neutral'
-                    ELSE 'neutral'
-                END
-            WHERE post_type IS NULL OR sentiment IS NULL;
-        """)
-        row = s._conn.execute(
-            "SELECT post_type, sentiment FROM posts_brands_signals "
-            "WHERE post_id = ?",
-            ("t_praise",),
-        ).fetchone()
-        assert row["post_type"] == "buzz_releases"
-        assert row["sentiment"] == "positive"
-    finally:
-        s.close()
-
-
-def test_migration_019_backfill_criticism_to_feedback_negative(tmp_path):
-    """Pre-existing signal_id='criticism' is backfilled to
-    (post_type='feedback_questions', sentiment='negative')."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        s._conn.execute(
-            "INSERT INTO posts (tweet_id, author_handle, fetched_at) "
-            "VALUES (?, ?, ?)",
-            ("t_criticism", "u_criticism", "2026-06-24T00:00:00+00:00"),
-        )
-        s._conn.execute(
-            "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) "
-            "VALUES (?, ?, ?)",
-            ("t_criticism", "minimax", "criticism"),
-        )
-        s._conn.executescript("""
-            UPDATE posts_brands_signals SET
-                post_type = CASE signal_id
-                    WHEN 'release'             THEN 'buzz_releases'
-                    WHEN 'praise'              THEN 'buzz_releases'
-                    WHEN 'commenter_capture'   THEN 'hands_on_usage'
-                    WHEN 'community_question'  THEN 'feedback_questions'
-                    WHEN 'criticism'           THEN 'feedback_questions'
-                    WHEN 'other'               THEN 'hands_on_usage'
-                    ELSE 'hands_on_usage'
-                END,
-                sentiment = CASE signal_id
-                    WHEN 'praise'              THEN 'positive'
-                    WHEN 'criticism'           THEN 'negative'
-                    WHEN 'community_question'  THEN 'neutral'
-                    WHEN 'release'             THEN 'neutral'
-                    WHEN 'commenter_capture'   THEN 'neutral'
-                    WHEN 'other'               THEN 'neutral'
-                    ELSE 'neutral'
-                END
-            WHERE post_type IS NULL OR sentiment IS NULL;
-        """)
-        row = s._conn.execute(
-            "SELECT post_type, sentiment FROM posts_brands_signals "
-            "WHERE post_id = ?",
-            ("t_criticism",),
-        ).fetchone()
-        assert row["post_type"] == "feedback_questions"
-        assert row["sentiment"] == "negative"
-    finally:
-        s.close()
-
-
-def test_migration_019_backfill_remaining_signals(tmp_path):
-    """The other 3 signals backfill correctly: community_question,
-    commenter_capture, other."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        for sig, expected_pt, expected_sent in [
-            ("community_question", "feedback_questions", "neutral"),
-            ("commenter_capture", "hands_on_usage", "neutral"),
-            ("other", "hands_on_usage", "neutral"),
-        ]:
-            tweet_id = f"t_{sig}"
-            s._conn.execute(
-                "INSERT INTO posts (tweet_id, author_handle, fetched_at) "
-                "VALUES (?, ?, ?)",
-                (tweet_id, f"u_{sig}", "2026-06-24T00:00:00+00:00"),
-            )
-            s._conn.execute(
-                "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) "
-                "VALUES (?, ?, ?)",
-                (tweet_id, "minimax", sig),
-            )
-        s._conn.executescript("""
-            UPDATE posts_brands_signals SET
-                post_type = CASE signal_id
-                    WHEN 'release'             THEN 'buzz_releases'
-                    WHEN 'praise'              THEN 'buzz_releases'
-                    WHEN 'commenter_capture'   THEN 'hands_on_usage'
-                    WHEN 'community_question'  THEN 'feedback_questions'
-                    WHEN 'criticism'           THEN 'feedback_questions'
-                    WHEN 'other'               THEN 'hands_on_usage'
-                    ELSE 'hands_on_usage'
-                END,
-                sentiment = CASE signal_id
-                    WHEN 'praise'              THEN 'positive'
-                    WHEN 'criticism'           THEN 'negative'
-                    WHEN 'community_question'  THEN 'neutral'
-                    WHEN 'release'             THEN 'neutral'
-                    WHEN 'commenter_capture'   THEN 'neutral'
-                    WHEN 'other'               THEN 'neutral'
-                    ELSE 'neutral'
-                END
-            WHERE post_type IS NULL OR sentiment IS NULL;
-        """)
-        for sig, expected_pt, expected_sent in [
-            ("community_question", "feedback_questions", "neutral"),
-            ("commenter_capture", "hands_on_usage", "neutral"),
-            ("other", "hands_on_usage", "neutral"),
-        ]:
-            tweet_id = f"t_{sig}"
-            row = s._conn.execute(
-                "SELECT post_type, sentiment FROM posts_brands_signals "
-                "WHERE post_id = ?",
-                (tweet_id,),
-            ).fetchone()
-            assert row["post_type"] == expected_pt, (
-                f"{sig}: expected post_type={expected_pt}, got {row['post_type']!r}"
-            )
-            assert row["sentiment"] == expected_sent, (
-                f"{sig}: expected sentiment={expected_sent}, got {row['sentiment']!r}"
-            )
-    finally:
-        s.close()
+# U9 (migration 022): the legacy signal_id column and signals table
+# are DROPPED. The signal_id → (post_type, sentiment) backfill that
+# 019 originally performed was a one-shot UPDATE on the data; 022
+# completed the replacement by removing the source data. There is
+# no post-022 data to backfill, so the 4 backfill tests are GONE.
 
 
 # --- idempotency ---------------------------------------------------
@@ -559,7 +375,16 @@ def test_migration_019_idempotent(tmp_path):
 
 def test_migration_019_full_stack_apply(tmp_path):
     """All migrations 001-019 apply on a fresh DB; the post_type +
-    sentiment taxonomy is in effect alongside the legacy signal taxonomy."""
+    sentiment taxonomy is in effect. Migration 021 was INTENTIONALLY
+    SKIPPED (reserved for an unrelated HF products crawler that
+    never landed). After U9 migration 022 ships, the applied set is
+    {1..19, 20, 22} (21 is missing).
+
+    U9: the legacy signals family is GONE post-022 (signals +
+    signal_labels dropped, signal_id column dropped). The new
+    taxonomy (post_type + sentiment) is the only classification
+    surface.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -569,8 +394,9 @@ def test_migration_019_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 20)), (
-            f"unexpected versions: {applied}"
+        expected = sorted(set(range(1, 21)) | {22})
+        assert applied == expected, (
+            f"unexpected versions: {applied} (expected {expected})"
         )
         # Both new enum families are in effect.
         for tbl in (
@@ -581,12 +407,12 @@ def test_migration_019_full_stack_apply(tmp_path):
                 "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
             ).fetchall()
             assert rows, f"{tbl} missing"
-        # Legacy signals family still present (additive change).
+        # U9: the legacy signals family is GONE.
         for tbl in ("signals", "signal_labels"):
             rows = s._conn.execute(
                 "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
             ).fetchall()
-            assert rows, f"{tbl} missing (should be preserved)"
+            assert not rows, f"{tbl} should be DROPPED post-022"
     finally:
         s.close()
 
@@ -595,8 +421,13 @@ def test_migration_019_full_stack_apply(tmp_path):
 
 
 def test_migration_019_insert_posts_brands_signals_writes_post_type_sentiment(tmp_path):
-    """insert_posts_brands_signals writes the new post_type + sentiment
-    kwargs to the renamed columns."""
+    """insert_posts_brands_signals writes the (post_type, sentiment)
+    args to the new columns.
+
+    U9 (migration 022): the `signal` kwarg is REMOVED. The legacy
+    6-bucket taxonomy is gone — only (post_type, sentiment) remain.
+    The signature is (post_id, brand_id, post_type, sentiment).
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -609,47 +440,28 @@ def test_migration_019_insert_posts_brands_signals_writes_post_type_sentiment(tm
         )
         s.insert_posts_brands_signals(
             "t_u9_insert", "minimax",
-            signal=None,
-            post_type="buzz_releases",
-            sentiment="positive",
+            "buzz_releases", "positive",
         )
+        # U8: post_id is INTEGER. JOIN via posts.tweet_id to resolve.
         row = s._conn.execute(
-            "SELECT signal_id, post_type, sentiment FROM posts_brands_signals "
-            "WHERE post_id = ?",
+            "SELECT pt.key AS post_type, sn.key AS sentiment "
+            "FROM posts_brands_signals pbs "
+            "JOIN posts p ON p.id = pbs.post_id "
+            "JOIN post_type_keys pt ON pt.id = pbs.post_type "
+            "JOIN sentiment_keys sn ON sn.id = pbs.sentiment "
+            "WHERE p.tweet_id = ?",
             ("t_u9_insert",),
         ).fetchone()
         assert row["post_type"] == "buzz_releases"
         assert row["sentiment"] == "positive"
-        assert row["signal_id"] is None
     finally:
         s.close()
 
 
-def test_migration_019_insert_legacy_signal_still_works(tmp_path):
-    """The legacy signal-only insert path still works (backward compat)."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        s._conn.execute(
-            "INSERT INTO posts (tweet_id, author_handle, fetched_at) "
-            "VALUES (?, ?, ?)",
-            ("t_u9_legacy", "u_legacy", "2026-06-24T00:00:00+00:00"),
-        )
-        s.insert_posts_brands_signals(
-            "t_u9_legacy", "minimax", signal="praise",
-        )
-        row = s._conn.execute(
-            "SELECT signal_id, post_type, sentiment FROM posts_brands_signals "
-            "WHERE post_id = ?",
-            ("t_u9_legacy",),
-        ).fetchone()
-        assert row["signal_id"] == "praise"
-        assert row["post_type"] is None
-        assert row["sentiment"] is None
-    finally:
-        s.close()
+# U9 (migration 022): the legacy single-string `signal` insert path
+# is GONE. `signal=` was a backward-compat shim for the v1.8
+# (R15) taxonomy; 022 completed the replacement. There is no
+# post-022 row that has signal-only data.
 
 
 # --- integration: dead-letter guards on new fields ----------------

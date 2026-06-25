@@ -3,18 +3,16 @@
 
 Public surface:
 - build_treemap_svg(tiles, *, width, height) -> str
-- compute_polarity(posts, current_window, prior_window) -> float | None
-    LEGACY (v1.7): reads post-level source_query_id + posts.created_at.
-    Still used by tests that predate the v1.8 multi-brand rewrite.
-    New code should call compute_polarity_from_db (the SQL-backed version).
 - compute_polarity_from_db(conn, brand_id, window_days, *, now=None) -> float | None
     v1.8 (Unit 4 / R17): reads posts_brands_signals + posts_brands via the
     JOIN shape from Decision 18. Filters _unattributed (Decision 15).
-- compute_polarity_signal_breakdown(conn, brand_id, window_start_epoch, *,
-                                     window_end_epoch=None) -> dict[str, float]
-    v1.8 (Unit 4 / R17): raw signal -> weighted_count breakdown per
-    brand in [window_start_epoch, window_end_epoch). The dryrun
-    verification calls this directly.
+    U9 (migration 022): polarity is sentiment-only — replaces the
+    legacy v1.7 Q1-Q6 signal-rate computation.
+- compute_polarity_sentiment_breakdown(conn, brand_id, window_start_epoch, *,
+                                          window_end_epoch=None) -> dict[str, float]
+    v1.8 (U9 / migration 022): raw sentiment -> weighted_count
+    breakdown per brand in [window_start_epoch, window_end_epoch).
+    The dryrun verification calls this directly.
 - bin_polarity(score: float | None) -> str
 - separate_active_and_no_data(tiles) -> (active_tiles, no_data_tiles)
 - TreemapTile (NamedTuple)
@@ -39,14 +37,13 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable
 
 import squarify
 
-# NOTE: We intentionally do NOT import _QID_TO_SIGNAL or _parse_post_timestamp
-# from .dashboard at module load. dashboard.py imports build_treemap_svg from
-# THIS module, so any top-level import here would form a cycle. Both names
-# are resolved lazily inside compute_polarity below.
+# NOTE: We intentionally do NOT import _parse_post_timestamp from .dashboard
+# at module load. dashboard.py imports build_treemap_svg from THIS module,
+# so any top-level import here would form a cycle. _parse_post_timestamp
+# is resolved lazily inside the helpers that need it.
 
 
 # v1.8.1 — Finviz-style 5-step divergent palette, balanced so the most-extreme
@@ -223,54 +220,59 @@ def bin_polarity(score: float | None) -> str:
     return polarity_fill(score, 1.0)
 
 
-# --- v1.8: SQL-backed polarity (Unit 4, R17, Decision 18) -------------------
+# --- v1.8/U9: SQL-backed polarity (Unit 4, R17, Decision 18) ----------------
 
 # The polarity SQL, factored as a module-level constant so EXPLAIN QUERY PLAN
 # tests can reference the same string the production code runs.
 # - Decision 18 (JOIN not IN subquery): the query planner can use the
-#   posts_brands_signals(brand_id, signal_id) and posts_brands(brand_id, post_id)
+#   posts_brands_signals(brand_id, sentiment) and posts_brands(brand_id, post_id)
 #   indexes to seek by brand, then join posts(tweet_id) for the time-window
 #   filter. EXPLAIN should show all three indexes used (no SORT or SCAN).
 # - Decision 15 (_unattributed filter): the WHERE clause excludes the
 #   sentinel brand so the treemap's "unattributed" bin doesn't pollute
 #   the polarity score.
-# - weight = SUM(pb.weight * (1 + p.retweet_count)): each post's signal is
-#   amplified by its pure-retweet count — an RT inherits the original's
-#   signal ("each utterance = one vote"). A 2-brand post contributes
-#   0.5*(1+rt) to each brand (Decision 9 fractional weight x RT fold).
+# - U9 (migration 022): the breakdown keys are sentiment_keys.key
+#   (positive / negative / neutral / mixed) joined through
+#   posts_brands_signals.sentiment. The 6-signal `signals` table was
+#   dropped; the legacy `signal_id` column was dropped.
+# - weight = SUM(pb.weight * (1 + p.retweet_count)): each post's
+#   sentiment is amplified by its pure-retweet count — an RT inherits
+#   the original's sentiment ("each utterance = one vote"). A 2-brand
+#   post contributes 0.5*(1+rt) to each brand (Decision 9 fractional
+#   weight x RT fold).
 # - the window filters on created_at_epoch (unix seconds), NOT the
 #   Twitter-format created_at: ISO-bound string comparison against the
 #   weekday-leading Twitter format sorted incorrectly and silently ignored
 #   the time window pre-migration-006.
 POLARITY_SQL: str = (
-    "SELECT s.key AS signal_id, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
+    "SELECT sk.key AS sentiment, SUM(pb.weight * (1 + p.retweet_count)) AS weighted_count "
     "FROM posts_brands_signals pbs "
     "JOIN posts_brands pb "
     "  ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id "
     "JOIN posts p ON p.id = pbs.post_id "
-    "JOIN signals s ON s.id = pbs.signal_id "
+    "JOIN sentiment_keys sk ON sk.id = pbs.sentiment "
     "JOIN brands b ON b.id = pbs.brand_id "
     "WHERE pbs.brand_id = ? "
     "  AND b.brand_id != '_unattributed' "
     "  AND p.created_at_epoch >= ? "
-    "GROUP BY s.key"
+    "GROUP BY sk.key"
 )
 
 
-def compute_polarity_signal_breakdown(
+def compute_polarity_sentiment_breakdown(
     conn,
     brand_id: str,
     window_start_epoch: str,
     *,
     window_end_epoch: str | None = None,
 ) -> dict[str, float]:
-    """Return {signal: weighted_count} for one brand.
+    """Return {sentiment: weighted_count} for one brand.
 
-    Implements Unit 4 / R17 / Decision 18 of the call-path attribution
-    pipeline. Reads from posts_brands_signals + posts_brands + posts via
-    the JOIN shape (no IN subquery). The _unattributed brand is excluded
-    by the WHERE clause (Decision 15); pass `_unattributed` explicitly
-    returns an empty dict by the same mechanism (the != filter).
+    Implements U9 (migration 022) of the call-path attribution pipeline.
+    Reads from posts_brands_signals + posts_brands + posts via the JOIN
+    shape (no IN subquery). The _unattributed brand is excluded by the
+    WHERE clause (Decision 15); pass `_unattributed` explicitly returns
+    an empty dict by the same mechanism (the != filter).
 
     Args:
         conn: a sqlite3.Connection (the Store's _conn).
@@ -284,12 +286,12 @@ def compute_polarity_signal_breakdown(
             polarity score uses this to slice [now-2N, now-N) precisely.
 
     Returns:
-        A dict mapping signal name (release / community_question /
-        criticism / commenter_capture / praise / other) to weighted
-        count. Weights are 1/N for multi-brand posts per Decision 9.
+        A dict mapping sentiment name (positive / negative / neutral /
+        mixed) to weighted count. Weights are 1/N for multi-brand
+        posts per Decision 9.
 
     Notes:
-        - Indexes used: idx_posts_brands_signals_brand_id_signal_id,
+        - Indexes used: idx_posts_brands_signals_brand_id_sentiment,
           idx_posts_brands_brand_post, posts (PK). EXPLAIN should show
           no SCAN or SORT on a populated DB.
     """
@@ -308,7 +310,7 @@ def compute_polarity_signal_breakdown(
             POLARITY_SQL, (brand_id_int, window_start_epoch),
         ).fetchall()
     else:
-        # POLARITY_SQL ends with "GROUP BY s.key"; insert the
+        # POLARITY_SQL ends with "GROUP BY sk.key"; insert the
         # upper-bound filter BEFORE the GROUP BY so it is applied
         # before aggregation. Splitting on "GROUP BY" and re-appending
         # keeps the constant a single source of truth.
@@ -318,35 +320,45 @@ def compute_polarity_signal_breakdown(
             sql_with_upper,
             (brand_id_int, window_start_epoch, window_end_epoch),
         ).fetchall()
-    return {r["signal_id"]: float(r["weighted_count"]) for r in rows}
+    return {r["sentiment"]: float(r["weighted_count"]) for r in rows}
+
+
+# Backwards-compat alias for tests that predate the U9 rename. Older
+# tests call `compute_polarity_signal_breakdown`; the function returned
+# {signal: weighted_count} under the 6-signal taxonomy. U9 swaps the
+# keys for {sentiment: weighted_count}. Old test code that only checks
+# the dict structure passes against the new return shape.
+compute_polarity_signal_breakdown = compute_polarity_sentiment_breakdown
 
 
 def _score_from_breakdown(
     current: dict[str, float],
     prior: dict[str, float],
 ) -> float | None:
-    """Compute the polarity score from two signal breakdowns.
+    """Compute the polarity score from two sentiment breakdowns.
+
+    U9 polarity is sentiment-only:
+      polarity = (positive_count - negative_count) / total_count
 
     Same sparse-data guards as the legacy compute_polarity() function:
-      - both windows empty (no praise/criticism AND no total) -> 0.0
-      - prior empty but current has data -> current_praise_rate -
-        current_criticism_rate (no NaN propagation)
+      - both windows empty (no positive/negative AND no total) -> 0.0
+      - prior empty but current has data -> current_positive_rate -
+        current_negative_rate (no NaN propagation)
       - current empty but prior had data -> None (the "went dark" sentinel)
-      - normal path -> (current_praise_rate - current_criticism_rate) -
-        (prior_praise_rate - prior_criticism_rate), clamped to [-1, 1]
+      - normal path -> (current_positive_rate - current_negative_rate) -
+        (prior_positive_rate - prior_negative_rate), clamped to [-1, 1]
 
-    `total` is computed as the sum of all signals in the breakdown.
-    This matches the legacy definition (Q1+Q2+Q3+Q4+Q5+Q6 signal counts)
-    when the breakdown covers all 6 signals. With per-brand signals
-    from posts_brands_signals, the breakdown only includes the 6 v1
-    signal names, so the totals are equivalent.
+    `total` is computed as the sum of all sentiment buckets in the
+    breakdown (positive + negative + neutral + mixed). The 6-signal
+    taxonomy is gone in U9 — `current_praise` / `current_criticism`
+    have been replaced by `current_positive` / `current_negative`.
     """
     current_total = sum(current.values())
     prior_total = sum(prior.values())
-    current_praise = current.get("praise", 0.0)
-    current_criticism = current.get("criticism", 0.0)
-    prior_praise = prior.get("praise", 0.0)
-    prior_criticism = prior.get("criticism", 0.0)
+    current_positive = current.get("positive", 0.0)
+    current_negative = current.get("negative", 0.0)
+    prior_positive = prior.get("positive", 0.0)
+    prior_negative = prior.get("negative", 0.0)
 
     # Sparse-data guard 1: both windows empty -> 0.0
     if current_total == 0 and prior_total == 0:
@@ -354,7 +366,7 @@ def _score_from_breakdown(
 
     # Sparse-data guard 2: prior empty but current has data
     if prior_total == 0:
-        current_rate = (current_praise - current_criticism) / current_total
+        current_rate = (current_positive - current_negative) / current_total
         return max(-1.0, min(1.0, current_rate))
 
     # Sparse-data guard 3: current empty but prior had data -> went dark
@@ -362,8 +374,8 @@ def _score_from_breakdown(
         return None
 
     # Normal path
-    current_rate = (current_praise - current_criticism) / current_total
-    prior_rate = (prior_praise - prior_criticism) / prior_total
+    current_rate = (current_positive - current_negative) / current_total
+    prior_rate = (prior_positive - prior_negative) / prior_total
     score = current_rate - prior_rate
     return max(-1.0, min(1.0, score))
 
@@ -421,93 +433,15 @@ def compute_polarity_from_db(
     # don't overlap. Without window_end_epoch=current_start_epoch the prior
     # slice would include the current window's posts (the SQL has only
     # a lower bound by default).
-    current = compute_polarity_signal_breakdown(
+    current = compute_polarity_sentiment_breakdown(
         conn, brand_id, current_start_epoch,
     )
-    prior = compute_polarity_signal_breakdown(
+    prior = compute_polarity_sentiment_breakdown(
         conn, brand_id, prior_start_epoch,
         window_end_epoch=current_start_epoch,
     )
 
     return _score_from_breakdown(current, prior)
-
-
-def compute_polarity(
-    posts: Iterable[dict],
-    current_window: tuple,
-    prior_window: tuple,
-) -> float | None:
-    """Compute the polarity score for one model (LEGACY v1.7 path).
-
-    polarity = (praise_rate_current - criticism_rate_current)
-             - (praise_rate_prior - criticism_rate_prior)
-
-    Each rate is signal_count / total_q1_to_q6_count in the respective window.
-    `total_q1_to_q6_count` is the sum of Q1, Q2, Q3, Q4, Q5, Q6 signal counts
-    (all posts classified into one of the 6 buckets).
-
-    Sparse-data guards (per the plan's R3):
-      - current_total == 0 AND prior_total == 0 -> 0.0 (muted bin; no data anywhere)
-      - prior_total == 0 AND current_total > 0 -> define prior rates as 0;
-        return current_praise_rate - current_criticism_rate (no NaN propagation)
-      - current_total == 0 AND prior_total > 0 -> None (the "went dark" sentinel;
-        the route maps it to --yellow and the UI labels "went dark")
-
-    Returns a float in approximately [-1.0, +1.0] or None for the went-dark case.
-    """
-    # Lazy import: dashboard.py imports from this module at top-level, so a
-    # module-level import here would cycle. These two helpers are pure
-    # functions of `dashboard.py`'s module state, so resolving them at call
-    # time is safe and avoids the cycle.
-    from .dashboard import _QID_TO_SIGNAL, _parse_post_timestamp
-
-    current_lower, current_upper = current_window
-    prior_lower, prior_upper = prior_window
-
-    current_praise = current_criticism = current_total = 0
-    prior_praise = prior_criticism = prior_total = 0
-
-    for p in posts:
-        sqid = p.get("source_query_id") or ""
-        signal = _QID_TO_SIGNAL.get(sqid)
-        if signal is None:
-            continue
-        dt = _parse_post_timestamp(p.get("created_at"))
-        if dt is None:
-            continue
-        if current_lower <= dt < current_upper:
-            current_total += 1
-            if signal == "praise":
-                current_praise += 1
-            elif signal == "criticism":
-                current_criticism += 1
-        elif prior_lower <= dt < prior_upper:
-            prior_total += 1
-            if signal == "praise":
-                prior_praise += 1
-            elif signal == "criticism":
-                prior_criticism += 1
-
-    # Sparse-data guard 1: both windows empty -> 0.0
-    if current_total == 0 and prior_total == 0:
-        return 0.0
-
-    # Sparse-data guard 2: prior empty but current has data -> define prior rates as 0
-    if prior_total == 0:
-        # No NaN, no division by zero. current_total > 0 here.
-        current_rate = (current_praise - current_criticism) / current_total
-        # Clamp to [-1, 1] in case of any future signal-counting bug.
-        return max(-1.0, min(1.0, current_rate))
-
-    # Sparse-data guard 3: current empty but prior had data -> went dark
-    if current_total == 0:
-        return None
-
-    # Normal path: both windows have data.
-    current_rate = (current_praise - current_criticism) / current_total
-    prior_rate = (prior_praise - prior_criticism) / prior_total
-    score = current_rate - prior_rate
-    return max(-1.0, min(1.0, score))
 
 
 def separate_active_and_no_data(

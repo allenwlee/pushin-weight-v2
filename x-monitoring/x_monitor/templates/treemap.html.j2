@@ -39,12 +39,21 @@
   </header>
 
   {# Polarity legend — fixed at the top of the page so users can decode
-     tile fills without a hover (we don't ship hover in v1). #}
+     tile fills without a hover (we don't ship hover in v1).
+
+     U9 (migration 022): polarity is sentiment-only (positive vs
+     negative rate change vs prior window). The legend reads:
+       red    -> negative rate rising
+       muted  -> flat
+       green  -> positive rate rising
+       yellow -> went dark sentinel (no data in current window)
+       faded  -> no data model (area_weight == 0)
+  #}
   <div class="treemap-legend" role="note" aria-label="Polarity legend">
     <span class="legend-label">Polarity (rate change vs prior {{ treemap_window_days }}d):</span>
-    <span class="legend-cell" style="background: var(--red);"></span><span>criticism rising</span>
+    <span class="legend-cell" style="background: var(--red);"></span><span>negative rising</span>
     <span class="legend-cell" style="background: var(--muted);"></span><span>flat</span>
-    <span class="legend-cell" style="background: var(--green);"></span><span>praise rising</span>
+    <span class="legend-cell" style="background: var(--green);"></span><span>positive rising</span>
     <span class="legend-cell" style="background: var(--yellow);"></span><span>went dark</span>
     <span class="legend-cell" style="background: #9ca3af; opacity: 0.4;"></span><span>no data</span>
   </div>

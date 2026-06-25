@@ -121,16 +121,23 @@ def test_load_brand_display_names_unsupported_locale_warns_falls_back(tmp_path, 
 # --- _load_signal_labels -----------------------------------------------
 
 
-def test_load_signal_labels_returns_all_six_series_keys(tmp_path):
-    """The lookup returns all six chart-series keys, even if some are
-    unseeded (in which case the raw key is the defensive fallback)."""
+def test_load_signal_labels_returns_all_four_sentiment_keys(tmp_path):
+    """The lookup returns the four sentiment keys that are the U9
+    chart-series keys (positive / negative / neutral / mixed), even
+    if some are unseeded (in which case the raw key is the defensive
+    fallback).
+
+    U9 (migration 022): the legacy 6-signal taxonomy is gone. The
+    function `_load_signal_labels` is a backwards-compat alias for
+    `_load_sentiment_labels`; the underlying keys are now sentiments,
+    not signals.
+    """
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         labels = _load_signal_labels(s, "en")
         assert set(labels.keys()) == {
-            "release", "community_question", "criticism",
-            "commenter_capture", "other", "praise",
+            "positive", "negative", "neutral", "mixed",
         }
     finally:
         s.close()
@@ -142,23 +149,25 @@ def test_load_signal_labels_en_returns_english_labels(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         labels = _load_signal_labels(s, "en")
-        assert labels["release"] == "Release"
-        assert labels["criticism"] == "Criticism"
-        assert labels["praise"] == "Praise"
+        assert labels["positive"] == "Positive"
+        assert labels["negative"] == "Negative"
+        assert labels["neutral"] == "Neutral"
+        assert labels["mixed"] == "Mixed"
     finally:
         s.close()
 
 
 def test_load_signal_labels_zh_cn_returns_chinese_labels(tmp_path):
     """Chinese locale returns the zh_cn seeded labels (seeded by
-    migration 007 with operator-curated translations)."""
+    migration 019 with operator-curated translations)."""
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
         labels = _load_signal_labels(s, "zh_cn")
-        assert labels["release"] == "发布"
-        assert labels["criticism"] == "批评"
-        assert labels["praise"] == "称赞"
+        assert labels["positive"] == "正面"
+        assert labels["negative"] == "负面"
+        assert labels["neutral"] == "中性"
+        assert labels["mixed"] == "混合"
     finally:
         s.close()
 
@@ -265,8 +274,11 @@ def test_build_cards_threads_db_brand_names_zh_cn(tmp_path):
 
 
 def test_build_cards_threads_db_signal_labels_zh_cn(tmp_path):
-    """_build_cards reads signal labels from the DB for the requested
-    locale and threads them into the card."""
+    """_build_cards reads sentiment labels from the DB for the requested
+    locale and threads them into the card. U9: the chart-series keys
+    are now the 4-sentiment taxonomy (positive / negative / neutral /
+    mixed), not the legacy 6-signal vocabulary.
+    """
     db = tmp_path / "x.db"
     cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
     from x_monitor.dashboard import DashboardApp
@@ -277,12 +289,18 @@ def test_build_cards_threads_db_signal_labels_zh_cn(tmp_path):
         cards = resp.get_json()["cards"]
         assert len(cards) == 1
         labels = cards[0]["signal_labels"]
-        assert labels["release"] == "发布"
-        assert labels["praise"] == "称赞"
+        assert labels["positive"] == "正面"
+        assert labels["negative"] == "负面"
 
 
 def test_build_cards_en_locale_returns_english_signals(tmp_path):
-    """Default English locale returns English signal labels."""
+    """Default English locale returns English sentiment labels.
+
+    U9: the dashboard's `signal_labels` field is now a
+    {sentiment_key: english_label} dict. The function name
+    `_load_signal_labels` is a backwards-compat alias for
+    `_load_sentiment_labels`; the underlying keys are sentiments.
+    """
     db = tmp_path / "x.db"
     cfg = Config(enabled_models=["minimax"], daily_ceiling=333)
     from x_monitor.dashboard import DashboardApp
@@ -292,8 +310,8 @@ def test_build_cards_en_locale_returns_english_signals(tmp_path):
         resp = c.get("/api/grid.json")
         cards = resp.get_json()["cards"]
         labels = cards[0]["signal_labels"]
-        assert labels["release"] == "Release"
-        assert labels["criticism"] == "Criticism"
+        assert labels["positive"] == "Positive"
+        assert labels["negative"] == "Negative"
 
 
 # --- model_detail route role labels -------------------------------------

@@ -26,7 +26,6 @@ from .store import Store
 from .treemap import (
     TreemapTile,
     build_treemap_svg,
-    compute_polarity,
     compute_polarity_from_db,
 )
 
@@ -143,12 +142,20 @@ def _pick_text(
 # Locale-aware lookups for the dashboard. Both helpers read from the
 # per-locale columns seeded by migration 006 / Unit 4's translator.
 # The model_definitions list is the model identifier set across the
-# dashboard / API / charts; the signal keys come from the chart series
-# tuple in serialize_grid_card.
+# dashboard / API / charts; the chart series tuple in
+# serialize_grid_card drives the rendered bar segments.
 
-_DASHBOARD_SIGNAL_KEYS: tuple[str, ...] = (
-    "release", "community_question", "criticism",
-    "commenter_capture", "other", "praise",
+# U9 (migration 022): the legacy 6-signal taxonomy is gone. The chart
+# series keys are now sentiments. post_type is reported separately via
+# `post_type_breakdown`. This tuple is the single source of truth for
+# the order/render of the stacked-bar chart series.
+_DASHBOARD_SENTIMENT_KEYS: tuple[str, ...] = (
+    "positive", "negative", "neutral", "mixed",
+)
+
+_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = (
+    "buzz_releases", "hands_on_usage",
+    "performance_comparisons", "feedback_questions",
 )
 
 
@@ -187,18 +194,49 @@ def _load_brand_display_names(
 
 
 def _load_signal_labels(store: Store, locale: str) -> dict[str, str]:
-    """Return {signal_key: localized_label} for the six chart series keys.
+    """Return {sentiment_key: localized_label} for the chart series keys.
+
+    U9 (migration 022): replaced the legacy 6-signal `_load_signal_labels`
+    with a sentiment-keyed variant. The function name is preserved for
+    backwards compat with the trend-chart JS that still emits the
+    `data-signal-labels` attribute. New code should prefer
+    `_load_sentiment_labels` for clarity.
 
     Used by the trend-chart JS to render localized tooltip labels. Falls
     back to the English label if the requested locale is missing
     (mirrors Store._pick_enum_label's fallback chain), and to the raw
-    signal key if both lookups miss (defensive: avoids rendering the
+    sentiment key if both lookups miss (defensive: avoids rendering the
     literal string 'None' on unseeded enums).
+    """
+    return _load_sentiment_labels(store, locale)
+
+
+def _load_sentiment_labels(store: Store, locale: str) -> dict[str, str]:
+    """Return {sentiment_key: localized_label} for the chart series keys.
+
+    U9 (migration 022): the chart series keys are now sentiment keys
+    (positive / negative / neutral / mixed), not the legacy 6-signal
+    taxonomy.
     """
     suffix = _LOCALE_TO_COLUMN.get(locale, "en")
     out: dict[str, str] = {}
-    for key in _DASHBOARD_SIGNAL_KEYS:
-        out[key] = store._pick_enum_label("signal", key, suffix) or key
+    for key in _DASHBOARD_SENTIMENT_KEYS:
+        out[key] = store._pick_enum_label("sentiment", key, suffix) or key
+    return out
+
+
+def _load_post_type_labels(store: Store, locale: str) -> dict[str, str]:
+    """Return {post_type_key: localized_label} for the post-type filter chips.
+
+    U9 (migration 022): post_type is reported alongside sentiment for
+    every per-brand classification. The filter chip set is the 4-key
+    taxonomy (buzz_releases / hands_on_usage / performance_comparisons /
+    feedback_questions).
+    """
+    suffix = _LOCALE_TO_COLUMN.get(locale, "en")
+    out: dict[str, str] = {}
+    for key in _DASHBOARD_POST_TYPE_KEYS:
+        out[key] = store._pick_enum_label("post_type", key, suffix) or key
     return out
 
 
@@ -278,16 +316,12 @@ def _parse_post_timestamp(created):
         return None
 
 
-# Canonical query_id -> expected_signal mapping. Single source of truth
-# shared by the totals branch and the per-day branch in serialize_grid_card.
-_QID_TO_SIGNAL: dict[str, str] = {
-    "Q1": "release",
-    "Q2": "community_question",
-    "Q3": "criticism",
-    "Q4": "commenter_capture",
-    "Q5": "other",
-    "Q6": "praise",
-}
+# Canonical query_id -> expected_signal mapping REMOVED in U9 (migration
+# 022). The legacy 6-signal taxonomy (Q1=release / Q2=community_question
+# / Q3=criticism / Q4=commenter_capture / Q5=other / Q6=praise) was
+# replaced by the (post_type × sentiment) decomposition. The v1.7 dashboard
+# used this mapping to label the per-day chart series; the v1.8 dashboard
+# uses sentiment directly (`_DASHBOARD_SENTIMENT_KEYS`).
 
 
 
@@ -335,66 +369,82 @@ def _clamp_polarity_window(window: int, ceiling: int) -> int:
     """
     return max(1, min(window, ceiling))
 
-def _qid_to_signal(qid: str) -> str | None:
-    """Map a source_query_id to its expected_signal name, or None for unknown."""
-    return _QID_TO_SIGNAL.get(qid)
 
-
-def _read_signal_breakdown_for_brand(
+def _read_classification_breakdown_for_brand(
     conn,
     brand_id: str,
     window_start_iso: str,
-) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Read posts_brands_signals for one brand grouped by (day, signal_id).
+) -> tuple[
+    dict[str, float],
+    dict[str, dict[str, float]],
+    dict[str, float],
+    dict[str, dict[str, float]],
+]:
+    """Read posts_brands_signals for one brand grouped by sentiment + post_type.
 
-    v1.8 (Unit 4 / R18). JOINs posts_brands_signals + posts_brands + posts
-    per Decision 18 (no IN subquery). The _unattributed sentinel is
-    excluded by the WHERE clause (Decision 15). Weights are honored
-    (1/N for multi-brand posts per Decision 9).
+    U9 (migration 022): replaces the legacy signal-keyed breakdown.
+    Returns BOTH sentiment totals + per-day AND post_type totals +
+    per-day, so the dashboard can render the stacked-bar chart
+    (sentiment series) and the post-type filter chips without a
+    second query.
+
+    JOINs posts_brands_signals + posts_brands + posts per Decision 18
+    (no IN subquery). The _unattributed sentinel is excluded by the
+    WHERE clause (Decision 15). Weights are honored (1/N for multi-brand
+    posts per Decision 9).
 
     U8 (migration 020): posts_brands_signals FK columns are INTEGER.
     Join via posts.id and brands.id; resolve the brand slug to its
     INTEGER id before the WHERE filter.
 
     Returns:
-        (totals, per_day) where:
-          totals[signal] = float (weighted_count)
-          per_day[iso_date][signal] = float (weighted_count)
+        (sentiment_totals, sentiment_per_day,
+         post_type_totals, post_type_per_day) where each dict has the
+        same shape:
+          totals[key] = float (weighted_count)
+          per_day[iso_date][key] = float (weighted_count)
     """
     brand_id_int = conn.execute(
         "SELECT id FROM brands WHERE brand_id = ?", (brand_id,)
     ).fetchone()
     if brand_id_int is None:
-        return {}, {}
+        return {}, {}, {}, {}
     brand_id_int = int(brand_id_int["id"])
     rows = conn.execute(
         """
         SELECT substr(p.created_at, 1, 10) AS day,
-               s.key AS signal,
+               sk.key AS sentiment,
+               ptk.key AS post_type,
                SUM(pb.weight) AS weighted_count
         FROM posts_brands_signals pbs
         JOIN posts_brands pb
           ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id
         JOIN posts p ON p.id = pbs.post_id
-        JOIN signals s ON s.id = pbs.signal_id
+        JOIN sentiment_keys sk ON sk.id = pbs.sentiment
+        JOIN post_type_keys ptk ON ptk.id = pbs.post_type
         JOIN brands b ON b.id = pbs.brand_id
         WHERE pbs.brand_id = ?
           AND b.brand_id != '_unattributed'
           AND p.created_at >= ?
-        GROUP BY day, s.key
+        GROUP BY day, sk.key, ptk.key
         """,
         (brand_id_int, window_start_iso),
     ).fetchall()
-    totals: dict[str, float] = {}
-    per_day: dict[str, dict[str, float]] = {}
+    sent_totals: dict[str, float] = {}
+    sent_per_day: dict[str, dict[str, float]] = {}
+    pt_totals: dict[str, float] = {}
+    pt_per_day: dict[str, dict[str, float]] = {}
     for r in rows:
-        sig = r["signal"]
+        sent = r["sentiment"]
+        pt = r["post_type"]
         w = float(r["weighted_count"])
-        totals[sig] = totals.get(sig, 0.0) + w
-        per_day.setdefault(r["day"], {})[sig] = (
-            per_day.setdefault(r["day"], {}).get(sig, 0.0) + w
-        )
-    return totals, per_day
+        sent_totals[sent] = sent_totals.get(sent, 0.0) + w
+        d_sent = sent_per_day.setdefault(r["day"], {})
+        d_sent[sent] = d_sent.get(sent, 0.0) + w
+        pt_totals[pt] = pt_totals.get(pt, 0.0) + w
+        d_pt = pt_per_day.setdefault(r["day"], {})
+        d_pt[pt] = d_pt.get(pt, 0.0) + w
+    return sent_totals, sent_per_day, pt_totals, pt_per_day
 
 
 def serialize_grid_card(
@@ -405,12 +455,21 @@ def serialize_grid_card(
     latest_run: dict[str, Any] | None = None,
     now: datetime | None = None,
     display_locale: str = "en",
-    signal_breakdown: dict[str, float] | None = None,
-    day_signal_counts: dict[str, dict[str, float]] | None = None,
+    sentiment_breakdown: dict[str, float] | None = None,
+    day_sentiment_counts: dict[str, dict[str, float]] | None = None,
+    post_type_breakdown: dict[str, float] | None = None,
+    day_post_type_counts: dict[str, dict[str, float]] | None = None,
     display_name: str | None = None,
     signal_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return the per-model grid card payload.
+
+    U9 (migration 022): the legacy 6-signal breakdown is replaced by a
+    (sentiment × post_type) decomposition. The chart renders 4 sentiment
+    series (positive / negative / neutral / mixed). Post-type counts are
+    exposed in the response payload for the per-model filter chips
+    (buzz_releases / hands_on_usage / performance_comparisons /
+    feedback_questions).
 
     Args:
         brand_id: the model slug (e.g. "minimax").
@@ -423,10 +482,16 @@ def serialize_grid_card(
             Unsupported → "en" with a warning log.
         display_name: pre-resolved localized brand name (i18n Unit 5).
             When None, falls back to MODEL_DISPLAY_NAMES.
-        signal_labels: pre-resolved {signal_key: localized_label} for
-            the chart series (i18n Unit 5). When None, the chart
-            container emits no `data-signal-labels` attribute and the
-            JS falls back to its hardcoded English labels.
+        sentiment_breakdown: pre-resolved {sentiment_key: weighted_count}
+            (U9: replaces `signal_breakdown`). Reads from
+            posts_brands_signals via _read_classification_breakdown_for_brand.
+        day_sentiment_counts: pre-resolved {iso_date: {sentiment_key: count}}.
+        post_type_breakdown: pre-resolved {post_type_key: weighted_count}.
+        day_post_type_counts: pre-resolved {iso_date: {post_type_key: count}}.
+        signal_labels: pre-resolved {sentiment_key: localized_label} for
+            the chart series. The parameter name is preserved for
+            backwards compat with the JS template attribute
+            (`data-signal-labels`); the dict values are sentiment labels.
     """
     locale = normalize_locale(display_locale)
     if now is None:
@@ -458,45 +523,37 @@ def serialize_grid_card(
         if dt >= cutoff_24h:
             in_24h.append(p)
 
-    # Per-day per-signal counts. day_signal_counts[iso_date][signal] = int.
-    #
-    # v1.8 (Unit 4 / R18): when the caller passes `signal_breakdown` and
-    # `day_signal_counts` (read from posts_brands_signals via the JOIN
-    # shape from Decision 18), use them directly. Otherwise fall back to
-    # the legacy post-level inference from posts[i]["source_query_id"]
-    # (kept for backwards compat with tests that build synthetic post
-    # lists without a DB).
-    sig_counts: Counter[str] = Counter()
-    day_signal_counts: dict[str, Counter[str]] = {}
-    if signal_breakdown is not None and day_signal_counts is not None:
-        sig_counts = Counter(signal_breakdown)
-        day_signal_counts = {d: Counter(c) for d, c in day_signal_counts.items()}
-    else:
-        for p in in_window:
-            sqid = p.get("source_query_id") or ""
-            signal = _qid_to_signal(sqid)
-            if signal is None:
-                continue
-            sig_counts[signal] += 1
-            dt = _parse_post_timestamp(p.get("created_at"))
-            if dt is None:
-                continue
-            day_signal_counts.setdefault(dt.date().isoformat(), Counter())[signal] += 1
+    # Per-day per-sentiment + per-day per-post_type counts. U9
+    # replaces the v1.7 source_query_id inference with the SQL-backed
+    # breakdown read from posts_brands_signals. When the caller passes
+    # the new breakdowns, use them directly; the legacy fallback (when
+    # neither breakdown is provided) returns empty counts — tests that
+    # build synthetic post lists without a DB should pass the
+    # breakdowns explicitly.
+    sent_counts: Counter[str] = Counter()
+    if sentiment_breakdown is not None:
+        sent_counts = Counter(sentiment_breakdown)
+    _day_sent_counts: dict[str, Counter[str]] = {
+        d: Counter(c) for d, c in (day_sentiment_counts or {}).items()
+    }
+    pt_counts: Counter[str] = Counter()
+    if post_type_breakdown is not None:
+        pt_counts = Counter(post_type_breakdown)
+    _day_pt_counts: dict[str, Counter[str]] = {
+        d: Counter(c) for d, c in (day_post_type_counts or {}).items()
+    }
 
     # Materialize the per-day grid into the response shape Chart.js wants:
     # `days` is a list of ISO date strings (oldest -> newest), and each series
-    # is a list[int] aligned to `days` with the count for that signal on that
-    # day (0 if no posts). Six series, ordered to match the bar segments.
-    chart_series_keys: tuple[str, ...] = (
-        "release", "community_question", "criticism",
-        "commenter_capture", "other", "praise",
-    )
+    # is a list[int] aligned to `days` with the count for that sentiment on that
+    # day (0 if no posts). Four series, ordered to match the bar segments.
+    chart_series_keys: tuple[str, ...] = _DASHBOARD_SENTIMENT_KEYS
     chart_days: list[str] = []
     chart_series: dict[str, list[int]] = {k: [] for k in chart_series_keys}
     for i in range(window_days - 1, -1, -1):
         d = (now.date() - timedelta(days=i)).isoformat()
         chart_days.append(d)
-        day_counter = day_signal_counts.get(d, Counter())
+        day_counter = _day_sent_counts.get(d, Counter())
         for sig in chart_series_keys:
             chart_series[sig].append(day_counter.get(sig, 0))
 
@@ -523,12 +580,13 @@ def serialize_grid_card(
             if isinstance(entry, str) and entry.startswith(f"{brand_id}/"):
                 sentinels.append("budget")
 
-    # v1.7-i18n (Unit 5): pre-render the signal labels as a JSON string
+    # v1.7-i18n (Unit 5): pre-render the sentiment labels as a JSON string
     # so the template can drop it verbatim into a data-signal-labels
     # attribute. We use ensure_ascii=False so non-ASCII (Chinese) labels
     # appear as their UTF-8 form in the HTML, not escaped \uXXXX. The
     # page is served with charset=utf-8, so the browser decodes it
-    # correctly.
+    # correctly. The template attribute name `data-signal-labels` is
+    # preserved for backwards compat with the trend-chart JS.
     signal_labels_json = (
         json.dumps(signal_labels, ensure_ascii=False) if signal_labels else ""
     )
@@ -539,7 +597,13 @@ def serialize_grid_card(
         "chart": {"days": chart_days, "series": chart_series},
         "signal_labels": signal_labels or {},
         "signal_labels_json": signal_labels_json,
-        "signal_breakdown": dict(sig_counts),
+        # U9: the breakdown keys are sentiments + post_types (was 6-signal).
+        # Old template keys `signal_breakdown` / `signal_labels` are
+        # preserved under sentiment for backwards compat; new templates
+        # should consume `sentiment_breakdown` + `post_type_breakdown`.
+        "sentiment_breakdown": dict(sent_counts),
+        "post_type_breakdown": dict(pt_counts),
+        "signal_breakdown": dict(sent_counts),
         "top3_posts": top3,
         "top3_7d": top3_7d,
         "top3_24h": top3_24h,
@@ -673,8 +737,14 @@ class DashboardApp:
 
         v1.7-i18n (Unit 5): also reads each brand's localized display
         name from the `brands` table (display_name_<locale> with
-        fallback to source) and the per-signal chart labels from
-        `signal_labels`. Both lookups share the same `Store` handle.
+        fallback to source) and the per-sentiment chart labels from
+        `signal_labels` (the dict values are sentiment labels post-U9).
+
+        U9 (migration 022): the per-model breakdown is the
+        sentiment × post_type decomposition read from
+        posts_brands_signals via _read_classification_breakdown_for_brand.
+        The 6-signal `signal_breakdown` is replaced by the
+        sentiment + post_type pair.
         """
         cards: list[dict] = []
         latest_run = _load_latest_run(self.runs_dir)
@@ -682,16 +752,16 @@ class DashboardApp:
         store = Store(db_path)
         try:
             # v1.7-i18n (Unit 5): read DB-backed brand display names and
-            # signal labels in this locale once per request. These two
+            # sentiment labels in this locale once per request. These two
             # queries replace the Python MODEL_DISPLAY_NAMES dict + the
             # hardcoded JS SIGNAL_LABELS constant.
             brand_names = _load_brand_display_names(store, locale)
             signal_labels = _load_signal_labels(store, locale)
-            # v1.8 (Unit 4 / R18): compute the signal breakdown once per
-            # model from posts_brands_signals via the JOIN shape from
-            # Decision 18. The cutoff is anchored to the latest run's
-            # finished_at (matching serialize_grid_card's "now" seam) so
-            # the 14d window is stable across cycles.
+            # v1.8 (Unit 4 / R18): compute the breakdown once per model
+            # from posts_brands_signals via the JOIN shape from Decision
+            # 18. The cutoff is anchored to the latest run's finished_at
+            # (matching serialize_grid_card's "now" seam) so the 14d
+            # window is stable across cycles.
             anchored_now = datetime.now(timezone.utc)
             if latest_run and latest_run.get("finished_at"):
                 try:
@@ -704,15 +774,20 @@ class DashboardApp:
             cutoff_iso = (anchored_now - timedelta(days=window_days)).isoformat()
             for m in self.config.enabled_models:
                 posts = store.get_all_posts(m)
-                sig_breakdown, day_sigs = _read_signal_breakdown_for_brand(
+                (
+                    sent_breakdown, day_sent,
+                    pt_breakdown, day_pt,
+                ) = _read_classification_breakdown_for_brand(
                     store._conn, m, cutoff_iso,
                 )
                 cards.append(
                     serialize_grid_card(
                         m, posts, window_days=window_days,
                         latest_run=latest_run, display_locale=locale,
-                        signal_breakdown=sig_breakdown,
-                        day_signal_counts=day_sigs,
+                        sentiment_breakdown=sent_breakdown,
+                        day_sentiment_counts=day_sent,
+                        post_type_breakdown=pt_breakdown,
+                        day_post_type_counts=day_pt,
                         display_name=brand_names.get(m),
                         signal_labels=signal_labels,
                     )

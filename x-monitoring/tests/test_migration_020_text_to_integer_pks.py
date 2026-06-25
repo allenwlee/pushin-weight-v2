@@ -264,7 +264,9 @@ def test_migration_020_products_integer_pk_and_fks(tmp_path):
     ("brand_search_terms", "brand_id", "brands"),
     ("posts_brands_signals", "post_id", "posts"),
     ("posts_brands_signals", "brand_id", "brands"),
-    ("posts_brands_signals", "signal_id", "signals"),
+    # U9 (migration 022): posts_brands_signals.signal_id + signals table
+    # are DROPPED. The replacement taxonomy (post_type + sentiment) is
+    # in the next two rows.
     ("posts_brands_signals", "post_type", "post_type_keys"),
     ("posts_brands_signals", "sentiment", "sentiment_keys"),
     ("posts_brands_mentions", "post_id", "posts"),
@@ -319,29 +321,6 @@ def test_migration_020_brands_accounts_role_id_fks_to_roles_id(tmp_path):
         )
         assert role_fk[4] == "id", (
             f"brands_accounts.role_id FK target column is {role_fk[4]!r}, "
-            f"expected 'id' (INTEGER PK)"
-        )
-    finally:
-        s.close()
-
-
-def test_migration_020_posts_brands_signals_signal_id_fks_to_signals_id(tmp_path):
-    """posts_brands_signals.signal_id INTEGER FK → signals.id (not signals.key)."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        fks = s._conn.execute(
-            "SELECT * FROM pragma_foreign_key_list('posts_brands_signals')"
-        ).fetchall()
-        sig_fk = next(
-            (r for r in fks if r[3] == "signal_id"), None,
-        )
-        assert sig_fk is not None
-        assert sig_fk[2] == "signals"
-        assert sig_fk[4] == "id", (
-            f"posts_brands_signals.signal_id FK target column is {sig_fk[4]!r}, "
             f"expected 'id' (INTEGER PK)"
         )
     finally:
@@ -471,28 +450,10 @@ def test_migration_020_hf_orgs_data_preserved_with_integer_company_id(tmp_path):
 
 
 # --- happy path: enum table FKs still wire up ---------------------------
-
-
-def test_migration_020_signal_id_resolves_to_known_signal_id(tmp_path):
-    """After conversion, signal_id values are INTEGER-storing-id. A
-    write of a known signal maps to its INTEGER id (dead-letter guard
-    still drops unknown signals — this is just a sanity check that
-    the post-migration 020 schema is sane for writes)."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        # release is one of the 6 known signals; its id should be
-        # the AUTOINCREMENT-assigned id (1..6 in declaration order
-        # from migration 008 + 018).
-        release_row = s._conn.execute(
-            "SELECT id FROM signals WHERE key = 'release'"
-        ).fetchone()
-        assert release_row is not None
-        assert isinstance(release_row["id"], int)
-    finally:
-        s.close()
+# U9 (migration 022): the `signals` table was DROPPED. The replacement
+# is `post_type_keys` + `sentiment_keys` (with their own FKs covered by
+# the parametrized FK-column test above). No signal_id-resolves test
+# needed post-022.
 
 
 # --- happy path: FK enforcement is ON after migration ------------------
@@ -580,36 +541,10 @@ def test_migration_020_bad_role_id_in_brands_accounts_rejected(tmp_path):
         s.close()
 
 
-def test_migration_020_bad_signal_id_in_posts_brands_signals_rejected(tmp_path):
-    """An INSERT into posts_brands_signals with a signal_id that does
-    not exist in signals.id is rejected."""
-    from x_monitor.store import Store
-    import sqlite3
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        b_row = s._conn.execute(
-            "SELECT id FROM brands WHERE brand_id = 'minimax'"
-        ).fetchone()
-        # We need a real post_id; insert a post first.
-        s._conn.execute(
-            "INSERT INTO posts (tweet_id, author_handle, fetched_at) "
-            "VALUES (?, ?, ?)",
-            ("t_020_fk", "u_020_fk", "2026-06-25T00:00:00+00:00"),
-        )
-        p_row = s._conn.execute(
-            "SELECT id FROM posts WHERE tweet_id = 't_020_fk'"
-        ).fetchone()
-        with pytest.raises(sqlite3.IntegrityError):
-            with s.transaction():
-                s._conn.execute(
-                    "INSERT INTO posts_brands_signals (post_id, brand_id, "
-                    "signal_id) VALUES (?, ?, ?)",
-                    (p_row["id"], b_row["id"], 999999),
-                )
-    finally:
-        s.close()
+# U9 (migration 022): the bad-signal_id test is GONE — the
+# `signal_id` column and `signals` table are dropped in 022. The
+# replacement bad-FK coverage for `post_type` and `sentiment` is
+# in tests/test_migration_022_kill_signal_id.py.
 
 
 # --- happy path: post-020 schemas match across tables ------------------
@@ -720,7 +655,15 @@ def test_migration_020_idempotent(tmp_path):
 
 
 def test_migration_020_full_stack_apply(tmp_path):
-    """All migrations 001-020 apply on a fresh DB."""
+    """All migrations 001-020 apply on a fresh DB. Migration 021 was
+    INTENTIONALLY SKIPPED (reserved for an unrelated HF products
+    crawler that never landed). After U9 migration 022 ships, the
+    applied set is {1..20, 22} (21 is missing).
+
+    This test asserts the post-022 reality rather than the original
+    contiguous 1-20 range, since auto_migrate applies every shipped
+    migration.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -732,8 +675,9 @@ def test_migration_020_full_stack_apply(tmp_path):
                 "SELECT version FROM _migrations"
             ).fetchall()
         )
-        assert applied == list(range(1, 21)), (
-            f"unexpected versions: {applied}"
+        expected = sorted(set(range(1, 21)) | {22})
+        assert applied == expected, (
+            f"unexpected versions: {applied} (expected {expected})"
         )
     finally:
         s.close()
@@ -766,7 +710,9 @@ def test_migration_020_indexes_preserved(tmp_path):
             "idx_brands_accounts_role_id",
             "idx_companies_accounts_role_id",
             "idx_posts_brands_brand_id",
-            "idx_posts_brands_signals_brand_id_signal_id",
+            # U9 (migration 022): the signal_id-backed index is GONE.
+            # The post_type + sentiment indexes are kept (different
+            # columns, different index names).
             "idx_posts_brands_signals_brand_id_post_type",
             "idx_posts_brands_signals_brand_id_sentiment",
         ):

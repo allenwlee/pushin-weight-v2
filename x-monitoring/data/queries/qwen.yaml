@@ -3,38 +3,32 @@
 queries:
   - id: Q1
     query_string: 'from:QwenLM min_faves:5'
-    expected_signal: release
     max_results: 50
     enabled: true
     min_faves: 5
     notes: Official Qwen release announcements.
   - id: Q2
     query_string: '(Qwen OR 通义千问 OR 通义 OR Qwen3) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2'
-    expected_signal: community_question
     max_results: 50
     enabled: true
     min_faves: 2
   - id: Q3
     query_string: '(Qwen OR 通义 OR Qwen3) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1'
-    expected_signal: criticism
     max_results: 50
     enabled: true
     min_faves: 1
   - id: Q4
     query_string: 'to:QwenLM min_faves:5'
-    expected_signal: commenter_capture
     max_results: 50
     enabled: true
     min_faves: 5
   - id: Q5
     query_string: '(Qwen OR 通义 OR Qwen3) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3'
-    expected_signal: other
     max_results: 50
     enabled: true
     min_faves: 3
   - id: Q6
     query_string: '(Qwen OR 通义千问 OR 通义 OR Qwen3) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5'
-    expected_signal: praise
     max_results: 50
     enabled: true
     min_faves: 5

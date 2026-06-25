@@ -6,39 +6,33 @@
 queries:
   - id: Q1
     query_string: '("StepFun" OR "阶跃星辰" OR "StepFun AI") (LLM OR model OR "step" OR 阶跃) -dance -choreography min_faves:5'
-    expected_signal: release
     max_results: 50
     enabled: true
     min_faves: 5
     notes: Brand-name Q1 fallback; switch to from:StepFunAI if the official handle is confirmed.
   - id: Q2
     query_string: '("StepFun" OR "阶跃星辰") (how OR tutorial OR guide OR 教程) min_faves:2'
-    expected_signal: community_question
     max_results: 50
     enabled: true
     min_faves: 2
   - id: Q3
     query_string: '("StepFun" OR "阶跃星辰") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1'
-    expected_signal: criticism
     max_results: 50
     enabled: true
     min_faves: 1
   - id: Q4
     query_string: 'to:StepFunAI min_faves:5'
-    expected_signal: commenter_capture
     max_results: 50
     enabled: true
     min_faves: 5
     notes: May be 0 results until the official handle is confirmed; harmless.
   - id: Q5
     query_string: '("StepFun" OR "阶跃星辰") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3'
-    expected_signal: other
     max_results: 50
     enabled: true
     min_faves: 3
   - id: Q6
     query_string: '("StepFun" OR "阶跃星辰") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5'
-    expected_signal: praise
     max_results: 50
     enabled: true
     min_faves: 5

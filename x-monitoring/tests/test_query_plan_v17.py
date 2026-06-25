@@ -91,7 +91,9 @@ def test_plan_calls_v17_emits_call_c_when_spec_provided(v17_data_dir):
     # is via post-fetch attribute_to_brands matching the per-brand
     # paren group.
     assert call_c.brand_id in {"xiaomi_mimo", "moonshot_kimi"}
-    assert call_c.expected_signal == "other"
+    # U9 (migration 022): PlannedCall no longer carries
+    # `expected_signal` — the 6-signal taxonomy was replaced by
+    # (post_type, sentiment) classification at ingestion time.
     # Shape: ((brand1) OR (brand2)) (co_occurrence) min_faves:0
     # Brand group order is dict-insertion order (py3.7+); both brands
     # are in the outer paren, joined with OR.
@@ -434,7 +436,6 @@ def test_v17_planned_call_call_kind_is_union():
         brand_id="*",
         bucket=None,
         query_string="(x) min_faves:0",
-        expected_signal="other",
         query_length=12,
     )
     assert p.call_kind == "brand_wide"

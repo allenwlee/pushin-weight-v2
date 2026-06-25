@@ -102,7 +102,14 @@ def test_migration_017_idempotent(tmp_path):
 
 def test_migration_017_full_stack_apply(tmp_path):
     """All migrations 001-020 apply on a fresh DB; brand_search_terms
-    is in effect as the attribution-side store."""
+    is in effect as the attribution-side store.
+
+    U9: migration 021 was INTENTIONALLY SKIPPED (reserved for an
+    unrelated HF products crawler that never landed). After U9
+    migration 022 ships, the applied set is {1..20, 22} (21 is
+    missing). This test now asserts that gap rather than the
+    contiguous 1-20 range.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -111,8 +118,9 @@ def test_migration_017_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 21)), (
-            f"unexpected versions: {applied}"
+        expected = sorted(set(range(1, 21)) | {22})
+        assert applied == expected, (
+            f"unexpected versions: {applied} (expected {expected})"
         )
         rows = s._conn.execute(
             "SELECT name FROM sqlite_master WHERE name = 'brand_search_terms'"

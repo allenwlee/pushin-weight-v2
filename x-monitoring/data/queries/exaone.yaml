@@ -3,39 +3,33 @@
 queries:
   - id: Q1
     query_string: '(EXAONE OR "LG AI" OR "LG EXAONE") min_faves:5'
-    expected_signal: release
     max_results: 50
     enabled: true
     min_faves: 5
     notes: Brand-name Q1 fallback; switch to from:LGAIResearch when operator confirms LG AI Research's official handle.
   - id: Q2
     query_string: '(EXAONE OR "LG AI" OR "LG EXAONE") (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2'
-    expected_signal: community_question
     max_results: 50
     enabled: true
     min_faves: 2
   - id: Q3
     query_string: '(EXAONE OR "LG AI" OR "LG EXAONE") (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1'
-    expected_signal: criticism
     max_results: 50
     enabled: true
     min_faves: 1
   - id: Q4
     query_string: '(EXAONE OR "LG AI" OR "LG EXAONE") min_faves:5'
-    expected_signal: commenter_capture
     max_results: 50
     enabled: true
     min_faves: 5
     notes: Brand-name Q4 fallback; switch to to:LGAIResearch when confirmed.
   - id: Q5
     query_string: '(EXAONE OR "LG AI" OR "LG EXAONE") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3'
-    expected_signal: other
     max_results: 50
     enabled: true
     min_faves: 3
   - id: Q6
     query_string: '(EXAONE OR "LG AI" OR "LG EXAONE") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5'
-    expected_signal: praise
     max_results: 50
     enabled: true
     min_faves: 5

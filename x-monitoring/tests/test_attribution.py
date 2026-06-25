@@ -2,7 +2,7 @@
 """Tests for x_monitor.attribution: consolidator + per-brand classifier.
 
 Covers Decision 13 (raw_token format), R7 (compute_post_brands),
-R8 (classify_signal brand_id validation + hallucination drop), and
+R8 (classify_post brand_id validation + hallucination drop), and
 the 16 plan-mandated scenarios (multi-brand equal split, dedup,
 case-insensitive, unknown handles, NULL entities, etc.).
 """
@@ -19,7 +19,7 @@ from x_monitor.attribution import (
     MentionRow,
     attribute_to_brands,
     build_signal_prompt,
-    classify_signal,
+    classify_post,
     compile_keyword_index,
     compute_post_brands,
     extract_body_keywords,
@@ -407,7 +407,7 @@ class TestNullEntities:
         assert len(mentions) == 1
 
 
-# --- classify_signal (R8) ----------------------------------------------
+# --- classify_post (R8, U9) --------------------------------------------
 
 
 class FakeClaudeClient:
@@ -424,59 +424,68 @@ class FakeClaudeClient:
         return self._response
 
 
-class TestClassifySignal:
-    """R8: per-brand signal classification + hallucination drop."""
+class TestClassifyPost:
+    """R8 + U9: per-brand (post_type, sentiment) classification.
+
+    U9 replaces the legacy 6-bucket `signal` taxonomy with the
+    (post_type, sentiment) decomposition. The LLM still validates
+    brand_ids against the registry (R8 hallucination drop).
+    """
 
     def test_validates_brand_ids_against_registry(self):
         # LLM returns real brands -> preserved.
         client = FakeClaudeClient({
-            "signals": [
-                {"brand_id": "minimax", "signal": "praise"},
-                {"brand_id": "qwen", "signal": "criticism"},
+            "classifications": [
+                {"brand_id": "minimax", "post_type": "buzz_releases", "sentiment": "positive"},
+                {"brand_id": "qwen", "post_type": "buzz_releases", "sentiment": "negative"},
             ]
         })
-        out = classify_signal(
+        out = classify_post(
             "minimax is great, qwen is bad",
             brand_ids=["minimax", "qwen"],
             brand_registry=BRAND_REGISTRY,
             anthropic_client=client,
         )
-        assert out == {"minimax": "praise", "qwen": "criticism"}
+        assert out == {
+            "minimax": ("buzz_releases", "positive"),
+            "qwen": ("buzz_releases", "negative"),
+        }
 
     def test_drops_hallucinated_brand_ids(self):
         # LLM invents "m3_pro" -> dropped (R8).
         client = FakeClaudeClient({
-            "signals": [
-                {"brand_id": "minimax", "signal": "praise"},
-                {"brand_id": "m3_pro", "signal": "praise"},  # hallucinated
-                {"brand_id": "fakebrand", "signal": "release"},  # hallucinated
+            "classifications": [
+                {"brand_id": "minimax", "post_type": "buzz_releases", "sentiment": "positive"},
+                {"brand_id": "m3_pro", "post_type": "buzz_releases", "sentiment": "positive"},  # hallucinated
+                {"brand_id": "fakebrand", "post_type": "buzz_releases", "sentiment": "positive"},  # hallucinated
             ]
         })
-        out = classify_signal(
+        out = classify_post(
             "minimax M3 is amazing",
             brand_ids=["minimax"],
             brand_registry=BRAND_REGISTRY,
             anthropic_client=client,
         )
-        assert out == {"minimax": "praise"}
+        assert out == {"minimax": ("buzz_releases", "positive")}
 
-    def test_coerces_unknown_signals_to_other(self):
+    def test_coerces_unknown_post_type_to_hands_on_usage(self):
+        # Unknown post_type / sentiment -> fallback per 022 default.
         client = FakeClaudeClient({
-            "signals": [
-                {"brand_id": "minimax", "signal": "BOGUS_VALUE"},
+            "classifications": [
+                {"brand_id": "minimax", "post_type": "BOGUS_VALUE", "sentiment": "BOGUS_VALUE"},
             ]
         })
-        out = classify_signal(
+        out = classify_post(
             "minimax",
             brand_ids=["minimax"],
             brand_registry=BRAND_REGISTRY,
             anthropic_client=client,
         )
-        assert out == {"minimax": "other"}
+        assert out == {"minimax": ("hands_on_usage", "neutral")}
 
     def test_returns_empty_when_no_client(self):
         # Offline / dry-run path.
-        out = classify_signal(
+        out = classify_post(
             "minimax",
             brand_ids=["minimax"],
             brand_registry=BRAND_REGISTRY,
@@ -485,8 +494,8 @@ class TestClassifySignal:
         assert out == {}
 
     def test_returns_empty_when_no_brand_ids(self):
-        client = FakeClaudeClient({"signals": []})
-        out = classify_signal(
+        client = FakeClaudeClient({"classifications": []})
+        out = classify_post(
             "nothing",
             brand_ids=[],
             brand_registry=BRAND_REGISTRY,
@@ -498,7 +507,7 @@ class TestClassifySignal:
 
     def test_returns_empty_on_llm_failure(self):
         client = FakeClaudeClient(RuntimeError("upstream down"))
-        out = classify_signal(
+        out = classify_post(
             "minimax",
             brand_ids=["minimax"],
             brand_registry=BRAND_REGISTRY,
@@ -507,8 +516,8 @@ class TestClassifySignal:
         assert out == {}
 
     def test_returns_empty_on_malformed_response(self):
-        client = FakeClaudeClient({"unexpected_key": []})  # no "signals"
-        out = classify_signal(
+        client = FakeClaudeClient({"unexpected_key": []})  # no "classifications"
+        out = classify_post(
             "minimax",
             brand_ids=["minimax"],
             brand_registry=BRAND_REGISTRY,
@@ -521,8 +530,10 @@ class TestClassifySignal:
         assert "minimax" in prompt
         assert "qwen" in prompt
         assert "minimax is great" in prompt
-        assert "release" in prompt
-        assert "praise" in prompt
+        # U9: the prompt now asks for (post_type, sentiment), not the
+        # legacy 6-bucket signal taxonomy.
+        assert "post_type" in prompt
+        assert "sentiment" in prompt
 
 
 # --- attribute_to_brands end-to-end (R2) --------------------------------

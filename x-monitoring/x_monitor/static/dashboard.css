@@ -9,11 +9,20 @@
   --red: #ef4444;
   --yellow: #eab308;
   --green: #10b981;
+  /* U9 (migration 022): sentiment bar colors. The 6-signal CSS
+     variables (--bar-release / --bar-community / --bar-criticism /
+     --bar-other / --bar-praise) are KEPT for backwards compat with
+     any inline-style references in templates, but the trend-chart
+     reads the four sentiment-specific vars below. */
   --bar-release: #10b981;
   --bar-community: #3b82f6;
   --bar-criticism: #ef4444;
   --bar-other: #8b949e;
   --bar-praise: #a855f7;
+  --bar-positive: #10b981;
+  --bar-negative: #ef4444;
+  --bar-neutral: #8b949e;
+  --bar-mixed: #3b82f6;
 }
 
 * { box-sizing: border-box; }

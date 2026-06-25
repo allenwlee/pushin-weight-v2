@@ -208,8 +208,13 @@ def test_migration_015_idempotent(tmp_path):
 
 
 def test_migration_015_full_stack_apply(tmp_path):
-    """All migrations 001-015 apply on a fresh DB; the singular-noun
-    enum table convention is in effect (signals + roles)."""
+    """All migrations {1..20, 22} apply on a fresh DB (only 21 absent).
+
+    Migration 015's intent (rename role_keys → roles) is preserved: the
+    `roles` table survives post-022 (only the 6-signal taxonomy was
+    killed, not roles). The `signals` + `signal_labels` tables were
+    dropped in 022.
+    """
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
@@ -219,15 +224,22 @@ def test_migration_015_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        assert applied == list(range(1, 20)), (
-            f"unexpected versions: {applied}"
+        expected = sorted(set(range(1, 21)) | {22})
+        assert applied == expected, (
+            f"unexpected versions: {applied} (expected {expected})"
         )
-        # Both singular enum tables are in effect.
-        for tbl in ("signals", "signal_labels", "roles", "role_labels"):
+        # The surviving singular enum table convention.
+        for tbl in ("roles", "role_labels"):
             rows = s._conn.execute(
                 "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
             ).fetchall()
             assert rows, f"{tbl} missing"
+        # The 6-signal taxonomy tables are GONE post-022.
+        for tbl in ("signals", "signal_labels"):
+            rows = s._conn.execute(
+                "SELECT name FROM sqlite_master WHERE name = ?", (tbl,)
+            ).fetchall()
+            assert rows == [], f"{tbl} should be GONE post-022"
         # Both old names are gone.
         for old in ("signal_keys", "role_keys"):
             rows = s._conn.execute(
@@ -242,18 +254,29 @@ def test_migration_015_full_stack_apply(tmp_path):
 
 
 def test_migration_015_upsert_account_writes_role_id(tmp_path):
-    """upsert_account writes the renamed role_id column on brands_accounts."""
+    """upsert_account writes the renamed role_id column on brands_accounts.
+    Post-020: role_id is INTEGER FK to roles.id (post-U8 conversion)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
+        official_id = s._conn.execute(
+            "SELECT id FROM roles WHERE key='official'"
+        ).fetchone()["id"]
         s.upsert_account("minimax", "u_015", role="official")
         row = s._conn.execute(
-            "SELECT role_id FROM brands_accounts WHERE author_id = ?",
+            "SELECT ba.role_id "
+            "FROM brands_accounts ba "
+            "JOIN accounts a ON a.id = ba.author_id "
+            "WHERE a.author_id = ?",
             ("handle:u_015",),
         ).fetchone()
-        assert row["role_id"] == "official"
+        assert row is not None
+        assert row["role_id"] == official_id, (
+            f"role_id is {row['role_id']!r}, expected {official_id} "
+            f"(INTEGER FK to official)"
+        )
     finally:
         s.close()
 
@@ -286,16 +309,24 @@ def test_migration_015_unknown_role_dead_lettered(tmp_path):
 
 
 def test_migration_015_get_account_returns_role_id(tmp_path):
-    """get_account returns the renamed role_id column."""
+    """get_account returns the renamed role_id column. Post-020:
+    role_id is INTEGER FK to roles.id, so the dict's role_id value
+    is the integer id (not the string key)."""
     from x_monitor.store import Store
 
     db = tmp_path / "x.db"
     s = Store(db, auto_migrate=True)
     try:
+        community_id = s._conn.execute(
+            "SELECT id FROM roles WHERE key='community'"
+        ).fetchone()["id"]
         s.upsert_account("minimax", "u_015_get", role="community")
         result = s.get_account("minimax", "u_015_get")
         assert result is not None
-        assert result.get("role_id") == "community"
+        assert result.get("role_id") == community_id, (
+            f"role_id is {result.get('role_id')!r}, expected {community_id} "
+            f"(INTEGER FK to community)"
+        )
     finally:
         s.close()
 

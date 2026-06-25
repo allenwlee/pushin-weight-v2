@@ -23,7 +23,8 @@ from x_monitor.treemap import (
     bin_polarity,
     polarity_fill,
     build_treemap_svg,
-    compute_polarity,
+    # U9: the legacy `compute_polarity` (6-signal formula) is gone;
+    # polarity is now sentiment-only via `compute_polarity_from_db`.
     separate_active_and_no_data,
 )
 
@@ -193,86 +194,58 @@ class TestPolarityFill:
 
 # ---------- end polarity_fill (v1.7.2 + v1.7.3) -----------------------------
 
-# ---------- compute_polarity -------------------------------------------------
+# ---------- _score_from_breakdown (U9 sentiment-only polarity) -------------
 
-class TestComputePolarity:
+class TestScoreFromBreakdown:
+    """U9 (migration 022): polarity is sentiment-only. The legacy
+    `compute_polarity` 6-signal formula is replaced by
+    `_score_from_breakdown`, which takes two sentiment breakdowns
+    {positive / negative / neutral / mixed → weighted_count} and
+    returns (positive - negative) / total.
+    """
+
     def test_all_zeros_returns_zero(self):
+        from x_monitor.treemap import _score_from_breakdown
         # Sparse-data guard 1: both windows empty.
-        score = compute_polarity([], (_now(), _now()), (_now(), _now()))
+        score = _score_from_breakdown({}, {})
         assert score == 0.0
 
-    def test_prior_zero_current_has_data_no_nan(self):
+    def test_prior_empty_current_has_data_no_nan(self):
+        from x_monitor.treemap import _score_from_breakdown
         # Sparse-data guard 2: prior empty, current has data.
-        # Define prior rates as 0, so score = current_rate - 0 = current_rate.
-        # 4 Q1 (release, not praise/criticism) + 2 Q6 (praise) = 6 total.
-        # praise_rate = 2/6 = 0.333.
-        now = _now()
-        posts = [
-            _post("Q6", now - timedelta(hours=1)),  # praise
-            _post("Q6", now - timedelta(hours=2)),  # praise
-            _post("Q1", now - timedelta(hours=3)),  # release (not in numerator)
-            _post("Q1", now - timedelta(hours=4)),
-            _post("Q1", now - timedelta(hours=5)),
-            _post("Q1", now - timedelta(hours=6)),
-        ]
-        score = compute_polarity(
-            posts,
-            (now - timedelta(days=2), now),  # current window
-            (now - timedelta(days=4), now - timedelta(days=2)),  # prior window (empty)
-        )
+        # 2 positive + 4 neutral = 6 total -> positive_rate = 2/6.
+        current = {"positive": 2.0, "neutral": 4.0}
+        prior: dict[str, float] = {}
+        score = _score_from_breakdown(current, prior)
         assert score is not None
-        # Expected: 0.333... no NaN
         assert abs(score - (2 / 6)) < 0.01
 
-    def test_current_zero_prior_has_data_returns_none(self):
+    def test_current_empty_prior_has_data_returns_none(self):
+        from x_monitor.treemap import _score_from_breakdown
         # Sparse-data guard 3: current empty, prior had data -> went dark.
-        now = _now()
-        posts = [
-            _post("Q6", now - timedelta(days=10)),  # in prior window only
-            _post("Q3", now - timedelta(days=11)),  # in prior window only
-        ]
-        score = compute_polarity(
-            posts,
-            (now - timedelta(days=2), now),  # current window (empty)
-            (now - timedelta(days=12), now - timedelta(days=2)),  # prior window
-        )
+        current: dict[str, float] = {}
+        prior = {"positive": 1.0, "negative": 1.0}
+        score = _score_from_breakdown(current, prior)
         assert score is None  # the "went dark" sentinel
 
-    def test_synthetic_praise_heavy_returns_positive(self):
-        # current: all praise, prior: all criticism -> score should be strongly positive
-        now = _now()
-        posts = []
-        for i in range(5):
-            posts.append(_post("Q6", now - timedelta(hours=i + 1)))  # current praise
-        for i in range(5):
-            posts.append(_post("Q3", now - timedelta(days=i + 2)))  # prior criticism
-        score = compute_polarity(
-            posts,
-            (now - timedelta(days=1), now),
-            (now - timedelta(days=6), now - timedelta(days=1)),
-        )
+    def test_synthetic_positive_heavy_returns_positive(self):
+        from x_monitor.treemap import _score_from_breakdown
+        # current: all positive, prior: all negative -> strongly positive
+        current = {"positive": 5.0}
+        prior = {"negative": 5.0}
+        score = _score_from_breakdown(current, prior)
         assert score is not None
-        # current_rate = 5/5 - 0/5 = 1.0
-        # prior_rate = 0/5 - 5/5 = -1.0
-        # score = 1.0 - (-1.0) = 2.0, clamped to 1.0
+        # current_rate = 1.0, prior_rate = -1.0, score = 2.0 → clamped to 1.0
         assert abs(score - 1.0) < 0.01
 
-    def test_synthetic_criticism_heavy_returns_negative(self):
-        now = _now()
-        posts = []
-        for i in range(5):
-            posts.append(_post("Q3", now - timedelta(hours=i + 1)))  # current criticism
-        for i in range(5):
-            posts.append(_post("Q6", now - timedelta(days=i + 2)))  # prior praise
-        score = compute_polarity(
-            posts,
-            (now - timedelta(days=1), now),
-            (now - timedelta(days=6), now - timedelta(days=1)),
-        )
+    def test_synthetic_negative_heavy_returns_negative(self):
+        from x_monitor.treemap import _score_from_breakdown
+        # current: all negative, prior: all positive -> strongly negative
+        current = {"negative": 5.0}
+        prior = {"positive": 5.0}
+        score = _score_from_breakdown(current, prior)
         assert score is not None
-        # current_rate = 0/5 - 5/5 = -1.0
-        # prior_rate = 5/5 - 0/5 = 1.0
-        # score = -1.0 - 1.0 = -2.0, clamped to -1.0
+        # current_rate = -1.0, prior_rate = 1.0, score = -2.0 → clamped to -1.0
         assert abs(score - (-1.0)) < 0.01
 
 
@@ -529,15 +502,21 @@ class TestSquarifyLayoutPadding:
 
 def _seed_brand_posts(store, brand, posts):
     """Direct-insert (posts, posts_brands, posts_brands_signals) for polarity-SQL
-    tests. `posts` = list of (tweet_id, signal, retweet_count, epoch). The
-    `brand` must already exist (migration 004 seeds KNOWN_MODELS like 'glm')."""
+    tests. `posts` = list of (tweet_id, sentiment, post_type, retweet_count, epoch).
+
+    U9 (migration 022): posts_brands_signals schema is now
+    (post_id, brand_id, post_type, sentiment) where `post_type` /
+    `sentiment` are INTEGER FKs to post_type_keys / sentiment_keys.
+    The legacy `signal_id` column is gone.
+
+    The `brand` must already exist (migration 004 seeds KNOWN_MODELS like 'glm')."""
     c = store._conn
-    # U8 (migration 020): posts.id / brands.id / signals.id are
-    # INTEGER. Look up each id once per call.
+    # U8 (migration 020): posts.id / brands.id / post_type_keys.id /
+    # sentiment_keys.id are INTEGER. Look up each id once per call.
     brand_int = c.execute(
         "SELECT id FROM brands WHERE brand_id = ?", (brand,)
     ).fetchone()["id"]
-    for tid, signal, rt, epoch in posts:
+    for tid, sentiment, post_type, rt, epoch in posts:
         c.execute(
             "INSERT INTO posts(tweet_id, fetched_at, created_at_epoch, retweet_count, author_handle) "
             "VALUES (?, '2026-01-01T00:00:00+00:00', ?, ?, 'u')",
@@ -546,35 +525,43 @@ def _seed_brand_posts(store, brand, posts):
         post_int = c.execute(
             "SELECT id FROM posts WHERE tweet_id = ?", (tid,)
         ).fetchone()["id"]
-        sig_int = c.execute(
-            "SELECT id FROM signals WHERE key = ?", (signal,)
+        sent_int = c.execute(
+            "SELECT id FROM sentiment_keys WHERE key = ?", (sentiment,)
+        ).fetchone()["id"]
+        pt_int = c.execute(
+            "SELECT id FROM post_type_keys WHERE key = ?", (post_type,)
         ).fetchone()["id"]
         c.execute(
             "INSERT INTO posts_brands(brand_id, post_id, weight) VALUES (?, ?, 1.0)",
             (brand_int, post_int),
         )
         c.execute(
-            "INSERT INTO posts_brands_signals(post_id, brand_id, signal_id) VALUES (?, ?, ?)",
-            (post_int, brand_int, sig_int),
+            "INSERT INTO posts_brands_signals(post_id, brand_id, post_type, sentiment) "
+            "VALUES (?, ?, ?, ?)",
+            (post_int, brand_int, pt_int, sent_int),
         )
 
 
 def test_polarity_breakdown_rt_fold(tmp_path):
-    """Each post's signal is weighted by (1 + retweet_count): an RT inherits
-    the original's signal ("each utterance = one vote")."""
+    """Each post's sentiment is weighted by (1 + retweet_count): an RT
+    inherits the original's sentiment ("each utterance = one vote").
+
+    U9: the breakdown is keyed by sentiment, not the legacy 6-signal
+    taxonomy.
+    """
     from x_monitor.store import Store
-    from x_monitor.treemap import compute_polarity_signal_breakdown
+    from x_monitor.treemap import compute_polarity_sentiment_breakdown
     now_ep = int(datetime.now(timezone.utc).timestamp())
     store = Store(tmp_path / "x.db")
     try:
         _seed_brand_posts(store, "glm", [
-            ("A", "praise", 9, now_ep),      # 1 * (1+9) = 10
-            ("B", "praise", 0, now_ep),      # 1 * (1+0) = 1
-            ("C", "criticism", 4, now_ep),   # 1 * (1+4) = 5
+            ("A", "positive", "buzz_releases", 9, now_ep),    # 1 * (1+9) = 10
+            ("B", "positive", "buzz_releases", 0, now_ep),    # 1 * (1+0) = 1
+            ("C", "negative", "hands_on_usage", 4, now_ep),   # 1 * (1+4) = 5
         ])
-        bd = compute_polarity_signal_breakdown(store._conn, "glm", 0)
-        assert bd["praise"] == 11.0
-        assert bd["criticism"] == 5.0
+        bd = compute_polarity_sentiment_breakdown(store._conn, "glm", 0)
+        assert bd["positive"] == 11.0
+        assert bd["negative"] == 5.0
     finally:
         store.close()
 
@@ -584,36 +571,37 @@ def test_polarity_breakdown_window_excludes_old(tmp_path):
     posts older than the bound — the fix for the pre-006 ISO-vs-Twitter-format
     bug that silently ignored the window."""
     from x_monitor.store import Store
-    from x_monitor.treemap import compute_polarity_signal_breakdown
+    from x_monitor.treemap import compute_polarity_sentiment_breakdown
     now_ep = int(datetime.now(timezone.utc).timestamp())
     old_ep = now_ep - 30 * 86400  # 30 days ago, outside a 7-day window
     store = Store(tmp_path / "x.db")
     try:
         _seed_brand_posts(store, "glm", [
-            ("RECENT", "praise", 0, now_ep),
-            ("OLD", "praise", 0, old_ep),
+            ("RECENT", "positive", "buzz_releases", 0, now_ep),
+            ("OLD", "positive", "buzz_releases", 0, old_ep),
         ])
         cutoff = now_ep - 7 * 86400
-        bd_7d = compute_polarity_signal_breakdown(store._conn, "glm", cutoff)
-        assert bd_7d["praise"] == 1.0  # OLD excluded
-        bd_all = compute_polarity_signal_breakdown(store._conn, "glm", 0)
-        assert bd_all["praise"] == 2.0  # both included all-time
+        bd_7d = compute_polarity_sentiment_breakdown(store._conn, "glm", cutoff)
+        assert bd_7d["positive"] == 1.0  # OLD excluded
+        bd_all = compute_polarity_sentiment_breakdown(store._conn, "glm", 0)
+        assert bd_all["positive"] == 2.0  # both included all-time
     finally:
         store.close()
 
 
 def test_compute_polarity_from_db_returns_score(tmp_path):
     """End-to-end: with data only in the current window, the score reduces to
-    the current (praise - criticism) rate (prior-empty guard)."""
+    the current (positive - negative) rate (prior-empty guard). U9 sentiment-
+    only polarity."""
     from x_monitor.store import Store
     from x_monitor.treemap import compute_polarity_from_db
     now_ep = int(datetime.now(timezone.utc).timestamp())
     store = Store(tmp_path / "x.db")
     try:
         _seed_brand_posts(store, "glm", [
-            ("P1", "praise", 0, now_ep),
-            ("P2", "praise", 0, now_ep),
-            ("C1", "criticism", 0, now_ep),
+            ("P1", "positive", "buzz_releases", 0, now_ep),
+            ("P2", "positive", "buzz_releases", 0, now_ep),
+            ("C1", "negative", "hands_on_usage", 0, now_ep),
         ])
         score = compute_polarity_from_db(store._conn, "glm", window_days=7)
         # current = {praise:2, criticism:1}, prior empty -> (2-1)/3 ~= 0.333

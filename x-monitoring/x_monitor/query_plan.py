@@ -30,9 +30,12 @@ unrelated common nouns. Shape: `(<tokens>) (<co_occurrence>) min_faves:N`
 a brand token AND at least one co-occurrence term. Configured via
 `call_c_specs:` in config.yaml; default empty list emits no Call C.
 
-Signal classification is post-fetch in `intent_classifier.classify_signal`
-and `attribute_to_brand` (Unit 2). The query shape no longer encodes
-signal intent — the structure is one wide net, one targeted net.
+U9 (migration 022): the legacy 6-signal `expected_signal` field was
+removed from PlannedCall and CallCBrandSpec. Per-tweet classification
+(post_type × sentiment) is post-fetch in `attribution.classify_post`
+and applied per-brand in `store.insert_posts`. The query shape no
+longer encodes signal intent — the structure is one wide net, one
+targeted net.
 
 Length cap guard: `assert_under_length_cap` is called on every emitted
 query so an over-cap query short-circuits to a per-query summary entry
@@ -70,7 +73,7 @@ class PlannedCall:
             or Call C variants).
         brand_id: brand this call is attributed to. For Call A
             (list-based), this is "*" because the list spans all
-            brands — post-fetch `attribute_to_brand` reassigns. For
+            brands — post-fetch `attribute_to_brands` reassigns. For
             Call B, this is the FIRST brand in the input order (used
             as a placeholder for `source_query_id`; same reassignment
             applies). For Call C, this is the spec's brand_id (the
@@ -78,13 +81,13 @@ class PlannedCall:
         bucket: None for both v1.7 call kinds. Retained for schema
             stability with the v1.6 contract.
         query_string: the actual X advanced-search query.
-        expected_signal: signal bucket this call primarily targets.
-            Call A targets "release" (faved official posts).
-            Call B targets "other" (the long tail; classifier may
-            upgrade to criticism/praise/etc). Call C defaults to
-            "other" per the spec.
         query_length: len(query_string) in characters. Verified under
             `X_LENGTH_CAP` (512) before being returned.
+
+    U9 (migration 022): `expected_signal` was REMOVED. The legacy
+        6-signal taxonomy is gone; per-tweet classification
+        (post_type × sentiment) happens post-fetch and is not encoded
+        in the query shape.
     """
 
     call_id: str
@@ -92,7 +95,6 @@ class PlannedCall:
     brand_id: str
     bucket: str | None
     query_string: str
-    expected_signal: str
     query_length: int
 
 
@@ -123,16 +125,16 @@ class CallCBrandSpec:
             AND at least one term from the co-occurrence group
             (implicit AND between the two parenthesised groups in X
             advanced-search syntax).
-        expected_signal: signal bucket this call primarily targets.
-            "other" by default (long tail; classifier may upgrade).
         min_faves: lower bound on the call's min_faves. 0 by default
             (no lower bound).
         call_id: stable label for this spec ("C1", "C2", ...). Optional;
             planner auto-assigns C1/C2/... if empty.
+
+    U9 (migration 022): `expected_signal` was REMOVED. The legacy
+        6-signal taxonomy is gone.
     """
     brands: dict[str, list[str]]
     co_occurrence: list[str]
-    expected_signal: str = "other"
     min_faves: int = 0
     call_id: str = ""
 
@@ -322,7 +324,6 @@ def plan_calls(
             brand_id="*",
             bucket=None,
             query_string=call_a_query,
-            expected_signal="release",
             query_length=len(call_a_query),
         ),
     ]
@@ -337,7 +338,6 @@ def plan_calls(
                 brand_id=group[0] if group else "*",
                 bucket=None,
                 query_string=group_b_query,
-                expected_signal="other",
                 query_length=len(group_b_query),
             )
         )
@@ -361,7 +361,6 @@ def plan_calls(
                 brand_id=c_brand_placeholder,
                 bucket=None,
                 query_string=call_c_query,
-                expected_signal=spec.expected_signal,
                 query_length=len(call_c_query),
             )
         )
