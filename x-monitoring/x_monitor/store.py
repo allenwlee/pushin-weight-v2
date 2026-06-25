@@ -37,6 +37,18 @@ class BrandRow:
     accent_color: str
     is_sentinel: bool
 
+@dataclass(frozen=True)
+class CompanyRow:
+    """A single row from the `companies` table.
+
+    The corporate-parent registry. A company may own zero, one, or many
+    HuggingFace orgs (via the `hf_orgs` 1:N edge added in migration 005).
+    """
+
+    company_id: str
+    display_name: str
+    hq_country: str | None
+
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -122,6 +134,17 @@ class Store:
         # invalidated within a Store instance (operators can call
         # store.close() and re-open if they mutate the brands table).
         self._brand_cache: list[BrandRow] | None = None
+        # v1.8 (Unit 3): caches for the i18n enum-key sets
+        # (signals, roles). Same lazy / not-invalidated
+        # lifecycle as _brand_cache — the *enum tables are seeded once
+        # by migration 008 and not mutated at runtime.
+        self._signals_cache: set[str] | None = None
+        self._roles_cache: set[str] | None = None
+        # U9: caches for the new enum families introduced by
+        # migration 019 (post_type_keys, sentiment_keys). Same
+        # lazy / not-invalidated lifecycle as the signals/roles caches.
+        self._post_type_cache: set[str] | None = None
+        self._sentiment_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
         self._signals_written: int = 0
@@ -196,7 +219,7 @@ class Store:
         """Idempotent insert. Returns number of NEWLY inserted rows.
 
         v1.8 (R16): writes to 4 tables in ONE transaction (posts,
-        post_brands, post_mentions, post_brand_signals). Re-inserting
+        posts_brands, posts_brands_mentions, posts_brands_signals). Re-inserting
         the same tweet_id is a no-op (INSERT OR IGNORE on posts).
 
         Per-post dict fields (R2, R3, R6, R8, R15, R16):
@@ -209,13 +232,13 @@ class Store:
         legacy callers (Unit 3) continue to work.
 
         Posts with no brand_id get a sentinel `_unattributed` row in
-        post_brands so the treemap's "unattributed" bin still works.
-        `_unattributed` is BLOCKED from post_brand_signals by the
+        posts_brands so the treemap's "unattributed" bin still works.
+        `_unattributed` is BLOCKED from posts_brands_signals by the
         schema's CHECK constraint (Decision 15).
         """
         if not posts:
             return 0
-        # Source of truth for the post_brand_signals / post_mentions FK
+        # Source of truth for the posts_brands_signals / posts_brands_mentions FK
         # guards: the brand_ids actually present in the `brands` table
         # (cached). This is wider than the per-post `valid_brands` list
         # (which is brand_ids ∩ KNOWN_MODELS) so cross-mention signals
@@ -299,7 +322,7 @@ class Store:
                 if cur.rowcount > 0:
                     n_new += 1
                     # Only write attribution rows for newly-inserted posts;
-                    # re-inserts must not duplicate (post_brands PK is
+                    # re-inserts must not duplicate (posts_brands PK is
                     # (brand_id, post_id)).
                     for b in valid_brands:
                         # R9: ON CONFLICT DO UPDATE so reattribution can
@@ -308,7 +331,7 @@ class Store:
                         # gotcha — only INSERT-listed columns update).
                         conn.execute(
                             """
-                            INSERT INTO post_brands(
+                            INSERT INTO posts_brands(
                                 brand_id, post_id, weight
                             ) VALUES (?, ?, ?)
                             ON CONFLICT(brand_id, post_id) DO UPDATE SET
@@ -325,7 +348,7 @@ class Store:
                     )
                     for b, sig in per_brand_signals:
                         if b == "_unattributed":
-                            # CHECK constraint on post_brand_signals
+                            # CHECK constraint on posts_brands_signals
                             # excludes the sentinel (Decision 15). Skip.
                             continue
                         # Guard against LLM hallucinations: per_brand_signals
@@ -344,14 +367,28 @@ class Store:
                                 b, tweet_id_str, sig,
                             )
                             continue
+                        # v1.8 (Unit 3): signal is now FK-validated against
+                        # signals (renamed from signal_keys in 014).
+                        # Hallucinated signal values would raise
+                        # IntegrityError; drop them to the dead-letter
+                        # log instead.
+                        if sig not in self._known_signal_keys():
+                            self._dead_letter_enum(
+                                "signal", sig,
+                                table="posts_brands_signals",
+                                post_id=tweet_id_str,
+                                brand_id=b,
+                            )
+                            self._signals_dropped += 1
+                            continue
                         # R11: ON CONFLICT DO UPDATE.
                         conn.execute(
                             """
-                            INSERT INTO post_brand_signals(
-                                post_id, brand_id, signal
+                            INSERT INTO posts_brands_signals(
+                                post_id, brand_id, signal_id
                             ) VALUES (?, ?, ?)
                             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                                signal = excluded.signal
+                                signal_id = excluded.signal_id
                             """,
                             (tweet_id_str, b, sig),
                         )
@@ -383,9 +420,10 @@ class Store:
                             )
                         if not m_source or not m_token:
                             continue
-                        # post_mentions.brand_id may be NULL (un-attributed
-                        # user mentions). Only guard non-null unknowns
-                        # against the same FK (migration 004:117).
+                        # posts_brands_mentions.brand_id may be NULL
+                        # (un-attributed user mentions). Only guard
+                        # non-null unknowns against the same FK
+                        # (migration 004:117).
                         if m_brand is not None and m_brand not in known_ids:
                             _log.warning(
                                 "insert_posts: dropping mention for "
@@ -396,7 +434,7 @@ class Store:
                             continue
                         conn.execute(
                             """
-                            INSERT INTO post_mentions(
+                            INSERT INTO posts_brands_mentions(
                                 post_id, brand_id, source, raw_token, mentioned_at
                             ) VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
@@ -592,7 +630,7 @@ class Store:
         # the caller; route it through _LOCALE_TO_COLUMN only.
         #
         # v1.8: posts.brand_id is dropped (migration 004). Attribution
-        # moves to post_brands(brand_id, post_id, weight). We pick any
+        # moves to posts_brands(brand_id, post_id, weight). We pick any
         # one brand_id per post (the first by lexicographic brand_id) so
         # the translation pipeline still has SOME brand to attribute
         # the post to for translation-prompt context. The translation
@@ -601,7 +639,7 @@ class Store:
             f"""
             SELECT p.tweet_id, pb.brand_id, p.text, p.author_handle, p.created_at
             FROM posts p
-            JOIN post_brands pb ON pb.post_id = p.tweet_id
+            JOIN posts_brands pb ON pb.post_id = p.tweet_id
             WHERE p.{col} IS NULL
             ORDER BY p.created_at DESC
             LIMIT ?
@@ -610,13 +648,162 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # --- v1.8 (Unit 4): registry-row translation helpers -----------------
+    #
+    # Mirrors bulk_update_translations / get_posts_missing_translations
+    # for the per-locale columns on brands / companies / accounts. The
+    # closed-set dicts below are the only way callers can pick a table +
+    # column + PK; the column/table names are interpolated into SQL so
+    # the closed-set is the SQL-injection defense.
+
+    _REGISTRY_TABLES: frozenset[str] = frozenset({"brands", "companies", "accounts"})
+    _REGISTRY_COLUMNS: frozenset[str] = frozenset({"display_name", "bio"})
+    _REGISTRY_PK: dict[str, str] = {
+        "brands": "brand_id",
+        "companies": "company_id",
+        "accounts": "author_id",
+    }
+    # Registry locale-to-column-suffix. Unlike posts.text_en / text_zh_cn,
+    # the registry columns are `<col>_en` / `<col>_zh_cn` where `<col>` is
+    # the source column name (display_name or bio), NOT a fixed prefix.
+    # So the "suffix" here is the column suffix (en / zh_cn), which is
+    # what gets appended to `<col>` to form the actual column name.
+    _REGISTRY_LOCALE_SUFFIX: dict[str, str] = {
+        "en": "en",
+        "zh_cn": "zh_cn",
+    }
+
+    def get_registry_missing_translations(
+        self,
+        table: str,
+        column: str,
+        locale: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return registry rows where `<column>_<locale>` IS NULL.
+
+        Used by the `x-monitor translate-registry` backfill subcommand
+        to find rows that the translator hasn't populated yet. Mirrors
+        `get_posts_missing_translations` (Unit 4 / D6 in the plan).
+
+        Args:
+            table: one of "brands" / "companies" / "accounts".
+            column: one of "display_name" / "bio". `bio` is only valid
+                for "accounts" (brands/companies have no bio column).
+            locale: one of "en" / "zh_cn".
+            limit: cap on result count.
+
+        Returns:
+            List of dicts with the PK column + `<column>` (source) +
+                `<column>_en` + `<column>_zh_cn` so the translator can
+                build its prompt and write back the result.
+        """
+        if table not in self._REGISTRY_TABLES:
+            raise ValueError(
+                f"table must be one of {sorted(self._REGISTRY_TABLES)}, "
+                f"got {table!r}"
+            )
+        if column not in self._REGISTRY_COLUMNS:
+            raise ValueError(
+                f"column must be one of {sorted(self._REGISTRY_COLUMNS)}, "
+                f"got {column!r}"
+            )
+        if locale not in self._TRANSLATION_LOCALES:
+            raise ValueError(
+                f"locale must be one of {sorted(self._TRANSLATION_LOCALES)}, "
+                f"got {locale!r}"
+            )
+        pk_col = self._REGISTRY_PK[table]
+        # bio only exists on accounts; bail loudly if the caller asks
+        # for an unsupported combo so we don't generate a SQL error
+        # mid-test.
+        if column == "bio" and table != "accounts":
+            raise ValueError(
+                f"column 'bio' is only valid for table 'accounts', "
+                f"got table={table!r}"
+            )
+        col = self._REGISTRY_LOCALE_SUFFIX[locale]  # 'en' or 'zh_cn'
+        rows = self._conn.execute(
+            f"""
+            SELECT {pk_col} AS pk, {column} AS source,
+                   {column}_en AS col_en,
+                   {column}_zh_cn AS col_zh_cn
+            FROM {table}
+            WHERE {column}_{col} IS NULL
+              AND {column} IS NOT NULL
+            ORDER BY {pk_col}
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def bulk_update_registry_translations(
+        self,
+        table: str,
+        column: str,
+        rows: list[dict[str, Any]],
+    ) -> int:
+        """Update `<column>_en` and `<column>_zh_cn` for a batch of rows.
+
+        Each row dict MUST have `pk` (the PK column value); the other 2
+        fields (`col_en`, `col_zh_cn`) are optional and default to NULL.
+
+        Empty input list is a no-op returning 0. Rows whose PK does not
+        exist in the table are silently skipped (UPDATE matches 0 rows).
+
+        Used by the registry translator (Unit 4). Mirrors
+        `bulk_update_translations` for posts.
+        """
+        if table not in self._REGISTRY_TABLES:
+            raise ValueError(
+                f"table must be one of {sorted(self._REGISTRY_TABLES)}, "
+                f"got {table!r}"
+            )
+        if column not in self._REGISTRY_COLUMNS:
+            raise ValueError(
+                f"column must be one of {sorted(self._REGISTRY_COLUMNS)}, "
+                f"got {column!r}"
+            )
+        if column == "bio" and table != "accounts":
+            raise ValueError(
+                f"column 'bio' is only valid for table 'accounts', "
+                f"got table={table!r}"
+            )
+        if not rows:
+            return 0
+        for r in rows:
+            if "pk" not in r:
+                raise KeyError(
+                    f"bulk_update_registry_translations: row missing 'pk': "
+                    f"{r!r}"
+                )
+        pk_col = self._REGISTRY_PK[table]
+        n_updated = 0
+        with self.transaction() as conn:
+            for r in rows:
+                cur = conn.execute(
+                    f"""
+                    UPDATE {table}
+                    SET {column}_en = ?, {column}_zh_cn = ?
+                    WHERE {pk_col} = ?
+                    """,
+                    (
+                        r.get("col_en"),
+                        r.get("col_zh_cn"),
+                        str(r["pk"]),
+                    ),
+                )
+                n_updated += cur.rowcount
+        return n_updated
+
     def get_posts_for_digest(
         self, brand_id: str, since_iso: str | None = None, limit: int = 200
     ) -> list[dict[str, Any]]:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
         # v1.8: posts.brand_id is dropped (migration 004). Attribution
-        # moves to post_brands(brand_id, post_id, weight). The returned
+        # moves to posts_brands(brand_id, post_id, weight). The returned
         # dicts keep the `brand_id` key (with weight on the side) so
         # downstream code that does `p.get("brand_id")` continues to
         # work unchanged.
@@ -625,7 +812,7 @@ class Store:
                 """
                 SELECT p.*, pb.weight
                 FROM posts p
-                JOIN post_brands pb ON pb.post_id = p.tweet_id
+                JOIN posts_brands pb ON pb.post_id = p.tweet_id
                 WHERE pb.brand_id = ? AND p.created_at >= ?
                 ORDER BY p.created_at DESC
                 LIMIT ?
@@ -637,7 +824,7 @@ class Store:
                 """
                 SELECT p.*, pb.weight
                 FROM posts p
-                JOIN post_brands pb ON pb.post_id = p.tweet_id
+                JOIN posts_brands pb ON pb.post_id = p.tweet_id
                 WHERE pb.brand_id = ?
                 ORDER BY p.created_at DESC
                 LIMIT ?
@@ -656,13 +843,13 @@ class Store:
         # detail page render 5-day-old posts at the top. Sort in Python by
         # parsed timestamp instead.
         #
-        # v1.8: posts.brand_id is dropped (migration 004); JOIN post_brands
+        # v1.8: posts.brand_id is dropped (migration 004); JOIN posts_brands
         # to filter by brand.
         rows = self._conn.execute(
             """
             SELECT p.*, pb.weight
             FROM posts p
-            JOIN post_brands pb ON pb.post_id = p.tweet_id
+            JOIN posts_brands pb ON pb.post_id = p.tweet_id
             WHERE pb.brand_id = ?
             """,
             (brand_id,),
@@ -739,7 +926,6 @@ class Store:
         brand_id: str,
         handle: str,
         role: str = "unknown",
-        engagement_tier: str = "low",
         source_query_ids: list[str] | None = None,
         display_name: str | None = None,
         verified: bool = False,
@@ -751,9 +937,9 @@ class Store:
 
         v1.8: accounts table loses the brand_id/handle PK and the per-account
         role/multi_brand_voice columns (migration 004, Decision 10). The
-        per-brand role now lives in `brand_accounts(brand_id, author_id,
+        per-brand role now lives in `brands_accounts(brand_id, author_id,
         role)`. The `multi_brand_voice` column is dropped (R12) — that
-        derivation moves to a query against brand_accounts.
+        derivation moves to a query against brands_accounts.
 
         For callers that don't have a real author_id (yaml-derived accounts
         in `data/brands/<brand>/accounts.yaml`), we synthesize a stable
@@ -761,6 +947,23 @@ class Store:
         """
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
+        # role is FK-validated against roles (renamed from role_keys in
+        # 015; trimmed to {official, staff, community} in 016). Legacy
+        # callers pass role="unknown" which is NOT in roles. In that
+        # case, skip the brands_accounts edge write — the per-brand
+        # role is unknowable, so the edge has no information.
+        # In that case, skip the brands_accounts edge write — the
+        # per-brand role is unknowable, so the edge has no information.
+        # The accounts row is still upserted (no role column there
+        # post-migration 004).
+        role_known = role in self._known_role_keys()
+        if not role_known:
+            self._dead_letter_enum(
+                "role", role,
+                table="brands_accounts",
+                brand_id=brand_id,
+                author_id=f"handle:{handle}",
+            )
         author_id = f"handle:{handle}"
         now = _now_iso()
         # Upsert into accounts (author_id PK). We drop multi_brand_voice
@@ -770,14 +973,13 @@ class Store:
             """
             INSERT INTO accounts(
                 author_id, handle, display_name, verified,
-                bio_contains_brand, engagement_tier,
+                bio_contains_brand,
                 first_seen_at, last_seen_at, source_query_ids, notes
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?)
             ON CONFLICT(author_id) DO UPDATE SET
                 display_name = COALESCE(excluded.display_name, accounts.display_name),
                 verified = MAX(accounts.verified, excluded.verified),
                 bio_contains_brand = MAX(accounts.bio_contains_brand, excluded.bio_contains_brand),
-                engagement_tier = excluded.engagement_tier,
                 last_seen_at = excluded.last_seen_at,
                 source_query_ids = excluded.source_query_ids,
                 notes = COALESCE(excluded.notes, accounts.notes)
@@ -788,35 +990,40 @@ class Store:
                 display_name,
                 int(verified),
                 int(bio_contains_brand),
-                engagement_tier,
                 now,
                 now,
                 json.dumps(source_query_ids or []),
                 notes,
             ),
         )
-        # Upsert the per-brand edge in brand_accounts (the per-brand role).
-        self._conn.execute(
-            """
-            INSERT INTO brand_accounts(
-                brand_id, author_id, role, added_at
-            ) VALUES (?,?,?,?)
-            ON CONFLICT(brand_id, author_id) DO UPDATE SET
-                role = excluded.role
-            """,
-            (brand_id, author_id, role, now),
-        )
+        # Upsert the per-brand edge in brands_accounts (the per-brand role).
+        # Skipped when role was unknown to roles — see dead-letter
+        # guard above. This preserves pre-v1.8 semantics: an unknown role
+        # did not write a brands_accounts row either (the old DEFAULT was
+        # 'community', so callers passing role='unknown' would have hit
+        # the schema's TEXT convention with no enforcement).
+        if role_known:
+            self._conn.execute(
+                """
+                INSERT INTO brands_accounts(
+                    brand_id, author_id, role_id, added_at
+                ) VALUES (?,?,?,?)
+                ON CONFLICT(brand_id, author_id) DO UPDATE SET
+                    role_id = excluded.role_id
+                """,
+                (brand_id, author_id, role, now),
+            )
 
     def get_account(self, brand_id: str, handle: str) -> dict[str, Any] | None:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
-        # v1.8: JOIN brand_accounts so we can return the per-brand role
+        # v1.8: JOIN brands_accounts so we can return the per-brand role
         # alongside the account row.
         row = self._conn.execute(
             """
-            SELECT a.*, ba.role
+            SELECT a.*, ba.role_id
             FROM accounts a
-            JOIN brand_accounts ba ON ba.author_id = a.author_id
+            JOIN brands_accounts ba ON ba.author_id = a.author_id
             WHERE ba.brand_id = ? AND a.handle = ?
             """,
             (brand_id, handle),
@@ -827,12 +1034,12 @@ class Store:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
         # v1.8: accounts no longer has brand_id. The per-brand accounts
-        # live behind brand_accounts JOIN.
+        # live behind brands_accounts JOIN.
         rows = self._conn.execute(
             """
-            SELECT a.*, ba.role
+            SELECT a.*, ba.role_id
             FROM accounts a
-            JOIN brand_accounts ba ON ba.author_id = a.author_id
+            JOIN brands_accounts ba ON ba.author_id = a.author_id
             WHERE ba.brand_id = ?
             """,
             (brand_id,),
@@ -871,8 +1078,8 @@ class Store:
 
     # --- v1.8: per-row write methods (R9, R10, R11) -----------------------
 
-    def insert_post_brands(self, post_id: str, brand_id: str, weight: float) -> None:
-        """Upsert one row into post_brands (R9).
+    def insert_posts_brands(self, post_id: str, brand_id: str, weight: float) -> None:
+        """Upsert one row into posts_brands (R9).
 
         ON CONFLICT(brand_id, post_id) DO UPDATE SET weight = excluded.weight
         per Decision 14 — reattribution MUST overwrite stale weights when
@@ -884,7 +1091,7 @@ class Store:
         """
         self._conn.execute(
             """
-            INSERT INTO post_brands(brand_id, post_id, weight)
+            INSERT INTO posts_brands(brand_id, post_id, weight)
             VALUES (?, ?, ?)
             ON CONFLICT(brand_id, post_id) DO UPDATE SET
                 weight = excluded.weight
@@ -892,7 +1099,7 @@ class Store:
             (brand_id, post_id, float(weight)),
         )
 
-    def insert_post_mentions(
+    def insert_posts_brands_mentions(
         self,
         post_id: str,
         brand_id: str | None,
@@ -900,7 +1107,7 @@ class Store:
         raw_token: str,
         mentioned_at: str,
     ) -> None:
-        """Upsert one row into post_mentions (R10).
+        """Upsert one row into posts_brands_mentions (R10).
 
         ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
         raw_token = excluded.raw_token.
@@ -914,7 +1121,7 @@ class Store:
         """
         self._conn.execute(
             """
-            INSERT INTO post_mentions(
+            INSERT INTO posts_brands_mentions(
                 post_id, brand_id, source, raw_token, mentioned_at
             ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(post_id, brand_id, source) DO UPDATE SET
@@ -923,18 +1130,30 @@ class Store:
             (post_id, brand_id, source, raw_token, mentioned_at),
         )
 
-    def insert_post_brand_signals(
-        self, post_id: str, brand_id: str, signal: str
+    def insert_posts_brands_signals(
+        self,
+        post_id: str,
+        brand_id: str,
+        signal: str | None = None,
+        post_type: str | None = None,
+        sentiment: str | None = None,
     ) -> None:
-        """Upsert one row into post_brand_signals (R11).
+        """Upsert one row into posts_brands_signals (R11).
 
-        ON CONFLICT(post_id, brand_id) DO UPDATE SET signal = excluded.signal.
+        ON CONFLICT(post_id, brand_id) DO UPDATE SET signal_id =
+        excluded.signal_id, post_type = excluded.post_type, sentiment =
+        excluded.sentiment.
 
         `_unattributed` is BLOCKED by the schema's CHECK constraint
         (Decision 15). Passes a non-sentinel brand_id.
 
-        Top-gun ON CONFLICT gotcha: the `signal` column MUST be in the
+        Top-gun ON CONFLICT gotcha: all written columns MUST be in the
         INSERT column list.
+
+        Migration 019 (Unit 9) added the optional post_type + sentiment
+        columns. Legacy callers pass only `signal`; new callers (the
+        post-U9 classifier) pass post_type + sentiment instead. Both
+        shapes are supported.
 
         Guards brand_id against the brands table (the FK target) so the
         reattribute path can't raise IntegrityError. Unknown brand_ids
@@ -943,19 +1162,52 @@ class Store:
         """
         if brand_id not in self._known_brand_ids():
             _log.warning(
-                "insert_post_brand_signals: dropping signal for "
+                "insert_posts_brands_signals: dropping signal for "
                 "brand_id=%r not in brands table (post_id=%s)",
                 brand_id, post_id,
             )
             return
+        # v1.8 (Unit 3): enum FK guard. signal is FK-validated against
+        # signals (renamed from signal_keys in 014). Unknown signal values
+        # would raise IntegrityError; drop them to the dead-letter log
+        # instead. None is allowed (post-U9 rows where the classifier
+        # emitted post_type + sentiment but not signal).
+        if signal is not None and signal not in self._known_signal_keys():
+            self._dead_letter_enum(
+                "signal", signal,
+                table="posts_brands_signals",
+                post_id=post_id,
+                brand_id=brand_id,
+            )
+            return
+        # U9: post_type FK guard.
+        if post_type is not None and post_type not in self._known_post_type_keys():
+            self._dead_letter_enum(
+                "post_type", post_type,
+                table="posts_brands_signals",
+                post_id=post_id,
+                brand_id=brand_id,
+            )
+            return
+        # U9: sentiment FK guard.
+        if sentiment is not None and sentiment not in self._known_sentiment_keys():
+            self._dead_letter_enum(
+                "sentiment", sentiment,
+                table="posts_brands_signals",
+                post_id=post_id,
+                brand_id=brand_id,
+            )
+            return
         self._conn.execute(
             """
-            INSERT INTO post_brand_signals(post_id, brand_id, signal)
-            VALUES (?, ?, ?)
+            INSERT INTO posts_brands_signals(post_id, brand_id, signal_id, post_type, sentiment)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                signal = excluded.signal
+                signal_id = excluded.signal_id,
+                post_type = excluded.post_type,
+                sentiment = excluded.sentiment
             """,
-            (post_id, brand_id, signal),
+            (post_id, brand_id, signal, post_type, sentiment),
         )
 
     # --- v1.8: detection-registry read methods (R12, R13) -----------------
@@ -992,7 +1244,7 @@ class Store:
     def _known_brand_ids(self) -> set[str]:
         """Cached set of brand_ids present in the `brands` table.
 
-        The source of truth for the post_brand_signals / post_mentions
+        The source of truth for the posts_brands_signals / posts_brands_mentions
         FK guards. Wider than KNOWN_MODELS (which is a 7-entry hardcoded
         frozenset) because it reflects whatever migration 004 seeded
         (12 brands) plus any operator-added rows. Includes the
@@ -1000,7 +1252,232 @@ class Store:
         """
         return {row.brand_id for row in self.read_brands()}
 
-    def read_brand_accounts(self) -> dict[str, str]:
+    # --- i18n (Unit 3): enum FK guards + per-locale helpers ---------------
+    #
+    # Cached sets of valid keys for the two enum families introduced
+    # by migration 008. Used by insert_posts_brands_signals (signal)
+    # and upsert_account (brands_accounts.role_id) to drop unknown values
+    # to the dead-letter log BEFORE SQLite raises IntegrityError on
+    # the FK.
+    #
+    # Cache lifecycle: populated on first call after Store.__init__.
+    # Lookup-table seeds are fixed by migration 007, so the cache never
+    # needs to be invalidated within a Store instance lifetime.
+    # Operators who mutate the *_keys tables outside the migration
+    # loader should call store.close() + re-open to refresh the cache.
+
+    def _known_signal_keys(self) -> set[str]:
+        """Return the set of canonical signal keys (cached).
+
+        Reads from the `signals` table (renamed from `signal_keys` in
+        migration 014). Used by insert_posts_brands_signals as the FK
+        guard for posts_brands_signals.signal_id.
+        """
+        if self._signals_cache is None:
+            self._signals_cache = {
+                r["key"]
+                for r in self._conn.execute("SELECT key FROM signals").fetchall()
+            }
+        return self._signals_cache
+
+    def _known_role_keys(self) -> set[str]:
+        """Return the set of canonical role keys (cached).
+
+        Reads from the `roles` table (renamed from `role_keys` in
+        migration 015). Used by upsert_account as the FK guard for
+        brands_accounts.role_id.
+        """
+        if self._roles_cache is None:
+            self._roles_cache = {
+                r["key"]
+                for r in self._conn.execute("SELECT key FROM roles").fetchall()
+            }
+        return self._roles_cache
+
+    def _known_post_type_keys(self) -> set[str]:
+        """Return the set of canonical post_type keys (cached).
+
+        U9: reads from the `post_type_keys` table added by
+        migration 019. Used by insert_posts_brands_signals as the FK
+        guard for posts_brands_signals.post_type.
+        """
+        if self._post_type_cache is None:
+            self._post_type_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM post_type_keys"
+                ).fetchall()
+            }
+        return self._post_type_cache
+
+    def _known_sentiment_keys(self) -> set[str]:
+        """Return the set of canonical sentiment keys (cached).
+
+        U9: reads from the `sentiment_keys` table added by
+        migration 019. Used by insert_posts_brands_signals as the FK
+        guard for posts_brands_signals.sentiment.
+        """
+        if self._sentiment_cache is None:
+            self._sentiment_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM sentiment_keys"
+                ).fetchall()
+            }
+        return self._sentiment_cache
+
+    def _dead_letter_enum(
+        self, family: str, value: str, **context: Any
+    ) -> None:
+        """Append a JSONL record to the dead-letter log for unknown enum FKs.
+
+        Migration 008 converts the enum TEXT columns (signal, role)
+        into FKs pointing at *_keys tables. Any write that supplies a
+        value outside the seeded set would raise IntegrityError at the
+        SQLite layer. The application-level intersect-before-INSERT
+        guard catches this first and writes the rejected value here so
+        operators can audit dropped rows after the fact.
+
+        File layout: `<db_path.parent>/runs/<YYYY-MM-DD>/enum_dead_letter.jsonl`.
+        One file per calendar day. Created lazily on first drop.
+
+        Args:
+            family: one of "signal" / "role" / "post_type" / "sentiment".
+            value: the unknown enum string that was rejected.
+            **context: extra fields (table, post_id, author_id, ...) so
+                the postmortem reader can find the offending row.
+        """
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        run_dir = self.db_path.parent / "runs" / day
+        run_dir.mkdir(parents=True, exist_ok=True)
+        log_path = run_dir / "enum_dead_letter.jsonl"
+        record = {
+            "ts": _now_iso(),
+            "family": family,
+            "value": value,
+            **context,
+        }
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+        _log.warning(
+            "dead-letter enum: family=%s value=%r context=%r (logged to %s)",
+            family, value, context, log_path,
+        )
+
+    @staticmethod
+    def _pick_i18n_text(
+        row: dict[str, Any], column: str, locale: str
+    ) -> tuple[str | None, bool]:
+        """Return `(display_text, is_translated)` for a registry row.
+
+        Pure function: no DB access. Mirrors the shape of
+        `dashboard._pick_text` (which is the post-text equivalent).
+
+        Fallback chain (per plan D6):
+            1. `<column>_<locale-suffix>` if non-NULL.
+            2. `<column>_en` if non-NULL.
+            3. `<column>` (source) — always present.
+
+        The locale-to-suffix mapping mirrors dashboard._LOCALE_TO_COLUMN
+        but is kept inline here so store.py stays self-contained.
+
+        `is_translated` is False whenever the function fell back to the
+        English column or the source column. Templates use the flag to
+        render the "source fallback" badge.
+        """
+        suffix = {"en": "en", "zh-CN": "zh_cn", "zh_cn": "zh_cn"}.get(locale, "en")
+        localized = row.get(f"{column}_{suffix}")
+        if localized:
+            return localized, True
+        en_val = row.get(f"{column}_en")
+        if en_val:
+            return en_val, False
+        return row.get(column), False
+
+    def _pick_enum_label(
+        self, family: str, value: str | None, locale: str
+    ) -> str:
+        """Return the localized label for an enum key, or the raw key on miss.
+
+        Lookup order:
+            1. `<family>_labels(key=?, lang=?)`
+            2. `<family>_labels(key=?, lang='en')`
+            3. The raw `value` (canonical English key)
+
+        `family` must be one of "signal" / "role".
+        Unknown family raises ValueError. Returns "" when value is
+        None/empty (templates render nothing for missing signals).
+        """
+        if value is None or value == "":
+            return ""
+        labels_table = {
+            "signal": "signal_labels",
+            "role": "role_labels",
+        }.get(family)
+        if labels_table is None:
+            raise ValueError(
+                f"unknown enum family {family!r}; expected "
+                "'signal' / 'role'"
+            )
+        suffix = {"en": "en", "zh-CN": "zh_cn", "zh_cn": "zh_cn"}.get(locale, "en")
+        row = self._conn.execute(
+            f"SELECT label FROM {labels_table} WHERE key = ? AND lang = ?",
+            (value, suffix),
+        ).fetchone()
+        if row is not None:
+            return row["label"]
+        if suffix != "en":
+            row = self._conn.execute(
+                f"SELECT label FROM {labels_table} WHERE key = ? AND lang = 'en'",
+                (value,),
+            ).fetchone()
+            if row is not None:
+                return row["label"]
+        return value
+
+    def read_companies(self) -> list["CompanyRow"]:
+        """Return all rows from the `companies` table.
+
+        No cache (low cardinality: ~10 rows) — re-query on each call.
+        Used by `hf_products.collect_all` to walk the 1:N companies→HF-orgs
+        edge.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT company_id, display_name, hq_country
+            FROM companies
+            ORDER BY display_name
+            """
+        ).fetchall()
+        return [
+            CompanyRow(
+                company_id=r["company_id"],
+                display_name=r["display_name"],
+                hq_country=r["hq_country"],
+            )
+            for r in rows
+        ]
+
+    def read_brands_companies_for_company(
+        self, company_id: str
+    ) -> list[str]:
+        """Return the brand_ids that belong to `company_id` via brands_companies.
+
+        Brands without a brands_companies edge (e.g. `_unattributed`) are
+        never returned — they're corporate-parent-less and intentionally
+        excluded from HF coverage.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT brand_id FROM brands_companies
+            WHERE company_id = ?
+            ORDER BY brand_id
+            """,
+            (company_id,),
+        ).fetchall()
+        return [r["brand_id"] for r in rows]
+
+    def read_brands_accounts(self) -> dict[str, str]:
         """Return {author_id: brand_id} for all brand-account edges (R13).
 
         Consumed by `attribution.extract_user_mentions` to resolve
@@ -1008,7 +1485,7 @@ class Store:
         `brand_id`.
         """
         rows = self._conn.execute(
-            "SELECT author_id, brand_id FROM brand_accounts"
+            "SELECT author_id, brand_id FROM brands_accounts"
         ).fetchall()
         return {r["author_id"]: r["brand_id"] for r in rows}
 
@@ -1048,9 +1525,118 @@ class Store:
         ).fetchall()
         return {r["term"]: r["brand_id"] for r in rows}
 
+    def read_hf_orgs(
+        self, company_id: str, *, confirmed_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return the company's HuggingFace org rows from `hf_orgs`.
+
+        Each row is a dict: {id, company_id, confirmed, discovered_via,
+        added_at}. With `confirmed_only=True` (default) only
+        curated/operator-confirmed orgs are returned — the orgs the crawler
+        scrapes. Discovered candidates (confirmed=0) are excluded so a wrong
+        org is never silently scraped.
+        """
+        sql = (
+            "SELECT id, company_id, confirmed, discovered_via, added_at "
+            "FROM hf_orgs WHERE company_id = ?"
+        )
+        if confirmed_only:
+            sql += " AND confirmed = 1"
+        sql += " ORDER BY id"
+        rows = self._conn.execute(sql, (company_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def upsert_hf_org(
+        self,
+        hf_org_id: str,
+        company_id: str,
+        *,
+        confirmed: int = 0,
+        discovered_via: str = "search",
+    ) -> None:
+        """Insert a company→HF-org edge, or update without downgrading.
+
+        Discovery uses confirmed=0 (candidates flagged for operator review).
+        On conflict, `confirmed` is never demoted (a curated/confirmed org
+        survives a re-discovery) and a `curated` provenance is preserved.
+        `hf_org_id` is the HF namespace string itself (e.g. "MiniMaxAI") and
+        is the table's PRIMARY KEY; the FK to `companies.company_id` is
+        created by migration 005.
+        """
+        with self.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO hf_orgs (
+                    id, company_id, confirmed, discovered_via, added_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    company_id = excluded.company_id,
+                    confirmed = CASE
+                        WHEN excluded.confirmed > hf_orgs.confirmed
+                        THEN excluded.confirmed
+                        ELSE hf_orgs.confirmed
+                    END,
+                    discovered_via = CASE
+                        WHEN hf_orgs.discovered_via = 'curated'
+                        THEN hf_orgs.discovered_via
+                        ELSE excluded.discovered_via
+                    END
+                """,
+                (hf_org_id, company_id, confirmed, discovered_via, _now_iso()),
+            )
+
+    def upsert_product(self, row: dict[str, Any]) -> None:
+        """Insert a product row, or refresh mutable stats on conflict (repo_id PK).
+
+        `row` must carry every product column. On conflict only the mutable
+        stats refresh (downloads, downloads_all_time, download_velocity, likes,
+        trending_score, last_modified, *_json, raw_json, updated_at); brand_id,
+        hf_org_id, hf_type, display_name, collected_at stay stable so re-runs are
+        idempotent and a brand assignment survives a refresh.
+        """
+        cols = [
+            "repo_id", "brand_id", "hf_org_id", "hf_type", "display_name", "author",
+            "sha", "private", "gated", "disabled", "pipeline_tag", "library_name",
+            "downloads", "downloads_all_time", "download_velocity", "likes",
+            "trending_score", "paperswithcode_id", "created_at", "last_modified",
+            "tags_json", "siblings_json", "card_data_json", "config_json",
+            "spaces_json", "raw_json", "collected_at", "updated_at",
+        ]
+        mutable = {
+            "downloads", "downloads_all_time", "download_velocity", "likes",
+            "trending_score", "last_modified", "tags_json", "siblings_json",
+            "card_data_json", "config_json", "spaces_json", "raw_json", "updated_at",
+        }
+        assert set(mutable) <= set(cols), "mutable references unknown product column"
+        set_clause = ", ".join(f"{c}=excluded.{c}" for c in cols if c in mutable)
+        sql = (
+            f"INSERT INTO products ({', '.join(cols)}) "
+            f"VALUES ({', '.join('?' for _ in cols)}) "
+            f"ON CONFLICT(repo_id) DO UPDATE SET {set_clause}"
+        )
+        with self.transaction() as conn:
+            conn.execute(sql, tuple(row.get(c) for c in cols))
+
+    def read_products(
+        self, brand_id: str | None = None, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Return product rows, optionally filtered by brand, downloads-desc."""
+        sql = "SELECT * FROM products"
+        params: tuple[Any, ...] = ()
+        if brand_id is not None:
+            sql += " WHERE brand_id = ?"
+            params = (brand_id,)
+        sql += " ORDER BY downloads DESC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = params + (limit,)
+        rows = self._conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
 __all__ = [
     # Dataclasses
     "BrandRow",
+    "CompanyRow",
     # Core
     "Store",
 ]

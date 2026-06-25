@@ -14,8 +14,8 @@ refactor shipped on 2026-06-19; plan at
 `docs/plans/2026-06-18-195234-refactor-company-brand-account-model-plan.md`).
 The headline change: polarity no longer reads from `posts.signal`
 (which was dropped in migration 004); it reads from
-`post_brand_signals(post_id, brand_id, signal)` joined with
-`post_brands` to apply the fractional weight. The polarity
+`posts_brands_signals(post_id, brand_id, signal)` joined with
+`posts_brands` to apply the fractional weight. The polarity
 formula itself does not change — the per-brand totals just
 become weighted sums instead of integer counts.
 
@@ -67,10 +67,10 @@ In v1.8, that schema is gone:
 
 - `posts.signal` was **dropped** in migration 004.
 - `posts.model_id` was **dropped** in migration 004 (Decision 9).
-- `post_brands(brand_id, post_id, weight)` is now the **only**
+- `posts_brands(brand_id, post_id, weight)` is now the **only**
   brand attribution. `weight` is REAL with default `1.0`; for a
   post naming N brands, all N rows get `weight = 1.0 / N`.
-- A new `post_brand_signals(post_id, brand_id, signal)` table
+- A new `posts_brands_signals(post_id, brand_id, signal)` table
   stores the per-brand signal. The classifier now returns
   `list[(brand_id, signal)]` — a "Qwen praised, DeepSeek
   criticized" post writes two rows, one per brand. (R6d)
@@ -123,7 +123,7 @@ latest_run and latest_run.get("finished_at"): ...` block).
 
 Per Decision 9, every post that names N brands contributes
 `weight = 1/N` to each brand's totals. The conservation
-invariant is: **sum of `post_brands.weight` for any one post
+invariant is: **sum of `posts_brands.weight` for any one post
 equals 1.0** (modulo IEEE 754 rounding — Decision 17 sets the
 drift tolerance at 1e-3).
 
@@ -137,7 +137,7 @@ Why this matters for polarity:
   count.
 - A 1-brand single-attribution post contributes `1.0` to its
   brand's bucket.
-- Posts in `post_brands` with `brand_id = '_unattributed'` get
+- Posts in `posts_brands` with `brand_id = '_unattributed'` get
   `weight = 1.0` but contribute **nothing** to any real
   brand's polarity (see section 5's `_unattributed` filter
   and Decision 15).
@@ -157,8 +157,8 @@ Decision 18 of the plan):
 
 ```sql
 SELECT pbs.signal, SUM(pb.weight) AS weighted_count
-FROM post_brand_signals pbs
-JOIN post_brands pb
+FROM posts_brands_signals pbs
+JOIN posts_brands pb
   ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id
 JOIN posts p ON p.tweet_id = pbs.post_id
 WHERE pbs.brand_id = ?
@@ -170,7 +170,7 @@ GROUP BY pbs.signal
 The 3-table JOIN path (the diagram):
 
 ```
-post_brand_signals           post_brands                posts
+posts_brands_signals           posts_brands                posts
 (pbs)                         (pb)                       (p)
 +--------------------+        +----------------+         +-----------------+
 | post_id    (FK)   |        | post_id  (FK)  |         | tweet_id (PK)   |
@@ -184,8 +184,8 @@ post_brand_signals           post_brands                posts
 
 Per Decision 18, this JOIN shape (vs. an IN-subquery on
 `tweet_id IN (SELECT ...)`) lets the query planner use the
-`post_brand_signals(brand_id, signal)` and
-`post_brands(brand_id, post_id)` indexes to seek by brand, then
+`posts_brands_signals(brand_id, signal)` and
+`posts_brands(brand_id, post_id)` indexes to seek by brand, then
 join `posts(tweet_id)` for the time-window filter. EXPLAIN QUERY
 PLAN on a 100k-post fixture should show all three indexes used
 (no SCAN or SORT nodes).
@@ -195,7 +195,7 @@ The three filters in the WHERE clause each carry meaning:
 - `pbs.brand_id = ?` — the brand being scored (e.g. `qwen`,
   `minimax`, `deepseek`). This is the per-brand attribution.
 - `pbs.brand_id != '_unattributed'` — Decision 15 hard-filter.
-  Even though `post_brand_signals` has a `CHECK
+  Even though `posts_brands_signals` has a `CHECK
   (brand_id <> '_unattributed')` constraint that prevents
   inserting sentinel rows at all, the WHERE clause is the
   application-level guarantee. The regression test
@@ -505,7 +505,7 @@ x_monitor/dashboard.py
 |---|---|---|
 | Every tile shows "no data" (yellow) | The current polarity window has zero kept posts for every brand. The pipeline isn't running, or all kept posts have NULL `created_at`. | Check `data/runs/<latest>/summary.json` for the run status. Check `posts.created_at IS NULL` count. |
 | One tile is yellow and the rest are normal | That specific brand has zero kept posts in the current window but had data in the prior window. The "went dark" guard fired. | Expected behavior. The dashboard is correctly signaling the brand is quiet. |
-| Every tile is `+0.00%` (DARK_GREEN) | Both windows are empty for every brand. The pipeline ingested posts but none have a per-brand signal in `post_brand_signals`. | Run the v1.8 classify_signal backfill: `python -m x_monitor reattribute-all-posts`. |
+| Every tile is `+0.00%` (DARK_GREEN) | Both windows are empty for every brand. The pipeline ingested posts but none have a per-brand signal in `posts_brands_signals`. | Run the v1.8 classify_signal backfill: `python -m x_monitor reattribute-all-posts`. |
 | Polarity % changes drastically between cycles | The 30-second dashboard refresh is happening mid-cycle. The `now` anchor is the last run's `finished_at`, but if a run is in progress, the `latest_run` is stale. | Wait for the next pipeline run. The "last updated" topbar shows the staleness. |
 | Polarity windows don't update when the cookie is set | The cookie was set on a different domain/path, or the browser is rejecting the cookie. | Inspect the `Set-Cookie` header on `/api/polarity_window/7`; the path is `/` and the max-age is 1 year. |
 | The grid's polarity badge doesn't match the treemap's tile fill | Expected. The grid uses `window_days` (default 14, non-toggleable); the treemap uses `polarity_window_days` (toggleable 1/7/30). | v1.8.x follow-up plan to align them. |
@@ -545,16 +545,16 @@ The polarity math is covered by `tests/test_treemap.py` and
   with `lower <= created_at < upper` are included.
 - **Signal** — one of `release`, `community_question`,
   `criticism`, `commenter_capture`, `praise`, `other`. Stored
-  per-brand in `post_brand_signals(post_id, brand_id, signal)`
+  per-brand in `posts_brands_signals(post_id, brand_id, signal)`
   (v1.8+). Replaces `posts.signal` which was dropped in
   migration 004.
-- **Weight** — a `REAL` on `post_brands(brand_id, post_id,
+- **Weight** — a `REAL` on `posts_brands(brand_id, post_id,
   weight)`; `1/N` per post naming N brands. Sum equals 1.0
   within 1e-3 tolerance (Decision 17).
 - **`_unattributed`** — sentinel `brand_id` for posts with no
   detected brand. Excluded from all polarity and per-brand
   queries (Decision 15). Has a `CHECK` constraint on
-  `post_brand_signals` and an early-return in
+  `posts_brands_signals` and an early-return in
   `compute_polarity_from_db`.
 - **Polarity** — a number in `[-1, +1]` (or `None` for "went
   dark") computed by `compute_polarity_from_db`. Encodes the

@@ -138,6 +138,84 @@ def _pick_text(
     return post.get("text"), False
 
 
+# --- v1.7 i18n dashboard helpers -----------------------------------------
+#
+# Locale-aware lookups for the dashboard. Both helpers read from the
+# per-locale columns seeded by migration 006 / Unit 4's translator.
+# The model_definitions list is the model identifier set across the
+# dashboard / API / charts; the signal keys come from the chart series
+# tuple in serialize_grid_card.
+
+_DASHBOARD_SIGNAL_KEYS: tuple[str, ...] = (
+    "release", "community_question", "criticism",
+    "commenter_capture", "other", "praise",
+)
+
+
+def _load_brand_display_names(
+    store: Store, locale: str
+) -> dict[str, str]:
+    """Return {brand_id: display_name} for all enabled brand rows in `locale`.
+
+    Reads `display_name`, `display_name_en`, `display_name_zh_cn` from
+    the `brands` table for every brand and resolves each one through
+    `Store._pick_i18n_text` (the locale → _en → source fallback chain
+    per D6). Falls back to `MODEL_DISPLAY_NAMES[brand_id]` if the row
+    has no `display_name` at all (defensive; should not happen
+    post-backfill).
+    """
+    suffix = _LOCALE_TO_COLUMN.get(locale, "en")
+    rows = store._conn.execute(
+        f"SELECT brand_id, display_name, display_name_{suffix} AS locale_name, "
+        "display_name_en FROM brands"
+    ).fetchall()
+    out: dict[str, str] = {}
+    for r in rows:
+        brand_id = r["brand_id"]
+        row = {
+            "display_name": r["display_name"],
+            "display_name_en": r["display_name_en"],
+            "display_name_zh_cn": (
+                r["locale_name"] if suffix == "zh_cn" else None
+            ),
+        }
+        text, _is_translated = Store._pick_i18n_text(
+            row, "display_name", locale
+        )
+        out[brand_id] = text or MODEL_DISPLAY_NAMES.get(brand_id, brand_id)
+    return out
+
+
+def _load_signal_labels(store: Store, locale: str) -> dict[str, str]:
+    """Return {signal_key: localized_label} for the six chart series keys.
+
+    Used by the trend-chart JS to render localized tooltip labels. Falls
+    back to the English label if the requested locale is missing
+    (mirrors Store._pick_enum_label's fallback chain), and to the raw
+    signal key if both lookups miss (defensive: avoids rendering the
+    literal string 'None' on unseeded enums).
+    """
+    suffix = _LOCALE_TO_COLUMN.get(locale, "en")
+    out: dict[str, str] = {}
+    for key in _DASHBOARD_SIGNAL_KEYS:
+        out[key] = store._pick_enum_label("signal", key, suffix) or key
+    return out
+
+
+def _load_role_labels(
+    store: Store, locale: str, role_ids: list[str]
+) -> dict[str, str]:
+    """Return {role_id: localized_label} for the role bars on /brand/<id>.
+
+    Defensive: empty input → empty dict.
+    """
+    suffix = _LOCALE_TO_COLUMN.get(locale, "en")
+    out: dict[str, str] = {}
+    for key in role_ids:
+        out[key] = store._pick_enum_label("role", key, suffix) or key
+    return out
+
+
 def brand_colorize(text: str) -> str:
     """Colorize brand_id matches in `text` with the brand's accent color.
 
@@ -267,9 +345,9 @@ def _read_signal_breakdown_for_brand(
     brand_id: str,
     window_start_iso: str,
 ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Read post_brand_signals for one brand grouped by (day, signal).
+    """Read posts_brands_signals for one brand grouped by (day, signal_id).
 
-    v1.8 (Unit 4 / R18). JOINs post_brand_signals + post_brands + posts
+    v1.8 (Unit 4 / R18). JOINs posts_brands_signals + posts_brands + posts
     per Decision 18 (no IN subquery). The _unattributed sentinel is
     excluded by the WHERE clause (Decision 15). Weights are honored
     (1/N for multi-brand posts per Decision 9).
@@ -282,16 +360,16 @@ def _read_signal_breakdown_for_brand(
     rows = conn.execute(
         """
         SELECT substr(p.created_at, 1, 10) AS day,
-               pbs.signal AS signal,
+               pbs.signal_id AS signal,
                SUM(pb.weight) AS weighted_count
-        FROM post_brand_signals pbs
-        JOIN post_brands pb
+        FROM posts_brands_signals pbs
+        JOIN posts_brands pb
           ON pb.post_id = pbs.post_id AND pb.brand_id = pbs.brand_id
         JOIN posts p ON p.tweet_id = pbs.post_id
         WHERE pbs.brand_id = ?
           AND pbs.brand_id != '_unattributed'
           AND p.created_at >= ?
-        GROUP BY day, pbs.signal
+        GROUP BY day, pbs.signal_id
         """,
         (brand_id, window_start_iso),
     ).fetchall()
@@ -317,6 +395,8 @@ def serialize_grid_card(
     display_locale: str = "en",
     signal_breakdown: dict[str, float] | None = None,
     day_signal_counts: dict[str, dict[str, float]] | None = None,
+    display_name: str | None = None,
+    signal_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return the per-model grid card payload.
 
@@ -329,6 +409,12 @@ def serialize_grid_card(
         display_locale: which locale to render top-3 post text in.
             Default "en". Supported: "en", "zh-CN", "zh_cn".
             Unsupported → "en" with a warning log.
+        display_name: pre-resolved localized brand name (i18n Unit 5).
+            When None, falls back to MODEL_DISPLAY_NAMES.
+        signal_labels: pre-resolved {signal_key: localized_label} for
+            the chart series (i18n Unit 5). When None, the chart
+            container emits no `data-signal-labels` attribute and the
+            JS falls back to its hardcoded English labels.
     """
     locale = normalize_locale(display_locale)
     if now is None:
@@ -363,7 +449,7 @@ def serialize_grid_card(
     # Per-day per-signal counts. day_signal_counts[iso_date][signal] = int.
     #
     # v1.8 (Unit 4 / R18): when the caller passes `signal_breakdown` and
-    # `day_signal_counts` (read from post_brand_signals via the JOIN
+    # `day_signal_counts` (read from posts_brands_signals via the JOIN
     # shape from Decision 18), use them directly. Otherwise fall back to
     # the legacy post-level inference from posts[i]["source_query_id"]
     # (kept for backwards compat with tests that build synthetic post
@@ -425,11 +511,22 @@ def serialize_grid_card(
             if isinstance(entry, str) and entry.startswith(f"{brand_id}/"):
                 sentinels.append("budget")
 
+    # v1.7-i18n (Unit 5): pre-render the signal labels as a JSON string
+    # so the template can drop it verbatim into a data-signal-labels
+    # attribute. We use ensure_ascii=False so non-ASCII (Chinese) labels
+    # appear as their UTF-8 form in the HTML, not escaped \uXXXX. The
+    # page is served with charset=utf-8, so the browser decodes it
+    # correctly.
+    signal_labels_json = (
+        json.dumps(signal_labels, ensure_ascii=False) if signal_labels else ""
+    )
     return {
         "brand_id": brand_id,
-        "display_name": MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
+        "display_name": display_name or MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
         "accent_color": MODEL_ACCENT_COLORS.get(brand_id, "#9ca3af"),
         "chart": {"days": chart_days, "series": chart_series},
+        "signal_labels": signal_labels or {},
+        "signal_labels_json": signal_labels_json,
         "signal_breakdown": dict(sig_counts),
         "top3_posts": top3,
         "top3_7d": top3_7d,
@@ -561,14 +658,25 @@ class DashboardApp:
         query param (highest priority) or the `locale` cookie
         (fallback), defaulting to "en". The same locale is used for
         every card on the page.
+
+        v1.7-i18n (Unit 5): also reads each brand's localized display
+        name from the `brands` table (display_name_<locale> with
+        fallback to source) and the per-signal chart labels from
+        `signal_labels`. Both lookups share the same `Store` handle.
         """
         cards: list[dict] = []
         latest_run = _load_latest_run(self.runs_dir)
         locale = self._resolve_locale()
         store = Store(db_path)
         try:
+            # v1.7-i18n (Unit 5): read DB-backed brand display names and
+            # signal labels in this locale once per request. These two
+            # queries replace the Python MODEL_DISPLAY_NAMES dict + the
+            # hardcoded JS SIGNAL_LABELS constant.
+            brand_names = _load_brand_display_names(store, locale)
+            signal_labels = _load_signal_labels(store, locale)
             # v1.8 (Unit 4 / R18): compute the signal breakdown once per
-            # model from post_brand_signals via the JOIN shape from
+            # model from posts_brands_signals via the JOIN shape from
             # Decision 18. The cutoff is anchored to the latest run's
             # finished_at (matching serialize_grid_card's "now" seam) so
             # the 14d window is stable across cycles.
@@ -593,6 +701,8 @@ class DashboardApp:
                         latest_run=latest_run, display_locale=locale,
                         signal_breakdown=sig_breakdown,
                         day_signal_counts=day_sigs,
+                        display_name=brand_names.get(m),
+                        signal_labels=signal_labels,
                     )
                 )
         finally:
@@ -658,11 +768,15 @@ class DashboardApp:
         if latest_run and latest_run.get("finished_at"):
             last_run_str = latest_run["finished_at"]
         from .treemap import MODEL_SECTORS
+        # v1.7-i18n (Unit 5): resolve localized brand display names from
+        # the DB once per treemap build, mirroring _build_cards.
+        treemap_locale = self._resolve_locale()
+        brand_names = _load_brand_display_names(store, treemap_locale)
         try:
             for m in self.config.enabled_models:
                 try:
                     # v1.8 (Unit 4 / R17): polarity now reads from
-                    # post_brand_signals + post_brands via the JOIN shape
+                    # posts_brands_signals + posts_brands via the JOIN shape
                     # from Decision 18. _unattributed is excluded at the
                     # SQL layer (Decision 15). The score is a float in
                     # [-1, +1] or None for the "went dark" sentinel.
@@ -670,23 +784,23 @@ class DashboardApp:
                         store._conn, m, polarity_window_days, now=now,
                     )
                     # v1.8 — area_weight is still cumulative (the v1.7
-                    # behavior); we read post_brands count via a focused
+                    # behavior); we read posts_brands count via a focused
                     # SQL query instead of fetching every post via
                     # get_all_posts.
                     area_row = store._conn.execute(
-                        "SELECT COUNT(*) AS n FROM post_brands WHERE brand_id = ?",
+                        "SELECT COUNT(*) AS n FROM posts_brands WHERE brand_id = ?",
                         (m,),
                     ).fetchone()
                     area_weight = int(area_row["n"]) if area_row else 0
                     # v1.8 — posts_in_window: count of distinct posts in
-                    # [now-N, now) for the brand. JOIN through post_brands
+                    # [now-N, now) for the brand. JOIN through posts_brands
                     # to honor multi-brand weighting (1/N); we count
                     # distinct post_ids so a 2-brand post is counted once
                     # per brand.
                     n_row = store._conn.execute(
                         """
                         SELECT COUNT(DISTINCT pb.post_id) AS n
-                        FROM post_brands pb
+                        FROM posts_brands pb
                         JOIN posts p ON p.tweet_id = pb.post_id
                         WHERE pb.brand_id = ?
                           AND pb.brand_id != '_unattributed'
@@ -706,7 +820,9 @@ class DashboardApp:
                 tiles.append(
                     TreemapTile(
                         brand_id=m,
-                        display_name=MODEL_DISPLAY_NAMES.get(m, m),
+                        display_name=brand_names.get(
+                            m, MODEL_DISPLAY_NAMES.get(m, m)
+                        ),
                         accent_color=MODEL_ACCENT_COLORS.get(m, "#9ca3af"),
                         area_weight=float(area_weight),
                         polarity_score=polarity,
@@ -938,6 +1054,21 @@ class DashboardApp:
             try:
                 posts = store.get_all_posts(brand_id)
                 accounts = store.get_accounts(brand_id)
+                # v1.7-i18n (Unit 5): resolve localized brand name + role
+                # bar labels from the DB in the request's locale. Roles
+                # that the store doesn't recognize (post-FK-guard
+                # dead-lettered values) still appear in the bar chart,
+                # rendered as their raw key.
+                detail_locale = self._resolve_locale()
+                detail_brand_names = _load_brand_display_names(
+                    store, detail_locale
+                )
+                role_counts: Counter[str] = Counter(
+                    a.get("role_id", "unknown") for a in accounts
+                )
+                role_labels = _load_role_labels(
+                    store, detail_locale, list(role_counts.keys())
+                )
             finally:
                 store.close()
             # Re-derive edges from posts for the drill-down graph
@@ -981,16 +1112,18 @@ class DashboardApp:
                         seen.add(h)
                         nodes.append(_Acc(handle=h))
             graph_svg = build_force_directed(nodes, edges, width=800, height=600)
-            role_counts: Counter[str] = Counter(a.get("role", "unknown") for a in accounts)
             return render_template(
                 "model_detail.html.j2",
                 brand_id=brand_id,
-                display_name=MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
+                display_name=detail_brand_names.get(
+                    brand_id, MODEL_DISPLAY_NAMES.get(brand_id, brand_id)
+                ),
                 accent_color=MODEL_ACCENT_COLORS.get(brand_id, "#9ca3af"),
                 posts=posts[:200],
                 clusters=clusters,
                 graph_svg=graph_svg,
                 role_counts=dict(role_counts),
+                role_labels=role_labels,
                 latest_run=_load_latest_run(self.runs_dir),
             )
 
@@ -1002,12 +1135,19 @@ class DashboardApp:
             try:
                 posts = store.get_all_posts(brand_id)
                 accounts = store.get_accounts(brand_id)
+                # v1.7-i18n (Unit 5): DB-backed display name in the
+                # request's locale.
+                api_brand_names = _load_brand_display_names(
+                    store, self._resolve_locale()
+                )
             finally:
                 store.close()
             return jsonify(
                 {
                     "brand_id": brand_id,
-                    "display_name": MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
+                    "display_name": api_brand_names.get(
+                        brand_id, MODEL_DISPLAY_NAMES.get(brand_id, brand_id)
+                    ),
                     "n_posts": len(posts),
                     "n_accounts": len(accounts),
                     "fetched_at": datetime.now(timezone.utc).isoformat(),

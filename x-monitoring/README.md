@@ -68,7 +68,7 @@ See `deploy/README.md` for LaunchAgent install/uninstall and log locations.
 v1.8 (2026-06-19) replaces v1.7's first-match-wins single-brand
 classifier with a multi-brand extraction pipeline. A single tweet
 naming two brands now produces one row per detected brand in
-`post_brands` / `post_mentions` / `post_brand_signals` (replaces the
+`posts_brands` / `post_mentions` / `posts_brands_signals` (replaces the
 old `posts.brand_id` + `posts.signal` columns).
 
 ### New modules

@@ -64,6 +64,26 @@
     var days = payload.days || [];
     var series = payload.series || {};
 
+    // v1.7-i18n (Unit 5): the server emits a per-card data-signal-labels
+    // attribute when the dashboard locale resolves to a label-bearing
+    // locale. When present, it overrides SIGNAL_LABELS so the chart
+    // tooltips render in the user's selected language. Falls back to
+    // the hardcoded English labels when the attribute is missing
+    // (defensive: keeps the chart functional on partial / hand-edited
+    // cards).
+    var labelsRaw = wrap.getAttribute('data-signal-labels');
+    var labels = SIGNAL_LABELS;
+    if (labelsRaw) {
+      try {
+        var parsed = JSON.parse(labelsRaw);
+        if (parsed && typeof parsed === 'object') {
+          labels = parsed;
+        }
+      } catch (e) {
+        console.warn('trend-chart: invalid data-signal-labels JSON', e);
+      }
+    }
+
     // Defensive destroy. Chart.js v4 cleans up on canvas removal, but
     // explicit destroy is cheap and survives upgrades / wrappers.
     var prior = Chart.getChart(canvas);
@@ -73,7 +93,7 @@
       .filter(function (k) { return series[k]; })
       .map(function (k) {
         return {
-          label: SIGNAL_LABELS[k],
+          label: labels[k] || SIGNAL_LABELS[k] || k,
           data: series[k],
           backgroundColor: colorFor(k),
           borderColor: colorFor(k),

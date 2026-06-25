@@ -58,7 +58,7 @@ The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海�
 | Deduped brand tokens (sum across all brands) | **75** |
 
 > **⚠️ Live-path caveat — `call_b_groups` is configured but not yet plumbed in `run.py`.**
-> `x_monitor/run.py:575-579` calls `plan_calls(self.data_dir, models, x_monitor_list_id=…, call_c_specs=…)` and **does not pass `call_b_groups`**. With the kwarg omitted, `plan_calls` falls back to the v1.7 single-B branch (`call_b_groups is None → b_groups = [list(enabled_models)]`) and emits one Call B spanning all 20 enabled brands. Computed live: that single Call B is **867 characters** — **well over the 512-char cap**. The `assert_under_length_cap` check inside `plan_calls` will raise on cycle entry. The configured B1/B2/B3 split (279 / 359 / 249 chars) would fit; the wiring fix is in `run.py` (pass `call_b_groups=self.config.call_b_groups`). **The live cycle is currently broken at 20 brands; do not add more brands until this is fixed.**
+> `x_monitor/run.py:575-579` calls `plan_calls(self.data_dir, models, x_monitor_list_id=…, call_c_specs=…)` and **does not pass `call_b_groups`**. With the kwarg omitted, `plan_calls` falls back to the v1.7 single-B branch (`call_b_groups is None → b_groups = [list(enabled_models)]`) and emits one Call B spanning all 20 enabled brands. Computed live: that single Call B is **867 characters** — **well over the 512-char cap**. The `assert_under_length_cap` check inside `plan_calls` will raise on cycle entry. The configured B1/B2/B3 split (320 / 474 / 310 chars after plan 2026-06-25-001) would fit; the wiring fix is in `run.py` (pass `call_b_groups=self.config.call_b_groups`). **The live cycle is currently broken at 20 brands; do not add more brands until this is fixed.**
 
 ---
 
@@ -438,7 +438,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **filter:** **none**
 - **Call group:** B2 (also in Call C spec C1)
 - **Brand tokens:** `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` (7)
-- **Q1:** `(Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder) min_faves:5`
+- **Q1:** `(Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder OR "Yi-Large") min_faves:5`
 - **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
 - **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
 - **Q4:** `(…) min_faves:5` (brand-name fallback)
@@ -495,7 +495,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **filter:** **none**
 - **Call group:** B3
 - **Brand tokens:** `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` (4)
-- **Q1:** `(Sakana OR "Sakana AI" OR "Sakana Labs") min_faves:5`
+- **Q1:** `(Sakana OR "Sakana AI" OR "Sakana Labs" OR "サカナAI") min_faves:5`
 - **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
 - **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
 - **Q4:** `(…) min_faves:5` (brand-name fallback)
@@ -510,7 +510,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **filter:** **none**
 - **Call group:** B3 (also in Call C spec C1)
 - **Brand tokens:** `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` (7)
-- **Q1:** `(Upstage OR Solar OR "Solar Pro" OR "Solar Mini") min_faves:5`
+- **Q1:** `(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") min_faves:5`
 - **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
 - **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
 - **Q4:** `(…) min_faves:5` (brand-name fallback)
@@ -538,7 +538,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 | `llama` | `Llama` (placeholder) | **false** | `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"`, `"Llama 3.1"` |
 | `nvidia_nemo` | `NVIDIAAIDev` (placeholder) | **false** | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` |
 | `doubao` | `doubaoAi` (placeholder) | **false** | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` |
-| `yi` | `01AI_Yi` (placeholder) | **false** | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder` |
+| `yi` | `01AI_Yi` (placeholder) | **false** | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` |
 | `sensechat` | `SenseTimeAI` (placeholder) | **false** | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` |
 | `exaone` | `LGAIResearch` (placeholder) | **false** | `EXAONE`, `"LG AI"`, `"LG EXAONE"` |
 | `kuaishou` | `KwaiYii` (placeholder) | **false** | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` |

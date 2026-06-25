@@ -830,7 +830,7 @@ def test_intent_call_reclassifies_brand_id(monkeypatch):
     }
     mentions = attribute_to_brands(
         post,
-        brand_accounts={},
+        brands_accounts={},
         brand_hashtags={},
         compiled_keyword_index=index,
         search_query=[],

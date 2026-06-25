@@ -46,7 +46,7 @@ def test_migration_003_applies_on_fresh_db(tmp_path):
         assert "text_en" in cols
         assert "text_zh_cn" in cols
         assert "lang_detected" in cols
-        # migration 004 dropped posts.signal (per Decision 1, R6d); columns that were here are now in post_brand_signals
+        # migration 004 dropped posts.signal (per Decision 1, R6d); columns that were here are now in posts_brands_signals
         # Confirm the migration was actually recorded.
         applied = {
             r[0]
@@ -87,7 +87,7 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
 
     v1.8 (R16): the v1.7 per-post `signal` column was dropped in
     migration 004 (R6d, Decision 18) — the per-brand signal now lives
-    in `post_brand_signals(post_id, brand_id, signal)`. The
+    in `posts_brands_signals(post_id, brand_id, signal)`. The
     `signals` dict (when supplied) writes to that table via the
     `_extract_per_brand_signals` helper.
     """
@@ -106,7 +106,7 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
                 "text_zh_cn": "海螺AI 最新版本",  # noop (already zh-CN)
                 "lang_detected": "zh-Hans",
                 # v1.8: signals is a dict[brand_id, signal]. Inserted
-                # into post_brand_signals(post_id, brand_id, signal).
+                # into posts_brands_signals(post_id, brand_id, signal).
                 "signals": {"minimax": "release"},
             }
         ])
@@ -118,13 +118,13 @@ def test_insert_posts_accepts_translation_columns(tmp_path):
         assert row["text_en"] == "Hailuo AI latest version"
         assert row["text_zh_cn"] == "海螺AI 最新版本"
         assert row["lang_detected"] == "zh-Hans"
-        # Verify the per-brand signal landed in post_brand_signals.
+        # Verify the per-brand signal landed in posts_brands_signals.
         sig_row = s._conn.execute(
-            "SELECT signal FROM post_brand_signals "
+            "SELECT signal_id FROM posts_brands_signals "
             "WHERE post_id = 't1' AND brand_id = 'minimax'"
         ).fetchone()
         assert sig_row is not None
-        assert sig_row["signal"] == "release"
+        assert sig_row["signal_id"] == "release"
     finally:
         s.close()
 

@@ -1,5 +1,14 @@
 # {{AGENT_ATTRIBUTION}}
 # MiniMax query library (Q1-Q5).
+#
+# Single role (U7 hybrid by design): build the TwitterAPI.io query
+# string. Read by x_monitor.query_plan.plan_calls() at cycle time.
+# This file is NOT read at post-fetch attribution time; the
+# {term: brand_id} map used by the attribution side lives in the
+# `brand_search_terms` DB table (operator-curated). Drift between
+# this yaml and the DB is logged at startup as a warning, not a
+# hard fail.
+#
 # Q1 — release signals from official account.
 # Q2 — community questions about MiniMax products.
 # Q3 — criticism, model failures, evals.

@@ -694,7 +694,7 @@ def cmd_reattribute(args, paths) -> int:
       --dry-run        do not write; print what would have been written
       --limit N        cap on posts processed (default: all)
       --model BRAND    only reattribute posts attributed to BRAND
-                       (joins post_brands)
+                       (joins posts_brands)
       --with-llm       enable per-brand signal classification via
                        Claude Haiku (requires ANTHROPIC_API_KEY in env)
 
@@ -731,6 +731,174 @@ def cmd_reattribute(args, paths) -> int:
     )
     print(json.dumps(counts, indent=2, ensure_ascii=False))
     return 0
+
+
+def cmd_translate_registry(args, paths) -> int:
+    """Backfill per-locale columns on registry tables (Unit 4).
+
+    Translates the source column on `brands` / `companies` / `accounts`
+    into en + zh-CN via Claude Haiku 4.5 and writes back via
+    `Store.bulk_update_registry_translations`. Idempotent (only fills
+    rows where the target column is NULL).
+
+    Usage:
+        x-monitor translate-registry brands display_name --locale both
+        x-monitor translate-registry accounts bio --locale zh_cn --limit 50
+        x-monitor translate-registry companies display_name --dry-run
+
+    Flags:
+      --locale   en | zh_cn | both (default: both)
+      --limit    cap on rows processed (default: 200)
+      --dry-run  skip the LLM + DB writes; just print the row count
+    """
+    from x_monitor.store import Store
+    from x_monitor.translator import (
+        AnthropicClaudeClient,
+        translate_registry_rows,
+    )
+
+    table = args.table
+    column = args.column
+    locale_arg = args.locale
+    limit = args.limit
+    dry_run = args.dry_run
+
+    # Guard: bio is only on accounts.
+    if column == "bio" and table != "accounts":
+        print(
+            f"translate-registry: column='bio' is only valid for "
+            f"table='accounts', got table={table!r}",
+            file=sys.stderr,
+        )
+        return 2
+
+    if locale_arg == "both":
+        target_locales = ["en", "zh_cn"]
+    else:
+        target_locales = [locale_arg]
+
+    db_path = paths["db"]
+    if not db_path.exists():
+        print(
+            f"translate-registry: db not found at {db_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    store = Store(db_path, auto_migrate=True)
+    try:
+        # Find rows needing translation per target locale. For "both",
+        # we union across locales (a row needs translation if EITHER
+        # locale column is NULL).
+        if locale_arg == "both":
+            missing_en = store.get_registry_missing_translations(
+                table, column, "en", limit=limit,
+            )
+            missing_zh = store.get_registry_missing_translations(
+                table, column, "zh_cn", limit=limit,
+            )
+            seen: set[str] = set()
+            rows = []
+            for r in missing_en + missing_zh:
+                pk = str(r["pk"])
+                if pk not in seen:
+                    seen.add(pk)
+                    rows.append({"pk": pk, "source": r["source"]})
+        else:
+            missing = store.get_registry_missing_translations(
+                table, column, locale_arg, limit=limit,
+            )
+            rows = [{"pk": str(r["pk"]), "source": r["source"]} for r in missing]
+
+        print(
+            f"translate-registry: {table}.{column} "
+            f"({len(rows)} rows, locales={target_locales}, "
+            f"dry_run={dry_run})"
+        )
+
+        if dry_run:
+            print(json.dumps({"would_translate": len(rows)}, indent=2))
+            return 0
+
+        if not rows:
+            print(json.dumps({"translated": 0}, indent=2))
+            return 0
+
+        # Build the column_label for the prompt context.
+        column_label = f"{table.rstrip('s')} {column.replace('_', ' ')}"
+
+        client = AnthropicClaudeClient()
+        results = translate_registry_rows(
+            rows, target_locales, client,
+            column_label=column_label,
+        )
+
+        # Write back via Store. Drop dry_run / translation_failed flags.
+        update_rows = [
+            {
+                "pk": r["pk"],
+                "col_en": r.get("col_en"),
+                "col_zh_cn": r.get("col_zh_cn"),
+            }
+            for r in results
+        ]
+        n_updated = store.bulk_update_registry_translations(
+            table, column, update_rows,
+        )
+        n_failed = sum(1 for r in results if r.get("translation_failed"))
+        print(
+            json.dumps(
+                {
+                    "rows_seen": len(rows),
+                    "rows_updated": n_updated,
+                    "rows_failed": n_failed,
+                },
+                indent=2,
+            )
+        )
+        return 0
+    finally:
+        store.close()
+
+
+def cmd_hf_products(args, paths) -> int:
+    """Collect HuggingFace models for each enabled company into `products`.
+
+    Flags:
+      --companies a,b   comma-separated company_ids or display names (default: all)
+      --brand BRAND     single company_id / display name (alias for --companies)
+      --max N           cap models per org
+      --dry-run         resolve orgs only; write nothing
+
+    The outer loop iterates companies (corporate parent), then for each
+    company iterates its HF orgs (1:N) and brands (M:N). Products are
+    attributed to the company’s brands via the brands_companies edge.
+    Discovery is automatic: companies lacking a confirmed HF org are
+    searched and their candidates are persisted flagged for review (not
+    scraped this run). HF auth uses HF_TOKEN from the environment
+    (anonymous if unset).
+    """
+    from x_monitor import hf_products
+    from x_monitor.store import Store
+
+    store = Store(paths["db"], auto_migrate=True)
+    try:
+        companies = None
+        if args.companies:
+            companies = [c.strip() for c in args.companies.split(",") if c.strip()]
+        elif args.brand:
+            companies = [args.brand]
+
+        results = hf_products.collect_all(
+            store,
+            companies=companies,
+            max=args.max,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return 0
+    finally:
+        store.close()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -846,7 +1014,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_reatt.add_argument(
         "--model", dest="model", default=None,
         help="Only reattribute posts attributed to this brand_id "
-             "(joins post_brands)",
+             "(joins posts_brands)",
     )
     p_reatt.add_argument(
         "--with-llm", action="store_true",
@@ -854,6 +1022,47 @@ def build_parser() -> argparse.ArgumentParser:
              "(requires ANTHROPIC_API_KEY in env)",
     )
     p_reatt.set_defaults(func=cmd_reattribute)
+
+    p_tr = sub.add_parser(
+        "translate-registry",
+        help="Backfill per-locale columns on registry tables (Unit 4)",
+    )
+    p_tr.add_argument(
+        "table", choices=["brands", "companies", "accounts"],
+        help="Registry table to translate.",
+    )
+    p_tr.add_argument(
+        "column", choices=["display_name", "bio"],
+        help="Column to translate. 'bio' is only valid for table='accounts'.",
+    )
+    p_tr.add_argument(
+        "--locale", choices=["en", "zh_cn", "both"], default="both",
+        help="Target locale(s). Default 'both'.",
+    )
+    p_tr.add_argument(
+        "--limit", type=int, default=200,
+        help="Cap on rows processed (default: 200).",
+    )
+    p_tr.add_argument(
+        "--dry-run", action="store_true",
+        help="Skip the LLM and DB writes; print the row count only.",
+    )
+    p_tr.set_defaults(func=cmd_translate_registry)
+
+    p_hf = sub.add_parser(
+        "hf-products",
+        help="Collect HuggingFace models per brand into the products table",
+    )
+    p_hf.add_argument(
+        "--companies",
+        help="comma-separated brand_ids or display names (default: all)",
+    )
+    p_hf.add_argument("--brand", help="single brand_id / display name")
+    p_hf.add_argument("--max", type=int, default=None, help="cap models per org")
+    p_hf.add_argument(
+        "--dry-run", action="store_true", help="resolve orgs only; write nothing"
+    )
+    p_hf.set_defaults(func=cmd_hf_products)
 
     return p
 

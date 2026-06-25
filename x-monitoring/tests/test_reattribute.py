@@ -4,11 +4,11 @@
 Covers R19: the `reattribute_all_posts` function and the
 `reattribute` CLI subcommand. The 6 plan-mandated scenarios:
   - idempotent re-run
-  - 2-brand post produces 2 post_brands rows with weights summing to 1.0
+  - 2-brand post produces 2 posts_brands rows with weights summing to 1.0
   - legacy entities JSON string handled
   - dry-run leaves DB unchanged
   - --limit caps post count
-  - --model <brand_id> filters via post_brands JOIN
+  - --model <brand_id> filters via posts_brands JOIN
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
     """Open Store at d/x.db, insert posts + detection registry.
 
     Detection keys (all optional):
-        brand_accounts, brand_hashtags, brand_keywords, brand_search_terms,
+        brands_accounts, brand_hashtags, brand_keywords, brand_search_terms,
         search_queries.
     """
     db = d / "x.db"
@@ -53,7 +53,7 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
         "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
         ("_unattributed", "Unattributed", "#6b7280", 1, "2026-06-19T00:00:00+00:00"),
     )
-    for author_id, brand_id in detection.get("brand_accounts", {}).items():
+    for author_id, brand_id in detection.get("brands_accounts", {}).items():
         store._conn.execute(
             "INSERT OR IGNORE INTO accounts(author_id, handle, "
             "first_seen_at, last_seen_at) VALUES (?, ?, ?, ?)",
@@ -61,7 +61,7 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
              "2026-06-19T00:00:00+00:00"),
         )
         store._conn.execute(
-            "INSERT INTO brand_accounts(brand_id, author_id, role, added_at) "
+            "INSERT INTO brands_accounts(brand_id, author_id, role_id, added_at) "
             "VALUES (?, ?, ?, ?)",
             (brand_id, author_id, "official", "2026-06-19T00:00:00+00:00"),
         )
@@ -145,19 +145,19 @@ def test_reattribute_idempotent(tmp_path: Path):
         d = Path(d_str)
         _seed_db(d, posts, detection)
         counts1 = reattribute_all_posts(d / "x.db", batch_size=2)
-        pb_count_1 = _row_count(d, "SELECT COUNT(*) FROM post_brands")
-        pm_count_1 = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        pb_count_1 = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
+        pm_count_1 = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
         counts2 = reattribute_all_posts(d / "x.db", batch_size=2)
-        pb_count_2 = _row_count(d, "SELECT COUNT(*) FROM post_brands")
-        pm_count_2 = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        pb_count_2 = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
+        pm_count_2 = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
     assert counts1["posts_scanned"] == 5
     assert counts2["posts_scanned"] == 5
     assert pb_count_1 == pb_count_2
     assert pm_count_1 == pm_count_2
 
 
-def test_reattribute_writes_post_brands(tmp_path: Path):
-    """2-brand post -> post_brands has 2 rows summing to 1.0."""
+def test_reattribute_writes_posts_brands(tmp_path: Path):
+    """2-brand post -> posts_brands has 2 rows summing to 1.0."""
     posts = [
         {"tweet_id": "1", "author_id": "u1", "author_handle": "u1",
          "text": "MiniMax Qwen are great together",
@@ -176,12 +176,12 @@ def test_reattribute_writes_post_brands(tmp_path: Path):
         store = Store(d / "x.db")
         try:
             rows = store._conn.execute(
-                "SELECT brand_id, weight FROM post_brands ORDER BY brand_id"
+                "SELECT brand_id, weight FROM posts_brands ORDER BY brand_id"
             ).fetchall()
         finally:
             store.close()
     assert counts["posts_scanned"] == 1
-    assert counts["post_brands_written"] == 2
+    assert counts["posts_brands_written"] == 2
     brand_ids = [r["brand_id"] for r in rows]
     assert "minimax" in brand_ids
     assert "qwen" in brand_ids
@@ -232,13 +232,13 @@ def test_reattribute_handles_legacy_entities_json_string(tmp_path: Path):
         store = Store(d / "x.db")
         try:
             rows = store._conn.execute(
-                "SELECT brand_id FROM post_brands WHERE brand_id <> "
+                "SELECT brand_id FROM posts_brands WHERE brand_id <> "
                 "'_unattributed'"
             ).fetchall()
         finally:
             store.close()
     assert counts["posts_scanned"] == 1
-    assert counts["post_brands_written"] >= 1
+    assert counts["posts_brands_written"] >= 1
     brand_ids = [r["brand_id"] for r in rows]
     assert "minimax" in brand_ids
 
@@ -256,15 +256,15 @@ def test_reattribute_dry_run_no_writes(tmp_path: Path):
     with tempfile.TemporaryDirectory() as d_str:
         d = Path(d_str)
         _seed_db(d, posts, detection)
-        before_pb = _row_count(d, "SELECT COUNT(*) FROM post_brands")
-        before_pm = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        before_pb = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
+        before_pm = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
         counts = reattribute_all_posts(
             d / "x.db", batch_size=10, dry_run=True,
         )
-        after_pb = _row_count(d, "SELECT COUNT(*) FROM post_brands")
-        after_pm = _row_count(d, "SELECT COUNT(*) FROM post_mentions")
+        after_pb = _row_count(d, "SELECT COUNT(*) FROM posts_brands")
+        after_pm = _row_count(d, "SELECT COUNT(*) FROM posts_brands_mentions")
     assert counts["posts_scanned"] == 1
-    assert counts["post_brands_written"] >= 1
+    assert counts["posts_brands_written"] >= 1
     assert before_pb == after_pb
     assert before_pm == after_pm
 
@@ -290,7 +290,7 @@ def test_reattribute_limit(tmp_path: Path):
 
 
 def test_reattribute_brand_filter(tmp_path: Path):
-    """--model <brand> filters via post_brands JOIN (post-pass)."""
+    """--model <brand> filters via posts_brands JOIN (post-pass)."""
     posts = [
         {"tweet_id": "1", "author_id": "u1", "author_handle": "u1",
          "text": "MiniMax is great",

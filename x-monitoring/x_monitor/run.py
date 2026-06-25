@@ -301,6 +301,61 @@ def _build_brand_index(
     return index, brand_search_terms
 
 
+def _load_brand_search_terms_from_db(store: Any) -> dict[str, str]:
+    """Return the {term: brand_id} map from the `brand_search_terms` table.
+
+    This is the post-fetch attribution source of truth (per the
+    hybrid-by-design contract documented in migration 017). The yaml
+    files in data/queries/ are *not* read at attribution time — the DB
+    table is. The yaml is the source for the query string built by
+    query_plan.plan_calls() at cycle time.
+    """
+    return store.read_brand_search_terms()
+
+
+def _log_brand_search_terms_drift(
+    yaml_terms: dict[str, str],
+    db_terms: dict[str, str],
+) -> None:
+    """Log a warning if the yaml and DB brand_search_terms maps disagree.
+
+    Drift is informational, not a hard fail. Three signals:
+
+      1. term in yaml but not in DB — the DB has stale coverage; the
+         query string can still match this term, but the attribution
+         side cannot map it back to a brand.
+      2. term in DB but not in yaml — the DB has an attribution entry
+         that no current query string produces. Probably leftover from
+         a removed brand or query; safe to drop, but flagged.
+      3. term in both with different brand_id — a brand_id mismatch
+         on a shared term; the DB wins at attribution time (yaml is
+         query-side, DB is attribution-side).
+    """
+    yaml_keys = set(yaml_terms)
+    db_keys = set(db_terms)
+    only_yaml = yaml_keys - db_keys
+    only_db = db_keys - yaml_keys
+    shared = yaml_keys & db_keys
+    mismatched = {t for t in shared if yaml_terms[t] != db_terms[t]}
+    if not (only_yaml or only_db or mismatched):
+        return
+    log.warning(
+        "brand_search_terms drift: yaml-only=%d db-only=%d mismatched=%d "
+        "(yaml=%d db=%d); DB wins at attribution time",
+        len(only_yaml), len(only_db), len(mismatched),
+        len(yaml_keys), len(db_keys),
+    )
+    if only_yaml:
+        sample = sorted(only_yaml)[:5]
+        log.warning("  yaml-only terms (sample): %s", sample)
+    if only_db:
+        sample = sorted(only_db)[:5]
+        log.warning("  db-only terms (sample): %s", sample)
+    if mismatched:
+        sample = sorted(mismatched)[:5]
+        log.warning("  mismatched terms (sample): %s", sample)
+
+
 def _attribute_call_items(
     items: list[dict[str, Any]],
     index: Any,
@@ -334,7 +389,7 @@ def _attribute_call_items(
         mentions: list[MentionRow] = list(
             attribute_to_brands(
                 post_like,
-                brand_accounts={},
+                brands_accounts={},
                 brand_hashtags={},
                 compiled_keyword_index=index,
                 search_query=[],
@@ -392,7 +447,7 @@ def _ingest_quote_tweets(
     is classified on commentary alone). Then `_attribute_call_items` folds
     commentary + quoted_text for `attribute_to_brands` and classifies the
     signal on the commentary only. Multi-brand QTs inherit 1/N-weighted
-    `post_brands`/`post_brand_signals` via `store.insert_posts`. Idempotent:
+    `posts_brands`/`posts_brands_signals` via `store.insert_posts`. Idempotent:
     re-ingesting a QT (same tweet_id) is a no-op (INSERT OR IGNORE + ON
     CONFLICT). Returns the number of QTs newly inserted.
     """
@@ -550,6 +605,13 @@ class RunPipeline:
                 cfgs: dict[str, RelevanceConfig] = {
                     m: load_filter(m, self.data_dir) for m in adjusted
                 }
+                # U7 hybrid by design: load the {term: brand_id} map from
+                # the DB once per cycle. The yaml is the source for query
+                # string construction (query_plan.py); the DB is the
+                # source for post-fetch attribution. We also build the
+                # yaml-derived map below only to feed the drift-detection
+                # log — the attribution side uses the DB-loaded map.
+                brand_search_terms_db = _load_brand_search_terms_from_db(store)
                 # v1.6: build the per-cycle call list once. Account calls
                 # (1 per brand) come first, then intent calls (1-3 per
                 # bucket, split when over the operator cap). For each call:
@@ -582,6 +644,16 @@ class RunPipeline:
                 # computed once per run — pure data lookup, no API.
                 brand_tokens = _brand_tokens_map(models, self.data_dir)
                 staff_handles = _staff_handles_map(models, self.data_dir)
+                # U7 drift detection: compare the yaml-derived
+                # {term: brand_id} map (built below for the body_keyword
+                # index only) to the DB-loaded map. Informational;
+                # does not abort the cycle.
+                _, yaml_terms_for_drift = _build_brand_index(
+                    brand_tokens, models
+                )
+                _log_brand_search_terms_drift(
+                    yaml_terms_for_drift, brand_search_terms_db
+                )
                 for call in plan:
                     if dry_run:
                         summary["queries"].append(
@@ -645,11 +717,15 @@ class RunPipeline:
                     # call kinds resolve real brand_ids via body_keyword
                     # + search_term matching (user_mention/hashtag stay
                     # offline — detection tables not populated).
-                    index, brand_search_terms = _build_brand_index(
-                        brand_tokens, models
-                    )
+                    # U7 hybrid: the body_keyword index is built from
+                    # yaml tokens, but the {term: brand_id} map for
+                    # search_term attribution comes from the DB
+                    # (`brand_search_terms_db`, loaded once per cycle).
+                    # The yaml is the query-side source; the DB is the
+                    # attribution-side source.
+                    index, _ = _build_brand_index(brand_tokens, models)
                     classified = _attribute_call_items(
-                        items, index, brand_search_terms
+                        items, index, brand_search_terms_db
                     )
                     # Drop items that matched no brand. These have no
                     # signal value for brand polarity. (v1.6 intent-branch
@@ -759,11 +835,15 @@ class RunPipeline:
                 # Skipped on dry_run / abort. See plan Units 4 & 5.
                 if not dry_run and summary["status"] != "aborted":
                     qt_brand_tokens = _brand_tokens_map(models, self.data_dir)
-                    qt_index, qt_bst = _build_brand_index(qt_brand_tokens, models)
+                    # U7 hybrid: the body_keyword index is built from
+                    # yaml tokens; the {term: brand_id} map for
+                    # search_term attribution comes from the DB
+                    # (`brand_search_terms_db`).
+                    qt_index, _ = _build_brand_index(qt_brand_tokens, models)
                     qt_staff = _staff_handles_map(models, self.data_dir)
                     try:
                         qt_out = self._capture_official_quote_tweets(
-                            apify, store, qt_index, qt_bst, qt_staff,
+                            apify, store, qt_index, brand_search_terms_db, qt_staff,
                         )
                         summary.setdefault("quote_tweets", {}).update(qt_out)
                     except Exception as e:  # never abort the run over QT capture
@@ -773,7 +853,7 @@ class RunPipeline:
                         ] = str(e)
                     try:
                         daily_out = self._capture_nonofficial_quote_tweets_daily(
-                            apify, store, qt_index, qt_bst, qt_staff,
+                            apify, store, qt_index, brand_search_terms_db, qt_staff,
                         )
                         summary.setdefault("quote_tweets", {}).update(daily_out)
                     except Exception as e:  # never abort the run over QT capture
@@ -1029,7 +1109,6 @@ class RunPipeline:
                     brand_id=m,
                     handle=a.handle,
                     role=a.role,
-                    engagement_tier=a.engagement_tier,
                     source_query_ids=a.source_query_ids,
                     display_name=a.display_name,
                     verified=a.verified,
@@ -1073,7 +1152,6 @@ class RunPipeline:
                     brand_id=m,
                     handle=handle,
                     role=role,
-                    engagement_tier=("high" if info["multi_posts"] >= 5 else "low"),
                     source_query_ids=[],
                     verified=False,
                     bio_contains_brand=False,

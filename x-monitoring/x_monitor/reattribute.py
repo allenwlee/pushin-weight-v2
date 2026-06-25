@@ -3,13 +3,13 @@
 
 Walks every row in `posts` and re-runs the v1.8 multi-brand attribution
 pipeline (`attribute_to_brands` + `compute_post_brands` +
-`classify_signal`) on each. Writes the results to `post_brands`,
-`post_mentions`, and `post_brand_signals` via the v1.8 Store methods,
+`classify_signal`) on each. Writes the results to `posts_brands`,
+`posts_brands_mentions`, and `posts_brands_signals` via the v1.8 Store methods,
 which are idempotent via `ON CONFLICT DO UPDATE`.
 
 This is the backfill path that runs after migration 004 has dropped
-the `posts.brand_id` column. The migration leaves `post_brands` /
-`post_mentions` / `post_brand_signals` empty (or partially filled for
+the `posts.brand_id` column. The migration leaves `posts_brands` /
+`posts_brands_mentions` / `posts_brands_signals` empty (or partially filled for
 posts that pre-date the v1.8 schema); `reattribute_all_posts` walks
 all 2,008 historical posts and fills them in.
 
@@ -25,7 +25,7 @@ Design notes (R19, plan Unit 5):
   - **Per-post transaction**: we wrap each post's 3-table write in
     `store.transaction()`. A single post failing doesn't poison the
     rest of the batch.
-  - **brand_filter is via JOIN**: we JOIN against post_brands to
+  - **brand_filter is via JOIN**: we JOIN against posts_brands to
     limit the SELECT to posts already attributed to that brand.
 
 Public function:
@@ -134,7 +134,7 @@ def _select_posts(
 
     When `brand_filter` is None, this is a straight SELECT on `posts`
     (ordered by `tweet_id` for stable runs). When `brand_filter` is
-    set, we do an INNER JOIN against `post_brands` to filter — this
+    set, we do an INNER JOIN against `posts_brands` to filter — this
     is the per-model view the dashboard uses.
     """
     if brand_filter is None:
@@ -143,7 +143,7 @@ def _select_posts(
     else:
         sql = (
             "SELECT p.* FROM posts p "
-            "JOIN post_brands pb ON pb.post_id = p.tweet_id "
+            "JOIN posts_brands pb ON pb.post_id = p.tweet_id "
             "WHERE pb.brand_id = ? "
             "ORDER BY p.tweet_id"
         )
@@ -179,7 +179,7 @@ def reattribute_all_posts(
         limit:           optional cap on posts processed.
         brand_filter:    optional brand_id; only reattribute posts
                          currently attributed to this brand (joined
-                         via post_brands).
+                         via posts_brands).
         anthropic_client: optional `AnthropicClaudeClient` instance.
                           When None, no signal classification happens
                           (default for offline / dry-run operation).
@@ -187,16 +187,16 @@ def reattribute_all_posts(
     Returns:
         Counts dict with keys:
           - posts_scanned
-          - post_brands_written
-          - post_mentions_written
-          - post_brand_signals_written
+          - posts_brands_written
+          - posts_brands_mentions_written
+          - posts_brands_signals_written
           - errors
     """
     counts: dict[str, int] = {
         "posts_scanned": 0,
-        "post_brands_written": 0,
-        "post_mentions_written": 0,
-        "post_brand_signals_written": 0,
+        "posts_brands_written": 0,
+        "posts_brands_mentions_written": 0,
+        "posts_brands_signals_written": 0,
         "errors": 0,
     }
 
@@ -204,7 +204,7 @@ def reattribute_all_posts(
     store = Store(db_path, auto_migrate=True)
     try:
         # Load detection tables ONCE (R19: amortize regex compile).
-        brand_accounts = store.read_brand_accounts()
+        brands_accounts = store.read_brands_accounts()
         brand_hashtags = store.read_brand_hashtags()
         brand_keywords_raw = store.read_brand_keywords()
         brand_search_terms = store.read_brand_search_terms()
@@ -216,7 +216,7 @@ def reattribute_all_posts(
             "reattribute: loaded detection tables: "
             "accounts=%d hashtags=%d keywords=%d search_terms=%d "
             "search_queries=%d brands=%d",
-            len(brand_accounts),
+            len(brands_accounts),
             len(brand_hashtags),
             len(brand_keywords_raw),
             len(brand_search_terms),
@@ -250,13 +250,13 @@ def reattribute_all_posts(
                 try:
                     mentions = attribute_to_brands(
                         normalized,
-                        brand_accounts=brand_accounts,
+                        brands_accounts=brands_accounts,
                         brand_hashtags=brand_hashtags,
                         compiled_keyword_index=compiled_keyword_index,
                         search_query=search_query,
                         brand_search_terms=brand_search_terms,
                     )
-                    post_brands = compute_post_brands(normalized, mentions)
+                    posts_brands = compute_post_brands(normalized, mentions)
                 except Exception as e:
                     logger.warning(
                         "reattribute: post %s raised during "
@@ -269,7 +269,7 @@ def reattribute_all_posts(
 
                 # 3. Per-brand signal classification (optional).
                 brand_ids_for_signal = [
-                    b for b, _w in post_brands if b != UNATTRIBUTED_BRAND_ID
+                    b for b, _w in posts_brands if b != UNATTRIBUTED_BRAND_ID
                 ]
                 signals = classify_signal(
                     text=normalized.get("text") or "",
@@ -278,14 +278,14 @@ def reattribute_all_posts(
                     anthropic_client=anthropic_client,
                 )
 
-                n_post_brands = len(post_brands)
+                n_posts_brands = len(posts_brands)
                 n_mentions = len(mentions)
                 n_signals = len(signals)
 
                 if dry_run:
-                    counts["post_brands_written"] += n_post_brands
-                    counts["post_mentions_written"] += n_mentions
-                    counts["post_brand_signals_written"] += n_signals
+                    counts["posts_brands_written"] += n_posts_brands
+                    counts["posts_brands_mentions_written"] += n_mentions
+                    counts["posts_brands_signals_written"] += n_signals
                     continue
 
                 # Real write path. Each post in its own transaction
@@ -304,14 +304,14 @@ def reattribute_all_posts(
 
                 try:
                     with store.transaction():
-                        for brand_id, weight in post_brands:
-                            store.insert_post_brands(
+                        for brand_id, weight in posts_brands:
+                            store.insert_posts_brands(
                                 post_id=post_id,
                                 brand_id=brand_id,
                                 weight=weight,
                             )
                         for m in mentions:
-                            store.insert_post_mentions(
+                            store.insert_posts_brands_mentions(
                                 post_id=post_id,
                                 brand_id=m.brand_id,
                                 source=m.source,
@@ -321,14 +321,14 @@ def reattribute_all_posts(
                         for brand_id, signal in signals.items():
                             if brand_id == UNATTRIBUTED_BRAND_ID:
                                 continue
-                            store.insert_post_brand_signals(
+                            store.insert_posts_brands_signals(
                                 post_id=post_id,
                                 brand_id=brand_id,
                                 signal=signal,
                             )
-                    counts["post_brands_written"] += n_post_brands
-                    counts["post_mentions_written"] += n_mentions
-                    counts["post_brand_signals_written"] += n_signals
+                    counts["posts_brands_written"] += n_posts_brands
+                    counts["posts_brands_mentions_written"] += n_mentions
+                    counts["posts_brands_signals_written"] += n_signals
                 except Exception as e:
                     logger.warning(
                         "reattribute: post %s failed to write: %s",

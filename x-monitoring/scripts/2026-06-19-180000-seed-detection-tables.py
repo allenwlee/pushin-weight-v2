@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""v3: seed detection tables on fuchitalee. accounts-first then brand_accounts."""
+"""v3: seed detection tables on fuchitalee. accounts-first then brands_accounts."""
 import sqlite3, sys, yaml
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,7 +48,7 @@ for bid, yn in brand_yaml.items():
 conn.commit()
 print(f'  +{n_canon_accts} canonical accounts')
 
-print('[3/4] Linking brand_accounts (canonical -> official)...')
+print('[3/4] Linking brands_accounts (canonical -> official)...')
 total_ba = 0
 for bid, yn in brand_yaml.items():
     p = filters_dir / yn
@@ -61,11 +61,11 @@ for bid, yn in brand_yaml.items():
     for handle in (data.get('canonical_handles') or []):
         aid = 'synthetic:' + handle.lower()
         cur = conn.execute(
-            'INSERT OR IGNORE INTO brand_accounts (brand_id, author_id, role, added_at) VALUES (?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO brands_accounts (brand_id, author_id, role_id, added_at) VALUES (?, ?, ?, ?)',
             (bid, aid, 'official', now))
         total_ba += cur.rowcount
 conn.commit()
-print(f'  +{total_ba} brand_accounts')
+print(f'  +{total_ba} brands_accounts')
 
 print('[4/4] Seeding brand_keywords (must_have_any + cjk_tokens)...')
 total_kw = 0
@@ -91,7 +91,7 @@ conn.commit()
 print(f'  +{total_kw} brand_keywords')
 
 print('--- post-seed row counts ---')
-for tbl in ['accounts', 'brand_accounts', 'brand_hashtags', 'brand_keywords', 'brand_search_terms', 'search_queries']:
+for tbl in ['accounts', 'brands_accounts', 'brand_hashtags', 'brand_keywords', 'brand_search_terms', 'search_queries']:
     n = conn.execute(f'SELECT COUNT(*) FROM {tbl}').fetchone()[0]
     print(f'  {tbl}: {n}')
 conn.close()

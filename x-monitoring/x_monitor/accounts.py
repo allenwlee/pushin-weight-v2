@@ -36,7 +36,6 @@ class Account(BaseModel):
     bio_contains_brand: bool = False
     multiple_posts_in_thread_with_official: int = 0  # count
     source_query_ids: list[str] = Field(default_factory=list)
-    engagement_tier: Literal["low", "medium", "high"] = "low"
     multi_brand_voice: bool = False
     notes: str = ""
 

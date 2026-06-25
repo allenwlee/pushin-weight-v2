@@ -4,11 +4,11 @@
 Companion to `x_monitor.intent_classifier` (v1.7 single-brand). v1.8
 replaces first-match-wins with all-matches-wins: a single tweet may
 attribute to multiple brands, and every detected brand gets its own
-row in `post_brands`, `post_mentions`, and `post_brand_signals`.
+row in `posts_brands`, `posts_brands_mentions`, and `posts_brands_signals`.
 
 Four extraction sources (Decision 6 in the schema plan):
   - `user_mention`   - `entities.user_mentions[].id` resolves via
-                       `brand_accounts` (numeric X user id -> brand_id).
+                       `brands_accounts` (numeric X user id -> brand_id).
   - `hashtag`         - `entities.hashtags[].tag` resolves via
                        `brand_hashtags` (case-insensitive, no '#').
   - `body_keyword`    - `post.text` scanned once with a precompiled
@@ -69,7 +69,7 @@ BRAND_SOURCE_PRIORITY: dict[Source, float] = {
 # Sentinel brand id (Decision 15). When a post has no detected brand
 # from any source, the consolidator emits a `_unattributed` row so the
 # post is still queryable. The treemap/dashboard filter excludes this
-# sentinel at the read side (post_brand_signals has a CHECK constraint
+# sentinel at the read side (posts_brands_signals has a CHECK constraint
 # blocking the sentinel entirely).
 UNATTRIBUTED_BRAND_ID: str = "_unattributed"
 
@@ -161,7 +161,7 @@ def validate_raw_token(source: Source, raw_token: str) -> None:
 
 @dataclass(frozen=True)
 class MentionRow:
-    """A single (post, brand, source) triple to be written to post_mentions.
+    """A single (post, brand, source) triple to be written to posts_brands_mentions.
 
     Fields:
         post_id:       the tweet_id (string)
@@ -171,7 +171,7 @@ class MentionRow:
         source:        one of user_mention/hashtag/body_keyword/search_term
         raw_token:     per-source format (see validate_raw_token)
         mentioned_at:  ISO-8601 UTC timestamp; denormalized from
-                       posts.created_at so post_mentions is queryable
+                       posts.created_at so posts_brands_mentions is queryable
                        without a JOIN to posts.
     """
 
@@ -256,19 +256,19 @@ def _normalize_entities(entities: Any) -> dict[str, Any]:
 
 def extract_user_mentions(
     post: dict[str, Any],
-    brand_accounts: dict[str, str],
+    brands_accounts: dict[str, str],
     entities: Any,
 ) -> list[MentionRow]:
     """Emit one MentionRow per @handle in `entities.user_mentions[]`.
 
     The numeric X user id (entities.user_mentions[].id) is the FK into
-    `brand_accounts.author_id`. Unknown handles are preserved with
+    `brands_accounts.author_id`. Unknown handles are preserved with
     brand_id=None so the raw `@handle` token survives for backfill.
 
     Args:
         post:            a post dict with at least `tweet_id` (or `id`)
                          and `created_at`
-        brand_accounts:  {author_id (str): brand_id} map (numeric id
+        brands_accounts:  {author_id (str): brand_id} map (numeric id
                          keyed; TwitterAPI.io returns id as str via
                          JSON but it's semantically numeric)
         entities:        post["entities"], may be dict/str/None
@@ -297,7 +297,7 @@ def extract_user_mentions(
         if not author_id or not username:
             continue
         author_id_str = str(author_id)
-        brand_id = brand_accounts.get(author_id_str)
+        brand_id = brands_accounts.get(author_id_str)
         raw_token = f"@{username}"
         out.append(MentionRow(
             post_id=post_id,
@@ -356,7 +356,7 @@ def extract_hashtag_mentions(
         brand_id = brand_hashtags.get(tag_lower)
         if brand_id is None:
             # Unknown hashtag: silently dropped (R4: noise is not
-            # preserved in post_mentions for the hashtag source).
+            # preserved in posts_brands_mentions for the hashtag source).
             continue
         raw_token = f"#{tag_lower}"
         out.append(MentionRow(
@@ -633,7 +633,7 @@ def compute_post_brands(
 
 def attribute_to_brands(
     post: dict[str, Any],
-    brand_accounts: dict[str, str],
+    brands_accounts: dict[str, str],
     brand_hashtags: dict[str, str],
     compiled_keyword_index: tuple[re.Pattern[str] | None, dict[str, str]],
     search_query: list[str],
@@ -653,7 +653,7 @@ def attribute_to_brands(
 
     Args:
         post:                   the post dict
-        brand_accounts:         {author_id: brand_id}
+        brands_accounts:         {author_id: brand_id}
         brand_hashtags:         {tag: brand_id} (lowercase keys)
         compiled_keyword_index: (pattern, token_to_brand) from
                                 `compile_keyword_index`
@@ -669,7 +669,7 @@ def attribute_to_brands(
     """
     entities = post.get("entities")
     mentions: list[MentionRow] = []
-    mentions.extend(extract_user_mentions(post, brand_accounts, entities))
+    mentions.extend(extract_user_mentions(post, brands_accounts, entities))
     mentions.extend(extract_hashtag_mentions(post, brand_hashtags, entities))
     mentions.extend(extract_body_keywords(post, compiled_keyword_index))
     mentions.extend(extract_search_term_match(post, search_query, brand_search_terms))
