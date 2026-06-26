@@ -152,10 +152,14 @@ def test_migration_007_full_stack_apply(tmp_path):
         # 017 = brand_search_terms hybrid by design (no-op DDL).
         # 018 = INTEGER PKs for enum tables (signals, roles).
         # 019 = post_types + sentiments taxonomy (additive columns).
-        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], f"unexpected versions: {applied}"
+        # 020 = TEXT→INTEGER PK rebuild (slugs kept, FKs re-pointed).
+        # 021 = INTENTIONALLY ABSENT (reserved for HF products crawler).
+        # 022 = drop signal_id + signals/signal_labels tables.
+        # 023 = rename brands.brand_id / companies.company_id → nickname.
+        assert applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23], f"unexpected versions: {applied}"
         # Verify the brand seed from migration 004 still readable.
         row = s._conn.execute(
-            "SELECT brand_id, display_name FROM brands WHERE brand_id = 'minimax'"
+            "SELECT nickname AS brand_id, display_name FROM brands WHERE nickname = 'minimax'"
         ).fetchone()
         assert row is not None
         assert row["display_name"] == "MiniMax AI"
@@ -176,7 +180,7 @@ def test_migration_007_null_locale_columns_default(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         rows = s._conn.execute(
-            "SELECT display_name, display_name_en, display_name_zh_cn FROM brands WHERE brand_id = 'minimax'"
+            "SELECT display_name, display_name_en, display_name_zh_cn FROM brands WHERE nickname = 'minimax'"
         ).fetchall()
         assert len(rows) == 1
         row = rows[0]

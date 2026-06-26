@@ -106,7 +106,7 @@ def test_migration_009_seeds_minimax_company(tmp_path):
     s = Store(tmp_path / "x.db", auto_migrate=True)
     try:
         row = s._conn.execute(
-            "SELECT * FROM companies WHERE company_id = 'minimax'"
+            "SELECT * FROM companies WHERE nickname = 'minimax'"
         ).fetchone()
         assert row is not None
         assert row["display_name"] == "MiniMax"

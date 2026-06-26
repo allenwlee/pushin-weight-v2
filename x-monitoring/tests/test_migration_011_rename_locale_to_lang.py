@@ -193,7 +193,7 @@ def test_migration_011_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        expected = sorted(set(range(1, 21)) | {22})
+        expected = sorted(set(range(1, 21)) | {22, 23})
         assert applied == expected, (
             f"unexpected versions: {applied} (expected {expected})"
         )

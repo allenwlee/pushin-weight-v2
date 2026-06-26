@@ -178,7 +178,7 @@ def test_migration_016_full_stack_apply(tmp_path):
             r[0]
             for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        expected = sorted(set(range(1, 21)) | {22})
+        expected = sorted(set(range(1, 21)) | {22, 23})
         assert applied == expected, (
             f"unexpected versions: {applied} (expected {expected})"
         )
@@ -238,7 +238,7 @@ def test_migration_016_backfill_brands_accounts_researcher_to_community(tmp_path
 
         # Resolve brand_id (INTEGER FK post-020) and author_id.
         brand_int_id = s._conn.execute(
-            "SELECT id FROM brands WHERE brand_id=?",
+            "SELECT id FROM brands WHERE nickname=?",
             ("minimax",),
         ).fetchone()["id"]
         s._conn.execute(
@@ -321,7 +321,7 @@ def test_migration_016_backfill_companies_accounts_press_to_community(tmp_path):
 
         # Pick any seeded company (mistral_ai is in the 004 seed).
         company_int_id = s._conn.execute(
-            "SELECT id FROM companies WHERE company_id=?",
+            "SELECT id FROM companies WHERE nickname=?",
             ("mistral_ai",),
         ).fetchone()["id"]
         s._conn.execute(

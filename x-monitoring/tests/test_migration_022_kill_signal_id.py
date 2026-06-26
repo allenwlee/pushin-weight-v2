@@ -370,7 +370,7 @@ def test_migration_022_insert_posts_brands_signals_writes_post_type_sentiment(tm
         test_brand = "u9_022_test_brand"
         test_tweet = "u9_022_test_tweet_100"
         s._conn.execute(
-            "INSERT INTO brands (brand_id, display_name) VALUES (?, ?)",
+            "INSERT INTO brands (nickname, display_name) VALUES (?, ?)",
             (test_brand, "U9 Test Brand"),
         )
         s._conn.execute(
@@ -393,7 +393,7 @@ def test_migration_022_insert_posts_brands_signals_writes_post_type_sentiment(tm
             "FROM posts_brands_signals pbs "
             "JOIN posts p ON p.id = pbs.post_id "
             "JOIN brands b ON b.id = pbs.brand_id "
-            "WHERE p.tweet_id = ? AND b.brand_id = ?",
+            "WHERE p.tweet_id = ? AND b.nickname = ?",
             (test_tweet, test_brand),
         ).fetchall()
         assert len(rows) == 1, f"expected 1 row, got {len(rows)}: {rows}"

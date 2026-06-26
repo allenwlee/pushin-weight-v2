@@ -67,8 +67,8 @@ import pytest
 
 
 @pytest.mark.parametrize("tbl,slug_col,expected_rows", [
-    ("brands", "brand_id", 12),
-    ("companies", "company_id", 11),
+    ("brands", "nickname", 12),
+    ("companies", "nickname", 11),
     ("accounts", "author_id", 0),
     ("hf_orgs", "namespace", 11),
     ("search_queries", "query_id", 0),
@@ -390,13 +390,13 @@ def test_migration_020_brands_companies_join_roundtrip(tmp_path):
         # JOIN cleanly to brands.brand_id and companies.company_id.
         rows = s._conn.execute(
             """
-            SELECT bc.brand_id, b.brand_id AS text_brand,
-                   bc.company_id, c.company_id AS text_company,
+            SELECT bc.brand_id, b.nickname AS text_brand,
+                   bc.company_id, c.nickname AS text_company,
                    bc.ownership_pct
             FROM brands_companies bc
             JOIN brands b     ON b.id     = bc.brand_id
             JOIN companies c  ON c.id     = bc.company_id
-            ORDER BY b.brand_id, c.company_id
+            ORDER BY b.nickname, c.nickname
             LIMIT 3
             """
         ).fetchall()
@@ -423,7 +423,7 @@ def test_migration_020_hf_orgs_data_preserved_with_integer_company_id(tmp_path):
     try:
         rows = s._conn.execute(
             """
-            SELECT h.id, h.namespace, h.company_id, c.company_id AS company_slug
+            SELECT h.id, h.namespace, h.company_id, c.nickname AS company_slug
             FROM hf_orgs h
             JOIN companies c ON c.id = h.company_id
             ORDER BY h.id
@@ -511,7 +511,7 @@ def test_migration_020_bad_role_id_in_brands_accounts_rejected(tmp_path):
     try:
         # Get a real brand_id + author_id; then write a bad role_id.
         b_row = s._conn.execute(
-            "SELECT id FROM brands WHERE brand_id = 'minimax'"
+            "SELECT id FROM brands WHERE nickname = 'minimax'"
         ).fetchone()
         a_row = s._conn.execute(
             "SELECT id FROM accounts WHERE author_id = 'u_020_role' "
@@ -563,8 +563,8 @@ def test_migration_020_all_tables_have_expected_schema_shape(tmp_path):
         # (table, id_col_name, slug_col_name)
         # edge tables have composite PKs and no single id column
         tables_with_id_pk = [
-            ("brands", "id", "brand_id"),
-            ("companies", "id", "company_id"),
+            ("brands", "id", "nickname"),
+            ("companies", "id", "nickname"),
             ("accounts", "id", "author_id"),
             ("hf_orgs", "id", "namespace"),
             ("search_queries", "id", "query_id"),
@@ -675,7 +675,7 @@ def test_migration_020_full_stack_apply(tmp_path):
                 "SELECT version FROM _migrations"
             ).fetchall()
         )
-        expected = sorted(set(range(1, 21)) | {22})
+        expected = sorted(set(range(1, 21)) | {22, 23})
         assert applied == expected, (
             f"unexpected versions: {applied} (expected {expected})"
         )
@@ -700,8 +700,8 @@ def test_migration_020_indexes_preserved(tmp_path):
             ).fetchall()
         }
         for idx in (
-            "idx_brands_brand_id",
-            "idx_companies_company_id",
+            "idx_brands_nickname",
+            "idx_companies_nickname",
             "idx_accounts_author_id",
             "idx_hf_orgs_namespace",
             "idx_search_queries_query_id",

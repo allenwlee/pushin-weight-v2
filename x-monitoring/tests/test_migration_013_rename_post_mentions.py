@@ -174,7 +174,7 @@ def test_migration_013_full_stack_apply(tmp_path):
         # 020 = TEXT→INTEGER PK refactor (U8 remediation).
         # 021 = INTENTIONALLY ABSENT (HF products crawler reservation).
         # 022 = kill signal_id + signals tables (U9 remediation).
-        expected = sorted(set(range(1, 21)) | {22})
+        expected = sorted(set(range(1, 21)) | {22, 23})
         assert applied == expected, (
             f"unexpected versions: {applied} (expected {expected})"
         )
