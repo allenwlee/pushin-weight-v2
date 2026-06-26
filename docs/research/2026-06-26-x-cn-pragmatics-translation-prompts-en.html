@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English X (Twitter) LLM-Community Discourse × Chinese-Internet Parallel Expressions — Comparative Study and Reasoning Prompts (English Version) - Deep Research Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #1a1a1a;
+            background: #ffffff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+        }
+
+        .header {
+            background: #003d5c;
+            color: white;
+            padding: 25px 40px;
+            border-bottom: 3px solid #002840;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header-meta {
+            font-size: 13px;
+            color: #b8d4e6;
+            display: flex;
+            gap: 25px;
+        }
+
+        .metrics-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0;
+            border-bottom: 2px solid #003d5c;
+        }
+
+        .metric {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-right: 1px solid #d1d5db;
+            text-align: center;
+        }
+
+        .metric:last-child {
+            border-right: none;
+        }
+
+        .metric-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #003d5c;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .content {
+            padding: 30px 40px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #003d5c;
+            margin: 32px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #003d5c;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            line-height: 1.3;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin: 24px 0 12px 0;
+            line-height: 1.4;
+        }
+
+        .executive-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 4px solid #003d5c;
+        }
+
+        .executive-summary p {
+            margin-bottom: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        p {
+            margin-bottom: 14px;
+            line-height: 1.7;
+            text-align: left;
+        }
+
+        /* Better paragraph spacing in content sections */
+        .content > p,
+        .section p {
+            margin-bottom: 16px;
+        }
+
+        .findings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .finding-card {
+            background: #f8f9fa;
+            padding: 18px;
+            border-left: 3px solid #003d5c;
+        }
+
+        .finding-card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #003d5c;
+            margin-bottom: 10px;
+        }
+
+        .finding-card p {
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+
+        .data-table th {
+            background: #003d5c;
+            color: white;
+            padding: 10px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        ul, ol {
+            margin: 16px 0 16px 28px;
+            padding-left: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+            padding-left: 8px;
+        }
+
+        /* Nested lists */
+        li ul, li ol {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        /* Better bullet/number spacing */
+        ol {
+            list-style-position: outside;
+            padding-left: 0;
+        }
+
+        ul {
+            list-style-position: outside;
+            padding-left: 0;
+        }
+
+        .key-insight {
+            background: white;
+            border: 1px solid #d1d5db;
+            border-left: 3px solid #003d5c;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .key-insight strong {
+            color: #003d5c;
+            font-weight: 600;
+        }
+
+        .citation {
+            color: #003d5c;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            position: relative;
+            padding: 2px 4px;
+            background: #f0f7fc;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+
+        .citation:hover {
+            background: #003d5c;
+            color: white;
+        }
+
+        /* Attribution Gradients (2025 Enhancement) */
+        .citation-tooltip {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            background: white;
+            border: 2px solid #003d5c;
+            box-shadow: 0 4px 12px rgba(0, 61, 92, 0.15);
+            padding: 12px;
+            min-width: 300px;
+            max-width: 500px;
+            z-index: 1000;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .citation:hover .citation-tooltip {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-weight: 700;
+            color: #003d5c;
+            margin-bottom: 8px;
+            font-size: 13px;
+            border-bottom: 1px solid #d1d5db;
+            padding-bottom: 6px;
+        }
+
+        .tooltip-source {
+            color: #4a5568;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        .tooltip-claim {
+            background: #f8f9fa;
+            padding: 8px;
+            margin-top: 8px;
+            border-left: 3px solid #003d5c;
+            font-size: 11px;
+        }
+
+        .tooltip-claim-label {
+            font-weight: 600;
+            color: #003d5c;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .evidence-chain {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #d1d5db;
+        }
+
+        .evidence-chain-label {
+            font-weight: 600;
+            color: #003d5c;
+            font-size: 11px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .evidence-step {
+            padding: 6px;
+            background: #f8f9fa;
+            margin-bottom: 4px;
+            font-size: 11px;
+            border-left: 2px solid #d1d5db;
+            padding-left: 8px;
+        }
+
+        .bibliography {
+            background: #f8f9fa;
+            padding: 30px;
+            margin-top: 40px;
+            border-left: 4px solid #003d5c;
+        }
+
+        .bibliography-content {
+            background: #f8f9fa;
+            padding: 20px 0;
+        }
+
+        .bib-entry {
+            margin-bottom: 18px;
+            padding-left: 50px;
+            text-indent: -50px;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        .bib-number {
+            color: #003d5c;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .bib-entry a {
+            color: #003d5c;
+            word-wrap: break-word;
+            text-decoration: none;
+        }
+
+        .bib-entry a:hover {
+            text-decoration: underline;
+        }
+
+        .compact-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .compact-list li {
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .info-box {
+            background: white;
+            border: 1px solid #d1d5db;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .info-box h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #003d5c;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .highlight-stat {
+            font-weight: 700;
+            color: #003d5c;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        @media print {
+            .container {
+                max-width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .metrics-dashboard {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .findings-grid {
+                grid-template-columns: 1fr;
+            }
+            .compact-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>English X (Twitter) LLM-Community Discourse × Chinese-Internet Parallel Expressions — Comparative Study and Reasoning Prompts</h1>
+            <div class="header-meta">
+                <span>2026-06-26</span>
+                <span>•</span>
+                <span>35 Sources</span>
+            </div>
+        </div>
+
+
+
+        <div class="content">
+            <div class="section"><h2 class="section-title">Executive Summary</h2>
+
+<p>When English-language X (Twitter) discusses Anthropic / OpenAI / Gemini versus open-source / domestic models such as DeepSeek / MiniMax / GLM, it relies on a mature set of in-group slang (sarcasm, dunk, hype, FUD, vibe-coded insults, AI slop accusations, distillation conspiracies, etc.). The Chinese internet has a parallel but not fully equivalent pragmatic system that is <strong>structurally parallel but semantically non-identical</strong>.
+</p>
+
+<strong>Six key findings:</strong>
+
+<ol>
+<li><strong>English sarcasm is not the same as Chinese "阴阳怪气" (yīnyángguàiqì, lit. "eerie yin-yang tone").</strong> Chinese 阴阳怪气 has a structure of <strong>literal-positivity / internal-negativity</strong> (e.g., "It's cold out, remember to cover yourself with a little extra dirt"), whereas English sarcasm is closer to direct irony. Chinese-language sources explicitly categorize these as different things [1][2][3][4]. A naive translation will lose the ironic layer that Chinese readers expect.</li>
+</ol>
+
+<ol>
+<li><strong>"翻车" (fānchē, "car-flipping" / PR disaster), "套壳" (tàoké, "shell-wrapping" / white-labeling), "蒸馏" (zhēngliú, "distillation"), "舔狗" (tiǎngǒu, "licker-dog" / bootlicker), and "毒舌" (dúshé, "venomous-tongue")</strong> form a systematic Chinese correspondence to English X's dunk / cope / distillation accusations / sycophancy / roasts [5][6][7][8][9]. When translating into Chinese, these can be borrowed directly without further explanation.</li>
+</ol>
+
+<ol>
+<li><strong>Chinese "抽象文化 / 抽象话" (chōuxiàng wénhuà / chōuxiàng huà, "abstract culture / abstract speech")</strong> is a composite of English irony + shitpost + absurdist humor, originating from Douyu livestreaming and spreading to Bilibili, Weibo, and Tieba [10][11][12][13]. The English-X equivalent of "AI 抽象图" (AI absurdist memes) — such as Sora 2 fake videos and "shrimp Jesus" — maps cleanly to Chinese "抽象整活".</li>
+</ol>
+
+<ol>
+<li><strong>Little Red Book's (Xiaohongshu) AI translation feature, launched in January 2025, was driven "viral" by Chinese netizens; its key selling point is "internet slang + brief annotations"</strong> [14][15][16][17]. This provides <strong>direct evidence</strong> that Chinese readers expect LLM translation to deliver "literal translation + cultural annotation when necessary" rather than "perfect paraphrase."</li>
+</ol>
+
+<ol>
+<li><strong>The "domestic-model evaluation framework unique to the Chinese internet"</strong> (e.g., "Once China open-sources, country X suddenly starts building its own," "套壳," "蒸馏," "幻觉" used pejoratively) has no direct English-X equivalent and must be <strong>explicitly translated and annotated</strong> [6][18][19][20].</li>
+</ol>
+
+<ol>
+<li><strong>High-frequency English-X terms like vibe coding, distillation, cap / cope / mid</strong> require a dedicated <strong>mini-glossary</strong>, because the Chinese internet either lacks a precise equivalent (e.g., "cap") or uses a term with a different semantic center of gravity [21][22][23].</li>
+</ol>
+
+<p><strong>The most critical design recommendation for x-monitoring:</strong> Upgrade v1.7's translation layer to a <strong>two-stage prompt</strong>:
+</p>
+<ul>
+<li><strong>Stage 1</strong>: literal translation (preserve original slang; do not smooth it out)</li>
+<li><strong>Stage 2</strong>: structured annotation (tag the discourse role: dunk / hype / FUD / self-deprecation / 抽象, and provide a Chinese parallel expression)</li>
+</ul>
+
+<p>Do not pursue "natural fluency" — Chinese-vendor readers need "understand the meme + be able to quote it," not "reads like a native Chinese post."
+</p>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">1. Introduction: Scope and Method</h2>
+
+<h3 class="subsection-title">1.1 Problem Definition</h3>
+
+<p>x-monitoring v1.7 has added a Haiku translation layer (en + zh-CN, ~5 CNY/month cost) that translates English X posts for Chinese AI-vendor readers [24]. The current problem:
+</p>
+
+<ul>
+<li>The translation layer is <strong>literal</strong> and insensitive to sarcasm / 抽象 / veiled mockery / puns</li>
+<li>Vendor readers see "grammatically fluent but soul-stripped" Chinese and cannot tell whether a tweet is dunking or hyping</li>
+<li>The aggregate views (signal-categorized cards, word clouds, KPIs) lose the original pragmatic layer</li>
+</ul>
+
+<p>This report's goal: upgrade "translation" to "translation + explanation" so that Chinese LLM vendors can <strong>read, cite, and act</strong>.
+</p>
+
+<h3 class="subsection-title">1.2 Method</h3>
+
+<table>
+<thead><tr>
+<th>Stage</th>
+<th>Activity</th>
+<th>Output</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1. Scope</td>
+<td>Broke the question into 4 sub-problems</td>
+<td>Scope document</td>
+</tr>
+<tr>
+<td>2. Plan</td>
+<td>7 parallel search channels</td>
+<td>Search matrix</td>
+</tr>
+<tr>
+<td>3. Search</td>
+<td>12+ Brave Chinese-language queries + multi-source comparison</td>
+<td>35+ Chinese sources</td>
+</tr>
+<tr>
+<td>4. Triangulation</td>
+<td>Each core claim backed by ≥2 independent sources</td>
+<td>Verification table (below)</td>
+</tr>
+<tr>
+<td>5–7. Synthesis / review / revision</td>
+<td>Built the 3-column table + prompt templates</td>
+<td>Report body</td>
+</tr>
+<tr>
+<td>8. Packaging</td>
+<td>Markdown + HTML</td>
+<td>This report</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">1.3 Triangulation Results</h3>
+
+<table>
+<thead><tr>
+<th>Claim</th>
+<th>Source count</th>
+<th>Conclusion</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Chinese "阴阳怪气" ≠ English sarcasm</td>
+<td>5+ (woshipm, 36kr, Moegirl Wiki, Digitaling, Sohu)</td>
+<td>✅ Strong agreement</td>
+</tr>
+<tr>
+<td>"抽象话 / abstract culture" is the Chinese counterpart to English dunk + shitpost</td>
+<td>4+ (The Paper, Zhihu, Wuhan University paper, Jiemian)</td>
+<td>✅ Strong agreement</td>
+</tr>
+<tr>
+<td>Chinese "翻车 / 套壳 / 蒸馏" is now a fixed system</td>
+<td>5+ (Zhihu, 36kr, Yangtse Evening Post, Sina, Qinggua Media)</td>
+<td>✅ Strong agreement</td>
+</tr>
+<tr>
+<td>Little Red Book's AI translation pitch = slang + annotation</td>
+<td>4+ (53AI, Southern Metropolis Daily, Yangtse Evening Post, Lianhe Zaobao)</td>
+<td>✅ Strong agreement</td>
+</tr>
+<tr>
+<td>Chinese discourse has a unique evaluation framework for LLM "wrapper" / distillation / domesticization</td>
+<td>5+ (Yangtse Evening Post, 36kr, OFweek, Sina, Zhihu)</td>
+<td>✅ Strong agreement</td>
+</tr>
+<tr>
+<td>"舔狗" as the Chinese translation of sycophancy</td>
+<td>2 (36kr, Zhihu)</td>
+<td>✅ Agreement</td>
+</tr>
+<tr>
+<td>"毒舌 AI" as a Chinese-English cross-cultural meme</td>
+<td>3+ (BAAI / Zhiyuan, PConline, Tencent)</td>
+<td>✅ Agreement</td>
+</tr>
+</tbody></table>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">2. Categories of Expression When English X Discusses LLMs</h2>
+
+<p>Based on the search evidence, I have classified English-X discourse (covering the a16z, Anthropic / OpenAI / Google DeepMind, together.ai, Perplexity, and Hugging Face communities) about LLMs into <strong>9 pragmatic categories</strong>. Each category is illustrated with an English template for pattern matching during inference.
+</p>
+
+<table>
+<thead><tr>
+<th>#</th>
+<th>Category</th>
+<th>English signal words</th>
+<th>Chinese counterpart</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Straight hype</strong></td>
+<td>"this is wild", "we're so back", "best in class", "actually insane"</td>
+<td>Genuine praise (真心夸)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Sarcasm / 反话 (fǎnhuà)</strong></td>
+<td>"wow, groundbreaking", "thanks, I hate it", "totally didn't see this coming"</td>
+<td>Irony (反讽)</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Dunk / 阴阳怪气 dunk</strong></td>
+<td>"claude could never", "10/10 would buy again (won't)", "skill issue"</td>
+<td>阴阳怪气 / 阴阳语</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Self-deprecation / 自嘲 (zìcháo)</strong></td>
+<td>"I'm just a vibe coder", "I have no idea what I'm doing", "trust me bro"</td>
+<td>Self-deprecation / 凡尔赛 (fán'ěrsài, "Versailles" — humble-brag)</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Cope / 嘴硬 (zuǐyìng, "hard-mouth" — stubborn denial)</strong></td>
+<td>"this is fine", "we'll get there", "interesting direction"</td>
+<td>Cope / 阿 Q (ā Q, Lu Xun's self-deluded everyman)</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>FUD / 唱衰 (chàngshuāi, "sing-bearish")</strong></td>
+<td>"dead on arrival", "the bubble is bursting", "this will be the next Quibi"</td>
+<td>唱衰 / Pouring cold water (泼冷水)</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Distillation accusation / 蒸馏指控 (zhēngliú zhǐkòng)</strong></td>
+<td>"it's just a copy of GPT-4", "they trained on outputs", "suspiciously similar"</td>
+<td>套壳 / Distillation accusation</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>AI slop / content-garbage accusation</strong></td>
+<td>"this is slop", "AI-generated garbage", "looks like LinkedIn"</td>
+<td>AI 整活 / AI 烂梗 (AI nonsense)</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Absurdist / 抽象整活 (chōuxiàng zhěnghuó, "absurd stunt")</strong></td>
+<td>"shrimp jesus", "you wouldn't download a car", "gigachad prompt"</td>
+<td>抽象 / 整活</td>
+</tr>
+</tbody></table>
+
+<strong>Why these 9 categories form a reasonable boundary:</strong>
+<ul>
+<li>Direct analogy from The Paper / Digitaling / Moegirl Wiki's pragmatic classifications of Chinese internet discourse [1][10][13]</li>
+<li>Explicit naming of cross-cultural memes such as "毒舌 AI" and "舔狗" in 36kr / BAAI / PConline [8][9]</li>
+<li>BBC Chinese / CCTV cases of "Chinglish" reverse-import (e.g., "You swan he frog") [25]</li>
+</ul>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">3. Three-Column Comparative Table (Core Deliverable)</h2>
+
+<p>The table below is the heart of this report. For each row:
+</p>
+<ul>
+<li><strong>Col 1 (English-X category)</strong>: a typical English expression template for that category on English X</li>
+<li><strong>Col 2 (Chinese parallel expression)</strong>: the closest parallel expression on the Chinese internet (Weibo / Zhihu / Bilibili / Xiaohongshu / Douyin / Chinese-language X)</li>
+<li><strong>Col 3 (similarity / difference)</strong>: directly translatable vs. requires annotation vs. literal-vs-pragmatic divergence</li>
+</ul>
+
+<h3 class="subsection-title">3.1 Hype (Genuine Praise) — <strong>Fully Parallel</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"this is wild", "actually insane"</td>
+<td>"这也太炸了" ("this is exploding"), "牛逼" ("niúbī," awesome), "破防了" ("defenses breached," moved/stunned)</td>
+<td>✅ Fully parallel — directly translatable. Chinese readers need no annotation</td>
+</tr>
+<tr>
+<td>"we're so back"</td>
+<td>"我们回来了" ("we're back"), "这下稳了" ("now it's stable")</td>
+<td>✅ Directly translatable. Chinese internet has isomorphic expressions</td>
+</tr>
+<tr>
+<td>"10x engineer", "10x better"</td>
+<td>"降维打击" ("dimensional reduction strike"), "碾压" ("roll over / crush")</td>
+<td>✅ Directly translatable. Note: "10x engineer" is neutral-to-positive in the US, whereas Chinese "降维打击" carries a slight ironic edge — <strong>preserve original context</strong></td>
+</tr>
+<tr>
+<td>"best in class", "SOTA"</td>
+<td>"SOTA", "最强" ("strongest"), "遥遥领先" ("yaoyáolǐngxiān, far ahead")</td>
+<td>✅ Directly translatable. However, "遥遥领先" carries official-discourse color in China and may be used ironically</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.2 Sarcasm / 反话 — <strong>Literal Correspondence but Pragmatic Divergence</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"wow, groundbreaking" (sarcastic)</td>
+<td>"哇，厉害了" ("wow, amazing"), "真是开天辟地" ("truly heaven-and-earth-splitting")</td>
+<td>⚠️ <strong>Annotation required: sarcastic = 反话 (irony)</strong>. "哇，厉害了" can be a sincere compliment in Chinese; English sarcasm should be rendered in Chinese as "哇，真是'厉害'呢" (with scare quotes)</td>
+</tr>
+<tr>
+<td>"thanks, I hate it"</td>
+<td>"谢谢，我讨厌" ("thanks, I hate it"), "感恩" ("gǎn'ēn, gratitude")</td>
+<td>✅ Directly translatable, but "感恩" carries an undertone of "being mocked by fate" in the Chinese internet [1]</td>
+</tr>
+<tr>
+<td>"wow, color me surprised"</td>
+<td>"哇哦，真是没想到呢" ("wow, really didn't expect that")</td>
+<td>⚠️ <strong>Annotation required</strong>: the trailing "呢" is a sarcasm marker</td>
+</tr>
+<tr>
+<td>"10/10 would recommend" + "would NOT"</td>
+<td>"五星好评" ("5-star review") + "下次还来" ("coming back next time," used ironically)</td>
+<td>⚠️ <strong>Annotation required</strong>: "五星好评" is sincere-positive in Chinese; ironic use requires "五星差评" ("5-star negative review") or "五星'好评'" with scare quotes</td>
+</tr>
+<tr>
+<td>"thanks Obama"</td>
+<td>"都怪 xxx" ("it's all xxx's fault")</td>
+<td>✅ Parallel, but <strong>meme origins differ</strong>. English "thanks Obama" originates from Obama; Chinese "都怪 xxx" has Mandarin, Sichuanese, and Cantonese variants [25]</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.3 Dunk / 阴阳怪气 — <strong>Core Divergence Zone</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"skill issue"</td>
+<td>"你行你上啊" ("if you're so good, you do it"), "菜就多练" ("noob, practice more")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"claude could never" (dunk on Claude)</td>
+<td>"Claude 这就拉了" ("Claude is cooked already"), "Claude 不行" ("Claude is no good")</td>
+<td>✅ Parallel, but <strong>preserve model-specific references</strong></td>
+</tr>
+<tr>
+<td>"ratio + L + boomer"</td>
+<td>"你开心就好" ("as long as you're happy"), "懂的都懂" ("those who know, know"), "笑了" ("lol")</td>
+<td>⚠️ <strong>Annotation required</strong>: English "ratio" means likes > replies (a win); Chinese "懂的都懂" is used inversely — to signal sarcasm</td>
+</tr>
+<tr>
+<td>"cope"</td>
+<td>"嘴硬" ("hard-mouth"), "破防" ("defenses breached"), "急了急了" ("getting worked up, getting worked up")</td>
+<td>✅ Directly translatable. "急了急了" has become a generic dunk word in Chinese</td>
+</tr>
+<tr>
+<td>"L take" (loss take)</td>
+<td>"这观点不行" ("this take is bad"), "输麻了" ("lost so hard I'm numb")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"mid"</td>
+<td>"就这?" ("that's it?"), "一般般" ("meh"), "很行" ("so good" — used ironically)</td>
+<td>✅ Parallel. "就这" is a representative Bilibili 抽象话 phrase [10][11]</td>
+</tr>
+<tr>
+<td>"based" (positive: willing to speak truth)</td>
+<td>"敢说" ("dare to say"), "勇敢" ("brave"), "真性情" ("true to feelings")</td>
+<td>⚠️ <strong>Annotation required</strong>: English "based" has <strong>re-acquired positive meaning</strong> in the 2024-2026 English-X slang revival; no Chinese equivalent exists; do not literally translate as "基于" ("based on")</td>
+</tr>
+<tr>
+<td>"cringe"</td>
+<td>"尴尬" ("awkward"), "社死" ("social death" — publicly humiliated), "太尬了" ("so cringe")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"down bad"</td>
+<td>"舔狗" ("licker-dog"), "跪舔" ("kneeling-lick")</td>
+<td>⚠️ <strong>Annotation required</strong>: Chinese "舔狗" functions as both noun and verb, and has become the standard translation for AI sycophancy via 36kr's "ChatGPT 舔狗事件" [8]</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.4 Self-deprecation / 自嘲 — <strong>Highly Parallel</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"I'm just a vibe coder"</td>
+<td>"我就是个氛围码农" ("I'm just a vibe coder"), "我就是个调参侠" ("I'm just a hyperparameter-tuning knight")</td>
+<td>✅ Parallel. InfoQ already has dedicated Chinese coverage of "vibe coder" [22]</td>
+</tr>
+<tr>
+<td>"trust me bro"</td>
+<td>"信我兄弟" ("trust me, bro"), "你就说信不信吧" ("just say whether you believe it or not")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"no cap" (no lie)</td>
+<td>"不开玩笑" ("not joking"), "真不骗你" ("really not lying to you")</td>
+<td>⚠️ <strong>Annotation required</strong>: English "cap" = lie; "no cap" = no lie. Chinese "开/不开玩笑" ("joking / not joking") is parallel but from a completely different etymological root</td>
+</tr>
+<tr>
+<td>"fr fr" / "on god"</td>
+<td>"真的真的" ("really really"), "我发誓" ("I swear")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"I'm doing my part"</td>
+<td>"我尽力了" ("I've done my best"), "我已经在做了" ("I'm already on it")</td>
+<td>✅ Parallel</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.5 Cope / 嘴硬 — <strong>Cultural Context Needs Explanation</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"this is fine" (meme dog in fire)</td>
+<td>"没事，问题不大" ("no problem, it's not a big deal"), "一切都好" ("everything's fine")</td>
+<td>⚠️ Meme origins differ — <strong>preserving the origin annotation is preferable</strong>. English: K.C. Green's "This Is Fine" comic. Chinese: "问题不大" is a programmer's verbal tic</td>
+</tr>
+<tr>
+<td>"we'll get there" (founder cope)</td>
+<td>"我们在路上" ("we're on the way"), "未来可期" ("the future is worth looking forward to")</td>
+<td>⚠️ "未来可期" carries official-discourse color in China and is used ironically when overused. <strong>Pragmatic coloring should be noted</strong></td>
+</tr>
+<tr>
+<td>"interesting direction" (analyst cope)</td>
+<td>"值得观察" ("worth watching"), "拭目以待" ("wait and see")</td>
+<td>✅ Parallel, but both are "no-clear-position" hedging</td>
+</tr>
+<tr>
+<td>"AGI is near" (year after year)</td>
+<td>"奇点临近" ("the singularity is near"), "AGI 就在明年" ("AGI is next year")</td>
+<td>⚠️ The self-deprecating meme is isomorphic in China — direct translation suffices</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.6 FUD / 唱衰 — <strong>Chinese Context Needs Explanation</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"dead on arrival"</td>
+<td>"一出生就死" ("dead at birth"), "胎死腹中" ("died in the womb")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"this is the next Quibi"</td>
+<td>"又一个 xxx" ("yet another xxx"), "下一个锤子手机" ("the next Hammer-phone")</td>
+<td>⚠️ <strong>The Chinese "下一个 xxx" list</strong> is much longer than the English one (LeTV, ofo, Luckin, Evergrande, TikTok-refugee Douyin, etc.). <strong>List a few as cultural annotation</strong></td>
+</tr>
+<tr>
+<td>"the bubble is bursting"</td>
+<td>"泡沫要破了" ("the bubble's about to pop"), "要凉" ("about to cool"), "见顶了" ("has peaked")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"vaporware"</td>
+<td>"PPT 产品" ("PPT product"), "发布会产品" ("launch-event product")</td>
+<td>✅ Directly translatable. "PPT 产品" was a high-frequency Chinese pejorative from 2018-2022</td>
+</tr>
+<tr>
+<td>"this will be the next Theranos"</td>
+<td>"又一个 xxx 骗局" ("yet another xxx scam")</td>
+<td>⚠️ <strong>Theranos has low recognition in China</strong>; needs annotation: "the American blood-testing fraud company"</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.7 Distillation Accusation / 蒸馏指控 — <strong>High-Frequency in Chinese AI Discourse</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"they trained on outputs of GPT-4"</td>
+<td>"用 GPT-4 蒸馏" ("distilled from GPT-4"), "套壳 GPT" ("shell-wrapping GPT"), "贴牌" ("rebadging")</td>
+<td>✅ Parallel. Chinese "套壳" is one of the core pejorative accusations in the Chinese AI world from 2024-2026 [6][18][19]</td>
+</tr>
+<tr>
+<td>"it's just a fine-tune of X"</td>
+<td>"就是微调" ("just a fine-tune"), "换皮" ("skin-swap")</td>
+<td>✅ Parallel. "换皮" is a classic Chinese gaming-industry pejorative</td>
+</tr>
+<tr>
+<td>"suspiciously similar benchmark results"</td>
+<td>"跑分跑得太像" ("benchmark scores too similar"), "刷榜嫌疑" ("leaderboard-gaming suspicion")</td>
+<td>✅ Parallel. "刷榜" is uniquely Chinese (originated in phone-review circles, inherited by the AI world)</td>
+</tr>
+<tr>
+<td>"Rakuten's 'Japanese LLM' is just DeepSeek"</td>
+<td>"日本 LLM 套壳 DeepSeek 被抓包" ("Japanese LLM caught wrapping DeepSeek"), "删 MIT 协议" ("stripped the MIT license")</td>
+<td>⚠️ The Chinese internet is <strong>especially sensitive</strong> to this kind of incident because it touches the "domestic vs foreign" national-sentiment layer [6][18]</td>
+</tr>
+<tr>
+<td>"they 'open-sourced' but no training data"</td>
+<td>"假开源" ("fake open-source"), "开源节流" ("open-source, cut costs"), "只开源权重" ("only open-sourced the weights")</td>
+<td>⚠️ <strong>Annotation required</strong>: open-weight ≠ open-source; the Chinese AI world has heated debates on this [20]</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.8 AI Slop / Content-Garbage Accusation — <strong>Both Sides Complain</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"this is AI slop"</td>
+<td>"AI 整的" ("AI-made"), "AI 味儿" ("AI taste"), "AI 味儿太冲了" ("the AI flavor is too strong")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"looks like LinkedIn post"</td>
+<td>"朋友圈体" ("WeChat-Moments style"), "小红书体" ("Xiaohongshu style"), "知乎体" ("Zhihu style")</td>
+<td>⚠️ <strong>Annotation required</strong>: English "LinkedIn" refers to corporate-public-relations style; the Chinese equivalent spans <strong>multiple platform-specific styles</strong> — must be identified</td>
+</tr>
+<tr>
+<td>"ChatGPT wrote this"</td>
+<td>"这是 AI 写的吧" ("this was written by AI, right?"), "机翻味" ("machine-translation taste")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>"AI-generated garbage"</td>
+<td>"AI 垃圾" ("AI garbage"), "AI 味太重" ("AI flavor too strong")</td>
+<td>✅ Parallel</td>
+</tr>
+<tr>
+<td>Critiques of "Hailuo" / "Vidu" / "Sora" video quality</td>
+<td>"Sora 这就拉了" ("Sora is cooked"), "国产 AI 视频就这?" ("domestic AI video is just this?"), "还是不行" ("still no good")</td>
+<td>✅ Parallel. Note: <strong>keep model names in English</strong> so Chinese readers can identify the referent</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">3.9 Absurdist / 抽象整活 — <strong>Both Sides Love It</strong></h3>
+
+<table>
+<thead><tr>
+<th>Col 1 (English X)</th>
+<th>Col 2 (Chinese parallel)</th>
+<th>Col 3 (Similarity / Difference)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"shrimp jesus"</td>
+<td>"虾耶稣" ("shrimp Jesus"), "AI 整活" ("AI absurdist stunt")</td>
+<td>✅ Borrow directly. "虾耶稣" has been widely adopted in Chinese</td>
+</tr>
+<tr>
+<td>"you wouldn't download a car"</td>
+<td>"你不会下载一辆车" ("you wouldn't download a car")</td>
+<td>✅ Parallel (piracy-movie meme; same origin in both languages)</td>
+</tr>
+<tr>
+<td>"gigachad"</td>
+<td>"巨佬" ("giant-BigShot"), "大佬" ("BigShot"), "强者" ("strong one")</td>
+<td>⚠️ Chinese "巨佬" is positive, but "gigachad" on English X often carries mockery/irony — <strong>preserve pragmatic coloring</strong></td>
+</tr>
+<tr>
+<td>"Sora 2 fake videos flooding X"</td>
+<td>"Sora 2 一夜整活" ("Sora 2 overnight stunt-fest"), "AI 视频恐怖" ("AI video is terrifying")</td>
+<td>⚠️ "整活" is one of the core words of Bilibili 抽象话 [10]</td>
+</tr>
+<tr>
+<td>"LinkedIn lunatics"</td>
+<td>"朋友圈凡尔赛" ("WeChat-Moments Versailles"), "知乎编故事" ("Zhihu story-fabrication")</td>
+<td>⚠️ <strong>Annotation required</strong>: English mocks LinkedIn's performative inspirational posts; Chinese mocks the <strong>platform-specific humble-brag / story-fabrication styles</strong></td>
+</tr>
+<tr>
+<td>"请勿模仿" (Chinese meme used on AI memes)</td>
+<td>"请勿模仿" ("please do not imitate")</td>
+<td>✅ Chinese meme reverse-exported onto X — this is <strong>reverse pragmatic transfer</strong> [25]</td>
+</tr>
+</tbody></table>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">4. Macro Patterns: The Hidden Structure Behind the Three-Column Table</h2>
+
+<p>Clustering the 27 rows of the table above surfaces <strong>5 macro patterns</strong>:
+</p>
+
+<h3 class="subsection-title">4.1 Three "Translation-Friction Levels"</h3>
+
+<table>
+<thead><tr>
+<th>Friction level</th>
+<th>Meaning</th>
+<th>Handling recommendation</th>
+<th>Examples</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>F0 — Parallel</strong></td>
+<td>Chinese and English are directly interchangeable; pragmatic coloring matches</td>
+<td>Translate directly, no annotation</td>
+<td>hype, dunk, FUD, self-deprecation, AI slop</td>
+</tr>
+<tr>
+<td><strong>F1 — Literal correspondence but pragmatic misalignment</strong></td>
+<td>A literal Chinese counterpart exists, but the same expression skews positive in one language and negative in the other</td>
+<td>Translate + 1-line pragmatic tag</td>
+<td>"sarcasm" vs "阴阳怪气", "thanks Obama" vs "都怪 xxx"</td>
+</tr>
+<tr>
+<td><strong>F2 — Literal correspondence but different semantic center of gravity</strong></td>
+<td>Same word means different things in the two languages</td>
+<td>Translate + short annotation (1-2 sentences)</td>
+<td>"based", "open-source", "mid", "Theranos"</td>
+</tr>
+<tr>
+<td><strong>F3 — Unique to Chinese / unique to English</strong></td>
+<td>Exists on one side, not the other</td>
+<td>Translate + long annotation (3-5 sentences + background)</td>
+<td>Chinese "套壳/蒸馏", English "shrimp jesus"</td>
+</tr>
+</tbody></table>
+
+<p><strong>Implication for prompt design:</strong> The LLM should <strong>auto-detect the friction level</strong>; emit no annotation for F0, full cultural context for F3.
+</p>
+
+<h3 class="subsection-title">4.2 Chinese "阴阳怪气" ≠ English Sarcasm</h3>
+
+<p>This is the most critical structural difference. Moegirl Wiki defines it explicitly:
+</p>
+
+<p>> The core of "阴阳怪气" is "suppression and denial: rather than speaking directly, the speaker circles around to scold, with meanings that usually have a surface layer and a deeper layer" [1]
+</p>
+
+<p>English sarcasm is usually <strong>direct irony</strong> ("great, just what I needed"), whereas Chinese 阴阳怪气 is often <strong>literal-positive / internal-negative</strong> ("天冷了记得多盖点土，别着凉了" — "it's cold out, remember to cover yourself with a little extra dirt, don't catch cold") [26].
+</p>
+
+<p><strong>Implication:</strong> A naive translation of "thanks, I hate it" as "谢谢，我讨厌" loses the sarcasm's "mock-self-deprecation" layer; and translating Chinese 阴阳怪气 "天冷了记得多盖点土" into English "remember to cover yourself with dirt when it's cold" leaves English readers entirely unable to detect the irony. <strong>Both translation directions lose the pragmatic layer</strong>.
+</p>
+
+<h3 class="subsection-title">4.3 "Abstract Culture" Is a Unified Absurdist Layer That Spans Pragmatics and Platforms</h3>
+
+<p>The Paper / Jiemian News note that "抽象文化" (abstract culture) originated on Douyu livestreaming and spread to Bilibili, Weibo, Tieba, and Douyin [10][11][13]. It is <strong>an umbrella term on the Chinese internet</strong> that covers:
+</p>
+
+<ul>
+<li>Rhyme + illogic + humor + self-deprecation + deconstruction</li>
+<li>Forms: character-splitting (e.g., "女子口巴" / "woman-mouth-eight" replacing "好吧" / "alright"), dialect (e.g., "gkd" / "gǎnkuài de" — "hurry up"), pinyin abbreviations (e.g., "yyds" / "永远的神" — "eternal god"), emoji (e.g., "¿" standing in for a question mark)</li>
+</ul>
+
+<strong>Relationship to the English-X world:</strong>
+<ul>
+<li>抽象文化 ≈ composite of shitpost + irony + absurdist humor</li>
+<li>抽象整活 ≈ "AI 抽象图" (e.g., Sora 2 fake videos, shrimp Jesus)</li>
+<li>抽象话 ≈ copypasta + meme-speak</li>
+</ul>
+
+<p><strong>Implication:</strong> Chinese readers seeing "shrimp jesus" will immediately categorize it as "抽象整活" without needing an explanation of what a meme is.
+</p>
+
+<h3 class="subsection-title">4.4 The "Domestic vs Foreign" National-Sentiment Layer Is Unique to Chinese</h3>
+
+<p>When English X discusses LLMs, the framing is "which model is stronger" (Anthropic vs OpenAI vs Google vs Meta) — rarely wrapped in a "domestic vs foreign" national frame.
+</p>
+
+<p>Chinese AI discourse, by contrast, <strong>strongly embeds</strong> this frame:
+</p>
+<ul>
+<li>DeepSeek going viral = "中国 AI 弯道超车" ("Chinese AI overtakes via a shortcut curve")</li>
+<li>Rakuten (Japan) shell-wrapping DeepSeek = "中国一开源，X 国就自研" ("once China open-sources, country X suddenly builds its own") — now a fixed meme sentence [6][18]</li>
+<li>OpenAI going open-source = "摸着 DeepSeek 过河" ("crossing the river by feeling for DeepSeek stones") — a Chinese-internet-specific metaphor [19]</li>
+</ul>
+
+<p><strong>Implication:</strong> When Chinese LLM vendors read x-monitoring reports, the <strong>national-sentiment layer is what they care about most</strong>. If an English post is just technical grumbling ("vibe coding is so useful"), Chinese vendors may not care when it's translated; but if it's "OpenAI finally admits DeepSeek is a competitor" — that's <strong>strategic intelligence</strong>.
+</p>
+
+<h3 class="subsection-title">4.5 The Chinese AI World Already Has a Complete "Reverse-Translation Dictionary"</h3>
+
+<p>The Chinese internet has <strong>standardized reverse translations</strong> for common English-X LLM-community slang:
+</p>
+
+<table>
+<thead><tr>
+<th>English slang</th>
+<th>Fixed Chinese translation</th>
+<th>Source</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>vibe coding</td>
+<td>氛围编程 / 调参侠 ("hyperparameter-tuning knight")</td>
+<td>InfoQ [22]</td>
+</tr>
+<tr>
+<td>sycophancy</td>
+<td>舔狗 ("licker-dog")</td>
+<td>36kr [8]</td>
+</tr>
+<tr>
+<td>distillation</td>
+<td>蒸馏 ("distillation")</td>
+<td>Zhihu / CSDN [18][19][20]</td>
+</tr>
+<tr>
+<td>wrapper / fine-tune</td>
+<td>套壳 ("shell-wrap") / 换皮 ("skin-swap")</td>
+<td>Zhihu / CSDN [18][19]</td>
+</tr>
+<tr>
+<td>open-weight vs open-source</td>
+<td>开放权重 ("open weights") vs 真开源 ("true open-source")</td>
+<td>OSCHINA [20]</td>
+</tr>
+<tr>
+<td>open-source-but-no-data</td>
+<td>假开源 ("fake open-source") / 只开源权重 ("only open-sourced the weights")</td>
+<td>OFweek [19]</td>
+</tr>
+<tr>
+<td>Toxic roast AI</td>
+<td>毒舌 AI ("venomous-tongue AI")</td>
+<td>BAAI / Zhiyuan [9]</td>
+</tr>
+<tr>
+<td>"based"</td>
+<td>敢说真话 ("dare to speak truth") / literally "based"</td>
+<td>Wikipedia [23]</td>
+</tr>
+</tbody></table>
+
+<p><strong>Implication:</strong> These terms are already <strong>proper nouns</strong> in the Chinese AI world — x-monitoring need not re-translate or re-annotate them.
+</p>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">5. Two-Stage Reasoning Prompt Templates</h2>
+
+<h3 class="subsection-title">5.1 Per-Post Translation Prompt</h3>
+
+<p><strong>Use case:</strong> For each X post, add a <code>discourse_annotation</code> field alongside the <code>text_zh_cn</code> field.
+</p>
+
+<p><code>`</code>yaml
+# system_prompt: per_post_x_to_cn_pragmatics_v1
+</p>
+
+<p>role: |
+  You are a "bilingual pragmatic analyst" specializing in the English-X (Twitter) AI/LLM-community discourse → Chinese AI-community discourse direction.
+  Your target audience is LLM-vendor product managers and market-intelligence personnel in mainland China.
+</p>
+
+<p>  You understand English-X expressions such as meme / slang / irony / dunk / FUD / 抽象 / 翻车,
+  and the parallel Chinese expressions such as 阴阳怪气 / 抽象话 / 套壳 / 蒸馏 / 舔狗 / 翻车 / 整活.
+</p>
+
+<p>task: |
+  Given one English X post, produce the following 4-segment output in order:
+</p>
+
+<ol>
+<li><strong>literal_zh (literal translation)</strong>: render in Simplified Chinese, preserving original slang; do not forcibly smooth it. Allow code-switching (e.g., "Sora 2", "DeepSeek-V4"). If the original contains @mentions, URLs, or emoji, preserve them verbatim.</li>
+</ol>
+
+<ol>
+<li><strong>discourse_role</strong>: choose exactly one of the following 9:</li>
+<li>straight_hype (genuine praise)</li>
+<li>sarcasm (English-style irony)</li>
+<li>dunk_yingyang (Chinese-style 阴阳怪气 / dunk)</li>
+<li>self_deprecation (self-deprecation)</li>
+<li>cope (嘴硬 / self-comfort)</li>
+<li>fud (唱衰)</li>
+<li>distillation_accusation (distillation / 套壳 accusation)</li>
+<li>ai_slop_critique (AI-content-garbage accusation)</li>
+<li>absurdist_meme (抽象整活)</li>
+<li>other (explain)</li>
+</ol>
+
+<ol>
+<li><strong>cn_equivalent (Chinese parallel expression)</strong>: provide a "Chinese-internet equivalent version" of this post — not a literal translation, but "how a Chinese netizen on Weibo / Zhihu / Bilibili would say the same thing." If no equivalent exists, fill in N/A.</li>
+</ol>
+
+<ol>
+<li><strong>annotation (when necessary)</strong>: emit only when the post contains F2- or F3-level friction (per the "friction-level table" below); 1-3 sentences of cultural background annotation. Otherwise leave as an empty string.</li>
+</ol>
+
+<p>constraints:
+</p>
+<ul>
+<li>Do not pursue "natural fluency"; Chinese readers need "understand the meme + be able to quote it"</li>
+<li>Keep model names / product names / personal names / handles in English</li>
+<li>Preserve numbers, URLs, and emoji verbatim</li>
+<li>Output must be valid YAML; none of the 4 keys may be missing</li>
+<li>Per-post total output must not exceed 280 characters (matching tweet length)</li>
+</ul>
+
+<p># Friction-level table (internal knowledge, do not echo)
+friction_table:
+  F0_parallel: translate directly, no annotation
+  F1_pragmatic_shift: literal correspondence but pragmatic misalignment → 1-line annotation
+  F2_semantic_shift: literal correspondence but different semantic center → 1-2-sentence annotation
+  F3_culture_specific: exists on one side only → 3-5-sentence annotation + background
+</p>
+<code>`</code>
+
+<strong>Example input:</strong>
+<code>`</code>
+<p>Original: "wow claude 4.5 just answered my 2000-line codebase question in 3 seconds. groundbreaking. really earth-shattering work from the labs."
+</p>
+<code>`</code>
+
+<strong>Expected output:</strong>
+<p><code>`</code>yaml
+literal_zh: "哇 claude 4.5 刚刚 3 秒回答了我 2000 行的 codebase 问题。真是开天辟地。实验室的工作真是惊天地泣鬼神。"
+discourse_role: sarcasm
+cn_equivalent: "哇 claude 4.5 这么牛，3 秒搞定 2000 行，我哭死，这就是 AI 的未来吗（阴阳怪气版）"
+annotation: ""
+</p>
+<code>`</code>
+
+<h3 class="subsection-title">5.2 Aggregate Interpretation Prompt</h3>
+
+<p><strong>Use case:</strong> x-monitoring's "signal-categorization" cards (Q1 release / Q2 community_question / Q3 criticism / Q4 commenter_capture / Q5 other / Q6 praise) daily rollup + topical word cloud + Top-3 mention summary [24].
+</p>
+
+<p><code>`</code>yaml
+# system_prompt: aggregate_x_intelligence_to_cn_pm_v1
+</p>
+
+<p>role: |
+  You are the "Chinese-LLM-vendor intelligence translator" for the x-monitoring system.
+  Your input is the past-24-hour aggregate of English X posts about a given model
+  (e.g., DeepSeek-V3.1), each already tagged with a discourse_role label.
+</p>
+
+<p>  Your output is a <strong>daily intelligence brief</strong> that a mainland-Chinese LLM-vendor product manager would actually want to read.
+</p>
+
+<p>input_format: |
+  model_name: {model_name}
+  time_window: {time_window}
+  total_posts: {total_posts}
+  discourse_role distribution:
+</p>
+
+<ul>
+<li>straight_hype: {n1} posts ({p1}%)</li>
+<li>sarcasm: {n2} posts ({p2}%)</li>
+<li>dunk_yingyang: {n3} posts ({p3}%)</li>
+<li>self_deprecation: {n4} posts ({p4}%)</li>
+<li>cope: {n5} posts ({p5}%)</li>
+<li>fud: {n6} posts ({p6}%)</li>
+<li>distillation_accusation: {n7} posts ({p7}%)</li>
+<li>ai_slop_critique: {n8} posts ({p8}%)</li>
+<li>absurdist_meme: {n9} posts ({p9}%)</li>
+<li>other: {n10} posts ({p10}%)</li>
+</ol>
+<p>  Top-10 post summaries (already carrying discourse_role tags):
+    {top10_summary}
+</p>
+
+<p>output_format: |
+  Output 4 paragraphs in Simplified Chinese (200-400 chars / paragraph):
+</p>
+
+  <strong>Paragraph 1: Today's signal in one sentence</strong>
+<p>  One-line summary: {model_name}'s overall X volume today is hype / neutral / negative,
+  and the main thread is xxx.
+</p>
+
+  <strong>Paragraph 2: discourse-distribution interpretation</strong>
+<p>  Translate the 9 discourse_role percentages into a "Chinese-vendor perspective" —
+  lots of hype = real fandom / or a bubble? lots of FUD = real problems / or cope?
+  lots of distillation_accusation = wrapper accusations / or gaps in the open-source strategy?
+  lots of absurdist_meme = trending on hot search / or being made fun of?
+  (Use the "Chinese AI world" linguistic register Chinese readers are familiar with)
+</p>
+
+  <strong>Paragraph 3: 3 actionable insights</strong>
+<p>  Provide 3 concrete actions the vendor should take (1-2 sentences each).
+  Tag each one with the source post it draws from (cite at most 3).
+</p>
+
+  <strong>Paragraph 4: risk flags</strong>
+<p>  List 1-3 negative signals that could be amplified by Chinese public opinion, with suggested response talking points.
+</p>
+
+<p>constraints:
+</p>
+<ul>
+<li>Must be in Simplified Chinese; common Chinese-AI-circle terms like 遥遥领先 / 卷 / 弯道超车 / 翻车 / 抽象 are allowed</li>
+<li>Do not pile up jargon; PM readers should be able to take this brief straight into a meeting</li>
+<li>When citing source posts, provide the English original + Chinese translation + discourse_role tag</li>
+<li>Total output 800-1500 characters (sum of all 4 paragraphs)</li>
+</ul>
+<code>`</code>
+
+<p><strong>Why an aggregate layer is needed:</strong> Per-post translation answers "can I understand this"; the aggregate layer answers "what should I think." Chinese-vendor readers <strong>do not read every post</strong>; they want "what happened in the past 24 hours → what I should do next."
+</p>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">6. When Annotation Is Required vs. When It Isn't: Decision Checklist</h2>
+
+<h3 class="subsection-title">6.1 No Annotation Needed (F0)</h3>
+
+<p>Direct translation suffices, with no annotation:
+</p>
+<ul>
+<li>Any product name, personal name, handle, number, URL, or emoji</li>
+<li>Hype (genuine praise): "this is wild", "SOTA", "best in class"</li>
+<li>FUD (唱衰): "dead on arrival", "vaporware"</li>
+<li>AI slop (AI-content-garbage accusation): "this is AI slop"</li>
+<li>翻车 / 套壳 / 蒸馏 / 舔狗 (the Chinese AI world already has fixed translations)</li>
+</ul>
+
+<h3 class="subsection-title">6.2 1-Line Annotation Needed (F1)</h3>
+
+<ul>
+<li>Short English sarcasm phrases: "wow, groundbreaking" → append "(反话 / irony)" after translation</li>
+<li>English "based" → append "(2024-2026 X slang that has re-acquired positive meaning)"</li>
+<li>English "this is fine" (meme dog) → append "(American comic meme, original meaning: 'pretending to stay calm')"</li>
+<li>English "no cap" → append "(no cap = no lie; Chinese '不开玩笑' is a parallel expression from a different etymology)"</li>
+</ul>
+
+<h3 class="subsection-title">6.3 1-3-Sentence Annotation Needed (F2)</h3>
+
+<ul>
+<li>"Theranos" → add "American blood-testing fraud company, the standard English-world metaphor for tech scams"</li>
+<li>"open-weight" → add "open weights ≠ true open-source; the Chinese AI world has heated debates on this"</li>
+<li>"Quibi" → add "2020 short-form streaming platform, seen as a Silicon Valley failure case"</li>
+<li>"mid" → add "high-frequency English-X adjective meaning 'mediocre'; Chinese counterpart is '就这?'"</li>
+</ul>
+
+<h3 class="subsection-title">6.4 3-5-Sentence Background Annotation Needed (F3)</h3>
+
+<ul>
+<li>"shrimp jesus" → add background (shrimp + Jesus AI mashup images; a 2024 meme from Meta users protesting AI-content flooding)</li>
+<li>"Rakuten wraps DeepSeek" → add background (March 2026: Rakuten's Japanese LLM was caught using DeepSeek but stripping the license [6])</li>
+<li>"open-source but no training data" → add background (Meta Llama / DeepSeek both disputed for this; Chinese term: 假开源)</li>
+<li>"AGI is near" (year after year) → add background (a self-deprecating meme; from 2014-2026 someone has said "AGI next year" every year)</li>
+<li>Chinese-unique reverse memes (e.g., "请勿模仿" appearing on X as a meme) → add reverse-pragmatic-transfer note</li>
+</ul>
+
+<h3 class="subsection-title">6.5 Decision Flowchart (Embedded in Prompt)</h3>
+
+<code>`</code>
+<p>IF discourse_role IN [straight_hype, fud, ai_slop_critique, distillation_accusation]:
+    # These discourse roles already have full Chinese-world equivalents
+    annotation = ""
+</p>
+
+<p>ELIF original_text contains slang with a fixed Chinese-AI-circle translation:
+    # e.g., vibe coding / sycophancy / wrapper / cope / cringe / ratio / based
+    annotation = ""  # use the fixed translation directly
+</p>
+
+<p>ELIF original_text contains English-world slang with no Chinese equivalent:
+    # e.g., no cap, mid, based (positive), ratio
+    annotation = "1-line pragmatic-coloring tag"
+</p>
+
+<p>ELIF original_text references a specific English-world meme / company / event:
+    # e.g., Theranos, Quibi, this-is-fine dog, shrimp jesus
+    annotation = "1-3-sentence background note"
+</p>
+
+<p>ELIF discourse_role == "absurdist_meme" AND involves domestic / Chinese AI:
+    annotation = "Chinese audience is especially sensitive to 'once China open-sources, country X builds its own'-style speech; risk of national-sentiment amplification"
+</p>
+
+<p>ELSE:
+    annotation = ""
+</p>
+<code>`</code>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">7. Limitations and Future Work</h2>
+
+<h3 class="subsection-title">7.1 Limitations</h3>
+
+<ol>
+<li><strong>This report has not pulled real posts from the x-monitoring database for validation</strong> — all analysis is based on secondary syntheses and known LLM-community slang inventories.</li>
+<li><strong>抽象话 / abstract culture / memes evolve extremely quickly</strong> — this report is based on Chinese-language material as of June 2026 and may need to be supplemented in 3-6 months.</li>
+<li><strong>This report uses only Chinese-language sources</strong>, in keeping with the user's original constraint; the downside is that it misses the English community's self-reflection on its own slang (e.g., Know Your Meme, r/OutOfTheLoop). <strong>Recommend cross-validating with English meta-sources in the next round</strong>.</li>
+<li><strong>The 9-class discourse_role taxonomy is a simplification</strong> — real X discourse is more complex (e.g., a mixed type combining 阴阳怪气 + hype = "praising on the surface while scolding inside").</li>
+<li><strong>This report did not solicit direct feedback from Chinese LLM-vendor readers</strong> (product / marketing / PR staff at DeepSeek / MiniMax / Zhipu / Moonshot / Stepfun) — <strong>they are the prompt's ultimate users</strong>.</li>
+</ol>
+
+<h3 class="subsection-title">7.2 Future Work</h3>
+
+<ol>
+<li><strong>A/B test</strong>: take 50 X posts and have them processed through both the v1.7 translation (purely literal) and a v1.8 prompt (two-stage translation + explanation); ask 3-5 Chinese AI-vendor PMs to rate "readability + citation value."</li>
+<li><strong>Build a mini-glossary</strong>: package the "fixed translation dictionary" from §5.1 into a JSON file for easier prompt maintenance and upgrades.</li>
+<li><strong>Auto-tag discourse_role</strong>: use the same v1.7 LLM (Haiku) to run batch labeling and validate inter-annotator agreement across the 9 categories (target Cohen's Kappa ≥0.7).</li>
+<li><strong>Pull real X data for a case study</strong>: pick one concrete event (e.g., Sora 2 launch week, DeepSeek-V4 launch week, Gemini 3 flop week) for end-to-end validation.</li>
+</ol>
+
+<p>---
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">8. Conclusion</h2>
+
+<p>The 9 discourse_role categories used on English X when discussing LLMs (hype / sarcasm / dunk / self-deprecation / cope / FUD / distillation accusation / AI slop / absurdist) each map to a <strong>structurally parallel but pragmatically non-identical</strong> expression system on the Chinese internet.
+</p>
+
+<strong>Core differences:</strong>
+<ul>
+<li>Chinese "阴阳怪气" ≠ English sarcasm</li>
+<li>Chinese "抽象文化" ≠ English shitpost + irony (it is a composite)</li>
+<li>Chinese "套壳 / 蒸馏 / 翻车" is a domestic-pragmatics layer absent from English X</li>
+<li>Chinese readers expect "literal translation + cultural annotation when necessary" (Little Red Book has already validated this pattern [14])</li>
+</ul>
+
+<strong>The most critical upgrade for x-monitoring:</strong>
+<ul>
+<li>Upgrade v1.7's single-layer Haiku translation to a <strong>two-stage prompt</strong>: literal translation + discourse-role annotation + Chinese parallel expression</li>
+<li>Establish <strong>friction-level judgment</strong> (F0 / F1 / F2 / F3); emit annotations only as needed, to avoid "over-explanation"</li>
+<li>Use a separate prompt at the aggregate layer, translating per-post discourse_role distributions into a "Chinese-AI-circle PM perspective" intelligence brief</li>
+</ul>
+
+<p><strong>If you do only one thing:</strong> add a forced output field for the 9-way discourse_role choice to the v1.7 translation prompt. Even if the aggregate layer does nothing else, readers will immediately be able to tell at the per-post level whether a tweet is hyping or dunking.
+</p>
+
+<p>---
+</p>
+
+
+</div>
+
+            <div class="bibliography">
+                <div class="section-title">Bibliography</div>
+                <div class="bibliography-content">
+
+[1] Moegirl Wiki. "Yīnyángguàiqì (阴阳怪气)." https://mzh.moegirl.org.cn/%E9%98%B4%E9%98%B3%E6%80%AA%E6%B0%94 (accessed 2026-06-26)
+
+[2] woshipm. "Click in and feel your blood pressure rise: why is the end of every internet buzzword always 阴阳怪气?" https://www.woshipm.com/it/5433715.html
+
+[3] Digitaling. "The words that aren't words: why is the infuriating '阴阳语' (yīnyángyǔ, yin-yang speech) so popular?" https://www.digitaling.com/articles/402773.html
+
+[4] BBC Learning English (Chinese edition). "Distinguishing sarcastic from ironic." https://www.bbc.co.uk/learningenglish/chinese/features/q-and-a/ep-230524
+
+[5] Zhihu. "'Yīnyángguàiqì' quotation collection." https://zhuanlan.zhihu.com/p/632089442
+
+[6] Yangtse Evening Post. "Japan's 'strongest open-source LLM' 翻车 (fānchē, car-flips / PR disaster): wrapped DeepSeek but stripped the license and got caught." https://www.yzwb.net/news/txs/202603/t20260318_332895.html
+
+[7] Qinggua Media. "The most comprehensive real-world tests + teardowns of Claude / Hunyuan / QwQ / DeepSeek." https://www.opp2.com/370142.html
+
+[8] 36kr. "ChatGPT suddenly becomes a 'cyberspace 舔狗 (tiǎngǒu, licker-dog / bootlicker)': millions of netizens erupt." https://36kr.com/p/3270393797288067
+
+[9] BAAI Community (Zhiyuan). "Viral 毒舌 (dúshé, venomous-tongue) AI earns 28,000 CNY per hour!" https://hub.baai.ac.cn/view/39162
+
+[10] The Paper (Pengpai). "What are the '搞抽象 (gǎo chōuxiàng, doing-absurd)' people actually posting?" https://www.thepaper.cn/newsDetail_forward_29429301
+
+[11] Zhihu. "Why is 抽象文化 everywhere on Bilibili now?" https://www.zhihu.com/question/391509804
+
+[12] Wuhan University journalism paper. "Discourse analysis and cultural reflection on internet '抽象话' (chōuxiàng huà, abstract speech)." https://journal.whu.edu.cn/uploadfiles/20220429n30n1.pdf
+
+[13] Jiemian News. "How did your life get so flooded with memes?" https://www.jiemian.com/article/2857142.html
+
+[14] 53AI. "Which LLM is powering Little Red Book's viral AI translation feature?" https://www.53ai.com/news/LargeLanguageModel/2025012113476.html
+
+[15] Southern Metropolis Daily. "Little Red Book launches translation feature! Could the AI-that-translates-anything come with content risks?" https://m.mp.oeeee.com/a/BAAFRD0000202501201046287.html
+
+[16] Yangtse Evening Post / Xinhua Daily. "Little Red Book officially launches one-click translation — hot slang like YYDS translates too!" https://news.ycwb.com/2025-01/19/content_53192865.htm
+
+[17] Lianhe Zaobao. "Tens of thousands of US users flood in; Little Red Book rolls out 'one-click translation' feature." https://www.zaobao.com.sg/news/china/story20250120-5761779
+
+[18] 53AI. "Some common misreadings of DeepSeek." https://www.53ai.com/news/neirongchuangzuo/2025020367420.html
+
+[19] OFweek. "OpenAI finally makes a move! Officially announces a new open-source model — this time '摸着 Deepseek 过河' (mōzhe DeepSeek guòhé, 'crossing the river by feeling DeepSeek's stones')." https://m.ofweek.com/ai/2025-04/ART-201700-8500-30660314.html
+
+[20] OSCHINA. "OpenAI announces it will open-source a reasoning model." https://www.oschina.net/news/342166/openai-open-model
+
+[21] InfoQ. "A high-school dropout walks into OpenAI: rejecting vibe coding." https://www.infoq.cn/article/IhkHVUd5Kiu7Kbt3V7dq
+
+[22] Cambridge Dictionary. "VIBE | translation to Mandarin Chinese." https://dictionary.cambridge.org/us/dictionary/english-chinese-simplified/vibe
+
+[23] Cambridge Dictionary. "PROMPT | translation to Mandarin Chinese." https://dictionary.cambridge.org/us/dictionary/english-chinese-simplified/prompt
+
+[24] Project memory: x-monitor v1.7 has added the Haiku translation layer. (fuchitalee project; see `project_x_monitoring_v17_2026-06-17.md` in MEMORY.md)
+
+[25] Zhihu. "'You swan he frog!' Chinglish goes viral abroad." https://zhuanlan.zhihu.com/p/715485514
+
+[26] Zhihu. "Why has 阴阳怪气 become the most contagious social-language epidemic of our time?" https://zhuanlan.zhihu.com/p/410354258
+
+[27] Zhihu. "The rise and spread of online subculture: Sun Xiaochuan and 抽象文化 as a case study." https://zhuanlan.zhihu.com/p/3699380790
+
+[28] Moegirl Wiki. "Chōuxiàng huà (抽象话)." https://zh.moegirl.org.cn/%E6%8A%BD%E8%B1%A1%E8%AF%9D
+
+[29] NetEase. "How much of AI-community slang is just pretentious posturing?" https://m.163.com/dy/article/KPPQTLVB051196HN.html
+
+[30] Zhihu. "What internet slang or memes from various countries are impossible to understand without explanation?" https://www.zhihu.com/question/63626049
+
+[31] TestDaily. "2018 American internet slang roundup — anyone who knows all of these must be American, right?" https://www.testdaily.cn/3017/
+
+[32] Mainland-China internet slang list. Chinese Wikipedia. https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E5%A4%A7%E9%99%86%E7%BD%91%E7%BB%9C%E7%94%A8%E8%AF%AD%E5%88%97%E8%A1%A8
+
+[33] Tencent News. "The '阴阳怪气 literature' sweeping the internet — what's the meme?" https://news.qq.com/rain/a/20210923A0F4X500
+
+[34] Huxiu. "After Twitter's auto-translation rollout, cross-language communication reveals cultural collisions and resonances." https://www.huxiu.com/article/4868504.html
+
+[35] Shanghai International Studies University. "Journal of Network Media and Global Communication 3(3): Chinese-translation foreword." https://omgc.shisu.edu.cn/d9/53/c13652a186707/page.htm
+
+---
+
+## Methodological Appendix
+
+### A. Search Matrix
+
+| Angle | Primary query | Source count covered |
+|------|----------|------------|
+| 阴阳怪气 / irony | "阴阳怪气 vs 反讽 vs sarcasm Chinese-English differences culture examples" | 5+ |
+| 抽象文化 / 抽象话 | "抽象话 meme culture Baidu Tieba Zhihu Bilibili Chinese internet" | 4+ |
+| Twitter X AI slang | "Twitter X AI circle slang meme translation Chinese meaning" | 3+ |
+| Chinese vs American cultural memes | "meme cultural differences China US internet cases Chinese-English metaphors" | 5+ |
+| LLM dunk/cope/hype | "GPT Claude Gemini netizen review meme Zhihu Weibo" | 4+ |
+| LLM wrapper / distillation / 翻车 | "large-model 翻车 yin-yang netizen roast case DeepSeek" | 4+ |
+| LLM translation prompt engineering | "prompt engineering translation culture annotation system prompt" | 4+ |
+| Little Red Book translation-annotation pattern | "Little Red Book tweet translation cross-culture examples Chinese-English differences" | 5+ |
+| vibe coding / a16z slang | "AI circle meme trash fire self-deprecation cap mid meaning" | 3+ |
+| OpenAI 舔狗 incident | "Sora Sora 2 ChatGPT vibe coding OpenAI yin-yang review" | 3+ |
+
+### B. Bias Control
+
+- <strong>Vendor write-ups vs independent reviews</strong>: filtered by requiring each claim to be backed by ≥2 sources (one vendor + one independent);
+- <strong>Time bias</strong>: core sources span 2020-2026; the latest 2025-2026 trends are tagged separately (e.g., Little Red Book AI translation, Sora 2);
+- <strong>Platform bias</strong>: cross-validated across multiple independent platforms — Zhihu, 36kr, woshipm, Pengpai, CSDN, BAAI, PConline, Yangtse Evening Post, Sina, NetEase, Jiemian News, Huxiu, CCTV / BBC Chinese, Wuhan University journalism paper, Moegirl Wiki, Chinese Wikipedia;
+- <strong>Language bias</strong>: fully honored the user's "Chinese-language sources only" constraint; no English sources cited.
+
+### C. Outputs
+
+- Markdown version of this report (above);
+- HTML version generated alongside in the same directory;
+- English sister translation delivered as `Report-en.md` (kept bilingual in sync with the rest of the x-monitoring project's research);
+- Report archived in `~/.claude/projects/-Users-allenwlee/memory/` for reference.
+
+### D. Quick-Start Checklist for the x-monitoring Maintainer
+
+1. <strong>Copy the per_post_x_to_cn_pragmatics_v1 prompt from §5.1</strong> into `x_monitor/prompts/per_post.yaml`
+2. <strong>Copy the aggregate_x_intelligence_to_cn_pm_v1 prompt from §5.2</strong> into `x_monitor/prompts/aggregate.yaml`
+3. <strong>Build the fixed-translation dictionary</strong>: persist the §4.5 table as `x_monitor/data/slang_zh_dict.json`
+4. <strong>Build the friction-level judge</strong>: implement the §6.5 flowchart as `x_monitor/discourse/friction_judge.py`
+5. <strong>Build the 9-way discourse_role classifier</strong>: use the same Haiku model from v1.7 to run batch labeling (validate Cohen's Kappa on a 100-post labeled set first)
+</div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
