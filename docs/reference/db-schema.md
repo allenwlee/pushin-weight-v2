@@ -3,10 +3,10 @@
 `x-monitoring/data/x_monitoring.db`
 (SQLite 3, ~36 MB on disk as of 2026-06-22, **4,191 rows in `posts`**)
 
-![x-monitor schema after migration batch 011-019](images/xmonitor-schema-post-batch.png)
+![x-monitor schema after migration batch 011-023](images/xmonitor-schema-post-batch.png)
 
-Source files: `x_monitor/migrations/00{1..9}_*.sql` + `x_monitor/migrations/01{0..9}_*.sql`
-Migration ledger: `_migrations` (**19 rows** — versions 1–19 applied).
+Source files: `x_monitor/migrations/00{1..9}_*.sql` + `x_monitor/migrations/01{0..9}_*.sql` + `x_monitor/migrations/02{0..3}_*.sql`
+Migration ledger: `_migrations` (**22 rows** — versions 1–20 + 22 + 23 applied; **021 intentionally reserved** for the HF products crawler that never landed).
 
 ```
 version  applied_at                 migration
@@ -30,6 +30,10 @@ version  applied_at                 migration
 17       2026-06-24T00:00:00+00:00  017_brand_search_terms_hybrid.sql
 18       2026-06-24T00:00:00+00:00  018_integer_primary_keys_enum_tables.sql
 19       2026-06-24T00:00:00+00:00  019_post_types_and_sentiments.sql
+20       2026-06-25T00:00:00+00:00  020_text_to_integer_pks_all_tables.sql
+                                          (021 reserved — HF products crawler that never landed)
+22       2026-06-25T00:00:00+00:00  022_kill_signal_id.sql
+23       2026-06-26T00:00:00+00:00  023_rename_brand_and_company_ids_to_nicknames.sql
 ```
 
 The `applied_at` column is the timestamp the migration was first run
@@ -43,9 +47,16 @@ because migrations are applied in filename order, and the
 > `feat/i18n-locale-columns-rebased`; 009 on
 > `feat/hf-products-crawler-rebased`; 010 on
 > `feat/rename-mn-tables`; 011–019 on
-> `feat/schema-modernization-batch` (HEAD `4cd62d2`).
+> `feat/schema-modernization-batch` (HEAD `4cd62d2`); 020, 022, 023
+> on `main` (HEADs `39396b0`, `4c9d8a0`, this branch).
+> Migration 021 is **intentionally absent** from the ledger — it was
+> reserved for an HF products crawler (a `feat/hf-products-crawler`
+> branch) that never landed; the slot remains available for a future
+> merge of that work.
 > See `docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md`
-> for the 9-unit modernization plan that produced 011–019.
+> for the 9-unit modernization plan that produced 011–019, and
+> `docs/plans/2026-06-26-001-refactor-brand-id-to-nickname-plan.md`
+> for the 1-unit parent-slug-column rename that produced 023.
 
 Conventions used in the diagrams:
 
@@ -78,6 +89,28 @@ Conventions used in the diagrams:
   `post_type_keys` + `sentiment_keys` enum families and nullable
   `post_type` + `sentiment` columns on `posts_brands_signals`
   alongside the legacy `signal_id` (019).
+- v2.0 (migration 020, follow-up) converts the remaining 13
+  TEXT-PK tables (and their dependent `products` table) to
+  **INTEGER surrogate PK + UNIQUE slug column** pattern. The slug
+  names are `brand_id` (in `brands`) and `company_id` (in
+  `companies`) — these are renamed to `nickname` in migration 023
+  below. **Migration 021 is intentionally absent** from the ledger
+  (reserved for an HF products crawler branch that never landed).
+- v2.0 (migration 022, U9 remediation) completes the legacy
+  6-signal taxonomy kill: drops `signal_id` from
+  `posts_brands_signals`, promotes `post_type` + `sentiment` to
+  `NOT NULL INTEGER` FKs, drops the `signals` + `signal_labels`
+  tables, and rewrites the 11 consumer files that read the legacy
+  keys (store.py, intent_classifier.py, attribution.py,
+  reattribute.py, treemap.py, dashboard.py, query_plan.py,
+  run.py, trend-chart.js, dashboard.css, _model_card.html.j2).
+- v2.0 (migration 023) renames the parent-table slug columns
+  `brands.brand_id` → `brands.nickname` and `companies.company_id`
+  → `companies.nickname`. The child FK columns are **unchanged**
+  (they already hold INTEGER surrogate ids post-020 and never held
+  the slug string). The Store API preserves its public contract
+  by aliasing `b.nickname AS brand_id` at the read boundary, so
+  downstream consumers do not see the rename.
 
 ### Enum table pattern (post 018/019)
 
@@ -195,9 +228,10 @@ added quote-tweet content + capture-tracking columns
 
 ```
 posts
-├── tweet_id*              TEXT  PK                       ← Twitter/X status id (str)
+├── id*                    INTEGER  PK AUTOINCREMENT       ← (migration 020) surrogate key
+├── tweet_id*              TEXT     UNIQUE NOT NULL        ← Twitter/X status id (str); was PK pre-020
 ├── author_handle*         TEXT                            ← @handle
-├── author_id              TEXT                            ← numeric X user id (str), FK → accounts.author_id (logical only)
+├── author_id              INTEGER                         ← (migration 020) FK → accounts.id ON DELETE SET NULL
 ├── text                   TEXT                            ← original post text
 ├── lang                   TEXT                            ← X-declared BCP-47 (often wrong; see lang_detected)
 ├── created_at             TEXT                            ← Twitter-format created_at (string; sorts incorrectly for time-window queries — see created_at_epoch)
@@ -239,18 +273,14 @@ posts
 Indexes:
 
 ```
-idx_posts_author                (author_handle)                     — handle lookups
-idx_posts_headline_null_urlonly (tweet_id) WHERE headline IS NULL
-                                            AND text GLOB 'https*'   — backfill subcommand
-idx_posts_text_en_backfill      (tweet_id) WHERE text_en IS NULL
-                                            AND lang_detected IS NOT NULL
-                                            AND lang_detected NOT IN
-                                                ('en','en-US','en-GB','und')   — (004) re-created w/ new predicate
-idx_posts_text_zh_cn_backfill   (tweet_id) WHERE text_zh_cn IS NULL
-                                            AND lang_detected IS NOT NULL
-                                            AND lang_detected NOT IN
-                                                ('zh','zh-CN','zh-Hans','zh-Hant','und')   — (004) re-created w/ new predicate
+idx_posts_tweet_id              (tweet_id)                          — (020) Twitter/X status lookups
+idx_posts_author_id             (author_id)                         — (020) account → post lookups
+idx_posts_headline_null_urlonly (id) WHERE headline IS NULL
+                                            AND text GLOB 'https*'   — backfill subcommand (020: switched from tweet_id to id)
+idx_posts_text_en_null          (id) WHERE text_en IS NULL          — (020) translator backfill driver
+idx_posts_text_zh_cn_null       (id) WHERE text_zh_cn IS NULL       — (020) translator backfill driver
 idx_posts_lang_detected         (lang_detected)                     — locale filtering
+idx_posts_source_query_id       (source_query_id)                   — (020) search_queries → posts lookup
 idx_posts_created_at_epoch      (created_at_epoch)                  — (006) polarity window + QT daily-pass recency
 ```
 
@@ -277,19 +307,20 @@ make per-account role meaningless; the per-brand role lives in
 
 ```
 accounts
-├── author_id*            TEXT  PK                       ← numeric X user id (str)
-├── handle*               TEXT                           ← @handle (backfilled from posts; may be out of date)
-├── display_name          TEXT                           ← resolved from X profile
-├── bio                   TEXT                           ← (migration 004) X profile bio
-├── bio_fetched_at        TEXT                           ← (migration 004) ISO-8601 when bio was last fetched
-├── bio_en                TEXT                           ← (migration 007) English translation of bio
-├── bio_zh_cn             TEXT                           ← (migration 007) Simplified Chinese translation of bio
-├── verified*             INTEGER DEFAULT 0              ← X blue-check flag
-├── bio_contains_brand*   INTEGER DEFAULT 0              ← did the bio mention the brand?
-├── first_seen_at         TEXT
-├── last_seen_at          TEXT
-├── source_query_ids      TEXT                           ← which search_queries discovered this account
-└── notes                 TEXT
+├── id*                    INTEGER  PK AUTOINCREMENT       ← (migration 020) surrogate key
+├── author_id*             TEXT     UNIQUE NOT NULL        ← numeric X user id (str); was PK pre-020
+├── handle*                TEXT                           ← @handle (backfilled from posts; may be out of date)
+├── display_name           TEXT                           ← resolved from X profile
+├── bio                    TEXT                           ← (migration 004) X profile bio
+├── bio_fetched_at         TEXT                           ← (migration 004) ISO-8601 when bio was last fetched
+├── bio_en                 TEXT                           ← (migration 007) English translation of bio
+├── bio_zh_cn              TEXT                           ← (migration 007) Simplified Chinese translation of bio
+├── verified*              INTEGER DEFAULT 0              ← X blue-check flag
+├── bio_contains_brand*    INTEGER DEFAULT 0              ← did the bio mention the brand?
+├── first_seen_at          TEXT
+├── last_seen_at           TEXT
+├── source_query_ids       TEXT                           ← which search_queries discovered this account
+└── notes                  TEXT
 ```
 
 **DROPPED in v1.8 (migration 004):**
@@ -313,17 +344,26 @@ accounts
   moves to the control layer (a fresh per-account metric that
   doesn't fit the discrete-enum shape); tracked separately.
 
-Indexes (rebuilt by 012; partial backfill indexes re-created):
+**CONVERTED in v2.0 (migration 020):**
+
+- `accounts.author_id` was the PK pre-020; it becomes a UNIQUE NOT
+  NULL slug column and `accounts.id` becomes the INTEGER surrogate
+  PK. Child tables FK to `accounts.id` post-020.
+
+Indexes (rebuilt by 012; re-built on id PK by 020; partial backfill
+indexes re-created):
 
 ```
-idx_accounts_bio_en_backfill    (author_id) WHERE bio_en    IS NULL   — (007/012) translator backfill driver
-idx_accounts_bio_zh_cn_backfill (author_id) WHERE bio_zh_cn IS NULL   — (007/012) translator backfill driver
+idx_accounts_author_id            (author_id)                       — (020) surrogate-free X-user-id lookup
+idx_accounts_handle               (handle)                          — (020) @handle lookup
+idx_accounts_bio_en_backfill      (id) WHERE bio_en    IS NULL      — (007/012/020) translator backfill driver
+idx_accounts_bio_zh_cn_backfill   (id) WHERE bio_zh_cn IS NULL      — (007/012/020) translator backfill driver
 ```
 
-(Only the PK index existed in v1.8; the table rebuilds in 008 and
-012 preserve these two partial indexes but do not create a separate
-per-key index — the PK already serves the lookups the dashboard
-needs.)
+(Only the PK index existed in v1.8; the table rebuilds in 008, 012,
+and 020 preserve these two partial indexes but do not create a
+separate per-key index — the PK already serves the lookups the
+dashboard needs.)
 
 ---
 
@@ -333,12 +373,13 @@ Join table: which accounts appeared on which posts. PK is now
 `(author_id, tweet_id)` (was `(model_id, handle, tweet_id)` in
 v1.7). Per Decision 4, `accounts.author_id` is the immutable X user
 id, so the per-brand fan-in lives in `brands_accounts`, not in this
-join.
+join. Migration 020 converts the FK columns from TEXT slug /
+tweet-id to INTEGER surrogate FKs.
 
 ```
 account_post_appearances
-├── author_id*     TEXT  PK[1]                   ← FK → accounts.author_id (logical only, no declared FK in 004)
-├── tweet_id*      TEXT  PK[2]                   ← FK → posts.tweet_id  ON DELETE CASCADE
+├── author_id*     INTEGER  PK[1]                ← (migration 020) FK → accounts.id   ON DELETE CASCADE
+├── tweet_id*      INTEGER  PK[2]                ← (migration 020) FK → posts.id       ON DELETE CASCADE
 └── role_at_time   TEXT                          ← snapshot of the active brands_accounts.role_id at the time of appearance
 ```
 
@@ -348,14 +389,15 @@ Indexes:
 (only the PK index — the v1.7 idx_apa_model is gone with the model_id column)
 ```
 
-Foreign keys (declared in 004):
+Foreign keys (declared in 004, FK columns re-typed in 020):
 
 ```
-FOREIGN KEY(tweet_id) REFERENCES posts(tweet_id) ON DELETE CASCADE
+FOREIGN KEY(author_id) REFERENCES accounts(id) ON DELETE CASCADE
+FOREIGN KEY(tweet_id)  REFERENCES posts(id)     ON DELETE CASCADE
 ```
 
-The `FOREIGN KEY(author_id) REFERENCES accounts(author_id)` edge
-is logical only (not declared) — the application enforces it.
+Both FKs are now declared (the pre-020 logical-only `author_id`
+edge is also enforced by the schema post-020).
 
 ---
 
@@ -368,7 +410,8 @@ locale-aware rendering.
 
 ```
 companies
-├── company_id*        TEXT  PK                       ← e.g. "alibaba", "moonshot", "mistral_ai", "minimax"
+├── id*                INTEGER  PK                     ← surrogate key (migration 020)
+├── nickname*          TEXT     UNIQUE NOT NULL       ← (migration 020/023) e.g. "alibaba", "moonshot", "mistral_ai", "minimax"; was `company_id` pre-023
 ├── display_name*      TEXT                           ← human-readable, e.g. "Alibaba"
 ├── display_name_en    TEXT                           ← (migration 007) English display name
 ├── display_name_zh_cn TEXT                           ← (migration 007) Simplified Chinese display name
@@ -379,7 +422,7 @@ companies
 Seed rows (11):
 
 ```
-company_id       display_name        hq_country
+nickname        display_name        hq_country
 ---------------  ------------------  ----------
 alibaba          Alibaba             CN
 baidu            Baidu               CN
@@ -397,8 +440,9 @@ minimax          MiniMax             CN   ← (009) added with the HF products m
 Indexes:
 
 ```
-idx_companies_display_name_en_backfill    (company_id) WHERE display_name_en    IS NULL
-idx_companies_display_name_zh_cn_backfill (company_id) WHERE display_name_zh_cn IS NULL
+idx_companies_nickname                     (nickname) UNIQUE
+idx_companies_display_name_en_backfill     (id) WHERE display_name_en    IS NULL
+idx_companies_display_name_zh_cn_backfill  (id) WHERE display_name_zh_cn IS NULL
 ```
 
 ---
@@ -414,19 +458,20 @@ review fix). Migration 007 adds `display_name_en` /
 
 ```
 brands
-├── brand_id*            TEXT  PK                       ← e.g. "minimax", "qwen", "_unattributed"
-├── display_name*        TEXT                           ← human-readable
-├── display_name_en      TEXT                           ← (migration 007) English display name
-├── display_name_zh_cn   TEXT                           ← (migration 007) Simplified Chinese display name
-├── accent_color*        TEXT  DEFAULT '#9ca3af'        ← hex color for the treemap card
-├── is_sentinel*         INTEGER DEFAULT 0              ← 1 only for the "_unattributed" row
-└── created_at*          TEXT                           ← ISO-8601 UTC
+├── id*                INTEGER  PK                     ← surrogate key (migration 020)
+├── nickname*          TEXT     UNIQUE NOT NULL       ← (migration 020/023) e.g. "minimax", "qwen", "_unattributed"; was `brand_id` pre-023
+├── display_name*      TEXT                           ← human-readable
+├── display_name_en    TEXT                           ← (migration 007) English display name
+├── display_name_zh_cn TEXT                           ← (migration 007) Simplified Chinese display name
+├── accent_color*      TEXT  DEFAULT '#9ca3af'        ← hex color for the treemap card
+├── is_sentinel*       INTEGER DEFAULT 0              ← 1 only for the "_unattributed" row
+└── created_at*        TEXT                           ← ISO-8601 UTC
 ```
 
 Seed rows (12 — 11 tracked brands + 1 sentinel):
 
 ```
-brand_id         display_name          accent_color   is_sentinel
+nickname        display_name          accent_color   is_sentinel
 -----------      -------------------   ------------   -----------
 minimax          MiniMax AI            #3b82f6        0
 qwen             Qwen                  #f97316        0
@@ -445,8 +490,9 @@ _unattributed    Unattributed          #6b7280        1
 Indexes:
 
 ```
-idx_brands_display_name_en_backfill    (brand_id) WHERE display_name_en    IS NULL
-idx_brands_display_name_zh_cn_backfill (brand_id) WHERE display_name_zh_cn IS NULL
+idx_brands_nickname                     (nickname) UNIQUE
+idx_brands_display_name_en_backfill     (id) WHERE display_name_en    IS NULL
+idx_brands_display_name_zh_cn_backfill  (id) WHERE display_name_zh_cn IS NULL
 ```
 
 ---
@@ -459,8 +505,8 @@ for future joint ventures (e.g. a hypothetical `0.6`).
 
 ```
 brands_companies
-├── brand_id*       TEXT  PK[1]                ← FK → brands.brand_id    ON DELETE CASCADE
-├── company_id*     TEXT  PK[2]                ← FK → companies.company_id ON DELETE CASCADE
+├── brand_id*       INTEGER  PK[1]             ← (migration 020) FK → brands.id    ON DELETE CASCADE
+├── company_id*     INTEGER  PK[2]             ← (migration 020) FK → companies.id ON DELETE CASCADE
 └── ownership_pct*  REAL  DEFAULT 1.0
 ```
 
@@ -468,19 +514,19 @@ Seed rows (11 — one per tracked brand; the `_unattributed` brand
 has no corporate parent and is intentionally excluded):
 
 ```
-brand_id         company_id
------------      -----------
-qwen             alibaba
-ernie            baidu
-hunyuan          tencent
-moonshot_kimi    moonshot
-glm              zhipu
-stepfun          stepfun_inc
-xiaomi_mimo      xiaomi
-mistral          mistral_ai
-inclusionai      inclusion_ai
-deepseek         deepseek_co
-minimax          minimax   ← (009) added with the HF products migration
+brand_id (nickname)  company_id (nickname)
+-----------------    --------------------
+qwen                 alibaba
+ernie                baidu
+hunyuan              tencent
+moonshot_kimi        moonshot
+glm                  zhipu
+stepfun              stepfun_inc
+xiaomi_mimo          xiaomi
+mistral              mistral_ai
+inclusionai          inclusion_ai
+deepseek             deepseek_co
+minimax              minimax   ← (009) added with the HF products migration
 ```
 
 
@@ -491,22 +537,23 @@ here (moved off `accounts.role` in v1.8; Decision 10). Migration
 008 added a FK from `role` to `role_keys.key`; migration 015 renamed
 the column to `role_id` (table renamed `roles` in the same unit).
 Migration 016 trimmed the values to {official, staff, community}.
+Migration 020 converted `brand_id` (TEXT slug) → INTEGER FK → brands.id.
 
 ```
 brands_accounts
-├── brand_id*   TEXT  PK[1]                 ← FK → brands.brand_id    ON DELETE CASCADE
-├── author_id*  TEXT  PK[2]                 ← FK → accounts.author_id ON DELETE CASCADE
-├── role_id*    TEXT  DEFAULT 'community'   ← (migration 008) FK → roles.key; (015) column rename role → role_id
+├── brand_id*   INTEGER PK[1]                 ← (migration 020) FK → brands.id    ON DELETE CASCADE
+├── author_id*  INTEGER PK[2]                 ← (migration 020) FK → accounts.id ON DELETE CASCADE
+├── role_id*    INTEGER DEFAULT <community.id> ← (migration 008) FK → roles.id; (015) column rename role → role_id
                                                "official" | "staff" | "community"
 └── added_at*   TEXT                         ← ISO-8601 UTC
 ```
 
-Foreign keys (declared in 008, FK target renamed in 015):
+Foreign keys (declared in 008, FK target renamed in 015 + 020):
 
 ```
-FOREIGN KEY (brand_id)  REFERENCES brands(brand_id)    ON DELETE CASCADE
-FOREIGN KEY (author_id) REFERENCES accounts(author_id) ON DELETE CASCADE
-FOREIGN KEY (role_id)   REFERENCES roles(key)          ON DELETE RESTRICT
+FOREIGN KEY (brand_id)  REFERENCES brands(id)       ON DELETE CASCADE
+FOREIGN KEY (author_id) REFERENCES accounts(id)     ON DELETE CASCADE
+FOREIGN KEY (role_id)   REFERENCES roles(id)        ON DELETE RESTRICT
 ```
 
 Indexes:
@@ -533,19 +580,19 @@ the column to `role_id`. Migration 016 trimmed the values to
 
 ```
 companies_accounts
-├── company_id*  TEXT  PK[1]                ← FK → companies.company_id ON DELETE CASCADE
-├── author_id*   TEXT  PK[2]                ← FK → accounts.author_id   ON DELETE CASCADE
-├── role_id*     TEXT  DEFAULT 'community'  ← (migration 008) FK → roles.key; (015) column rename role → role_id
+├── company_id*  INTEGER PK[1]               ← (migration 020) FK → companies.id ON DELETE CASCADE
+├── author_id*   INTEGER PK[2]               ← (migration 020) FK → accounts.id  ON DELETE CASCADE
+├── role_id*     INTEGER DEFAULT <community.id> ← (migration 008) FK → roles.id; (015) column rename role → role_id
                                                 "official" | "staff" | "community"
 └── added_at*    TEXT                         ← ISO-8601 UTC
 ```
 
-Foreign keys (declared in 008, FK target renamed in 015):
+Foreign keys (declared in 008, FK target renamed in 015 + 020):
 
 ```
-FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE
-FOREIGN KEY (author_id)  REFERENCES accounts(author_id)   ON DELETE CASCADE
-FOREIGN KEY (role_id)    REFERENCES roles(key)            ON DELETE RESTRICT
+FOREIGN KEY (company_id) REFERENCES companies(id)   ON DELETE CASCADE
+FOREIGN KEY (author_id)  REFERENCES accounts(id)    ON DELETE CASCADE
+FOREIGN KEY (role_id)    REFERENCES roles(id)       ON DELETE RESTRICT
 ```
 
 Indexes:
@@ -561,13 +608,14 @@ idx_companies_accounts_role_id  (role_id)   — (008/015) supports dashboard gro
 Per-(post, brand) attribution with fractional weight (Decision 9,
 Option C). `weight = 1.0 / N` for a post naming N distinct brands;
 single-brand posts get `weight = 1.0`. Unattributed posts get a
-sentinel row (`brand_id = '_unattributed'`, `weight = 1.0`) that
-queries filter out via `is_sentinel`.
+sentinel row (`brand_id = <_unattributed.id>`, `weight = 1.0`) that
+queries filter out via `is_sentinel`. Migration 020 converted
+`brand_id` (TEXT slug) and `post_id` (TEXT) → INTEGER FKs.
 
 ```
 posts_brands
-├── brand_id*  TEXT  PK[1]                 ← FK → brands.brand_id  ON DELETE SET NULL
-├── post_id*   TEXT  PK[2]                 ← FK → posts.tweet_id   ON DELETE CASCADE
+├── brand_id*  INTEGER PK[1]                 ← (migration 020) FK → brands.id ON DELETE SET NULL
+├── post_id*   INTEGER PK[2]                 ← (migration 020) FK → posts.id  ON DELETE CASCADE
 └── weight*    REAL  DEFAULT 1.0
 ```
 
@@ -592,11 +640,11 @@ enforced on `posts_brands`.
 
 ```
 posts_brands_mentions
-├── post_id*       TEXT  PK[1]              ← FK → posts.tweet_id   ON DELETE CASCADE
-├── brand_id       TEXT  PK[2]              ← FK → brands.brand_id  ON DELETE SET NULL (nullable for un-attributed mentions)
-├── source*        TEXT  PK[3]              ← user_mention | hashtag | body_keyword | search_term
-├── raw_token*     TEXT                     ← literal matched text: "@MiniMaxAI", "#minimax", "M3.0", "from:minimax OR ..."
-└── mentioned_at*  TEXT                     ← posts.created_at (ISO-8601 UTC)
+├── post_id*       INTEGER PK[1]              ← (migration 020) FK → posts.id   ON DELETE CASCADE
+├── brand_id       INTEGER PK[2]              ← (migration 020) FK → brands.id  ON DELETE SET NULL (nullable for un-attributed mentions)
+├── source*        TEXT    PK[3]              ← user_mention | hashtag | body_keyword | search_term
+├── raw_token*     TEXT                       ← literal matched text: "@MiniMaxAI", "#minimax", "M3.0", "from:minimax OR ..."
+└── mentioned_at*  TEXT                       ← posts.created_at (ISO-8601 UTC)
 ```
 
 Indexes:
@@ -622,104 +670,84 @@ Migration 014 renamed `signal_keys` → `signals` and the FK column
 additive re-shape: it adds nullable `post_type` + `sentiment` TEXT
 columns FK-validated against the new `post_type_keys` /
 `sentiment_keys` tables, and the existing `signal_id` is preserved
-alongside them (legacy data path is intact; U9 follow-up
-classifier will reclassify rows with the LLM).
+alongside them. Migration 020 converts all TEXT-storing-key FKs
+(`signal_id`, `post_type`, `sentiment`) to INTEGER-storing-id and
+drops the `(brand_id <> '_unattributed')` CHECK constraint (the
+sentinel's integer id is data-dependent and the post-fetch
+attribution logic never inserts sentinel rows anyway). Migration 022
+is the U9 **replacement** (not additive): it drops `signal_id` and
+the `signals` + `signal_labels` tables entirely, and promotes
+`post_type` + `sentiment` to `NOT NULL INTEGER` FKs against the
+new `*_keys` tables.
 
 ```
 posts_brands_signals
-├── post_id*    TEXT  PK[1]                ← FK → posts.tweet_id   ON DELETE CASCADE
-├── brand_id*   TEXT  PK[2]                ← FK → brands.brand_id  ON DELETE SET NULL
-├── signal_id   TEXT                        ← (008) FK → signals.key; (014) column rename signal → signal_id
-                                               (legacy 6-bucket; preserved through 019 for back-compat)
-                                               release | community_question | criticism | commenter_capture | praise | other
-├── post_type   TEXT                        ← (019) FK → post_type_keys.key; nullable (legacy rows backfilled from signal_id)
+├── post_id*    INTEGER PK[1]                ← (020) FK → posts.id         ON DELETE CASCADE
+├── brand_id*   INTEGER PK[2]                ← (020) FK → brands.id        ON DELETE SET NULL
+├── post_type*  INTEGER NOT NULL            ← (019) added; (020) INTEGER; (022) promoted to NOT NULL
+                                               FK → post_type_keys.id
                                                buzz_releases | hands_on_usage | performance_comparisons | feedback_questions
-├── sentiment   TEXT                        ← (019) FK → sentiment_keys.key; nullable (legacy rows backfilled from signal_id)
+├── sentiment*  INTEGER NOT NULL            ← (019) added; (020) INTEGER; (022) promoted to NOT NULL
+                                               FK → sentiment_keys.id
                                                positive | negative | neutral | mixed
-                                            CHECK (brand_id <> '_unattributed')
+                                               (signal_id dropped in 022; legacy 6-bucket taxonomy fully removed)
 ```
 
-Foreign keys (declared in 008; FK target renamed in 014; two new
-FKs added in 019):
+Foreign keys (declared in 008; FK target renamed in 014; new FKs
+added in 019; FK columns re-typed INTEGER in 020; signal_id FK
+dropped in 022):
 
 ```
-FOREIGN KEY (post_id)   REFERENCES posts(tweet_id)         ON DELETE CASCADE
-FOREIGN KEY (brand_id)  REFERENCES brands(brand_id)        ON DELETE SET NULL
-FOREIGN KEY (signal_id) REFERENCES signals(key)            ON DELETE RESTRICT
-FOREIGN KEY (post_type) REFERENCES post_type_keys(key)      ON DELETE RESTRICT
-FOREIGN KEY (sentiment) REFERENCES sentiment_keys(key)      ON DELETE RESTRICT
+FOREIGN KEY (post_id)   REFERENCES posts(id)             ON DELETE CASCADE
+FOREIGN KEY (brand_id)  REFERENCES brands(id)            ON DELETE SET NULL
+FOREIGN KEY (post_type) REFERENCES post_type_keys(id)    ON DELETE RESTRICT
+FOREIGN KEY (sentiment) REFERENCES sentiment_keys(id)    ON DELETE RESTRICT
 ```
 
 Indexes:
 
 ```
-idx_posts_brands_signals_brand_id_signal_id  (brand_id, signal_id)   — (014) per-brand polarity aggregation
-idx_posts_brands_signals_brand_id_post_type  (brand_id, post_type)   — (019) post_type aggregation
-idx_posts_brands_signals_brand_id_sentiment  (brand_id, sentiment)   — (019) sentiment aggregation
+idx_posts_brands_signals_brand_id_post_type  (brand_id, post_type)   — (019/020/022) post_type aggregation
+idx_posts_brands_signals_brand_id_sentiment  (brand_id, sentiment)   — (019/020/022) sentiment aggregation
 ```
 
-**019 backfill (static CASE).** Existing rows that pre-date 019
+The legacy `idx_posts_brands_signals_brand_id_signal_id` index
+(from 014) is dropped by migration 022 alongside the `signal_id`
+column it supported.
+
+**019/022 backfill (static CASE).** Existing rows that pre-date 019
 are backfilled from `signal_id` to (`post_type`, `sentiment`) using
 a documented heuristic mapping — see the 019 section at the top of
 this doc. The mapping is canonical until the LLM classifier
-re-runs.
+re-runs (U9 follow-up).
 
 ---
 
-### `signals` (6 rows; seeded by migration 008; renamed 014; integer-PK 018)
+### `signals` (6 rows; seeded by migration 008; renamed 014; integer-PK 018; **DROPPED by 022**)
 
 Enum-key lookup for `posts_brands_signals.signal_id`. The FK
 target for the `signal_id` column (referential integrity). Seeded
 once by migration 008; not mutated at runtime.
 
-After migration 018 the table uses the canonical enum-table
-shape: INTEGER `id` PK + UNIQUE TEXT `key`. The TEXT `key` remains
-the FK target (the `signal_id` column on `posts_brands_signals`
-still holds the key string, not the integer id). All existing
-read-side consumers continue to work unchanged.
-
-```
-signals
-├── id*         INTEGER  PK AUTOINCREMENT  ← (018) integer surrogate; new enum FKs use this
-├── key*        TEXT     UNIQUE NOT NULL   ← canonical string; FK target
-                                                release | community_question | criticism |
-                                                commenter_capture | praise | other
-└── created_at* TEXT                       ← ISO-8601 UTC
-```
+After migration 018 the table used the canonical enum-table
+shape: INTEGER `id` PK + UNIQUE TEXT `key`. Migration 022 (U9
+remediation) **drops the table entirely** along with the
+`signal_id` column and the `signal_labels` lookup — the legacy
+6-bucket taxonomy is fully removed; `posts_brands_signals` now
+reads only from `post_type_keys` + `sentiment_keys`.
 
 ---
 
-### `signal_labels` (12 rows; seeded by migration 008; column rename 011)
+### `signal_labels` (12 rows; seeded by migration 008; column rename 011; **DROPPED by 022**)
 
 Per-locale display label for each `signals.key`. The display
 layer joins `(key, lang)` per render. Operator may override
 labels via `data/translations/enum_zh_cn_overrides.json`.
 
-```
-signal_labels
-├── key*     TEXT  PK[1]                   ← FK → signals(key) ON DELETE CASCADE
-├── lang*    TEXT  PK[2]                   ← (011) renamed from `locale`; "en" | "zh_cn"
-└── label*   TEXT
-```
-
-Seed labels (12 = 6 keys × 2 locales):
-
-```
-key                  lang      label
-------------------   -------   ----------
-release              en        Release
-release              zh_cn     发布
-community_question   en        Question
-community_question   zh_cn     提问
-criticism            en        Criticism
-criticism            zh_cn     批评
-commenter_capture    en        Capture
-commenter_capture    zh_cn     引流
-praise               en        Praise
-praise               zh_cn     称赞
-other                en        Other
-other                zh_cn     其他
-```
+Migration 022 drops this table along with `signals` and the
+`signal_id` column on `posts_brands_signals`. The
+`post_type_labels` and `sentiment_labels` tables (post-019) carry
+forward the per-locale display concern for the new vocabulary.
 
 ---
 
@@ -866,12 +894,13 @@ mixed      zh_cn     混合
 ### `brand_hashtags` (≥0 rows; detection registry, R6a)
 
 Detection registry: hashtags (lowercase, no `#` prefix) that
-trigger a brand mention via the `hashtag` source.
+trigger a brand mention via the `hashtag` source. Migration 020
+converted `brand_id` from TEXT slug → INTEGER FK.
 
 ```
 brand_hashtags
-├── brand_id*  TEXT  PK[1]                 ← FK → brands.brand_id  ON DELETE CASCADE
-├── tag*       TEXT  PK[2]                 ← lowercase, no '#' prefix
+├── brand_id*  INTEGER PK[1]                ← (migration 020) FK → brands.id  ON DELETE CASCADE
+├── tag*       TEXT    PK[2]                ← lowercase, no '#' prefix
 └── added_at*  TEXT
 ```
 
@@ -882,13 +911,14 @@ brand_hashtags
 Detection registry: literal substrings or regex patterns that
 trigger a brand mention via the `body_keyword` source. `is_regex`
 is `0` for substring (case-insensitive contains) and `1` for
-regex (RE2 syntax; the application validates on insert).
+regex (RE2 syntax; the application validates on insert). Migration
+020 converted `brand_id` from TEXT slug → INTEGER FK.
 
 ```
 brand_keywords
-├── brand_id*  TEXT  PK[1]                 ← FK → brands.brand_id  ON DELETE CASCADE
-├── pattern*   TEXT  PK[2]                 ← substring or regex pattern
-├── is_regex*  INTEGER DEFAULT 0           ← 0 = substring, 1 = regex
+├── brand_id*  INTEGER PK[1]                ← (migration 020) FK → brands.id  ON DELETE CASCADE
+├── pattern*   TEXT    PK[2]                ← substring or regex pattern
+├── is_regex*  INTEGER DEFAULT 0            ← 0 = substring, 1 = regex
 └── added_at*  TEXT
 ```
 
@@ -912,12 +942,13 @@ fetch path in `x_monitor.run.run()` via
 at attribution time; the DB is NOT used to build the query string.
 No data is duplicated. A startup-time drift check (U7) logs a
 warning if the yaml terms and the DB terms disagree on coverage
-— informational, not a hard fail.
+— informational, not a hard fail. Migration 020 converted
+`brand_id` from TEXT slug → INTEGER FK.
 
 ```
 brand_search_terms
-├── brand_id*  TEXT  PK[1]                 ← FK → brands.brand_id  ON DELETE CASCADE
-├── term*      TEXT  PK[2]
+├── brand_id*  INTEGER PK[1]                ← (migration 020) FK → brands.id  ON DELETE CASCADE
+├── term*      TEXT    PK[2]
 └── added_at*  TEXT
 ```
 
@@ -930,20 +961,22 @@ pointer from `posts.source_query_id` to
 `data/queries/<id>.json` with a real DB row. `ON DELETE SET NULL`
 on the FK from `posts.source_query_id` preserves posts when a
 query is dropped; the application backfills `search_queries`
-before applying the FK.
+before applying the FK. Migration 020 added an INTEGER surrogate
+`id` PK and converted `brand_id` from TEXT slug → INTEGER FK.
 
 ```
 search_queries
-├── query_id*          TEXT  PK              ← opaque id (was the filename in data/queries/)
-├── brand_id*          TEXT                  ← FK → brands.brand_id  ON DELETE CASCADE
-├── keywords_json*     TEXT  JSON            ← the OR-grouped query string
-├── plan_calls_run_id  TEXT                  ← the run that produced this query (nullable)
-└── created_at*        TEXT                  ← ISO-8601 UTC
+├── id*                INTEGER PK AUTOINCREMENT ← (migration 020) surrogate key
+├── query_id*          TEXT    UNIQUE NOT NULL  ← opaque id (was the filename in data/queries/)
+├── brand_id*          INTEGER                  ← (migration 020) FK → brands.id  ON DELETE SET NULL
+├── keywords_json*     TEXT    JSON             ← the OR-grouped query string
+├── plan_calls_run_id  TEXT                     ← the run that produced this query (nullable)
+└── created_at*        TEXT                     ← ISO-8601 UTC
 ```
 
 ---
 
-### `hf_orgs` (11 rows; seeded by migration 009)
+### `hf_orgs` (11 rows; seeded by migration 009; INTEGER PK 020)
 
 1:N edge `companies` → HuggingFace orgs/usernames. Replaces the
 earlier `brand_hf_orgs` design — a `brand` is an operator-curated
@@ -953,16 +986,22 @@ namespaces), but an HF namespace is a corporate identity (e.g.
 `MiniMaxAI` belongs to MiniMax). HF namespace ownership is
 corporate, not shared, so the edge is 1:N (not M:N). The
 `brand_hf_orgs` table from the original 005 draft is dropped by
-migration 009 (idempotent `DROP IF EXISTS`).
+migration 009 (idempotent `DROP IF EXISTS`). Migration 020
+introduced an INTEGER surrogate `id` PK and renamed the original
+TEXT PK column `id` (HF namespace string) to `namespace`
+(`TEXT UNIQUE NOT NULL`) to avoid a type-changing-same-name
+ambiguity; `company_id` was converted from TEXT slug → INTEGER FK.
 
 ```
 hf_orgs
-├── id*              TEXT  PK                ← HF namespace, e.g. "MiniMaxAI", "deepseek-ai"
-├── company_id*      TEXT                     ← FK → companies.company_id ON DELETE CASCADE
-├── confirmed*       INTEGER DEFAULT 0        ← 1 = curated/operator-confirmed (scraped)
-                                                0 = runtime-discovered candidate (review)
-├── discovered_via*   TEXT  DEFAULT 'curated'  ← 'curated' | 'search:<query>'
-└── added_at*        TEXT                     ← ISO-8601 UTC
+├── id*                INTEGER PK AUTOINCREMENT  ← (migration 020) surrogate key
+├── namespace*         TEXT    UNIQUE NOT NULL   ← (migration 020) HF namespace; was the original TEXT PK `id`
+                                                      e.g. "MiniMaxAI", "deepseek-ai"
+├── company_id*        INTEGER                   ← (migration 020) FK → companies.id ON DELETE CASCADE
+├── confirmed*         INTEGER DEFAULT 0         ← 1 = curated/operator-confirmed (scraped)
+                                                      0 = runtime-discovered candidate (review)
+├── discovered_via*     TEXT    DEFAULT 'curated' ← 'curated' | 'search:<query>'
+└── added_at*          TEXT                       ← ISO-8601 UTC
 ```
 
 Seed rows (11 — one HF namespace per company that has a corporate
@@ -970,31 +1009,32 @@ parent; the `_unattributed` brand has no corporate parent and no
 HF coverage):
 
 ```
-id              company_id       confirmed   discovered_via
---------------  ---------------  ----------  --------------
-Qwen            alibaba          1           curated
-baidu           baidu            1           curated
-tencent         tencent          1           curated
-moonshotai      moonshot         1           curated
-THUDM           zhipu            1           curated
-XiaomiMiMo      xiaomi           1           curated
-mistralai       mistral_ai       1           curated
-inclusionAI     inclusion_ai     1           curated
-deepseek-ai     deepseek_co      1           curated
-stepfun-ai      stepfun_inc      1           curated
-MiniMaxAI       minimax          1           curated
+namespace         company_id (nickname)   confirmed   discovered_via
+--------------    --------------------    ----------  --------------
+Qwen              alibaba                  1           curated
+baidu             baidu                    1           curated
+tencent           tencent                  1           curated
+moonshotai        moonshot                 1           curated
+THUDM             zhipu                    1           curated
+XiaomiMiMo        xiaomi                   1           curated
+mistralai         mistral_ai               1           curated
+inclusionAI       inclusion_ai             1           curated
+deepseek-ai       deepseek_co              1           curated
+stepfun-ai        stepfun_inc              1           curated
+MiniMaxAI         minimax                  1           curated
 ```
 
-Foreign keys (declared in 009):
+Foreign keys (declared in 009, FK column re-typed in 020):
 
 ```
-FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE
+FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
 ```
 
 Indexes:
 
 ```
-idx_hf_orgs_company  (company_id)   — per-company HF org lookup
+idx_hf_orgs_namespace  (namespace)   — (020) per-HF-namespace lookup
+idx_hf_orgs_company    (company_id)  — per-company HF org lookup
 ```
 
 Runtime writes go through `x_monitor.store.upsert_hf_org`, which
@@ -1009,43 +1049,48 @@ review — those are **flagged, not scraped**, until promoted.
 
 ---
 
-### `products` (19 rows; populated by the HF products crawler)
+### `products` (19 rows; populated by the HF products crawler; INTEGER FKs 020)
 
 The HuggingFace product catalog. One row per HF model (today);
 `hf_type` is reserved by CHECK for future datasets and spaces.
 Mirrors `posts` in spirit (a fact row + a brand FK + rich JSON
-columns) but for HF artifacts instead of X posts.
+columns) but for HF artifacts instead of X posts. Migration 020
+added an INTEGER surrogate `id` PK and converted `brand_id`
+(TEXT slug → INTEGER FK) and `hf_org_id` (TEXT namespace string →
+INTEGER FK via `LEFT JOIN hf_orgs h ON h.namespace = p.hf_org_id`).
 
 ```
 products
-├── repo_id*              TEXT  PK                   ← HF model id, e.g. "MiniMaxAI/MiniMax-M1"
-├── brand_id              TEXT                       ← FK → brands.brand_id  ON DELETE SET NULL
-├── hf_org_id             TEXT                       ← (migration 009) FK → hf_orgs.id  ON DELETE SET NULL
-├── hf_type*              TEXT  DEFAULT 'model'      ← CHECK (hf_type IN ('model','dataset','space'))
-├── display_name          TEXT                       ← repo name part (after the '/')
-├── author                TEXT                       ← HF `author` field
-├── sha                   TEXT                       ← git revision
-├── private               INTEGER                    ← 0/1
-├── gated                 TEXT                       ← 'auto' | 'manual' | 'false' | NULL
-├── disabled              INTEGER                    ← 0/1
-├── pipeline_tag          TEXT                       ← HF task, e.g. "text-generation"
-├── library_name          TEXT                       ← e.g. "transformers"
-├── downloads             INTEGER                    ← 30-day count (canonical public metric)
-├── downloads_all_time    INTEGER                    ← not exposed by HF API (always NULL)
-├── download_velocity     REAL                       ← downloads_per_day (not exposed by HF API; always NULL)
-├── likes                 INTEGER
-├── trending_score        REAL
-├── paperswithcode_id     TEXT
-├── created_at            TEXT                       ← HF ISO-8601
-├── last_modified         TEXT                       ← HF ISO-8601
-├── tags_json             TEXT  JSON                 ← HF tags array
-├── siblings_json         TEXT  JSON                 ← [{rfilename[, size]}, ...]
-├── card_data_json        TEXT  JSON                 ← license, language, base_model, …
-├── config_json           TEXT  JSON                 ← architectures, model_type, quantization_config, …
-├── spaces_json           TEXT  JSON                 ← dependent Spaces array
-├── raw_json              TEXT  JSON                 ← verbatim HF ModelInfo payload (lossless archive)
-├── collected_at*         TEXT                       ← ISO-8601; set on first upsert, stable
-└── updated_at*           TEXT                       ← ISO-8601; rewritten on every upsert
+├── id*                  INTEGER PK AUTOINCREMENT  ← (migration 020) surrogate key
+├── repo_id*             TEXT    UNIQUE NOT NULL   ← HF model id, e.g. "MiniMaxAI/MiniMax-M1"
+├── brand_id             INTEGER                   ← (migration 020) FK → brands.id  ON DELETE SET NULL
+├── hf_org_id            INTEGER                   ← (020) FK → hf_orgs.id   ON DELETE SET NULL
+                                                        (joined via hf_orgs.namespace pre-020; now the INTEGER id)
+├── hf_type*             TEXT    DEFAULT 'model'    ← CHECK (hf_type IN ('model','dataset','space'))
+├── display_name         TEXT                       ← repo name part (after the '/')
+├── author               TEXT                       ← HF `author` field
+├── sha                  TEXT                       ← git revision
+├── private              INTEGER                    ← 0/1
+├── gated                TEXT                       ← 'auto' | 'manual' | 'false' | NULL
+├── disabled             INTEGER                    ← 0/1
+├── pipeline_tag         TEXT                       ← HF task, e.g. "text-generation"
+├── library_name         TEXT                       ← e.g. "transformers"
+├── downloads            INTEGER                    ← 30-day count (canonical public metric)
+├── downloads_all_time   INTEGER                    ← not exposed by HF API (always NULL)
+├── download_velocity    REAL                       ← downloads_per_day (not exposed by HF API; always NULL)
+├── likes                INTEGER
+├── trending_score       REAL
+├── paperswithcode_id    TEXT
+├── created_at           TEXT                       ← HF ISO-8601
+├── last_modified        TEXT                       ← HF ISO-8601
+├── tags_json            TEXT  JSON                 ← HF tags array
+├── siblings_json        TEXT  JSON                 ← [{rfilename[, size]}, ...]
+├── card_data_json       TEXT  JSON                 ← license, language, base_model, …
+├── config_json          TEXT  JSON                 ← architectures, model_type, quantization_config, …
+├── spaces_json          TEXT  JSON                 ← dependent Spaces array
+├── raw_json             TEXT  JSON                 ← verbatim HF ModelInfo payload (lossless archive)
+├── collected_at*        TEXT                       ← ISO-8601; set on first upsert, stable
+└── updated_at*          TEXT                       ← ISO-8601; rewritten on every upsert
 ```
 
 `brand_id` and `hf_org_id` both use `ON DELETE SET NULL` (not
@@ -1053,18 +1098,19 @@ CASCADE): deleting a brand or an HF-org keeps the product row
 but nulls those FKs — `repo_id` is never cascaded because HF
 model identity is global.
 
-Foreign keys (declared in 009):
+Foreign keys (declared in 009, FK columns re-typed in 020):
 
 ```
-FOREIGN KEY (brand_id)  REFERENCES brands(brand_id) ON DELETE SET NULL
-FOREIGN KEY (hf_org_id) REFERENCES hf_orgs(id)      ON DELETE SET NULL
+FOREIGN KEY (brand_id)  REFERENCES brands(id)  ON DELETE SET NULL
+FOREIGN KEY (hf_org_id) REFERENCES hf_orgs(id) ON DELETE SET NULL
 ```
 
 Indexes:
 
 ```
-idx_products_brand     (brand_id)    — per-brand HF catalog scans
-idx_products_hf_org_id (hf_org_id)   — per-HF-org lookup
+idx_products_repo_id    (repo_id)    — (020) per-HF-model lookup
+idx_products_brand      (brand_id)   — per-brand HF catalog scans
+idx_products_hf_org_id  (hf_org_id)  — per-HF-org lookup
 ```
 
 **Stable vs mutable columns.** `repo_id`, `brand_id`, `hf_org_id`,
@@ -1098,7 +1144,7 @@ production DB.
 
 ---
 
-### `_migrations` (19 rows)
+### `_migrations` (22 rows; **021 intentionally absent**)
 
 Tracks which SQL files have been applied. Written by
 `x_monitor/store.py::_apply_migration` (after the migration's
@@ -1116,7 +1162,12 @@ The `applied_at` column reflects the moment the migration was
 first applied to a real production DB. Production migrated 005
 and 006 together (quote-tweets branch), 007 and 008 together
 (i18n branch), 009 alone (HF products), 010 alone (M:N rename),
-and 011–019 together (schema-modernization batch).
+011–019 together (schema-modernization batch), 020 alone
+(TEXT→INTEGER PK remediation), 022 alone (U9 remediation that
+completes the 6-signal kill), and 023 alone (parent-slug rename).
+Version 021 is intentionally absent — it was reserved for an HF
+products crawler (a `feat/hf-products-crawler` branch) that
+never landed.
 
 ---
 
@@ -1182,8 +1233,9 @@ post-011–019 renames applied).
 
                 ┌──────────────────────────────┐
                 │ search_queries               │
-                │ PK query_id                  │
-                │ FK → brands                  │
+                │ PK id (INTEGER AI)           │
+                │ UQ query_id (TEXT, NN)       │
+                │ FK → brands.id               │
                 └──────────────────────────────┘
                          (posts.source_query_id is a soft pointer here;
                           no declared FK, so query rows can be dropped
@@ -1192,28 +1244,34 @@ post-011–019 renames applied).
                 ┌────────────────────────────────┐
                 │ account_post_appearances       │
                 │ PK (author_id, tweet_id)       │
-                │ FK → posts.tweet_id            │
+                │ FK → accounts.id               │
+                │ FK → posts.id                  │
                 │   ON DELETE CASCADE            │
-                │   (FK → accounts is logical)   │
                 └────────────────────────────────┘
 
-   ┌──────────────────────────┐         ┌────────────────────────────────┐
-   │ signals                  │         │ roles                           │
-   │ PK id (INTEGER AI)       │         │ PK id (INTEGER AI)              │
-   │ UQ key (TEXT, NN)        │         │ UQ key (TEXT, NN)               │
-   │   (6 rows)               │         │   (3 rows after 016)            │
-   │                          │         │                                 │
-   │ (referenced by           │         │ (referenced by brands_accounts   │
-   │  posts_brands_signals    │         │  + companies_accounts.role_id)  │
-   │  .signal_id FK)          │         │                                 │
-   └────────┬─────────────────┘         └────────┬───────────────────────┘
-            │ FK → signals.key (CASCADE)        │ FK → roles.key (CASCADE)
-            ▼                                    ▼
-   ┌──────────────────────────┐         ┌────────────────────────────────┐
-   │ signal_labels            │         │ role_labels                     │
-   │ PK (key, lang)           │         │ PK (key, lang)                  │
-   │ 12 rows                  │         │ 6 rows (3 keys × 2 locales)     │
-   └──────────────────────────┘         └────────────────────────────────┘
+                  ┌──────────────────────────┐
+                  │ roles                    │
+                  │ PK id (INTEGER AI)       │
+                  │ UQ key (TEXT, NN)        │
+                  │   (3 rows after 016)     │
+                  │                          │
+                  │ (referenced by           │
+                  │  brands_accounts         │
+                  │  + companies_accounts    │
+                  │  .role_id FK)            │
+                  └────────┬─────────────────┘
+                           │ FK → roles.key (CASCADE; INTEGER FK to roles.id post-018/020)
+                           ▼
+                  ┌──────────────────────────┐
+                  │ role_labels              │
+                  │ PK (key, lang)           │
+                  │ 6 rows (3 keys × 2       │
+                  │        locales)          │
+                  └──────────────────────────┘
+
+                  (signals + signal_labels tables DROPPED by migration 022;
+                   the 6-bucket taxonomy is gone; posts_brands_signals now
+                   reads only from post_type_keys + sentiment_keys.)
 
    ┌──────────────────────────┐         ┌────────────────────────────────┐
    │ post_type_keys           │         │ sentiment_keys                  │
@@ -1234,58 +1292,69 @@ post-011–019 renames applied).
    └──────────────────────────┘         └────────────────────────────────┘
 
 
-   ┌────────────────┐  1:N  ┌────────────────┐
-   │   companies    │──────▶│   hf_orgs      │
-   │   PK id        │       │   PK id        │  (HF namespace is
-   │   (11 rows)    │       │   (11 rows)    │   1:N per company —
-   └────────────────┘       │   FK→companies │   HF namespace
-                            │   ON DELETE    │   ownership is
-                            │   CASCADE      │   corporate, not
-                            └──────┬─────────┘   shared)
+   ┌────────────────┐  1:N  ┌────────────────────┐
+   │   companies    │──────▶│   hf_orgs          │
+   │   PK id        │       │   PK id (INT AI)   │  (HF namespace is
+   │   (11 rows)    │       │   UQ namespace     │   1:N per company —
+   └────────────────┘       │   (TEXT, NN)       │   HF namespace
+                            │   FK→companies.id  │   ownership is
+                            │   ON DELETE        │   corporate, not
+                            │   CASCADE          │   shared)
+                            │   (11 rows)        │
+                            └──────┬─────────────┘
                                    │ 1
                                    │
                                    │ N
                             ┌──────▼─────────┐
                             │   products     │
-                            │   PK repo_id   │
-                            │   FK→brands    │
-                            │   FK→hf_orgs   │
-                            │   (19 rows)    │
+                            │   PK id (INT AI)│
+                            │   UQ repo_id    │
+                            │   FK→brands.id  │
+                            │   FK→hf_orgs.id │
+                            │   (19 rows)     │
                             └────────────────┘
 ```
 
 Logical (un-FK'd) edges:
 
-- `posts.author_id` → `accounts.author_id`. The migration does not
-  declare this FK on `posts` (it would block the 004 backfill that
-  inserts `accounts` rows from `posts.author_id`). The application
-  enforces it. Likewise `account_post_appearances.author_id` is
-  not a declared FK to `accounts.author_id`.
+- `posts.author_id` (INTEGER, FK → `accounts.id`) is a real declared
+  FK post-020. The pre-020 logical-only edge was enforced by the
+  application because the 004 backfill would have blocked on it
+  (it inserts `accounts` rows from `posts.author_id`). Post-020
+  the FK is declared, but the same backfill order is preserved
+  (`accounts` first, then `posts`) — see migration 020 for the
+  rebuild order.
 - `posts.source_query_id` → `search_queries.query_id`. Soft
   pointer; `ON DELETE SET NULL` semantics are achieved by the
   application setting the column to NULL when a query row is
-  removed, not by a real FK.
+  removed, not by a real FK. (`search_queries.brand_id` is now an
+  INTEGER FK to `brands.id` post-020.)
 - `_unattributed` brand rows. They are seeded into `brands`
   (`is_sentinel = 1`), they appear in `posts_brands` for
   un-attributed posts (filtered at query time), but they NEVER
-  appear in `posts_brands_signals` (CHECK constraint enforces this).
-  They are the only `brand_id` values that should not be rendered
-  on the treemap or grid.
+  appear in `posts_brands_signals` (the pre-020 `CHECK
+  (brand_id <> '_unattributed')` constraint was dropped in
+  migration 020 because the sentinel's INTEGER id is data-
+  dependent; the post-fetch attribution logic never inserts
+  sentinel rows into `posts_brands_signals` anyway).
+  They are the only brand rows that should not be rendered on the
+  treemap or grid.
 - Brand source priority (R2): `user_mention` + `hashtag` are
   higher confidence than `body_keyword` + `search_term`. Multi-
   source matches take the max confidence across contributing
   sources. This is enforced by the application, not the schema.
 - `posts_brands_signals.signal_id` enum (v1.9, FK to `signals.key`):
   `"release" | "community_question" | "criticism" | "commenter_capture" | "praise" | "other"`.
-  Legacy 6-bucket taxonomy; preserved through 019 for back-compat
-  with the Store API and all consumers.
+  Legacy 6-bucket taxonomy; **dropped in migration 022**. The
+  `(post_type, sentiment)` decomposition below is the only signal
+  vocabulary left in the schema post-022.
 - `posts_brands_signals.post_type` enum (v2.0 / 019, FK to
-  `post_type_keys.key`): `"buzz_releases" | "hands_on_usage" |
+  `post_type_keys.id`): `"buzz_releases" | "hands_on_usage" |
   "performance_comparisons" | "feedback_questions"`.
 - `posts_brands_signals.sentiment` enum (v2.0 / 019, FK to
-  `sentiment_keys.key`): `"positive" | "negative" | "neutral" | "mixed"`.
+  `sentiment_keys.id`): `"positive" | "negative" | "neutral" | "mixed"`.
 - `brands_accounts.role_id` / `companies_accounts.role_id` enum
-  (v1.9, FK to `roles.key`): trimmed to
+  (v1.9, FK to `roles.id`): trimmed to
   `"official" | "staff" | "community"` (was 5 values in 008:
   `official, community, researcher, press, vendor`; 016 removed
   `researcher`, `press`, `vendor` and added `staff`).
@@ -1499,6 +1568,41 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── CREATE idx_posts_brands_signals_brand_id_signal_id
    ├── CREATE idx_posts_brands_signals_brand_id_post_type
    └── CREATE idx_posts_brands_signals_brand_id_sentiment
+
+020_text_to_integer_pks_all_tables.sql   (on `main`; APPLIED on production 2026-06-25)
+                                          (U8 remediation: 13 TEXT-PK tables + products converted to INTEGER PK)
+   ├── Phase 1: lookup tables — brands, companies, accounts, hf_orgs, search_queries
+   │     (each: CREATE <table>_new with INTEGER id PK + UNIQUE slug column, JOIN-backfill via slug→id, swap)
+   │     hf_orgs additionally renames the original TEXT PK `id` → `namespace` (TEXT UNIQUE NOT NULL)
+   ├── Phase 2: posts (moved up so M:N can FK to posts.id)
+   │     (CREATE posts_new with INTEGER id PK + UNIQUE tweet_id, JOIN-backfill via author_handle→accounts.id)
+   ├── Phase 3: edge tables — brands_companies, brands_accounts, companies_accounts
+   │     (each: brand_id / company_id / author_id TEXT → INTEGER via JOIN-backfill)
+   │     brands_accounts + companies_accounts: role_id TEXT → INTEGER via JOIN to roles.key
+   ├── Phase 4: M:N tables — posts_brands, brand_search_terms, posts_brands_signals, posts_brands_mentions
+   │     (each: post_id / brand_id TEXT → INTEGER via JOIN-backfill)
+   │     posts_brands_signals additionally: signal_id / post_type / sentiment TEXT → INTEGER
+   │                                          CHECK (brand_id <> '_unattributed') DROPPED
+   │     brand_search_terms: brand_id TEXT → INTEGER
+   └── Phase 5: products (brand_id TEXT → INTEGER; hf_org_id TEXT namespace → INTEGER via JOIN to hf_orgs.namespace)
+
+(021 RESERVED — hf-products-crawler branch never landed; version slot intentionally empty)
+
+022_kill_signal_id.sql                  (on `main`; APPLIED on production 2026-06-25)
+                                          (U9 remediation: replace, not augment; the 6-signal taxonomy is fully removed)
+   ├── UPDATE posts_brands_signals (defensive backfill any NULL post_type / sentiment to 'hands_on_usage' / 'neutral')
+   ├── DROP + CREATE posts_brands_signals (drops signal_id; promotes post_type + sentiment to NOT NULL INTEGER FKs)
+   ├── DROP idx_posts_brands_signals_brand_id_signal_id  (signal_id index no longer has a column to support)
+   ├── DROP TABLE signals                                 (the 6-bucket enum-key table)
+   └── DROP TABLE signal_labels                           (per-locale display for the dropped signals)
+
+023_rename_brand_and_company_ids_to_nicknames.sql (on branch `refactor/brand-id-to-nickname`; CURRENT branch)
+   ├── ALTER TABLE brands    RENAME COLUMN brand_id   TO nickname
+   ├── ALTER TABLE companies RENAME COLUMN company_id TO nickname
+   ├── DROP INDEX IF EXISTS idx_brands_brand_id          (the original UNIQUE TEXT PK index)
+   ├── CREATE INDEX IF NOT EXISTS idx_brands_nickname    (UNIQUE on the new slug column)
+   ├── DROP INDEX IF EXISTS idx_companies_company_id
+   └── CREATE INDEX IF NOT EXISTS idx_companies_nickname
 ```
 
 The `posts` table grew in two stages and then SHRANK in v1.8, then GREW again in v1.8 + QT, then grew in v1.9 with the i18n locale work (none on `posts` itself — the locale columns landed on `brands` / `companies` / `accounts` instead), and the schema was otherwise unchanged through 011–019:
@@ -1571,3 +1675,33 @@ The `posts` table grew in two stages and then SHRANK in v1.8, then GREW again in
     static CASE backfill from the legacy `signal_id` to the
     new `(post_type, sentiment)` decomposition. The legacy
     `signal_id` column is preserved. No consumer is rewritten.
+- **v2.0 + U8/U9 remediation (migrations 020, 022; 021 reserved):**
+  - 020 completes the U8 plan-body literal for the 13 tables
+    that 018 deferred: every TEXT-PK table and every TEXT-storing-
+    key FK column is converted to INTEGER. New INTEGER surrogate
+    `id` PKs on `brands`, `companies`, `accounts`, `posts`,
+    `hf_orgs`, `search_queries`, `products`. The TEXT PK of
+    `hf_orgs` is renamed to `namespace` to avoid a type-changing-
+    same-name ambiguity. Every child FK column is also re-typed
+    (TEXT slug/storing-key → INTEGER storing-id). The
+    `(brand_id <> '_unattributed')` CHECK on
+    `posts_brands_signals` is dropped (the sentinel's INTEGER id
+    is data-dependent; the post-fetch attribution logic never
+    inserts sentinel rows anyway).
+  - 021 is **intentionally absent** — reserved for an HF
+    products crawler branch that never landed.
+  - 022 completes the U9 plan-body literal as a **replacement**,
+    not an augment: drops `signal_id` from `posts_brands_signals`,
+    promotes `post_type` + `sentiment` to `NOT NULL INTEGER` FKs,
+    drops the `signals` + `signal_labels` tables, drops the
+    `signal_id` index. The 11 consumer files that referenced
+    `signal_id` are rewritten to use `(post_type, sentiment)` only.
+- **v2.0 + parent-slug rename (migration 023):**
+  - 023 renames `brands.brand_id` → `brands.nickname` and
+    `companies.company_id` → `companies.nickname`. The child FK
+    columns are **unchanged** (they already hold INTEGER
+    surrogate ids post-020 and never held the slug string).
+    The two UNIQUE slug indexes are renamed (`idx_brands_nickname`,
+    `idx_companies_nickname`). The Store API preserves its public
+    contract by aliasing `b.nickname AS brand_id` at the read
+    boundary, so downstream consumers do not see the rename.
