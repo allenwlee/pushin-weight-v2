@@ -1,8 +1,9 @@
 ---
 title: "Replace Legacy signal_keys with post_types and sentiments"
 type: refactor
-status: planned
+status: completed
 date: 2026-06-24
+delivered: 2026-06-25
 origin: conversation + taxonomy research + db-schema.md
 ---
 
@@ -221,6 +222,26 @@ Steps in migration (like 008):
 - `docs/reference/db-schema.md`
 - `x_monitor/migrations/008_enum_i18n_lookup_tables.sql` (pattern)
 - `x_monitor/attribution.py`, `store.py`, `treemap.py`
+
+---
+
+## Delivery (2026-06-25)
+
+This plan was implemented as **U9** of `docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md` and shipped via **migration 022** (`x_monitor/migrations/022_kill_signal_id.sql`).
+
+**Final shipped state (post-migration-022):**
+- `signal_keys` / `signal_labels` (and the renamed `signals` / `signal_labels` from U4) DROPPED.
+- `posts_brands_signals.signal_id` DROPPED.
+- New tables `post_type_keys` / `post_type_labels` / `sentiment_keys` / `sentiment_labels` created with INTEGER PK (per U8 convention) and `lang` column (per U1).
+- `posts_brands_signals` rebuilt with `post_type` + `sentiment` columns as INTEGER NOT NULL FKs to the new tables.
+- 11-file consumer rewrite (store.py + intent_classifier.py + attribution.py + reattribute.py + treemap.py + dashboard.py + query_plan.py + run.py + trend-chart.js + dashboard.css + _model_card.html.j2).
+- `expected_signal` dropped from `data/queries/*.yaml` (21 files) and `x-monitoring/config.yaml::call_c_specs`.
+- `attribution.py::build_signal_prompt` rewritten to ask for `(post_type, sentiment)` instead of the 6-signal vocabulary.
+- Classifier: `classify_signal` removed; `classify_post(text, brand_ids) → dict[brand_id, tuple[post_type, sentiment]]` is the new entry point.
+
+**Deviation from this plan body:** the plan called the new enum tables `post_types` / `sentiments` (singular, no `_keys` suffix). The shipped implementation uses `post_type_keys` / `sentiment_keys` (with `_keys` suffix) to match the enum-lookup convention established by the U4 rename. Rationale documented in `docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md` under the "Reconsidered 2026-06-25" entry in Open Questions.
+
+See `project_xmonitor_schema_modernization_complete_2026-06-24.md` for the as-shipped record (commits, tests, follow-ups).
 
 ---
 
