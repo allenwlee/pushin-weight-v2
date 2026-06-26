@@ -1055,6 +1055,7 @@ class Store:
         brand_id: str,
         handle: str,
         role: str = "unknown",
+        author_id: str | None = None,
         source_query_ids: list[str] | None = None,
         display_name: str | None = None,
         verified: bool = False,
@@ -1070,8 +1071,11 @@ class Store:
         role)`. The `multi_brand_voice` column is dropped (R12) — that
         derivation moves to a query against brands_accounts.
 
-        For callers that don't have a real author_id (yaml-derived accounts
-        in `data/brands/<brand>/accounts.yaml`), we synthesize a stable
+        `author_id` is the X user id (immutable, globally-unique identifier
+        Twitter/X assigns to each account). Pass it when the caller has it
+        (e.g., the apify normalizers now extract it from the API response).
+        For callers that don't have one (yaml-derived accounts in
+        `data/brands/<brand>/accounts.yaml`), we synthesize a stable
         `handle:<handle>` author_id so re-upserts hit the same row.
         """
         if brand_id not in KNOWN_MODELS:
@@ -1086,14 +1090,18 @@ class Store:
         # The accounts row is still upserted (no role column there
         # post-migration 004).
         role_known = role in self._known_role_keys()
+        # Resolve author_id: real X user id when the caller passes one,
+        # synthetic `handle:<handle>` fallback otherwise. The dead-letter
+        # log uses the same synthesized value so the message is stable
+        # across calls.
+        resolved_author_id = author_id or f"handle:{handle}"
         if not role_known:
             self._dead_letter_enum(
                 "role", role,
                 table="brands_accounts",
                 brand_id=brand_id,
-                author_id=f"handle:{handle}",
+                author_id=resolved_author_id,
             )
-        author_id = f"handle:{handle}"
         now = _now_iso()
         # Upsert into accounts (author_id PK). We drop multi_brand_voice
         # silently — v1.8 callers can stop passing it; old callers passing
@@ -1106,6 +1114,7 @@ class Store:
                 first_seen_at, last_seen_at, source_query_ids, notes
             ) VALUES (?,?,?,?,?,?,?,?,?)
             ON CONFLICT(author_id) DO UPDATE SET
+                handle = COALESCE(excluded.handle, accounts.handle),
                 display_name = COALESCE(excluded.display_name, accounts.display_name),
                 verified = MAX(accounts.verified, excluded.verified),
                 bio_contains_brand = MAX(accounts.bio_contains_brand, excluded.bio_contains_brand),
@@ -1114,7 +1123,7 @@ class Store:
                 notes = COALESCE(excluded.notes, accounts.notes)
             """,
             (
-                author_id,
+                resolved_author_id,
                 handle,
                 display_name,
                 int(verified),
@@ -1136,14 +1145,14 @@ class Store:
             # (brands.id, accounts.id, roles.id), not TEXT slugs. Look
             # each up before the INSERT.
             brand_id_int = self._brand_int_id(brand_id)
-            author_id_int = self._account_int_id(author_id)
+            author_id_int = self._account_int_id(resolved_author_id)
             role_id_int = self._role_int_id(role)
             if brand_id_int is None:
                 # brand_id isn't in the brands table; the FK would fail.
                 _log.warning(
                     "upsert_account: skipping brands_accounts write; "
                     "brand_id=%r not in brands table (author_id=%s)",
-                    brand_id, author_id,
+                    brand_id, resolved_author_id,
                 )
                 return
             if author_id_int is None:
@@ -1151,13 +1160,13 @@ class Store:
                 # should always resolve. If it doesn't, the cache is
                 # stale — refresh once before giving up.
                 self._account_id_map = None
-                author_id_int = self._account_int_id(author_id)
+                author_id_int = self._account_int_id(resolved_author_id)
             if author_id_int is None or role_id_int is None:
                 # Truly unrecoverable; bail out to avoid an FK error.
                 _log.warning(
                     "upsert_account: skipping brands_accounts write; "
                     "unresolvable integer id (brand=%s, author=%s, role=%s)",
-                    brand_id, author_id, role,
+                    brand_id, resolved_author_id, role,
                 )
                 return
             self._conn.execute(

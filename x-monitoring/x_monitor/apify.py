@@ -453,6 +453,12 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
             or item.get("userName")
             or ""
         ),
+        # X user id of the tweet author — the immutable, globally-unique
+        # identifier Twitter/X assigns to each account. Stored as
+        # `accounts.author_id` so re-ingestion can match the same row even
+        # if the handle changes. Blank when the API didn't return an id
+        # (caller is expected to fall back to handle-based matching).
+        "author_id": str(author.get("id") or ""),
         "author_name": author.get("name") or "",
         "author_followers_count": int(author.get("followers") or 0),
         "author_verified": bool(
@@ -481,6 +487,11 @@ def _normalize_follower(item: dict[str, Any]) -> dict[str, Any]:
         "handle": str(handle),
         "display_name": str(display_name),
         "follower_count": follower_count,
+        # X user id (the immutable, globally-unique identifier Twitter/X
+        # assigns to each account). Stored as `accounts.author_id` so the
+        # same row can be matched on re-ingestion even if the handle
+        # changes. Blank when the API response didn't include one.
+        "author_id": str(item.get("id") or ""),
     }
 
 
