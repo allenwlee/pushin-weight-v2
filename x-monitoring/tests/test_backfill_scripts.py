@@ -393,12 +393,12 @@ def test_re_run_backfill_is_noop(tmp_path, monkeypatch):
     s = Store(db_path)
     try:
         rows = s._conn.execute(
-            "SELECT brand_id, display_name FROM brands"
+            "SELECT nickname AS brand_id, display_name FROM brands"
         ).fetchall()
         for r in rows:
             s._conn.execute(
                 "UPDATE brands SET display_name_en = ?, display_name_zh_cn = ? "
-                "WHERE brand_id = ?",
+                "WHERE nickname = ?",
                 (r["display_name"], r["display_name"], r["brand_id"]),
             )
         s._conn.commit()

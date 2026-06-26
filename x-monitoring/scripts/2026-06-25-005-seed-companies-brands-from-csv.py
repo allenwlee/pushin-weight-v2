@@ -337,7 +337,7 @@ def _process_row(
     # INSERT OR IGNORE companies.
     cur = conn.execute(
         "INSERT OR IGNORE INTO companies"
-        "(company_id, display_name, display_name_en, display_name_zh_cn,"
+        "(nickname, display_name, display_name_en, display_name_zh_cn,"
         " hq_country, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (company_id, company_name, company_name_en, company_name_zh_cn,
          hq_country, now),
@@ -347,7 +347,7 @@ def _process_row(
     # INSERT OR IGNORE brands.
     cur = conn.execute(
         "INSERT OR IGNORE INTO brands"
-        "(brand_id, display_name, display_name_en, display_name_zh_cn,"
+        "(nickname, display_name, display_name_en, display_name_zh_cn,"
         " accent_color, is_sentinel, created_at)"
         " VALUES (?, ?, ?, ?, ?, 0, ?)",
         (brand_id, brand_name, brand_name_en, brand_name_zh_cn,

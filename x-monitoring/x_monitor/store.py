@@ -756,7 +756,7 @@ class Store:
         # slug (b.brand_id) for downstream code that expects a string.
         rows = self._conn.execute(
             f"""
-            SELECT p.tweet_id, b.brand_id, p.text, p.author_handle, p.created_at
+            SELECT p.tweet_id, b.nickname AS brand_id, p.text, p.author_handle, p.created_at
             FROM posts p
             JOIN posts_brands pb ON pb.post_id = p.id
             JOIN brands b        ON b.id = pb.brand_id
@@ -779,8 +779,8 @@ class Store:
     _REGISTRY_TABLES: frozenset[str] = frozenset({"brands", "companies", "accounts"})
     _REGISTRY_COLUMNS: frozenset[str] = frozenset({"display_name", "bio"})
     _REGISTRY_PK: dict[str, str] = {
-        "brands": "brand_id",
-        "companies": "company_id",
+        "brands": "nickname",
+        "companies": "nickname",
         "accounts": "author_id",
     }
     # Registry locale-to-column-suffix. Unlike posts.text_en / text_zh_cn,
@@ -1471,7 +1471,7 @@ class Store:
             return self._brand_cache
         rows = self._conn.execute(
             """
-            SELECT brand_id, display_name, accent_color, is_sentinel
+            SELECT nickname AS brand_id, display_name, accent_color, is_sentinel
             FROM brands
             ORDER BY display_name
             """
@@ -1595,7 +1595,7 @@ class Store:
             self._brand_id_map = {
                 r["brand_id"]: r["id"]
                 for r in self._conn.execute(
-                    "SELECT id, brand_id FROM brands"
+                    "SELECT id, nickname AS brand_id FROM brands"
                 ).fetchall()
             }
         return self._brand_id_map.get(brand_id)
@@ -1606,7 +1606,7 @@ class Store:
             self._company_id_map = {
                 r["company_id"]: r["id"]
                 for r in self._conn.execute(
-                    "SELECT id, company_id FROM companies"
+                    "SELECT id, nickname AS company_id FROM companies"
                 ).fetchall()
             }
         return self._company_id_map.get(company_id)
@@ -1815,7 +1815,7 @@ class Store:
         """
         rows = self._conn.execute(
             """
-            SELECT company_id, display_name, hq_country
+            SELECT nickname AS company_id, display_name, hq_country
             FROM companies
             ORDER BY display_name
             """
@@ -1844,12 +1844,12 @@ class Store:
         """
         rows = self._conn.execute(
             """
-            SELECT b.brand_id
+            SELECT b.nickname AS brand_id
             FROM brands_companies bc
             JOIN brands b   ON b.id = bc.brand_id
             JOIN companies c ON c.id = bc.company_id
-            WHERE c.company_id = ?
-            ORDER BY b.brand_id
+            WHERE c.nickname = ?
+            ORDER BY b.nickname
             """,
             (company_id,),
         ).fetchall()
@@ -1871,7 +1871,7 @@ class Store:
         """
         rows = self._conn.execute(
             """
-            SELECT a.author_id, b.brand_id
+            SELECT a.author_id, b.nickname AS brand_id
             FROM brands_accounts ba
             JOIN accounts a ON a.id = ba.author_id
             JOIN brands b   ON b.id = ba.brand_id
@@ -1916,7 +1916,7 @@ class Store:
         """
         rows = self._conn.execute(
             """
-            SELECT bst.term, b.brand_id
+            SELECT bst.term, b.nickname AS brand_id
             FROM brand_search_terms bst
             JOIN brands b ON b.id = bst.brand_id
             """

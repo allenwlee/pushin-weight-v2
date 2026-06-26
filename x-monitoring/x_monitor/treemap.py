@@ -253,7 +253,7 @@ POLARITY_SQL: str = (
     "JOIN sentiment_keys sk ON sk.id = pbs.sentiment "
     "JOIN brands b ON b.id = pbs.brand_id "
     "WHERE pbs.brand_id = ? "
-    "  AND b.brand_id != '_unattributed' "
+    "  AND b.nickname != '_unattributed' "
     "  AND p.created_at_epoch >= ? "
     "GROUP BY sk.key"
 )
@@ -300,7 +300,7 @@ def compute_polarity_sentiment_breakdown(
     # slug is unknown, the breakdown is empty (the brand has no
     # posts_brands rows to aggregate).
     brand_id_int = conn.execute(
-        "SELECT id FROM brands WHERE brand_id = ?", (brand_id,)
+        "SELECT id FROM brands WHERE nickname = ?", (brand_id,)
     ).fetchone()
     if brand_id_int is None:
         return {}

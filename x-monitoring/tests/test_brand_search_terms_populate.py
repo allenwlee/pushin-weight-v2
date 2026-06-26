@@ -247,9 +247,13 @@ queries:
         # all dedup to MiniMax + 海螺; Q6 adds 🤯). llama yields
         # Llama + "Llama 3". Total: 5.
         assert _bst_row_count(conn) == 5
+        # post-020: brand_search_terms.brand_id is INTEGER FK → brands.id;
+        # JOIN back to brands.nickname so the assertion stays readable.
         rows = conn.execute(
-            "SELECT brand_id, term FROM brand_search_terms"
-            " ORDER BY brand_id, term"
+            "SELECT b.nickname AS brand_slug, bst.term"
+            " FROM brand_search_terms bst"
+            " JOIN brands b ON b.id = bst.brand_id"
+            " ORDER BY b.nickname, bst.term"
         ).fetchall()
         assert rows == [
             ('llama', '"Llama 3"'),
@@ -260,8 +264,10 @@ queries:
         ]  # SQLite ORDER BY uses Unicode codepoint order
         # Per-brand term counts: minimax=3 (MiniMax, 海螺, 🤯), llama=2
         by_brand = conn.execute(
-            "SELECT brand_id, COUNT(*) FROM brand_search_terms"
-            " GROUP BY brand_id ORDER BY brand_id"
+            "SELECT b.nickname AS brand_slug, COUNT(*)"
+            " FROM brand_search_terms bst"
+            " JOIN brands b ON b.id = bst.brand_id"
+            " GROUP BY b.nickname ORDER BY b.nickname"
         ).fetchall()
         assert by_brand == [("llama", 2), ("minimax", 3)]
     finally:

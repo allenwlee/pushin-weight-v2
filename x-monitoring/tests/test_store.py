@@ -185,12 +185,12 @@ def test_insert_posts_writes_posts_brands():
             # JOIN back to posts / brands to recover the TEXT identities
             # the test contract cares about.
             rows = store._conn.execute(
-                "SELECT b.brand_id, pb.weight "
+                "SELECT b.nickname AS brand_id, pb.weight "
                 "FROM posts_brands pb "
                 "JOIN brands b ON b.id = pb.brand_id "
                 "JOIN posts p ON p.id = pb.post_id "
                 "WHERE p.tweet_id = 'p1' "
-                "ORDER BY b.brand_id"
+                "ORDER BY b.nickname"
             ).fetchall()
             assert len(rows) == 2
             assert rows[0]["brand_id"] == "deepseek"
@@ -287,13 +287,13 @@ def test_insert_posts_writes_posts_brands_signals():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT b.brand_id, pt.key AS post_type, sn.key AS sentiment "
+                "SELECT b.nickname AS brand_id, pt.key AS post_type, sn.key AS sentiment "
                 "FROM posts_brands_signals pbs "
                 "JOIN brands b ON b.id = pbs.brand_id "
                 "JOIN post_type_keys pt ON pt.id = pbs.post_type "
                 "JOIN sentiment_keys sn ON sn.id = pbs.sentiment "
                 "JOIN posts p ON p.id = pbs.post_id "
-                "WHERE p.tweet_id = 'p1' ORDER BY b.brand_id"
+                "WHERE p.tweet_id = 'p1' ORDER BY b.nickname"
             ).fetchall()
             assert len(rows) == 2
             assert rows[0]["brand_id"] == "deepseek"
@@ -360,11 +360,11 @@ def test_insert_posts_drops_hallucinated_brand_classifications():
             # posts_brands_signals must contain exactly the 2 known
             # brands — the hallucinated `fake_brand` is dropped.
             rows = store._conn.execute(
-                "SELECT b.brand_id "
+                "SELECT b.nickname AS brand_id "
                 "FROM posts_brands_signals pbs "
                 "JOIN brands b ON b.id = pbs.brand_id "
                 "JOIN posts p ON p.id = pbs.post_id "
-                "WHERE p.tweet_id = 'p1' ORDER BY b.brand_id"
+                "WHERE p.tweet_id = 'p1' ORDER BY b.nickname"
             ).fetchall()
             assert len(rows) == 2
             assert [r["brand_id"] for r in rows] == ["deepseek", "qwen"]
@@ -426,11 +426,11 @@ def test_insert_posts_keeps_cross_mention_classification():
                 }
             ])
             rows = store._conn.execute(
-                "SELECT b.brand_id "
+                "SELECT b.nickname AS brand_id "
                 "FROM posts_brands_signals pbs "
                 "JOIN brands b ON b.id = pbs.brand_id "
                 "JOIN posts p ON p.id = pbs.post_id "
-                "WHERE p.tweet_id = 'p1' ORDER BY b.brand_id"
+                "WHERE p.tweet_id = 'p1' ORDER BY b.nickname"
             ).fetchall()
             # Both classifications land — deepseek is a real brand
             # even though the post is only attributed to qwen.
@@ -529,7 +529,7 @@ def test_insert_posts_brands_upsert_on_conflict():
                 "SELECT pb.weight FROM posts_brands pb "
                 "JOIN posts p ON p.id = pb.post_id "
                 "JOIN brands b ON b.id = pb.brand_id "
-                "WHERE p.tweet_id='p1' AND b.brand_id='qwen'"
+                "WHERE p.tweet_id='p1' AND b.nickname='qwen'"
             ).fetchone()
             assert row["weight"] == 0.7
             # Only 1 row, not 2.
@@ -537,7 +537,7 @@ def test_insert_posts_brands_upsert_on_conflict():
                 "SELECT COUNT(*) FROM posts_brands pb "
                 "JOIN posts p ON p.id = pb.post_id "
                 "JOIN brands b ON b.id = pb.brand_id "
-                "WHERE p.tweet_id='p1' AND b.brand_id='qwen'"
+                "WHERE p.tweet_id='p1' AND b.nickname='qwen'"
             ).fetchone()[0]
             assert n == 1
         finally:

@@ -118,7 +118,7 @@ def test_migration_017_full_stack_apply(tmp_path):
         applied = sorted(
             r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
         )
-        expected = sorted(set(range(1, 21)) | {22})
+        expected = sorted(set(range(1, 21)) | {22, 23})
         assert applied == expected, (
             f"unexpected versions: {applied} (expected {expected})"
         )
@@ -145,13 +145,13 @@ def test_load_brand_search_terms_from_db_returns_seeded_map(tmp_path):
         # auto-population in U7). INSERT OR IGNORE because migration
         # 004 already seeded the 'minimax' brand.
         s._conn.execute(
-            "INSERT OR IGNORE INTO brands(brand_id, display_name, "
+            "INSERT OR IGNORE INTO brands(nickname, display_name, "
             "accent_color, is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
             ("minimax", "MiniMax", "#a855f7", 0, "2026-06-24T00:00:00+00:00"),
         )
         # brand_search_terms.brand_id is INTEGER (FK -> brands.id) post-020
         brand_int = s._conn.execute(
-            "SELECT id FROM brands WHERE brand_id = ?", ("minimax",)
+            "SELECT id FROM brands WHERE nickname = ?", ("minimax",)
         ).fetchone()["id"]
         s._conn.execute(
             "INSERT INTO brand_search_terms(brand_id, term, added_at) "
@@ -238,14 +238,14 @@ def test_yaml_and_db_can_diverge_for_attribution_path(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         s._conn.execute(
-            "INSERT OR IGNORE INTO brands(brand_id, display_name, "
+            "INSERT OR IGNORE INTO brands(nickname, display_name, "
             "accent_color, is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
             ("minimax", "MiniMax", "#a855f7", 0, "2026-06-24T00:00:00+00:00"),
         )
         # DB-side: only 'minimax' is a search term.
         # brand_search_terms.brand_id is INTEGER (FK -> brands.id) post-020
         brand_int = s._conn.execute(
-            "SELECT id FROM brands WHERE brand_id = ?", ("minimax",)
+            "SELECT id FROM brands WHERE nickname = ?", ("minimax",)
         ).fetchone()["id"]
         s._conn.execute(
             "INSERT INTO brand_search_terms(brand_id, term, added_at) "

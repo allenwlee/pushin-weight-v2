@@ -141,7 +141,7 @@ def _ensure_brand_row(
     """INSERT OR IGNORE a brand row if missing. Returns True if inserted."""
     cur = conn.execute(
         "INSERT OR IGNORE INTO brands"
-        "(brand_id, display_name, accent_color, is_sentinel, created_at)"
+        "(nickname, display_name, accent_color, is_sentinel, created_at)"
         " VALUES (?, ?, ?, 0, ?)",
         (brand_id, display_name, accent_color, now),
     )
@@ -197,11 +197,22 @@ def _populate(
                 new_brand_rows += 1
 
         n_new = 0
+        # post-020: brand_search_terms.brand_id is INTEGER FK → brands.id;
+        # resolve the slug → INTEGER id once per brand before the
+        # per-token insert loop.
+        brand_int_row = conn.execute(
+            "SELECT id FROM brands WHERE nickname = ?", (brand_id,)
+        ).fetchone()
+        if brand_int_row is None:
+            print(f"  {brand_id}: brand row missing after _ensure_brand_row;"
+                  f" skipping term insert", file=sys.stderr)
+            continue
+        brand_int = brand_int_row[0]
         for tok in tokens:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO brand_search_terms"
                 "(brand_id, term, added_at) VALUES (?, ?, ?)",
-                (brand_id, tok, now),
+                (brand_int, tok, now),
             )
             if cur.rowcount > 0:
                 n_new += 1
@@ -227,7 +238,8 @@ def _populate(
         return 0
 
     db_rows = conn.execute(
-        "SELECT brand_id, term FROM brand_search_terms"
+        "SELECT b.nickname AS brand_id, bst.term"
+        " FROM brand_search_terms bst JOIN brands b ON b.id = bst.brand_id"
     ).fetchall()
     db_terms: dict[str, str] = {}
     for brand_id, term in db_rows:

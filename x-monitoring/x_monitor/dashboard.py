@@ -173,7 +173,7 @@ def _load_brand_display_names(
     """
     suffix = _LOCALE_TO_COLUMN.get(locale, "en")
     rows = store._conn.execute(
-        f"SELECT brand_id, display_name, display_name_{suffix} AS locale_name, "
+        f"SELECT nickname AS brand_id, display_name, display_name_{suffix} AS locale_name, "
         "display_name_en FROM brands"
     ).fetchall()
     out: dict[str, str] = {}
@@ -405,7 +405,7 @@ def _read_classification_breakdown_for_brand(
           per_day[iso_date][key] = float (weighted_count)
     """
     brand_id_int = conn.execute(
-        "SELECT id FROM brands WHERE brand_id = ?", (brand_id,)
+        "SELECT id FROM brands WHERE nickname = ?", (brand_id,)
     ).fetchone()
     if brand_id_int is None:
         return {}, {}, {}, {}
@@ -424,7 +424,7 @@ def _read_classification_breakdown_for_brand(
         JOIN post_type_keys ptk ON ptk.id = pbs.post_type
         JOIN brands b ON b.id = pbs.brand_id
         WHERE pbs.brand_id = ?
-          AND b.brand_id != '_unattributed'
+          AND b.nickname != '_unattributed'
           AND p.created_at >= ?
         GROUP BY day, sk.key, ptk.key
         """,
@@ -867,7 +867,7 @@ class DashboardApp:
                     # INTEGER to the SQL. The _unattributed check is via
                     # brands.brand_id slug (preserved as TEXT UNIQUE).
                     brand_id_int_row = store._conn.execute(
-                        "SELECT id FROM brands WHERE brand_id = ?", (m,)
+                        "SELECT id FROM brands WHERE nickname = ?", (m,)
                     ).fetchone()
                     if brand_id_int_row is None:
                         # Brand slug not in brands table — skip the tile.
@@ -902,7 +902,7 @@ class DashboardApp:
                         JOIN posts p ON p.id = pb.post_id
                         JOIN brands b ON b.id = pb.brand_id
                         WHERE pb.brand_id = ?
-                          AND b.brand_id != '_unattributed'
+                          AND b.nickname != '_unattributed'
                           AND p.created_at >= ?
                         """,
                         (brand_id_int, current_window[0].isoformat()),

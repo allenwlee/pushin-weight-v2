@@ -49,7 +49,7 @@ def test_load_brand_display_names_zh_cn_returns_zh_cn_column(tmp_path):
     try:
         # Seeded brands include minimax. Set its zh_cn display name.
         s._conn.execute(
-            "UPDATE brands SET display_name_zh_cn = ? WHERE brand_id = ?",
+            "UPDATE brands SET display_name_zh_cn = ? WHERE nickname = ?",
             ("MiniMax AI 公司", "minimax"),
         )
         names = _load_brand_display_names(s, "zh_cn")
@@ -65,7 +65,7 @@ def test_load_brand_display_names_falls_back_to_en(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         s._conn.execute(
-            "UPDATE brands SET display_name_en = ? WHERE brand_id = ?",
+            "UPDATE brands SET display_name_en = ? WHERE nickname = ?",
             ("MiniMax AI", "minimax"),
         )
         names = _load_brand_display_names(s, "zh_cn")
@@ -93,7 +93,7 @@ def test_load_brand_display_names_zh_cn_alias_supported(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         s._conn.execute(
-            "UPDATE brands SET display_name_zh_cn = ? WHERE brand_id = ?",
+            "UPDATE brands SET display_name_zh_cn = ? WHERE nickname = ?",
             ("MiniMax AI 公司", "minimax"),
         )
         names_canonical = _load_brand_display_names(s, "zh-CN")
@@ -261,7 +261,7 @@ def test_build_cards_threads_db_brand_names_zh_cn(tmp_path):
         try:
             s2._conn.execute(
                 "UPDATE brands SET display_name_zh_cn = ? "
-                "WHERE brand_id = ?",
+                "WHERE nickname = ?",
                 ("MiniMax AI 中文", "minimax"),
             )
         finally:
@@ -385,7 +385,7 @@ def test_api_model_returns_db_display_name_zh_cn(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         s._conn.execute(
-            "UPDATE brands SET display_name_zh_cn = ? WHERE brand_id = ?",
+            "UPDATE brands SET display_name_zh_cn = ? WHERE nickname = ?",
             ("MiniMax AI 公司", "minimax"),
         )
     finally:
