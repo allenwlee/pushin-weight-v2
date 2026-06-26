@@ -5,6 +5,8 @@
 
 ![x-monitor schema after migration batch 011-023](images/xmonitor-schema-post-batch.png)
 
+*This image is generated from [`docs/reference/schema.dot`](schema.dot) via [`scripts/build_schema_image.sh`](../../scripts/build_schema_image.sh) — regenerate after any migration change.*
+
 Source files: `x_monitor/migrations/00{1..9}_*.sql` + `x_monitor/migrations/01{0..9}_*.sql` + `x_monitor/migrations/02{0..3}_*.sql`
 Migration ledger: `_migrations` (**22 rows** — versions 1–20 + 22 + 23 applied; **021 intentionally reserved** for the HF products crawler that never landed).
 
