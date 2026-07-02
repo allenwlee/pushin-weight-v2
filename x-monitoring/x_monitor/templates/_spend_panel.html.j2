@@ -1,0 +1,59 @@
+{# {{AGENT_ATTRIBUTION}} #}
+{# U6: API-spend panel — aggregated metrics from summary["http_log"] of
+   the latest run. htmx-polled via /api/spend.html. Renders nothing
+   useful when there is no run yet (the embedded page renders once a
+   run completes). #}
+<aside class="spend-panel" aria-label="API spend, latest cycle">
+  <header class="spend-panel-head">
+    <h2>API spend</h2>
+    <span class="muted">last cycle{% if last_run_finished_at %} · {{ last_run_finished_at }}{% endif %}</span>
+  </header>
+  {% if not has_run %}
+    <p class="muted">no run yet — wait for the next cycle.</p>
+  {% else %}
+    <dl class="spend-grid">
+      <div class="spend-cell">
+        <dt>requests</dt>
+        <dd>{{ spend.n_requests }}</dd>
+      </div>
+      <div class="spend-cell">
+        <dt>total duration</dt>
+        <dd>{{ "%.2f"|format(spend.total_duration_ms / 1000) }}s</dd>
+      </div>
+      <div class="spend-cell">
+        <dt>total results</dt>
+        <dd>{{ spend.n_results }}</dd>
+      </div>
+    </dl>
+    {% if spend.by_endpoint %}
+      <table class="spend-endpoints" aria-label="Per-endpoint breakdown">
+        <thead>
+          <tr>
+            <th scope="col">endpoint</th>
+            <th scope="col">n</th>
+            <th scope="col">mean ms</th>
+            <th scope="col">max ms</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for path, agg in spend.by_endpoint.items()|sort %}
+            <tr>
+              <td class="spend-path">{{ path }}</td>
+              <td>{{ agg.n }}</td>
+              <td>{{ "%.0f"|format(agg.mean_ms) }}</td>
+              <td>{{ agg.max_ms }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+    {% if spend.by_status %}
+      <p class="spend-status muted">
+        status codes:
+        {% for status, count in spend.by_status.items()|sort %}
+          <span class="spend-status-chip">{{ status }}×{{ count }}</span>
+        {% endfor %}
+      </p>
+    {% endif %}
+  {% endif %}
+</aside>

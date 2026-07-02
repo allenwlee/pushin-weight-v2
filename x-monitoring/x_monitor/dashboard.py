@@ -298,6 +298,61 @@ def _load_latest_run(runs_dir: Path) -> dict[str, Any] | None:
     return None
 
 
+def summarize_http_log(log: list[dict] | None) -> dict[str, Any]:
+    """Aggregate per-cycle HTTP spend from `summary["http_log"]`.
+
+    Used by both the new dashboard /api/spend.* routes and the existing
+    scripts/dump_http_log.py shape (latency_percentiles stays in
+    dump_http_log; this helper stays dashboard-local for the panel
+    render). Kept here so the same aggregation is reused by tests.
+
+    Returns a dict with:
+      - n_requests          total HTTP requests in the cycle
+      - total_duration_ms   sum of all per-request durations
+      - by_endpoint         {path: {n, mean_ms, max_ms}}
+      - by_status           {status_int: count}
+      - n_results           sum of n_results across requests
+    Empty log -> all zeros, empty dicts.
+    """
+    out: dict[str, Any] = {
+        "n_requests": 0,
+        "total_duration_ms": 0,
+        "by_endpoint": {},
+        "by_status": {},
+        "n_results": 0,
+    }
+    if not log:
+        return out
+
+    # Pass 1: aggregate per-endpoint counts and durations.
+    per_endpoint: dict[str, dict[str, int]] = {}
+    for r in log:
+        path = r.get("path") or "?"
+        dur = int(r.get("duration_ms") or 0)
+        status = r.get("status")
+        per_endpoint.setdefault(path, {"n": 0, "total_dur": 0, "max_dur": 0})
+        per_endpoint[path]["n"] += 1
+        per_endpoint[path]["total_dur"] += dur
+        if dur > per_endpoint[path]["max_dur"]:
+            per_endpoint[path]["max_dur"] = dur
+        if status is not None:
+            out["by_status"][status] = out["by_status"].get(status, 0) + 1
+        out["n_results"] += int(r.get("n_results") or 0)
+
+    out["n_requests"] = len(log)
+    out["total_duration_ms"] = sum(
+        int(r.get("duration_ms") or 0) for r in log
+    )
+    for path, agg in per_endpoint.items():
+        n = agg["n"]
+        out["by_endpoint"][path] = {
+            "n": n,
+            "mean_ms": agg["total_dur"] / n if n else 0,
+            "max_ms": agg["max_dur"],
+        }
+    return out
+
+
 def _parse_post_timestamp(created):
     """Parse a tweet created_at into an aware UTC datetime, or None.
 
@@ -1174,12 +1229,20 @@ class DashboardApp:
         def grid():
             # 9-card grid (preserved from v1.6). Moved off / when the treemap
             # became the default front page.
-            cards, _latest_run = self._build_cards(db_path)
+            cards, latest_run = self._build_cards(db_path)
+            spend = summarize_http_log(
+                (latest_run or {}).get("http_log") or []
+            )
             return render_template(
                 "grid.html.j2",
                 cards=cards,
                 poll_seconds=self.config.dashboard.poll_seconds,
                 active_locale=self._resolve_locale(),
+                spend=spend,
+                has_run=latest_run is not None,
+                last_run_finished_at=(
+                    (latest_run or {}).get("finished_at")
+                ),
             )
 
         @app.route("/api/treemap.html")
@@ -1284,6 +1347,9 @@ class DashboardApp:
             payload, latest_run = self._build_combined_payload(
                 db_path, window_days=raw_window,
             )
+            spend = summarize_http_log(
+                (latest_run or {}).get("http_log") or []
+            )
             return render_template(
                 "combined.html.j2",
                 payload=payload,
@@ -1292,6 +1358,11 @@ class DashboardApp:
                 poll_seconds=self.config.dashboard.poll_seconds,
                 last_run_at=(latest_run or {}).get("finished_at"),
                 brands=self.config.enabled_models,
+                spend=spend,
+                has_run=latest_run is not None,
+                last_run_finished_at=(
+                    (latest_run or {}).get("finished_at")
+                ),
             )
 
         @app.route("/api/combined.html")
@@ -1526,6 +1597,43 @@ class DashboardApp:
                     "n_posts": len(posts),
                     "n_accounts": len(accounts),
                     "fetched_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+
+        # U6: API-spend panel — aggregated metrics from
+        # summary["http_log"]. Two routes so htmx polling can hit
+        # the HTML fragment while external consumers use JSON.
+        @app.route("/api/spend.html")
+        def api_spend_html():
+            latest = _load_latest_run(self.runs_dir)
+            spend = summarize_http_log(
+                (latest or {}).get("http_log") or []
+            )
+            return render_template(
+                "_spend_panel.html.j2",
+                spend=spend,
+                has_run=latest is not None,
+                last_run_finished_at=(
+                    (latest or {}).get("finished_at")
+                ),
+            )
+
+        @app.route("/api/spend.json")
+        def api_spend_json():
+            latest = _load_latest_run(self.runs_dir)
+            spend = summarize_http_log(
+                (latest or {}).get("http_log") or []
+            )
+            return jsonify(
+                {
+                    "spend": spend,
+                    "has_run": latest is not None,
+                    "last_run_finished_at": (
+                        (latest or {}).get("finished_at")
+                    ),
+                    "fetched_at": datetime.now(
+                        timezone.utc
+                    ).isoformat(),
                 }
             )
 

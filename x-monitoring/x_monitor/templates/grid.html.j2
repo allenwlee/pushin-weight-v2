@@ -56,5 +56,11 @@
         hx-swap="innerHTML">
     {% include "_grid_cards.html.j2" %}
   </main>
+  <aside id="api-spend" class="spend-panel-wrap"
+         hx-get="/api/spend.html"
+         hx-trigger="every {{ poll_seconds }}s"
+         hx-swap="innerHTML">
+    {% include "_spend_panel.html.j2" %}
+  </aside>
 </body>
 </html>
