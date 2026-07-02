@@ -598,15 +598,28 @@ def test_insert_posts_brands_mentions_allows_null_brand_id():
 
 
 def test_read_brands_returns_12_rows():
-    """read_brands returns the 11 real brands + the _unattributed sentinel."""
+    """read_brands returns the 11 real brands + the _unattributed sentinel.
+
+    Note: the cumulative count is no longer asserted as a strict 12
+    because migration 024 (U3) added 9 more v1.7 brand_ids, and any
+    future seed migration would also raise the cumulative count. The
+    meaningful property is that the 11 v1.6 brand_ids + 1 sentinel are
+    present, plus any later seed migrations.
+    """
     with tempfile.TemporaryDirectory() as d:
         store = Store(Path(d) / "x.db")
         try:
             brands = store.read_brands()
-            assert len(brands) == 12
             sentinels = [b for b in brands if b.is_sentinel]
             assert len(sentinels) == 1
             assert sentinels[0].brand_id == "_unattributed"
+            real_ids = {b.brand_id for b in brands if not b.is_sentinel}
+            for required in {
+                "minimax", "qwen", "deepseek", "glm", "xiaomi_mimo",
+                "moonshot_kimi", "inclusionai", "mistral", "stepfun",
+                "ernie", "hunyuan",
+            }:
+                assert required in real_ids, f"missing brand_id: {required}"
             # Cache hit on second call returns same list (identity).
             brands2 = store.read_brands()
             assert brands2 is brands

@@ -397,12 +397,20 @@ def test_get_posts_missing_translations_invalid_locale_raises(tmp_path):
 
 
 def test_migration_004_brands_seeded(tmp_path):
-    """Migration 004 seeds 12 brands incl. _unattributed (is_sentinel=1).
+    """Migration 004 seeds the 11 v1.6 brand_ids + the `_unattributed`
+    sentinel.
 
     Per the brand-model plan: 11 real brand_ids (minimax, qwen, deepseek,
     glm, xiaomi_mimo, moonshot_kimi, inclusionai, mistral, stepfun,
     ernie, hunyuan) + the `_unattributed` sentinel. read_brands()
     returns them as BrandRow dataclasses.
+
+    The total count assertion is intentionally NOT a strict number:
+    migration 024 (U3) added 9 more v1.7 brand_ids, and any future
+    seed migration would also raise the cumulative count. We assert
+    the 11 v1.6 brand_ids are present instead, which is the property
+    this test is actually responsible for (it pins migration 004's
+    seeding behavior).
     """
     from x_monitor.store import BrandRow, Store
 
@@ -410,12 +418,12 @@ def test_migration_004_brands_seeded(tmp_path):
     s = Store(db, auto_migrate=True)
     try:
         brands = s.read_brands()
-        assert len(brands) == 12, f"expected 12 brands, got {len(brands)}"
         # Sentinel present and correctly flagged.
         sentinels = [b for b in brands if b.is_sentinel]
         assert len(sentinels) == 1
         assert sentinels[0].brand_id == "_unattributed"
-        # Real brand slugs present.
+        # Real v1.6 brand slugs present (the actual property migration
+        # 004 is responsible for seeding).
         real_ids = {b.brand_id for b in brands if not b.is_sentinel}
         for required in {
             "minimax", "qwen", "deepseek", "glm", "xiaomi_mimo",
