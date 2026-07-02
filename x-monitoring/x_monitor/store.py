@@ -145,6 +145,11 @@ class Store:
         # lazy / not-invalidated lifecycle as the roles cache.
         self._post_type_cache: set[str] | None = None
         self._sentiment_cache: set[str] | None = None
+        # U1: caches for the new enum families introduced by
+        # migration 025 (discourse_keys, nationalism_keys). Same lazy /
+        # not-invalidated lifecycle as the post_type / sentiment cache.
+        self._discourse_cache: set[str] | None = None
+        self._nationalism_cache: set[str] | None = None
         # Per-insert_posts counters, read by the cron caller to surface
         # in summary.totals. Reset at the start of each insert_posts call.
         self._classifications_written: int = 0
@@ -165,6 +170,10 @@ class Store:
         self._role_id_map: dict[str, int] | None = None
         self._post_type_id_map: dict[str, int] | None = None
         self._sentiment_id_map: dict[str, int] | None = None
+        # U1: integer-id lookup caches for discourse_keys and
+        # nationalism_keys (mirrors the pattern at _post_type_id_map).
+        self._discourse_id_map: dict[str, int] | None = None
+        self._nationalism_id_map: dict[str, int] | None = None
 
     def close(self) -> None:
         self._conn.close()
@@ -240,6 +249,95 @@ class Store:
                 self._conn.execute("PRAGMA foreign_keys = ON")
             newly.append(version)
         return newly
+
+    # --- call_state (U2: since= cursor persistence) -------------------
+
+    # Sentinel written in place of NULL `bucket` so the composite
+    # PRIMARY KEY can support ON CONFLICT semantics. SQLite (and the
+    # SQL standard) treat two NULLs as distinct in UNIQUE/PK
+    # constraints, so a NULL bucket would silently break the
+    # UPSERT path. The empty string is never a real bucket value
+    # (v1.6 buckets are nonempty identifiers; v1.7 calls always
+    # pass bucket=None).
+    _NULL_BUCKET_SENTINEL: str = ""
+
+    @classmethod
+    def _bucket_for_storage(cls, bucket: str | None) -> str:
+        return cls._NULL_BUCKET_SENTINEL if bucket is None else bucket
+
+    def get_last_completed_at(
+        self,
+        brand_id: str,
+        call_id: str,
+        call_kind: str,
+        bucket: str | None,
+        query_id: str,
+    ) -> str | None:
+        """Return the cursor for a PlannedCall, or None if no prior run.
+
+        `last_completed_at` is the ISO-8601 timestamp of the last
+        successful cycle that finished this exact PlannedCall. The
+        caller subtracts CURSOR_OVERLAP_HOURS before emitting it as
+        the TwitterAPI.io `since:` operator (see x_monitor/run.py).
+
+        The composite key matches the migration 025 PRIMARY KEY:
+        (brand_id, call_id, call_kind, bucket, query_id). Two Call C
+        specs in the same cycle share call_kind/bucket/query_id but
+        differ in call_id, so they're stored as separate cursors.
+
+        Returns None when the row does not exist (first-ever cycle
+        for this PlannedCall). Returns the stored ISO timestamp
+        otherwise.
+        """
+        bucket_stored = self._bucket_for_storage(bucket)
+        row = self._conn.execute(
+            "SELECT last_completed_at FROM call_state "
+            "WHERE brand_id = ? AND call_id = ? AND call_kind = ? "
+            "AND bucket = ? AND query_id = ?",
+            (brand_id, call_id, call_kind, bucket_stored, query_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return row["last_completed_at"]
+
+    def set_last_completed_at(
+        self,
+        brand_id: str,
+        call_id: str,
+        call_kind: str,
+        bucket: str | None,
+        query_id: str,
+        last_completed_at: str,
+    ) -> None:
+        """Upsert the cursor for a PlannedCall after a successful cycle.
+
+        Idempotent: re-running the same cycle leaves the cursor at
+        `last_completed_at`. The caller is responsible for advancing
+        the cursor only on success — if the cycle raises, this method
+        must NOT be called, so a failed cycle does not lose data
+        (the prior cursor is preserved).
+
+        See migration 025 for the column shapes. Note the
+        NULL-bucket sentinel: see `_NULL_BUCKET_SENTINEL`.
+        """
+        bucket_stored = self._bucket_for_storage(bucket)
+        self._conn.execute(
+            """
+            INSERT INTO call_state(
+                brand_id, call_id, call_kind, bucket, query_id,
+                last_completed_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(brand_id, call_id, call_kind, bucket, query_id)
+            DO UPDATE SET
+                last_completed_at = excluded.last_completed_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                brand_id, call_id, call_kind, bucket_stored, query_id,
+                last_completed_at, _now_iso(),
+            ),
+        )
+        self._conn.commit()
 
     # --- posts ------------------------------------------------------------
 
@@ -1457,6 +1555,301 @@ class Store:
             (post_id_int, brand_id_int, post_type_int, sentiment_int),
         )
 
+    # --- U1: posts_brands_discourse helpers (migration 025) ----------------
+    #
+    # Per-act pragmatics signal junction. The `discourse_key` and
+    # `act_id` parts of the composite PK are required (NOT NULL); the
+    # two `*_nationalism` FKs are nullable during the backfill window
+    # (filled by `bulk_update_nationalism` once U4's second pass runs).
+    # All FK columns store INTEGER ids — see migration 025 header.
+
+    def bulk_insert_post_brand_discourse(
+        self, rows: list[dict[str, Any]]
+    ) -> int:
+        """Upsert rows into posts_brands_discourse (U1, U4).
+
+        Each row dict requires:
+          - `tweet_id` (TEXT, FK to posts.tweet_id)
+          - `brand_id` (TEXT, FK to brands.brand_id)
+          - `discourse_key` (TEXT; e.g. 'dunk_yingyang')
+          - `act_id` (int, 1-99; v1 always writes 1)
+        Optional (nullable during backfill window):
+          - `china_nationalism` (TEXT; e.g. 'anti')
+          - `us_nationalism` (TEXT; e.g. 'constructive_critical')
+
+        Returns the number of rows successfully written (existing
+        rows are upserted — same `(post, brand, discourse, act)` PK
+        updates the nationalism columns in place).
+
+        All FK resolutions are guarded: unknown `discourse_key` or
+        `*_nationalism` is dead-lettered and the row is dropped (the
+        parser must coerce before calling). Unknown `brand_id` is
+        dropped with a warning. `act_id` outside 1-99 raises ValueError
+        (a caller-side invariant).
+
+        The bulk method follows the same shape as
+        `bulk_update_translations`: one transaction, one cursor per
+        row, count of *upserted* rows returned.
+        """
+        if not rows:
+            return 0
+        # Pre-validate: every row must have the four required keys.
+        for r in rows:
+            for required in (
+                "tweet_id", "brand_id", "discourse_key", "act_id",
+            ):
+                if required not in r:
+                    raise KeyError(
+                        f"bulk_insert_post_brand_discourse: row missing "
+                        f"{required!r}: {r!r}"
+                    )
+        n_written = 0
+        with self.transaction() as conn:
+            for r in rows:
+                tweet_id = str(r["tweet_id"])
+                brand_id = r["brand_id"]
+                discourse_key = r["discourse_key"]
+                act_id = int(r["act_id"])
+                if not 1 <= act_id <= 99:
+                    raise ValueError(
+                        f"bulk_insert_post_brand_discourse: act_id={act_id} "
+                        f"out of range [1, 99] (tweet_id={tweet_id} "
+                        f"brand_id={brand_id} discourse_key={discourse_key})"
+                    )
+                # Discourse FK guard (dead-letter; never coerce silently).
+                # `uncategorized` is the sentinel for LLM-hallucinated
+                # discourse keys (KTD5); it's NOT a row in
+                # discourse_keys (the table is intentionally tight).
+                # We drop `uncategorized` rows with a dead-letter
+                # note: they carry no actionable discourse signal,
+                # the brief renderer cites them in the limitations
+                # paragraph. Persisting them as rows would require
+                # adding `uncategorized` to discourse_keys (which
+                # would muddy the taxonomy — explicitly avoided).
+                if discourse_key == "uncategorized":
+                    self._dead_letter_enum(
+                        "discourse", discourse_key,
+                        table="posts_brands_discourse",
+                        post_id=tweet_id,
+                        brand_id=brand_id,
+                        note="uncategorized-sentinel (KTD5): row skipped, no FK target",
+                    )
+                    continue
+                if discourse_key not in self._known_discourse_keys():
+                    self._dead_letter_enum(
+                        "discourse", discourse_key,
+                        table="posts_brands_discourse",
+                        post_id=tweet_id,
+                        brand_id=brand_id,
+                    )
+                    continue
+                # Brand FK guard (drop with warning; mirrors the
+                # pre-019 signal handler).
+                if brand_id not in self._known_brand_ids():
+                    _log.warning(
+                        "bulk_insert_post_brand_discourse: dropping row "
+                        "for brand_id=%r not in brands table "
+                        "(tweet_id=%s discourse_key=%s)",
+                        brand_id, tweet_id, discourse_key,
+                    )
+                    continue
+                # Resolve INTEGER ids.
+                post_id_int = self._tweet_int_id(tweet_id)
+                brand_id_int = self._brand_int_id(brand_id)
+                if post_id_int is None or brand_id_int is None:
+                    _log.warning(
+                        "bulk_insert_post_brand_discourse: dropping row; "
+                        "unresolvable id (tweet_id=%s brand_id=%s)",
+                        tweet_id, brand_id,
+                    )
+                    continue
+                discourse_key_int = self._discourse_int_id(discourse_key)
+                if discourse_key_int is None:
+                    # Should be impossible — we just checked
+                    # _known_discourse_keys() — but drop defensively if
+                    # the cache is stale.
+                    _log.warning(
+                        "bulk_insert_post_brand_discourse: dropping row; "
+                        "unresolvable discourse_key id "
+                        "(tweet_id=%s brand_id=%s discourse_key=%s)",
+                        tweet_id, brand_id, discourse_key,
+                    )
+                    continue
+                china_natl_int = self._nationalism_int_id(
+                    r.get("china_nationalism")
+                )
+                us_natl_int = self._nationalism_int_id(
+                    r.get("us_nationalism")
+                )
+                # If caller supplied a key but it didn't resolve, log a
+                # warning and write NULL (we don't dead-letter a half-
+                # formed nationalism FK; we just leave the column NULL).
+                if (r.get("china_nationalism") is not None
+                        and china_natl_int is None):
+                    _log.warning(
+                        "bulk_insert_post_brand_discourse: NULLing "
+                        "china_nationalism=%r (not in nationalism_keys) "
+                        "for (tweet_id=%s brand_id=%s)",
+                        r.get("china_nationalism"),
+                        tweet_id, brand_id,
+                    )
+                if (r.get("us_nationalism") is not None
+                        and us_natl_int is None):
+                    _log.warning(
+                        "bulk_insert_post_brand_discourse: NULLing "
+                        "us_nationalism=%r (not in nationalism_keys) "
+                        "for (tweet_id=%s brand_id=%s)",
+                        r.get("us_nationalism"),
+                        tweet_id, brand_id,
+                    )
+                # Top-gun ON CONFLICT gotcha: all written columns MUST be
+                # in the INSERT column list (otherwise ON CONFLICT DO
+                # UPDATE doesn't touch them on conflict).
+                conn.execute(
+                    """
+                    INSERT INTO posts_brands_discourse(
+                        post_id, brand_id, discourse_key, act_id,
+                        china_nationalism, us_nationalism
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(post_id, brand_id, discourse_key, act_id)
+                    DO UPDATE SET
+                        china_nationalism = excluded.china_nationalism,
+                        us_nationalism = excluded.us_nationalism
+                    """,
+                    (
+                        post_id_int,
+                        brand_id_int,
+                        discourse_key_int,
+                        act_id,
+                        china_natl_int,
+                        us_natl_int,
+                    ),
+                )
+                n_written += 1
+        return n_written
+
+    def get_post_brand_discourse_for_post(
+        self, tweet_id: str
+    ) -> list[dict[str, Any]]:
+        """Return all (post × brand × discourse × act) rows for a tweet.
+
+        Used by U7's smoketest runner to render sample posts with all
+        four new prongs visible, and by U4's second-pass classifier to
+        find rows whose nationalism FKs are still NULL.
+
+        Returns a list of dicts with TEXT key values (joined back from
+        the INTEGER FK ids via the *_keys tables) — the caller-facing
+        shape stays in TEXT-land, the Store never leaks INTEGER ids.
+        """
+        # One-shot join for the per-post set. Resolves
+        # discourse_key.id → discourse_keys.key and the two
+        # nationalism.id → nationalism_keys.key (LEFT JOIN because the
+        # two nationalism FKs are nullable).
+        rows = self._conn.execute(
+            """
+            SELECT
+                b.nickname      AS brand_id,
+                dk.key          AS discourse_key,
+                pbd.act_id      AS act_id,
+                cn.key          AS china_nationalism,
+                un.key          AS us_nationalism
+            FROM posts_brands_discourse pbd
+            JOIN posts p              ON p.id          = pbd.post_id
+            JOIN brands b             ON b.id          = pbd.brand_id
+            JOIN discourse_keys dk    ON dk.id         = pbd.discourse_key
+            LEFT JOIN nationalism_keys cn ON cn.id      = pbd.china_nationalism
+            LEFT JOIN nationalism_keys un ON un.id      = pbd.us_nationalism
+            WHERE p.tweet_id = ?
+            ORDER BY b.nickname, pbd.act_id, dk.key
+            """,
+            (tweet_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def bulk_update_nationalism(
+        self,
+        tweet_id: str,
+        brand_id: str,
+        discourse_key: str,
+        act_id: int,
+        china_nationalism: str | None,
+        us_nationalism: str | None,
+    ) -> bool:
+        """Backfill the two nationalism FKs for an existing discourse row.
+
+        Returns True if a row was updated, False if the discourse row
+        doesn't exist or any FK resolution failed. Used by U4's
+        second-pass classifier — the first pass writes the
+        `discourse_key` row with both nationalism FKs NULL, then a
+        second LLM call (or human-curated batch) fills them in.
+
+        Mirrors the sentinel-blocking and dead-letter pattern of
+        `bulk_insert_post_brand_discourse` (smaller surface: one row,
+        no enumeration).
+        """
+        # Discourse FK guard (same as the bulk path).
+        if discourse_key not in self._known_discourse_keys():
+            self._dead_letter_enum(
+                "discourse", discourse_key,
+                table="posts_brands_discourse",
+                post_id=tweet_id,
+                brand_id=brand_id,
+                via="bulk_update_nationalism",
+            )
+            return False
+        if brand_id not in self._known_brand_ids():
+            _log.warning(
+                "bulk_update_nationalism: brand_id=%r not in brands "
+                "table (tweet_id=%s)",
+                brand_id, tweet_id,
+            )
+            return False
+        post_id_int = self._tweet_int_id(tweet_id)
+        brand_id_int = self._brand_int_id(brand_id)
+        discourse_key_int = self._discourse_int_id(discourse_key)
+        if (
+            post_id_int is None
+            or brand_id_int is None
+            or discourse_key_int is None
+        ):
+            _log.warning(
+                "bulk_update_nationalism: unresolvable id "
+                "(tweet_id=%s brand_id=%s discourse_key=%s)",
+                tweet_id, brand_id, discourse_key,
+            )
+            return False
+        china_int = self._nationalism_int_id(china_nationalism)
+        us_int = self._nationalism_int_id(us_nationalism)
+        if (china_nationalism is not None and china_int is None):
+            _log.warning(
+                "bulk_update_nationalism: NULLing china_nationalism=%r "
+                "(not in nationalism_keys) for (tweet_id=%s)",
+                china_nationalism, tweet_id,
+            )
+        if (us_nationalism is not None and us_int is None):
+            _log.warning(
+                "bulk_update_nationalism: NULLing us_nationalism=%r "
+                "(not in nationalism_keys) for (tweet_id=%s)",
+                us_nationalism, tweet_id,
+            )
+        cur = self._conn.execute(
+            """
+            UPDATE posts_brands_discourse
+            SET china_nationalism = ?, us_nationalism = ?
+            WHERE post_id = ? AND brand_id = ?
+              AND discourse_key = ? AND act_id = ?
+            """,
+            (
+                china_int,
+                us_int,
+                post_id_int,
+                brand_id_int,
+                discourse_key_int,
+                act_id,
+            ),
+        )
+        return cur.rowcount > 0
+
     # --- v1.8: detection-registry read methods (R12, R13) -----------------
 
     def read_brands(self) -> list[BrandRow]:
@@ -1692,6 +2085,82 @@ class Store:
                 ).fetchall()
             }
         return self._sentiment_id_map.get(sentiment_key)
+
+    def _known_discourse_keys(self) -> set[str]:
+        """Return the set of canonical discourse keys (cached).
+
+        U1: reads from the `discourse_keys` table added by
+        migration 025. Used by U4's parser and by
+        `bulk_insert_post_brand_discourse` as the FK guard.
+
+        The 9 valid keys are the literal set from research §2:
+        genuine_hype, sarcasm, dunk_yingyang, self_deprecation, cope,
+        fud, distillation_accusation, ai_slop_critique, absurdist_meme.
+        The LLM's response parser coerces unknown keys to the literal
+        string `uncategorized` (not in this set) — see KTD5.
+        """
+        if self._discourse_cache is None:
+            self._discourse_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM discourse_keys"
+                ).fetchall()
+            }
+        return self._discourse_cache
+
+    def _known_nationalism_keys(self) -> set[str]:
+        """Return the set of canonical nationalism keys (cached).
+
+        U1: reads from the `nationalism_keys` table added by
+        migration 025. Used by `bulk_insert_post_brand_discourse`
+        and `bulk_update_nationalism` as the FK guard.
+
+        The 6 valid keys are: none, mild_pro, pro,
+        constructive_critical, anti, mixed. Shared across both
+        china_nationalism and us_nationalism axes.
+        """
+        if self._nationalism_cache is None:
+            self._nationalism_cache = {
+                r["key"]
+                for r in self._conn.execute(
+                    "SELECT key FROM nationalism_keys"
+                ).fetchall()
+            }
+        return self._nationalism_cache
+
+    def _discourse_int_id(self, discourse_key: str) -> int | None:
+        """Map `discourse_keys.key` (TEXT) to `discourse_keys.id` (INTEGER).
+
+        Returns None when the key is not in the table. Caller
+        decides whether to dead-letter or coerce to `uncategorized`
+        before calling.
+        """
+        if self._discourse_id_map is None:
+            self._discourse_id_map = {
+                r["key"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM discourse_keys"
+                ).fetchall()
+            }
+        return self._discourse_id_map.get(discourse_key)
+
+    def _nationalism_int_id(self, nationalism_key: str | None) -> int | None:
+        """Map `nationalism_keys.key` (TEXT) to `nationalism_keys.id` (INTEGER).
+
+        Returns None when the key is None (intentional — nationalism
+        FKs are nullable during the backfill window) or when the key
+        is not in the table (caller decides coerce / dead-letter).
+        """
+        if nationalism_key is None:
+            return None
+        if self._nationalism_id_map is None:
+            self._nationalism_id_map = {
+                r["key"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM nationalism_keys"
+                ).fetchall()
+            }
+        return self._nationalism_id_map.get(nationalism_key)
 
     def _dead_letter_enum(
         self, family: str, value: str, **context: Any
