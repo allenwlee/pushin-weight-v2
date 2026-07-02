@@ -1,11 +1,41 @@
-# {{AGENT_ATTRIBUTION}}
-# x-monitor — Chinese Models X Monitoring
+# x-monitor
 
-Daily, multi-language, signal-first view of X conversation around the nine v1 Chinese AI models
-(MiniMax, Qwen, DeepSeek, GLM, Xiaomi MiMo, Moonshot Kimi, InclusionAI Ling, InclusionAI Ring,
-InclusionAI Ming), built from a curated query library and a living community account graph.
+A daily dashboard for keeping tabs on what people are saying about Chinese AI models on X (formerly Twitter).
 
-## Quickstart
+## What this is
+
+x-monitor is a small tool that runs in the background, scans X every 15 minutes for posts about nine Chinese AI models — MiniMax, Qwen, DeepSeek, GLM, Xiaomi MiMo, Moonshot Kimi, and three InclusionAI models (Ling, Ring, Ming) — and shows you a summary of the day's conversation in a simple browser dashboard.
+
+It was built for MiniMax's developer relations team so they always know what the public is saying about these models: who's excited, who's critical, who's asking questions, and what releases are being discussed.
+
+## What it does
+
+- **Finds posts about each model.** A curated list of search queries (in English and Chinese) runs every 15 minutes, pulling in posts that mention any of the nine models.
+- **Filters out noise.** Pure retweets and off-topic mentions are deprioritized so the signal isn't drowned out.
+- **Classifies each post.** Each post gets sorted into a category — release news, community question, criticism, praise, or other — and attributed to the brand(s) it mentions.
+- **Tracks the community.** Identifies which accounts are official, which are staff, and which are regular commenters, and how they relate to each other.
+- **Shows it on a dashboard.** A simple web page with one card per model. Each card shows recent volume, today's top posts, and the mix of opinion types.
+
+## Who uses it
+
+The MiniMax devrel team, plus anyone who wants a daily snapshot of public opinion about these models. The dashboard runs locally on a Mac and is meant for a single user.
+
+## How to use it
+
+1. Open the dashboard in a browser at `http://127.0.0.1:5000/`.
+2. Look at the nine model cards. Each card gives you today's picture at a glance.
+3. Click into a card to see recent posts, the community around that model, and other details.
+4. Items that look off get flagged for review — check the review queue (`x-monitor review --list`) and resolve or dismiss them.
+
+That's it. Everything else (the 15-minute scan, the storage, the error handling) runs automatically.
+
+---
+
+## Setup & Operations
+
+The following is for whoever sets up or maintains the tool.
+
+### Quickstart
 
 ```bash
 # 1. Install (uses system Python; recommend venv)
@@ -32,7 +62,7 @@ x-monitor dashboard start
 # Open http://127.0.0.1:5000/ in a browser
 ```
 
-## Daily Ops
+### Daily Ops
 
 1. `x-monitor dashboard start` (if not running) → open `http://127.0.0.1:5000/`.
 2. Glance at the 9-card grid: sparklines = volume, signal bars = release/criticism/question mix, top-3 = today's signal.
@@ -40,7 +70,7 @@ x-monitor dashboard start
 4. `x-monitor review --list` → `--resolve` or `--dismiss` items.
 5. `x-monitor dashboard stop` when done.
 
-## Layout
+### Layout
 
 - `x_monitor/` — Python package (`x-monitor` CLI entry).
 - `data/queries/<model>.yaml` — 5 curated X advanced-search queries per model.
@@ -50,7 +80,7 @@ x-monitor dashboard start
 - `data/_review_queue.json` — review queue (single source of truth).
 - `deploy/com.fuchitalee.x-monitor.plist` — LaunchAgent on fuchitalee.
 
-## Troubleshooting
+### Troubleshooting
 
 - **Red badge on every card** → `degraded:cookies: true` in `data/runs/LATEST.json`.
   Run `x-monitor setup cookies` to validate the cookie file, then re-run.
@@ -63,7 +93,7 @@ x-monitor dashboard start
 
 See `deploy/README.md` for LaunchAgent install/uninstall and log locations.
 
-## v1.8 — Call-Path Attribution
+### v1.8 — Call-Path Attribution
 
 v1.8 (2026-06-19) replaces v1.7's first-match-wins single-brand
 classifier with a multi-brand extraction pipeline. A single tweet
@@ -71,7 +101,7 @@ naming two brands now produces one row per detected brand in
 `posts_brands` / `post_mentions` / `posts_brands_signals` (replaces the
 old `posts.brand_id` + `posts.signal` columns).
 
-### New modules
+#### New modules
 
 - `x_monitor/attribution.py` — multi-brand extractors
   (`extract_user_mentions`, `extract_hashtag_mentions`,
@@ -84,13 +114,13 @@ old `posts.brand_id` + `posts.signal` columns).
   re-exports the v1.8 names and emits `DeprecationWarning` on its
   legacy function bodies. A follow-up commit deletes it.
 
-### Public API
+#### Public API
 
 `from x_monitor import Store, attribute_to_brands, classify_signal, ...` —
 see `x_monitor/__all__` for the stable import surface. See
 `x_monitor/CHANGELOG.md` for the full v1.8 change list.
 
-### Operator deploy sequence
+#### Operator deploy sequence
 
 1. Apply migration 004 (already done 2026-06-19).
 2. Land this code (Units 1-6).
@@ -98,4 +128,3 @@ see `x_monitor/__all__` for the stable import surface. See
    live DB. Expect 5-10 min for ~2,000 posts.
 4. Verify the dashboard renders with real data.
 5. Restart the LaunchAgent + dashboard.
-
