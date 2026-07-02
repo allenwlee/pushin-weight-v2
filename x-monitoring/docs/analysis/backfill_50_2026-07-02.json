@@ -1,0 +1,893 @@
+{
+  "model": "MiniMax-M3.0",
+  "base_url": "https://api.minimax.io/anthropic",
+  "n_posts_attempted": 50,
+  "n_classifications_inserted": 17,
+  "pbs_row_count_before": 4917,
+  "pbs_row_count_after": 4934,
+  "results": [
+    {
+      "tweet_id": "2059705155797537098",
+      "post_rowid": 156,
+      "created_at": "Wed May 27 18:35:51 +0000 2026",
+      "text_preview": "Kiedyś, wiele lat temu, wdałem się  w dysputę  z Panem Muzykiem. Czułem, źe ma traumę, chciałem pomóc. \n\nW odpowiedzi. Naczytałem się o internetowych besserwiserach, naczytałem się impertynencji, w mojej ocenie, niezasłużonych. \n\nJestem mag",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1698
+    },
+    {
+      "tweet_id": "2064823495570440572",
+      "post_rowid": 1009,
+      "created_at": "Wed Jun 10 21:34:18 +0000 2026",
+      "text_preview": "Have you ever wondered what those antennas on a cell tower actually do?\n\nThey’re not random hardware stuck on a mast. Each one is designed for a specific role in how your phone gets signal, stays connected, and moves data across networks.\n\n",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 865
+    },
+    {
+      "tweet_id": "2064759101599736210",
+      "post_rowid": 935,
+      "created_at": "Wed Jun 10 17:18:25 +0000 2026",
+      "text_preview": "Prometheus is already part of America's first privately developed advanced reactor in more than 40 years. But this is only the beginning.\n\nOur #AI moonshot is reinventing how reactors are designed, licensed, manufactured, built, and operate",
+      "brand_slugs": [
+        "moonshot_kimi"
+      ],
+      "classifications": [
+        {
+          "brand": "moonshot_kimi",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1206
+    },
+    {
+      "tweet_id": "2064726501103411631",
+      "post_rowid": 882,
+      "created_at": "Wed Jun 10 15:08:53 +0000 2026",
+      "text_preview": "$PL: CAN WE SEE ANOTHER 10X?  \n\nEveryone values $PL as a satellite imagery company, which means they're valuing the camera and don't know about the potential search engine being built on top of it. The CEO's actual vision is something far b",
+      "brand_slugs": [
+        "moonshot_kimi"
+      ],
+      "classifications": [
+        {
+          "brand": "moonshot_kimi",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 699
+    },
+    {
+      "tweet_id": "2064712403317608714",
+      "post_rowid": 865,
+      "created_at": "Wed Jun 10 14:12:52 +0000 2026",
+      "text_preview": "Decades later I’m still cool as a cucumber, but the feelings never really change.\n\nAt the highs: pure euphoria, everything feels like a moonshot.\n\nAt the lows: it feels like the world is ending. Truth is — neither is real. We’re all human.\n",
+      "brand_slugs": [
+        "moonshot_kimi"
+      ],
+      "classifications": [
+        {
+          "brand": "moonshot_kimi",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 6117
+    },
+    {
+      "tweet_id": "2064659782028398730",
+      "post_rowid": 816,
+      "created_at": "Wed Jun 10 10:43:46 +0000 2026",
+      "text_preview": "📡 $NVDA AND $NOK ARE TURNING CELL TOWERS INTO AI MACHINES.\n\nThe next leg of the AI buildout isn't another data center in the desert. It's the tower above your head.\n\nThe part almost nobody's pricing in: $AMPG. 🇺🇸\n\nSub $200M.\n\nThe only Ameri",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 927
+    },
+    {
+      "tweet_id": "2064651729618993218",
+      "post_rowid": 807,
+      "created_at": "Wed Jun 10 10:11:46 +0000 2026",
+      "text_preview": "The next phase of the AI Infrastructure buildout is at the edge.\n\n$NVDA and $AMPG  are turning cell towers into intelligent edge nodes.\n\n🧠 Here's How They're Doing It. \n\nAmplitech recently became the first to develop an open-source massive ",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 3264
+    },
+    {
+      "tweet_id": "2064641852049920442",
+      "post_rowid": 796,
+      "created_at": "Wed Jun 10 09:32:31 +0000 2026",
+      "text_preview": "AI不是互联网，而是房地产！\n\n接着周末的思考，我越来越觉得，AI产业最容易让人看错的地方，就是大家总喜欢拿它和互联网类比。\n\n这种类比当然有道理，但如果站在投资和商业模式的角度来看，我觉得AI更像另一个行业：\n\n房地产。\n\n这里说的不是科技属性，而是从纯生意的角度看商业模式。\n\n如果抛开技术细节，只看整个产业链的资金流向、资本开支模式、融资模式、产业链分工和利润分配方式，那么AI和房地产其实有惊人的相似之处。我觉得，中国房地产过去二十年的发展历程，可能更值得参考。\n\n一个关",
+      "brand_slugs": [
+        "minimax"
+      ],
+      "classifications": [
+        {
+          "brand": "minimax",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 3528
+    },
+    {
+      "tweet_id": "2064625248952041733",
+      "post_rowid": 784,
+      "created_at": "Wed Jun 10 08:26:32 +0000 2026",
+      "text_preview": "If you read my previous post about FanForce, you’ll understand how I came across this one.\n\nFor those who missed it, @myfanforce is a platform where you can discover startups early and grow alongside them before everyone else starts talking",
+      "brand_slugs": [
+        "minimax"
+      ],
+      "classifications": [
+        {
+          "brand": "minimax",
+          "post_type": "hands_on_usage",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 1189
+    },
+    {
+      "tweet_id": "2064585160390316177",
+      "post_rowid": 762,
+      "created_at": "Wed Jun 10 05:47:15 +0000 2026",
+      "text_preview": "mimo texting jsng this bc he wants jsng so bad but he has like internalized homophobia to deal with ... jsng showing up to his place and talking it out with him and showing him a good time ...",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 2265
+    },
+    {
+      "tweet_id": "2064558247307334007",
+      "post_rowid": 754,
+      "created_at": "Wed Jun 10 04:00:18 +0000 2026",
+      "text_preview": "$sive 주식 전량 매도로 논란(?)이 됐던 Harish Krishnaswamy가\n\n$sive가 IMS 2026에서 \"Wideband FR3 MIMO Antenna Array for NextG Wireless Links\" 논문이 Best Industry Paper 1위를 수상했다고 축하하는 글을 올림\n\n주식 왜 판거야...ㅋㅋㅋㅋㅋ https://t.co/TwGjduaR4e",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 906
+    },
+    {
+      "tweet_id": "2062198738568024468",
+      "post_rowid": 188,
+      "created_at": "Wed Jun 03 15:44:27 +0000 2026",
+      "text_preview": "@miguel_arndt @Jujonomi87 El sustrato norteafricano tiene nombre: iberomauriense, genoma de referencia Taforalt, 15.000 años. Linajes U6, M1, E-M78 que en Europa no aparecen. Lo describe el paper primero que le dejo aquí:\n\nhttps://t.co/j0wo",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 845
+    },
+    {
+      "tweet_id": "2062058227714408673",
+      "post_rowid": 187,
+      "created_at": "Wed Jun 03 06:26:07 +0000 2026",
+      "text_preview": "MAI od Microsoft wypuścił świetny paper o tworzeniu modelu. Ale nie o tym - widzę, że za modelami stoi mocna ekipa zebrana z całego świata. Byli pracownicy Google, AllenAi - od US, po Europę. 1. Lekcja odrobiona? 2. Kompetencje dzisiaj to n",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 6631
+    },
+    {
+      "tweet_id": "2072463158082675195",
+      "post_rowid": 4959,
+      "created_at": "Wed Jul 01 23:31:36 +0000 2026",
+      "text_preview": "消耗tokens台厉害了。废话太多，怎么减少？",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "feedback_questions",
+          "sentiment": "negative"
+        }
+      ],
+      "duration_ms": 999
+    },
+    {
+      "tweet_id": "2072457836961862116",
+      "post_rowid": 4960,
+      "created_at": "Wed Jul 01 23:10:27 +0000 2026",
+      "text_preview": "Free claude code anyone?",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "feedback_questions",
+          "sentiment": "neutral"
+        }
+      ],
+      "duration_ms": 931
+    },
+    {
+      "tweet_id": "2072456683289186356",
+      "post_rowid": 4961,
+      "created_at": "Wed Jul 01 23:05:52 +0000 2026",
+      "text_preview": "It’s getting very strange.",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 772
+    },
+    {
+      "tweet_id": "2072450254696567247",
+      "post_rowid": 4962,
+      "created_at": "Wed Jul 01 22:40:19 +0000 2026",
+      "text_preview": "ZCode経由で1.5倍使えるの続けるんだ",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 807
+    },
+    {
+      "tweet_id": "2072443840427094436",
+      "post_rowid": 4963,
+      "created_at": "Wed Jul 01 22:14:50 +0000 2026",
+      "text_preview": "Already week nunchi using",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 5097
+    },
+    {
+      "tweet_id": "2072441569874243834",
+      "post_rowid": 4923,
+      "created_at": "Wed Jul 01 22:05:49 +0000 2026",
+      "text_preview": "What’s thr major difference between zCode and other harnesses? @ZixuanLi_",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 718
+    },
+    {
+      "tweet_id": "2072438266939482238",
+      "post_rowid": 4964,
+      "created_at": "Wed Jul 01 21:52:41 +0000 2026",
+      "text_preview": "使い勝手抜群✨",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 771
+    },
+    {
+      "tweet_id": "2072436130654605796",
+      "post_rowid": 4965,
+      "created_at": "Wed Jul 01 21:44:12 +0000 2026",
+      "text_preview": "Zaiも\n続々と\n帝国化",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "neutral"
+        }
+      ],
+      "duration_ms": 1074
+    },
+    {
+      "tweet_id": "2072434614556364849",
+      "post_rowid": 4966,
+      "created_at": "Wed Jul 01 21:38:10 +0000 2026",
+      "text_preview": "Trying out zcode shows me just how bad gemini is…",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 813
+    },
+    {
+      "tweet_id": "2072430996704661851",
+      "post_rowid": 4967,
+      "created_at": "Wed Jul 01 21:23:48 +0000 2026",
+      "text_preview": "Cheaper quota when using in ZCode https://t.co/zAhvLGOmJ0",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 788
+    },
+    {
+      "tweet_id": "2072424039080169536",
+      "post_rowid": 4968,
+      "created_at": "Wed Jul 01 20:56:09 +0000 2026",
+      "text_preview": "https://t.co/sRmWtu6c2Q がGLM-5.2向け公式開発環境「ZCode」を公開！\n\nCoding Planならクォータが1.5倍、BYOKにも対応。\nmacOS / Windows / Linuxで利用可能。\n\nさっそく試してみる。",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 940
+    },
+    {
+      "tweet_id": "2072421962253750705",
+      "post_rowid": 4969,
+      "created_at": "Wed Jul 01 20:47:54 +0000 2026",
+      "text_preview": "ts is straight up a codex clone 💀🫣",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 795
+    },
+    {
+      "tweet_id": "2072419764539174991",
+      "post_rowid": 4970,
+      "created_at": "Wed Jul 01 20:39:10 +0000 2026",
+      "text_preview": "I've been using ZCode for nearly 2 weeks. What do you mean by \"introducting\"?",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "feedback_questions",
+          "sentiment": "neutral"
+        }
+      ],
+      "duration_ms": 1348
+    },
+    {
+      "tweet_id": "2072416611139555456",
+      "post_rowid": 4971,
+      "created_at": "Wed Jul 01 20:26:38 +0000 2026",
+      "text_preview": "já estou testando, vamos ver qual é que é. Até hoje só gostei de usar CLI com claude ou opencode https://t.co/8h25yygWyJ",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 881
+    },
+    {
+      "tweet_id": "2072412679285711133",
+      "post_rowid": 4972,
+      "created_at": "Wed Jul 01 20:11:00 +0000 2026",
+      "text_preview": "Holy shit!",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 912
+    },
+    {
+      "tweet_id": "2072411904237056495",
+      "post_rowid": 4973,
+      "created_at": "Wed Jul 01 20:07:56 +0000 2026",
+      "text_preview": "the opengraph image has a very different UI from the one you can see on the website? also not to mention the fact that a good bit of the UI is basically just codex",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "feedback_questions",
+          "sentiment": "negative"
+        }
+      ],
+      "duration_ms": 1858
+    },
+    {
+      "tweet_id": "2072411738146853079",
+      "post_rowid": 4974,
+      "created_at": "Wed Jul 01 20:07:16 +0000 2026",
+      "text_preview": "Ze pone maZ intereZante eZto 😏",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 804
+    },
+    {
+      "tweet_id": "2072410318135824794",
+      "post_rowid": 4975,
+      "created_at": "Wed Jul 01 20:01:38 +0000 2026",
+      "text_preview": "https://t.co/ebEyOPpTxj",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1130
+    },
+    {
+      "tweet_id": "2072408214738444558",
+      "post_rowid": 4976,
+      "created_at": "Wed Jul 01 19:53:16 +0000 2026",
+      "text_preview": "Get in ☄️☄️☄️",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1152
+    },
+    {
+      "tweet_id": "2072406508256567358",
+      "post_rowid": 4977,
+      "created_at": "Wed Jul 01 19:46:29 +0000 2026",
+      "text_preview": "Here we go",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 2472
+    },
+    {
+      "tweet_id": "2072405400914440280",
+      "post_rowid": 4978,
+      "created_at": "Wed Jul 01 19:42:05 +0000 2026",
+      "text_preview": "Got to see this at @aiDotEngineer first hand! It looks really good",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1024
+    },
+    {
+      "tweet_id": "2072404880463908962",
+      "post_rowid": 4979,
+      "created_at": "Wed Jul 01 19:40:01 +0000 2026",
+      "text_preview": "Niceeee",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1124
+    },
+    {
+      "tweet_id": "2072403362688147705",
+      "post_rowid": 4980,
+      "created_at": "Wed Jul 01 19:33:59 +0000 2026",
+      "text_preview": "卧槽，智谱官方正式发布了 GLM-5.2 的专属开发环境 ZCode！\n\n只要你是 GLM 编程计划的订阅者，在 ZCode 里的使用额度直接翻 1.5 倍！\n\n目前面向 macOS、Windows 和 Linux 系统开放了全平台下载。\n\n同时，ZCode 引入了 BYOK（Bring Your Own Key）机制，允许开发者直接配置现有的 API 密钥或关联其他第三方订阅方案。",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 2003
+    },
+    {
+      "tweet_id": "2072402286949613889",
+      "post_rowid": 4981,
+      "created_at": "Wed Jul 01 19:29:43 +0000 2026",
+      "text_preview": "زدکد ابزار رسمی و اختصاصی شرکت @Zai_org برای مدل GLM5.2 هست. این یک محیط کدنویسی هوشمند و عامل‌محور (نه یک ویرایشگر کد معمولی مثل وی‌اس‌کد) حساب می‌شه که بیشتر روی کارهای پیچیده، چندمرحله‌ای و طولانی‌مدت تمرکز داره. توی اعلامیه‌شون گفتن که ",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 1010
+    },
+    {
+      "tweet_id": "2072401960922222860",
+      "post_rowid": 4982,
+      "created_at": "Wed Jul 01 19:28:25 +0000 2026",
+      "text_preview": "OpenChamber still fits my setup better, but more GLM tooling is good tooling. Worth a look.",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 954
+    },
+    {
+      "tweet_id": "2072401199501021220",
+      "post_rowid": 4983,
+      "created_at": "Wed Jul 01 19:25:23 +0000 2026",
+      "text_preview": "21 min just to add a blog post even tho I had already given the content in md file? 😭 https://t.co/LXw9yGQphw",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 888
+    },
+    {
+      "tweet_id": "2072401153896186118",
+      "post_rowid": 4984,
+      "created_at": "Wed Jul 01 19:25:13 +0000 2026",
+      "text_preview": "Rare occurrence, launching an app on macOS, Windows, and Linux at the same time.",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1045
+    },
+    {
+      "tweet_id": "2072400892440297833",
+      "post_rowid": 4985,
+      "created_at": "Wed Jul 01 19:24:10 +0000 2026",
+      "text_preview": "🔥🔥🔥",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1733
+    },
+    {
+      "tweet_id": "2072400639808639480",
+      "post_rowid": 4986,
+      "created_at": "Wed Jul 01 19:23:10 +0000 2026",
+      "text_preview": "sir, they dropped open source claude code into the timeline, and it looks good. https://t.co/dC5iyshQKz",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 9379
+    },
+    {
+      "tweet_id": "2072400577040945653",
+      "post_rowid": 4987,
+      "created_at": "Wed Jul 01 19:22:55 +0000 2026",
+      "text_preview": "I hate that coding data is so important. The market became so fragmented because of the need for it",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 701
+    },
+    {
+      "tweet_id": "2072398030121140700",
+      "post_rowid": 4988,
+      "created_at": "Wed Jul 01 19:12:48 +0000 2026",
+      "text_preview": "Intéressant mais pour 40$ de diff, je vais pas bouger toutes mes habitudes \n\nOn verra dans 2 semaines si on en parle encore",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "feedback_questions",
+          "sentiment": "mixed"
+        }
+      ],
+      "duration_ms": 887
+    },
+    {
+      "tweet_id": "2072397944234602679",
+      "post_rowid": 4989,
+      "created_at": "Wed Jul 01 19:12:27 +0000 2026",
+      "text_preview": "https://t.co/ENzipgNM4X ZCode'u duyurdu.\nÇoğu kişi hala sadece model sanıyor ama bu sefer makinenizi kontrol eden resmi agentik ortamı çıkardılar.\n\nTerminali yönetiyor, dosyaları düzenliyor, uzun görevleri kendi başına planlayıp bitiriyor.\n",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 1741
+    },
+    {
+      "tweet_id": "2072397493749321919",
+      "post_rowid": 4990,
+      "created_at": "Wed Jul 01 19:10:40 +0000 2026",
+      "text_preview": "@samsantosb Lançaram a pouco tempo: https://t.co/wv2asjfzMO",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "neutral"
+        }
+      ],
+      "duration_ms": 1011
+    },
+    {
+      "tweet_id": "2072397488028549252",
+      "post_rowid": 4991,
+      "created_at": "Wed Jul 01 19:10:39 +0000 2026",
+      "text_preview": "dumb question but, how difficult is it to make such IDEs? \n\ni thought it’d be quite easy (just ask GLM to build one lol)",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "feedback_questions",
+          "sentiment": "neutral"
+        }
+      ],
+      "duration_ms": 1057
+    },
+    {
+      "tweet_id": "2072397263314558985",
+      "post_rowid": 4992,
+      "created_at": "Wed Jul 01 19:09:45 +0000 2026",
+      "text_preview": "ZCode official coding harness for GLM-5.2 / Z .ai https://t.co/mjEFTYXNjy",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 4707
+    },
+    {
+      "tweet_id": "2072396014296662452",
+      "post_rowid": 4993,
+      "created_at": "Wed Jul 01 19:04:47 +0000 2026",
+      "text_preview": "Did this just export all my data ? https://t.co/YM66fsYezA",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 762
+    },
+    {
+      "tweet_id": "2072395092669943886",
+      "post_rowid": 4994,
+      "created_at": "Wed Jul 01 19:01:07 +0000 2026",
+      "text_preview": "Wake up babe open source claude code just dropped https://t.co/arC3DZdl8s",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 1062
+    }
+  ]
+}

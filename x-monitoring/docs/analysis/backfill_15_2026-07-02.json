@@ -1,0 +1,283 @@
+{
+  "model": "MiniMax-M3.0",
+  "base_url": "https://api.minimax.io/anthropic",
+  "n_posts_attempted": 15,
+  "n_classifications_inserted": 0,
+  "results": [
+    {
+      "tweet_id": "2059716284955381812",
+      "post_rowid": 157,
+      "created_at": "Wed May 27 19:20:04 +0000 2026",
+      "text_preview": "Day 7/90 → €5k MRR 🔥\n\n✅ V2 of the app is done — onboarding is now super smooth with 20 steps and a hard paywall \n✅ Started full English translation (my agents need heavy babysitting, there’s a lot to translate) \n✅ Sprinted + hit 10k steps t",
+      "brand_slugs": [
+        "deepseek",
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "deepseek",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        },
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": "hands_on_usage",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 1829
+    },
+    {
+      "tweet_id": "2059705155797537098",
+      "post_rowid": 156,
+      "created_at": "Wed May 27 18:35:51 +0000 2026",
+      "text_preview": "Kiedyś, wiele lat temu, wdałem się  w dysputę  z Panem Muzykiem. Czułem, źe ma traumę, chciałem pomóc. \n\nW odpowiedzi. Naczytałem się o internetowych besserwiserach, naczytałem się impertynencji, w mojej ocenie, niezasłużonych. \n\nJestem mag",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 944
+    },
+    {
+      "tweet_id": "2064823495570440572",
+      "post_rowid": 1009,
+      "created_at": "Wed Jun 10 21:34:18 +0000 2026",
+      "text_preview": "Have you ever wondered what those antennas on a cell tower actually do?\n\nThey’re not random hardware stuck on a mast. Each one is designed for a specific role in how your phone gets signal, stays connected, and moves data across networks.\n\n",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 2317
+    },
+    {
+      "tweet_id": "2064759101599736210",
+      "post_rowid": 935,
+      "created_at": "Wed Jun 10 17:18:25 +0000 2026",
+      "text_preview": "Prometheus is already part of America's first privately developed advanced reactor in more than 40 years. But this is only the beginning.\n\nOur #AI moonshot is reinventing how reactors are designed, licensed, manufactured, built, and operate",
+      "brand_slugs": [
+        "moonshot_kimi"
+      ],
+      "classifications": [
+        {
+          "brand": "moonshot_kimi",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 875
+    },
+    {
+      "tweet_id": "2064726501103411631",
+      "post_rowid": 882,
+      "created_at": "Wed Jun 10 15:08:53 +0000 2026",
+      "text_preview": "$PL: CAN WE SEE ANOTHER 10X?  \n\nEveryone values $PL as a satellite imagery company, which means they're valuing the camera and don't know about the potential search engine being built on top of it. The CEO's actual vision is something far b",
+      "brand_slugs": [
+        "moonshot_kimi"
+      ],
+      "classifications": [
+        {
+          "brand": "moonshot_kimi",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 3181
+    },
+    {
+      "tweet_id": "2064712403317608714",
+      "post_rowid": 865,
+      "created_at": "Wed Jun 10 14:12:52 +0000 2026",
+      "text_preview": "Decades later I’m still cool as a cucumber, but the feelings never really change.\n\nAt the highs: pure euphoria, everything feels like a moonshot.\n\nAt the lows: it feels like the world is ending. Truth is — neither is real. We’re all human.\n",
+      "brand_slugs": [
+        "moonshot_kimi"
+      ],
+      "classifications": [
+        {
+          "brand": "moonshot_kimi",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 798
+    },
+    {
+      "tweet_id": "2064659782028398730",
+      "post_rowid": 816,
+      "created_at": "Wed Jun 10 10:43:46 +0000 2026",
+      "text_preview": "📡 $NVDA AND $NOK ARE TURNING CELL TOWERS INTO AI MACHINES.\n\nThe next leg of the AI buildout isn't another data center in the desert. It's the tower above your head.\n\nThe part almost nobody's pricing in: $AMPG. 🇺🇸\n\nSub $200M.\n\nThe only Ameri",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1432
+    },
+    {
+      "tweet_id": "2064651729618993218",
+      "post_rowid": 807,
+      "created_at": "Wed Jun 10 10:11:46 +0000 2026",
+      "text_preview": "The next phase of the AI Infrastructure buildout is at the edge.\n\n$NVDA and $AMPG  are turning cell towers into intelligent edge nodes.\n\n🧠 Here's How They're Doing It. \n\nAmplitech recently became the first to develop an open-source massive ",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 687
+    },
+    {
+      "tweet_id": "2064641852049920442",
+      "post_rowid": 796,
+      "created_at": "Wed Jun 10 09:32:31 +0000 2026",
+      "text_preview": "AI不是互联网，而是房地产！\n\n接着周末的思考，我越来越觉得，AI产业最容易让人看错的地方，就是大家总喜欢拿它和互联网类比。\n\n这种类比当然有道理，但如果站在投资和商业模式的角度来看，我觉得AI更像另一个行业：\n\n房地产。\n\n这里说的不是科技属性，而是从纯生意的角度看商业模式。\n\n如果抛开技术细节，只看整个产业链的资金流向、资本开支模式、融资模式、产业链分工和利润分配方式，那么AI和房地产其实有惊人的相似之处。我觉得，中国房地产过去二十年的发展历程，可能更值得参考。\n\n一个关",
+      "brand_slugs": [
+        "minimax"
+      ],
+      "classifications": [
+        {
+          "brand": "minimax",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1410
+    },
+    {
+      "tweet_id": "2064625248952041733",
+      "post_rowid": 784,
+      "created_at": "Wed Jun 10 08:26:32 +0000 2026",
+      "text_preview": "If you read my previous post about FanForce, you’ll understand how I came across this one.\n\nFor those who missed it, @myfanforce is a platform where you can discover startups early and grow alongside them before everyone else starts talking",
+      "brand_slugs": [
+        "minimax"
+      ],
+      "classifications": [
+        {
+          "brand": "minimax",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 1064
+    },
+    {
+      "tweet_id": "2064585160390316177",
+      "post_rowid": 762,
+      "created_at": "Wed Jun 10 05:47:15 +0000 2026",
+      "text_preview": "mimo texting jsng this bc he wants jsng so bad but he has like internalized homophobia to deal with ... jsng showing up to his place and talking it out with him and showing him a good time ...",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 683
+    },
+    {
+      "tweet_id": "2064558247307334007",
+      "post_rowid": 754,
+      "created_at": "Wed Jun 10 04:00:18 +0000 2026",
+      "text_preview": "$sive 주식 전량 매도로 논란(?)이 됐던 Harish Krishnaswamy가\n\n$sive가 IMS 2026에서 \"Wideband FR3 MIMO Antenna Array for NextG Wireless Links\" 논문이 Best Industry Paper 1위를 수상했다고 축하하는 글을 올림\n\n주식 왜 판거야...ㅋㅋㅋㅋㅋ https://t.co/TwGjduaR4e",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 776
+    },
+    {
+      "tweet_id": "2062198738568024468",
+      "post_rowid": 188,
+      "created_at": "Wed Jun 03 15:44:27 +0000 2026",
+      "text_preview": "@miguel_arndt @Jujonomi87 El sustrato norteafricano tiene nombre: iberomauriense, genoma de referencia Taforalt, 15.000 años. Linajes U6, M1, E-M78 que en Europa no aparecen. Lo describe el paper primero que le dejo aquí:\n\nhttps://t.co/j0wo",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 3551
+    },
+    {
+      "tweet_id": "2062058227714408673",
+      "post_rowid": 187,
+      "created_at": "Wed Jun 03 06:26:07 +0000 2026",
+      "text_preview": "MAI od Microsoft wypuścił świetny paper o tworzeniu modelu. Ale nie o tym - widzę, że za modelami stoi mocna ekipa zebrana z całego świata. Byli pracownicy Google, AllenAi - od US, po Europę. 1. Lekcja odrobiona? 2. Kompetencje dzisiaj to n",
+      "brand_slugs": [
+        "xiaomi_mimo"
+      ],
+      "classifications": [
+        {
+          "brand": "xiaomi_mimo",
+          "post_type": null,
+          "sentiment": null,
+          "reason": "llm_omitted"
+        }
+      ],
+      "duration_ms": 20463
+    },
+    {
+      "tweet_id": "2072469298266984879",
+      "post_rowid": 4958,
+      "created_at": "Wed Jul 01 23:55:59 +0000 2026",
+      "text_preview": "https://t.co/O83DIrY05Cからデスクトップアプリが出てて気になる",
+      "brand_slugs": [
+        "glm"
+      ],
+      "classifications": [
+        {
+          "brand": "glm",
+          "post_type": "buzz_releases",
+          "sentiment": "positive"
+        }
+      ],
+      "duration_ms": 848
+    }
+  ]
+}

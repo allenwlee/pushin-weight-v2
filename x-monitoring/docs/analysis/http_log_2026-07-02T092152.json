@@ -1,0 +1,514 @@
+{
+  "run_id": "20260702T092152_0000-aefc20c4",
+  "started_at": "2026-07-02T09:21:52+00:00",
+  "finished_at": "2026-07-02T09:23:57+00:00",
+  "status": "completed",
+  "phase_timings_sec": {
+    "plan": 0.024,
+    "call.*.account.acct.fetch": 34.443,
+    "call.*.account.acct.attribute": 0.019,
+    "call.*.account.acct.filter+store": 0.005,
+    "call.llama.brand_wide.acct.fetch": 14.931,
+    "call.llama.brand_wide.acct.attribute": 0.018,
+    "call.llama.brand_wide.acct.filter+store": 0.011,
+    "call.doubao.brand_wide.acct.fetch": 19.302,
+    "call.doubao.brand_wide.acct.attribute": 0.016,
+    "call.doubao.brand_wide.acct.filter+store": 0.006,
+    "call.nvidia_nemo.brand_wide.acct.fetch": 14.313,
+    "call.nvidia_nemo.brand_wide.acct.attribute": 0.016,
+    "call.nvidia_nemo.brand_wide.acct.filter+store": 0.001,
+    "call.xiaomi_mimo.brand_wide.acct.fetch": 35.298,
+    "call.xiaomi_mimo.brand_wide.acct.attribute": 0.033,
+    "call.xiaomi_mimo.brand_wide.acct.filter+store": 0.006,
+    "calls_loop_total": 118.418,
+    "qt_official": 6.012,
+    "qt_daily": 0.0,
+    "account_graph": 0.001,
+    "total": 124.555
+  },
+  "n_requests": 16,
+  "http_log": [
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "(list:2067062923525275922) min_faves:1",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 22798,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "(list:2067062923525275922) min_faves:1",
+        "queryType": "Latest",
+        "limit": "20",
+        "cursor": "DAADDAABCgABHMNkc6xbsKcKAAIcwn3uUJuA2QAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2VfT0AnEAoABhzDZV9PP9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 7796,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "(list:2067062923525275922) min_faves:1",
+        "queryType": "Latest",
+        "limit": "10",
+        "cursor": "DAADDAABCgABHMNkc6xbsKcKAAIcwgseLNuQRAAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2VfT0AnEAoABhzDZV9PP7HgAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 3820,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 3509,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+        "queryType": "Latest",
+        "limit": "20",
+        "cursor": "DAADDAABCgABHMNlc9sXYHkKAAIcw2S5sFeAwQAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2WAvQAnEAoABhzDZYC8_9jwAAA"
+      },
+      "status": 200,
+      "n_results": 19,
+      "duration_ms": 5354,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+        "queryType": "Latest",
+        "limit": "11",
+        "cursor": "DAADDAABCgABHMNlc9sXYHkKAAIcw2QVN5tRBQAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2WAvQAnEAoABhzDZYC8_7HgAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 6048,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 6753,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+        "queryType": "Latest",
+        "limit": "20",
+        "cursor": "DAADDAABCgABHMNli6sXMFkKAAIcw2VVQZZB_gAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2WPmUAnEAoABhzDZY-ZP9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 10620,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+        "queryType": "Latest",
+        "limit": "10",
+        "cursor": "DAADDAABCgABHMNli6sXMFkKAAIcw2Upf5rhQgAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2WPmUAnEAoABhzDZY-ZP7HgAAA"
+      },
+      "status": 200,
+      "n_results": 19,
+      "duration_ms": 1901,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (Sakana OR \"Sakana AI\" OR…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 5355,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (Sakana OR \"Sakana AI\" OR…",
+        "queryType": "Latest",
+        "limit": "20",
+        "cursor": "DAADDAABCgABHMNll2GWEGMKAAIcw2To5dfQ9wAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2Wh7EAnEAoABhzDZaHsP9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 5880,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (Sakana OR \"Sakana AI\" OR…",
+        "queryType": "Latest",
+        "limit": "10",
+        "cursor": "DAADDAABCgABHMNll2GWEGMKAAIcw2Rsv9fR2gAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2Wh7EAnEAoABhzDZaHsP7HgAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 3055,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 5542,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+        "queryType": "Latest",
+        "limit": "20",
+        "cursor": "DAADDAABCgABHMNlrOwXsU4KAAIcw2AKydax7wAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2WwEEAnEAoABhzDZbAQP9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 9459,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+        "queryType": "Latest",
+        "limit": "10",
+        "cursor": "DAADDAABCgABHMNlrOwXsU4KAAIcw1sXSZahuQAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2WwEEAnEAoABhzDZbAQP7HgAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 20267,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweets",
+      "params": {
+        "tweet_ids": "2072495173955956810"
+      },
+      "status": 200,
+      "n_results": 1,
+      "duration_ms": 6007,
+      "attempts": 1,
+      "has_next_page": false
+    }
+  ],
+  "logical_calls": [
+    {
+      "signature": "SEARCH query=(list:2067062923525275922) min_faves:1",
+      "n_requests": 3,
+      "total_duration_ms": 34414,
+      "total_results": 60,
+      "items": [
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "(list:2067062923525275922) min_faves:1",
+            "queryType": "Latest",
+            "limit": "20"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 22798,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "(list:2067062923525275922) min_faves:1",
+            "queryType": "Latest",
+            "limit": "20",
+            "cursor": "DAADDAABCgABHMNkc6xbsKcKAAIcwn3uUJuA2QAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2VfT0AnEAoABhzDZV9PP9jwAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 7796,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "(list:2067062923525275922) min_faves:1",
+            "queryType": "Latest",
+            "limit": "10",
+            "cursor": "DAADDAABCgABHMNkc6xbsKcKAAIcwgseLNuQRAAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2VfT0AnEAoABhzDZV9PP7HgAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 3820,
+          "attempts": 1,
+          "has_next_page": true
+        }
+      ]
+    },
+    {
+      "signature": "SEARCH query=((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark...",
+      "n_requests": 3,
+      "total_duration_ms": 14911,
+      "total_results": 59,
+      "items": [
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+            "queryType": "Latest",
+            "limit": "20"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 3509,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+            "queryType": "Latest",
+            "limit": "20",
+            "cursor": "DAADDAABCgABHMNlc9sXYHkKAAIcw2S5sFeAwQAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2WAvQAnEAoABhzDZYC8_9jwAAA"
+          },
+          "status": 200,
+          "n_results": 19,
+          "duration_ms": 5354,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+            "queryType": "Latest",
+            "limit": "11",
+            "cursor": "DAADDAABCgABHMNlc9sXYHkKAAIcw2QVN5tRBQAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2WAvQAnEAoABhzDZYC8_7HgAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 6048,
+          "attempts": 1,
+          "has_next_page": true
+        }
+      ]
+    },
+    {
+      "signature": "SEARCH query=((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\")...",
+      "n_requests": 3,
+      "total_duration_ms": 19274,
+      "total_results": 59,
+      "items": [
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+            "queryType": "Latest",
+            "limit": "20"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 6753,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+            "queryType": "Latest",
+            "limit": "20",
+            "cursor": "DAADDAABCgABHMNli6sXMFkKAAIcw2VVQZZB_gAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2WPmUAnEAoABhzDZY-ZP9jwAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 10620,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+            "queryType": "Latest",
+            "limit": "10",
+            "cursor": "DAADDAABCgABHMNli6sXMFkKAAIcw2Upf5rhQgAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2WPmUAnEAoABhzDZY-ZP7HgAAA"
+          },
+          "status": 200,
+          "n_results": 19,
+          "duration_ms": 1901,
+          "attempts": 1,
+          "has_next_page": true
+        }
+      ]
+    },
+    {
+      "signature": "SEARCH query=((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"...",
+      "n_requests": 3,
+      "total_duration_ms": 14290,
+      "total_results": 60,
+      "items": [
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (Sakana OR \"Sakana AI\" OR…",
+            "queryType": "Latest",
+            "limit": "20"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 5355,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (Sakana OR \"Sakana AI\" OR…",
+            "queryType": "Latest",
+            "limit": "20",
+            "cursor": "DAADDAABCgABHMNll2GWEGMKAAIcw2To5dfQ9wAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2Wh7EAnEAoABhzDZaHsP9jwAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 5880,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((NeMo OR Megatron OR \"NVIDIA NeMo\" OR \"Megatron-LM\") OR (EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (Sakana OR \"Sakana AI\" OR…",
+            "queryType": "Latest",
+            "limit": "10",
+            "cursor": "DAADDAABCgABHMNll2GWEGMKAAIcw2Rsv9fR2gAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2Wh7EAnEAoABhzDZaHsP7HgAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 3055,
+          "attempts": 1,
+          "has_next_page": true
+        }
+      ]
+    },
+    {
+      "signature": "SEARCH query=((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR Moons...",
+      "n_requests": 3,
+      "total_duration_ms": 35268,
+      "total_results": 60,
+      "items": [
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+            "queryType": "Latest",
+            "limit": "20"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 5542,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+            "queryType": "Latest",
+            "limit": "20",
+            "cursor": "DAADDAABCgABHMNlrOwXsU4KAAIcw2AKydax7wAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUcw2WwEEAnEAoABhzDZbAQP9jwAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 9459,
+          "attempts": 1,
+          "has_next_page": true
+        },
+        {
+          "path": "/twitter/tweet/advanced_search",
+          "params": {
+            "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+            "queryType": "Latest",
+            "limit": "10",
+            "cursor": "DAADDAABCgABHMNlrOwXsU4KAAIcw1sXSZahuQAIAAIAAAACCAADAAAAAAgABAAAAAEKAAUcw2WwEEAnEAoABhzDZbAQP7HgAAA"
+          },
+          "status": 200,
+          "n_results": 20,
+          "duration_ms": 20267,
+          "attempts": 1,
+          "has_next_page": true
+        }
+      ]
+    },
+    {
+      "signature": "/twitter/tweets tweet_ids=2072495173955956810",
+      "n_requests": 1,
+      "total_duration_ms": 6007,
+      "total_results": 1,
+      "items": [
+        {
+          "path": "/twitter/tweets",
+          "params": {
+            "tweet_ids": "2072495173955956810"
+          },
+          "status": 200,
+          "n_results": 1,
+          "duration_ms": 6007,
+          "attempts": 1,
+          "has_next_page": false
+        }
+      ]
+    }
+  ]
+}

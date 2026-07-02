@@ -1,0 +1,161 @@
+{
+  "model": "MiniMax-M3.0",
+  "base_url": "https://api.minimax.io/anthropic",
+  "registry": [
+    "deepseek",
+    "glm",
+    "minimax",
+    "moonshot_kimi",
+    "qwen"
+  ],
+  "results": [
+    {
+      "text": "🚀 GLM-5.2 just dropped with 1M context and MIT license. Huge for open-source AI.",
+      "brands": [
+        "glm"
+      ],
+      "expect_post_type": "buzz_releases",
+      "expect_sentiment": "positive",
+      "note": "release announcement, explicit hype",
+      "actual": {
+        "glm": [
+          "buzz_releases",
+          "positive"
+        ]
+      },
+      "duration_ms": 2773
+    },
+    {
+      "text": "Qwen3-Max release notes: 480B params, native tool-calling support.",
+      "brands": [
+        "qwen"
+      ],
+      "expect_post_type": "buzz_releases",
+      "expect_sentiment": "neutral",
+      "note": "release note, no hype or criticism",
+      "actual": {
+        "qwen": [
+          "buzz_releases",
+          "neutral"
+        ]
+      },
+      "duration_ms": 1173
+    },
+    {
+      "text": "I've been running DeepSeek-V3 in production for 2 weeks. Saved $40k/mo vs Anthropic.",
+      "brands": [
+        "deepseek"
+      ],
+      "expect_post_type": "hands_on_usage",
+      "expect_sentiment": "positive",
+      "note": "first-person production story, positive",
+      "actual": {
+        "deepseek": [
+          "hands_on_usage",
+          "positive"
+        ]
+      },
+      "duration_ms": 1030
+    },
+    {
+      "text": "GLM-5.2 in Cline feels good in theory but the tool-call formatting is fragile.",
+      "brands": [
+        "glm"
+      ],
+      "expect_post_type": "hands_on_usage",
+      "expect_sentiment": "mixed",
+      "note": "qualified hands-on review",
+      "actual": {
+        "glm": [
+          "hands_on_usage",
+          "mixed"
+        ]
+      },
+      "duration_ms": 1001
+    },
+    {
+      "text": "Qwen3-Coder keeps inventing tool calls that don't exist. Frustrating.",
+      "brands": [
+        "qwen"
+      ],
+      "expect_post_type": "hands_on_usage",
+      "expect_sentiment": "negative",
+      "note": "frustration with tool calls",
+      "actual": {
+        "qwen": [
+          "hands_on_usage",
+          "negative"
+        ]
+      },
+      "duration_ms": 1464
+    },
+    {
+      "text": "GLM-5.2 hit 88 on SWE-bench Verified, matching Opus. OSS is catching up.",
+      "brands": [
+        "glm"
+      ],
+      "expect_post_type": "performance_comparisons",
+      "expect_sentiment": "positive",
+      "note": "benchmark with comparison",
+      "actual": {
+        "glm": [
+          "performance_comparisons",
+          "positive"
+        ]
+      },
+      "duration_ms": 1187
+    },
+    {
+      "text": "MiniMax M3 benchmarks fast but I've seen hallucinations in long-context that GPT-5 handles fine.",
+      "brands": [
+        "minimax"
+      ],
+      "expect_post_type": "performance_comparisons",
+      "expect_sentiment": "mixed",
+      "note": "bench positive + caveat",
+      "actual": {
+        "minimax": [
+          "performance_comparisons",
+          "mixed"
+        ]
+      },
+      "duration_ms": 5373
+    },
+    {
+      "text": "Zhipu's free tier pricing has gotten predatory. Personal users getting squeezed out.",
+      "brands": [
+        "glm"
+      ],
+      "expect_post_type": "feedback_questions",
+      "expect_sentiment": "negative",
+      "note": "pricing complaint",
+      "actual": {
+        "glm": [
+          "feedback_questions",
+          "negative"
+        ]
+      },
+      "duration_ms": 4481
+    },
+    {
+      "text": "How do I configure the Kimi K2 Thinking API endpoint with LangChain?",
+      "brands": [
+        "moonshot_kimi"
+      ],
+      "expect_post_type": "feedback_questions",
+      "expect_sentiment": "neutral",
+      "note": "how-to question",
+      "actual": {
+        "moonshot_kimi": [
+          "feedback_questions",
+          "neutral"
+        ]
+      },
+      "duration_ms": 1083
+    }
+  ],
+  "accuracy": {
+    "post_type": "9/9",
+    "sentiment": "9/9"
+  }
+}
