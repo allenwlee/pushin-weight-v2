@@ -169,6 +169,51 @@ fact. A low-effort follow-up is to render a "API spend this cycle"
 panel on the dashboard using the same data; a longer follow-up is
 to alert when total per-day spend exceeds an absolute threshold.
 
+#### 6. Add `x-monitor translate` backfill subcommand for posts
+
+**Status:** designed but unwired — same gap pattern as the post-fetch
+classifier (item lands here once we wire `RunPipeline.execute` to call
+classify_post).
+
+**Symptom:** all translator plumbing for posts is shipped (migration
+003 columns, `translate_batch` + tests, `Store.bulk_update_translations`,
+`Store.get_posts_missing_translations`), but **zero of 5,703 posts**
+in the live DB have `text_en` / `text_zh_cn` / `lang_detected`
+populated. `grep translate` in `run.py` and the LaunchAgent deploy
+scripts returns zero matches, and `__main__.py` only registers
+`x-monitor translate-registry` (which handles `brands.display_name` /
+`accounts.bio` / `companies.display_name`, not `posts.text`).
+
+**Shape:** thin CLI subcommand that mirrors
+`scripts/backfill_classify_recent.py`:
+
+```bash
+x-monitor translate [--locale en,zh_cn] [--limit 200]
+```
+
+Internals:
+1. `Store.get_posts_missing_translations(locale, limit)` → rows needing fill.
+2. `translate_batch(rows, target_locales, client, dry_run=False)` → rows with `text_en` / `text_zh_cn` / `lang_detected`.
+3. `Store.bulk_update_translations(rows)` → persist; returns updated count for the run log.
+4. Failures are non-fatal per `translator.py:25-27` — failed rows stay NULL and the dashboard falls back to source `text` + "translation pending" badge.
+
+**Cost:** Decision 6 in the original 2026-06-17 plan budgets ~$0.005 per
+1,000 kept posts for both locales. A full backfill of all 5,703 posts
+is ~$0.03 — trivial.
+
+**Why deferred:** the live pipeline path doesn't surface translation
+either, so a one-shot backfill only fixes historical posts. The
+follow-on is item 6b below.
+
+#### 6b. Wire `translate_batch` into `RunPipeline.execute`
+
+**Status:** deferred (depends on item 6 being a known-good shape).
+
+**Shape:** call `translate_batch` on the kept set per cycle, after
+classify_post lands. Same per-cycle cost envelope as the 2026-06-17
+plan — incremental on top of fetch + classify. Fail-soft: a
+translation failure for one tweet never aborts the cycle.
+
 ---
 
 ### References
@@ -183,3 +228,13 @@ to alert when total per-day spend exceeds an absolute threshold.
 - `docs/plans/2026-06-07-001-feat-chinese-models-x-monitoring-plan.md:36`
   — original `since:` design rationale
 - `scripts/dump_http_log.py` — companion tool from the same session
+- `x_monitor/translator.py:203` — `translate_batch` (item 6)
+- `x_monitor/translator.py:25-27` — fail-soft contract (item 6)
+- `x_monitor/store.py:668, 718` — `bulk_update_translations` /
+  `get_posts_missing_translations` (item 6)
+- `x_monitor/__main__.py:1027-1050` — `translate-registry` subcommand
+  to mirror for `translate` (item 6)
+- `docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md`
+  — original integration point (item 6b)
+- `migrations/003_translation_columns.sql` — `text_en` / `text_zh_cn`
+  / `lang_detected` schema (item 6)
