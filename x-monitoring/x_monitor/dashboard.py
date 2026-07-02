@@ -316,12 +316,22 @@ def _parse_post_timestamp(created):
         return None
 
 
-# Canonical query_id -> expected_signal mapping REMOVED in U9 (migration
-# 022). The legacy 6-signal taxonomy (Q1=release / Q2=community_question
-# / Q3=criticism / Q4=commenter_capture / Q5=other / Q6=praise) was
-# replaced by the (post_type × sentiment) decomposition. The v1.7 dashboard
-# used this mapping to label the per-day chart series; the v1.8 dashboard
-# uses sentiment directly (`_DASHBOARD_SENTIMENT_KEYS`).
+# Canonical query_id -> expected_signal mapping. The legacy 6-signal
+# taxonomy (Q1=release / Q2=community_question / Q3=criticism /
+# Q4=commenter_capture / Q5=other / Q6=praise) was replaced in U9 by the
+# (post_type × sentiment) decomposition, so the v1.8 grid card reads
+# from posts_brands_signals directly via _read_classification_breakdown_for_brand.
+# The combined chart (v2.0) still renders per-signal stacks via
+# source_query_id, so this mapping is kept as a local dependency of
+# serialize_combined_chart / _qid_to_signal only.
+_QID_TO_SIGNAL: dict[str, str] = {
+    "Q1": "release",
+    "Q2": "community_question",
+    "Q3": "criticism",
+    "Q4": "commenter_capture",
+    "Q5": "other",
+    "Q6": "praise",
+}
 
 
 
@@ -368,6 +378,50 @@ def _clamp_polarity_window(window: int, ceiling: int) -> int:
     the prior window is 1 day ago, well within any reasonable history).
     """
     return max(1, min(window, ceiling))
+
+
+# Combined chart window: stock-chart style, 1d-360d. Default 30d (matches
+# the treemap default). The combined chart has no prior-window comparison,
+# so unlike the polarity window there is NO clamp to dashboard.window_days.
+# Picking 360d with only 14d of history renders early days as zeros (the
+# operator sees their own data sparsity).
+ALLOWED_COMBINED_WINDOWS: tuple[int, ...] = (1, 7, 14, 30, 60, 90, 180, 360)
+COMBINED_WINDOW_COOKIE = "combined_window"
+COMBINED_WINDOW_DEFAULT = 30
+
+
+def _resolve_combined_window(req, default: int) -> int:
+    """Read the combined chart window from a Flask request's cookies.
+
+    Returns the validated int if the cookie is set to one of the allowed
+    values; otherwise returns `default`. Defensive: any malformed value
+    (non-int, out of range, negative) falls back to the default rather
+    than raising, so a stale or hand-edited cookie can't crash the page.
+
+    Unlike _resolve_polarity_window, this helper does NOT clamp to
+    dashboard.window_days — the combined chart has no prior-window
+    comparison, and zero-fill early days is the correct behavior when
+    the operator picks a window wider than available history.
+    """
+    raw = req.cookies.get(COMBINED_WINDOW_COOKIE)
+    if raw is None:
+        return default
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if n not in ALLOWED_COMBINED_WINDOWS:
+        return default
+    return n
+
+
+def _qid_to_signal(qid: str) -> str | None:
+    """Map a source_query_id to its expected_signal name, or None for unknown.
+
+    Local dependency of serialize_combined_chart (v2.0). Kept alongside
+    `_QID_TO_SIGNAL` because the grid card no longer uses signals after U9.
+    """
+    return _QID_TO_SIGNAL.get(qid)
 
 
 def _read_classification_breakdown_for_brand(
@@ -613,6 +667,102 @@ def serialize_grid_card(
         "degraded_sentinels": sentinels,
         "last_run_at": (latest_run or {}).get("finished_at"),
         "display_locale": locale,
+    }
+
+
+def serialize_combined_chart(
+    brands: list[str],
+    posts_by_brand: dict[str, list[dict[str, Any]]],
+    *,
+    window_days: int = 30,
+    latest_run: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Return the combined multi-brand chart payload.
+
+    Aggregates posts for all enabled brands into a per-day, per-brand
+    total (series) and a per-day, per-brand, per-signal breakdown (stacked).
+    The shape is what static/combined-chart.js expects on the wire.
+
+    Args:
+        brands: list of brand model_ids (e.g. ["minimax", "qwen", ...]).
+        posts_by_brand: {brand: [post dicts]} aligned with `brands`.
+        window_days: total window for the chart (default 30).
+        latest_run: parsed LATEST.json (or None) for the now anchor.
+            When present, latest_run["finished_at"] wins over `now`
+            (matches serialize_grid_card behavior).
+        now: anchor timestamp for window cutoffs (test seam).
+
+    Returns:
+        {
+            "days": [iso_date_str] * window_days,         # oldest -> newest
+            "series": {brand: [int] * window_days},        # total per brand per day
+            "stacked": {brand: {signal: [int] * window_days}},  # per signal
+            "window_days": int,
+            "fetched_at": iso_str,
+        }
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+        if latest_run and latest_run.get("finished_at"):
+            try:
+                now = datetime.fromisoformat(
+                    latest_run["finished_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+
+    # The combined chart still renders per-signal stacks via
+    # source_query_id (v2.0). Future migration to sentiment/post_type is
+    # tracked separately; the grid card already moved to U9 sentiment.
+    chart_series_keys: tuple[str, ...] = (
+        "release", "community_question", "criticism",
+        "commenter_capture", "other", "praise",
+    )
+
+    # days: ISO date strings, oldest -> newest
+    days: list[str] = [
+        (now.date() - timedelta(days=i)).isoformat()
+        for i in range(window_days - 1, -1, -1)
+    ]
+
+    series: dict[str, list[int]] = {b: [0] * window_days for b in brands}
+    stacked: dict[str, dict[str, list[int]]] = {
+        b: {sig: [0] * window_days for sig in chart_series_keys}
+        for b in brands
+    }
+
+    # Single pass per brand: bucket posts into per-day, per-signal counts.
+    for brand in brands:
+        posts = posts_by_brand.get(brand, [])
+        for p in posts:
+            signal = _qid_to_signal(p.get("source_query_id") or "")
+            if signal is None:
+                continue
+            dt = _parse_post_timestamp(p.get("created_at"))
+            if dt is None:
+                continue
+            # Skip posts outside the window
+            days_ago = (now.date() - dt.date()).days
+            if days_ago < 0 or days_ago >= window_days:
+                continue
+            # Index from the END of `days` (oldest -> newest)
+            idx = window_days - 1 - days_ago
+            series[brand][idx] += 1
+            stacked[brand][signal][idx] += 1
+
+    # Per-brand stroke colors from MODEL_ACCENT_COLORS so the chart
+    # renders each line in its brand color (matches the 9-card grid
+    # sparkline convention).
+    colors = {b: MODEL_ACCENT_COLORS.get(b, "#9ca3af") for b in brands}
+
+    return {
+        "days": days,
+        "series": series,
+        "stacked": stacked,
+        "colors": colors,
+        "window_days": window_days,
+        "fetched_at": now.isoformat(),
     }
 
 
@@ -937,6 +1087,39 @@ class DashboardApp:
         tiles.sort(key=lambda t: (-t.area_weight, t.display_name))
         return tiles
 
+    def _build_combined_payload(
+        self, db_path, *, window_days: int
+    ) -> tuple[dict[str, Any], dict | None]:
+        """Build the combined chart payload. Shared by /combined, /api/combined.html, /api/combined.json.
+
+        Fetches posts for every enabled model, calls serialize_combined_chart,
+        and returns the payload + latest_run (for the window toggle's
+        active state). Per-brand failures are caught and rendered as a
+        zero-totals line (matches _build_treemap_tiles resilience).
+        """
+        latest_run = _load_latest_run(self.runs_dir)
+        posts_by_brand: dict[str, list[dict[str, Any]]] = {}
+        store = Store(db_path)
+        try:
+            for m in self.config.enabled_models:
+                try:
+                    posts_by_brand[m] = store.get_all_posts(m)
+                except Exception as e:
+                    log.warning(
+                        "combined chart post fetch failed for %s: %s — using empty list",
+                        m, e,
+                    )
+                    posts_by_brand[m] = []
+        finally:
+            store.close()
+        payload = serialize_combined_chart(
+            list(self.config.enabled_models),
+            posts_by_brand,
+            window_days=window_days,
+            latest_run=latest_run,
+        )
+        return payload, latest_run
+
     def _validate_dashboard_config(self) -> None:
         """Startup check that every enabled_model has a display_name + accent_color.
 
@@ -1081,6 +1264,99 @@ class DashboardApp:
             )
             resp.set_cookie(
                 POLARITY_WINDOW_COOKIE,
+                str(days),
+                max_age=60 * 60 * 24 * 365,  # 1 year
+                samesite="Lax",
+                httponly=True,
+            )
+            return resp
+
+        # ---- Combined chart (Unit 3 of v2.0 plan) ----
+        # New 3rd topbar tab. Same 3-route shape as the treemap:
+        # initial render + htmx partial + structured JSON.
+
+        @app.route("/combined")
+        def combined():
+            # Combined chart front page (full page with topbar + htmx poll).
+            raw_window = _resolve_combined_window(
+                request, COMBINED_WINDOW_DEFAULT,
+            )
+            payload, latest_run = self._build_combined_payload(
+                db_path, window_days=raw_window,
+            )
+            return render_template(
+                "combined.html.j2",
+                payload=payload,
+                combined_window_days=raw_window,
+                allowed_combined_windows=list(ALLOWED_COMBINED_WINDOWS),
+                poll_seconds=self.config.dashboard.poll_seconds,
+                last_run_at=(latest_run or {}).get("finished_at"),
+                brands=self.config.enabled_models,
+            )
+
+        @app.route("/api/combined.html")
+        def api_combined_html():
+            # SVG+canvas htmx partial — no <main> wrapper. The wrapping
+            # <main id="combined-chart"> on the initial page persists,
+            # so the hx-trigger attribute stays attached and polling
+            # continues.
+            raw_window = _resolve_combined_window(
+                request, COMBINED_WINDOW_DEFAULT,
+            )
+            payload, _latest_run = self._build_combined_payload(
+                db_path, window_days=raw_window,
+            )
+            return render_template(
+                "_combined_chart.html.j2",
+                payload=payload,
+                combined_window_days=raw_window,
+                brands=self.config.enabled_models,
+            )
+
+        @app.route("/api/combined.json")
+        def api_combined_json():
+            # Structured payload for external consumers.
+            raw_window = _resolve_combined_window(
+                request, COMBINED_WINDOW_DEFAULT,
+            )
+            payload, _latest_run = self._build_combined_payload(
+                db_path, window_days=raw_window,
+            )
+            return jsonify(
+                {
+                    **payload,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(),
+                    "window": {
+                        "combined_window_days": raw_window,
+                        "default_window_days": COMBINED_WINDOW_DEFAULT,
+                        "allowed_windows": list(ALLOWED_COMBINED_WINDOWS),
+                    },
+                }
+            )
+
+        @app.route("/api/combined_window/<int:days>")
+        def api_set_combined_window(days: int):
+            """Set the combined chart window cookie and redirect back.
+
+            The toggle buttons in the topbar link here. After the
+            redirect, the next page render reads the new cookie and
+            re-renders the combined chart with the chosen window.
+            Because the htmx poller on /api/combined.html also reads
+            the cookie, the toggle updates on the very next poll
+            (within `poll_seconds`).
+            """
+            if days not in ALLOWED_COMBINED_WINDOWS:
+                return jsonify(
+                    {
+                        "error": "invalid combined window",
+                        "allowed": list(ALLOWED_COMBINED_WINDOWS),
+                    }
+                ), 400
+            resp = make_response(
+                redirect(request.referrer or url_for("combined"), code=303)
+            )
+            resp.set_cookie(
+                COMBINED_WINDOW_COOKIE,
                 str(days),
                 max_age=60 * 60 * 24 * 365,  # 1 year
                 samesite="Lax",

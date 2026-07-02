@@ -23,6 +23,7 @@ run_dashboard*.py
 __pycache__/
 *.pyc
 *.egg-info/
+.venv
 .venv/
 venv
 .pytest_cache/
