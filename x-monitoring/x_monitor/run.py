@@ -8,6 +8,7 @@ import fcntl
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -534,6 +535,12 @@ class RunPipeline:
         Returns the run summary dict (also written to data/runs/<run_id>.json).
         """
         run_id = f"{_now_iso().replace(':', '').replace('+', '_').replace('-', '')}-{uuid.uuid4().hex[:8]}"
+        phase_timings: dict[str, float] = {}
+        _run_t0 = time.monotonic()
+
+        def _t(phase: str, t0: float) -> None:
+            phase_timings[phase] = round(time.monotonic() - t0, 3)
+
         summary: dict[str, Any] = {
             "run_id": run_id,
             "started_at": _now_iso(),
@@ -541,6 +548,7 @@ class RunPipeline:
             "status": "running",
             "degraded": {},
             "queries": [],
+            "phase_timings_sec": phase_timings,
             "totals": {
                 "n_queries_run": 0,
                 "n_results": 0,
@@ -638,11 +646,14 @@ class RunPipeline:
                         "Call A is list-based; see plan §'Call A — list-based "
                         "fan-in' for the operator steps to create the list."
                     )
+                _t_plan = time.monotonic()
                 plan = plan_calls(
                     self.data_dir, models,
                     x_monitor_list_id=self.config.x_monitor_list_id,
+                    call_b_groups=self.config.call_b_groups,
                     call_c_specs=self.config.call_c_specs or None,
                 )
+                _t("plan", _t_plan)
                 # Pre-load brand-token + staff-handle maps for
                 # attribute_to_brand (intent calls only). These are
                 # computed once per run — pure data lookup, no API.
@@ -658,6 +669,7 @@ class RunPipeline:
                 _log_brand_search_terms_drift(
                     yaml_terms_for_drift, brand_search_terms_db
                 )
+                _t_loop = time.monotonic()
                 for call in plan:
                     if dry_run:
                         summary["queries"].append(
@@ -675,6 +687,7 @@ class RunPipeline:
                     raw_path = self.raw_dir / run_id / f"{call.brand_id}_{call.call_kind}_{call.bucket or 'acct'}.json"
                     raw_path.parent.mkdir(parents=True, exist_ok=True)
 
+                    _t_fetch = time.monotonic()
                     try:
                         items = apify.run_search(
                             call.query_string,
@@ -698,7 +711,9 @@ class RunPipeline:
                             }
                         )
                         continue
+                    _t(f"call.{call.brand_id}.{call.call_kind}.{call.bucket or 'acct'}.fetch", _t_fetch)
 
+                    _t_attr = time.monotonic()
                     # v1.8 (R15): for intent calls, reclassify each tweet
                     # via the multi-brand pipeline. Populate
                     #   - it["brand_id"]      (legacy compat: first match)
@@ -738,6 +753,8 @@ class RunPipeline:
                     items = [
                         it for it in items if not it.get("_unattributed")
                     ]
+                    _t(f"call.{call.brand_id}.{call.call_kind}.{call.bucket or 'acct'}.attribute", _t_attr)
+                    _t_filter = time.monotonic()
                     log.info(
                         "call brand_id=%s kind=%s bucket=%s n_results=%d "
                         "n_classified=%d",
@@ -802,6 +819,7 @@ class RunPipeline:
                     n_inserted = store.insert_posts(kept_all)
                     summary["totals"]["n_classifications_written"] += store._classifications_written
                     summary["totals"]["n_classifications_dropped"] += store._classifications_dropped
+                    _t(f"call.{call.brand_id}.{call.call_kind}.{call.bucket or 'acct'}.filter+store", _t_filter)
 
                     log.info(
                         "call model=%s kind=%s bucket=%s n_results=%d "
@@ -831,6 +849,7 @@ class RunPipeline:
                     summary["totals"]["n_queries_run"] += 1
                     summary["totals"]["n_results"] += len(items)
                     summary["totals"]["n_inserted"] += n_inserted
+                _t("calls_loop_total", _t_loop)
 
                 if summary["status"] == "aborted":
                     pass  # already handled in the inner break
@@ -846,6 +865,7 @@ class RunPipeline:
                     # (`brand_search_terms_db`).
                     qt_index, _ = _build_brand_index(qt_brand_tokens, models)
                     qt_staff = _staff_handles_map(models, self.data_dir)
+                    _t_qt_o = time.monotonic()
                     try:
                         qt_out = self._capture_official_quote_tweets(
                             apify, store, qt_index, brand_search_terms_db, qt_staff,
@@ -856,6 +876,9 @@ class RunPipeline:
                         summary.setdefault("quote_tweets", {})[
                             "official_error"
                         ] = str(e)
+                    _t("qt_official", _t_qt_o)
+
+                    _t_qt_d = time.monotonic()
                     try:
                         daily_out = self._capture_nonofficial_quote_tweets_daily(
                             apify, store, qt_index, brand_search_terms_db, qt_staff,
@@ -866,15 +889,27 @@ class RunPipeline:
                         summary.setdefault("quote_tweets", {})[
                             "daily_error"
                         ] = str(e)
+                    _t("qt_daily", _t_qt_d)
             finally:
                 store.close()
 
             # Account graph update
+            _t_acc = time.monotonic()
             self._update_accounts(store, summary)
+            _t("account_graph", _t_acc)
 
             if summary["status"] == "running":
                 summary["status"] = "completed" if not summary["degraded"] else "degraded"
             summary["finished_at"] = _now_iso()
+            _t("total", _run_t0)
+            # Per-request HTTP log captured by TwitterApiClient._get.
+            # Surfaced at the top level of the run JSON so scripts/
+            # dump_http_log.py can post-process any past run without
+            # needing live access to the apify client.
+            try:
+                summary["http_log"] = list(apify._request_log)
+            except AttributeError:
+                summary["http_log"] = []
             self._write_summary(run_id, summary)
             self._update_latest_symlink(run_id, running=False)
             return summary

@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import requests
@@ -76,6 +76,11 @@ class TwitterApiClient:
     base_url: str = TWITTERAPI_BASE
     timeout_s: int = 60
     max_retries: int = 2
+    # Per-instance request log. Each entry is one logical HTTP exchange
+    # (one URL + params + retries collapsed into a single record). The list
+    # is mutated as requests complete; copied into run.summary["http_log"]
+    # at the end of the run by RunPipeline.execute.
+    _request_log: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_env(cls) -> "TwitterApiClient":
@@ -95,7 +100,10 @@ class TwitterApiClient:
     def _get(self, path: str, params: dict[str, Any]) -> Any:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
+        t0 = time.monotonic()
+        n_attempts = 0
         for attempt in range(self.max_retries + 1):
+            n_attempts = attempt + 1
             try:
                 r = requests.get(
                     url,
@@ -132,10 +140,60 @@ class TwitterApiClient:
                 raise RuntimeError(
                     f"TwitterAPI.io error {r.status_code}: {r.text[:200]}"
                 )
+            # Success — record into the per-instance log before returning.
+            self._record_request(path, params, r, t0, n_attempts)
             return r.json()
         if last_exc:
             raise last_exc
         raise RuntimeError("TwitterAPI.io call failed without a recorded exception")
+
+    def _record_request(
+        self,
+        path: str,
+        params: dict[str, Any],
+        response: "requests.Response",
+        t0: float,
+        n_attempts: int,
+    ) -> None:
+        """Append one entry to self._request_log for a completed _get call.
+
+        Kept side-effect free (apart from the append) so a logging failure
+        never propagates back to the caller. Truncates long string params
+        (search queries, cursor tokens) so a single 50-result run JSON
+        stays scannable.
+        """
+        try:
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            body = response.json() if response.content else {}
+            if not isinstance(body, dict):
+                body = {}
+            # Endpoint-specific result-count probes. Each is cheap and
+            # path-driven; unknown paths record 0 rather than crash.
+            n_results = len(
+                body.get("tweets")
+                or body.get("quotes")
+                or body.get("followers")
+                or body.get("users")
+                or (body.get("data") if isinstance(body.get("data"), list) else [])
+                or []
+            )
+            # Truncate param values so the run JSON doesn't bloat on full
+            # search queries; preserve the keys so readers can group.
+            params_compact = {
+                k: (str(v) if not isinstance(v, str) else (v[:120] + "…" if len(v) > 120 else v))
+                for k, v in params.items()
+            }
+            self._request_log.append({
+                "path": path,
+                "params": params_compact,
+                "status": response.status_code,
+                "n_results": n_results,
+                "duration_ms": duration_ms,
+                "attempts": n_attempts,
+                "has_next_page": bool(body.get("has_next_page") or body.get("next_cursor")),
+            })
+        except Exception as exc:  # never let logging break a real call
+            log.debug("failed to record http request: %s", exc)
 
     def _walk_followers(self, handle: str, max_results: int) -> list[dict[str, Any]]:
         """Paginate get_user_followers via cursor. Returns normalized list."""
