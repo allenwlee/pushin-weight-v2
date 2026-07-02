@@ -15,6 +15,7 @@ data/_review_queue.json
 data/_review_queue.json.lock
 data/headlines_cache.json
 data/headlines_cache.json.lock
+data/_qt_daily_marker
 
 # Worktree-only runtime files (NOT committed, NOT shared with main)
 run_dashboard*.py
