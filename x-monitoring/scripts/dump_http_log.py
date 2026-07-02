@@ -11,6 +11,9 @@ Usage:
     scripts/dump_http_log.py RUN_ID               # dump specific run
     scripts/dump_http_log.py path/to/run.json     # dump specific file
     scripts/dump_http_log.py --out docs/x.json    # also persist report
+    scripts/dump_http_log.py --latency-summary    # print per-call latency
+                                                 # distribution (mean, p50,
+                                                 # p95, p99, outliers). U4.
 
 Each entry in http_log is one logical HTTP exchange (URL + params + any
 retries collapsed into a single record). Fields:
@@ -86,6 +89,115 @@ def render_flat(log: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def latency_percentiles(durations_ms: list[int]) -> dict[str, float | int | None]:
+    """Return mean / median / p95 / p99 / max for a list of millisecond
+    durations.
+
+    Returns sentinel values (None for percentiles, 0 for everything)
+    when the input is empty so callers can render a clean row instead
+    of a KeyError. Sorts a copy — does NOT mutate the input.
+    """
+    if not durations_ms:
+        return {
+            "n": 0, "mean_ms": 0, "median_ms": None,
+            "p95_ms": None, "p99_ms": None, "max_ms": 0, "min_ms": 0,
+        }
+    sorted_d = sorted(durations_ms)
+    n = len(sorted_d)
+
+    def _percentile(p: float) -> float:
+        # Linear interpolation between adjacent ranks (same method
+        # numpy's default percentile uses). With n=1 we return the
+        # only value.
+        if n == 1:
+            return float(sorted_d[0])
+        rank = (p / 100.0) * (n - 1)
+        lo = int(rank)
+        hi = min(lo + 1, n - 1)
+        frac = rank - lo
+        return sorted_d[lo] * (1 - frac) + sorted_d[hi] * frac
+
+    return {
+        "n": n,
+        "mean_ms": sum(sorted_d) / n,
+        "median_ms": _percentile(50),
+        "p95_ms": _percentile(95),
+        "p99_ms": _percentile(99),
+        "max_ms": sorted_d[-1],
+        "min_ms": sorted_d[0],
+    }
+
+
+def render_latency_summary(log: list[dict]) -> str:
+    """Print a per-endpoint latency distribution table.
+
+    Two sections:
+      1. Per-endpoint mean/p50/p95/p99/max.
+      2. Outliers — the top 5% (or top 3, whichever is greater) of
+         requests across the whole run, with their path + duration
+         for manual inspection.
+    """
+    if not log:
+        return "# (no HTTP requests to summarize)"
+
+    by_path: dict[str, list[int]] = defaultdict(list)
+    for r in log:
+        by_path[r["path"]].append(r["duration_ms"])
+
+    lines = ["## Latency distribution (per endpoint)"]
+    lines.append(
+        "  endpoint                                          "
+        "  n   mean    p50    p95    p99     max"
+    )
+    for path in sorted(by_path.keys()):
+        d = by_path[path]
+        s = latency_percentiles(d)
+        mean_v = f"{s['mean_ms']:>6.0f}"
+        p50_v = "  -  " if s["median_ms"] is None else f"{s['median_ms']:>6.0f}"
+        p95_v = "  -  " if s["p95_ms"] is None else f"{s['p95_ms']:>6.0f}"
+        p99_v = "  -  " if s["p99_ms"] is None else f"{s['p99_ms']:>6.0f}"
+        lines.append(
+            f"  {path[:50]:<50}  "
+            f"{s['n']:>3d}  "
+            f"{mean_v}  "
+            f"{p50_v}  "
+            f"{p95_v}  "
+            f"{p99_v}  "
+            f"{s['max_ms']:>6d}"
+        )
+
+    lines.append("")
+    lines.append("## Outliers (top by duration)")
+    sorted_log = sorted(log, key=lambda r: -r["duration_ms"])
+    n_outliers = max(3, len(sorted_log) // 20)
+    for r in sorted_log[:n_outliers]:
+        lines.append(
+            f"  {r['duration_ms']:>6d}ms  "
+            f"{r['path']:<40}  "
+            f"status={r['status']}  "
+            f"results={r['n_results']}"
+        )
+
+    overall = latency_percentiles(
+        [r["duration_ms"] for r in log]
+    )
+    lines.append("")
+    lines.append("## Overall")
+    if overall["median_ms"] is None:
+        lines.append("  (no requests)")
+    else:
+        lines.append(
+            f"  n={overall['n']}  "
+            f"mean={overall['mean_ms']:.0f}ms  "
+            f"p50={overall['median_ms']:.0f}ms  "
+            f"p95={overall['p95_ms']:.0f}ms  "
+            f"p99={overall['p99_ms']:.0f}ms  "
+            f"max={overall['max_ms']}ms  "
+            f"min={overall['min_ms']}ms"
+        )
+    return "\n".join(lines)
+
+
 def render_grouped(groups: list[dict]) -> str:
     lines = []
     for g in groups:
@@ -147,6 +259,12 @@ def main() -> int:
         "--no-pretty", action="store_true",
         help="print only the flat list (skip the grouped section)",
     )
+    parser.add_argument(
+        "--latency-summary", action="store_true",
+        help="print a per-endpoint latency distribution (mean / p50 / "
+             "p95 / p99 / max) plus the overall distribution and top "
+             "outliers. U4 observation tool.",
+    )
     args = parser.parse_args()
 
     run_path = resolve_run_path(args.run, Path(args.data_dir))
@@ -195,6 +313,10 @@ def main() -> int:
         print(render_grouped(groups))
         print()
 
+    if args.latency_summary:
+        print(render_latency_summary(log))
+        print()
+
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,6 +330,17 @@ def main() -> int:
             "http_log": log,
             "logical_calls": group_calls(log),
         }
+        if args.latency_summary:
+            by_path: dict[str, list[int]] = defaultdict(list)
+            for r in log:
+                by_path[r["path"]].append(r["duration_ms"])
+            report["latency_by_endpoint"] = {
+                p: latency_percentiles(d)
+                for p, d in by_path.items()
+            }
+            report["latency_overall"] = latency_percentiles(
+                [r["duration_ms"] for r in log]
+            )
         out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
         print(f"# Wrote report to {out_path}")
     return 0
