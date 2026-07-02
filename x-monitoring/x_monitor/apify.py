@@ -27,8 +27,9 @@ TWITTERAPI_BASE = "https://api.twitterapi.io"
 SEARCH_PATH = "/twitter/tweet/advanced_search"
 FOLLOWERS_PATH = "/twitter/user/followers"
 # Per docs TwitterAPI.io caps each advanced_search response at 20 tweets.
-# We paginate via next_cursor to retrieve up to max_results.
-SEARCH_MAX_PER_PAGE = 20
+# We paginate via next_cursor to retrieve up to max_results. The per-page
+# cap is now passed in by the caller (SearchConfig.max_per_page, default
+# 20) — see TwitterApiClient.run_search / _walk_search.
 USER_INFO_PATH = "/twitter/user/info"
 # v1.4: long-form X article body. Cost: 100 credits per article.
 ARTICLE_PATH = "/twitter/article"
@@ -232,16 +233,17 @@ class TwitterApiClient:
         max_results: int,
         *,
         max_pages: int = 5,
+        max_per_page: int = 20,
     ) -> list[dict[str, Any]]:
         """Paginate advanced_search via next_cursor. Returns up to max_results.
 
-        TwitterAPI.io caps each response at SEARCH_MAX_PER_PAGE tweets and
-        signals more results via `has_next_page` + `next_cursor`. We follow
+        TwitterAPI.io caps each response at `max_per_page` tweets (the
+        platform caps it at 20; we clamp to whatever the caller passes).
+        Signals more results via `has_next_page` + `next_cursor`. We follow
         the cursor until either the user's max_results ceiling is hit or
         has_next_page is false. The defensive max_pages cap (default 5)
-        guards against a runaway cursor draining the credit budget — at 20
-        tweets/page × 5 pages = 100 tweets, which covers all current
-        max_results=50 calls with headroom.
+        guards against a runaway cursor draining the credit budget — at
+        `max_per_page` tweets/page × max_pages pages = the per-call ceiling.
         """
         out: list[dict[str, Any]] = []
         cursor: str | None = None
@@ -251,7 +253,7 @@ class TwitterApiClient:
             params: dict[str, Any] = {
                 "query": query,
                 "queryType": "Latest",
-                "limit": min(SEARCH_MAX_PER_PAGE, max_results - len(out)),
+                "limit": min(max_per_page, max_results - len(out)),
             }
             if cursor:
                 params["cursor"] = cursor
@@ -274,6 +276,9 @@ class TwitterApiClient:
         max_results: int = 50,
         since: str | None = None,
         cookies: dict[str, str] | None = None,  # noqa: ARG002 — kept for compat
+        *,
+        max_pages: int = 5,
+        max_per_page: int = 20,
     ) -> list[dict[str, Any]]:
         """Run an X advanced-search query via TwitterAPI.io.
 
@@ -289,13 +294,23 @@ class TwitterApiClient:
         ApifyClient signature but is ignored (TwitterAPI.io does not require
         user cookies).
 
+        `max_pages` (kw-only) bounds pagination depth — default 5, same
+        defensive cap as before. `max_per_page` (kw-only) is the per-page
+        request size — default 20 (the platform cap). Both are passed
+        through to `_walk_search`.
+
         Returns up to max_results tweets, paginated via next_cursor (see
         _walk_search).
         """
         effective_query = query
         if since and "since:" not in query:
             effective_query = f"{query} since:{since}"
-        return self._walk_search(effective_query, max_results, max_pages=5)
+        return self._walk_search(
+            effective_query,
+            max_results,
+            max_pages=max_pages,
+            max_per_page=max_per_page,
+        )
 
     def get_quote_tweets(
         self,

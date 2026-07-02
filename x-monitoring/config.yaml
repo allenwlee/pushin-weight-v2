@@ -53,6 +53,18 @@ clustering:
   min_commenters: 3
   min_posts: 2
 
+# Search caps for the main-loop advanced_search call (U1, 2026-07-02).
+# All three are operator-tunable without a code edit. Defaults match
+# the prior hardcoded values; omit this block to use defaults.
+#   max_results   tweets per logical call (default 50)
+#   max_per_page  TwitterAPI.io per-page request size (default 20)
+#   max_pages     pagination safety cap (default 5)
+# Credit math at defaults: 5 pages × 20 tweets = 100 tweets = ~$0.015.
+search:
+  max_results: 50
+  max_per_page: 20
+  max_pages: 5
+
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.
 query_rot_streak_threshold: 3

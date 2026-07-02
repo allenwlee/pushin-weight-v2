@@ -11,7 +11,6 @@ import requests
 
 from x_monitor.apify import (
     FOLLOWERS_MAX_PER_PAGE,
-    SEARCH_MAX_PER_PAGE,
     TwitterApiAuthError,
     TwitterApiClient,
     TwitterApiRateLimitError,
@@ -413,13 +412,18 @@ def _tweet(tid: str, text: str = "hi") -> dict:
 
 
 class TestSearchMaxPerPage:
-    """The platform-side cap is locked at 20."""
+    """The platform-side cap is locked at 20 (default)."""
 
-    def test_cap_is_20(self):
+    def test_default_max_per_page_is_20(self):
         # TwitterAPI.io caps each advanced_search response at 20; _walk_search
-        # relies on this. If they ever raise it, this test forces an explicit
-        # decision.
-        assert SEARCH_MAX_PER_PAGE == 20
+        # relies on this when the caller doesn't pass max_per_page. If they
+        # ever raise it, this test forces an explicit decision.
+        client = TwitterApiClient(api_key="k")
+        with patch.object(client, "_get", return_value={
+            "tweets": [_tweet("1")], "has_next_page": False
+        }) as mg:
+            client._walk_search("from:x", max_results=50)
+        assert mg.call_args.args[1]["limit"] == 20
 
 
 class TestWalkSearch:
@@ -510,6 +514,33 @@ class TestWalkSearch:
         with patch.object(client, "_get", return_value={"tweets": []}):
             assert client._walk_search("from:nobody", max_results=50) == []
 
+    def test_honors_caller_supplied_max_pages(self):
+        # U1: max_pages is configurable. Caller passes max_pages=2; the
+        # defensive cap must be 2 even if has_next_page stays True.
+        client = self._client()
+
+        def infinite_pages(*args, **kwargs):
+            return {
+                "tweets": [_tweet("1")],
+                "has_next_page": True,
+                "next_cursor": "always-more",
+            }
+
+        with patch.object(client, "_get", side_effect=infinite_pages) as mock_get:
+            client._walk_search("from:x", max_results=200, max_pages=2)
+        assert mock_get.call_count == 2
+
+    def test_honors_caller_supplied_max_per_page(self):
+        # U1: max_per_page is configurable. Caller passes max_per_page=5;
+        # every per-page request must carry limit=5.
+        client = self._client()
+        page = {"tweets": [_tweet("1")], "has_next_page": False}
+        with patch.object(client, "_get", return_value=page) as mock_get:
+            client._walk_search(
+                "from:x", max_results=20, max_pages=10, max_per_page=5
+            )
+        assert mock_get.call_args.args[1]["limit"] == 5
+
     def test_handles_data_key_fallback(self):
         # Some endpoints return "data" instead of "tweets".
         client = self._client()
@@ -569,6 +600,22 @@ class TestRunSearch:
         ):
             out = client.run_search("from:x", max_results=50)
         assert len(out) == 30
+
+    def test_threads_max_pages_to_walk(self):
+        # U1: run_search accepts max_pages and passes it through to _walk_search.
+        client = self._client()
+        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+            client.run_search("from:x", max_pages=3)
+            kwargs = mock_walk.call_args.kwargs
+            assert kwargs["max_pages"] == 3
+
+    def test_threads_max_per_page_to_walk(self):
+        # U1: run_search accepts max_per_page and passes it through to _walk_search.
+        client = self._client()
+        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+            client.run_search("from:x", max_per_page=8)
+            kwargs = mock_walk.call_args.kwargs
+            assert kwargs["max_per_page"] == 8
 
 
 # --- get_quote_tweets / get_tweets_by_ids (2026-06-22) --------------------

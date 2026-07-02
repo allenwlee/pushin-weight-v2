@@ -689,9 +689,12 @@ class RunPipeline:
 
                     _t_fetch = time.monotonic()
                     try:
+                        s = self.config.search
                         items = apify.run_search(
                             call.query_string,
-                            max_results=50,
+                            max_results=s.max_results,
+                            max_pages=s.max_pages,
+                            max_per_page=s.max_per_page,
                         )
                     except TwitterApiAuthError as e:
                         summary["degraded"]["twitterapi_auth"] = str(e)

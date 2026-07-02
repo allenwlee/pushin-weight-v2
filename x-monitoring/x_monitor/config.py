@@ -102,12 +102,33 @@ class QuoteTweetConfig(BaseModel):
     daily_call_budget: int = Field(default=50, ge=0)
 
 
+class SearchConfig(BaseModel):
+    """Search-cap knobs (U1, 2026-07-02). All optional with defaults;
+    the main-loop search runs with no config.yaml entry.
+
+    `max_results` is the upper bound on tweets returned per logical search
+    call. `max_per_page` is the per-page request size passed to TwitterAPI.io
+    (the platform caps responses at 20; we clamp to that). `max_pages` is a
+    defensive cap on pagination depth — guards against a runaway cursor
+    draining the credit budget.
+
+    Defaults match today's hardcoded values (50 / 20 / 5) — this is a pure
+    config-exposure refactor; omitting the `search:` block in config.yaml
+    yields identical ship-path behavior.
+    """
+
+    max_results: int = Field(default=50, ge=1)
+    max_per_page: int = Field(default=20, ge=1)
+    max_pages: int = Field(default=5, ge=1)
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
     apify_actor: str = "automation-lab/twitter-scraper"
     clustering: ClusteringConfig = ClusteringConfig()
     quote_tweets: QuoteTweetConfig = QuoteTweetConfig()
+    search: SearchConfig = SearchConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))
