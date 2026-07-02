@@ -1,11 +1,15 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
 # TwitterAPI.io live queries — v1.7.x (20 brands, A + B1/B2/B3 + C1)
 
-**Regenerated:** 2026-06-25 (JST) — schema references re-verified against the 9 migrations (011–019) on `feat/schema-modernization-batch` @ `4cd62d2`; live-query inventory unchanged from 2026-06-23.
+**Regenerated:** 2026-07-02 (JST) — live-query inventory re-verified against `main`; schema references still reflect the 9 migrations (011–019) landed on `feat/schema-modernization-batch` @ `4cd62d2`. Drift from the previous (2026-06-25) regeneration:
+- **Account yaml count is 16, not 20** — 4 brands (`mistral`, `stepfun`, `ernie`, `hunyuan`) are query-only and intentionally have no accounts yaml; the previous doc claimed a 1:1 mapping.
+- **`call_b_groups` is now plumbed in `run.py`** (lines 650–655) — the live cycle now emits B1/B2/B3 (not a single 867-char over-cap Call B). The "live-path caveat" below is now historical; the 5-call plan (A + B1 + B2 + B3 + C1) runs live.
+- Deduped brand-token count is **90** (not 75) at 20 brands.
+
 **Source of truth:** code on `main` of `/Users/fuchitalee/development/minimax-marketing/x-monitoring/`
 - `config.yaml::enabled_models` (20 brands), `config.yaml::call_b_groups` (3 groups), `config.yaml::call_c_specs` (1 spec)
 - `data/queries/<brand>.yaml` — 6 queries (Q1–Q6) per brand = **120 total**
-- `data/accounts/<brand>.yaml` — official handle + empty `staff:` list per brand
+- `data/accounts/<brand>.yaml` — official handle + empty `staff:` list (16 of 20 brands; 4 query-only brands omitted)
 - `data/filters/<brand>.yaml` — per-brand `min_faves` + `must_have_*` overrides (7 brands)
 - `x_monitor/config.py::KNOWN_MODELS` (frozenset of 20)
 - `x_monitor/query_plan.py::plan_calls(...)` — call planner
@@ -49,16 +53,17 @@ The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海�
 | Brand query yaml files (`data/queries/<brand>.yaml`) | **20** (1:1 with enabled_models) |
 | Queries per brand (Q1–Q6) | **6** uniformly |
 | Total query entries across all yaml | **120** (20 × 6) |
-| Account yaml files (`data/accounts/<brand>.yaml`) | **20** (1:1 with enabled_models) |
+| Account yaml files (`data/accounts/<brand>.yaml`) | **16** (4 query-only brands: `mistral`, `stepfun`, `ernie`, `hunyuan`) |
 | Filter yaml files (`data/filters/<brand>.yaml`) | **7** (only the v1-era brands) |
 | Call A length | 38 chars |
 | Call B groups (config) | 3 (B1, B2, B3) |
 | Call C specs (config) | 1 (`call_id: C1`, multi-brand) |
-| Plan size per cycle (if all groups + Call C emitted) | **1 Call A + 3 Call B + 1 Call C = 5 calls** |
-| Deduped brand tokens (sum across all brands) | **75** |
+| Plan size per cycle (live) | **1 Call A + 3 Call B + 1 Call C = 5 calls** (live) |
+| Deduped brand tokens (sum across all brands) | **90** (recomputed 2026-07-02; previous claim of 75 was stale) |
 
-> **⚠️ Live-path caveat — `call_b_groups` is configured but not yet plumbed in `run.py`.**
-> `x_monitor/run.py:575-579` calls `plan_calls(self.data_dir, models, x_monitor_list_id=…, call_c_specs=…)` and **does not pass `call_b_groups`**. With the kwarg omitted, `plan_calls` falls back to the v1.7 single-B branch (`call_b_groups is None → b_groups = [list(enabled_models)]`) and emits one Call B spanning all 20 enabled brands. Computed live: that single Call B is **867 characters** — **well over the 512-char cap**. The `assert_under_length_cap` check inside `plan_calls` will raise on cycle entry. The configured B1/B2/B3 split (320 / 474 / 310 chars after plan 2026-06-25-001) would fit; the wiring fix is in `run.py` (pass `call_b_groups=self.config.call_b_groups`). **The live cycle is currently broken at 20 brands; do not add more brands until this is fixed.**
+> **✅ `call_b_groups` is now wired through `run.py`.** `x_monitor/run.py:650-655` calls
+> `plan_calls(self.data_dir, models, x_monitor_list_id=…, call_b_groups=self.config.call_b_groups, call_c_specs=self.config.call_c_specs or None)`.
+> The live cycle emits 5 calls — Call A (38 chars) + Call B1 (320 chars) + Call B2 (474 chars) + Call B3 (310 chars) + Call C1 (505 chars) — all under the 512-char cap. The 867-char over-cap single-B fallback (which would apply if `call_b_groups` were `None`) is no longer the live path.
 
 ---
 
@@ -160,13 +165,13 @@ Configured in `config.yaml::call_b_groups` (a list of brand-id lists; v1.7.x fie
 | 4 | `kuaishou` | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` | 4 |
 | 5 | `upstage` | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` | 7 |
 
-### Brand tokens not in Call B
+### Brand tokens not in Call A
 
-The four brands `mistral`, `stepfun`, `ernie`, `hunyuan` have **no `data/accounts/<brand>.yaml`** — they appear in Call B (group B1) but contribute **0 to Call A's list membership**. The other 16 brands have an accounts yaml and contribute to both Call A and Call B.
+The four brands `mistral`, `stepfun`, `ernie`, `hunyuan` have **no `data/accounts/<brand>.yaml`** — they appear in Call B (group B1) but contribute **0 to Call A's list membership**. The other 16 brands have an accounts yaml and contribute to both Call A and Call B. This 16/20 split is intentional (operator has not yet confirmed the official handles for those 4) — see the per-brand sections below.
 
-### What happens if `call_b_groups` is `None`
+### What happens if `call_b_groups` is `None` (historical / fallback only)
 
-`plan_calls` (`x_monitor/query_plan.py:312-316`) falls back to `b_groups = [list(enabled_models)]` and emits **one** Call B spanning all 20 enabled brands. Computed: **867 characters** — over the 512-char cap. The cycle's `assert_under_length_cap` check raises and the call short-circuits. **Currently this is the active path** (see "Live-path caveat" above).
+`plan_calls` (`x_monitor/query_plan.py:315-316`) falls back to `b_groups = [list(enabled_models)]` and emits **one** Call B spanning all 20 enabled brands. Computed: **867 characters** — over the 512-char cap. The cycle's `assert_under_length_cap` check raises and the call short-circuits. This is the **fallback** path; the live path passes `call_b_groups=self.config.call_b_groups` from `run.py:653` and never hits it.
 
 ---
 
@@ -595,9 +600,9 @@ ssh fuchitalee 'cd ~/development/minimax-marketing/x-monitoring && \
   [print(c.call_id, c.call_kind, c.brand_id, c.query_length, c.query_string) for c in plan]"'
 ```
 
-**Expected (when `call_b_groups` is plumbed through `run.py`):** 5 entries — Call A (38 chars), Call B1 (320 chars), Call B2 (474 chars), Call B3 (310 chars), Call C1 (505 chars — multi-brand co-occurrence). All under the 512-char cap.
+**Expected (live, as of 2026-07-02):** 5 entries — Call A (38 chars), Call B1 (320 chars), Call B2 (474 chars), Call B3 (310 chars), Call C1 (505 chars — multi-brand co-occurrence). All under the 512-char cap.
 
-**Currently emitted (no `call_b_groups` kwarg in `run.py`):** 3 entries — Call A (38 chars), Call B (867 chars — **fails length cap**), Call C1. **The cycle is broken until `run.py` passes `call_b_groups=self.config.call_b_groups` to `plan_calls`.**
+**Currently emitted (verified 2026-07-02):** 5 entries — Call A (38 chars), Call B1 (320 chars), Call B2 (474 chars), Call B3 (310 chars), Call C1 (505 chars). All under the 512-char cap. (`call_b_groups` is plumbed in `run.py:650-655`; the 867-char single-B over-cap fallback no longer applies.)
 
 ```bash
 # In dry-run mode, the cycle still plans the calls but doesn't fire them
@@ -618,7 +623,7 @@ C1 has only **7 chars of headroom** under the cap. Any further co-occurrence or 
 
 | Change | Effect |
 |---|---|
-| Add a brand to `enabled_models` (and drop `data/queries/<brand>.yaml` + optionally `data/accounts/<brand>.yaml`) | One more paren group appended to the single Call B (when `call_b_groups` is None). Adds ~10-30 chars to the (already over-cap) single Call B. With `call_b_groups` plumbed, the operator must also add the new brand to one of B1/B2/B3 and the group's call must still fit under 512 chars. |
+| Add a brand to `enabled_models` (and drop `data/queries/<brand>.yaml` + optionally `data/accounts/<brand>.yaml`) | One more paren group appended to the assigned Call B group (B1/B2/B3) in `call_b_groups`. The operator must also add the new brand to one of B1/B2/B3 (every `enabled_models` brand must appear in exactly one group, enforced by `Config._validate_call_b_groups`), and the group's resulting call must still fit under the 512-char cap. If `call_b_groups` were `None`, the fallback would emit one Call B spanning all enabled brands — currently 867 chars and over-cap. |
 | Switch a brand from `verified: false` placeholder to `verified: true` (operator confirms the official handle) | Update `data/accounts/<brand>.yaml::verified: true` and optionally switch Q1 from `(<brand tokens>)` to `from:<handle>` and Q4 from `(<brand tokens>)` to `to:<handle>`. The yaml `notes` fields flag this for every placeholder brand. |
 | Add a staff handle to `data/accounts/<brand>.yaml::staff` | Two-step: (1) add the handle to the yaml, (2) operator adds the handle to the public x.com list (`x_monitor_list_id`). The list-drift detection soft-warns if step (2) is missed. |
 | Edit a brand's tokens in `data/queries/<brand>.yaml::Q2` (or any of Q2/Q3/Q5/Q6) | The Call B paren group's tokens change — re-measure `len(query_string)` and re-verify under 512 chars. `_load_brand_tokens_per_model` reads the first `(...)` group of Q2/Q3/Q5/Q6 in iteration order. |

@@ -40,7 +40,7 @@ def _short(val: object) -> str:
 def group_calls(log: list[dict]) -> list[dict]:
     """Group HTTP requests by logical signature.
 
-    For /advanced_search: shared query+queryType. For /quotes: shared pid.
+    For /advanced_search: shared query+queryType. For /quotes: shared tweetId.
     Everything else: a flat group of one.
     """
     by_signature: dict[str, list[dict]] = defaultdict(list)
@@ -50,7 +50,7 @@ def group_calls(log: list[dict]) -> list[dict]:
         if path.endswith("/advanced_search"):
             sig = f"SEARCH query={_short(params.get('query', '?'))}"
         elif path.endswith("/quotes"):
-            sig = f"QT pid={params.get('pid', '?')}"
+            sig = f"QT tweetId={params.get('tweetId', '?')}"
         else:
             sig = f"{path} " + " ".join(
                 f"{k}={_short(params.get(k, '?'))}" for k in sorted(params.keys())

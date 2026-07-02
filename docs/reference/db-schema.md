@@ -1,7 +1,7 @@
 # x-monitoring DB schema
 
 `x-monitoring/data/x_monitoring.db`
-(SQLite 3, ~36 MB on disk as of 2026-06-22, **4,191 rows in `posts`**)
+(SQLite 3, ~74 MB on disk as of 2026-07-02, **5,760 rows in `posts`**)
 
 ![x-monitor schema after migration batch 011-023](images/xmonitor-schema-post-batch.png)
 
@@ -19,23 +19,23 @@ version  applied_at                 migration
 4        2026-06-19T06:41:47+00:00  004_company_brand_account_model.sql
 5        2026-06-22T01:59:44+00:00  005_quoted_text.sql
 6        2026-06-22T05:03:47+00:00  006_quote_capture_tracking.sql
-7        2026-06-23T00:00:00+00:00  007_i18n_locale_columns.sql
-8        2026-06-23T00:00:00+00:00  008_enum_i18n_lookup_tables.sql
-9        2026-06-22T18:58:00+00:00  009_products.sql
-10       2026-06-24T00:00:00+00:00  010_rename_mn_tables_to_plural_plural.sql
-11       2026-06-24T00:00:00+00:00  011_rename_locale_to_lang.sql
-12       2026-06-24T00:00:00+00:00  012_drop_engagement_tier.sql
-13       2026-06-24T00:00:00+00:00  013_rename_post_mentions_to_posts_brands_mentions.sql
-14       2026-06-24T00:00:00+00:00  014_rename_signal_keys_to_signals.sql
-15       2026-06-24T00:00:00+00:00  015_rename_role_keys_to_roles.sql
-16       2026-06-24T00:00:00+00:00  016_trim_role_values.sql
-17       2026-06-24T00:00:00+00:00  017_brand_search_terms_hybrid.sql
-18       2026-06-24T00:00:00+00:00  018_integer_primary_keys_enum_tables.sql
-19       2026-06-24T00:00:00+00:00  019_post_types_and_sentiments.sql
-20       2026-06-25T00:00:00+00:00  020_text_to_integer_pks_all_tables.sql
+7        2026-06-25T05:39:27+00:00  007_i18n_locale_columns.sql
+8        2026-06-25T05:39:27+00:00  008_enum_i18n_lookup_tables.sql
+9        2026-06-25T05:39:27+00:00  009_products.sql
+10       2026-06-25T05:39:27+00:00  010_rename_mn_tables_to_plural_plural.sql
+11       2026-06-25T05:39:27+00:00  011_rename_locale_to_lang.sql
+12       2026-06-30T03:00:01+00:00  012_drop_engagement_tier.sql
+13       2026-06-30T03:00:01+00:00  013_rename_post_mentions_to_posts_brands_mentions.sql
+14       2026-06-30T03:00:01+00:00  014_rename_signal_keys_to_signals.sql
+15       2026-06-30T03:00:01+00:00  015_rename_role_keys_to_roles.sql
+16       2026-06-30T03:00:01+00:00  016_trim_role_values.sql
+17       2026-06-30T03:00:01+00:00  017_brand_search_terms_hybrid.sql
+18       2026-06-30T03:00:01+00:00  018_integer_primary_keys_enum_tables.sql
+19       2026-06-30T03:00:01+00:00  019_post_types_and_sentiments.sql
+20       2026-06-30T03:00:02+00:00  020_text_to_integer_pks_all_tables.sql
                                           (021 reserved — HF products crawler that never landed)
-22       2026-06-25T00:00:00+00:00  022_kill_signal_id.sql
-23       2026-06-26T00:00:00+00:00  023_rename_brand_and_company_ids_to_nicknames.sql
+22       2026-06-30T03:00:02+00:00  022_kill_signal_id.sql
+23       2026-06-30T03:00:02+00:00  023_rename_brand_and_company_ids_to_nicknames.sql
 ```
 
 The `applied_at` column is the timestamp the migration was first run
@@ -50,7 +50,7 @@ because migrations are applied in filename order, and the
 > `feat/hf-products-crawler-rebased`; 010 on
 > `feat/rename-mn-tables`; 011–019 on
 > `feat/schema-modernization-batch` (HEAD `4cd62d2`); 020, 022, 023
-> on `main` (HEADs `39396b0`, `4c9d8a0`, this branch).
+> on `main` (HEADs `39396b0`, `4c9d8a0`, this branch is `docs/research-batch-2026-06-26`).
 > Migration 021 is **intentionally absent** from the ledger — it was
 > reserved for an HF products crawler (a `feat/hf-products-crawler`
 > branch) that never landed; the slot remains available for a future
@@ -218,7 +218,7 @@ follow-up work.
 
 ## Tables
 
-### `posts` (4,191 rows)
+### `posts` (5,760 rows)
 
 The core fact table. One row per kept tweet (after the per-model
 relevance filter in Unit 4 of the v1.7 plan). In v1.8 the brand and
@@ -230,18 +230,18 @@ added quote-tweet content + capture-tracking columns
 
 ```
 posts
-├── id*                    INTEGER  PK AUTOINCREMENT       ← (migration 020) surrogate key
+├── id                     INTEGER  PK AUTOINCREMENT       ← (migration 020) surrogate key
 ├── tweet_id*              TEXT     UNIQUE NOT NULL        ← Twitter/X status id (str); was PK pre-020
-├── author_handle*         TEXT                            ← @handle
+├── author_handle          TEXT                            ← @handle (nullable in live schema)
 ├── author_id              INTEGER                         ← (migration 020) FK → accounts.id ON DELETE SET NULL
 ├── text                   TEXT                            ← original post text
 ├── lang                   TEXT                            ← X-declared BCP-47 (often wrong; see lang_detected)
 ├── created_at             TEXT                            ← Twitter-format created_at (string; sorts incorrectly for time-window queries — see created_at_epoch)
-├── fetched_at*            TEXT                            ← ISO-8601 UTC, when the run ingested it
-├── like_count             INTEGER  DEFAULT 0              ← (migration 004) renamed from favorite_count
-├── retweet_count          INTEGER  DEFAULT 0
-├── reply_count            INTEGER  DEFAULT 0
-├── quote_count            INTEGER  DEFAULT 0
+├── fetched_at             TEXT                            ← ISO-8601 UTC, when the run ingested it (nullable in live schema, although the 001/002 seeds populate it)
+├── like_count             INTEGER                         ← (migration 004) renamed from favorite_count
+├── retweet_count          INTEGER
+├── reply_count            INTEGER
+├── quote_count            INTEGER
 ├── in_reply_to_user_id    TEXT                            ← nullable
 ├── quoted_status_id       TEXT                            ← nullable; populated for quote tweets (also see quoted_text)
 ├── conversation_id        TEXT                            ← nullable
@@ -255,7 +255,7 @@ posts
 ├── lang_detected          TEXT                            ← (migration 003) post-fetch detected lang, e.g. "zh-Hans"
                                                               (migration 004 also backfills from existing text_en/text_zh_cn rows)
 ├── quoted_text            TEXT                            ← (migration 005) quoted tweet's text (was held in memory & discarded pre-005)
-├── last_quote_count_seen* INTEGER  DEFAULT 0              ← (migration 006) most recent quote_count observed on this post
+├── last_quote_count_seen  INTEGER                         ← (migration 006) most recent quote_count observed on this post
 ├── last_quote_fetched_at  TEXT                            ← (migration 006) ISO-8601; seeds sinceTime for next /twitter/tweet/quotes call
 └── created_at_epoch       INTEGER                         ← (migration 006) unix-second epoch parsed from Twitter-format created_at
                                                               (existing rows backfilled by scripts/2026-06-22-140225-backfill-created-at-epoch.py;
@@ -311,14 +311,14 @@ make per-account role meaningless; the per-brand role lives in
 accounts
 ├── id*                    INTEGER  PK AUTOINCREMENT       ← (migration 020) surrogate key
 ├── author_id*             TEXT     UNIQUE NOT NULL        ← numeric X user id (str); was PK pre-020
-├── handle*                TEXT                           ← @handle (backfilled from posts; may be out of date)
+├── handle                 TEXT                           ← @handle (backfilled from posts; may be out of date; nullable in live schema)
 ├── display_name           TEXT                           ← resolved from X profile
 ├── bio                    TEXT                           ← (migration 004) X profile bio
 ├── bio_fetched_at         TEXT                           ← (migration 004) ISO-8601 when bio was last fetched
 ├── bio_en                 TEXT                           ← (migration 007) English translation of bio
 ├── bio_zh_cn              TEXT                           ← (migration 007) Simplified Chinese translation of bio
-├── verified*              INTEGER DEFAULT 0              ← X blue-check flag
-├── bio_contains_brand*    INTEGER DEFAULT 0              ← did the bio mention the brand?
+├── verified               INTEGER                        ← X blue-check flag (no DEFAULT in live schema; 004 backfill sets 0)
+├── bio_contains_brand     INTEGER                        ← did the bio mention the brand? (no DEFAULT in live schema; 004 backfill sets 0)
 ├── first_seen_at          TEXT
 ├── last_seen_at           TEXT
 ├── source_query_ids       TEXT                           ← which search_queries discovered this account
@@ -371,17 +371,22 @@ dashboard needs.)
 
 ### `account_post_appearances` (0 rows; created by migration 004)
 
-Join table: which accounts appeared on which posts. PK is now
+Join table: which accounts appeared on which posts. PK is
 `(author_id, tweet_id)` (was `(model_id, handle, tweet_id)` in
 v1.7). Per Decision 4, `accounts.author_id` is the immutable X user
 id, so the per-brand fan-in lives in `brands_accounts`, not in this
-join. Migration 020 converts the FK columns from TEXT slug /
-tweet-id to INTEGER surrogate FKs.
+join. **Not fully refactored by migration 020** — the `author_id`
+column is still TEXT (the X user id string), not converted to an
+INTEGER FK to `accounts.id`. Only the `tweet_id` FK is declared,
+and it points to `posts.tweet_id` (TEXT), not `posts.id`. This
+table is never populated in production (0 rows) so the
+unconverted state is harmless; a future migration could
+rebuild it to INTEGER FKs once it becomes a real join target.
 
 ```
 account_post_appearances
-├── author_id*     INTEGER  PK[1]                ← (migration 020) FK → accounts.id   ON DELETE CASCADE
-├── tweet_id*      INTEGER  PK[2]                ← (migration 020) FK → posts.id       ON DELETE CASCADE
+├── author_id*     TEXT     PK[1]                ← TEXT X user id; NOT converted by 020
+├── tweet_id*      TEXT     PK[2]                ← TEXT; FK → posts.tweet_id ON DELETE CASCADE (pre-020 shape)
 └── role_at_time   TEXT                          ← snapshot of the active brands_accounts.role_id at the time of appearance
 ```
 
@@ -391,15 +396,20 @@ Indexes:
 (only the PK index — the v1.7 idx_apa_model is gone with the model_id column)
 ```
 
-Foreign keys (declared in 004, FK columns re-typed in 020):
+Foreign keys (declared in 004; not re-typed by 020):
 
 ```
-FOREIGN KEY(author_id) REFERENCES accounts(id) ON DELETE CASCADE
-FOREIGN KEY(tweet_id)  REFERENCES posts(id)     ON DELETE CASCADE
+FOREIGN KEY(tweet_id)  REFERENCES posts(tweet_id)     ON DELETE CASCADE
 ```
 
-Both FKs are now declared (the pre-020 logical-only `author_id`
-edge is also enforced by the schema post-020).
+The `author_id` FK to `accounts.author_id` is pre-existing logical
+only — not declared. A full 020 conversion would have rebuilt
+this table as `(accounts.id INTEGER, posts.id INTEGER)`, but
+since 020 prioritized tables that the rest of the schema FKs
+to, this one was deferred. Same drift category as
+`brand_hashtags` / `brand_keywords` — three small 004-era tables
+left on TEXT PKs / TEXT FKs because they are write-cold and
+schema-isolated.
 
 ---
 
@@ -414,11 +424,11 @@ locale-aware rendering.
 companies
 ├── id*                INTEGER  PK                     ← surrogate key (migration 020)
 ├── nickname*          TEXT     UNIQUE NOT NULL       ← (migration 020/023) e.g. "alibaba", "moonshot", "mistral_ai", "minimax"; was `company_id` pre-023
-├── display_name*      TEXT                           ← human-readable, e.g. "Alibaba"
+├── display_name       TEXT                           ← human-readable, e.g. "Alibaba" (nullable in live schema; 004 seed never inserts NULL)
 ├── display_name_en    TEXT                           ← (migration 007) English display name
 ├── display_name_zh_cn TEXT                           ← (migration 007) Simplified Chinese display name
 ├── hq_country         TEXT                           ← ISO-3166-1 alpha-2 (CN, FR, US, ...)
-└── created_at*        TEXT                           ← ISO-8601 UTC
+└── created_at         TEXT                           ← ISO-8601 UTC
 ```
 
 Seed rows (11):
@@ -462,12 +472,12 @@ review fix). Migration 007 adds `display_name_en` /
 brands
 ├── id*                INTEGER  PK                     ← surrogate key (migration 020)
 ├── nickname*          TEXT     UNIQUE NOT NULL       ← (migration 020/023) e.g. "minimax", "qwen", "_unattributed"; was `brand_id` pre-023
-├── display_name*      TEXT                           ← human-readable
+├── display_name       TEXT                           ← human-readable (nullable in live schema, although the 004 seed never inserts NULL)
 ├── display_name_en    TEXT                           ← (migration 007) English display name
 ├── display_name_zh_cn TEXT                           ← (migration 007) Simplified Chinese display name
-├── accent_color*      TEXT  DEFAULT '#9ca3af'        ← hex color for the treemap card
-├── is_sentinel*       INTEGER DEFAULT 0              ← 1 only for the "_unattributed" row
-└── created_at*        TEXT                           ← ISO-8601 UTC
+├── accent_color       TEXT                           ← hex color for the treemap card (no DEFAULT in live schema; 004 seed sets it)
+├── is_sentinel        INTEGER                        ← 1 only for the "_unattributed" row (no DEFAULT in live schema; 004 seed sets it)
+└── created_at         TEXT                           ← ISO-8601 UTC
 ```
 
 Seed rows (12 — 11 tracked brands + 1 sentinel):
@@ -509,7 +519,7 @@ for future joint ventures (e.g. a hypothetical `0.6`).
 brands_companies
 ├── brand_id*       INTEGER  PK[1]             ← (migration 020) FK → brands.id    ON DELETE CASCADE
 ├── company_id*     INTEGER  PK[2]             ← (migration 020) FK → companies.id ON DELETE CASCADE
-└── ownership_pct*  REAL  DEFAULT 1.0
+└── ownership_pct   REAL                       ← 1.0 for wholly-owned; no DEFAULT in live schema
 ```
 
 Seed rows (11 — one per tracked brand; the `_unattributed` brand
@@ -532,7 +542,7 @@ minimax              minimax   ← (009) added with the HF products migration
 ```
 
 
-### `brands_accounts` (19 rows; application-seeded)
+### `brands_accounts` (0 rows; application-seeded)
 
 M:N edge between brands and accounts. The per-brand `role_id` lives
 here (moved off `accounts.role` in v1.8; Decision 10). Migration
@@ -545,9 +555,9 @@ Migration 020 converted `brand_id` (TEXT slug) → INTEGER FK → brands.id.
 brands_accounts
 ├── brand_id*   INTEGER PK[1]                 ← (migration 020) FK → brands.id    ON DELETE CASCADE
 ├── author_id*  INTEGER PK[2]                 ← (migration 020) FK → accounts.id ON DELETE CASCADE
-├── role_id*    INTEGER DEFAULT <community.id> ← (migration 008) FK → roles.id; (015) column rename role → role_id
-                                               "official" | "staff" | "community"
-└── added_at*   TEXT                         ← ISO-8601 UTC
+├── role_id*    INTEGER                       ← (migration 008) FK → roles.id; (015) column rename role → role_id
+                                               "official" | "staff" | "community" (no DEFAULT in live schema; seed must provide)
+└── added_at    TEXT                          ← ISO-8601 UTC
 ```
 
 Foreign keys (declared in 008, FK target renamed in 015 + 020):
@@ -584,9 +594,9 @@ the column to `role_id`. Migration 016 trimmed the values to
 companies_accounts
 ├── company_id*  INTEGER PK[1]               ← (migration 020) FK → companies.id ON DELETE CASCADE
 ├── author_id*   INTEGER PK[2]               ← (migration 020) FK → accounts.id  ON DELETE CASCADE
-├── role_id*     INTEGER DEFAULT <community.id> ← (migration 008) FK → roles.id; (015) column rename role → role_id
-                                                "official" | "staff" | "community"
-└── added_at*    TEXT                         ← ISO-8601 UTC
+├── role_id*     INTEGER                     ← (migration 008) FK → roles.id; (015) column rename role → role_id
+                                                "official" | "staff" | "community" (no DEFAULT in live schema; seed must provide)
+└── added_at     TEXT                        ← ISO-8601 UTC
 ```
 
 Foreign keys (declared in 008, FK target renamed in 015 + 020):
@@ -605,7 +615,7 @@ idx_companies_accounts_role_id  (role_id)   — (008/015) supports dashboard gro
 
 ---
 
-### `posts_brands` (5,053 rows; populated by `x_monitor.reattribute`)
+### `posts_brands` (6,278 rows; populated by `x_monitor.reattribute`)
 
 Per-(post, brand) attribution with fractional weight (Decision 9,
 Option C). `weight = 1.0 / N` for a post naming N distinct brands;
@@ -618,7 +628,7 @@ queries filter out via `is_sentinel`. Migration 020 converted
 posts_brands
 ├── brand_id*  INTEGER PK[1]                 ← (migration 020) FK → brands.id ON DELETE SET NULL
 ├── post_id*   INTEGER PK[2]                 ← (migration 020) FK → posts.id  ON DELETE CASCADE
-└── weight*    REAL  DEFAULT 1.0
+└── weight     REAL                          ← 1.0 / N for multi-brand posts; no DEFAULT in live schema
 ```
 
 Indexes:
@@ -630,7 +640,7 @@ idx_posts_brands_brand_post  (brand_id, post_id)      — polarity JOIN (Decisio
 
 ---
 
-### `posts_brands_mentions` (4,428 rows; populated by `x_monitor.reattribute`)
+### `posts_brands_mentions` (5,653 rows; populated by `x_monitor.reattribute`)
 
 Per-mention provenance: how was each brand named on each post?
 Renamed from `post_mentions` in migration 013 (M:N naming
@@ -645,8 +655,8 @@ posts_brands_mentions
 ├── post_id*       INTEGER PK[1]              ← (migration 020) FK → posts.id   ON DELETE CASCADE
 ├── brand_id       INTEGER PK[2]              ← (migration 020) FK → brands.id  ON DELETE SET NULL (nullable for un-attributed mentions)
 ├── source*        TEXT    PK[3]              ← user_mention | hashtag | body_keyword | search_term
-├── raw_token*     TEXT                       ← literal matched text: "@MiniMaxAI", "#minimax", "M3.0", "from:minimax OR ..."
-└── mentioned_at*  TEXT                       ← posts.created_at (ISO-8601 UTC)
+├── raw_token      TEXT                       ← literal matched text: "@MiniMaxAI", "#minimax", "M3.0", "from:minimax OR ..." (nullable in live schema; 004 declared NOT NULL but 020 rebuild dropped the constraint)
+└── mentioned_at   TEXT                       ← posts.created_at (ISO-8601 UTC; nullable in live schema; 004 declared NOT NULL but 020 rebuild dropped the constraint)
 ```
 
 Indexes:
@@ -658,29 +668,30 @@ idx_posts_brands_mentions_post                 (post_id)                        
 
 ---
 
-### `posts_brands_signals` (4,303 rows; backfilled from `posts.signal` by migration 004; rebuilt by 008, 014, 019)
+### `posts_brands_signals` (4,934 rows; backfilled from `posts.signal` by migration 004; rebuilt by 008, 014, 019, 020, 022)
 
 Per-(post, brand) signal classification (R6d / Decision 18).
 Replaces the v1.7 post-level `posts.signal` column. A post naming
-2 brands with different sentiments writes 2 rows. The CHECK
-constraint excludes the sentinel (Decision 15) — `_unattributed`
-rows have no meaningful per-brand signal.
+2 brands with different sentiments writes 2 rows. There is no
+sentinel-exclusion CHECK in the current schema — the original 004
+constraint `(brand_id <> '_unattributed')` was dropped by 020
+(the sentinel's INTEGER id is data-dependent; the post-fetch
+attribution logic never inserts sentinel rows into this table
+anyway), and the 019 additive re-shape also has no exclusion
+constraint.
 
 Migration 008 added a FK from `signal` to `signal_keys.key`.
 Migration 014 renamed `signal_keys` → `signals` and the FK column
-`signal` → `signal_id` (TEXT-storing-key). Migration 019 is the
-additive re-shape: it adds nullable `post_type` + `sentiment` TEXT
-columns FK-validated against the new `post_type_keys` /
-`sentiment_keys` tables, and the existing `signal_id` is preserved
-alongside them. Migration 020 converts all TEXT-storing-key FKs
-(`signal_id`, `post_type`, `sentiment`) to INTEGER-storing-id and
-drops the `(brand_id <> '_unattributed')` CHECK constraint (the
-sentinel's integer id is data-dependent and the post-fetch
-attribution logic never inserts sentinel rows anyway). Migration 022
-is the U9 **replacement** (not additive): it drops `signal_id` and
-the `signals` + `signal_labels` tables entirely, and promotes
-`post_type` + `sentiment` to `NOT NULL INTEGER` FKs against the
-new `*_keys` tables.
+`signal` → `signal_id` (TEXT-storing-key). Migration 019 was the
+additive re-shape: it added nullable `post_type` + `sentiment`
+TEXT columns FK-validated against the new `post_type_keys` /
+`sentiment_keys` tables, with the existing `signal_id` preserved
+alongside them. Migration 020 converted all TEXT-storing-key FKs
+(`signal_id`, `post_type`, `sentiment`) to INTEGER-storing-id.
+Migration 022 is the U9 **replacement** (not additive): it dropped
+`signal_id` and the `signals` + `signal_labels` tables entirely,
+and promoted `post_type` + `sentiment` to `NOT NULL INTEGER` FKs
+against the new `*_keys` tables.
 
 ```
 posts_brands_signals
@@ -893,15 +904,21 @@ mixed      zh_cn     混合
 
 ---
 
-### `brand_hashtags` (≥0 rows; detection registry, R6a)
+### `brand_hashtags` (0 rows; detection registry, R6a)
 
 Detection registry: hashtags (lowercase, no `#` prefix) that
-trigger a brand mention via the `hashtag` source. Migration 020
-converted `brand_id` from TEXT slug → INTEGER FK.
+trigger a brand mention via the `hashtag` source. **Not converted
+by migration 020** — this table is still the original 004 shape
+with a TEXT `brand_id` FK to `brands.nickname` (UNIQUE), not the
+INTEGER FK to `brands.id` that the rest of the schema uses.
+This is an open drift from 020's stated plan-body literal
+("all current tables"); the `brand_id` values are stable
+nickname strings, so the FK still resolves correctly, but the
+column is TEXT-storing-nickname rather than INTEGER-storing-id.
 
 ```
 brand_hashtags
-├── brand_id*  INTEGER PK[1]                ← (migration 020) FK → brands.id  ON DELETE CASCADE
+├── brand_id*  TEXT    PK[1]                ← TEXT nickname; FK → brands.nickname ON DELETE CASCADE
 ├── tag*       TEXT    PK[2]                ← lowercase, no '#' prefix
 └── added_at*  TEXT
 ```
@@ -913,12 +930,16 @@ brand_hashtags
 Detection registry: literal substrings or regex patterns that
 trigger a brand mention via the `body_keyword` source. `is_regex`
 is `0` for substring (case-insensitive contains) and `1` for
-regex (RE2 syntax; the application validates on insert). Migration
-020 converted `brand_id` from TEXT slug → INTEGER FK.
+regex (RE2 syntax; the application validates on insert).
+**Not converted by migration 020** — this table is still the
+original 004 shape with a TEXT `brand_id` FK to `brands.nickname`,
+not the INTEGER FK to `brands.id`. Same drift as
+`brand_hashtags`; the values are stable nickname strings so the
+FK still resolves.
 
 ```
 brand_keywords
-├── brand_id*  INTEGER PK[1]                ← (migration 020) FK → brands.id  ON DELETE CASCADE
+├── brand_id*  TEXT    PK[1]                ← TEXT nickname; FK → brands.nickname ON DELETE CASCADE
 ├── pattern*   TEXT    PK[2]                ← substring or regex pattern
 ├── is_regex*  INTEGER DEFAULT 0            ← 0 = substring, 1 = regex
 └── added_at*  TEXT
@@ -1051,7 +1072,7 @@ review — those are **flagged, not scraped**, until promoted.
 
 ---
 
-### `products` (19 rows; populated by the HF products crawler; INTEGER FKs 020)
+### `products` (0 rows; populated by the HF products crawler; INTEGER FKs 020)
 
 The HuggingFace product catalog. One row per HF model (today);
 `hf_type` is reserved by CHECK for future datasets and spaces.
@@ -1141,8 +1162,9 @@ without re-scraping. `downloads_all_time` and `download_velocity`
 are **not** exposed by the HF API at all and stay NULL.
 
 See `docs/reference/minimax-hf-products-2026-06-22.md` for the
-live 19-product MiniMax catalog written from this table on the
-production DB.
+prior 19-product MiniMax catalog (the production DB's `products`
+table is currently 0 rows; the crawler has not been re-run since
+that initial scrape).
 
 ---
 
@@ -1162,14 +1184,13 @@ _migrations
 
 The `applied_at` column reflects the moment the migration was
 first applied to a real production DB. Production migrated 005
-and 006 together (quote-tweets branch), 007 and 008 together
-(i18n branch), 009 alone (HF products), 010 alone (M:N rename),
-011–019 together (schema-modernization batch), 020 alone
-(TEXT→INTEGER PK remediation), 022 alone (U9 remediation that
-completes the 6-signal kill), and 023 alone (parent-slug rename).
-Version 021 is intentionally absent — it was reserved for an HF
-products crawler (a `feat/hf-products-crawler` branch) that
-never landed.
+and 006 together (quote-tweets branch), 007–011 in a single
+2026-06-25 batch (i18n branch through locale→lang rename), 012–019
+in a single 2026-06-30 batch (schema-modernization batch), 020,
+022, and 023 in a final 2026-06-30 batch (TEXT→INTEGER PK
+remediation, U9 signal kill, and parent-slug rename). Version 021
+is intentionally absent — it was reserved for an HF products
+crawler (a `feat/hf-products-crawler` branch) that never landed.
 
 ---
 
@@ -1457,7 +1478,7 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── ALTER posts +created_at_epoch INTEGER                           ← unix-second epoch (for time-window queries; Twitter-format created_at sorts wrong)
    └── CREATE idx_posts_created_at_epoch   ← polarity window + QT daily-pass recency
 
-007_i18n_locale_columns.sql              (branch `feat/i18n-locale-columns-rebased`; APPLIED on production 2026-06-23)
+007_i18n_locale_columns.sql              (branch `feat/i18n-locale-columns-rebased`; APPLIED on production 2026-06-25)
    ├── ALTER brands      +display_name_en / +display_name_zh_cn   ← registry-table locale columns (R1)
    ├── ALTER companies   +display_name_en / +display_name_zh_cn   ← registry-table locale columns (R1)
    ├── ALTER accounts    +bio_en         / +bio_zh_cn             ← account-bio locale columns (R2)
@@ -1468,7 +1489,7 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── CREATE idx_accounts_bio_en_backfill
    └── CREATE idx_accounts_bio_zh_cn_backfill
 
-008_enum_i18n_lookup_tables.sql          (branch `feat/i18n-locale-columns-rebased`; APPLIED on production 2026-06-23)
+008_enum_i18n_lookup_tables.sql          (branch `feat/i18n-locale-columns-rebased`; APPLIED on production 2026-06-25)
    ├── CREATE signal_keys             (6 rows)        ← FK target for posts_brands_signals.signal
    ├── CREATE signal_labels           (12 rows)       ← per-(key, locale) display labels
    ├── CREATE role_keys               (5 rows)        ← FK target for brands_accounts.role + companies_accounts.role
@@ -1486,7 +1507,7 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── CREATE idx_accounts_bio_en_backfill            (re-create on rebuilt accounts)
    └── CREATE idx_accounts_bio_zh_cn_backfill         (re-create on rebuilt accounts)
 
-009_products.sql                          (branch `feat/hf-products-crawler-rebased`; APPLIED on production 2026-06-23)
+009_products.sql                          (branch `feat/hf-products-crawler-rebased`; APPLIED on production 2026-06-25)
    ├── DROP TABLE IF EXISTS brand_hf_orgs              ← remove earlier 005-draft M:N brand↔HF-org edge
    ├── DROP INDEX IF EXISTS idx_brand_hf_orgs_brand
    ├── DROP INDEX IF EXISTS idx_products_hf_org
@@ -1499,7 +1520,7 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── INSERT brands_companies (minimax → minimax)       ← add the `minimax` brand's corporate-parent edge
    └── INSERT hf_orgs (MiniMaxAI → minimax, +10 other curated orgs)
 
-010_rename_mn_tables_to_plural_plural.sql (branch `feat/rename-mn-tables`; APPLIED on production 2026-06-24)
+010_rename_mn_tables_to_plural_plural.sql (branch `feat/rename-mn-tables`; APPLIED on production 2026-06-25)
    ├── ALTER TABLE brand_accounts    RENAME TO brands_accounts
    ├── ALTER TABLE brand_companies   RENAME TO brands_companies
    ├── ALTER TABLE company_accounts  RENAME TO companies_accounts
@@ -1512,12 +1533,12 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── DROP + CREATE idx_brands_accounts_role
    └── DROP + CREATE idx_companies_accounts_role
 
-011_rename_locale_to_lang.sql             (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-24)
+011_rename_locale_to_lang.sql             (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-25)
    ├── ALTER signal_labels          RENAME COLUMN locale TO lang
    ├── ALTER role_labels            RENAME COLUMN locale TO lang
    └── ALTER engagement_tier_labels RENAME COLUMN locale TO lang   (the table itself is dropped in 012)
 
-012_drop_engagement_tier.sql              (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-24)
+012_drop_engagement_tier.sql              (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── DROP TABLE engagement_tier_labels
    ├── DROP TABLE engagement_tier_keys
    ├── CREATE TABLE accounts_new (no engagement_tier column)
@@ -1527,24 +1548,24 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── CREATE INDEX idx_accounts_bio_en_backfill
    └── CREATE INDEX idx_accounts_bio_zh_cn_backfill
 
-013_rename_post_mentions_to_posts_brands_mentions.sql  (branch `feat/schema-modernization-batch`)
+013_rename_post_mentions_to_posts_brands_mentions.sql  (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── ALTER TABLE post_mentions RENAME TO posts_brands_mentions
    ├── DROP + CREATE idx_posts_brands_mentions_brand_source_recent
    └── DROP + CREATE idx_posts_brands_mentions_post
 
-014_rename_signal_keys_to_signals.sql     (branch `feat/schema-modernization-batch`)
+014_rename_signal_keys_to_signals.sql     (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── ALTER TABLE signal_keys RENAME TO signals
    ├── ALTER TABLE posts_brands_signals RENAME COLUMN signal TO signal_id
    └── DROP + CREATE idx_posts_brands_signals_brand_id_signal_id
 
-015_rename_role_keys_to_roles.sql         (branch `feat/schema-modernization-batch`)
+015_rename_role_keys_to_roles.sql         (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── ALTER TABLE role_keys RENAME TO roles
    ├── ALTER TABLE brands_accounts    RENAME COLUMN role TO role_id
    ├── ALTER TABLE companies_accounts RENAME COLUMN role TO role_id
    ├── DROP + CREATE idx_brands_accounts_role_id
    └── DROP + CREATE idx_companies_accounts_role_id
 
-016_trim_role_values.sql                  (branch `feat/schema-modernization-batch`)
+016_trim_role_values.sql                  (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── UPDATE brands_accounts    SET role_id = 'community' WHERE role_id IN ('researcher','press','vendor')
    ├── UPDATE companies_accounts SET role_id = 'community' WHERE role_id IN ('researcher','press','vendor')
    ├── INSERT OR IGNORE roles (staff)                              ← new key
@@ -1552,14 +1573,14 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── DELETE FROM roles       WHERE key IN ('researcher','press','vendor')
    └── INSERT OR IGNORE role_labels (3 keys × 2 locales)            ← canonical labels for official / staff / community
 
-017_brand_search_terms_hybrid.sql         (branch `feat/schema-modernization-batch`)
+017_brand_search_terms_hybrid.sql         (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    └── (no DDL — reserves the version slot; documents the yaml ↔ DB hybrid contract)
 
-018_integer_primary_keys_enum_tables.sql  (branch `feat/schema-modernization-batch`)
+018_integer_primary_keys_enum_tables.sql  (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── signals: TEMP backup signal_labels → rebuild signals (INTEGER id PK + UNIQUE key) → restore signal_labels from TEMP
    └── roles:   TEMP backup role_labels   → rebuild roles   (INTEGER id PK + UNIQUE key) → restore role_labels   from TEMP
 
-019_post_types_and_sentiments.sql         (branch `feat/schema-modernization-batch`)
+019_post_types_and_sentiments.sql         (branch `feat/schema-modernization-batch`; APPLIED on production 2026-06-30)
    ├── CREATE post_type_keys   (INTEGER id PK + UNIQUE key; 4 rows)
    ├── CREATE post_type_labels (8 rows = 4 keys × 2 locales)
    ├── CREATE sentiment_keys   (INTEGER id PK + UNIQUE key; 4 rows)
@@ -1571,7 +1592,7 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    ├── CREATE idx_posts_brands_signals_brand_id_post_type
    └── CREATE idx_posts_brands_signals_brand_id_sentiment
 
-020_text_to_integer_pks_all_tables.sql   (on `main`; APPLIED on production 2026-06-25)
+020_text_to_integer_pks_all_tables.sql   (on `main`; APPLIED on production 2026-06-30)
                                           (U8 remediation: 13 TEXT-PK tables + products converted to INTEGER PK)
    ├── Phase 1: lookup tables — brands, companies, accounts, hf_orgs, search_queries
    │     (each: CREATE <table>_new with INTEGER id PK + UNIQUE slug column, JOIN-backfill via slug→id, swap)
@@ -1588,9 +1609,19 @@ PRAGMA journal_mode = WAL;    — write-ahead logging for concurrent reader/writ
    │     brand_search_terms: brand_id TEXT → INTEGER
    └── Phase 5: products (brand_id TEXT → INTEGER; hf_org_id TEXT namespace → INTEGER via JOIN to hf_orgs.namespace)
 
+   Note — three 004-era tables were DEFERRED from 020's scope (not in the 13-table list):
+   brand_hashtags, brand_keywords (R6a/R6b detection registries; TEXT brand_id
+   FK → brands.nickname, still TEXT-storing-nickname), and
+   account_post_appearances (TEXT (author_id, tweet_id) PK; no INTEGER
+   FK → accounts.id declared; only the tweet_id → posts.tweet_id FK).
+   All three are write-cold (0 rows or read-only at runtime) so the
+   unconverted state is harmless; a future remediation migration
+   could rebuild them to the 020 pattern. See the brand_hashtags,
+   brand_keywords, and account_post_appearances sections below.
+
 (021 RESERVED — hf-products-crawler branch never landed; version slot intentionally empty)
 
-022_kill_signal_id.sql                  (on `main`; APPLIED on production 2026-06-25)
+022_kill_signal_id.sql                  (on `main`; APPLIED on production 2026-06-30)
                                           (U9 remediation: replace, not augment; the 6-signal taxonomy is fully removed)
    ├── UPDATE posts_brands_signals (defensive backfill any NULL post_type / sentiment to 'hands_on_usage' / 'neutral')
    ├── DROP + CREATE posts_brands_signals (drops signal_id; promotes post_type + sentiment to NOT NULL INTEGER FKs)
