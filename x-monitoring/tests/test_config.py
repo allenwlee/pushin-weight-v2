@@ -179,3 +179,79 @@ def test_clustering_defaults():
     c = Config(enabled_models=["minimax"], daily_ceiling=100)
     assert c.clustering.min_commenters == 3
     assert c.clustering.min_posts == 2
+
+
+# --- U1: SearchConfig ----------------------------------------------------
+
+
+def test_search_defaults():
+    # No `search:` block in YAML -> defaults match today's hardcoded values.
+    c = Config(enabled_models=["minimax"], daily_ceiling=100)
+    assert c.search.max_results == 50
+    assert c.search.max_per_page == 20
+    assert c.search.max_pages == 5
+
+
+def test_search_defaults_via_yaml_no_block(tmp_path):
+    # YAML loads cleanly with no search: block; defaults apply.
+    p = _write(
+        tmp_path,
+        "enabled_models: [minimax]\ndaily_ceiling: 100\n",
+    )
+    c = load_config(p)
+    assert c.search.max_results == 50
+    assert c.search.max_per_page == 20
+    assert c.search.max_pages == 5
+
+
+def test_search_explicit_override(tmp_path):
+    # All three caps overridable via YAML.
+    p = _write(
+        tmp_path,
+        (
+            "enabled_models: [minimax]\n"
+            "daily_ceiling: 100\n"
+            "search:\n"
+            "  max_results: 25\n"
+            "  max_per_page: 10\n"
+            "  max_pages: 3\n"
+        ),
+    )
+    c = load_config(p)
+    assert c.search.max_results == 25
+    assert c.search.max_per_page == 10
+    assert c.search.max_pages == 3
+
+
+def test_search_partial_override(tmp_path):
+    # Only max_pages overridden; others fall back to defaults.
+    p = _write(
+        tmp_path,
+        (
+            "enabled_models: [minimax]\n"
+            "daily_ceiling: 100\n"
+            "search:\n"
+            "  max_pages: 3\n"
+        ),
+    )
+    c = load_config(p)
+    assert c.search.max_results == 50
+    assert c.search.max_per_page == 20
+    assert c.search.max_pages == 3
+
+
+@pytest.mark.parametrize("field", ["max_results", "max_per_page", "max_pages"])
+def test_search_rejects_non_positive(tmp_path, field):
+    # Any non-positive integer triggers Pydantic validation.
+    p = _write(
+        tmp_path,
+        (
+            f"enabled_models: [minimax]\n"
+            f"daily_ceiling: 100\n"
+            f"search:\n"
+            f"  {field}: 0\n"
+        ),
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        load_config(p)
+    assert field in str(excinfo.value)

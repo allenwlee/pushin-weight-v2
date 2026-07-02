@@ -49,5 +49,11 @@
     <canvas class="combined-chart"
             aria-label="Daily total posts per brand, last {{ combined_window_days }} days"></canvas>
   </main>
+  <aside id="api-spend" class="spend-panel-wrap"
+         hx-get="/api/spend.html"
+         hx-trigger="every {{ poll_seconds }}s"
+         hx-swap="innerHTML">
+    {% include "_spend_panel.html.j2" %}
+  </aside>
 </body>
 </html>

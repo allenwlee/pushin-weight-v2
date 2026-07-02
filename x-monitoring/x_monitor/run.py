@@ -10,7 +10,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +51,15 @@ log = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# U2: hours subtracted from `last_completed_at` before emitting
+# TwitterAPI.io's `since:` operator. The 1-hour overlap absorbs near-
+# boundary posts (a post whose created_at is a few seconds AFTER the
+# previous cursor but appears in the API's index a few seconds before
+# the new cursor would naturally include it). 1 hour is enough for
+# typical ingestion latency without re-fetching a full prior day.
+CURSOR_OVERLAP_HOURS: int = 1
 
 
 def _iso_to_epoch(value: str | None) -> int | None:
@@ -469,6 +478,219 @@ def _ingest_quote_tweets(
     return store.insert_posts(kept)
 
 
+def _run_post_fetch(
+    kept_posts: list[dict[str, Any]],
+    *,
+    store: Store,
+    anthropic_client: Any,
+    brand_registry_rows: list[Any],
+    brand_tokens: dict[str, list[str]] | None = None,
+) -> dict[str, int]:
+    """U5: stream-aligned post-fetch transformer runner.
+
+    Plan: docs/plans/2026-07-02-002-feat-streamlined-post-fetch-pipeline-plan.md
+    (Unit 5 of 8). Runs the three U3 + U4 transformers over the
+    cycle's KEPT post set, AFTER `store.insert_posts` has written
+    the raw posts:
+
+      1. `translate_batch_pragmatics` (U3) writes text_en / text_zh_cn
+         / lang_detected to `posts` and emits the four-pronged row
+         (literal_zh + discourse_role + cn_equivalent + annotation).
+      2. `classify_pragmatics_full` (U4) writes the per-brand
+         (post_type + sentiment) pair to `posts_brands_signals` AND
+         the (discourse_role + china_nationalism + us_nationalism)
+         triple to `posts_brands_discourse`.
+
+    Fail-soft per stage: an LLM failure on one post never aborts the
+    cycle. Counters surface in the run summary so the smoketest
+    runner (U7) can assert the cycle hit its per-stage count targets.
+
+    Args:
+        kept_posts: the per-cycle kept posts. Each dict must have
+            `tweet_id` (or `id`) and `text`. The per-brand
+            classifications live on `classifications` (set by
+            `_attribute_call_items` via classify_post) — U4's merged
+            call REPLACES those with the five-prong result.
+        store: open Store (caller's transaction).
+        anthropic_client: a ClaudeClient-protocol object. When None,
+            skip both stages (used by --dry-run and offline tests).
+        brand_registry_rows: list of BrandRow from store.read_brands().
+        brand_tokens: optional {brand_id: [brand_names...]} for the
+            translator's brand-preservation prompt block.
+
+    Returns:
+        Counter dict with keys:
+          n_translated       — kept posts with text_en + text_zh_cn
+          n_discourse        — kept posts with at least one
+                               posts_brands_discourse row written
+          n_nationalism      — kept posts with both nationalism FKs
+                               populated
+          n_failed_translate — kept posts whose LLM call failed
+    """
+    counters = {
+        "n_translated": 0,
+        "n_discourse": 0,
+        "n_nationalism": 0,
+        "n_failed_translate": 0,
+    }
+    if not kept_posts or anthropic_client is None:
+        return counters
+
+    # Lazy imports to avoid pulling translator / classification
+    # modules when the caller is offline (the no-`anthropic_client`
+    # path is the offline-test path).
+    from .translator import translate_batch_pragmatics
+    from .attribution import classify_pragmatics_full
+
+    # --- Stage 1: translate_batch_pragmatics (U3) ------------------------
+    # Build the per-post translation batch (one call per 20-post batch).
+    # Build the brand_names list across the kept set so the prompt
+    # block covers every brand we may reference.
+    brand_names: list[str] = []
+    seen_names: set[str] = set()
+    if brand_tokens:
+        for names in brand_tokens.values():
+            for n in names:
+                if n not in seen_names:
+                    brand_names.append(n)
+                    seen_names.add(n)
+    t0 = time.monotonic()
+    try:
+        translation_rows = translate_batch_pragmatics(
+            kept_posts,
+            ["en", "zh_cn"],
+            anthropic_client,
+            brand_names=brand_names or None,
+        )
+    except Exception as e:
+        log.warning("_run_post_fetch: translate_batch_pragmatics failed: %s", e)
+        translation_rows = []
+    t_translate = time.monotonic() - t0
+    log.info(
+        "_run_post_fetch: translate_batch_pragmatics %d rows in %.2fs",
+        len(translation_rows), t_translate,
+    )
+
+    # Persist translations to `posts` via Store.bulk_update_translations.
+    # This is the v1.7 Store method — it reads only text_en / text_zh_cn
+    # / lang_detected (backward-compat with U3's row shape).
+    bulk_translation_rows = [
+        {
+            "tweet_id": r["tweet_id"],
+            "text_en": r.get("text_en"),
+            "text_zh_cn": r.get("text_zh_cn") or r.get("literal_zh"),
+            "lang_detected": r.get("lang_detected"),
+        }
+        for r in translation_rows
+    ]
+    n_updated = store.bulk_update_translations(bulk_translation_rows)
+    counters["n_translated"] = n_updated
+    counters["n_failed_translate"] = sum(
+        1 for r in translation_rows if r.get("translation_failed")
+    )
+
+    # --- Stage 2: classify_pragmatics_full (U4) -------------------------
+    # One LLM call per post (not batched here — the U4 prompt is
+    # already structured for per-brand output; batching posts is the
+    # Store's job, not the LLM call's). For ~200 kept posts at the
+    # typical 15-min cadence this is ~200 calls; the
+    # `_call_signal_with_retry` retry policy handles transient 429/5xx.
+    t0 = time.monotonic()
+    discourse_rows: list[dict[str, Any]] = []
+    signal_rows: list[dict[str, Any]] = []
+    n_nationalism = 0
+    for it in kept_posts:
+        brand_ids = it.get("brand_ids") or []
+        if not brand_ids:
+            continue
+        try:
+            classified = classify_pragmatics_full(
+                text=it.get("text") or "",
+                brand_ids=list(brand_ids),
+                brand_registry=brand_registry_rows,
+                anthropic_client=anthropic_client,
+            )
+        except Exception as e:
+            log.warning(
+                "_run_post_fetch: classify_pragmatics_full failed for "
+                "tweet_id=%s: %s",
+                it.get("id") or it.get("tweet_id"), e,
+            )
+            continue
+        for brand_id, prongs in classified.items():
+            # posts_brands_signals: (post_type, sentiment) per brand
+            signal_rows.append({
+                "tweet_id": str(it.get("id") or it.get("tweet_id")),
+                "brand_id": brand_id,
+                "post_type": prongs["post_type"],
+                "sentiment": prongs["sentiment"],
+            })
+            # posts_brands_discourse: (discourse_role + 2 nationalism
+            # axes) per brand. act_id = 1 (v1 always writes a single
+            # speech-act per post × brand).
+            discourse_rows.append({
+                "tweet_id": str(it.get("id") or it.get("tweet_id")),
+                "brand_id": brand_id,
+                "discourse_key": prongs["discourse_role"],
+                "act_id": 1,
+                "china_nationalism": prongs["china_nationalism"],
+                "us_nationalism": prongs["us_nationalism"],
+            })
+            if (
+                prongs["china_nationalism"] != "none"
+                and prongs["us_nationalism"] != "none"
+            ):
+                n_nationalism += 1
+    t_classify = time.monotonic() - t0
+    log.info(
+        "_run_post_fetch: classify_pragmatics_full %d brand rows "
+        "(%d discourse, %d signal) in %.2fs",
+        len(discourse_rows), len(discourse_rows),
+        len(signal_rows), t_classify,
+    )
+
+    # Persist. The U4 path REPLACES the (post_type, sentiment) row
+    # classify_post wrote (we don't double-write — U4 wins because
+    # it's the merged-path writer). Insert one signal row per
+    # (post × brand) — the existing `insert_posts_brands_signals`
+    # is per-row (not bulk), so loop. Failures are per-row (the
+    # method drops unknowns to dead-letter and continues).
+    for s in signal_rows:
+        try:
+            store.insert_posts_brands_signals(
+                post_id=s["tweet_id"],
+                brand_id=s["brand_id"],
+                post_type=s["post_type"],
+                sentiment=s["sentiment"],
+            )
+        except Exception as e:
+            log.warning(
+                "_run_post_fetch: insert_posts_brands_signals "
+                "(tweet_id=%s brand_id=%s): %s",
+                s["tweet_id"], s["brand_id"], e,
+            )
+    try:
+        store.bulk_insert_post_brand_discourse(discourse_rows)
+    except Exception as e:
+        log.warning("_run_post_fetch: bulk_insert_post_brand_discourse: %s", e)
+
+    # Per-post counters for the smoketest runner.
+    # n_discourse = kept posts with at least one PERSISTED discourse
+    # row. The Store dead-letters `uncategorized` rows (KTD5), so the
+    # row count returned by bulk_insert_post_brand_discourse may be
+    # less than `len(discourse_rows)`. We approximate the per-post
+    # set by re-reading the DB rather than re-counting the input —
+    # the smoketest runner (U7) only needs an order-of-magnitude
+    # signal.
+    persisted_count = len({
+        r["tweet_id"] for r in discourse_rows
+        if r["discourse_key"] != "uncategorized"
+    })
+    counters["n_discourse"] = persisted_count
+    counters["n_nationalism"] = n_nationalism
+    return counters
+
+
 class RunPipeline:
     """The x-monitor daily collection pipeline."""
 
@@ -670,6 +892,15 @@ class RunPipeline:
                     yaml_terms_for_drift, brand_search_terms_db
                 )
                 _t_loop = time.monotonic()
+                # U5: per-cycle accumulator for the post-fetch
+                # transformers. Each `_attribute_call_items` returns
+                # kept items in its own dict; we accumulate the
+                # NEWLY-INSERTED set so _run_post_fetch runs once
+                # after the loop. Use a list (order preserved) plus
+                # a set to dedupe across calls when the same tweet
+                # shows up twice (rare — repeated brand mentions).
+                cycle_kept: list[dict[str, Any]] = []
+                cycle_kept_ids: set[str] = set()
                 for call in plan:
                     if dry_run:
                         summary["queries"].append(
@@ -687,11 +918,62 @@ class RunPipeline:
                     raw_path = self.raw_dir / run_id / f"{call.brand_id}_{call.call_kind}_{call.bucket or 'acct'}.json"
                     raw_path.parent.mkdir(parents=True, exist_ok=True)
 
+                    # U2 (since= cursor): read the prior cursor for
+                    # this PlannedCall. If present, subtract
+                    # CURSOR_OVERLAP_HOURS so near-boundary posts
+                    # don't fall between cycles, and pass it as the
+                    # `since=` kwarg. `apify.run_search` only injects
+                    # it as a `since:` operator if the query string
+                    # doesn't already contain one — no conflict
+                    # with explicit `since:` strings.
+                    #
+                    # Build synth_q first so its `.id` (the Q1-Q6
+                    # source query id) can be used as the query_id
+                    # portion of the cursor key.
+                    synth_q = _planned_call_to_query(call)
+
+                    prior_iso = store.get_last_completed_at(
+                        call.brand_id,
+                        call.call_id,
+                        call.call_kind,
+                        call.bucket,
+                        synth_q.id,
+                    )
+                    since_cursor: str | None = None
+                    if prior_iso:
+                        try:
+                            prior_dt = datetime.fromisoformat(
+                                prior_iso.replace("Z", "+00:00")
+                            )
+                            since_dt = prior_dt - timedelta(
+                                hours=CURSOR_OVERLAP_HOURS
+                            )
+                            # TwitterAPI.io's `since:` is a YYYY-MM-DD
+                            # operator. Use the date in UTC.
+                            since_cursor = since_dt.date().isoformat()
+                        except (ValueError, TypeError):
+                            # Defensive: a row with a malformed
+                            # timestamp is treated as no cursor so
+                            # the cycle still runs.
+                            log.warning(
+                                "call_state cursor for brand=%s call_id=%s "
+                                "kind=%s bucket=%s query_id=%s has malformed "
+                                "timestamp %r; ignoring",
+                                call.brand_id, call.call_id,
+                                call.call_kind, call.bucket,
+                                synth_q.id, prior_iso,
+                            )
+                            since_cursor = None
+
                     _t_fetch = time.monotonic()
                     try:
+                        s = self.config.search
                         items = apify.run_search(
                             call.query_string,
-                            max_results=50,
+                            max_results=s.max_results,
+                            since=since_cursor,
+                            max_pages=s.max_pages,
+                            max_per_page=s.max_per_page,
                         )
                     except TwitterApiAuthError as e:
                         summary["degraded"]["twitterapi_auth"] = str(e)
@@ -761,13 +1043,8 @@ class RunPipeline:
                         call.brand_id, call.call_kind, call.bucket,
                         len(items), classified,
                     )
-                    # The existing v1.2 filter + review-queue machinery
-                    # expects a Query object (for source_query_id + min_faves).
-                    # We synthesize one for the call. The Query.id is
-                    # derived from the call shape:
-                    #   account calls -> "Q1" (release)
-                    #   intent calls  -> the signal-derived QID
-                    synth_q = _planned_call_to_query(call)
+                    # `synth_q` was built earlier (U2 cursor read
+                    # needs synth_q.id as the cursor query_id).
                     # The filter is per-model, but the tweets now span
                     # potentially many models. We partition by brand_id
                     # and filter each subset.
@@ -817,6 +1094,14 @@ class RunPipeline:
                         encoding="utf-8",
                     )
                     n_inserted = store.insert_posts(kept_all)
+                    # U5: append newly-inserted posts to the cycle
+                    # accumulator so _run_post_fetch has the full
+                    # kept set after the loop ends. dedupe by tweet_id.
+                    for _it in kept_all:
+                        _tid = str(_it.get("id") or _it.get("tweet_id") or "")
+                        if _tid and _tid not in cycle_kept_ids:
+                            cycle_kept.append(_it)
+                            cycle_kept_ids.add(_tid)
                     summary["totals"]["n_classifications_written"] += store._classifications_written
                     summary["totals"]["n_classifications_dropped"] += store._classifications_dropped
                     _t(f"call.{call.brand_id}.{call.call_kind}.{call.bucket or 'acct'}.filter+store", _t_filter)
@@ -828,6 +1113,40 @@ class RunPipeline:
                         len(items), len(kept_all), n_filtered_total,
                         reasons_total, n_review_total,
                     )
+
+                    # U2 (cursor advance): only advance on success,
+                    # AFTER filter/store completed. If any preceding
+                    # step raised, we'd have already broken out of
+                    # the loop via TwitterApiAuthError / the
+                    # rate-limit-and-server-error continues, so this
+                    # point is reached only when the whole per-call
+                    # pipeline succeeded. We do NOT advance on
+                    # inserted_count == 0 — the cursor covers "we
+                    # fetched through this moment"; 0 inserted is
+                    # still a successful fetch.
+                    try:
+                        store.set_last_completed_at(
+                            call.brand_id,
+                            call.call_id,
+                            call.call_kind,
+                            call.bucket,
+                            synth_q.id,
+                            _now_iso(),
+                        )
+                    except Exception as exc:
+                        # A failing cursor write must not abort the
+                        # cycle — log and keep going. Worst case:
+                        # the next cycle re-fetches some tweets,
+                        # which the tweet_id dedup in insert_posts
+                        # already handles.
+                        log.warning(
+                            "failed to advance call_state cursor for "
+                            "brand=%s call_id=%s kind=%s bucket=%s "
+                            "query_id=%s: %s",
+                            call.brand_id, call.call_id,
+                            call.call_kind, call.bucket,
+                            synth_q.id, exc,
+                        )
 
                     summary["queries"].append(
                         {
@@ -853,6 +1172,38 @@ class RunPipeline:
 
                 if summary["status"] == "aborted":
                     pass  # already handled in the inner break
+
+                # U5: post-fetch transformers (translate + classify).
+                # Runs ONCE per cycle on the cycle_kept accumulator.
+                # Skipped on dry_run / abort (the kept set is empty
+                # under dry_run anyway). See plan §5 High-Level
+                # Technical Design.
+                if not dry_run and summary["status"] != "aborted" and cycle_kept:
+                    _t_pf = time.monotonic()
+                    try:
+                        # brand_registry_rows from the open Store;
+                        # brand_tokens from the cycle's per-model map.
+                        pf_counters = _run_post_fetch(
+                            cycle_kept,
+                            store=store,
+                            anthropic_client=anthropic_client,
+                            brand_registry_rows=store.read_brands(),
+                            brand_tokens=getattr(
+                                self.config, "brand_tokens_map", None
+                            ),
+                        )
+                        summary.setdefault("post_fetch", {}).update(pf_counters)
+                        # Also surface per-stage wall-clock for the
+                        # smoketest runner (U7).
+                        summary["post_fetch"]["wall_clock_sec"] = (
+                            time.monotonic() - _t_pf
+                        )
+                    except Exception as e:  # never abort the run over post-fetch
+                        log.warning("post-fetch transformers failed: %s", e)
+                        summary.setdefault("post_fetch", {})[
+                            "error"
+                        ] = str(e)
+                    _t("post_fetch", _t_pf)
 
                 # v1.9 (2026-06-22): quote-tweet capture. Runs after the
                 # main harvest so newly-attributed posts are in the DB.
