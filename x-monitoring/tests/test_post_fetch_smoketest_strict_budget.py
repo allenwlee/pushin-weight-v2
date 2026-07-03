@@ -122,7 +122,7 @@ def test_smoketest_strict_budget_exits_1_when_cycle_exceeds_90s(
     import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
 
-    db_path = tmp_path / "data" / "monitor.db"
+    db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
     _seed_kept_posts(db_path, [
         {"tweet_id": "t1", "text": "x"},
@@ -170,7 +170,7 @@ def test_smoketest_without_strict_budget_exits_0_on_slow_cycle(
     import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
 
-    db_path = tmp_path / "data" / "monitor.db"
+    db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
     _seed_kept_posts(db_path, [
         {"tweet_id": "t1", "text": "x"},

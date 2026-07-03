@@ -218,10 +218,15 @@ def test_run_pipeline_execute_calls_run_post_fetch(tmp_path, monkeypatch):
         assert len(rows) == 1, f"expected 1 kept post, got {len(rows)}"
         kept = rows[0]
         assert kept["tweet_id"] == "t200"
-        # Translator populated text_en + text_zh_cn — this is the
-        # proof that _run_post_fetch's translate stage actually
-        # ran end-to-end on the live cycle's kept set.
-        assert kept["text_en"], "text_en not populated by translator"
+        # The post text is English → server-side deterministic
+        # noop NULLs text_en (source serves) and populates
+        # text_zh_cn with the Chinese best-interpretation. This
+        # pair of assertions proves _run_post_fetch's translate
+        # stage actually ran end-to-end on the live cycle's
+        # kept set (and the deterministic noop is wired).
+        assert kept["text_en"] is None, (
+            "text_en must be NULL for English posts (deterministic noop)"
+        )
         assert kept["text_zh_cn"], (
             "text_zh_cn not populated by translator"
         )

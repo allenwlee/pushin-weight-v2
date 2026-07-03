@@ -105,7 +105,7 @@ def test_smoketest_latest_cycle_end_to_end(tmp_path, monkeypatch):
     import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
 
-    db_path = tmp_path / "data" / "monitor.db"
+    db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
     _seed_db_with_kept_posts(db_path, [
         {"tweet_id": f"t{i}", "text": f"Claude could never {i}"}
@@ -139,7 +139,7 @@ def test_smoketest_latest_cycle_empty_db(tmp_path, monkeypatch):
     """An empty DB returns 0 with a friendly message."""
     from scripts import post_fetch_smoketest as sm
 
-    db_path = tmp_path / "data" / "monitor.db"
+    db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
     # Open + close to materialize the schema.
     from x_monitor.store import Store

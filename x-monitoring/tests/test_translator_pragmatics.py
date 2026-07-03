@@ -228,22 +228,21 @@ def test_translate_batch_pragmatics_empty_input_no_llm_call():
 
 
 def test_translate_batch_pragmatics_returns_four_prongs():
+    """Source is French → text_en + text_zh_cn both populated."""
     from x_monitor.translator import translate_batch_pragmatics
 
     tweets = [{"tweet_id": "t1", "text": "Claude could never"}]
     client = FakeClaudeClient()
-    # Factory that emits a dunk_yingyang classification so the row
-    # carries the discourse_role prong.
     def factory(t, locales):
         return {"results": [{
             "tweet_id": "t1",
             "text_en": "Claude could never",
             "literal_zh": "Claude 永远做不出",
-            "lang_detected": "en",
+            "lang_detected": "fr",
             "discourse_role": "dunk_yingyang",
             "cn_equivalent": "Claude 不行",
             "annotation": "",
-            "noop_en": True,
+            "noop_en": False,
             "noop_zh": False,
         }]}
     client._factory = factory
@@ -257,38 +256,39 @@ def test_translate_batch_pragmatics_returns_four_prongs():
     out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
     assert len(out) == 1
     row = out[0]
-    # Backward-compat columns still populated.
+    # Backward-compat columns populated for non-English, non-zh sources.
     assert row["tweet_id"] == "t1"
     assert row["text_en"] == "Claude could never"
     assert row["text_zh_cn"] == "Claude 永远做不出"
-    assert row["lang_detected"] == "en"
+    assert row["lang_detected"] == "fr"
     # New prongs.
     assert row["literal_zh"] == "Claude 永远做不出"
     assert row["discourse_role"] == "dunk_yingyang"
     assert row["cn_equivalent"] == "Claude 不行"
-    # F0 zeroing: dunk_yingyang is NOT F0 (it's a non-F0 role), and
-    # the source has no fixed-dict token, so the empty annotation
-    # stays empty (the LLM emitted "", the judge kept it).
     assert row["annotation"] == ""
 
 
-def test_translate_batch_pragmatics_backward_compat_columns():
-    """Store.bulk_update_translations still sees text_en / text_zh_cn /
-    lang_detected — these columns are still populated even with the
-    new prompt path."""
+def test_translate_batch_pragmatics_text_en_null_when_lang_is_english():
+    """Deterministic noop: lang_detected='en' → text_en is NULL.
+
+    The LLM echoes the source into text_en (per its prompt
+    contract "set to source AND noop_en=true"). The server-side
+    coerce NULLs it because the source already serves as the
+    English text.
+    """
     from x_monitor.translator import translate_batch_pragmatics
 
-    tweets = [{"tweet_id": "1", "text": "hype"}]
+    tweets = [{"tweet_id": "1", "text": "Claude could never"}]
     client = FakeClaudeClient()
     def factory(t, locales):
         return {"results": [{
             "tweet_id": "1",
-            "text_en": "hype",
-            "literal_zh": "太炸了",
+            "text_en": "Claude could never",
+            "literal_zh": "Claude 永远做不出",
             "lang_detected": "en",
-            "discourse_role": "genuine_hype",
-            "cn_equivalent": "太炸了",
-            "annotation": "should be zeroed (F0)",
+            "discourse_role": "dunk_yingyang",
+            "cn_equivalent": "Claude 不行",
+            "annotation": "",
             "noop_en": True,
             "noop_zh": False,
         }]}
@@ -301,10 +301,82 @@ def test_translate_batch_pragmatics_backward_compat_columns():
 
     out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
     row = out[0]
-    # The three columns the v1.7 Store method reads are populated.
-    assert row["text_en"] == "hype"
-    assert row["text_zh_cn"] == "太炸了"
+    # text_en NULLed by server-side coerce (lang is en).
+    assert row["text_en"] is None
+    assert row["noop_en"] is True
+    # text_zh_cn populated (Chinese best-interpretation).
+    assert row["text_zh_cn"] == "Claude 永远做不出"
     assert row["lang_detected"] == "en"
+
+
+def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
+    """Deterministic noop: lang_detected='zh-Hans' → text_zh_cn + literal_zh NULL."""
+    from x_monitor.translator import translate_batch_pragmatics
+
+    tweets = [{"tweet_id": "1", "text": "Claude 真不错"}]
+    client = FakeClaudeClient()
+    def factory(t, locales):
+        return {"results": [{
+            "tweet_id": "1",
+            "text_en": "Claude is really good",
+            "literal_zh": "Claude 真不错",
+            "lang_detected": "zh-Hans",
+            "discourse_role": "genuine_hype",
+            "cn_equivalent": "Claude 真不错",
+            "annotation": "",
+            "noop_en": False,
+            "noop_zh": True,
+        }]}
+    client._factory = factory
+    orig = client.messages_create
+    def rec(**kwargs):
+        kwargs["_test_tweets"] = tweets
+        return orig(**kwargs)
+    client.messages_create = rec  # type: ignore[assignment]
+
+    out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
+    row = out[0]
+    # text_zh_cn + literal_zh NULLed by server-side coerce.
+    assert row["text_zh_cn"] is None
+    assert row["literal_zh"] is None
+    assert row["noop_zh"] is True
+    # text_en populated (English best-interpretation of zh source).
+    assert row["text_en"] == "Claude is really good"
+
+
+def test_translate_batch_pragmatics_backward_compat_columns():
+    """Store.bulk_update_translations still sees text_en / text_zh_cn /
+    lang_detected for non-English / non-zh sources."""
+    from x_monitor.translator import translate_batch_pragmatics
+
+    tweets = [{"tweet_id": "1", "text": "Claude est vraiment bien"}]
+    client = FakeClaudeClient()
+    def factory(t, locales):
+        return {"results": [{
+            "tweet_id": "1",
+            "text_en": "Claude is really good",
+            "literal_zh": "Claude 真的很好",
+            "lang_detected": "fr",
+            "discourse_role": "genuine_hype",
+            "cn_equivalent": "太棒了",
+            "annotation": "should be zeroed (F0)",
+            "noop_en": False,
+            "noop_zh": False,
+        }]}
+    client._factory = factory
+    orig = client.messages_create
+    def rec(**kwargs):
+        kwargs["_test_tweets"] = tweets
+        return orig(**kwargs)
+    client.messages_create = rec  # type: ignore[assignment]
+
+    out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
+    row = out[0]
+    # The three columns the v1.7 Store method reads are populated
+    # for non-en / non-zh sources.
+    assert row["text_en"] == "Claude is really good"
+    assert row["text_zh_cn"] == "Claude 真的很好"
+    assert row["lang_detected"] == "fr"
 
 
 def test_translate_batch_pragmatics_applies_friction_judge():
@@ -445,3 +517,45 @@ def test_translate_batch_pragmatics_invalid_response_marked_failed():
     )
     assert len(out) == 2
     assert all(r["translation_failed"] for r in out)
+
+# --- Lang-family helpers (deterministic noop logic) ------------------
+
+
+def test_is_english_family_matches_en_variants():
+    """All English-family tags are recognized (en, en-US, en_GB, EN)."""
+    from x_monitor.translator import _is_english_family
+
+    for lang in ("en", "EN", "en-US", "en_GB", "en-us", "en_CA"):
+        assert _is_english_family(lang), f"{lang!r} should match English family"
+
+
+def test_is_english_family_rejects_non_english():
+    """Non-English tags are NOT in the English family."""
+    from x_monitor.translator import _is_english_family
+
+    for lang in ("fr", "zh-Hans", "zh", "ja", "ko", "es", "de", ""):
+        assert not _is_english_family(lang), (
+            f"{lang!r} must not match English family"
+        )
+
+
+def test_is_simplified_chinese_family_matches_zhs_variants():
+    """Simplified Chinese variants: zh, zh-Hans, zh-CN, zh_CN_Hans."""
+    from x_monitor.translator import _is_simplified_chinese_family
+
+    for lang in ("zh", "zh-Hans", "zh-CN", "zh_CN_Hans", "zh_Hans"):
+        assert _is_simplified_chinese_family(lang), (
+            f"{lang!r} should match Simplified Chinese family"
+        )
+
+
+def test_is_simplified_chinese_family_rejects_traditional():
+    """Traditional Chinese (zh-Hant, zh-TW, zh-HK) is NOT Simplified —
+    the translator should still emit a Simplified rendering for these."""
+    from x_monitor.translator import _is_simplified_chinese_family
+
+    for lang in ("zh-Hant", "zh-TW", "zh_HK", "zh-Hant-HK"):
+        assert not _is_simplified_chinese_family(lang), (
+            f"{lang!r} is Traditional Chinese, must NOT match "
+            f"Simplified family"
+        )

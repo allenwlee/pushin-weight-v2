@@ -75,22 +75,28 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _load_latest_cycle_posts(
     store, anthropic_client, limit: int
 ) -> list[dict]:
-    """Pull the most recent kept posts (joined with their brand
-    attribution) from the DB. Falls back to the most recent N posts
-    if no run summary is available."""
-    # Pick the most recent N posts that have at least one brand
-    # attribution in posts_brands (U5 only ran on kept posts, but
-    # the smoketest can be exercised on any posts that have brand
-    # rows).
+    """Pull the most recent kept posts from the DB and use the
+    deterministic brand-keyword detector to assign brand_ids.
+
+    The classifier must NEVER rely on `posts_brands.brand_id`
+    alone — that table was populated by the noisy body-keyword
+    scan (e.g. Spanish "llama" matches as a verb get attributed
+    to the llama brand). For the post-fetch classifier we want
+    the same keyword machinery the LLM is told to trust, applied
+    deterministically to the post text.
+    """
+    from x_monitor.attribution import (
+        compile_keyword_index,
+        detect_brand_mentions,
+    )
+    # Build the keyword index from the live `brand_keywords` table.
+    brand_keywords = store.read_brand_keywords()
+    compiled_index = compile_keyword_index(brand_keywords)
+
     rows = store._conn.execute(
         """
         SELECT p.tweet_id, p.text, p.lang_detected
         FROM posts p
-        WHERE EXISTS (
-            SELECT 1 FROM posts_brands pb
-            JOIN brands b ON b.id = pb.brand_id
-            WHERE pb.post_id = p.id AND b.nickname <> '_unattributed'
-        )
         ORDER BY p.fetched_at DESC
         LIMIT ?
         """,
@@ -98,24 +104,19 @@ def _load_latest_cycle_posts(
     ).fetchall()
     out: list[dict] = []
     for r in rows:
-        # Find attributed brands via Store helper (TEXT-keyed join).
-        attrs = store._conn.execute(
-            """
-            SELECT b.nickname AS brand_id
-            FROM posts_brands pb
-            JOIN brands b ON b.id = pb.brand_id
-            JOIN posts p ON p.id = pb.post_id
-            WHERE p.tweet_id = ? AND b.nickname <> '_unattributed'
-            """,
-            (r["tweet_id"],),
-        ).fetchall()
+        text = r["text"] or ""
+        # Deterministic brand detection: text-scan the same regex
+        # index the original attribution used, but treat its
+        # output as the GROUND TRUTH for the classifier (not the
+        # noisy posts_brands table).
+        brand_ids = detect_brand_mentions(text, compiled_index)
         out.append({
             "tweet_id": r["tweet_id"],
             "id": r["tweet_id"],
-            "text": r["text"] or "",
+            "text": text,
             "lang_detected": r["lang_detected"],
-            "brand_id": attrs[0]["brand_id"] if attrs else "",
-            "brand_ids": [a["brand_id"] for a in attrs],
+            "brand_id": brand_ids[0] if brand_ids else "",
+            "brand_ids": brand_ids,
         })
     return out
 
@@ -159,13 +160,13 @@ def _render_sample_posts(
         tid = str(post.get("tweet_id") or post.get("id"))
         lines.append("")
         lines.append(f"--- Post {i} (tweet_id={tid}) ---")
-        lines.append(f"text:        {post.get('text', '')[:200]}")
+        lines.append(f"text:        {post.get('text', '')}")
         tr = trans_by_id.get(tid, {})
-        lines.append(f"text_en:     {(tr.get('text_en') or '')[:120]}")
-        lines.append(f"literal_zh:  {(tr.get('literal_zh') or tr.get('text_zh_cn') or '')[:120]}")
+        lines.append(f"text_en:     {(tr.get('text_en') or '')}")
+        lines.append(f"literal_zh:  {(tr.get('literal_zh') or tr.get('text_zh_cn') or '')}")
         lines.append(f"discourse:   {tr.get('discourse_role', 'uncategorized')}")
-        lines.append(f"cn_equiv:    {(tr.get('cn_equivalent') or '')[:120]}")
-        lines.append(f"annotation:  {(tr.get('annotation') or '(none)')[:200]}")
+        lines.append(f"cn_equiv:    {(tr.get('cn_equivalent') or '')}")
+        lines.append(f"annotation:  {(tr.get('annotation') or '(none)')}")
         for cls in classification_rows.get(tid, []):
             lines.append(
                 f"  [brand={cls['brand_id']}] "
@@ -210,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         brand_registry_rows = []
         return _run_pipeline(posts, brand_registry_rows, args)
 
-    db_path = Path("data") / "monitor.db"
+    db_path = Path("data") / "x_monitoring.db"
     if not db_path.exists():
         print(
             f"smoketest: db not found at {db_path} — "
@@ -300,9 +301,18 @@ def _run_pipeline(
     t_classify_ms = int((time.monotonic() - t0) * 1000)
 
     # --- Aggregate counts -----------------------------------------
+    # n_translated = rows where the translator produced output
+    # for AT LEAST one target locale (not both — under the
+    # deterministic noop, English posts have text_en NULL but
+    # text_zh_cn populated, and vice versa).
     n_translated = sum(
         1 for r in translation_rows
-        if r.get("text_en") and (r.get("text_zh_cn") or r.get("literal_zh"))
+        if not r.get("translation_failed")
+        and (
+            r.get("text_en") is not None
+            or r.get("text_zh_cn") is not None
+            or r.get("literal_zh") is not None
+        )
     )
     n_failed_translate = sum(
         1 for r in translation_rows if r.get("translation_failed")

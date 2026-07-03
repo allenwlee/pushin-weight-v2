@@ -897,6 +897,54 @@ TEXT column `annotation TEXT` to the table; deferred to a follow-up
 migration if it bloats row size.** Not load-bearing for v1; flagged here
 for transparency.
 
+**OQ5. Should the translator carry a `register` field that picks the
+Chinese rendering voice?** Currently `translate_batch_pragmatics`
+renders all Chinese in a single mid-register analyst voice. Real
+Chinese-vendor readers distinguish:
+
+  - **analytical** (peer-engineer voice — tight terminology, no hedging)
+  - **promotional** (vendor marketing voice — uses 「」「」, idioms, drop-the-throat-clearing)
+  - **policy-brief** (analyst-to-investor voice — front-loads the claim, surfaces the governance angle)
+  - **conversational** (Twitter-discourse voice — preserves 抽象话, 阴阳怪气, dunk phrasing)
+
+The source post's register (and its likely authorship — see the
+"AI-likeness" heuristic surfaced in the smoketest run on
+2026-07-03) should drive which of these four voices the translator
+uses for `literal_zh` and `cn_equivalent`. A Kimi-launch tweet from a
+GitHub blog post is `policy-brief` (front-load the enterprise-governance
+angle); a Chinese-developer's 阴阳怪气 dunk on Claude is
+`conversational` (preserve 抽象话 verbatim, no smoothing).
+
+Proposed shape:
+  - `register TEXT NOT NULL` column on `posts_brands_discourse` (FK to a
+    new `register_keys` lookup table with the 4 keys above + a
+    5th `other` for hallucinated values).
+  - `register` prong added to the §5.1 prompt contract
+    (returned alongside `discourse_role`).
+  - The translator's prompt branches on `register` to select a
+    voice-specific few-shot set + tone guidance.
+  - `cn_equivalent` renders to the target voice (currently it
+    defaults to analyst regardless of source).
+
+**Recommendation: defer to v2.** Reasoning: the v1 translator's
+single mid-register output already passes the bar for the dashboard
+brief use case. Adding `register` is a substantial prompt-surface
+change (4 voices × 9 discourse_roles × 2 nationalism axes = 72
+voice-condition combinations to seed) and the test surface doubles
+or triples. Worth doing but not in v1 — flag as a follow-up. See
+the smoketest run on 2026-07-03 for the originating observation:
+the live `literal_zh` for an analytical Kimi/Copilot post lost the
+source's "is easy to read as... I think that misses the bigger
+shift" skeptic framing because the translator defaults to a
+flat analyst register.
+
+**Status:** parked. Open question for the maintainer: do we want
+register to be the translator's voice-picker OR the brief
+renderer's voice-picker? (Translator-side: literal_zh varies by
+register. Brief-renderer-side: literal_zh stays flat, brief
+generates register-specific cards. The first preserves translation
+fidelity; the second is cheaper to ship.)
+
 ## 12. Scope Boundaries
 
 ### In Scope

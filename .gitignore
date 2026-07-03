@@ -3,3 +3,10 @@
 # Adding these here so `git status`, `git ls-files`, and any tool that
 # walks the repo from the root do not see a duplicate tree of the project.
 /worktrees/
+
+# compound-engineering plugin scratch state — per-session reviewer artifacts
+# and run logs that have no value in git history.
+/.context/
+
+# Legacy runtime data not covered by x-monitoring/.gitignore
+data/monitor.db

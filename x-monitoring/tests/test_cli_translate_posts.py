@@ -181,8 +181,14 @@ def test_cli_translate_posts_dry_run(tmp_path, monkeypatch):
         s.close()
 
 
-def test_cli_translate_posts_real_run_writes_text_en(tmp_path, monkeypatch):
-    """A real run with a fake client writes text_en to posts."""
+def test_cli_translate_posts_real_run_writes_text_zh_cn(tmp_path, monkeypatch):
+    """A real run with a fake client writes text_zh_cn to posts.
+
+    The default FakeClaudeClient emits lang_detected='en', so the
+    server-side deterministic noop NULLs text_en (the source
+    already serves as the English version) and populates
+    text_zh_cn with the Chinese best-interpretation.
+    """
     from x_monitor import __main__ as cli
     from x_monitor import translator as tr_mod
 
@@ -208,9 +214,14 @@ def test_cli_translate_posts_real_run_writes_text_en(tmp_path, monkeypatch):
         assert report["rows_updated"] == 1
         assert report["rows_failed"] == 0
         row = s._conn.execute(
-            "SELECT text_en FROM posts WHERE tweet_id='t1'"
+            "SELECT text_en, text_zh_cn, lang_detected FROM posts "
+            "WHERE tweet_id='t1'"
         ).fetchone()
-        assert row["text_en"] == "Claude could never"
+        # text_en NULLed (deterministic noop for lang=en).
+        assert row["text_en"] is None
+        # text_zh_cn populated with the Chinese best-interpretation.
+        assert row["text_zh_cn"] == "[zh] Claude could never"
+        assert row["lang_detected"] == "en"
     finally:
         s.close()
 
@@ -240,10 +251,13 @@ def test_cli_translate_posts_limit_caps_batch(tmp_path, monkeypatch):
         assert rc == 0
         report = _last_json_block(buf.getvalue())
         assert report["rows_seen"] == 2
-        # Only the first 2 posts got translated.
+        # Only the first 2 posts got translated. Default fake
+        # emits lang_detected='en' so deterministic noop NULLs
+        # text_en — we check text_zh_cn which IS populated for
+        # English posts.
         rows = s._conn.execute(
-            "SELECT tweet_id, text_en FROM posts "
-            "WHERE text_en IS NOT NULL ORDER BY tweet_id"
+            "SELECT tweet_id, text_zh_cn FROM posts "
+            "WHERE text_zh_cn IS NOT NULL ORDER BY tweet_id"
         ).fetchall()
         assert [r["tweet_id"] for r in rows] == ["t0", "t1"]
     finally:

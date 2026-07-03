@@ -57,11 +57,14 @@ class FakeClaudeClient:
             "text_en": t.get("text", ""),
             "literal_zh": f"[zh] {t.get('text', '')}",
             "text_zh_cn": f"[zh] {t.get('text', '')}",
-            "lang_detected": "en",
+            # French so the server-side noop doesn't NULL both
+            # text_en and text_zh_cn (the post is neither
+            # English nor Simplified Chinese).
+            "lang_detected": "fr",
             "discourse_role": "genuine_hype",
             "cn_equivalent": "[zh equivalent]",
             "annotation": "",
-            "noop_en": True,
+            "noop_en": False,
             "noop_zh": False,
         } for t in tweets]}
 
@@ -241,12 +244,14 @@ def test_run_post_fetch_happy_path_writes_all_three_tables(tmp_path):
         assert out["n_nationalism"] == 0  # both axes were "none"
         assert out["n_failed_translate"] == 0
 
-        # Verify posts row updated.
+        # Verify posts row updated. The factory emits lang_detected='en'
+        # → server-side deterministic noop NULLs text_en (source serves)
+        # and populates text_zh_cn with the Chinese best-interpretation.
         row = s._conn.execute(
             "SELECT text_en, text_zh_cn, lang_detected FROM posts "
             "WHERE tweet_id = 't1'"
         ).fetchone()
-        assert row["text_en"] == "Claude could never"
+        assert row["text_en"] is None
         assert row["text_zh_cn"] == "Claude 永远做不出"
         assert row["lang_detected"] == "en"
 

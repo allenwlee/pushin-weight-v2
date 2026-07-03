@@ -444,6 +444,66 @@ def compile_keyword_index(
     return compiled, token_to_brand
 
 
+def detect_brand_mentions(
+    text: str,
+    compiled_keyword_index: tuple[re.Pattern[str] | None, dict[str, str]],
+) -> list[str]:
+    """Return deduplicated brand_ids mentioned in `text`.
+
+    Companion to `extract_body_keywords` for the U4 post-fetch
+    path: instead of emitting a MentionRow per match, return the
+    SET of brand_ids found (so the LLM classifier can iterate
+    deterministically across them). Reuses the same regex
+    resolution as the body-keyword path.
+
+    The order is "first-seen wins" (matches v1.7 contract) — useful
+    for downstream rank/weight heuristics.
+
+    Args:
+        text: the post text to scan
+        compiled_keyword_index: (pattern, token_to_brand) tuple from
+                                `compile_keyword_index()`
+
+    Returns:
+        A list of deduplicated brand_id slugs. Empty when no
+        pattern, no text, or no matches.
+    """
+    pattern, token_to_brand = compiled_keyword_index
+    if pattern is None or not token_to_brand or not text:
+        return []
+    regex_keys = [k for k in token_to_brand if any(
+        c in k for c in "()[]{}.*+?\\^$|"
+    )]
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in pattern.finditer(text):
+        raw_token = m.group(0)
+        brand_id: str | None = None
+        # 1. Literal lookup.
+        brand_id = token_to_brand.get(raw_token)
+        if brand_id is None:
+            cf = raw_token.casefold()
+            for tok, b in token_to_brand.items():
+                if tok.casefold() == cf:
+                    brand_id = b
+                    break
+        # 2. Regex-pattern re-test.
+        if brand_id is None and regex_keys:
+            for pat_str in regex_keys:
+                try:
+                    if re.fullmatch(pat_str, raw_token, re.IGNORECASE):
+                        brand_id = token_to_brand[pat_str]
+                        break
+                except re.error:
+                    continue
+        if brand_id is None or brand_id == UNATTRIBUTED_BRAND_ID:
+            continue
+        if brand_id not in seen:
+            seen.add(brand_id)
+            out.append(brand_id)
+    return out
+
+
 def extract_body_keywords(
     post: dict[str, Any],
     compiled_keyword_index: tuple[re.Pattern[str] | None, dict[str, str]],
@@ -994,13 +1054,20 @@ def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
         "[{\"brand_id\": str, \"post_type\": str, \"sentiment\": str, "
         "\"discourse_role\": str, \"china_nationalism\": str, "
         "\"us_nationalism\": str}, ...]}\n"
-        "2. One entry per brand you classify (you may OMIT brands "
-        "that don't apply).\n"
+        "2. RETURN ONE ROW FOR EVERY BRAND LISTED. The brand list "
+        "is what the keyword detector found in the text — if a "
+        "brand name appears, you MUST produce a row. Cross-brand "
+        "comparison posts (\"GLM 5.2 vs Kimi K2.7\"), reply chains "
+        "where the brand is mentioned, posts sharing screenshots "
+        "with the brand name — ALL count. Only skip a brand if "
+        "the post text contains ZERO mention of it (this should be "
+        "impossible given how the brand list was derived).\n"
         "3. Use the EXACT brand_id strings from the list above.\n"
         "4. nationalism is ORTHOGONAL to post_type × sentiment × "
         "discourse_role — a single post can be e.g. (perf_compare, "
         "positive, genuine_hype, none, constructive_critical).\n"
-        "5. If the tweet is off-topic for all brands, return "
+        "5. If the tweet is off-topic for all brands (shouldn't "
+        "happen if the brand list is non-empty), return "
         "{\"classifications\": []}.\n"
         "6. No prose, no explanation, no code fences.\n"
     )
@@ -1063,7 +1130,14 @@ def classify_pragmatics_full(
         return {}
     if anthropic_client is None:
         return {}
-    registry_ids = {b.brand_id for b in brand_registry}
+    # If the caller didn't supply a brand_registry, trust the
+    # brand_ids argument (the fixture path doesn't read the live
+    # `brands` table). The parser then validates the LLM's
+    # response against the same set.
+    if brand_registry:
+        registry_ids = {b.brand_id for b in brand_registry}
+    else:
+        registry_ids = set(brand_ids)
     prompt = build_pragmatics_full_prompt(text, brand_ids)
     try:
         response = _call_signal_with_retry(anthropic_client, prompt)

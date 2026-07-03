@@ -854,6 +854,42 @@ def cmd_translate_posts(args, paths) -> int:
         store.close()
 
 
+def cmd_smoketest(args, paths) -> int:
+    """U7: forward to scripts.post_fetch_smoketest.main.
+
+    The db path comes from `paths["db"]` (the live x_monitoring.db);
+    the script's hardcoded `data/x_monitoring.db` is also valid but
+    we pass the explicit path for testability.
+
+    Flags:
+      --source          latest-cycle (default) or fixture
+      --fixture PATH    JSONL file when --source=fixture
+      --sample N        sample-post eyeball section size (default: 5)
+      --strict-budget   exit 1 if total wall-clock exceeds 90s
+      --limit N         cap posts processed (default: 200)
+    """
+    import sys as _sys
+    from scripts.post_fetch_smoketest import main as _smoke_main
+
+    argv: list[str] = ["--source", args.source]
+    if args.fixture:
+        argv.extend(["--fixture", str(args.fixture)])
+    argv.extend(["--sample", str(args.sample)])
+    if getattr(args, "strict_budget", False):
+        argv.append("--strict-budget")
+    argv.extend(["--limit", str(args.limit)])
+    # chdir into the project root so the script's hardcoded
+    # `data/x_monitoring.db` resolves correctly.
+    project_root = paths["db"].parent.parent  # data/ → x-monitoring/
+    import os as _os
+    _prev_cwd = _os.getcwd()
+    try:
+        _os.chdir(project_root)
+        return _smoke_main(argv)
+    finally:
+        _os.chdir(_prev_cwd)
+
+
 def cmd_translate_registry(args, paths) -> int:
     """Backfill per-locale columns on registry tables (Unit 4).
 
@@ -1169,6 +1205,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the LLM and DB writes; print the row count only.",
     )
     p_tr.set_defaults(func=cmd_translate_registry)
+
+    p_tp = sub.add_parser(
+        "translate",
+        help="Backfill per-locale translation columns on the posts table (U6)",
+    )
+    p_tp.add_argument(
+        "--locale", choices=["en", "zh_cn", "both"], default="both",
+        help="Target locale(s). Default 'both'.",
+    )
+    p_tp.add_argument(
+        "--limit", type=int, default=200,
+        help="Cap on posts processed (default: 200).",
+    )
+    p_tp.add_argument(
+        "--dry-run", action="store_true",
+        help="Skip the LLM and DB writes; print the row count only.",
+    )
+    p_tp.set_defaults(func=cmd_translate_posts)
+
+    p_smoke = sub.add_parser(
+        "smoketest",
+        help="One-cycle post-fetch smoketest (U7): run the entire "
+             "pipeline on the latest cycle's kept posts and print a "
+             "report (per-stage counts, timing, sample posts, errors).",
+    )
+    p_smoke.add_argument(
+        "--source",
+        choices=["latest-cycle", "fixture"],
+        default="latest-cycle",
+    )
+    p_smoke.add_argument(
+        "--fixture", type=Path, default=None,
+    )
+    p_smoke.add_argument(
+        "--sample", type=int, default=5,
+    )
+    p_smoke.add_argument(
+        "--strict-budget", action="store_true",
+        help="Exit 1 if total wall-clock exceeds 90s.",
+    )
+    p_smoke.add_argument(
+        "--limit", type=int, default=200,
+    )
+    p_smoke.set_defaults(func=cmd_smoketest)
 
     p_hf = sub.add_parser(
         "hf-products",

@@ -296,6 +296,40 @@ _DISCOURSE_ROLES: frozenset[str] = frozenset({
 })
 _DISCOURSE_UNCATEGORIZED: str = "uncategorized"
 
+
+def _is_english_family(lang: str) -> bool:
+    """True when `lang` (lowercase) identifies as English.
+
+    Handles ISO-639 with optional script/region (e.g. "en",
+    "en-US", "en_GB", "EN"). Anything else is NOT English and
+    text_en should be populated with a best-interpretation.
+    """
+    if not lang:
+        return False
+    # Strip region tag (en-US, en_GB) — match on the bare lang.
+    bare = lang.split("-")[0].split("_")[0].strip().lower()
+    return bare == "en"
+
+
+def _is_simplified_chinese_family(lang: str) -> bool:
+    """True when `lang` identifies as Simplified Chinese.
+
+    Matches "zh-Hans", "zh-CN", "zh_CN_Hans", and bare "zh"
+    (default to Simplified — most common case). Traditional
+    Chinese (zh-Hant, zh-TW, zh-HK) is NOT Simplified — the
+    translator should still emit a Simplified rendering for those.
+    """
+    if not lang:
+        return False
+    # Normalize to hyphen-separated form for token checks.
+    lang_norm = lang.lower().replace("_", "-")
+    # Explicit Traditional markers — never match.
+    for marker in ("hant", "-tw", "-hk"):
+        if marker in lang_norm:
+            return False
+    bare = lang_norm.split("-")[0]
+    return bare == "zh"
+
 # U3: the fixed-translation dictionary from research §4.5 — these are
 # proper nouns in the Chinese AI circle and don't need annotation when
 # they appear in source text. Used by apply_friction_judge.
@@ -327,8 +361,15 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "                    the original slang — do NOT smooth it out. "
     "Mixed Chinese/English is permitted (e.g. 'Sora 2', 'DeepSeek-V4').\n"
     "                    @mentions, URLs, and emojis stay verbatim.\n"
-    "  text_en:          English text. If the source is already English, "
-    "                    set this to the source AND set noop_en: true.\n"
+    "  text_en:          English text. Always populate with the best "
+    "interpretation\n"
+    "                    of the source (English posts get the source "
+    "verbatim;\n"
+    "                    non-English posts get a literal translation). "
+    "Server-side\n"
+    "                    will NULL this column if the post's "
+    "`lang_detected` is\n"
+    "                    English (no English text needs re-storing).\n"
     "  lang_detected:    ISO 639-1 + script (e.g. 'en', 'zh-Hans').\n"
     "  discourse_role:   EXACTLY one of: genuine_hype, sarcasm, "
     "dunk_yingyang,\n"
@@ -339,14 +380,22 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "Bilibili\n"
     "                    say the same thing' rendering. Use 'N/A' if "
     "no equivalent.\n"
+    "  literal_zh:       Best-interpretation Simplified Chinese rendering. "
+    "Always\n"
+    "                    populate — server-side will NULL the zh-CN column\n"
+    "                    if `lang_detected` is already Simplified "
+    "Chinese.\n"
     "  annotation:       A 1-3 sentence cultural-background annotation. "
     "ONLY when\n"
     "                    the post contains F2 or F3 friction (meme origin, "
     "named\n"
     "                    event, brand-specific slur). Otherwise leave empty.\n"
-    "  noop_en:          true if text_en equals the source.\n"
-    "  noop_zh:          true if literal_zh equals the source Chinese "
-    "(only applies when source is Chinese).\n\n"
+    "  noop_en:          (optional hint) true if the source is already "
+    "English.\n"
+    "  noop_zh:          true if source is already Simplified Chinese. "
+    "The\n"
+    "                    server-side translator may use this as a hint but\n"
+    "                    ultimately decides via `lang_detected`.\n\n"
     "Fixed-translation dictionary — use these for the literal_zh field "
     "WITHOUT annotation:\n"
     "  vibe coding → 氛围编程;  sycophancy → 舔狗;  distillation → 蒸馏;\n"
@@ -557,18 +606,47 @@ def translate_batch_pragmatics(
             continue
         for t, p in zip(batch, parsed):
             judged = apply_friction_judge(t, p)
-            literal_zh = judged.get("literal_zh") or p.get("text_zh_cn")
+            # Server-side noop logic is deterministic and based
+            # on `lang_detected`, NOT the LLM's noop_* flags (the
+            # LLM is a sloppy noop reporter — it echoes the source
+            # into the locale column anyway, and the shape contract
+            # is "the locale column is NULL when the source is
+            # already in that locale").
+            #
+            # text_en: NULL when lang is in the English family
+            #   (en, en-US, en-GB, ...). The source `text` is
+            #   already the English version.
+            #
+            # text_zh_cn: populated for ALL non-zh-Hans sources.
+            #   The LLM's output is treated as a best-interpretation
+            #   rendering with nuance (idioms / memes annotated
+            #   via cn_equivalent + annotation), NOT a literal
+            #   word-for-word translation. When the source IS
+            #   already Simplified Chinese, the column stays NULL
+            #   (source serves).
+            #
+            # The LLM's `noop_en` / `noop_zh` flags are surfaced
+            # for downstream consumers (dashboard badges) but
+            # are NOT trusted for column population.
+            lang = (judged.get("lang_detected") or "").lower()
+            text_en = None if _is_english_family(lang) else judged.get("text_en")
+            is_already_zh = _is_simplified_chinese_family(lang)
+            literal_zh_raw = (
+                None if is_already_zh
+                else (judged.get("literal_zh") or p.get("text_zh_cn"))
+            )
+            text_zh_cn = None if is_already_zh else literal_zh_raw
             out.append({
                 "tweet_id": str(
                     p.get("tweet_id") or t.get("tweet_id") or t.get("id")
                 ),
                 "brand_id": t.get("brand_id"),
-                "text_en": judged.get("text_en"),
-                "text_zh_cn": literal_zh,
-                "lang_detected": judged.get("lang_detected"),
-                "noop_en": judged.get("noop_en", False),
-                "noop_zh": judged.get("noop_zh", False),
-                "literal_zh": literal_zh,
+                "text_en": text_en,
+                "text_zh_cn": text_zh_cn,
+                "lang_detected": lang or None,
+                "noop_en": text_en is None,
+                "noop_zh": text_zh_cn is None,
+                "literal_zh": literal_zh_raw,
                 "discourse_role": judged.get("discourse_role"),
                 "cn_equivalent": judged.get("cn_equivalent"),
                 "annotation": judged.get("annotation"),
