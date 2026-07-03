@@ -733,6 +733,127 @@ def cmd_reattribute(args, paths) -> int:
     return 0
 
 
+def cmd_translate_posts(args, paths) -> int:
+    """Backfill per-locale translation columns on the posts table (U6).
+
+    Plan: docs/plans/2026-07-02-002-feat-streamlined-post-fetch-pipeline-plan.md
+    (Unit 6 of 8). Finds posts where `text_en` / `text_zh_cn` /
+    `lang_detected` is NULL and runs them through the §5.1
+    `translate_batch_pragmatics` (U3) prompt. Writes back via
+    `Store.bulk_update_translations` (the v1.7 Store path — the
+    row shape is backward-compatible because U3 still populates
+    text_en / text_zh_cn / lang_detected alongside the new
+    literal_zh / discourse_role / cn_equivalent / annotation
+    prongs).
+
+    Usage:
+        x-monitor translate --locale both --limit 50
+        x-monitor translate --locale zh_cn --dry-run
+        x-monitor translate --limit 1000
+
+    Flags:
+      --locale   en | zh_cn | both (default: both)
+      --limit    cap on posts processed (default: 200)
+      --dry-run  skip the LLM + DB writes; print the row count only
+
+    Returns 0 on success, 2 on bad args / missing db.
+    """
+    from x_monitor.store import Store
+    from x_monitor.translator import (
+        AnthropicClaudeClient,
+        translate_batch_pragmatics,
+    )
+
+    locale_arg = args.locale
+    limit = args.limit
+    dry_run = args.dry_run
+
+    if locale_arg == "both":
+        target_locales = ["en", "zh_cn"]
+    else:
+        target_locales = [locale_arg]
+
+    db_path = paths["db"]
+    if not db_path.exists():
+        print(
+            f"translate: db not found at {db_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    store = Store(db_path, auto_migrate=True)
+    try:
+        if locale_arg == "both":
+            missing_en = store.get_posts_missing_translations(
+                "en", limit=limit,
+            )
+            missing_zh = store.get_posts_missing_translations(
+                "zh_cn", limit=limit,
+            )
+            seen: set[str] = set()
+            rows: list[dict] = []
+            for r in missing_en + missing_zh:
+                pk = str(r["tweet_id"])
+                if pk not in seen:
+                    seen.add(pk)
+                    rows.append({
+                        "tweet_id": pk,
+                        "text": r.get("text", ""),
+                    })
+        else:
+            missing = store.get_posts_missing_translations(
+                locale_arg, limit=limit,
+            )
+            rows = [
+                {"tweet_id": str(r["tweet_id"]),
+                 "text": r.get("text", "")}
+                for r in missing
+            ]
+
+        print(
+            f"translate: posts ({len(rows)} rows, locales={target_locales}, "
+            f"dry_run={dry_run})"
+        )
+
+        if dry_run:
+            print(json.dumps({"would_translate": len(rows)}, indent=2))
+            return 0
+
+        if not rows:
+            print(json.dumps({"translated": 0}, indent=2))
+            return 0
+
+        client = AnthropicClaudeClient()
+        results = translate_batch_pragmatics(
+            rows, target_locales, client,
+        )
+
+        update_rows = [
+            {
+                "tweet_id": r["tweet_id"],
+                "text_en": r.get("text_en"),
+                "text_zh_cn": r.get("text_zh_cn") or r.get("literal_zh"),
+                "lang_detected": r.get("lang_detected"),
+            }
+            for r in results
+        ]
+        n_updated = store.bulk_update_translations(update_rows)
+        n_failed = sum(1 for r in results if r.get("translation_failed"))
+        print(
+            json.dumps(
+                {
+                    "rows_seen": len(rows),
+                    "rows_updated": n_updated,
+                    "rows_failed": n_failed,
+                },
+                indent=2,
+            )
+        )
+        return 0
+    finally:
+        store.close()
+
+
 def cmd_translate_registry(args, paths) -> int:
     """Backfill per-locale columns on registry tables (Unit 4).
 

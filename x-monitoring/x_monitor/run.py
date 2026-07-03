@@ -1181,6 +1181,14 @@ class RunPipeline:
                 if not dry_run and summary["status"] != "aborted" and cycle_kept:
                     _t_pf = time.monotonic()
                     try:
+                        # Lazy import to avoid pulling the anthropic
+                        # SDK at module load (offline / no-key paths
+                        # still work via _run_post_fetch's no-client
+                        # short-circuit).
+                        from x_monitor.translator import (
+                            AnthropicClaudeClient,
+                        )
+                        anthropic_client = AnthropicClaudeClient()
                         # brand_registry_rows from the open Store;
                         # brand_tokens from the cycle's per-model map.
                         pf_counters = _run_post_fetch(

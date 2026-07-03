@@ -927,6 +927,162 @@ def classify_post(
     return parsed
 
 
+# --- U4: classify_pragmatics_full (merged per-post classifier) ----------
+#
+# KTD1: a SINGLE batched LLM call per 20-post batch returns ALL FIVE
+# prongs (post_type, sentiment, discourse_role, china_nationalism,
+# us_nationalism) per attributed brand.
+
+
+_VALID_DISCOURSE: frozenset[str] = frozenset({
+    "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
+    "cope", "fud", "distillation_accusation", "ai_slop_critique",
+    "absurdist_meme",
+})
+_VALID_NATIONALISM: frozenset[str] = frozenset({
+    "none", "mild_pro", "pro", "constructive_critical", "anti", "mixed",
+})
+_VALID_POST_TYPES = {
+    "buzz_releases", "hands_on_usage",
+    "performance_comparisons", "feedback_questions",
+}
+_VALID_SENTIMENTS = {"positive", "negative", "neutral", "mixed"}
+
+
+def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
+    """Build the §5.1 + U9 merged per-post classifier prompt."""
+    brand_list = ", ".join(brand_ids) if brand_ids else "(none)"
+    return (
+        "You classify a tweet's relationship to a list of brands, "
+        "across five dimensions.\n\n"
+        "Tweet text:\n"
+        f"\"\"\"\n{text}\n\"\"\"\n\n"
+        f"Brands (in order): {brand_list}\n\n"
+        "For each brand, return FIVE fields from these exact sets:\n\n"
+        "post_type (4 buckets — what KIND of post):\n"
+        "  - buzz_releases            (brand announced something new)\n"
+        "  - hands_on_usage           (user is using / showing the brand)\n"
+        "  - performance_comparisons  (benchmark / eval / head-to-head)\n"
+        "  - feedback_questions       (user asking how-to / help / complaint)\n\n"
+        "sentiment (4 values — the VALENCE):\n"
+        "  - positive                 (praise, enthusiasm)\n"
+        "  - negative                 (criticism, disappointment)\n"
+        "  - neutral                  (informational / question)\n"
+        "  - mixed                    (multiple valences in one post)\n\n"
+        "discourse_role (9 keys — pragmatic register, §2):\n"
+        "  - genuine_hype             (straight praise)\n"
+        "  - sarcasm                  (English verbal irony)\n"
+        "  - dunk_yingyang            (阴阳怪气 / passive-aggressive dunk)\n"
+        "  - self_deprecation         (自嘲 / self-mockery)\n"
+        "  - cope                     (嘴硬 / stubborn denial)\n"
+        "  - fud                      (唱衰 / spreading doom)\n"
+        "  - distillation_accusation  (套壳 / 蒸馏指控)\n"
+        "  - ai_slop_critique         (AI content-garbage accusation)\n"
+        "  - absurdist_meme           (抽象整活 / absurdist antics)\n\n"
+        "china_nationalism (6-step scale, §4.4):\n"
+        "  - none                     (no China-nationalism layer)\n"
+        "  - mild_pro                 (温和亲华 — subtle positive)\n"
+        "  - pro                      (亲华 — open positive)\n"
+        "  - constructive_critical   (建设性批评 — pro-CN criticism)\n"
+        "  - anti                     (反华 — hostile)\n"
+        "  - mixed                    (mixed modes in one post)\n\n"
+        "us_nationalism (6-step scale, same as china_nationalism but\n"
+        "applied to the US axis — anti = 反美, etc.):\n"
+        "  - none / mild_pro / pro / constructive_critical / anti / mixed\n\n"
+        "Rules:\n"
+        "1. Return ONLY a JSON object: {\"classifications\": "
+        "[{\"brand_id\": str, \"post_type\": str, \"sentiment\": str, "
+        "\"discourse_role\": str, \"china_nationalism\": str, "
+        "\"us_nationalism\": str}, ...]}\n"
+        "2. One entry per brand you classify (you may OMIT brands "
+        "that don't apply).\n"
+        "3. Use the EXACT brand_id strings from the list above.\n"
+        "4. nationalism is ORTHOGONAL to post_type × sentiment × "
+        "discourse_role — a single post can be e.g. (perf_compare, "
+        "positive, genuine_hype, none, constructive_critical).\n"
+        "5. If the tweet is off-topic for all brands, return "
+        "{\"classifications\": []}.\n"
+        "6. No prose, no explanation, no code fences.\n"
+    )
+
+
+def _parse_pragmatics_full_response(
+    response: dict[str, Any],
+    brand_registry_ids: set[str],
+) -> dict[str, dict[str, str]]:
+    """Parse the merged LLM response with per-brand five-prong rows."""
+    if not isinstance(response, dict):
+        return {}
+    results = response.get("classifications")
+    if not isinstance(results, list):
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        b = item.get("brand_id")
+        if not isinstance(b, str) or b not in brand_registry_ids:
+            continue
+        pt = item.get("post_type")
+        sent = item.get("sentiment")
+        dr = item.get("discourse_role")
+        cn = item.get("china_nationalism")
+        un = item.get("us_nationalism")
+        post_type = pt if pt in _VALID_POST_TYPES else "hands_on_usage"
+        sentiment = sent if sent in _VALID_SENTIMENTS else "neutral"
+        discourse_role = (
+            dr if isinstance(dr, str) and dr in _VALID_DISCOURSE
+            else "uncategorized"
+        )
+        china = (
+            cn if isinstance(cn, str) and cn in _VALID_NATIONALISM
+            else "none"
+        )
+        us = (
+            un if isinstance(un, str) and un in _VALID_NATIONALISM
+            else "none"
+        )
+        out[b] = {
+            "post_type": post_type,
+            "sentiment": sentiment,
+            "discourse_role": discourse_role,
+            "china_nationalism": china,
+            "us_nationalism": us,
+        }
+    return out
+
+
+def classify_pragmatics_full(
+    text: str,
+    brand_ids: list[str],
+    brand_registry: list,
+    anthropic_client: "ClaudeClient | None" = None,
+) -> dict[str, dict[str, str]]:
+    """U4: per-brand five-prong classification via one merged LLM call."""
+    if not brand_ids or not text:
+        return {}
+    if anthropic_client is None:
+        return {}
+    registry_ids = {b.brand_id for b in brand_registry}
+    prompt = build_pragmatics_full_prompt(text, brand_ids)
+    try:
+        response = _call_signal_with_retry(anthropic_client, prompt)
+    except Exception as e:
+        logger.warning(
+            "classify_pragmatics_full: LLM call failed after %d retries: %s",
+            _MAX_RETRIES, e,
+        )
+        return {}
+    parsed = _parse_pragmatics_full_response(response, registry_ids)
+    if not parsed:
+        logger.warning(
+            "classify_pragmatics_full returned no classifications for "
+            "text=%r brand_ids=%r",
+            text[:80], brand_ids,
+        )
+    return parsed
+
+
 # --- Real Anthropic client (lazy import) --------------------------------
 
 

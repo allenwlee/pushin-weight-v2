@@ -270,6 +270,312 @@ def translate_batch(
     return out
 
 
+# --- U3: pragmatics translation prompt (research §5.1) -----------------
+#
+# The v1.7 prompt asked for plain text_en / text_zh_cn. The U3
+# upgrade asks for the four-pronged YAML contract from research
+# §5.1 so Chinese-vendor readers can tell hype from dunk from
+# 抽象 without losing the literal translation. The prompt also
+# accepts optional few-shot examples (research §3.10) that anchor
+# each of the 9 discourse_roles to a verified live X post.
+
+
+# Maximum tweets per LLM call. The plan's Decision 6 specifies 20.
+_TRANSLATION_BATCH_SIZE = 20
+
+# Retry policy: 3 attempts with exponential backoff (1s, 2s, 4s).
+_MAX_RETRIES = 3
+_BACKOFF_BASE_SECONDS = 1.0
+
+# U3: the 9-way discourse_role vocabulary (mirrors discourse_keys
+# migration 026). Coerce unknown keys to `uncategorized` per KTD5.
+_DISCOURSE_ROLES: frozenset[str] = frozenset({
+    "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
+    "cope", "fud", "distillation_accusation", "ai_slop_critique",
+    "absurdist_meme",
+})
+_DISCOURSE_UNCATEGORIZED: str = "uncategorized"
+
+# U3: the fixed-translation dictionary from research §4.5 — these are
+# proper nouns in the Chinese AI circle and don't need annotation when
+# they appear in source text. Used by apply_friction_judge.
+_FIXED_ZH_TRANSLATIONS: dict[str, str] = {
+    "vibe coding": "氛围编程",
+    "vibe coder": "氛围码农",
+    "sycophancy": "舔狗",
+    "distillation": "蒸馏",
+    "wrapper": "套壳",
+    "fine-tune": "微调",
+    "skin-swapping": "换皮",
+    "open-weight": "开放权重",
+    "open-source": "真开源",
+    "roast": "毒舌",
+    "based": "敢说真话",
+}
+
+
+_PRAGMATICS_SYSTEM_PROMPT: str = (
+    "You are a 'bilingual pragmatic analyst' specializing in English X "
+    "(Twitter) AI/LLM-sphere discourse → Chinese AI-sphere discourse. "
+    "Your audience is product managers and market intelligence personnel "
+    "at Chinese-mainland LLM vendors.\n\n"
+    "You understand English X expressions such as meme / slang / irony / "
+    "dunk / FUD / 抽象 / 翻车, and you understand Chinese parallel "
+    "expressions such as 阴阳怪气 / 抽象话 / 套壳 / 蒸馏 / 舔狗 / 翻车 / 整活.\n\n"
+    "For each input tweet, output exactly 4 fields in this YAML shape:\n"
+    "  literal_zh:       Simplified Chinese literal translation. Preserve\n"
+    "                    the original slang — do NOT smooth it out. "
+    "Mixed Chinese/English is permitted (e.g. 'Sora 2', 'DeepSeek-V4').\n"
+    "                    @mentions, URLs, and emojis stay verbatim.\n"
+    "  text_en:          English text. If the source is already English, "
+    "                    set this to the source AND set noop_en: true.\n"
+    "  lang_detected:    ISO 639-1 + script (e.g. 'en', 'zh-Hans').\n"
+    "  discourse_role:   EXACTLY one of: genuine_hype, sarcasm, "
+    "dunk_yingyang,\n"
+    "                    self_deprecation, cope, fud, "
+    "distillation_accusation,\n"
+    "                    ai_slop_critique, absurdist_meme, other.\n"
+    "  cn_equivalent:    A 'how would Chinese netizens on Weibo/Zhihu/"
+    "Bilibili\n"
+    "                    say the same thing' rendering. Use 'N/A' if "
+    "no equivalent.\n"
+    "  annotation:       A 1-3 sentence cultural-background annotation. "
+    "ONLY when\n"
+    "                    the post contains F2 or F3 friction (meme origin, "
+    "named\n"
+    "                    event, brand-specific slur). Otherwise leave empty.\n"
+    "  noop_en:          true if text_en equals the source.\n"
+    "  noop_zh:          true if literal_zh equals the source Chinese "
+    "(only applies when source is Chinese).\n\n"
+    "Fixed-translation dictionary — use these for the literal_zh field "
+    "WITHOUT annotation:\n"
+    "  vibe coding → 氛围编程;  sycophancy → 舔狗;  distillation → 蒸馏;\n"
+    "  wrapper → 套壳;  fine-tune → 微调;  open-weight → 开放权重;\n"
+    "  roast → 毒舌;  based → 敢说真话.\n\n"
+    "Rules:\n"
+    "1. Return ONLY a JSON object of the form:\n"
+    '   {"results": [{"tweet_id": str, "text_en": str, "literal_zh": str, '
+    '"lang_detected": str, "discourse_role": str, "cn_equivalent": str, '
+    '"annotation": str, "noop_en": bool, "noop_zh": bool}, ...]}\n'
+    "2. One result per input tweet, in the same order.\n"
+    "3. Total output per post ≤ 280 characters (excluding tweet_id).\n"
+    "4. Model names, brand names, personal names, @mentions, URLs, and "
+    "emojis stay verbatim.\n"
+    "5. Do not include any prose, explanation, or code fences outside "
+    "the JSON.\n"
+)
+
+
+def _load_few_shot_examples() -> list[dict[str, Any]]:
+    """Load the §3.10 few-shot examples from disk (research).
+
+    The fixture lives at `x_monitor/data/few_shot_pragmatics.jsonl`
+    (created when this module is first installed). On missing-file
+    or parse-error, fall back to an empty list so the prompt is
+    still sent (just without the anchoring examples).
+
+    The loader is intentionally tolerant: it never raises, so a
+    broken fixture file degrades to "no few-shot" rather than
+    breaking the live cycle.
+    """
+    try:
+        from pathlib import Path as _P
+        path = (
+            _P(__file__).parent / "data" / "few_shot_pragmatics.jsonl"
+        )
+        if not path.exists():
+            return []
+        out: list[dict[str, Any]] = []
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                if isinstance(row, dict):
+                    out.append(row)
+        return out
+    except Exception:
+        return []
+
+
+def build_pragmatics_translation_prompt(
+    tweets: list[dict[str, Any]],
+    target_locales: list[str],
+    brand_names: list[str] | None = None,
+    few_shot_examples: list[dict[str, Any]] | None = None,
+) -> str:
+    """Build the U3 §5.1 pragmatics-aware translation prompt."""
+    locale_list = ", ".join(target_locales)
+    brand_block = ""
+    if brand_names:
+        brand_block = (
+            "\n\nBrand and model names to preserve verbatim "
+            "(do not translate, transliterate, or paraphrase):\n"
+            + "\n".join(f"  - {name}" for name in brand_names)
+        )
+
+    if few_shot_examples is None:
+        few_shot_examples = _load_few_shot_examples()
+    few_shot_block = ""
+    if few_shot_examples:
+        few_shot_block = (
+            "\n\nFew-shot examples (one per discourse_role; verified "
+            "live X posts from 2026-06-26):\n"
+            + "\n".join(
+                f"  Input: {ex.get('input', '')!r}\n"
+                f"  Output: {json.dumps(ex.get('output', {}), ensure_ascii=False)}"
+                for ex in few_shot_examples
+            )
+        )
+
+    tweet_payload = json.dumps(
+        [{"tweet_id": t.get("tweet_id") or t.get("id"),
+          "text": t.get("text", ""),
+          "brand_id": t.get("brand_id")}
+         for t in tweets],
+        ensure_ascii=False,
+    )
+
+    return (
+        _PRAGMATICS_SYSTEM_PROMPT
+        + f"\n\nTarget locales for text_en: {locale_list}"
+        + brand_block
+        + few_shot_block
+        + f"\n\nTweets (JSON array):\n{tweet_payload}"
+    )
+
+
+def apply_friction_judge(
+    post: dict[str, Any], llm_yaml: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply the F0–F3 friction-level judgment (research §6.5)."""
+    text = (post.get("text") or "").lower()
+    raw_role = llm_yaml.get("discourse_role") or ""
+    role = raw_role if raw_role in _DISCOURSE_ROLES else _DISCOURSE_UNCATEGORIZED
+    raw_annotation = (llm_yaml.get("annotation") or "").strip()
+
+    f0_roles = {
+        "genuine_hype", "fud", "ai_slop_critique",
+        "distillation_accusation",
+    }
+    if role in f0_roles:
+        annotation = ""
+    elif any(token in text for token in _FIXED_ZH_TRANSLATIONS):
+        annotation = ""
+    elif any(
+        marker in text
+        for marker in (
+            "theranos", "quibi", "shrimp jesus", "this is fine",
+        )
+    ):
+        annotation = raw_annotation[:280]
+    elif any(slang in text for slang in ("no cap", " mid ", "based")):
+        annotation = raw_annotation[:140]
+    else:
+        annotation = ""
+
+    return {
+        **llm_yaml,
+        "discourse_role": role,
+        "annotation": annotation,
+    }
+
+
+def _empty_pragmatics_row(
+    tweet: dict[str, Any], failed: bool = False, dry_run: bool = False
+) -> dict[str, Any]:
+    """U3: empty-row shape for the four-pronged contract."""
+    row: dict[str, Any] = {
+        "tweet_id": str(tweet.get("tweet_id") or tweet.get("id")),
+        "brand_id": tweet.get("brand_id"),
+        "text_en": None,
+        "text_zh_cn": None,
+        "literal_zh": None,
+        "lang_detected": None,
+        "discourse_role": _DISCOURSE_UNCATEGORIZED,
+        "cn_equivalent": None,
+        "annotation": None,
+    }
+    if failed:
+        row["translation_failed"] = True
+    if dry_run:
+        row["dry_run"] = True
+    return row
+
+
+def _parse_pragmatics_response(
+    response: dict[str, Any],
+    tweets: list[dict[str, Any]],
+) -> list[dict[str, Any]] | None:
+    """U3: parse the LLM's structured YAML/JSON response."""
+    if not isinstance(response, dict):
+        return None
+    results = response.get("results")
+    if not isinstance(results, list):
+        return None
+    if len(results) != len(tweets):
+        return None
+    return results
+
+
+def translate_batch_pragmatics(
+    tweets: list[dict[str, Any]],
+    target_locales: list[str],
+    client: "ClaudeClient",
+    *,
+    brand_names: list[str] | None = None,
+    few_shot_examples: list[dict[str, Any]] | None = None,
+    dry_run: bool = False,
+) -> list[dict[str, Any]]:
+    """U3: translate a batch of tweets with the §5.1 four-pronged contract."""
+    if not tweets:
+        return []
+
+    if dry_run:
+        return [_empty_pragmatics_row(t, dry_run=True) for t in tweets]
+
+    out: list[dict[str, Any]] = []
+    for start in range(0, len(tweets), _TRANSLATION_BATCH_SIZE):
+        batch = tweets[start: start + _TRANSLATION_BATCH_SIZE]
+        prompt = build_pragmatics_translation_prompt(
+            batch,
+            target_locales,
+            brand_names=brand_names,
+            few_shot_examples=few_shot_examples,
+        )
+        try:
+            response = _call_with_retry(client, prompt)
+        except Exception:
+            for t in batch:
+                out.append(_empty_pragmatics_row(t, failed=True))
+            continue
+        parsed = _parse_pragmatics_response(response, batch)
+        if parsed is None:
+            for t in batch:
+                out.append(_empty_pragmatics_row(t, failed=True))
+            continue
+        for t, p in zip(batch, parsed):
+            judged = apply_friction_judge(t, p)
+            literal_zh = judged.get("literal_zh") or p.get("text_zh_cn")
+            out.append({
+                "tweet_id": str(
+                    p.get("tweet_id") or t.get("tweet_id") or t.get("id")
+                ),
+                "brand_id": t.get("brand_id"),
+                "text_en": judged.get("text_en"),
+                "text_zh_cn": literal_zh,
+                "lang_detected": judged.get("lang_detected"),
+                "noop_en": judged.get("noop_en", False),
+                "noop_zh": judged.get("noop_zh", False),
+                "literal_zh": literal_zh,
+                "discourse_role": judged.get("discourse_role"),
+                "cn_equivalent": judged.get("cn_equivalent"),
+                "annotation": judged.get("annotation"),
+            })
+    return out
+
+
 # --- v1.8 (Unit 4): registry-row translation extension -----------------
 #
 # Extends translate_batch to cover the per-locale columns on the
