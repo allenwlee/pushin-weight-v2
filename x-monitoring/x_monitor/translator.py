@@ -369,7 +369,9 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "Server-side\n"
     "                    will NULL this column if the post's "
     "`lang_detected` is\n"
-    "                    English (no English text needs re-storing).\n"
+    "                    English or Simplified Chinese (the server-side noop\n"
+    "                    NULLs text_en in those cases — never echo the source\n"
+    "                    into a locale column that matches the source).\n"
     "  lang_detected:    ISO 639-1 + script (e.g. 'en', 'zh-Hans').\n"
     "  discourse_role:   EXACTLY one of: genuine_hype, sarcasm, "
     "dunk_yingyang,\n"
@@ -629,8 +631,19 @@ def translate_batch_pragmatics(
             # for downstream consumers (dashboard badges) but
             # are NOT trusted for column population.
             lang = (judged.get("lang_detected") or "").lower()
-            text_en = None if _is_english_family(lang) else judged.get("text_en")
             is_already_zh = _is_simplified_chinese_family(lang)
+            # U5: text_en NULL when lang is EITHER the English family
+            # (source already is English — serving source is redundant)
+            # OR the Simplified Chinese family (source is Chinese, the
+            # LLM sometimes echoes the Chinese into text_en instead of
+            # translating — see the v10 smoketest Post 4 bug). The
+            # Chinese→English translation path remains the default for
+            # all other source languages.
+            text_en = (
+                None
+                if _is_english_family(lang) or is_already_zh
+                else judged.get("text_en")
+            )
             literal_zh_raw = (
                 None if is_already_zh
                 else (judged.get("literal_zh") or p.get("text_zh_cn"))

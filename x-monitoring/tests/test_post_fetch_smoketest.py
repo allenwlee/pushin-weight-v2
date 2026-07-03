@@ -60,7 +60,7 @@ class FakeClaudeClient:
                 kwargs.get("_test_tweets", []),
                 kwargs.get("_test_target_locales", []),
             )
-        if "across five dimensions" in prompt:
+        if "across FIVE dimensions" in prompt:
             return self._c_factory(
                 kwargs.get("_test_text", ""),
                 kwargs.get("_test_brand_ids", []),

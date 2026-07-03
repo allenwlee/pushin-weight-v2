@@ -56,7 +56,7 @@ class FakeClaudeClient:
                 "noop_en": True,
                 "noop_zh": False,
             } for t in tweets]}
-        if "across five dimensions" in prompt:
+        if "across FIVE dimensions" in prompt:
             return {"classifications": [{
                 "brand_id": "deepseek", "post_type": "hands_on_usage",
                 "sentiment": "neutral", "discourse_role": "genuine_hype",

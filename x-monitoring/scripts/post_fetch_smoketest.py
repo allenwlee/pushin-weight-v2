@@ -146,12 +146,18 @@ def _render_sample_posts(
     sample_posts: list[dict],
     translation_rows: list[dict],
     classification_rows: dict[str, list[dict]],
+    unsanctioned_flags: dict[str, list[str]] | None = None,
 ) -> str:
     """Render N posts with all 7 annotation fields aligned.
 
-    Returns a string suitable for stdout. Layout: each post is a
-    block with the original `text` and the aligned annotations.
+    U7: supports multi-value post_types[] and discourse_roles[] per
+    brand row. Each (brand × post_type × discourse_role) tuple
+    gets its own rendered line.
+
+    `unsanctioned_flags` is an optional per-post_id list of flag values
+    that get surfaced in a dedicated section at the end.
     """
+    unsanctioned_flags = unsanctioned_flags or {}
     trans_by_id = {r["tweet_id"]: r for r in translation_rows}
     lines: list[str] = []
     lines.append("")
@@ -164,16 +170,35 @@ def _render_sample_posts(
         tr = trans_by_id.get(tid, {})
         lines.append(f"text_en:     {(tr.get('text_en') or '')}")
         lines.append(f"literal_zh:  {(tr.get('literal_zh') or tr.get('text_zh_cn') or '')}")
-        lines.append(f"discourse:   {tr.get('discourse_role', 'uncategorized')}")
+        # U7: discourse may now be an array; join for display.
+        disc_val = tr.get("discourse_role", "uncategorized")
+        if isinstance(disc_val, list):
+            disc_val = ",".join(disc_val) if disc_val else "uncategorized"
+        lines.append(f"discourse:   {disc_val}")
         lines.append(f"cn_equiv:    {(tr.get('cn_equivalent') or '')}")
         lines.append(f"annotation:  {(tr.get('annotation') or '(none)')}")
+        # U7: per-post unsanctioned flags (if any).
+        flags = unsanctioned_flags.get(tid, [])
+        if flags:
+            lines.append(f"unsanctioned: {','.join(flags)}")
+        # U7: render N rows per brand — one per (post_type × discourse_role).
+        # If post_types / discourse_roles are arrays, expand. Otherwise
+        # fall back to the single scalar values (legacy).
         for cls in classification_rows.get(tid, []):
-            lines.append(
-                f"  [brand={cls['brand_id']}] "
-                f"pt={cls['post_type']} sent={cls['sentiment']} "
-                f"disc={cls['discourse_role']} "
-                f"cn={cls['china_nationalism']} us={cls['us_nationalism']}"
+            post_types = cls.get("post_types") or (
+                [cls["post_type"]] if cls.get("post_type") else [""]
             )
+            discourse_roles = cls.get("discourse_roles") or (
+                [cls["discourse_role"]] if cls.get("discourse_role") else [""]
+            )
+            for pt in post_types:
+                for dr in discourse_roles:
+                    lines.append(
+                        f"  [brand={cls['brand_id']}] "
+                        f"pt={pt} sent={cls['sentiment']} "
+                        f"disc={dr} "
+                        f"cn={cls['china_nationalism']} us={cls['us_nationalism']}"
+                    )
     return "\n".join(lines)
 
 
@@ -276,6 +301,7 @@ def _run_pipeline(
     # --- Stage 2: classify_pragmatics_full (U4) ----------------------
     t0 = time.monotonic()
     classification_rows: dict[str, list[dict]] = {}
+    unsanctioned_flags_by_post: dict[str, list[str]] = {}
     for post in posts:
         brand_ids = post.get("brand_ids") or []
         if not brand_ids:
@@ -294,10 +320,17 @@ def _run_pipeline(
                 file=sys.stderr,
             )
             continue
-        for brand_id, prongs in cls.items():
+        # U2a: cls is now {"by_brand": {...}, "unsanctioned_flags": [...]}.
+        by_brand = cls.get("by_brand", {}) if isinstance(cls, dict) else {}
+        for brand_id, prongs in by_brand.items():
             classification_rows.setdefault(
                 str(post.get("tweet_id") or post.get("id")), []
             ).append({"brand_id": brand_id, **prongs})
+        flags = cls.get("unsanctioned_flags", []) if isinstance(cls, dict) else []
+        if flags:
+            unsanctioned_flags_by_post[
+                str(post.get("tweet_id") or post.get("id"))
+            ] = list(flags)
     t_classify_ms = int((time.monotonic() - t0) * 1000)
 
     # --- Aggregate counts -----------------------------------------
@@ -328,6 +361,7 @@ def _run_pipeline(
         if r.get("china_nationalism") != "none"
         and r.get("us_nationalism") != "none"
     )
+    n_unsanctioned = len(unsanctioned_flags_by_post)
 
     total_ms = t_translate_ms + t_classify_ms
 
@@ -340,6 +374,7 @@ def _run_pipeline(
     print(f"n_classified:        {n_classified_posts}")
     print(f"n_discourse:         {n_discourse}")
     print(f"n_nationalism:       {n_nationalism}")
+    print(f"n_unsanctioned:      {n_unsanctioned}")
     print(f"t_translate_ms:      {t_translate_ms}")
     print(f"t_classify_ms:       {t_classify_ms}")
     print(f"t_total_ms:          {total_ms}")
@@ -350,9 +385,19 @@ def _run_pipeline(
             file=sys.stderr,
         )
 
-    # Sample posts section.
+    # Sample posts section (U7: include unsanctioned flags).
     sample = posts[: args.sample]
-    print(_render_sample_posts(sample, translation_rows, classification_rows))
+    print(_render_sample_posts(
+        sample, translation_rows, classification_rows,
+        unsanctioned_flags=unsanctioned_flags_by_post,
+    ))
+
+    # Unsanctioned flags summary.
+    if unsanctioned_flags_by_post:
+        print("")
+        print(f"=== UNSANCTIONED FLAGS ({len(unsanctioned_flags_by_post)} posts) ===")
+        for tid, flags in list(unsanctioned_flags_by_post.items())[:5]:
+            print(f"  tweet_id={tid} flags={','.join(flags)}")
 
     # Error summary.
     errors = [

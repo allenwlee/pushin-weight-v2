@@ -998,6 +998,9 @@ _VALID_DISCOURSE: frozenset[str] = frozenset({
     "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
     "cope", "fud", "distillation_accusation", "ai_slop_critique",
     "absurdist_meme",
+    # U2a: extended by migration 027 + plan 2026-07-03-003.
+    # NOTE: hyphenated, not underscored — see plan KTD7.
+    "advertising-marketing",
 })
 _VALID_NATIONALISM: frozenset[str] = frozenset({
     "none", "mild_pro", "pro", "constructive_critical", "anti", "mixed",
@@ -1005,31 +1008,56 @@ _VALID_NATIONALISM: frozenset[str] = frozenset({
 _VALID_POST_TYPES = {
     "buzz_releases", "hands_on_usage",
     "performance_comparisons", "feedback_questions",
+    # U2a: extended by migration 027 + plan 2026-07-03-003.
+    "advertising_marketing", "event_announcement",
 }
 _VALID_SENTIMENTS = {"positive", "negative", "neutral", "mixed"}
 
+# U2a: top-level unsanctioned flag allow-list. Values outside this set
+# are filtered out at the parser (KTD2 / R14).
+_VALID_UNSANCTIONED_FLAGS: frozenset[str] = frozenset({
+    "marketing_spam", "scam", "crypto", "unauthorized",
+})
+
+# U2b: hard cap on LLM-emitted array lengths. The prompt instructs
+# max 3 of each per brand; the parser enforces 6 as a defensive ceiling
+# against LLM-emitted 100-element arrays (security F2).
+_ARRAY_HARD_CAP = 6
+
 
 def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
-    """Build the §5.1 + U9 merged per-post classifier prompt."""
+    """Build the §5.1 + U9 + U3a merged per-post classifier prompt.
+
+    U3a extends this prompt with:
+      - 2 new post_type values (advertising_marketing, event_announcement)
+      - 1 new discourse_role value (advertising-marketing, hyphenated)
+      - The per-brand row now emits `post_types: [str]` and
+        `discourse_roles: [str]` arrays (max 3 each) instead of
+        scalar `post_type` / `discourse_role`.
+      - A top-level `unsanctioned_flags: [str]` field for
+        marketing_spam / scam / crypto / unauthorized.
+    """
     brand_list = ", ".join(brand_ids) if brand_ids else "(none)"
     return (
         "You classify a tweet's relationship to a list of brands, "
-        "across five dimensions.\n\n"
+        "across FIVE dimensions.\n\n"
         "Tweet text:\n"
         f"\"\"\"\n{text}\n\"\"\"\n\n"
         f"Brands (in order): {brand_list}\n\n"
         "For each brand, return FIVE fields from these exact sets:\n\n"
-        "post_type (4 buckets — what KIND of post):\n"
+        "post_types (6 buckets — what KIND of post; ARRAY, max 3):\n"
         "  - buzz_releases            (brand announced something new)\n"
         "  - hands_on_usage           (user is using / showing the brand)\n"
         "  - performance_comparisons  (benchmark / eval / head-to-head)\n"
-        "  - feedback_questions       (user asking how-to / help / complaint)\n\n"
-        "sentiment (4 values — the VALENCE):\n"
+        "  - feedback_questions       (user asking how-to / help / complaint)\n"
+        "  - advertising_marketing   (CTA, promo, wrapper, free-credit pitch)\n"
+        "  - event_announcement      (official event / community meetup)\n\n"
+        "sentiment (4 values — the VALENCE; scalar):\n"
         "  - positive                 (praise, enthusiasm)\n"
         "  - negative                 (criticism, disappointment)\n"
         "  - neutral                  (informational / question)\n"
         "  - mixed                    (multiple valences in one post)\n\n"
-        "discourse_role (9 keys — pragmatic register, §2):\n"
+        "discourse_roles (10 keys — pragmatic register, §2; ARRAY, max 3):\n"
         "  - genuine_hype             (straight praise)\n"
         "  - sarcasm                  (English verbal irony)\n"
         "  - dunk_yingyang            (阴阳怪气 / passive-aggressive dunk)\n"
@@ -1038,8 +1066,10 @@ def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
         "  - fud                      (唱衰 / spreading doom)\n"
         "  - distillation_accusation  (套壳 / 蒸馏指控)\n"
         "  - ai_slop_critique         (AI content-garbage accusation)\n"
-        "  - absurdist_meme           (抽象整活 / absurdist antics)\n\n"
-        "china_nationalism (6-step scale, §4.4):\n"
+        "  - absurdist_meme           (抽象整活 / absurdist antics)\n"
+        "  - advertising-marketing    (salesy, CTA-heavy marketing speak — "
+        "NOTE: hyphenated, not underscored)\n\n"
+        "china_nationalism (6-step scale, §4.4; scalar):\n"
         "  - none                     (no China-nationalism layer)\n"
         "  - mild_pro                 (温和亲华 — subtle positive)\n"
         "  - pro                      (亲华 — open positive)\n"
@@ -1047,42 +1077,89 @@ def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
         "  - anti                     (反华 — hostile)\n"
         "  - mixed                    (mixed modes in one post)\n\n"
         "us_nationalism (6-step scale, same as china_nationalism but\n"
-        "applied to the US axis — anti = 反美, etc.):\n"
+        "applied to the US axis — anti = 反美, etc.; scalar):\n"
         "  - none / mild_pro / pro / constructive_critical / anti / mixed\n\n"
         "Rules:\n"
-        "1. Return ONLY a JSON object: {\"classifications\": "
-        "[{\"brand_id\": str, \"post_type\": str, \"sentiment\": str, "
-        "\"discourse_role\": str, \"china_nationalism\": str, "
-        "\"us_nationalism\": str}, ...]}\n"
-        "2. RETURN ONE ROW FOR EVERY BRAND LISTED. The brand list "
+        "1. Return ONLY a JSON object matching this shape:\n"
+        "   {\n"
+        "     \"classifications\": [\n"
+        "       {\n"
+        "         \"brand_id\": str,\n"
+        "         \"post_types\": [str],         // ARRAY, max 3\n"
+        "         \"sentiment\": str,             // scalar\n"
+        "         \"discourse_roles\": [str],     // ARRAY, max 3\n"
+        "         \"china_nationalism\": str,     // scalar\n"
+        "         \"us_nationalism\": str         // scalar\n"
+        "       }, ...\n"
+        "     ],\n"
+        "     \"unsanctioned_flags\": [str]       // ARRAY, top-level\n"
+        "   }\n"
+        "2. RETURN ONE OBJECT PER BRAND LISTED. The brand list "
         "is what the keyword detector found in the text — if a "
-        "brand name appears, you MUST produce a row. Cross-brand "
+        "brand name appears, you MUST produce an object. Cross-brand "
         "comparison posts (\"GLM 5.2 vs Kimi K2.7\"), reply chains "
         "where the brand is mentioned, posts sharing screenshots "
         "with the brand name — ALL count. Only skip a brand if "
         "the post text contains ZERO mention of it (this should be "
         "impossible given how the brand list was derived).\n"
         "3. Use the EXACT brand_id strings from the list above.\n"
-        "4. nationalism is ORTHOGONAL to post_type × sentiment × "
-        "discourse_role — a single post can be e.g. (perf_compare, "
-        "positive, genuine_hype, none, constructive_critical).\n"
-        "5. If the tweet is off-topic for all brands (shouldn't "
+        "4. Most posts have exactly 1 post_type and 1 discourse_role. "
+        "Multi-value is allowed when a post legitimately has more than "
+        "one (e.g., a benchmark write-up that is also a "
+        "`performance_comparisons` AND `feedback_questions` because it "
+        "asks 'am I running behind?'). MAXIMUM 3 of each per brand.\n"
+        "5. nationalism is ORTHOGONAL to post_types × sentiment × "
+        "discourse_roles — a single post can be e.g. "
+        "([perf_compare, feedback], positive, [genuine_hype], none, "
+        "constructive_critical).\n"
+        "6. If the tweet is off-topic for all brands (shouldn't "
         "happen if the brand list is non-empty), return "
         "{\"classifications\": []}.\n"
-        "6. No prose, no explanation, no code fences.\n"
+        "7. genuine_hype is incompatible with explicit call-to-action. "
+        "If the post contains a CTA (URL + verb like 'try', 'sign up', "
+        "'join', 'get', 'limited-time', 'free access', 限时免费, 立即体验, "
+        "注册, 点击), discount offer, or wrapper/promo language "
+        "('one API key', 'OpenAI-compatible gateway', 'free credit no card'), "
+        "prefer discourse_role `advertising-marketing` over `genuine_hype`. "
+        "If both genuine praise AND a CTA coexist, emit BOTH "
+        "discourse_roles values — let downstream consumers decide.\n"
+        "8. At the JSON root (outside `classifications`), emit "
+        "`unsanctioned_flags: [str]`. Allowed values: "
+        "`marketing_spam`, `scam`, `crypto`, `unauthorized`. Empty "
+        "array if none apply. Use this for promotional/crypto/scam/"
+        "unauthorized brand use that the post_type and discourse_role "
+        "taxonomies don't fully capture.\n"
+        "9. No prose, no explanation, no code fences.\n"
     )
 
 
 def _parse_pragmatics_full_response(
     response: dict[str, Any],
     brand_registry_ids: set[str],
-) -> dict[str, dict[str, str]]:
-    """Parse the merged LLM response with per-brand five-prong rows."""
+) -> dict[str, Any]:
+    """Parse the merged LLM response into the new U2a shape.
+
+    Returns:
+        {
+            "by_brand": {brand_id: {post_type, sentiment, discourse_role,
+                                    china_nationalism, us_nationalism}},
+            "unsanctioned_flags": [str, ...],
+        }
+
+    Each per-brand entry's discourse_role is a SINGLE string (scalar),
+    not an array. U2b's array reshape is applied at a higher layer
+    (Store API / U4's bulk_insert path) — the parser deliberately keeps
+    the scalar shape to preserve backwards-compat with callers that
+    iterate `result[brand_id]["discourse_role"]`.
+
+    The U2b multi-value path lives in `_parse_pragmatics_full_response_arrays`
+    (added below) — callers that need arrays call that variant directly.
+    """
     if not isinstance(response, dict):
-        return {}
+        return {"by_brand": {}, "unsanctioned_flags": []}
     results = response.get("classifications")
     if not isinstance(results, list):
-        return {}
+        return {"by_brand": {}, "unsanctioned_flags": []}
     out: dict[str, dict[str, str]] = {}
     for item in results:
         if not isinstance(item, dict):
@@ -1116,7 +1193,116 @@ def _parse_pragmatics_full_response(
             "china_nationalism": china,
             "us_nationalism": us,
         }
-    return out
+    flags = _parse_unsanctioned_flags(response.get("unsanctioned_flags"))
+    return {"by_brand": out, "unsanctioned_flags": flags}
+
+
+def _parse_unsanctioned_flags(raw: Any) -> list[str]:
+    """Filter the top-level unsanctioned_flags array against the allow-list."""
+    if not isinstance(raw, list):
+        return []
+    return [f for f in raw if isinstance(f, str) and f in _VALID_UNSANCTIONED_FLAGS]
+
+
+def _parse_pragmatics_full_response_arrays(
+    response: dict[str, Any],
+    brand_registry_ids: set[str],
+) -> dict[str, Any]:
+    """U2b: parse the LLM response into multi-value arrays.
+
+    Each per-brand entry emits `post_types: [str]` and
+    `discourse_roles: [str]` arrays. Sentiment / nationalism stay
+    scalar (one valence per post × brand is the natural semantic).
+    N rows are produced per brand — one per (post_type, discourse_role)
+    combination — by `_expand_per_brand_to_rows` below.
+
+    Returns:
+        {
+            "rows": [
+                {"brand_id", "post_type", "sentiment",
+                 "discourse_role", "china_nationalism", "us_nationalism"},
+                ...
+            ],
+            "unsanctioned_flags": [str, ...],
+        }
+
+    The caller (Store.bulk_insert_post_brand_signals +
+    bulk_insert_post_brand_discourse) iterates `rows` and inserts each
+    into the appropriate junction table.
+    """
+    if not isinstance(response, dict):
+        return {"rows": [], "unsanctioned_flags": []}
+    results = response.get("classifications")
+    if not isinstance(results, list):
+        return {"rows": [], "unsanctioned_flags": []}
+    rows: list[dict[str, str]] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        b = item.get("brand_id")
+        if not isinstance(b, str) or b not in brand_registry_ids:
+            continue
+        # post_types array — default to ["hands_on_usage"] if missing/invalid.
+        raw_pts = item.get("post_types")
+        if not isinstance(raw_pts, list) or not raw_pts:
+            post_types = ["hands_on_usage"]
+        else:
+            post_types = [
+                p for p in raw_pts
+                if isinstance(p, str) and p in _VALID_POST_TYPES
+            ]
+            # Security: hard cap at _ARRAY_HARD_CAP entries.
+            if len(post_types) > _ARRAY_HARD_CAP:
+                logger.warning(
+                    "classify_pragmatics_full: post_types=%d > hard cap %d; "
+                    "truncating (brand_id=%r)",
+                    len(post_types), _ARRAY_HARD_CAP, b,
+                )
+                post_types = post_types[:_ARRAY_HARD_CAP]
+            if not post_types:
+                post_types = ["hands_on_usage"]
+        # discourse_roles array — default to ["uncategorized"] if missing/invalid.
+        raw_drs = item.get("discourse_roles")
+        if not isinstance(raw_drs, list) or not raw_drs:
+            discourse_roles = ["uncategorized"]
+        else:
+            discourse_roles = [
+                d for d in raw_drs
+                if isinstance(d, str) and d in _VALID_DISCOURSE
+            ]
+            if len(discourse_roles) > _ARRAY_HARD_CAP:
+                logger.warning(
+                    "classify_pragmatics_full: discourse_roles=%d > hard cap %d; "
+                    "truncating (brand_id=%r)",
+                    len(discourse_roles), _ARRAY_HARD_CAP, b,
+                )
+                discourse_roles = discourse_roles[:_ARRAY_HARD_CAP]
+            if not discourse_roles:
+                discourse_roles = ["uncategorized"]
+        # Scalar fields with the same coercion rules.
+        sent = item.get("sentiment")
+        cn = item.get("china_nationalism")
+        un = item.get("us_nationalism")
+        sentiment = sent if sent in _VALID_SENTIMENTS else "neutral"
+        china = cn if isinstance(cn, str) and cn in _VALID_NATIONALISM else "none"
+        us = un if isinstance(un, str) and un in _VALID_NATIONALISM else "none"
+        # Expand: one row per (post_type × discourse_role) pair.
+        # Each row gets the same sentiment + nationalism values
+        # (per the plan: sentiment is per-(post, brand, post_type) — so
+        # all rows for the same brand share sentiment; discourse roles
+        # get their own row but inherit the post's sentiment).
+        for pt in post_types:
+            for dr in discourse_roles:
+                rows.append({
+                    "brand_id": b,
+                    "post_type": pt,
+                    "sentiment": sentiment,
+                    "discourse_role": dr,
+                    "china_nationalism": china,
+                    "us_nationalism": us,
+                })
+    flags = _parse_unsanctioned_flags(response.get("unsanctioned_flags"))
+    return {"rows": rows, "unsanctioned_flags": flags}
 
 
 def classify_pragmatics_full(
@@ -1124,12 +1310,17 @@ def classify_pragmatics_full(
     brand_ids: list[str],
     brand_registry: list,
     anthropic_client: "ClaudeClient | None" = None,
-) -> dict[str, dict[str, str]]:
-    """U4: per-brand five-prong classification via one merged LLM call."""
+) -> dict[str, Any]:
+    """U4 (U2a): per-brand classification + top-level unsanctioned_flags.
+
+    Returns `{"by_brand": {...}, "unsanctioned_flags": [...]}` (U2a shape).
+    Callers that only want the by_brand dict should index result["by_brand"].
+    """
+    empty = {"by_brand": {}, "unsanctioned_flags": []}
     if not brand_ids or not text:
-        return {}
+        return empty
     if anthropic_client is None:
-        return {}
+        return empty
     # If the caller didn't supply a brand_registry, trust the
     # brand_ids argument (the fixture path doesn't read the live
     # `brands` table). The parser then validates the LLM's
@@ -1146,9 +1337,9 @@ def classify_pragmatics_full(
             "classify_pragmatics_full: LLM call failed after %d retries: %s",
             _MAX_RETRIES, e,
         )
-        return {}
+        return empty
     parsed = _parse_pragmatics_full_response(response, registry_ids)
-    if not parsed:
+    if not parsed["by_brand"]:
         logger.warning(
             "classify_pragmatics_full returned no classifications for "
             "text=%r brand_ids=%r",

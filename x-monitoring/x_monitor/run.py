@@ -595,9 +595,14 @@ def _run_post_fetch(
     # Store's job, not the LLM call's). For ~200 kept posts at the
     # typical 15-min cadence this is ~200 calls; the
     # `_call_signal_with_retry` retry policy handles transient 429/5xx.
+    # U2a/U2b: classify_pragmatics_full returns the new shape
+    # {"by_brand": {...}, "unsanctioned_flags": [...]}. We use the
+    # by_brand dict for signal/discourse persistence and the
+    # unsanctioned_flags for the new posts_unsanctioned_flags write.
     t0 = time.monotonic()
     discourse_rows: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
+    unsanctioned_by_post: dict[str, list[str]] = {}
     n_nationalism = 0
     for it in kept_posts:
         brand_ids = it.get("brand_ids") or []
@@ -617,8 +622,12 @@ def _run_post_fetch(
                 it.get("id") or it.get("tweet_id"), e,
             )
             continue
-        for brand_id, prongs in classified.items():
-            # posts_brands_signals: (post_type, sentiment) per brand
+        # U2a: pull the per-brand dict out of the new return shape.
+        by_brand = classified.get("by_brand", {}) if isinstance(
+            classified, dict) else {}
+        for brand_id, prongs in by_brand.items():
+            # posts_brands_signals: (post_type, sentiment) per brand.
+            # Scalar fields preserved from the legacy shape.
             signal_rows.append({
                 "tweet_id": str(it.get("id") or it.get("tweet_id")),
                 "brand_id": brand_id,
@@ -641,6 +650,12 @@ def _run_post_fetch(
                 and prongs["us_nationalism"] != "none"
             ):
                 n_nationalism += 1
+        # U2a: capture top-level unsanctioned flags for the new table.
+        flags = classified.get("unsanctioned_flags", []) if isinstance(
+            classified, dict) else []
+        if flags:
+            tid = str(it.get("id") or it.get("tweet_id"))
+            unsanctioned_by_post[tid] = list(flags)
     t_classify = time.monotonic() - t0
     log.info(
         "_run_post_fetch: classify_pragmatics_full %d brand rows "
@@ -674,6 +689,26 @@ def _run_post_fetch(
     except Exception as e:
         log.warning("_run_post_fetch: bulk_insert_post_brand_discourse: %s", e)
 
+    # U8a: Stage 3 — unsanctioned flags. One row per post with
+    # non-empty unsanctioned_flags. Failures are per-row (the Store
+    # method dead-letters on FK violations and continues).
+    t_unsanc = time.monotonic()
+    n_unsanctioned = 0
+    for tid, flags in unsanctioned_by_post.items():
+        try:
+            store.upsert_unsanctioned_flags(tid, flags)
+            n_unsanctioned += 1
+        except Exception as e:
+            log.warning(
+                "_run_post_fetch: upsert_unsanctioned_flags "
+                "(tweet_id=%s): %s", tid, e,
+            )
+    t_unsanc_ms = int((time.monotonic() - t_unsanc) * 1000)
+    log.info(
+        "_run_post_fetch: upsert_unsanctioned_flags %d posts in %dms",
+        n_unsanctioned, t_unsanc_ms,
+    )
+
     # Per-post counters for the smoketest runner.
     # n_discourse = kept posts with at least one PERSISTED discourse
     # row. The Store dead-letters `uncategorized` rows (KTD5), so the
@@ -688,6 +723,8 @@ def _run_post_fetch(
     })
     counters["n_discourse"] = persisted_count
     counters["n_nationalism"] = n_nationalism
+    counters["n_unsanctioned"] = n_unsanctioned
+    counters["t_unsanctioned_ms"] = t_unsanc_ms
     return counters
 
 

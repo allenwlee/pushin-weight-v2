@@ -854,6 +854,130 @@ def cmd_translate_posts(args, paths) -> int:
         store.close()
 
 
+def cmd_backfill_unsanctioned_flags(args, paths) -> int:
+    """U8b: backfill posts_unsanctioned_flags for recent posts.
+
+    Plan: docs/plans/2026-07-03-003-feat-post-fetch-taxonomy-and-multi-discourse-plan.md
+    Unit U8b. Finds posts that have NO `posts_unsanctioned_flags` row
+    and runs them through `classify_pragmatics_full` (U2a shape) to
+    extract just the top-level `unsanctioned_flags` array. Other prongs
+    (post_type / sentiment / discourse / nationalism) are NOT updated
+    by this backfill — only the unsanctioned flags.
+
+    Usage:
+        x-monitor backfill unsanctioned-flags --limit 200
+        x-monitor backfill unsanctioned-flags --limit 500 --yes
+        x-monitor backfill unsanctioned-flags --limit 50 --dry-run
+
+    Flags:
+      --limit    cap on posts processed (default: 200)
+      --dry-run  skip the LLM + DB writes; print the post_ids only
+      --yes      required when --limit > 500 (rate-limit protection
+                 against accidental large reclassifications)
+
+    Returns 0 on success, 2 on bad args, 1 on --limit > 500 without --yes.
+    """
+    if args.limit > 500 and not args.yes:
+        print(
+            f"ERROR: --limit > 500 requires --yes (got --limit={args.limit}). "
+            "Refusing to reclassify a large history without explicit "
+            "confirmation.",
+            file=sys.stderr,
+        )
+        return 1
+
+    from x_monitor.store import Store
+    from x_monitor.attribution import classify_pragmatics_full
+    from x_monitor.translator import AnthropicClaudeClient
+
+    db_path = paths["db"]
+    if not db_path.exists():
+        print(
+            f"backfill unsanctioned-flags: db not found at {db_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    store = Store(db_path, auto_migrate=True)
+    client = AnthropicClaudeClient()
+
+    post_ids = store.recent_posts_unsanctioned_missing(args.limit)
+    if not post_ids:
+        print(
+            f"backfill unsanctioned-flags: no posts missing flags "
+            f"(limit={args.limit})"
+        )
+        store.close()
+        return 0
+
+    print(
+        f"backfill unsanctioned-flags: {len(post_ids)} posts to process "
+        f"(limit={args.limit}, dry_run={args.dry_run})"
+    )
+
+    if args.dry_run:
+        for pid in post_ids[:10]:
+            print(f"  would classify: tweet_id={pid}")
+        if len(post_ids) > 10:
+            print(f"  ... and {len(post_ids) - 10} more")
+        store.close()
+        return 0
+
+    n_written = 0
+    n_failed = 0
+    for i, pid in enumerate(post_ids, 1):
+        # U2a: classify_pragmatics_full returns the new shape.
+        # We discard everything except unsanctioned_flags.
+        try:
+            classified = classify_pragmatics_full(
+                text=store._conn.execute(
+                    "SELECT text FROM posts WHERE tweet_id = ?", (pid,)
+                ).fetchone()["text"] or "",
+                brand_ids=[],  # brand_ids empty → classifier returns empty by_brand
+                brand_registry=store.read_brands(),
+                anthropic_client=client,
+            )
+        except Exception as e:
+            logger.warning(
+                "backfill unsanctioned-flags: classify failed for "
+                "tweet_id=%s: %s", pid, e,
+            )
+            n_failed += 1
+            # Rate-limit: 200ms between LLM calls.
+            time.sleep(0.2)
+            continue
+
+        flags = (
+            classified.get("unsanctioned_flags", [])
+            if isinstance(classified, dict) else []
+        )
+        if flags:
+            try:
+                store.upsert_unsanctioned_flags(pid, flags)
+                n_written += 1
+            except Exception as e:
+                logger.warning(
+                    "backfill unsanctioned-flags: upsert failed for "
+                    "tweet_id=%s: %s", pid, e,
+                )
+                n_failed += 1
+        # Rate-limit: 200ms between LLM calls.
+        time.sleep(0.2)
+        # Progress line every 10 posts.
+        if i % 10 == 0:
+            print(
+                f"  progress: {i}/{len(post_ids)} "
+                f"(wrote={n_written}, failed={n_failed})"
+            )
+
+    print(
+        f"backfill unsanctioned-flags: complete — "
+        f"wrote={n_written}, failed={n_failed}, total={len(post_ids)}"
+    )
+    store.close()
+    return 0
+
+
 def cmd_smoketest(args, paths) -> int:
     """U7: forward to scripts.post_fetch_smoketest.main.
 
@@ -1249,6 +1373,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit", type=int, default=200,
     )
     p_smoke.set_defaults(func=cmd_smoketest)
+
+    p_bu = sub.add_parser(
+        "backfill",
+        help="Backfill commands (selective reclassification)",
+    )
+    p_bu_sub = p_bu.add_subparsers(dest="backfill_cmd", required=True)
+    p_bu_uf = p_bu_sub.add_parser(
+        "unsanctioned-flags",
+        help="Backfill posts_unsanctioned_flags for recent posts (U8b)",
+    )
+    p_bu_uf.add_argument(
+        "--limit", type=int, default=200,
+        help="Cap on posts to process (default: 200).",
+    )
+    p_bu_uf.add_argument(
+        "--dry-run", action="store_true",
+        help="Skip the LLM + DB writes; print the post_ids only.",
+    )
+    p_bu_uf.add_argument(
+        "--yes", action="store_true",
+        help="Required when --limit > 500 (prevents accidental large "
+             "reclassifications).",
+    )
+    p_bu_uf.set_defaults(func=cmd_backfill_unsanctioned_flags)
 
     p_hf = sub.add_parser(
         "hf-products",

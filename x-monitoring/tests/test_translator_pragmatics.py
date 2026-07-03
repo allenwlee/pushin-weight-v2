@@ -310,7 +310,13 @@ def test_translate_batch_pragmatics_text_en_null_when_lang_is_english():
 
 
 def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
-    """Deterministic noop: lang_detected='zh-Hans' → text_zh_cn + literal_zh NULL."""
+    """Deterministic noop (U5): lang_detected='zh-Hans' → both
+    text_zh_cn + literal_zh AND text_en NULLed. The English translation
+    is intentionally NOT stored — the v10 Post 4 bug surfaced this:
+    the LLM was echoing Chinese characters into text_en instead of
+    translating, so the server-side noop now NULLs both columns
+    when the source is already Simplified Chinese. The dashboard
+    can fall back to the source text in the appropriate column."""
     from x_monitor.translator import translate_batch_pragmatics
 
     tweets = [{"tweet_id": "1", "text": "Claude 真不错"}]
@@ -340,8 +346,10 @@ def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
     assert row["text_zh_cn"] is None
     assert row["literal_zh"] is None
     assert row["noop_zh"] is True
-    # text_en populated (English best-interpretation of zh source).
-    assert row["text_en"] == "Claude is really good"
+    # U5 fix: text_en ALSO NULLed when source is Simplified Chinese
+    # (the LLM often echoes the source into text_en, see v10 Post 4).
+    assert row["text_en"] is None
+    assert row["noop_en"] is True
 
 
 def test_translate_batch_pragmatics_backward_compat_columns():

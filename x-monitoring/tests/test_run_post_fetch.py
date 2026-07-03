@@ -100,7 +100,7 @@ class FakeClaudeClient:
                 tweets,
                 kwargs.get("_test_target_locales", []),
             )
-        if "across five dimensions" in prompt:
+        if "across FIVE dimensions" in prompt:
             self.classify_calls.append(kwargs)
             # Pull `Tweet text:\n"""\n<text>\n"""` and `Brands (in
             # order): a, b, c` out of the prompt.
@@ -255,21 +255,15 @@ def test_run_post_fetch_happy_path_writes_all_three_tables(tmp_path):
         assert row["text_zh_cn"] == "Claude 永远做不出"
         assert row["lang_detected"] == "en"
 
-        # Verify posts_brands_signals updated (post_type + sentiment).
+        # Verify posts_brands_signals updated (post_type_key + sentiment).
+        # U1b: the column is now `post_type_key` (TEXT) and stores the
+        # TEXT slug directly (no INTEGER FK resolution needed).
         sig = s._conn.execute(
-            "SELECT * FROM posts_brands_signals"
+            "SELECT post_type_key, sentiment FROM posts_brands_signals"
         ).fetchone()
         assert sig is not None
-        # Look up the TEXT keys via the *_keys tables for an
-        # assertion that's readable.
-        pt_key = s._conn.execute(
-            "SELECT key FROM post_type_keys WHERE id = ?",
-            (sig["post_type"],),
-        ).fetchone()["key"]
-        sent_key = s._conn.execute(
-            "SELECT key FROM sentiment_keys WHERE id = ?",
-            (sig["sentiment"],),
-        ).fetchone()["key"]
+        pt_key = sig["post_type_key"]
+        sent_key = sig["sentiment"]
         assert pt_key == "hands_on_usage"
         assert sent_key == "neutral"
 

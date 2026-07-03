@@ -33,3 +33,4 @@ venv
 
 # Cookies (defense in depth — never commit)
 config.local.yaml
+safe-backups/

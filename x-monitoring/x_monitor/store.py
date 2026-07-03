@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -575,35 +576,21 @@ class Store:
                             )
                             self._classifications_dropped += 1
                             continue
-                        # U8: posts_brands_signals stores INTEGER ids
-                        # for post_type and sentiment (not the TEXT
-                        # keys). Look them up before the INSERT.
-                        post_type_int = self._post_type_int_id(pt)
-                        sentiment_int = self._sentiment_int_id(sent)
-                        if post_type_int is None or sentiment_int is None:
-                            # Should be impossible — we just checked
-                            # both keys against _known_*_keys() — but
-                            # the cache could be stale; drop
-                            # defensively.
-                            self._classifications_dropped += 1
-                            _log.warning(
-                                "insert_posts: dropping classification for "
-                                "brand_id=%r — unresolvable id (post_id=%s)",
-                                b, tweet_id_str,
-                            )
-                            continue
-                        # R11 + U9: ON CONFLICT DO UPDATE; the legacy
-                        # `signal_id` column was dropped in 022.
+                        # U1b: column is `post_type_key` and PK is
+                        # (post_id, brand_id, post_type_key). Use TEXT
+                        # values directly (migration 028). The pt /
+                        # sent / b values were already validated against
+                        # the *_keys() allow-lists above — no further
+                        # id-resolution needed.
                         conn.execute(
                             """
                             INSERT INTO posts_brands_signals(
-                                post_id, brand_id, post_type, sentiment
+                                post_id, brand_id, post_type_key, sentiment
                             ) VALUES (?, ?, ?, ?)
-                            ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                                post_type = excluded.post_type,
+                            ON CONFLICT(post_id, brand_id, post_type_key) DO UPDATE SET
                                 sentiment = excluded.sentiment
                             """,
-                            (post_id_int, brand_id_int, post_type_int, sentiment_int),
+                            (tweet_id_str, b, pt, sent),
                         )
                         self._classifications_written += 1
                     # Mentions (R10). v1.8 callers pass `mentions` as a
@@ -1456,33 +1443,20 @@ class Store:
         post_type: str,
         sentiment: str,
     ) -> None:
-        """Upsert one row into posts_brands_signals (R11, U9).
+        """Upsert one row into posts_brands_signals (R11, U9, U1b).
 
-        U9: both `post_type` and `sentiment` are required (NOT NULL post-022).
-        The legacy `signal` column was dropped in migration 022 — this
-        method no longer accepts it.
+        U9: both `post_type` and `sentiment` are required.
+        U1b: PK is now (post_id, brand_id, post_type_key) — the
+        method accepts one (post, brand, post_type) tuple at a time
+        and the ON CONFLICT clause targets the new composite PK.
+        For N post_types per (post, brand), call this method N times.
 
-        ON CONFLICT(post_id, brand_id) DO UPDATE SET post_type =
-        excluded.post_type, sentiment = excluded.sentiment.
+        Stores TEXT-natural-key values directly (post_id → posts.tweet_id,
+        brand_id → brands.nickname, post_type → post_type_keys.key,
+        sentiment → sentiment_keys.key). FK guards drop unknown
+        values with a warning.
 
-        `_unattributed` is BLOCKED by an application-level guard
-        (Decision 15 + U8 — the schema-level CHECK was dropped because
-        the sentinel's INTEGER id is data-dependent). Passes a
-        non-sentinel brand_id.
-
-        Top-gun ON CONFLICT gotcha: all written columns MUST be in the
-        INSERT column list.
-
-        U8 (migration 020): all FK columns (post_id, brand_id,
-        post_type, sentiment) are stored as INTEGER ids (FKs to
-        posts.id, brands.id, post_type_keys.id, sentiment_keys.id).
-        The public signature still takes TEXT slugs/keys; this method
-        resolves each to its INTEGER id before the INSERT.
-
-        Guards brand_id against the brands table (the FK target) so the
-        reattribute path can't raise IntegrityError. Unknown brand_ids
-        are dropped with a warning rather than aborting the caller's
-        transaction.
+        `_unattributed` sentinel brand is blocked.
         """
         if brand_id not in self._known_brand_ids():
             _log.warning(
@@ -1491,9 +1465,6 @@ class Store:
                 brand_id, post_id,
             )
             return
-        # U8: block the sentinel brand. The pre-020 schema enforced
-        # this via a CHECK (brand_id <> '_unattributed'); the post-020
-        # schema uses an is_sentinel column on brands instead.
         sentinel_brand_ids = {
             b.brand_id for b in self.read_brands() if b.is_sentinel
         }
@@ -1522,38 +1493,20 @@ class Store:
                 brand_id=brand_id,
             )
             return
-        # U8: resolve every FK column to its INTEGER id. Drop the
-        # write with a warning if any lookup fails (the FK would
-        # otherwise raise IntegrityError and abort the caller's
-        # transaction).
-        post_id_int = self._tweet_int_id(post_id)
-        brand_id_int = self._brand_int_id(brand_id)
-        if post_id_int is None or brand_id_int is None:
-            _log.warning(
-                "insert_posts_brands_signals: dropping row; unresolvable id "
-                "(post_id=%s brand_id=%s)",
-                post_id, brand_id,
-            )
-            return
-        post_type_int = self._post_type_int_id(post_type)
-        sentiment_int = self._sentiment_int_id(sentiment)
-        if post_type_int is None or sentiment_int is None:
-            _log.warning(
-                "insert_posts_brands_signals: dropping row; unresolvable id "
-                "(post_id=%s brand_id=%s post_type=%s sentiment=%s)",
-                post_id, brand_id, post_type, sentiment,
-            )
-            return
+        # U1b: write TEXT values directly. Migration 028 changed the
+        # PK to (post_id, brand_id, post_type_key); post_type goes
+        # into the post_type_key column.
         self._conn.execute(
             """
-            INSERT INTO posts_brands_signals(post_id, brand_id, post_type, sentiment)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(post_id, brand_id) DO UPDATE SET
-                post_type = excluded.post_type,
+            INSERT INTO posts_brands_signals (
+                post_id, brand_id, post_type_key, sentiment
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(post_id, brand_id, post_type_key) DO UPDATE SET
                 sentiment = excluded.sentiment
             """,
-            (post_id_int, brand_id_int, post_type_int, sentiment_int),
+            (post_id, brand_id, post_type, sentiment),
         )
+        self._conn.commit()
 
     # --- U1: posts_brands_discourse helpers (migration 025) ----------------
     #
@@ -1726,6 +1679,186 @@ class Store:
                     ),
                 )
                 n_written += 1
+        return n_written
+
+    # --- U4 (plan 2026-07-03-003): unsanctioned flags + multi-post_type ----
+
+    # Evidence sanitization bounds (security R14).
+    _EVIDENCE_MAX_LEN = 1024  # 1 KB
+    _EVIDENCE_FORBIDDEN = re.compile(r"https?://", re.IGNORECASE)
+
+    def upsert_unsanctioned_flags(
+        self,
+        post_id: str,
+        flags: list[str],
+        evidence: str | None = None,
+    ) -> None:
+        """Insert or update a row in posts_unsanctioned_flags (KTD3, R3).
+
+        Security (R14):
+        - `evidence` is capped at 1 KB and stripped of control characters
+          (except \\t\\n\\r).
+        - URLs in `evidence` are rejected (open-redirect / XSS surface on
+          the dashboard's rendered output).
+
+        The `flags` list is stored as JSON TEXT. Allowed values are
+        filtered at the parser layer (`_parse_unsanctioned_flags`); this
+        method trusts the caller and writes whatever it gets.
+
+        ON CONFLICT(post_id) DO UPDATE — re-classification overwrites.
+        """
+        import json as _json
+        if evidence is not None:
+            if len(evidence) > self._EVIDENCE_MAX_LEN:
+                raise ValueError(
+                    f"evidence length {len(evidence)} > {self._EVIDENCE_MAX_LEN}"
+                )
+            if self._EVIDENCE_FORBIDDEN.search(evidence):
+                raise ValueError(
+                    "evidence must not contain http(s):// URLs"
+                )
+            # Strip C0 control chars except \t \n \r.
+            evidence = "".join(
+                ch for ch in evidence
+                if ch in "\t\n\r" or (ord(ch) >= 0x20 and ord(ch) != 0x7F)
+            )
+        flags_json = _json.dumps(list(flags), ensure_ascii=False)
+        self._conn.execute(
+            """
+            INSERT INTO posts_unsanctioned_flags (
+                post_id, flags, evidence, decided_at
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(post_id) DO UPDATE SET
+                flags = excluded.flags,
+                evidence = excluded.evidence,
+                decided_at = excluded.decided_at
+            """,
+            (post_id, flags_json, evidence, _now_iso()),
+        )
+        self._conn.commit()
+
+    def get_unsanctioned_flags(self, post_id: str) -> list[str] | None:
+        """Return the unsanctioned flags list for a post, or None if missing.
+
+        Returns `None` for missing rows (so the dashboard can distinguish
+        "no flags row" from "row exists with empty flags").
+        On parse failure, returns None and logs a warning (per R14
+        — silent `[]` would let dashboard hide flagged posts).
+        """
+        import json as _json
+        row = self._conn.execute(
+            "SELECT flags FROM posts_unsanctioned_flags WHERE post_id = ?",
+            (post_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            parsed = _json.loads(row["flags"])
+            if not isinstance(parsed, list):
+                return None
+            return [f for f in parsed if isinstance(f, str)]
+        except (ValueError, TypeError) as e:
+            logger.warning(
+                "get_unsanctioned_flags: JSON parse failed for post_id=%s: %s",
+                post_id, e,
+            )
+            return None
+
+    def flag_get_status(self, post_id: str) -> str:
+        """Return 'missing' | 'ok' | 'corrupt' for the flags row.
+
+        'missing': no row exists for post_id.
+        'ok': row exists, flags JSON parses cleanly.
+        'corrupt': row exists but flags is not valid JSON.
+        """
+        import json as _json
+        row = self._conn.execute(
+            "SELECT flags FROM posts_unsanctioned_flags WHERE post_id = ?",
+            (post_id,),
+        ).fetchone()
+        if row is None:
+            return "missing"
+        try:
+            _json.loads(row["flags"])
+            return "ok"
+        except (ValueError, TypeError):
+            return "corrupt"
+
+    def recent_posts_unsanctioned_missing(self, limit: int) -> list[str]:
+        """Return post_ids of recent posts that have NO unsanctioned_flags row.
+
+        Used by U8b's backfill CLI to find posts that need classification.
+        Returns post_ids ordered by fetched_at DESC.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT p.tweet_id FROM posts p
+            LEFT JOIN posts_unsanctioned_flags uf ON uf.post_id = p.tweet_id
+            WHERE uf.post_id IS NULL
+            ORDER BY p.fetched_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [r["tweet_id"] for r in rows]
+
+    def bulk_insert_post_brand_signals(
+        self,
+        rows: list[dict[str, Any]],
+    ) -> int:
+        """U2b + U4: bulk insert per-(post × brand × post_type) signal rows.
+
+        Each `row` is a dict with at minimum:
+            post_id, brand_id, post_type, sentiment
+        Optionally:
+            china_nationalism, us_nationalism (forward-compat)
+
+        Stores TEXT-natural-key values directly (post_id → posts.tweet_id,
+        brand_id → brands.nickname). The post_type_key + sentiment columns
+        are FKs to their respective *_keys tables; the Store validates
+        these against `_known_post_type_keys()` / `_known_sentiment_keys()`
+        and drops unknown values with a warning.
+
+        ON CONFLICT(post_id, brand_id, post_type_key) DO UPDATE SET
+        sentiment = excluded.sentiment — re-classification overwrites.
+
+        Returns the count of rows written.
+        """
+        n_written = 0
+        for r in rows:
+            tweet_id = r.get("post_id")
+            brand_id = r.get("brand_id")
+            post_type = r.get("post_type")
+            sentiment = r.get("sentiment")
+            if not all(isinstance(x, str) for x in (tweet_id, brand_id,
+                                                     post_type, sentiment)):
+                continue
+            if post_type not in self._known_post_type_keys():
+                _log.warning(
+                    "bulk_insert_post_brand_signals: dropping row; "
+                    "post_type=%r not in post_type_keys (post_id=%s brand_id=%s)",
+                    post_type, tweet_id, brand_id,
+                )
+                continue
+            if sentiment not in self._known_sentiment_keys():
+                _log.warning(
+                    "bulk_insert_post_brand_signals: dropping row; "
+                    "sentiment=%r not in sentiment_keys (post_id=%s)",
+                    sentiment, tweet_id,
+                )
+                continue
+            self._conn.execute(
+                """
+                INSERT INTO posts_brands_signals (
+                    post_id, brand_id, post_type_key, sentiment
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(post_id, brand_id, post_type_key) DO UPDATE SET
+                    sentiment = excluded.sentiment
+                """,
+                (tweet_id, brand_id, post_type, sentiment),
+            )
+            n_written += 1
+        self._conn.commit()
         return n_written
 
     def get_post_brand_discourse_for_post(
