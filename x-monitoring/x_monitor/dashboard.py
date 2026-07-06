@@ -566,6 +566,108 @@ def _qid_to_signal(qid: str) -> str | None:
     return _QID_TO_SIGNAL.get(qid)
 
 
+def resolve_vanity_url_for_brand(
+    store: Store, brand_id: str
+) -> tuple[str, str] | None:
+    """Return `(company_or_underscore, brand)` for a brand's vanity URL.
+
+    U5 of feat/pushin-weight-home-pages (2026-07-06). Joins brands +
+    brands_companies + companies. If the brand has exactly one company
+    parent, returns `(company.nickname, brand.nickname)`. If the brand
+    has no company parent (e.g. `_unattributed`, or any brandless
+    orphan), returns `("_", brand.nickname)`. Returns `None` if the
+    brand doesn't exist.
+
+    The single-parent constraint matches the v1 model: a brand is
+    expected to belong to at most one corporate parent. If a future
+    plan adds many-to-many, this helper will need to be updated to
+    disambiguate (e.g. by returning a list and asking the caller to
+    pick).
+    """
+    row = store._conn.execute(
+        "SELECT nickname FROM brands WHERE nickname = ?",
+        (brand_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    parent = store._conn.execute(
+        """
+        SELECT c.nickname AS company_nickname
+        FROM brands_companies bc
+        JOIN companies c ON c.id = bc.company_id
+        WHERE bc.brand_id = (SELECT id FROM brands WHERE nickname = ?)
+        LIMIT 2
+        """,
+        (brand_id,),
+    ).fetchall()
+    if len(parent) == 0:
+        return ("_", brand_id)
+    if len(parent) > 1:
+        # Defensive: warn and pick the first
+        log.warning(
+            "brand %r has %d company parents; picking the first",
+            brand_id, len(parent),
+        )
+    return (parent[0]["company_nickname"], brand_id)
+
+
+def resolve_brand_via_vanity(
+    store: Store, company: str, brand: str
+) -> str | None:
+    """Reverse of `resolve_vanity_url_for_brand`: given a (company,
+    brand) pair, return the brand_id if the brand is owned by that
+    company. `company="_"` matches brands with no parent.
+
+    Returns None when:
+        - the brand doesn't exist;
+        - the company doesn't exist;
+        - the brand exists but is not owned by the given company
+          (R12: `/<wrong-company>/<brand>` returns 404, not 302).
+
+    Used by the `/<company>/<brand>` and `/_/<brand>` routes.
+    """
+    brand_row = store._conn.execute(
+        "SELECT nickname FROM brands WHERE nickname = ?",
+        (brand,),
+    ).fetchone()
+    if brand_row is None:
+        return None
+    if company == "_":
+        # Company-less lookup: the brand must have ZERO company
+        # parents for the match to succeed.
+        n_parents = store._conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM brands_companies bc
+            WHERE bc.brand_id = (SELECT id FROM brands WHERE nickname = ?)
+            """,
+            (brand,),
+        ).fetchone()["n"]
+        if n_parents == 0:
+            return brand
+        return None
+    # Company-specific lookup: the company must exist AND own the brand
+    company_row = store._conn.execute(
+        "SELECT nickname FROM companies WHERE nickname = ?",
+        (company,),
+    ).fetchone()
+    if company_row is None:
+        return None
+    owned = store._conn.execute(
+        """
+        SELECT 1
+        FROM brands_companies bc
+        JOIN brands b   ON b.id   = bc.brand_id
+        JOIN companies c ON c.id  = bc.company_id
+        WHERE b.nickname = ? AND c.nickname = ?
+        """,
+        (brand, company),
+    ).fetchone()
+    if owned is None:
+        return None
+    return brand
+
+
 def _read_classification_breakdown_for_brand(
     conn,
     brand_id: str,
@@ -1884,35 +1986,40 @@ class DashboardApp:
         window_days = self.config.dashboard.window_days
         treemap_n_days = self.config.dashboard.treemap_volume_window_days
 
+        # === U5: Pushin' Weight home pages (multi + single brand) =======
+        # The two new home pages REPLACE the four legacy topbar views.
+        # Templates live under templates/home.html.j2 and
+        # templates/brand_home.html.j2 (created in U6); they consume the
+        # data-layer payloads from U2 (multi-brand chart) and U3
+        # (single-brand chart) + U4 (feed). The legacy `/` (treemap),
+        # `/grid`, `/combined`, `/treemap`, `/brand/<id>`, `/model/<id>`,
+        # `/api/treemap.*`, `/api/combined.*`, `/api/grid.*`, `/api/grid.html`
+        # routes are all redirected or removed per the plan's authority
+        # hierarchy.
+
         @app.route("/")
-        def index():
-            # Treemap front page (Finviz-style). The htmx wrapper polls the
-            # partial endpoint every Ns; this initial render is the
-            # same data the first poll will return.
-            latest_run = _load_latest_run(self.runs_dir)
-            raw_window = _resolve_polarity_window(
-                request, self.config.dashboard.treemap_volume_window_days,
-            )
-            window = _clamp_polarity_window(
-                raw_window, self.config.dashboard.window_days,
-            )
-            tiles = self._build_treemap_tiles(latest_run, polarity_window_days=window)
-            svg = build_treemap_svg(tiles, width=1200, height=800)
-            return render_template(
-                "treemap.html.j2",
-                treemap_svg=svg,
-                tiles=tiles,
-                treemap_window_days=window,
-                selected_window_days=raw_window,
-                allowed_polarity_windows=list(ALLOWED_POLARITY_WINDOWS),
-                poll_seconds=self.config.dashboard.poll_seconds,
-                last_run_at=(latest_run or {}).get("finished_at"),
+        def home_multi():
+            """Multi-brand Pushin' Weight home page (R5–R11).
+
+            U5 supersedes the legacy treemap front page (decision 1 of
+            the plan's authority hierarchy). The legacy /treemap and
+            /combined routes below redirect here.
+            """
+            from ._home_routes import render_home_multi
+            return render_home_multi(
+                app=self.app,
+                config=self.config,
+                db_path=db_path,
+                runs_dir=self.runs_dir,
+                request=request,
             )
 
         @app.route("/grid")
         def grid():
-            # 9-card grid (preserved from v1.6). Moved off / when the treemap
-            # became the default front page.
+            # U5: 9-card grid is gone — redirect to the new multi-brand home.
+            return redirect("/", code=302)
+            # (the old page-rendering code below is unreachable; kept
+            # until U10 deletes the legacy templates.)
             cards, latest_run = self._build_cards(db_path)
             spend = summarize_http_log(
                 (latest_run or {}).get("http_log") or []
@@ -2024,7 +2131,10 @@ class DashboardApp:
 
         @app.route("/combined")
         def combined():
-            # Combined chart front page (full page with topbar + htmx poll).
+            # U5: combined chart is gone — redirect to the new multi-brand home.
+            return redirect("/", code=302)
+            # (the old page-rendering code below is unreachable; kept
+            # until U10 deletes the legacy templates.)
             raw_window = _resolve_combined_window(
                 request, COMBINED_WINDOW_DEFAULT,
             )
@@ -2236,98 +2346,136 @@ class DashboardApp:
             cards, _latest_run = self._build_cards(db_path)
             return jsonify({"cards": cards, "fetched_at": datetime.now(timezone.utc).isoformat()})
 
-        # v1.8: /model/<id> is the legacy route (Decision 16). New canonical
-        # path is /brand/<id>. Old route returns 301 to preserve external
-        # links / browser history. The new /brand/<id> handler does the
-        # actual work.
+        # U5: /model/<id> and /brand/<id> are legacy per-brand drill-down
+        # routes (v1.8 decision 16). They now 302 to the new vanity URL
+        # (`/<company>/<brand>` or `/_/<brand>`) per the plan's KTD9 +
+        # A10. 404 when the brand doesn't exist.
+
         @app.route("/model/<brand_id>")
         def model_detail(brand_id: str):
-            # Backward-compat redirect — preserves bookmarks, dashboards
-            # that link here, and any in-flight requests during deploy.
-            from flask import redirect
-            return redirect(f"/brand/{brand_id}", code=301)
+            from ._home_routes import legacy_vanity_target
+            target = legacy_vanity_target(db_path, brand_id)
+            if target is None:
+                abort(404)
+            return redirect(target, code=302)
 
         @app.route("/brand/<brand_id>")
         def brand_detail(brand_id: str):
-            if brand_id not in self.config.enabled_models:
+            from ._home_routes import legacy_vanity_target
+            target = legacy_vanity_target(db_path, brand_id)
+            if target is None:
                 abort(404)
-            from .account_graph import build_force_directed
+            return redirect(target, code=302)
 
-            store = Store(db_path)
-            try:
-                posts = store.get_all_posts(brand_id)
-                accounts = store.get_accounts(brand_id)
-                # v1.7-i18n (Unit 5): resolve localized brand name + role
-                # bar labels from the DB in the request's locale. Roles
-                # that the store doesn't recognize (post-FK-guard
-                # dead-lettered values) still appear in the bar chart,
-                # rendered as their raw key.
-                detail_locale = self._resolve_locale()
-                detail_brand_names = _load_brand_display_names(
-                    store, detail_locale
-                )
-                role_counts: Counter[str] = Counter(
-                    a.get("role_key") or "unknown" for a in accounts
-                )
-                role_labels = _load_role_labels(
-                    store, detail_locale, list(role_counts.keys())
-                )
-            finally:
-                store.close()
-            # Re-derive edges from posts for the drill-down graph
-            from .accounts import derive_edges, find_clusters
+        # U5: /treemap (legacy alias for the old `/` page) and
+        # /_unattributed both 302 to `/`.
+        @app.route("/treemap")
+        def legacy_treemap():
+            return redirect("/", code=302)
 
-            posts_for_edges = [
-                {
-                    "id": p.get("tweet_id"),
-                    "author_handle": p.get("author_handle"),
-                    "in_reply_to_user_id": p.get("in_reply_to_user_id"),
-                    "quoted_status_id": p.get("quoted_status_id"),
-                    "entities": json.loads(p.get("entities") or "{}"),
-                    "conversation_id": p.get("conversation_id"),
-                }
-                for p in posts
-            ]
-            edges = derive_edges(posts_for_edges, brand_id)
-            clusters = find_clusters(
-                posts_for_edges,
-                edges,
-                min_commenters=self.config.clustering.min_commenters,
-                min_posts=self.config.clustering.min_posts,
+        @app.route("/_unattributed")
+        def legacy_unattributed():
+            return redirect("/", code=302)
+
+        # U5: Single-brand home page at /<company>/<brand> (R12).
+        @app.route("/<company>/<brand>", methods=["GET"])
+        def home_brand(company: str, brand: str):
+            from ._home_routes import render_home_brand
+            return render_home_brand(
+                app=self.app,
+                config=self.config,
+                db_path=db_path,
+                runs_dir=self.runs_dir,
+                request=request,
+                company=company,
+                brand=brand,
+                company_underscore=False,
             )
-            # Build graph nodes from accounts. store.get_accounts returns
-            # dicts (the v1.8 schema uses author_id PK, not (model_id, handle));
-            # build_force_directed expects Account objects with .handle, so
-            # convert dicts to Account. If accounts is empty, fall back to
-            # unique authors in posts.
-            from .accounts import Account as _Acc
-            nodes: list[_Acc] = []
-            for a in accounts:
-                h = a.get("handle") or a.get("author_handle")
-                if not h:
-                    continue
-                nodes.append(_Acc(handle=h, display_name=a.get("display_name") or "", role=a.get("role") or "unknown", verified=bool(a.get("verified"))))
-            if not nodes:
-                seen: set[str] = set()
-                for p in posts:
-                    h = p.get("author_handle")
-                    if h and h not in seen:
-                        seen.add(h)
-                        nodes.append(_Acc(handle=h))
-            graph_svg = build_force_directed(nodes, edges, width=800, height=600)
-            return render_template(
-                "model_detail.html.j2",
-                brand_id=brand_id,
-                display_name=detail_brand_names.get(
-                    brand_id, MODEL_DISPLAY_NAMES.get(brand_id, brand_id)
-                ),
-                accent_color=MODEL_ACCENT_COLORS.get(brand_id, "#9ca3af"),
-                posts=posts[:200],
-                clusters=clusters,
-                graph_svg=graph_svg,
-                role_counts=dict(role_counts),
-                role_labels=role_labels,
-                latest_run=_load_latest_run(self.runs_dir),
+
+        # U5: Single-brand home for company-less brands at /_/<brand> (R12).
+        @app.route("/_/<brand>", methods=["GET"])
+        def home_brand_underscore(brand: str):
+            from ._home_routes import render_home_brand
+            return render_home_brand(
+                app=self.app,
+                config=self.config,
+                db_path=db_path,
+                runs_dir=self.runs_dir,
+                request=request,
+                company="_",
+                brand=brand,
+                company_underscore=True,
+            )
+
+        # === /U5 page routes ===========================================
+
+        # --- U5: /api/v1/* API routes -----------------------------------
+        # The chart + feed JSON endpoints power the new home pages and
+        # the bottomless-scroll feed. Each delegates to a helper in
+        # `x_monitor._home_routes` (defined alongside this file).
+
+        @app.route("/api/v1/home.chart.json")
+        def api_home_chart_json():
+            from ._home_routes import build_home_chart_payload
+            return jsonify(
+                build_home_chart_payload(
+                    db_path=db_path,
+                    runs_dir=self.runs_dir,
+                    request=request,
+                )
+            )
+
+        @app.route("/api/v1/home.chart.html")
+        def api_home_chart_html():
+            from ._home_routes import render_home_chart_html
+            return render_home_chart_html(
+                config=self.config,
+                db_path=db_path,
+                runs_dir=self.runs_dir,
+                request=request,
+            )
+
+        @app.route("/api/v1/home.feed.json")
+        def api_home_feed_json():
+            from ._home_routes import build_home_feed_payload
+            return jsonify(
+                build_home_feed_payload(
+                    db_path=db_path,
+                    runs_dir=self.runs_dir,
+                    request=request,
+                )
+            )
+
+        @app.route("/api/v1/home.brand.chart.json")
+        def api_home_brand_chart_json():
+            from ._home_routes import build_brand_chart_payload
+            return jsonify(
+                build_brand_chart_payload(
+                    db_path=db_path,
+                    runs_dir=self.runs_dir,
+                    request=request,
+                )
+            )
+
+        @app.route("/api/v1/home.brand.chart.html")
+        def api_home_brand_chart_html():
+            from ._home_routes import render_brand_chart_html
+            return render_brand_chart_html(
+                config=self.config,
+                db_path=db_path,
+                runs_dir=self.runs_dir,
+                request=request,
+            )
+
+        @app.route("/api/v1/health")
+        def api_health():
+            return jsonify(
+                {
+                    "ok": True,
+                    "version": "pushin-weight-v1",
+                    "app": APP_DISPLAY_NAME_EN,
+                    "app_zh": APP_DISPLAY_NAME_ZH,
+                }
             )
 
         @app.route("/api/model/<brand_id>.json")
