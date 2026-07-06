@@ -578,8 +578,16 @@ def translate_batch_pragmatics(
     brand_names: list[str] | None = None,
     few_shot_examples: list[dict[str, Any]] | None = None,
     dry_run: bool = False,
+    on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
 ) -> list[dict[str, Any]]:
-    """U3: translate a batch of tweets with the §5.1 four-pronged contract."""
+    """U3: translate a batch of tweets with the §5.1 four-pronged contract.
+
+    on_batch_error (U7): optional callback invoked per-batch when the
+    LLM call raised (after retries exhausted) OR the response failed
+    to parse. Receives the input batch and the exception (for parse
+    failures a synthetic `ValueError("parse failure")` is passed).
+    Used by the smoketest to attribute failures to specific tweet_ids.
+    """
     if not tweets:
         return []
 
@@ -597,14 +605,18 @@ def translate_batch_pragmatics(
         )
         try:
             response = _call_with_retry(client, prompt)
-        except Exception:
+        except Exception as exc:
             for t in batch:
                 out.append(_empty_pragmatics_row(t, failed=True))
+            if on_batch_error is not None:
+                on_batch_error(batch, exc)
             continue
         parsed = _parse_pragmatics_response(response, batch)
         if parsed is None:
             for t in batch:
                 out.append(_empty_pragmatics_row(t, failed=True))
+            if on_batch_error is not None:
+                on_batch_error(batch, ValueError("parse failure"))
             continue
         for t, p in zip(batch, parsed):
             judged = apply_friction_judge(t, p)

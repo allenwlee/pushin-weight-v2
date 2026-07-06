@@ -368,25 +368,33 @@ def _run_pipeline(
     # --- Stage 1: translate_batch_pragmatics (U3) --------------------
     translation_errors: dict[str, dict] = translation_errors_override or {}
     t0 = time.monotonic()
+
+    def _record_batch_error(batch: list[dict], exc: Exception) -> None:
+        """U7: attribute a per-batch translation failure to every
+        tweet in the input batch. The translator calls this once per
+        batch when the LLM call raised OR the response failed to parse.
+        """
+        for t in batch:
+            tid = str(t.get("tweet_id") or t.get("id"))
+            translation_errors[tid] = {
+                "class": exc.__class__.__name__,
+                "msg": str(exc)[:200],
+                "retries": _MAX_RETRIES,
+            }
+
     try:
         translation_rows = translate_batch_pragmatics(
             posts, ["en", "zh_cn"], client,
+            on_batch_error=_record_batch_error if not translation_errors_override else None,
         )
     except Exception as exc:
-        # U7: whole-batch failure (e.g. proxy 502 across all retries)
-        # — attribute the exception to every tweet in the input so the
-        # === TRANSLATION FAILURES === section can show per-tweet.
+        # Defensive: if translate_batch_pragmatics raises OUT (not
+        # caught internally), still attribute the failure per-tweet.
         print(f"smoketest: translate stage raised: {exc}",
               file=sys.stderr)
         translation_rows = []
         if not translation_errors_override:
-            for post in posts:
-                tid = str(post.get("tweet_id") or post.get("id"))
-                translation_errors[tid] = {
-                    "class": exc.__class__.__name__,
-                    "msg": str(exc)[:200],
-                    "retries": _MAX_RETRIES,
-                }
+            _record_batch_error(posts, exc)
     t_translate_ms = int((time.monotonic() - t0) * 1000)
 
     # --- Stage 2: classify_pragmatics_full (U4) ----------------------
