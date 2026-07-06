@@ -2,7 +2,11 @@
 {# htmx partial for the single-brand Pushin' Weight area chart canvas.
    pw-brand-chart.js reads data-brand-chart and toggles dataset
    visibility on tab clicks. #}
+{# `chart` and `payload` are aliases so this partial renders both when
+   the parent passes `chart` (single-brand page render) and when the
+   API route passes `payload` (htmx partial). #}
+{% set data = chart if chart is defined else payload %}
 <canvas class="home-brand-chart"
-        aria-label="Stacked area chart for {{ brand }}, last {{ payload.window_days }} days"
-        data-brand-chart='{{ payload|tojson }}'
-        data-pw-tab="{{ payload.tab }}"></canvas>
+        aria-label="Stacked area chart for {{ brand }}, last {{ data.window_days }} days"
+        data-brand-chart='{{ data|tojson }}'
+        data-pw-tab="{{ data.tab }}"></canvas>

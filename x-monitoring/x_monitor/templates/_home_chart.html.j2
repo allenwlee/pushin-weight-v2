@@ -3,6 +3,9 @@
    Re-rendered by hx-trigger="every {{ poll_seconds }}s" on the
    parent .home-chart-wrap. Carries the data-home JSON attribute
    for pw-chart.js to pick up on swap. #}
+{# `chart` and `payload` are aliases so this partial renders both when
+   the parent passes `chart` and when the API route passes `payload`. #}
+{% set data = chart if chart is defined else payload %}
 <canvas class="home-chart"
-        aria-label="Daily total posts per brand, last {{ chart.window_days }} days"
-        data-home='{{ chart|tojson }}'></canvas>
+        aria-label="Daily total posts per brand, last {{ data.window_days }} days"
+        data-home='{{ data|tojson }}'></canvas>

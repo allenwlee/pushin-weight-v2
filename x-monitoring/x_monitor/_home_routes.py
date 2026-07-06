@@ -121,14 +121,14 @@ def _denormalize_posts(
     if brand_id_int is None:
         return base
 
-    # posts_brands_signals → per-(post, post_type) row; collect post_types
+    # posts_brands_signals → per-(post, post_type) row; collect post_types.
+    # Migration 028 changed the schema: post_type_key and sentiment are
+    # TEXT-natural-key values (no longer integer FKs to key tables).
     pt_rows = store._conn.execute(
         f"""
-        SELECT p.tweet_id, ptk.key AS post_type_key, sk.key AS sentiment_key
+        SELECT p.tweet_id, pbs.post_type_key, pbs.sentiment
         FROM posts p
         JOIN posts_brands_signals pbs ON pbs.post_id = p.id
-        JOIN post_type_keys ptk ON ptk.id = pbs.post_type
-        JOIN sentiment_keys sk   ON sk.id  = pbs.sentiment
         WHERE p.tweet_id IN ({placeholders})
           AND pbs.brand_id = ?
         """,
@@ -140,14 +140,15 @@ def _denormalize_posts(
         pt_by_tweet.setdefault(r["tweet_id"], []).append(r["post_type_key"])
         sent_by_tweet.setdefault(r["tweet_id"], []).append(r["sentiment_key"])
 
-    # posts_brands_discourse → per-(post, discourse) row
+    # posts_brands_discourse → per-(post, discourse) row.
+    # Migration 026 schema: the discourse and nationalism columns are
+    # TEXT-natural-key values (no longer integer FKs to key tables).
     disc_rows = store._conn.execute(
         f"""
-        SELECT p.tweet_id, dk.key AS discourse_key,
-               pbd.cn_nationalism, pbd.us_nationalism
+        SELECT p.tweet_id, pbd.discourse_key,
+               pbd.china_nationalism, pbd.us_nationalism
         FROM posts p
         JOIN posts_brands_discourse pbd ON pbd.post_id = p.id
-        JOIN discourse_keys dk ON dk.id = pbd.discourse
         WHERE p.tweet_id IN ({placeholders})
           AND pbd.brand_id = ?
         """,
