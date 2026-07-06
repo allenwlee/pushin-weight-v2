@@ -1085,6 +1085,209 @@ def serialize_home_chart(
     }
 
 
+# Tab keys for the single-brand Pushin' Weight area chart (R14, U3, KTD6).
+# The order matches the on-screen tab strip. Each tab maps to a
+# `(category_field, category_keys, color_tokens)` triple resolved by
+# `_SINGLE_BRAND_TAB_SPECS` below.
+_SINGLE_BRAND_TABS: tuple[str, ...] = (
+    "post_type", "discourse", "account_roles",
+    "us_nationalism", "cn_nationalism", "unsanctioned",
+)
+
+
+_SINGLE_BRAND_TAB_SPECS: dict[str, dict[str, Any]] = {
+    "post_type": {
+        "field": "post_types",
+        # multi-valued list; each post can carry several
+        "multi": True,
+        "categories": _DASHBOARD_POST_TYPE_KEYS,
+        "color_var_prefix": "--pt-",
+    },
+    "discourse": {
+        "field": "discourse",
+        "multi": True,
+        "categories": _DASHBOARD_DISCOURSE_KEYS,
+        "color_var_prefix": "--bar-",
+    },
+    "account_roles": {
+        "field": "role_key",
+        "multi": False,
+        "categories": _DASHBOARD_ROLE_KEYS,
+        "color_var_prefix": "--role-",
+    },
+    "us_nationalism": {
+        "field": "us_nationalism",
+        "multi": False,
+        "categories": _DASHBOARD_NATIONALISM_KEYS,
+        "color_var_prefix": "--nat-",
+    },
+    "cn_nationalism": {
+        "field": "cn_nationalism",
+        "multi": False,
+        "categories": _DASHBOARD_NATIONALISM_KEYS,
+        "color_var_prefix": "--nat-",
+    },
+    "unsanctioned": {
+        # Synthetic 2-bucket split (flagged / unflagged). R7 unsanctioned
+        # filter applies in the input filter; this tab counts both
+        # buckets regardless of the active filter.
+        "field": "__unsanctioned__",
+        "multi": False,
+        "categories": ("flagged", "unflagged"),
+        "color_var_prefix": "__special__",
+    },
+}
+
+
+def serialize_single_brand_chart(
+    brand_id: str,
+    posts: list[dict[str, Any]],
+    *,
+    window_days: int = 7,
+    latest_run: dict[str, Any] | None = None,
+    now: datetime | None = None,
+    filters: dict[str, Any] | None = None,
+    tab: str = "post_type",
+) -> dict[str, Any]:
+    """Return the single-brand Pushin' Weight area chart payload (R14, U3).
+
+    Aggregates posts for one brand into per-day, per-category counts
+    for each of the 6 tabs (post_type / discourse / account_roles /
+    us_nationalism / cn_nationalism / unsanctioned). The output
+    includes all 6 tab datasets so the JS can toggle visibility on the
+    same canvas (KTD6).
+
+    Payload shape:
+
+        {
+            "brand_id": str,
+            "display_name": str,
+            "accent_color": hex,
+            "days": [iso_date_str] * window_days,
+            "tab_datasets": {
+                "post_type":     {category: [int] * window_days},
+                "discourse":     {category: [int] * window_days},
+                "account_roles": {category: [int] * window_days},
+                "us_nationalism":{category: [int] * window_days},
+                "cn_nationalism":{category: [int] * window_days},
+                "unsanctioned":  {category: [int] * window_days},
+            },
+            "tab": str,                        # the active tab (echo)
+            "color_vars": {category: "var(--token)"},
+            "applied_filters": {...},
+            "window_days": int,
+            "fetched_at": iso_str,
+        }
+
+    Args:
+        brand_id: model_id of the brand (e.g. "minimax").
+        posts: list of denormalized post dicts (see
+            `serialize_home_chart` for the expected fields). The route
+            layer is responsible for the brand-scope narrowing and the
+            joins to `posts_brands_signals`, `posts_brands_discourse`,
+            `posts_unsanctioned_flags`, and `accounts` (for role_key).
+        tab: which tab is active; determines which tab is echoed in the
+            output (the JS can still read any tab from `tab_datasets`).
+            Defaults to `post_type` (R14 default).
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+        if latest_run and latest_run.get("finished_at"):
+            try:
+                now = datetime.fromisoformat(
+                    latest_run["finished_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+    if filters is None:
+        filters = {}
+    if tab not in _SINGLE_BRAND_TABS:
+        tab = "post_type"
+
+    days: list[str] = [
+        (now.date() - timedelta(days=i)).isoformat()
+        for i in range(window_days - 1, -1, -1)
+    ]
+
+    tab_datasets: dict[str, dict[str, list[int]]] = {}
+    for tab_key, spec in _SINGLE_BRAND_TAB_SPECS.items():
+        tab_datasets[tab_key] = {
+            cat: [0] * window_days for cat in spec["categories"]
+        }
+
+    for p in posts:
+        # The unsanctioned tab always counts the full post set (flagged +
+        # unflagged) — the unsanctioned filter would otherwise leave the
+        # tab with a single empty bucket when off (the default), making
+        # the stacked area visually useless. The filter still narrows
+        # the OTHER 5 tabs.
+        is_flagged = bool(p.get("unsanctioned"))
+        post_passes_filter = _post_matches_filter(p, filters)
+        if not post_passes_filter and not is_flagged:
+            # Skip: not flagged AND filtered out → not visible on any tab
+            continue
+        dt = _parse_post_timestamp(p.get("created_at"))
+        if dt is None:
+            continue
+        days_ago = (now.date() - dt.date()).days
+        if days_ago < 0 or days_ago >= window_days:
+            continue
+        idx = window_days - 1 - days_ago
+
+        for tab_key, spec in _SINGLE_BRAND_TAB_SPECS.items():
+            field = spec["field"]
+            categories = spec["categories"]
+            if tab_key == "unsanctioned":
+                # Always count toward the unsanctioned tab regardless
+                # of the active filter (see loop preamble).
+                key = "flagged" if is_flagged else "unflagged"
+                tab_datasets[tab_key][key][idx] += 1
+            else:
+                # Other tabs respect the filter strictly.
+                if not post_passes_filter:
+                    continue
+                if spec["multi"]:
+                    vals = p.get(field) or []
+                    for v in vals:
+                        if v in categories:
+                            tab_datasets[tab_key][v][idx] += 1
+                else:
+                    v = p.get(field)
+                    if v in categories:
+                        tab_datasets[tab_key][v][idx] += 1
+
+    # Color tokens per category. Used by the JS to render each stacked
+    # area segment in its brand-specific color. The route layer is
+    # responsible for actually resolving the CSS variable to a hex
+    # value (the JS reads `getComputedStyle` on the canvas's parent).
+    color_vars: dict[str, dict[str, str]] = {}
+    for tab_key, spec in _SINGLE_BRAND_TAB_SPECS.items():
+        prefix = spec["color_var_prefix"]
+        if prefix == "__special__":
+            color_vars[tab_key] = {
+                "flagged": "var(--yellow)",
+                "unflagged": "var(--muted)",
+            }
+        else:
+            color_vars[tab_key] = {
+                cat: f"var({prefix}{cat.replace('_', '-')})"
+                for cat in spec["categories"]
+            }
+
+    return {
+        "brand_id": brand_id,
+        "display_name": MODEL_DISPLAY_NAMES.get(brand_id, brand_id),
+        "accent_color": MODEL_ACCENT_COLORS.get(brand_id, "#9ca3af"),
+        "days": days,
+        "tab_datasets": tab_datasets,
+        "tab": tab,
+        "color_vars": color_vars,
+        "applied_filters": dict(filters),
+        "window_days": window_days,
+        "fetched_at": now.isoformat(),
+    }
+
+
 def _build_top3(
     posts: list[dict[str, Any]],
     *,
