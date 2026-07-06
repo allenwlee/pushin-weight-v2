@@ -1,0 +1,122 @@
+# {{AGENT_ATTRIBUTION}}
+# Alias map for scripts/2026-07-06-001-migrate-pushin-weight-records.py
+#
+# Plan: docs/plans/2026-07-06-002-feat-pushin-weight-records-migration-plan.md
+# Unit 2 of 6 (U2 — operator-editable alias map; the U4 CLI script reads
+# this at startup and applies the mappings to incoming source rows).
+#
+# Schema: each section maps a TARGET slug (or label) to its SOURCE
+# equivalent. The script looks up a source slug by reversing the map
+# (target → source) when scanning source rows. 1:1 mappings (where
+# the source and target use the same slug) are NOT listed here; the
+# script treats them as identity.
+#
+# Sections:
+#   brands:    target_nickname → source_id
+#   companies: target_nickname → source_id
+#   discourse: target_key      → source_key
+#   post_type: target_key      → source_key  (source has 4 keys; target has 6)
+#   sentinels_dropped: list of source brand_ids that have no target equivalent
+
+# -----------------------------------------------------------------------------
+# Brand slugs
+# -----------------------------------------------------------------------------
+# 3 in-place renames are done by migration 030 (SQL U1). After 030, the
+# target's `brands.nickname` uses these target-side slugs; the source's
+# `brands.id` still uses the old slugs. The script maps source's old
+# slug to the target's new slug when reading source rows.
+#
+# 6 brands (`chatglm`, `wenxin`, `seed`, `sensenova`, `kwaiyii`, `step`)
+# are 1:1 between source and target — not listed here, the script
+# handles them as identity.
+brands:
+  mimo:         mimo          # source already uses mimo (target renamed from xiaomi_mimo)
+  nemo_megatron: nemo_megatron  # source uses nemo_megatron (target renamed from nvidia_nemo)
+  sakana_ai:    sakana_ai     # source uses sakana_ai (target renamed from sakana)
+
+# -----------------------------------------------------------------------------
+# Company slugs
+# -----------------------------------------------------------------------------
+# Two kinds of mappings:
+#
+# 1. 9 NEW companies (added by migration 030). Source's companies use
+#    bare slugs for kuaishou / upstage; the migration used the plan-side
+#    `kuaishou_co` / `upstage_co` form so the rows are visually distinct
+#    from the brand rows. The script maps source's bare slugs to the
+#    target's `_co`-suffixed slugs.
+#
+# 2. 5 SLUG-DIVERGENT companies (the company-side half of the slug gap
+#    plan 002 deferred to a follow-up). Source uses a different slug
+#    for the same legal entity as target. The script maps source's
+#    slug to the target's slug.
+#
+# Companies 1:1 between source and target (alibaba, baidu, tencent,
+# xiaomi, minimax, moonshot) are NOT listed here.
+companies:
+  # --- 9 new (target-only companies, source has matching rows) ---
+  meta:         meta
+  nvidia:       nvidia
+  bytedance:    bytedance
+  sensetime:    sensetime
+  lg_ai:        lg_ai
+  sakana:       sakana
+  kuaishou_co:  kuaishou      # source uses bare 'kuaishou'
+  upstage_co:   upstage       # source uses bare 'upstage'
+  01ai:         01ai
+
+  # --- 5 slug-divergent (same company, different slug) ---
+  deepseek_co:    deepseek       # target adds _co suffix
+  inclusion_ai:   inclusion      # target adds _ai suffix
+  mistral_ai:     mistral        # target adds _ai suffix
+  stepfun_inc:    stepfun        # target adds _inc suffix
+  zhipu:          zai            # source's zai == target's zhipu (rebranded)
+
+# -----------------------------------------------------------------------------
+# Discourse keys
+# -----------------------------------------------------------------------------
+# 2 aliases (dunk, other) are renamed; the other 8 keys are 1:1.
+discourse:
+  dunk_yingyang:        dunk
+  advertising-marketing: other
+
+# -----------------------------------------------------------------------------
+# Post-type keys
+# -----------------------------------------------------------------------------
+# Source has 4 keys; target has 6. The 2 source-only keys are aliased
+# to the closest target semantic. The 2 target-only keys
+# (`buzz_releases`, `performance_comparisons`) are NOT in source.
+#
+# Note: target's post_type slug for advertising is `advertising_marketing`
+# (underscore), while target's discourse slug is `advertising-marketing`
+# (hyphen). The two lookup tables use different slug conventions
+# (discourse uses hyphens, post_type uses underscores). The alias map
+# preserves that divergence.
+#
+# Mapping rationale (operator-reviewable):
+#   criticism      → feedback_questions    (both about critique/feedback)
+#   release        → event_announcement    (both about launches/releases)
+#   other          → advertising_marketing (with underscore; discourse's
+#                     same alias uses a hyphen — see top of file)
+#   hands_on_usage → hands_on_usage        (1:1)
+post_type:
+  feedback_questions:    criticism
+  event_announcement:     release
+  advertising_marketing:  other
+  hands_on_usage:         hands_on_usage
+
+# -----------------------------------------------------------------------------
+# Lookup tables with no source-side aliasing
+# -----------------------------------------------------------------------------
+# `nationalism`, `roles`, `hf_types` are 1:1 between source and target
+# on key — not listed here. The script treats them as identity.
+# `sentiment` is target-only (no source table) — not in scope.
+
+# -----------------------------------------------------------------------------
+# Source-only sentinels that have no target equivalent
+# -----------------------------------------------------------------------------
+# The source has 2 generic-region sentinels; the target has only 1
+# (`_unattributed`). The script drops the source rows and emits
+# `dropped_no_alias` entries with this reason.
+sentinels_dropped:
+  - unattributed_chinese_models
+  - unattributed_us_labs
