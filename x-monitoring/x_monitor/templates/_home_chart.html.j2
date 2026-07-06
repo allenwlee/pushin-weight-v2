@@ -1,0 +1,8 @@
+{# {{AGENT_ATTRIBUTION}} #}
+{# htmx partial for the multi-brand Pushin' Weight home chart canvas.
+   Re-rendered by hx-trigger="every {{ poll_seconds }}s" on the
+   parent .home-chart-wrap. Carries the data-home JSON attribute
+   for pw-chart.js to pick up on swap. #}
+<canvas class="home-chart"
+        aria-label="Daily total posts per brand, last {{ chart.window_days }} days"
+        data-home='{{ chart|tojson }}'></canvas>

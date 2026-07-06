@@ -1,0 +1,43 @@
+{# {{AGENT_ATTRIBUTION}} #}
+{# First-batch Jinja render of the Pushin' Weight feed rows.
+   The `rows` and `next_cursor` are populated by serialize_feed_page
+   on the parent page render. Subsequent batches are appended by
+   pw-feed.js via IntersectionObserver + fetch. #}
+{% for row in feed.rows %}
+  <tr data-pw-feed-row data-tweet-id="{{ row.tweet_id }}">
+    <td class="muted-cell">{{ row.created_at }}</td>
+    <td>
+      {% for b in row.brands %}
+        <span class="pill">{{ b.display_name_zh_cn if active_locale == 'zh_cn' else (b.display_name_en or b.nickname) }}</span>
+      {% endfor %}
+    </td>
+    <td>
+      {% if row.lang_detected %}
+        <div class="lang-sub">translated from: [{{ row.lang_detected }}]</div>
+      {% endif %}
+      <div class="cell-truncated" data-pw-cell-truncated>{{ row.text_translated or '' }}</div>
+      <div class="muted-cell">★ {{ row.like_count }}</div>
+    </td>
+    <td>
+      <div class="cell-truncated" data-pw-cell-truncated>{{ row.text or '' }}</div>
+    </td>
+    <td>
+      {% for nick, cls in row.classifications.items() %}
+        {% for d in cls.get('discourse') or [] %}
+          <span class="pill">{{ d }}</span>
+        {% endfor %}
+        {% for pt in cls.get('post_types') or [] %}
+          <span class="pill">{{ pt }}</span>
+        {% endfor %}
+        {% if cls.get('cn_nationalism') %}<span class="pill muted">cn:{{ cls.cn_nationalism }}</span>{% endif %}
+        {% if cls.get('us_nationalism') %}<span class="pill muted">us:{{ cls.us_nationalism }}</span>{% endif %}
+      {% endfor %}
+      {% if row.unsanctioned %}<span class="pill flagged">unsanctioned</span>{% endif %}
+    </td>
+    <td>
+      <div>{{ row.account.handle }} · <span class="pill role-{{ row.account.role }}">{{ row.account.role_label }}</span></div>
+    </td>
+  </tr>
+{% else %}
+  <tr><td colspan="6" class="muted-cell">no posts in window</td></tr>
+{% endfor %}
