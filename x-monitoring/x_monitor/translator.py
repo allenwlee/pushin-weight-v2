@@ -348,6 +348,19 @@ _FIXED_ZH_TRANSLATIONS: dict[str, str] = {
 }
 
 
+# Translator output column naming — see docs/reference/translator-output.md
+#
+#   `literal_zh` (post translator, _PRAGMATICS_SYSTEM_PROMPT below) and
+#   `text_zh_cn` (registry translator, _REGISTRY_*_PROMPT further down)
+#   end up writing to the same `posts` columns but reflect TWO different
+#   rendering styles — lossless-with-slang for X / Twitter posts vs.
+#   formal / named-entity-preserving for lookup tables. The naming
+#   convention makes the translator stage obvious from the column name.
+#
+#   `cn_equivalent` is NOT a translation — it's the "how would Chinese
+#   netizens on Weibo/Zhihu/Bilibili say this" free rendering. Distinct
+#   from `literal_zh`.
+
 _PRAGMATICS_SYSTEM_PROMPT: str = (
     "You are a 'bilingual pragmatic analyst' specializing in English X "
     "(Twitter) AI/LLM-sphere discourse → Chinese AI-sphere discourse. "
