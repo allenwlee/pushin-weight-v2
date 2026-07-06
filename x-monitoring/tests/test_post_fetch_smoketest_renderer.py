@@ -1,23 +1,33 @@
-"""U7 + U1 + U2: smoketest runner — multi-discourse / unsanctioned / URL / discourse-field-source.
+"""U7 + U1 + U2: smoketest runner — hierarchical multi-discourse / unsanctioned / URL / discourse-field-source.
 
 Plans:
 - docs/plans/2026-07-03-003-feat-post-fetch-taxonomy-and-multi-discourse-plan.md (U7)
 - docs/plans/2026-07-04-001-feat-post-fetch-smoketest-and-prompt-tuning-plan.md (U1, U2)
 - docs/plans/2026-07-06-001-feat-remove-trans_disc-plan.md (post-grace:
   discourse_role is classifier-only; trans_disc: is removed)
+- smoketest skill (pushin_weight_smoketest 2026-07-06):
+  hierarchical layout — post-level fields under `post:`, per-brand
+  fields under `brand_mentions:` with the brand name as a bare
+  section header.
 
 Verifies:
-- _render_sample_posts handles multi-value post_types[] / discourse_roles[]
-  arrays by expanding into N rows per brand.
-- _render_sample_posts surfaces unsanctioned flags per post when present.
-- U1-final (2026-07-06): translator no longer emits discourse_role; the
-  report has NO `trans_disc:` line. Per-brand `cls_disc=` is the only
-  discourse field — emitted when `cls.discourse_roles` or legacy
-  `cls.discourse_role` is present, omitted entirely (not a placeholder)
-  when absent.
+- `_render_sample_posts` handles multi-value `post_types[]` /
+  `discourse_roles[]` arrays by rendering nested bullets, not
+  flattening or expanding to a cartesian product.
+- `_render_sample_posts` surfaces unsanctioned flags per post when
+  present.
+- U1-final (2026-07-06): translator no longer emits `discourse_role`;
+  the report has NO `trans_disc:` line. Per-brand `cls_discourse=` is
+  the only discourse field — emitted when `cls.discourse_roles` or
+  legacy `cls.discourse_role` is present, omitted entirely (not a
+  placeholder) when absent.
+- smoketest skill (pushin_weight_smoketest 2026-07-06): the report
+  groups post-level tags under `post:` (types + annotation) and
+  per-brand tags under `brand_mentions:` (post_types, sentiment,
+  cls_discourse, cn, us).
 - U2: each post header includes the full X / Twitter URL.
 - Backwards compat: legacy scalar `cls.discourse_role` still renders
-  as a single-element `cls_disc=`.
+  as a single-element `cls_discourse=`.
 """
 
 from __future__ import annotations
@@ -25,12 +35,16 @@ from __future__ import annotations
 from scripts.post_fetch_smoketest import _render_sample_posts
 
 
-def test_u7_renders_one_line_per_brand_with_scalar_fields():
-    """Legacy shape: scalar post_type + scalar `cls.discourse_role`.
+def test_u7_renders_one_block_per_brand_with_scalar_fields():
+    """Legacy shape: scalar `post_type` + scalar `cls.discourse_role`.
 
     U2: header includes URL. Plan 2026-07-06-001 removed the
     translator's `trans_disc:` field — pragmatic register is the
-    classifier's exclusive output (`cls_disc=` per brand).
+    classifier's exclusive output (`cls_discourse=` per brand).
+
+    smoketest skill (pushin_weight_smoketest 2026-07-06):
+    hierarchical layout — post-level tags under `post:`, per-brand
+    tags under `brand_mentions:`.
     """
     sample = [
         {"tweet_id": "111", "id": "111", "text": "GLM 5.2 真棒",
@@ -49,13 +63,23 @@ def test_u7_renders_one_line_per_brand_with_scalar_fields():
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    assert "[brand=glm]" in out
-    assert "pt=hands_on_usage" in out
-    assert "cls_disc=genuine_hype" in out
+    assert "post:" in out
+    assert "\n  types=hands_on_usage" in out
+    assert "\n  annotation=(none)" in out
+    assert "\nbrand_mentions:" in out
+    # Brand section header is bare (NOT inside `[]`).
+    assert "\n  glm\n" in out
+    # Legacy scalar post_type uses the `post_types=` shorthand.
+    assert "    post_types=hands_on_usage" in out
+    # Per-brand sentiment / cls_discourse / cn / us each on its own line.
+    assert "    sentiment=positive" in out
+    assert "    cls_discourse=genuine_hype" in out
+    assert "    cn=none" in out
+    assert "    us=none" in out
 
 
-def test_u7_renders_n_lines_for_multi_post_types():
-    """2 post_types × 1 discourse = 2 lines for the same brand."""
+def test_u7_renders_post_types_bullet_list_when_array():
+    """post_types[] array → nested bullets under the brand block."""
     sample = [{"tweet_id": "222", "id": "222", "text": "GLM vs Kimi?"}]
     trans = [{"tweet_id": "222", "literal_zh": "GLM vs Kimi?"}]
     class_rows = {
@@ -63,22 +87,23 @@ def test_u7_renders_n_lines_for_multi_post_types():
             {"brand_id": "glm",
              "post_types": ["performance_comparisons", "feedback_questions"],
              "sentiment": "neutral",
-             "discourse_roles": ["self_deprecation"],
+             "discourse_role": "self_deprecation",
              "china_nationalism": "mild_pro", "us_nationalism": "none"},
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    # Count occurrences of the brand line.
-    n_lines = out.count("[brand=glm]")
-    assert n_lines == 2, (
-        f"expected 2 lines for 2 post_types; got {n_lines}\n{out}"
-    )
-    assert "pt=performance_comparisons" in out
-    assert "pt=feedback_questions" in out
+    assert "    post_types:\n" in out
+    assert "      - performance_comparisons\n" in out
+    assert "      - feedback_questions\n" in out
+    # Legacy single scalar cls.discourse_role still maps to cls_discourse=.
+    assert "    cls_discourse=self_deprecation" in out
+    # post: types= lists both at the post level (unique-set).
+    assert "\n  types=performance_comparisons,feedback_questions\n" in out
 
 
-def test_u7_renders_n_lines_for_multi_discourse_roles():
-    """1 post_type × 2 discourse_roles = 2 lines."""
+def test_u7_renders_discourse_roles_bullet_list_when_many():
+    """Multi-element `discourse_roles[]` array → nested bullets;
+    `cls_discourse=` line is omitted in the multi-bullet case."""
     sample = [{"tweet_id": "333", "id": "333", "text": "GLM is great"}]
     trans = [{"tweet_id": "333", "literal_zh": "GLM 太棒了"}]
     class_rows = {
@@ -91,14 +116,37 @@ def test_u7_renders_n_lines_for_multi_discourse_roles():
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    n_lines = out.count("[brand=glm]")
-    assert n_lines == 2
-    assert "cls_disc=genuine_hype" in out
-    assert "cls_disc=advertising-marketing" in out
+    assert "    discourse_roles:\n" in out
+    assert "      - genuine_hype\n" in out
+    assert "      - advertising-marketing\n" in out
+    # The `cls_discourse=` line is NOT rendered when discourse_roles
+    # has multiple elements (the bullet list is the source of truth).
+    assert "    cls_discourse=" not in out
 
 
-def test_u7_renders_cartesian_expansion():
-    """2 post_types × 2 discourse_roles = 4 lines."""
+def test_u7_renders_single_element_discourse_role_inline():
+    """Single-element `discourse_roles[]` array → `cls_discourse=`
+    on its own line (not a bullet list)."""
+    sample = [{"tweet_id": "344", "id": "344", "text": "GLM is great"}]
+    trans = [{"tweet_id": "344", "literal_zh": "GLM 太棒了"}]
+    class_rows = {
+        "344": [
+            {"brand_id": "glm",
+             "post_types": ["hands_on_usage"],
+             "sentiment": "positive",
+             "discourse_roles": ["genuine_hype"],
+             "china_nationalism": "none", "us_nationalism": "none"},
+        ],
+    }
+    out = _render_sample_posts(sample, trans, class_rows)
+    assert "    cls_discourse=genuine_hype" in out
+    # No bullet list when only one role.
+    assert "    discourse_roles:\n" not in out
+
+
+def test_u7_renders_one_block_per_brand_when_array():
+    """post_types array + single-element discourse_role: exactly
+    one brand block (no cartesian expansion)."""
     sample = [{"tweet_id": "444", "id": "444", "text": "complex post"}]
     trans = [{"tweet_id": "444", "literal_zh": "复杂 post"}]
     class_rows = {
@@ -106,13 +154,13 @@ def test_u7_renders_cartesian_expansion():
             {"brand_id": "glm",
              "post_types": ["performance_comparisons", "feedback_questions"],
              "sentiment": "mixed",
-             "discourse_roles": ["genuine_hype", "advertising-marketing"],
+             "discourse_role": "genuine_hype",
              "china_nationalism": "none", "us_nationalism": "none"},
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    n_lines = out.count("[brand=glm]")
-    assert n_lines == 4
+    # One header.
+    assert out.count("\n  glm\n") == 1
 
 
 def test_u7_surfaces_unsanctioned_flags_for_post():
@@ -143,8 +191,6 @@ def test_u7_trans_disc_field_removed_from_render():
     field is silently absent regardless of input shape (no default
     placeholder, no `(none)`, nothing)."""
     sample = [{"tweet_id": "777", "id": "777", "text": "test"}]
-    # Even if a stale caller passes the legacy translator dict with
-    # a discourse_role field, the renderer no longer surfaces it.
     trans = [{
         "tweet_id": "777",
         "literal_zh": "test",
@@ -180,7 +226,8 @@ def test_u7_legacy_scalar_discourse_ignored():
 
 
 def test_u7_multiple_brands_render_separately():
-    """Two brands each with arrays → both render their rows."""
+    """Two brands each with arrays → both render their own blocks.
+    Multi-element post_types / discourse_roles render as bullets."""
     sample = [{"tweet_id": "aa1", "id": "aa1", "text": "GLM + Kimi"}]
     trans = [{"tweet_id": "aa1", "literal_zh": "GLM + Kimi"}]
     class_rows = {
@@ -198,20 +245,29 @@ def test_u7_multiple_brands_render_separately():
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    assert out.count("[brand=glm]") == 1
-    assert out.count("[brand=moonshot_kimi]") == 1
-    assert "cls_disc=genuine_hype" in out
-    assert "cls_disc=self_deprecation" in out
+    # Each brand appears once as a bare section header.
+    assert out.count("\n  glm\n") == 1
+    assert out.count("\n  moonshot_kimi\n") == 1
+    assert "    cls_discourse=genuine_hype" in out
+    assert "    cls_discourse=self_deprecation" in out
 
 
-# --- U1-final (2026-07-06): no trans_disc:, only per-brand cls_disc= ----
+def test_u7_no_classifications_renders_brand_mentions_none():
+    """When a post has classifications=[] (e.g. no detected brand),
+    `post:` keeps types=(none) and `brand_mentions: (none)`."""
+    sample = [{"tweet_id": "bb1", "id": "bb1", "text": "lonely post"}]
+    trans = [{"tweet_id": "bb1", "literal_zh": "孤单 post"}]
+    out = _render_sample_posts(sample, trans, {})
+    assert "post:" in out
+    assert "  types=(none)" in out
+    assert "brand_mentions: (none)" in out
 
 
 def test_u1_post_level_header_drops_trans_disc_after_grace():
     """Plan 2026-07-06-001: the previous U1 rename (`discourse:` →
     `trans_disc:`) is now obsolete because the translator no longer
     emits `discourse_role` at all. The renderer has no post-level
-    discourse field; per-brand `cls_disc=` is the sole source."""
+    discourse field; per-brand `cls_discourse=` is the sole source."""
     sample = [{"tweet_id": "100", "id": "100", "text": "hello"}]
     trans = [{"tweet_id": "100", "literal_zh": "你好",
               "discourse_role": "genuine_hype"}]
@@ -222,8 +278,8 @@ def test_u1_post_level_header_drops_trans_disc_after_grace():
     assert "\ndiscourse:" not in ("\n" + out)
 
 
-def test_u1_per_brand_cls_disc_emitted_when_in_payload():
-    """cls_disc= comes from cls.discourse_roles when present."""
+def test_u1_per_brand_cls_discourse_emitted_when_in_payload():
+    """cls_discourse= comes from `cls.discourse_roles` when present."""
     sample = [{"tweet_id": "200", "id": "200", "text": "t"}]
     trans = [{"tweet_id": "200", "literal_zh": "t"}]
     class_rows = {
@@ -236,12 +292,13 @@ def test_u1_per_brand_cls_disc_emitted_when_in_payload():
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    assert "cls_disc=genuine_hype" in out
+    assert "    cls_discourse=genuine_hype" in out
 
 
-def test_u1_per_brand_cls_disc_omitted_when_absent():
-    """U1: when discourse_roles is absent, the cls_disc= field is omitted
-    entirely — NOT emitted as a placeholder `cls_disc=uncategorized`.
+def test_u1_per_brand_cls_discourse_omitted_when_absent():
+    """U1: when discourse_roles is absent, the cls_discourse= field is
+    omitted entirely — NOT emitted as a placeholder
+    `cls_discourse=uncategorized`.
     """
     sample = [{"tweet_id": "300", "id": "300", "text": "t"}]
     trans = [{"tweet_id": "300", "literal_zh": "t"}]
@@ -255,15 +312,17 @@ def test_u1_per_brand_cls_disc_omitted_when_absent():
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    assert "[brand=kimi]" in out
-    assert "cls_disc" not in out, (
-        f"cls_disc= should be omitted when payload is absent:\n{out}"
-    )
+    # Brand block exists (cn/us are always emitted).
+    assert "\n  kimi\n" in out
+    assert "    cn=none" in out
+    assert "    us=none" in out
+    # No cls_discourse= line when payload lacks the field.
+    assert "    cls_discourse=" not in out
 
 
-def test_u1_per_brand_legacy_discourse_role_still_emits_cls_disc():
+def test_u1_per_brand_legacy_discourse_role_still_emits_cls_discourse():
     """Backwards compat: legacy scalar `discourse_role` on the class
-    row is wrapped into a single-element `cls_disc=`.
+    row is wrapped into a single-element `cls_discourse=`.
     """
     sample = [{"tweet_id": "400", "id": "400", "text": "t"}]
     trans = [{"tweet_id": "400", "literal_zh": "t"}]
@@ -277,7 +336,7 @@ def test_u1_per_brand_legacy_discourse_role_still_emits_cls_disc():
         ],
     }
     out = _render_sample_posts(sample, trans, class_rows)
-    assert "cls_disc=genuine_hype" in out
+    assert "    cls_discourse=genuine_hype" in out
 
 
 # --- U2: full X / Twitter URL in post header -----------------------------

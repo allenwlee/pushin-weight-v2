@@ -144,11 +144,14 @@ def test_smoketest_fixture_runs_end_to_end(tmp_path, monkeypatch):
     assert "t_translate_ms:" in out
     assert "t_classify_ms:" in out
     assert "SAMPLE POSTS" in out
-    # Sample posts render with the 7 fields.
+    # Sample posts render with the required fields.
     assert "text:" in out
     assert "text_en:" in out
     assert "literal_zh:" in out
-    assert "discourse:" in out
+    # smoketest skill (2026-07-06): post-level tags grouped under
+    # `post:`; per-brand tags grouped under `brand_mentions:`.
+    assert "post:" in out and "types=" in out
+    assert "brand_mentions:" in out
 
 
 def test_smoketest_strict_budget_does_not_trip_on_fast_cycle(tmp_path, monkeypatch):

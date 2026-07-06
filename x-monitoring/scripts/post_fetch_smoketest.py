@@ -248,9 +248,18 @@ def _render_sample_posts(
 ) -> str:
     """Render N posts with translator + classifier fields aligned.
 
-    U7: supports multi-value post_types[] and discourse_roles[] per
-    brand row. Each (brand × post_type × discourse_role) tuple
-    gets its own rendered line.
+    Layout (smoketest skill 2026-07-06, hierarchical):
+        post:
+          types=<unique post_types across all brands>
+          annotation=<translator-emitted annotation>
+        brand_mentions:
+          <brand_id>
+            post_types:
+              - <value>
+            sentiment=<value>
+            cls_discourse=<value|omitted>
+            cn=<value>
+            us=<value>
 
     U1-final (plan 2026-07-06-001): discourse_role is classifier-only.
     The translator's post-level `discourse_role` was REMOVED from the
@@ -288,52 +297,74 @@ def _render_sample_posts(
         lines.append(f"literal_zh:  {(tr.get('literal_zh') or tr.get('text_zh_cn') or '')}")
         # No trans_disc — translator no longer emits discourse_role.
         lines.append(f"cn_equiv:    {(tr.get('cn_equivalent') or '')}")
-        lines.append(f"annotation:  {(tr.get('annotation') or '(none)')}")
         # U7: per-post unsanctioned flags (if any).
         flags = unsanctioned_flags.get(tid, [])
         if flags:
             lines.append(f"unsanctioned: {','.join(flags)}")
-        # U7: render N rows per brand — one per (post_type × discourse_role).
-        # If post_types / discourse_roles are arrays, expand. Otherwise
-        # fall back to the single scalar values (legacy).
-        # U1: emit cls_disc= from cls.discourse_roles when present;
-        # omit the field entirely (not as a placeholder) when absent.
-        for cls in classification_rows.get(tid, []):
+        # Hierarchical layout (smoketest skill 2026-07-06).
+        # post: block groups post-level tags (types, annotation);
+        # brand_mentions: block groups per-brand tags with the brand
+        # name as a bare section header. Multi-value post_types /
+        # discourse_roles render as nested bullets, not flattened.
+        brand_rows = classification_rows.get(tid, [])
+        all_post_types: list[str] = []
+        for cls in brand_rows:
             post_types = cls.get("post_types") or (
-                [cls["post_type"]] if cls.get("post_type") else [""]
+                [cls["post_type"]] if cls.get("post_type") else []
             )
+            for pt in post_types:
+                if pt and pt not in all_post_types:
+                    all_post_types.append(pt)
+        # --- post: ----------------------------------------------------
+        if not brand_rows:
+            lines.append("post:")
+            lines.append("  types=(none)")
+            lines.append(f"  annotation={tr.get('annotation') or '(none)'}")
+            lines.append("brand_mentions: (none)")
+            continue
+        lines.append("post:")
+        if all_post_types:
+            lines.append(f"  types={','.join(all_post_types)}")
+        else:
+            lines.append("  types=(none)")
+        lines.append(f"  annotation={tr.get('annotation') or '(none)'}")
+        # --- brand_mentions: -----------------------------------------
+        lines.append("brand_mentions:")
+        for cls in brand_rows:
+            brand_id = cls["brand_id"]
+            lines.append(f"  {brand_id}")
+            # post_types — bullet list when array, single line for
+            # legacy scalar (still keeping the key=`post_types=` name
+            # for forward-compat with the array shape).
+            post_types = cls.get("post_types")
+            if post_types is None:
+                scalar = cls.get("post_type")
+                if scalar:
+                    lines.append(f"    post_types={scalar}")
+            else:
+                lines.append("    post_types:")
+                for pt in post_types:
+                    lines.append(f"      - {pt}")
+            lines.append(f"    sentiment={cls['sentiment']}")
+            # discourse_roles — single `cls_discourse=` line for one
+            # element; nested bullets for many; omit entirely when
+            # both arrays are absent. Prefer the modern `discourse_roles`
+            # array; fall back to legacy scalar `discourse_role`.
             has_array = "discourse_roles" in cls
             raw_drs = cls.get("discourse_roles")
-            if raw_drs is None:
-                legacy_dr = cls.get("discourse_role")
-                discourse_roles = (
-                    [legacy_dr] if legacy_dr else [""]
-                )
-            else:
-                discourse_roles = raw_drs
-            # Build the per-brand line. cls_disc= is omitted (NOT
-            # replaced by a placeholder) when the classifier payload
-            # was missing BOTH `discourse_roles` AND the legacy
-            # `discourse_role` scalar. Otherwise emit the comma-joined
-            # value.
-            has_legacy = bool(cls.get("discourse_role"))
-            omit_cls_disc = not (has_array or has_legacy)
-            for pt in post_types:
-                for dr in discourse_roles:
-                    if omit_cls_disc:
-                        cls_disc_field = ""
-                    elif not dr:
-                        cls_disc_field = ""
-                    else:
-                        cls_disc_field = (
-                            f" cls_disc={dr if isinstance(dr, str) else ','.join(dr)}"
-                        )
-                    lines.append(
-                        f"  [brand={cls['brand_id']}] "
-                        f"pt={pt} sent={cls['sentiment']}"
-                        f"{cls_disc_field} "
-                        f"cn={cls['china_nationalism']} us={cls['us_nationalism']}"
-                    )
+            legacy_dr = cls.get("discourse_role")
+            if has_array and raw_drs:
+                if len(raw_drs) == 1:
+                    lines.append(f"    cls_discourse={raw_drs[0]}")
+                else:
+                    lines.append("    discourse_roles:")
+                    for dr in raw_drs:
+                        lines.append(f"      - {dr}")
+                    # No `cls_discourse=` line in the multi-bullet case.
+            elif legacy_dr:
+                lines.append(f"    cls_discourse={legacy_dr}")
+            lines.append(f"    cn={cls['china_nationalism']}")
+            lines.append(f"    us={cls['us_nationalism']}")
     return "\n".join(lines)
 
 
