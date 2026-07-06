@@ -77,11 +77,23 @@ SUPPORTED_LOCALES: tuple[str, ...] = ("en", "zh-CN", "zh_cn")
 
 # Maps a user-facing locale (e.g. "zh-CN") to the DB column suffix
 # used in `text_<suffix>`. Both "zh-CN" and "zh_cn" map to "zh_cn".
+# "original" maps to a sentinel that signals "_pick_text should
+# return the source `text` column directly, not a translation".
 _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
     "zh-CN": "zh_cn",
     "zh_cn": "zh_cn",
+    "original": "__source__",
 }
+
+
+# Product rename (U1 of feat/pushin-weight-home-pages, 2026-07-06):
+# "Pushin' Weight (走个量)" is the new external-facing name. The
+# internal `x_monitor` package name is preserved per plan R17; this
+# affects only the chrome (topbar <h1> + <title>) and the per-page
+# greeting text.
+APP_DISPLAY_NAME_ZH = "走个量"
+APP_DISPLAY_NAME_EN = "Pushin' Weight"
 
 
 def normalize_locale(locale: str | None) -> str:
@@ -97,6 +109,12 @@ def normalize_locale(locale: str | None) -> str:
     """
     if not locale:
         return "en"
+    # "original" is the v1 of pushin-weight-home-pages (U1) "show source text"
+    # locale — it sits in the locale enum but bypasses _pick_text's translation
+    # column lookup. Treated as a first-class supported value, not an
+    # unknown value that would fall through to "en".
+    if locale.casefold() == "original":
+        return "original"
     # Case-insensitive check
     for sup in SUPPORTED_LOCALES:
         if locale.casefold() == sup.casefold():
@@ -128,6 +146,10 @@ def _pick_text(
         translation is NULL.
     """
     column = _LOCALE_TO_COLUMN.get(locale, "en")
+    # "original" locale (U1 of pushin-weight-home-pages) returns the
+    # source `text` column directly, regardless of available translations.
+    if column == "__source__":
+        return post.get("text"), False
     translated = post.get(f"text_{column}")
     if translated:
         return translated, True
@@ -466,6 +488,40 @@ def _resolve_combined_window(req, default: int) -> int:
     except (TypeError, ValueError):
         return default
     if n not in ALLOWED_COMBINED_WINDOWS:
+        return default
+    return n
+
+
+# Pushin' Weight home-page window (U1 of feat/pushin-weight-home-pages,
+# 2026-07-06). The user-facing toggle is 1d / 7d / 30d / 1y, which is
+# deliberately narrower than the combined chart's 8-value set (1, 7, 14,
+# 30, 60, 90, 180, 360) — the home page UX is targeted at the four
+# natural time horizons, not the stock-chart granularity. Per A5 the
+# cookie is NOT clamped to dashboard.window_days; the home page can show
+# any of 1d/7d/30d/1y regardless of post history (early days render as
+# zero, matching the combined chart's D4 precedent).
+ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
+HOME_WINDOW_COOKIE = "home_window"
+HOME_WINDOW_DEFAULT = 7
+
+
+def _resolve_home_window(req, default: int) -> int:
+    """Read the Pushin' Weight home-page window from a Flask request's cookies.
+
+    Mirrors `_resolve_combined_window`: returns the validated int if the
+    cookie is set to one of the allowed values; otherwise returns
+    `default`. Defensive: malformed/absent/out-of-range falls back to the
+    default rather than raising. Does NOT clamp to dashboard.window_days
+    per A5.
+    """
+    raw = req.cookies.get(HOME_WINDOW_COOKIE)
+    if raw is None:
+        return default
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if n not in ALLOWED_HOME_WINDOWS:
         return default
     return n
 
@@ -909,6 +965,8 @@ class DashboardApp:
         # Make our helpers available in templates
         env.globals["MODEL_DISPLAY_NAMES"] = MODEL_DISPLAY_NAMES
         env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
+        env.globals["APP_DISPLAY_NAME_ZH"] = APP_DISPLAY_NAME_ZH
+        env.globals["APP_DISPLAY_NAME_EN"] = APP_DISPLAY_NAME_EN
         env.filters["brand_colorize"] = brand_colorize
 
         app = Flask(
@@ -921,6 +979,8 @@ class DashboardApp:
         app.jinja_env.filters["brand_colorize"] = brand_colorize
         app.jinja_env.globals["MODEL_DISPLAY_NAMES"] = MODEL_DISPLAY_NAMES
         app.jinja_env.globals["MODEL_ACCENT_COLORS"] = MODEL_ACCENT_COLORS
+        app.jinja_env.globals["APP_DISPLAY_NAME_ZH"] = APP_DISPLAY_NAME_ZH
+        app.jinja_env.globals["APP_DISPLAY_NAME_EN"] = APP_DISPLAY_NAME_EN
         app.config["JSON_SORT_KEYS"] = False
         # Inject request.endpoint into every template render so the nav
         # strip can pick its active tab without per-route plumbing.
@@ -1451,13 +1511,24 @@ class DashboardApp:
         def api_set_locale():
             """Set the `locale` cookie. Returns 200 on success, 400 on invalid.
 
-            The form field is `locale`; valid values are "en" and "zh-CN"
-            (plus the alias "zh_cn"). Anything else → 400.
+            The form field is `locale`; valid values are "en", "zh-CN"
+            (plus the alias "zh_cn"), and "original" (added in
+            feat/pushin-weight-home-pages U1, 2026-07-06). Anything else → 400.
             """
             from flask import make_response, redirect, request
             locale = (request.form.get("locale") or "").strip()
             if not locale:
                 return jsonify({"error": "missing locale param"}), 400
+            # "original" is a first-class locale value added in
+            # feat/pushin-weight-home-pages U1 (2026-07-06) — it signals
+            # "show source text, skip translations". Not a synonym for "en".
+            if locale.casefold() == "original":
+                resp = make_response(jsonify({"locale": "original"}), 200)
+                resp.set_cookie(
+                    "locale", "original",
+                    max_age=60 * 60 * 24 * 365, path="/", samesite="Lax",
+                )
+                return resp
             # Validate against the supported set; reject unknown locales
             if not any(locale.casefold() == s.casefold() for s in SUPPORTED_LOCALES):
                 return jsonify({"error": f"unsupported locale: {locale!r}"}), 400
@@ -1468,6 +1539,68 @@ class DashboardApp:
             )
             resp = make_response(jsonify({"locale": canonical}), 200)
             # 1 year, path=/ so all routes see it
+            resp.set_cookie(
+                "locale", canonical,
+                max_age=60 * 60 * 24 * 365, path="/", samesite="Lax",
+            )
+            return resp
+
+        @app.route("/api/v1/home.window/<int:days>", methods=["POST", "GET"])
+        def api_home_window(days: int):
+            """Set the `home_window` cookie (Pushin' Weight home pages, U1).
+
+            Validates against ALLOWED_HOME_WINDOWS = (1, 7, 30, 365). On
+            success, 303 back to the referrer (or `/` when no referrer).
+            On invalid value, 400 with the allowed set.
+            """
+            if days not in ALLOWED_HOME_WINDOWS:
+                return jsonify(
+                    {
+                        "error": "invalid home window",
+                        "allowed": list(ALLOWED_HOME_WINDOWS),
+                    }
+                ), 400
+            from flask import request
+            resp = make_response(
+                redirect(request.referrer or "/", code=303)
+            )
+            resp.set_cookie(
+                HOME_WINDOW_COOKIE,
+                str(days),
+                max_age=60 * 60 * 24 * 365,  # 1 year
+                samesite="Lax",
+                httponly=True,
+            )
+            return resp
+
+        @app.route(
+            "/api/v1/home.locale/<locale>", methods=["POST", "GET"]
+        )
+        def api_home_locale(locale: str):
+            """Set the `locale` cookie (Pushin' Weight home pages, U1).
+
+            Accepts "en", "zh-CN" (alias "zh_cn"), and "original". 303
+            back to the referrer (or `/` when no referrer). 400 on invalid.
+            """
+            from flask import request
+            canonical: str | None = None
+            if locale.casefold() == "original":
+                canonical = "original"
+            else:
+                for s in SUPPORTED_LOCALES:
+                    if locale.casefold() == s.casefold():
+                        canonical = s
+                        break
+            if canonical is None:
+                return jsonify(
+                    {
+                        "error": f"unsupported locale: {locale!r}",
+                        "allowed": list(SUPPORTED_LOCALES) + ["original"],
+                    }
+                ), 400
+            resp = make_response(
+                redirect(request.referrer or "/", code=303)
+            )
             resp.set_cookie(
                 "locale", canonical,
                 max_age=60 * 60 * 24 * 365, path="/", samesite="Lax",

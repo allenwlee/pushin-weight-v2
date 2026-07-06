@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>{{ display_name }} — x-monitor</title>
+  <title>{{ APP_DISPLAY_NAME_ZH }} · {{ display_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>x-monitor</h1>
+    <h1>{{ APP_DISPLAY_NAME_ZH }} <small>{{ APP_DISPLAY_NAME_EN }}</small></h1>
     <span class="muted">drill-down · {{ brand_id }}</span>
   </header>
   <main class="detail" style="--accent: {{ accent_color }};">

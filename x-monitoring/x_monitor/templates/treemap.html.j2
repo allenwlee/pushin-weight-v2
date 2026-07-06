@@ -3,13 +3,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>x-monitor — treemap</title>
+  <title>{{ APP_DISPLAY_NAME_ZH }} · treemap</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <h1>x-monitor</h1>
+    <h1>{{ APP_DISPLAY_NAME_ZH }} <small>{{ APP_DISPLAY_NAME_EN }}</small></h1>
     {# Topbar nav strip: 2 tabs (Treemap | 9-Card Grid) with active state set
        server-side based on request.endpoint. aria-current="page" gives screen
        readers the active tab. #}
