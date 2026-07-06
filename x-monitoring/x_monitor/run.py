@@ -478,6 +478,60 @@ def _ingest_quote_tweets(
     return store.insert_posts(kept)
 
 
+# v12 (plan 2026-07-06-001 U2): demote post_type='hands_on_usage' to a more
+# specific value when the source text contains a strong marker for
+# performance_comparisons or event_announcement. The classifier prompt
+# rules 13/14/15 try to steer the LLM away from hands_on_usage, but
+# _parse_pragmatics_full_response coerces unknown post_types to
+# hands_on_usage as a fallback. This helper is the parser-side counter-
+# measure: detect the markers in the raw text and override the type.
+_PERF_COMPARE_MARKERS = (
+    "benchmark", "eval", "ttft", "latency", "ranking",
+    " vs ", "side-by-side", "climbed n spots", "dropped n spots",
+    "nth place",
+)
+_EVENT_ANNOUNCEMENT_MARKERS = (
+    "is generally available", "launched today", "shipped",
+    "now in beta", "now live", "released",
+)
+
+
+def _post_process_pragmatics(
+    by_brand: dict[str, dict[str, str]],
+    text: str,
+) -> dict[str, dict[str, str]]:
+    """Demote post_type='hands_on_usage' to a more specific type when the
+    raw source text carries a strong marker. Pure function — returns a new
+    by_brand dict, never mutates the caller's.
+
+    Performance comparisons win over event announcements when both
+    markers fire (the plan's Edge case C establishes this order).
+    """
+    if not by_brand:
+        return by_brand
+    if not text:
+        return by_brand
+    haystack = text.lower()
+    # Compute each marker family exactly once per post.
+    perf = any(m in haystack for m in _PERF_COMPARE_MARKERS)
+    event = (
+        len(text) < 280
+        and any(m in haystack for m in _EVENT_ANNOUNCEMENT_MARKERS)
+    )
+    if not (perf or event):
+        return by_brand
+    demoted_to = "performance_comparisons" if perf else "event_announcement"
+    out: dict[str, dict[str, str]] = {}
+    for brand_id, prongs in by_brand.items():
+        if prongs.get("post_type") == "hands_on_usage":
+            new_prongs = dict(prongs)
+            new_prongs["post_type"] = demoted_to
+            out[brand_id] = new_prongs
+        else:
+            out[brand_id] = prongs
+    return out
+
+
 def _run_post_fetch(
     kept_posts: list[dict[str, Any]],
     *,
@@ -627,6 +681,21 @@ def _run_post_fetch(
         # U2a: pull the per-brand dict out of the new return shape.
         by_brand = classified.get("by_brand", {}) if isinstance(
             classified, dict) else {}
+        # v12 (plan 2026-07-06-001 U2): parser-layer demotion. When the
+        # LLM-defaulted post_type='hands_on_usage' but the raw text
+        # contains a strong marker for performance_comparisons or
+        # event_announcement, override. Fail-soft: log + keep the
+        # un-post-processed by_brand on any exception.
+        try:
+            by_brand = _post_process_pragmatics(
+                by_brand, it.get("text") or "",
+            )
+        except Exception as e:
+            log.warning(
+                "_run_post_fetch: _post_process_pragmatics failed for "
+                "tweet_id=%s: %s",
+                it.get("id") or it.get("tweet_id"), e,
+            )
         for brand_id, prongs in by_brand.items():
             # posts_brands_signals: (post_type, sentiment) per brand.
             # Scalar fields preserved from the legacy shape.
