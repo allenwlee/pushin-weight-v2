@@ -1,0 +1,107 @@
+WARNING: cycle exceeded 90s ceiling (actual: 103.9s)
+smoketest: source=fixture n_posts=20
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          20
+n_translated:        20
+n_failed_translate:  0
+n_classified:        20
+n_discourse:         0
+n_nationalism:       0
+n_unsanctioned:      0
+t_translate_ms:      26406
+t_classify_ms:       77509
+t_total_ms:          103915
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=1001 url=https://x.com/(no handle)/status/1001) ---
+text:        Kimi K2.7 Code is generally available in GitHub Copilot
+text_en:     
+literal_zh:  Kimi K2.7 Code 已在 GitHub Copilot 正式可用
+cn_equiv:    Kimi K2.7 Code 上车 GitHub Copilot 了
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=hands_on_usage
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 2 (tweet_id=1002 url=https://x.com/(no handle)/status/1002) ---
+text:        DeepSeek-V4 just dropped, MIT-licensed open weights, fully permissively licensed for commercial use. This changes everything for the open-source AI race.
+text_en:     
+literal_zh:  DeepSeek-V4 刚刚发布，MIT 协议开放权重，完全可商用许可。这改变了开源 AI 竞赛的格局。
+cn_equiv:    这下真掀桌了
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 3 (tweet_id=1003 url=https://x.com/(no handle)/status/1003) ---
+text:        Qwen3-Max beats GPT-5 on long-context reasoning evals. The Chinese AI labs are running laps around OpenAI at this point.
+text_en:     
+literal_zh:  Qwen3-Max 在长上下文推理评测中击败 GPT-5。中国 AI 实验室现在简直是在吊打 OpenAI。
+cn_equiv:    把 OpenAI 按在地上摩擦
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 4 (tweet_id=1004 url=https://x.com/(no handle)/status/1004) ---
+text:        @bridgemindai @algebraist22 LOL it is really easy. 
+
+Ok, maybe one LLM can oneshot something but the cost is $100 vs another LLM that may take 4 prompts for $10. (Just an example)
+
+I will easily leave - which I have done. These American companies just be changing things like features and making things worse without any care to the customer.
+
+They have been caught downgrading previous models for new ones. 
+
+Like at least with Kimi 2.7 code, I can code with quality but when I want more creative writing; I can go back to 2.5 and still get the same quality that I got months ago when it released.
+text_en:     
+literal_zh:  @bridgemindai @algebraist22 LOL 这其实很简单。
+
+好吧，可能某个 LLM 能一发命中解决问题，但成本是 100 美元；而另一个 LLM 可能要 4 次提示词花 10 美元。（只是个例子）
+
+我会毫不犹豫地跑路——我已经这么干过了。这些美国公司就是会乱改功能、把体验越改越烂，完全不顾客户。
+
+它们已经被抓到在新模型里偷偷降级老模型。
+
+至少用 Kimi 2.7 code 写代码质量有保障，但我想搞创意写作时还能切回 2.5，照样能拿到几个月前发布时的同款质量。
+cn_equiv:    反向升级警告
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 5 (tweet_id=1005 url=https://x.com/(no handle)/status/1005) ---
+text:        Open-source Llama 4 just dropped and the weights are permissive. Western labs are scrambling. This is the most important model release of the year.
+text_en:     
+literal_zh:  开源 Llama 4 刚刚发布，权重许可宽松。西方实验室已经慌了。这是今年最重要的模型发布。
+cn_equiv:    西方大厂已经坐不住了
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  llama
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=uncategorized
+    cn=none
+    us=none

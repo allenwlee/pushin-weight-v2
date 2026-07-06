@@ -1,0 +1,383 @@
+classify_pragmatics_full: duplicate brand_id='deepseek' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='qwen' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='openai' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='moonshot_kimi' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='moonshot_kimi' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='deepseek' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='moonshot_kimi' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='qwen' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='anthropic' in response rows; keeping first
+smoketest: source=fixture n_posts=20
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          20
+n_translated:        20
+n_failed_translate:  0
+n_classified:        20
+n_discourse:         25
+n_nationalism:       4
+n_unsanctioned:      0
+t_translate_ms:      28513
+t_classify_ms:       48938
+t_total_ms:          77451
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=1001 url=https://x.com/(no handle)/status/1001) ---
+text:        Kimi K2.7 Code is generally available in GitHub Copilot
+text_en:     
+literal_zh:  Kimi K2.7 Code 已在 GitHub Copilot 正式可用
+cn_equiv:    Kimi K2.7 Code 上线 GitHub Copilot 了
+post:
+  types=event_announcement
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=event_announcement
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 2 (tweet_id=1002 url=https://x.com/(no handle)/status/1002) ---
+text:        DeepSeek-V4 just dropped, MIT-licensed open weights, fully permissively licensed for commercial use. This changes everything for the open-source AI race.
+text_en:     
+literal_zh:  DeepSeek-V4 刚刚发布，MIT 协议开放权重，完全可商用。这会改变开源 AI 竞赛的一切。
+cn_equiv:    DeepSeek-V4 放出来了，MIT 开源可商用，这下真的炸了
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 3 (tweet_id=1003 url=https://x.com/(no handle)/status/1003) ---
+text:        Qwen3-Max beats GPT-5 on long-context reasoning evals. The Chinese AI labs are running laps around OpenAI at this point.
+text_en:     
+literal_zh:  Qwen3-Max 在长上下文推理评测中击败 GPT-5。中国 AI 实验室这会儿把 OpenAI 套圈了。
+cn_equiv:    Qwen3-Max 在长上下文上干翻 GPT-5，中国队已经遥遥领先
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=mixed
+    us=anti
+--- Post 4 (tweet_id=1004 url=https://x.com/(no handle)/status/1004) ---
+text:        @bridgemindai @algebraist22 LOL it is really easy. 
+
+Ok, maybe one LLM can oneshot something but the cost is $100 vs another LLM that may take 4 prompts for $10. (Just an example)
+
+I will easily leave - which I have done. These American companies just be changing things like features and making things worse without any care to the customer.
+
+They have been caught downgrading previous models for new ones. 
+
+Like at least with Kimi 2.7 code, I can code with quality but when I want more creative writing; I can go back to 2.5 and still get the same quality that I got months ago when it released.
+text_en:     
+literal_zh:  @bridgemindai @algebraist22 LOL 这真的太容易了。
+
+行吧，可能某个 LLM 能一发命中，但成本是 100 美元，而另一个 LLM 可能要 4 次提示、花 10 美元。（就举个例子）
+
+我会轻松跑路——我也确实这么做了。这些美国公司就是会乱改功能、把东西越改越烂，完全不在乎客户。
+
+它们已经被抓到用新模型降级老模型。
+
+起码 Kimi 2.7 code 这边，编程质量在线；想要创意写作的话我可以切回 2.5，质量还跟几个月前刚发布时一样。
+cn_equiv:    美企只会糊弄用户，Kimi 反向升级没毛病
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=mild_pro
+--- Post 5 (tweet_id=1005 url=https://x.com/(no handle)/status/1005) ---
+text:        Open-source Llama 4 just dropped and the weights are permissive. Western labs are scrambling. This is the most important model release of the year.
+text_en:     
+literal_zh:  开源 Llama 4 刚刚发布，权重许可宽松。西方实验室慌了。这是今年最重要的模型发布。
+cn_equiv:    Llama 4 开源了，友商们都坐不住了
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  llama
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 6 (tweet_id=1006 url=https://x.com/(no handle)/status/1006) ---
+text:        GLM 5.2 absolutely smokes Claude 4 on coding benchmarks. Chinese engineering just keeps delivering while Anthropic fumbles the rollout.
+text_en:     
+literal_zh:  GLM 5.2 在编程基准上把 Claude 4 打得满地找牙。中国工程持续交卷，Anthropic 却手忙脚乱。
+cn_equiv:    GLM 5.2 吊打 Claude 4，中国工程血虐 A 社
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  glm
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=mild_pro
+    us=none
+  anthropic
+    post_types=performance_comparisons
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+--- Post 7 (tweet_id=1007 url=https://x.com/(no handle)/status/1007) ---
+text:        We benchmarked Kimi K2.7 against Claude 4.7 on coding tasks; results below. TL;DR: K2.7 wins on cost-per-completion and trails on long-horizon refactors.
+text_en:     
+literal_zh:  我们把 Kimi K2.7 和 Claude 4.7 放在编程任务上跑了一遍基准，结果如下。一句话：K2.7 在单次完成成本上赢了，长视野重构上落后。
+cn_equiv:    Kimi K2.7 vs Claude 4.7 跑分：性价比赢，长任务输
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+  anthropic
+    post_types=performance_comparisons
+    sentiment=mixed
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 8 (tweet_id=1008 url=https://x.com/(no handle)/status/1008) ---
+text:        Kimi K2.7 Code is now live, scored 89% on MMLU benchmark
+text_en:     
+literal_zh:  Kimi K2.7 Code 上线了，MMLU 基准拿到 89%
+cn_equiv:    Kimi K2.7 Code 上线，MMLU 89 分
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 9 (tweet_id=1009 url=https://x.com/(no handle)/status/1009) ---
+text:        I'm using Kimi 2.7 code to refactor my codebase. Not earth-shattering but honestly useful for boilerplate rewrites.
+text_en:     
+literal_zh:  我在用 Kimi 2.7 code 重构代码库。算不上炸裂，但模板代码重写是真挺顺手。
+cn_equiv:    Kimi 2.7 code 重构凑合能用
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 10 (tweet_id=1010 url=https://x.com/(no handle)/status/1010) ---
+text:        DeepSeek-V4 launched today for enterprise customers with no consumer waitlist. Pricing below OpenAI o3, performance above on most evals.
+text_en:     
+literal_zh:  DeepSeek-V4 今天面向企业客户上线，没有消费者排队。定价低于 OpenAI o3，多数评测表现优于后者。
+cn_equiv:    DeepSeek-V4 企业版直发，价格屠夫，性能反超 o3
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 11 (tweet_id=1011 url=https://x.com/(no handle)/status/1011) ---
+text:        Qwen is the most underhyped Chinese AI lab right now. Their open weights are first-class, their agent tooling is ahead of OpenAI's.
+text_en:     
+literal_zh:  Qwen 是当下最低估的中国 AI 实验室。开放权重是第一梯队，Agent 工具链甚至领先 OpenAI。
+cn_equiv:    Qwen 是被严重低估的中国 AI 实验室
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 12 (tweet_id=1012 url=https://x.com/(no handle)/status/1012) ---
+text:        Apple's got a deal with Alibaba to bake Qwen into iOS in China. Cook is playing the long game here.
+text_en:     
+literal_zh:  Apple 跟 Alibaba 谈成了，要把 Qwen 塞进中国版 iOS。库克在下大棋。
+cn_equiv:    苹果联手阿里把 Qwen 装进中国 iOS，库克这盘下得大
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=buzz_releases
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  apple
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 13 (tweet_id=1013 url=https://x.com/(no handle)/status/1013) ---
+text:        GPT-5 fumbled the rollout AGAIN. Sam got dunked on by every dev on X. This is exactly the trap Anthropic has been warning about.
+text_en:     
+literal_zh:  GPT-5 又翻车了。Sam 在 X 上被每一个开发者花式吊打。这正是 Anthropic 一路警告的那个陷阱。
+cn_equiv:    GPT-5 又翻车，Sam 惨遭群嘲，A 社预言成真
+post:
+  types=buzz_releases,performance_comparisons
+  annotation=(none)
+brand_mentions:
+  openai
+    post_types=buzz_releases
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+  anthropic
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 14 (tweet_id=1014 url=https://x.com/(no handle)/status/1014) ---
+text:        Open-source Llama 4-Mini is now generally available on HuggingFace. Apache 2.0, weights at the link.
+text_en:     
+literal_zh:  开源 Llama 4-Mini 已在 HuggingFace 正式可用。Apache 2.0，权重见链接。
+cn_equiv:    Llama 4-Mini 上 HuggingFace 了，Apache 2.0 开源
+post:
+  types=event_announcement
+  annotation=(none)
+brand_mentions:
+  llama
+    post_types=event_announcement
+    sentiment=neutral
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+--- Post 15 (tweet_id=1015 url=https://x.com/(no handle)/status/1015) ---
+text:        GLM-5.1 vs Claude 4.5 vs GPT-5-mini — I ran them all on the same eval suite. GLM is closing the gap and honestly it's a bit embarrassing for the US labs.
+text_en:     
+literal_zh:  GLM-5.1 vs Claude 4.5 vs GPT-5-mini——同一套评测跑下来。GLM 在缩小差距，老实说美国实验室有点丢人。
+cn_equiv:    GLM-5.1 追平美系模型，美国队有点挂不住
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  glm
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=mild_pro
+    us=anti
+  anthropic
+    post_types=performance_comparisons
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=mild_pro
+    us=anti
+  openai
+    post_types=performance_comparisons
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=mild_pro
+    us=anti
+--- Post 16 (tweet_id=1016 url=https://x.com/(no handle)/status/1016) ---
+text:        Kimi is a Chinese AI lab so obviously it's a security threat to America, just like TikTok. Wake up sheeple.
+text_en:     
+literal_zh:  Kimi 是中国 AI 实验室，所以很显然对美国构成安全威胁，跟 TikTok 一模一样。醒醒吧，愚民们。
+cn_equiv:    阴阳怪气警告，Kimi 也被扣上国家安全帽子了
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=feedback_questions
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=anti
+--- Post 17 (tweet_id=1017 url=https://x.com/(no handle)/status/1017) ---
+text:        I keep going back to Kimi 2.5 for creative writing because the new Kimi 2.7 code is optimized for refactoring not for prose. Having both as options is honestly the killer feature.
+text_en:     
+literal_zh:  我一直切回 Kimi 2.5 写创意写作，因为新版 Kimi 2.7 code 偏向重构而不是散文。两个版本都能选，这反而是杀手锏。
+cn_equiv:    Kimi 2.5 写文、2.7 写码，双版本才是真香
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 18 (tweet_id=1018 url=https://x.com/(no handle)/status/1018) ---
+text:        DeepSeek's latest paper shows distillation from US frontier models. Anthropic was right all along. CCP-funded IP theft, plain and simple.
+text_en:     
+literal_zh:  DeepSeek 最新论文暴露了从美国前沿模型蒸馏。Anthropic 一直是对的。CCP 出资的知识产权盗窃，就这么简单。
+cn_equiv:    DeepSeek 被坐实蒸馏美国模型，A 社实锤了
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=performance_comparisons
+    sentiment=negative
+    cls_discourse=distillation_accusation
+    cn=none
+    us=none
+--- Post 19 (tweet_id=1019 url=https://x.com/(no handle)/status/1019) ---
+text:        Kimi K2.7 ships with a 1M context window and scores 89% on MMLU. The IDE just got a lot more interesting.
+text_en:     
+literal_zh:  Kimi K2.7 配备 100 万上下文窗口，MMLU 跑出 89%。IDE 这下有意思多了。
+cn_equiv:    Kimi K2.7 1M 上下文 + MMLU 89 分，IDE 直接起飞
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 20 (tweet_id=1020 url=https://x.com/(no handle)/status/1020) ---
+text:        Comparing Qwen3-Coder to Claude Code on a non-trivial refactor: Qwen wins on cost, Claude wins on polish. Both beat Cursor's default.
+text_en:     
+literal_zh:  在一个不小的重构任务上对比 Qwen3-Coder 和 Claude Code：Qwen 成本赢，Claude 精致度赢。两个都吊打 Cursor 默认模型。
+cn_equiv:    Qwen3-Coder 性价比赢，Claude Code 体验赢，全方位吊打 Cursor
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+  anthropic
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none

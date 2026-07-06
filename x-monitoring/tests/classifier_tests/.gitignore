@@ -1,0 +1,2 @@
+# Smoketest fixtures live in /tmp/, not in-repo. Don't commit one.
+*.jsonl
