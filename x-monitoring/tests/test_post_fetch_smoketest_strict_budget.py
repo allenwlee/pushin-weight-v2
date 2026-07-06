@@ -90,6 +90,12 @@ def _seed_kept_posts(db_path: Path, posts: list[dict]) -> None:
                 '2026-07-02T00:00:00+00:00')
         """,
     )
+    # Seed brand_keywords so the smoketest's U5 keyword detector
+    # picks up "anthropic" in the seed posts.
+    s._conn.execute(
+        "INSERT OR IGNORE INTO brand_keywords(brand_id, pattern, is_regex, added_at) "
+        "VALUES ('anthropic', 'anthropic', 0, '2026-07-02T00:00:00+00:00')",
+    )
     s._brand_cache = None
     s._brand_id_map = None
     brand_id_int = s._brand_int_id("anthropic")
@@ -125,7 +131,7 @@ def test_smoketest_strict_budget_exits_1_when_cycle_exceeds_90s(
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
     _seed_kept_posts(db_path, [
-        {"tweet_id": "t1", "text": "x"},
+        {"tweet_id": "t1", "text": "Anthropic Claude Opus is great"},
     ])
 
     fake = FakeSlowClaudeClient()
@@ -173,7 +179,7 @@ def test_smoketest_without_strict_budget_exits_0_on_slow_cycle(
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
     _seed_kept_posts(db_path, [
-        {"tweet_id": "t1", "text": "x"},
+        {"tweet_id": "t1", "text": "Anthropic Claude Opus is great"},
     ])
 
     fake = FakeSlowClaudeClient()

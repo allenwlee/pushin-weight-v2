@@ -99,6 +99,16 @@ def _seed_db_with_kept_posts(db_path: Path, posts: list[dict]) -> None:
                 '2026-07-02T00:00:00+00:00')
         """,
     )
+    # Seed brand_keywords so the smoketest's U5 keyword detector
+    # recognizes "glm" / "anthropic" patterns in the seed posts.
+    s._conn.execute(
+        "INSERT OR IGNORE INTO brand_keywords(brand_id, pattern, is_regex, added_at) "
+        "VALUES ('glm', 'glm', 0, '2026-07-02T00:00:00+00:00')",
+    )
+    s._conn.execute(
+        "INSERT OR IGNORE INTO brand_keywords(brand_id, pattern, is_regex, added_at) "
+        "VALUES ('anthropic', 'anthropic', 0, '2026-07-02T00:00:00+00:00')",
+    )
     s._brand_cache = None
     s._brand_id_map = None
     brand_id_int = s._brand_int_id("anthropic")

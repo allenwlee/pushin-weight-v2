@@ -198,3 +198,105 @@ def test_prompt_no_code_fences_or_prose():
     # rule (Rule 9) says "No prose, no explanation, no code fences."
     assert "No prose" in p
     assert "no code fences" in p
+
+
+# --- U3 (plan 2026-07-04): sentiment calibration rules ------------------
+
+
+def test_u3_prompt_includes_rule_10_launch_announcement_neutral():
+    """Rule 10: launch announcement with no evaluative language → sent=neutral."""
+    p = _prompt()
+    assert "10." in p
+    assert "launch announcement" in p.lower() or "generally available" in p
+
+
+def test_u3_prompt_includes_rule_11_strategically_positive():
+    """Rule 11: long analytical post with 'strategically positive' → sent=positive."""
+    p = _prompt()
+    assert "11." in p
+    assert "strategically positive" in p
+
+
+def test_u3_prompt_includes_rule_12_multi_brand_state_of_market():
+    """Rule 12: multi-brand state-of-market posts → sent=neutral per brand."""
+    p = _prompt()
+    assert "12." in p
+    assert "climbed 20 spots" in p or "state-of-market" in p or "state of market" in p
+
+
+# --- U4 (plan 2026-07-04): post_type disambiguation rules ----------------
+
+
+def test_u4_prompt_includes_rule_13_event_announcement():
+    """Rule 13: one-line launch posts → pt=event_announcement (NOT hands_on_usage)."""
+    p = _prompt()
+    assert "13." in p
+    assert "event_announcement" in p
+    # The 'NOT hands_on_usage' caveat
+    assert "NOT hands_on_usage" in p
+
+
+def test_u4_prompt_includes_rule_14_ttft_performance():
+    """Rule 14: TTFT / benchmark / 'vs' comparison → pt=performance_comparisons."""
+    p = _prompt()
+    assert "14." in p
+    assert "TTFT" in p or "ttft" in p.lower()
+    assert "performance_comparisons" in p
+
+
+def test_u4_prompt_includes_rule_15_analytical_commentary():
+    """Rule 15: pure analytical commentary → perf OR feedback_questions, NOT hands_on_usage."""
+    p = _prompt()
+    assert "15." in p
+    assert "feedback_questions" in p
+
+
+def test_u4_prompt_canonical_example_llm_drag_race():
+    """Rule 14 cites the LLM Drag Race write-up as the canonical example."""
+    p = _prompt()
+    assert "Drag Race" in p or "drag race" in p.lower()
+
+
+# --- Worked example block ----------------------------------------------
+
+
+def test_u3u4_prompt_has_worked_example_block():
+    """The prompt ends with 'Worked examples' listing six reference cases."""
+    p = _prompt()
+    assert "Worked examples" in p
+    # Six example markers expected: A, B, C, D, E, F.
+    for marker in ["A.", "B.", "C.", "D.", "E.", "F."]:
+        assert marker in p, f"worked example {marker} missing"
+
+
+def test_u3u4_prompt_worked_example_a_event_announcement():
+    """Example A: 'Kimi K2.7 Code is generally available' → event_announcement/neutral."""
+    p = _prompt()
+    # The example text appears verbatim
+    assert "Kimi K2.7 Code is generally available" in p
+    # And the expected per-brand output is shown
+    assert "event_announcement" in p
+
+
+def test_u3u4_prompt_worked_example_b_multi_brand_neutral():
+    """Example B: state-of-market (Kimi climbed, Deepseek price drop) → neutral per brand."""
+    p = _prompt()
+    assert "K2.7 Code climbed 20 spots" in p or "climbed 20 spots" in p
+    assert "Deepseek V4" in p or "price dropped" in p
+
+
+def test_u3u4_prompt_worked_example_c_qwen_positive():
+    """Example C: Qwen investment thesis → positive sentiment."""
+    p = _prompt()
+    assert "Alibaba" in p
+    assert "strategically positive" in p
+
+
+def test_u3u4_prompt_token_count_under_2500():
+    """Prompt size guard. len(prompt.split()) * 1.3 is a rough upper bound on tokens."""
+    p = _prompt()
+    approx_tokens = int(len(p.split()) * 1.3)
+    assert approx_tokens < 2500, (
+        f"prompt too big: ~{approx_tokens} tokens "
+        f"({len(p.split())} words)"
+    )

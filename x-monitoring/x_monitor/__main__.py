@@ -743,8 +743,10 @@ def cmd_translate_posts(args, paths) -> int:
     `Store.bulk_update_translations` (the v1.7 Store path — the
     row shape is backward-compatible because U3 still populates
     text_en / text_zh_cn / lang_detected alongside the new
-    literal_zh / discourse_role / cn_equivalent / annotation
-    prongs).
+    literal_zh / cn_equivalent / annotation prongs). Plan
+    2026-07-06-001 dropped `discourse_role` from U3 — pragmatic
+    register is exclusively the classifier's per-brand output
+    (`posts_brands_discourse`).
 
     Usage:
         x-monitor translate --locale both --limit 50
@@ -979,15 +981,20 @@ def cmd_backfill_unsanctioned_flags(args, paths) -> int:
 
 
 def cmd_smoketest(args, paths) -> int:
-    """U7: forward to scripts.post_fetch_smoketest.main.
+    """U7 + U6: forward to scripts.post_fetch_smoketest.main.
 
     The db path comes from `paths["db"]` (the live x_monitoring.db);
     the script's hardcoded `data/x_monitoring.db` is also valid but
     we pass the explicit path for testability.
 
     Flags:
-      --source          latest-cycle (default) or fixture
+      --source          latest-cycle (default) | fixture | api-query
       --fixture PATH    JSONL file when --source=fixture
+      --query STR       advanced-search string for --source=api-query
+      --since DATE      ISO YYYY-MM-DD; injected as 'since:' operator
+      --max-pages N     pagination cap (api-query, default 5)
+      --max-per-page N  per-page request size (api-query, default 20)
+      --api-quiet       suppress client._request_log echo
       --sample N        sample-post eyeball section size (default: 5)
       --strict-budget   exit 1 if total wall-clock exceeds 90s
       --limit N         cap posts processed (default: 200)
@@ -998,6 +1005,16 @@ def cmd_smoketest(args, paths) -> int:
     argv: list[str] = ["--source", args.source]
     if args.fixture:
         argv.extend(["--fixture", str(args.fixture)])
+    if getattr(args, "query", None):
+        argv.extend(["--query", args.query])
+    if getattr(args, "since", None):
+        argv.extend(["--since", args.since])
+    if getattr(args, "max_pages", None) is not None:
+        argv.extend(["--max-pages", str(args.max_pages)])
+    if getattr(args, "max_per_page", None) is not None:
+        argv.extend(["--max-per-page", str(args.max_per_page)])
+    if getattr(args, "api_quiet", False):
+        argv.append("--api-quiet")
     argv.extend(["--sample", str(args.sample)])
     if getattr(args, "strict_budget", False):
         argv.append("--strict-budget")
@@ -1356,11 +1373,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_smoke.add_argument(
         "--source",
-        choices=["latest-cycle", "fixture"],
+        choices=["latest-cycle", "fixture", "api-query"],
         default="latest-cycle",
     )
     p_smoke.add_argument(
         "--fixture", type=Path, default=None,
+    )
+    p_smoke.add_argument(
+        "--query",
+        help="Advanced-search string for --source=api-query (X "
+             "operators; costs real TwitterAPI.io quota).",
+    )
+    p_smoke.add_argument(
+        "--since",
+        help="ISO date YYYY-MM-DD; injected as 'since:' operator "
+             "for --source=api-query.",
+    )
+    p_smoke.add_argument(
+        "--max-pages", type=int, default=5,
+        help="Pagination depth cap for --source=api-query (default: 5).",
+    )
+    p_smoke.add_argument(
+        "--max-per-page", type=int, default=20,
+        help="Per-page request size for --source=api-query (default: 20).",
+    )
+    p_smoke.add_argument(
+        "--api-quiet", action="store_true",
+        help="Suppress client._request_log echo for --source=api-query.",
     )
     p_smoke.add_argument(
         "--sample", type=int, default=5,

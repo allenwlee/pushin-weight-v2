@@ -1,21 +1,22 @@
 """U3 tests for x_monitor.translator: pragmatics-aware translation.
 
 Plan: docs/plans/2026-07-02-002-feat-streamlined-post-fetch-pipeline-plan.md
-(Unit 3 of 8).
+(Unit 3 of 8), refined by plan 2026-07-06-001 (drop translator's
+discourse_role).
 
 Verifies:
 - build_pragmatics_translation_prompt includes the §5.1 system
-  prompt contract (literal_zh, discourse_role, cn_equivalent,
-  annotation).
+  prompt contract (literal_zh, text_en, text_zh_cn, lang_detected,
+  cn_equivalent, annotation) but NOT discourse_role.
 - _load_few_shot_examples returns [] when the fixture is missing
   (degrades gracefully; doesn't break the cycle).
-- apply_friction_judge zeros annotation for F0 roles
-  (genuine_hype, fud, ai_slop_critique, distillation_accusation).
 - apply_friction_judge zeros annotation when the source contains a
   fixed-translation dictionary token (vibe coding, sycophancy, ...).
-- apply_friction_judge coerces unknown discourse_role to
-  `uncategorized` per KTD5.
-- translate_batch_pragmatics returns the four-pronged row shape.
+- apply_friction_judge does NOT consume / emit discourse_role
+  (it was removed from the contract).
+- translate_batch_pragmatics returns the four-pronged row shape
+  (literal_zh, cn_equivalent, annotation, noop_en, noop_zh) but
+  the row does NOT carry a `discourse_role` field.
 - translate_batch_pragmatics is backward-compatible with
   translate_batch (text_en, text_zh_cn, lang_detected still populated).
 - F1/F2/F3 friction rows keep their LLM annotation (truncated).
@@ -69,34 +70,46 @@ class FakeClaudeClient:
 
 
 def test_pragmatics_prompt_contains_four_prong_contract():
-    """The §5.1 system prompt is present in the built prompt."""
+    """The §5.1 system prompt is present in the built prompt.
+
+    Plan 2026-07-06-001 removed `discourse_role` from the translator
+    contract — pragmatic register is now exclusively the classifier's
+    per-brand output (posts_brands_discourse). The prompt's required
+    fields are now: literal_zh, text_en, text_zh_cn, lang_detected,
+    cn_equivalent, annotation.
+    """
     from x_monitor.translator import build_pragmatics_translation_prompt
 
     tweets = [{"tweet_id": "1", "text": "Claude could never make this slide deck"}]
     prompt = build_pragmatics_translation_prompt(
         tweets, ["en", "zh_cn"], brand_names=["Claude"]
     )
-    for token in ("literal_zh", "discourse_role", "cn_equivalent",
+    for token in ("literal_zh", "cn_equivalent",
                   "annotation", "bilingual pragmatic analyst",
                   "氛围编程", "套壳"):
         assert token in prompt, f"missing {token!r} in prompt"
+    # discourse_role is no longer part of the translator contract.
+    assert "discourse_role" not in prompt, (
+        "discourse_role should be gone from the translator prompt; "
+        "it's the classifier's exclusive output"
+    )
 
 
 def test_pragmatics_prompt_includes_few_shot_when_provided():
-    """Explicit few-shot list is appended to the prompt."""
+    """Explicit few-shot list is appended to the prompt (no discourse_role key)."""
     from x_monitor.translator import build_pragmatics_translation_prompt
 
     tweets = [{"tweet_id": "1", "text": "hello"}]
     few_shot = [{
         "input": "Claude could never",
-        "output": {"discourse_role": "dunk_yingyang",
-                   "literal_zh": "Claude 永远做不出"},
+        "output": {"literal_zh": "Claude 永远做不出"},
     }]
     prompt = build_pragmatics_translation_prompt(
         tweets, ["en", "zh_cn"], few_shot_examples=few_shot
     )
     assert "Claude could never" in prompt
-    assert "dunk_yingyang" in prompt
+    # No discourse_role key in the few-shot rendering (the few-shot
+    # block is JSON-dumped from the fixture which was also cleaned).
 
 
 def test_pragmatics_prompt_skips_few_shot_when_empty_list_passed():
@@ -126,40 +139,15 @@ def test_load_few_shot_examples_missing_file_returns_empty():
 # --- friction judge -----------------------------------------------------
 
 
-def test_friction_judge_f0_role_zeroes_annotation():
-    """F0 role (genuine_hype) → annotation is empty."""
-    from x_monitor.translator import apply_friction_judge
-
-    out = apply_friction_judge(
-        {"tweet_id": "1", "text": "wow this is wild"},
-        {"literal_zh": "这也太炸了",
-         "discourse_role": "genuine_hype",
-         "cn_equivalent": "这也太炸了",
-         "annotation": "the LLM emitted a long F0 note but F0 should zero it"},
-    )
-    assert out["annotation"] == ""
-    assert out["discourse_role"] == "genuine_hype"
-
-
-def test_friction_judge_f0_zeroes_for_all_three_f0_roles():
-    """All four F0 roles (genuine_hype, fud, ai_slop_critique,
-    distillation_accusation) zero the annotation."""
-    from x_monitor.translator import apply_friction_judge
-
-    for role in ("genuine_hype", "fud", "ai_slop_critique",
-                 "distillation_accusation"):
-        out = apply_friction_judge(
-            {"tweet_id": "1", "text": "x"},
-            {"discourse_role": role, "annotation": "should be zeroed"},
-        )
-        assert out["annotation"] == "", (
-            f"F0 role {role!r} must zero annotation, got "
-            f"{out['annotation']!r}"
-        )
-
-
 def test_friction_judge_fixed_translation_zeroes_annotation():
-    """A fixed-dictionary token in source → annotation zeroed."""
+    """A fixed-dictionary token in source → annotation zeroed.
+
+    Plan 2026-07-06-001: the F0-role tier (genuine_hype / fud /
+    ai_slop_critique / distillation_accusation) was REMOVED. The
+    judge no longer reads `discourse_role` from the LLM response —
+    pragmatic register is exclusively the classifier's per-brand
+    output. The fixed-dictionary check remains.
+    """
     from x_monitor.translator import apply_friction_judge
 
     for token in ("vibe coding", "sycophancy", "distillation",
@@ -167,23 +155,25 @@ def test_friction_judge_fixed_translation_zeroes_annotation():
                   "based"):
         out = apply_friction_judge(
             {"tweet_id": "1", "text": f"this is {token} material"},
-            {"discourse_role": "cope",
-             "annotation": "should be zeroed by fixed-dict match"},
+            {"annotation": "should be zeroed by fixed-dict match"},
         )
         assert out["annotation"] == "", (
             f"fixed-dict token {token!r} must zero annotation"
         )
 
 
-def test_friction_judge_unknown_role_coerced_to_uncategorized():
-    """LLM hallucinations of discourse_role → `uncategorized` (KTD5)."""
+def test_friction_judge_does_not_read_discourse_role():
+    """Plan 2026-07-06-001: judge does not coerce / consume
+    `discourse_role` — the input dict may not contain it at all."""
     from x_monitor.translator import apply_friction_judge
 
+    # No discourse_role key in input — judge must still work.
     out = apply_friction_judge(
-        {"tweet_id": "1", "text": "x"},
-        {"discourse_role": "made_up_role", "annotation": "x"},
+        {"tweet_id": "1", "text": "hello"},
+        {"literal_zh": "你好", "annotation": ""},
     )
-    assert out["discourse_role"] == "uncategorized"
+    # output does not introduce a discourse_role field either.
+    assert "discourse_role" not in out
 
 
 def test_friction_judge_named_event_keeps_annotation_truncated():
@@ -193,11 +183,10 @@ def test_friction_judge_named_event_keeps_annotation_truncated():
     long_note = "x" * 400  # > 280 chars
     out = apply_friction_judge(
         {"tweet_id": "1", "text": "this is the next Theranos"},
-        {"discourse_role": "fud", "annotation": long_note},
+        {"annotation": long_note},
     )
-    # The role is F0 (fud) so the annotation should be zeroed BEFORE
-    # the named-event check fires. The flowchart's order is F0 first.
-    assert out["annotation"] == ""
+    # Named-event match fires → keep annotation, truncated.
+    assert out["annotation"] == long_note[:280]
 
 
 def test_friction_judge_english_slang_keeps_short_note():
@@ -206,8 +195,7 @@ def test_friction_judge_english_slang_keeps_short_note():
 
     out = apply_friction_judge(
         {"tweet_id": "1", "text": "no cap this is wild"},
-        {"discourse_role": "self_deprecation",
-         "annotation": "no cap = not lying (English slang)"},
+        {"annotation": "no cap = not lying (English slang)"},
     )
     # Truncated to ≤ 140 chars.
     assert len(out["annotation"]) <= 140
@@ -228,7 +216,11 @@ def test_translate_batch_pragmatics_empty_input_no_llm_call():
 
 
 def test_translate_batch_pragmatics_returns_four_prongs():
-    """Source is French → text_en + text_zh_cn both populated."""
+    """Source is French → text_en + text_zh_cn both populated.
+
+    Plan 2026-07-06-001: `discourse_role` is no longer in the
+    translator contract, so the output row no longer carries it.
+    """
     from x_monitor.translator import translate_batch_pragmatics
 
     tweets = [{"tweet_id": "t1", "text": "Claude could never"}]
@@ -239,7 +231,6 @@ def test_translate_batch_pragmatics_returns_four_prongs():
             "text_en": "Claude could never",
             "literal_zh": "Claude 永远做不出",
             "lang_detected": "fr",
-            "discourse_role": "dunk_yingyang",
             "cn_equivalent": "Claude 不行",
             "annotation": "",
             "noop_en": False,
@@ -261,11 +252,14 @@ def test_translate_batch_pragmatics_returns_four_prongs():
     assert row["text_en"] == "Claude could never"
     assert row["text_zh_cn"] == "Claude 永远做不出"
     assert row["lang_detected"] == "fr"
-    # New prongs.
+    # New prongs (no discourse_role).
     assert row["literal_zh"] == "Claude 永远做不出"
-    assert row["discourse_role"] == "dunk_yingyang"
     assert row["cn_equivalent"] == "Claude 不行"
     assert row["annotation"] == ""
+    assert "discourse_role" not in row, (
+        "translator row must NOT carry discourse_role — it's the "
+        "classifier's per-brand output"
+    )
 
 
 def test_translate_batch_pragmatics_text_en_null_when_lang_is_english():
@@ -286,7 +280,6 @@ def test_translate_batch_pragmatics_text_en_null_when_lang_is_english():
             "text_en": "Claude could never",
             "literal_zh": "Claude 永远做不出",
             "lang_detected": "en",
-            "discourse_role": "dunk_yingyang",
             "cn_equivalent": "Claude 不行",
             "annotation": "",
             "noop_en": True,
@@ -327,7 +320,6 @@ def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
             "text_en": "Claude is really good",
             "literal_zh": "Claude 真不错",
             "lang_detected": "zh-Hans",
-            "discourse_role": "genuine_hype",
             "cn_equivalent": "Claude 真不错",
             "annotation": "",
             "noop_en": False,
@@ -365,9 +357,8 @@ def test_translate_batch_pragmatics_backward_compat_columns():
             "text_en": "Claude is really good",
             "literal_zh": "Claude 真的很好",
             "lang_detected": "fr",
-            "discourse_role": "genuine_hype",
             "cn_equivalent": "太棒了",
-            "annotation": "should be zeroed (F0)",
+            "annotation": "should be zeroed by fixed-dict match",
             "noop_en": False,
             "noop_zh": False,
         }]}
@@ -385,25 +376,26 @@ def test_translate_batch_pragmatics_backward_compat_columns():
     assert row["text_en"] == "Claude is really good"
     assert row["text_zh_cn"] == "Claude 真的很好"
     assert row["lang_detected"] == "fr"
+    # No discourse_role field.
+    assert "discourse_role" not in row
 
 
 def test_translate_batch_pragmatics_applies_friction_judge():
-    """The judge runs on every row — F0 role zeros annotation."""
+    """The judge runs on every row — fixed-dict token zeroes annotation."""
     from x_monitor.translator import translate_batch_pragmatics
 
-    tweets = [{"tweet_id": "1", "text": "hype"}]
+    tweets = [{"tweet_id": "1", "text": "vibe coding is the new norm"}]
     client = FakeClaudeClient()
     def factory(t, locales):
-        # LLM emits a long annotation even though discourse_role is
-        # genuine_hype (F0). The judge must zero it.
+        # LLM emits a long annotation; the fixed-dictionary token
+        # "vibe coding" must zero it.
         return {"results": [{
             "tweet_id": "1",
-            "text_en": "hype",
-            "literal_zh": "太炸了",
+            "text_en": "vibe coding is the new norm",
+            "literal_zh": "氛围编程是新常态",
             "lang_detected": "en",
-            "discourse_role": "genuine_hype",
-            "cn_equivalent": "太炸了",
-            "annotation": "a long F0 annotation that should be zeroed",
+            "cn_equivalent": "氛围编程是新常态",
+            "annotation": "a long note that the fixed-dict should zero",
             "noop_en": True,
             "noop_zh": False,
         }]}
@@ -416,36 +408,8 @@ def test_translate_batch_pragmatics_applies_friction_judge():
 
     out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
     assert out[0]["annotation"] == ""
-    assert out[0]["discourse_role"] == "genuine_hype"
-
-
-def test_translate_batch_pragmatics_unknown_role_coerced():
-    """An LLM hallucinated discourse_role is coerced to `uncategorized`."""
-    from x_monitor.translator import translate_batch_pragmatics
-
-    tweets = [{"tweet_id": "1", "text": "x"}]
-    client = FakeClaudeClient()
-    def factory(t, locales):
-        return {"results": [{
-            "tweet_id": "1",
-            "text_en": "x",
-            "literal_zh": "x",
-            "lang_detected": "en",
-            "discourse_role": "made_up_role",
-            "cn_equivalent": "x",
-            "annotation": "",
-            "noop_en": True,
-            "noop_zh": False,
-        }]}
-    client._factory = factory
-    orig = client.messages_create
-    def rec(**kwargs):
-        kwargs["_test_tweets"] = tweets
-        return orig(**kwargs)
-    client.messages_create = rec  # type: ignore[assignment]
-
-    out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
-    assert out[0]["discourse_role"] == "uncategorized"
+    # No discourse_role in the output row.
+    assert "discourse_role" not in out[0]
 
 
 def test_translate_batch_pragmatics_dry_run_returns_stubs():
@@ -461,7 +425,7 @@ def test_translate_batch_pragmatics_dry_run_returns_stubs():
     assert out[0]["tweet_id"] == "1"
     assert out[0]["dry_run"] is True
     assert out[0]["text_en"] is None
-    assert out[0]["discourse_role"] == "uncategorized"
+    assert "discourse_role" not in out[0]
     assert client.call_count == 0
 
 
@@ -483,6 +447,7 @@ def test_translate_batch_pragmatics_batches_above_20():
     assert len(out) == 22
     for i, row in enumerate(out):
         assert row["tweet_id"] == f"t{i}"
+        assert "discourse_role" not in row
 
 
 def test_translate_batch_pragmatics_failure_marked_failed():
@@ -501,7 +466,7 @@ def test_translate_batch_pragmatics_failure_marked_failed():
     assert len(out) == 1
     assert out[0]["translation_failed"] is True
     assert out[0]["text_en"] is None
-    assert out[0]["discourse_role"] == "uncategorized"
+    assert "discourse_role" not in out[0]
 
 
 def test_translate_batch_pragmatics_invalid_response_marked_failed():
@@ -515,7 +480,6 @@ def test_translate_batch_pragmatics_invalid_response_marked_failed():
         # Only 1 result for 2 tweets → length mismatch → parse fail.
         return {"results": [{"tweet_id": "1", "text_en": "x",
                              "literal_zh": "x", "lang_detected": "en",
-                             "discourse_role": "genuine_hype",
                              "cn_equivalent": "x", "annotation": "",
                              "noop_en": True, "noop_zh": False}]}
     client._factory = short_factory
@@ -525,6 +489,7 @@ def test_translate_batch_pragmatics_invalid_response_marked_failed():
     )
     assert len(out) == 2
     assert all(r["translation_failed"] for r in out)
+    assert all("discourse_role" not in r for r in out)
 
 # --- Lang-family helpers (deterministic noop logic) ------------------
 

@@ -274,10 +274,14 @@ def translate_batch(
 #
 # The v1.7 prompt asked for plain text_en / text_zh_cn. The U3
 # upgrade asks for the four-pronged YAML contract from research
-# §5.1 so Chinese-vendor readers can tell hype from dunk from
-# 抽象 without losing the literal translation. The prompt also
-# accepts optional few-shot examples (research §3.10) that anchor
-# each of the 9 discourse_roles to a verified live X post.
+# §5.1 so Chinese-vendor readers can tell literal translation
+# apart from netizen-flavored rephrasing without losing either.
+# Note: `discourse_role` was REMOVED from the translator contract
+# in plan 2026-07-06-001 — pragmatic register is now exclusively
+# the classifier's output (per-brand, written to
+# `posts_brands_discourse`), not the translator's (post-level,
+# never persisted). The translator returns translation + netizen
+# voice + friction annotation; nothing about the post's tone.
 
 
 # Maximum tweets per LLM call. The plan's Decision 6 specifies 20.
@@ -286,15 +290,6 @@ _TRANSLATION_BATCH_SIZE = 20
 # Retry policy: 3 attempts with exponential backoff (1s, 2s, 4s).
 _MAX_RETRIES = 3
 _BACKOFF_BASE_SECONDS = 1.0
-
-# U3: the 9-way discourse_role vocabulary (mirrors discourse_keys
-# migration 026). Coerce unknown keys to `uncategorized` per KTD5.
-_DISCOURSE_ROLES: frozenset[str] = frozenset({
-    "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
-    "cope", "fud", "distillation_accusation", "ai_slop_critique",
-    "absurdist_meme",
-})
-_DISCOURSE_UNCATEGORIZED: str = "uncategorized"
 
 
 def _is_english_family(lang: str) -> bool:
@@ -348,6 +343,19 @@ _FIXED_ZH_TRANSLATIONS: dict[str, str] = {
 }
 
 
+# Translator output column naming — see docs/reference/translator-output.md
+#
+#   `literal_zh` (post translator, _PRAGMATICS_SYSTEM_PROMPT below) and
+#   `text_zh_cn` (registry translator, _REGISTRY_*_PROMPT further down)
+#   end up writing to the same `posts` columns but reflect TWO different
+#   rendering styles — lossless-with-slang for X / Twitter posts vs.
+#   formal / named-entity-preserving for lookup tables. The naming
+#   convention makes the translator stage obvious from the column name.
+#
+#   `cn_equivalent` is NOT a translation — it's the "how would Chinese
+#   netizens on Weibo/Zhihu/Bilibili say this" free rendering. Distinct
+#   from `literal_zh`.
+
 _PRAGMATICS_SYSTEM_PROMPT: str = (
     "You are a 'bilingual pragmatic analyst' specializing in English X "
     "(Twitter) AI/LLM-sphere discourse → Chinese AI-sphere discourse. "
@@ -356,7 +364,7 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "You understand English X expressions such as meme / slang / irony / "
     "dunk / FUD / 抽象 / 翻车, and you understand Chinese parallel "
     "expressions such as 阴阳怪气 / 抽象话 / 套壳 / 蒸馏 / 舔狗 / 翻车 / 整活.\n\n"
-    "For each input tweet, output exactly 4 fields in this YAML shape:\n"
+    "For each input tweet, output exactly the fields listed below in this YAML shape:\n"
     "  literal_zh:       Simplified Chinese literal translation. Preserve\n"
     "                    the original slang — do NOT smooth it out. "
     "Mixed Chinese/English is permitted (e.g. 'Sora 2', 'DeepSeek-V4').\n"
@@ -373,11 +381,6 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "                    NULLs text_en in those cases — never echo the source\n"
     "                    into a locale column that matches the source).\n"
     "  lang_detected:    ISO 639-1 + script (e.g. 'en', 'zh-Hans').\n"
-    "  discourse_role:   EXACTLY one of: genuine_hype, sarcasm, "
-    "dunk_yingyang,\n"
-    "                    self_deprecation, cope, fud, "
-    "distillation_accusation,\n"
-    "                    ai_slop_critique, absurdist_meme, other.\n"
     "  cn_equivalent:    A 'how would Chinese netizens on Weibo/Zhihu/"
     "Bilibili\n"
     "                    say the same thing' rendering. Use 'N/A' if "
@@ -406,8 +409,8 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "Rules:\n"
     "1. Return ONLY a JSON object of the form:\n"
     '   {"results": [{"tweet_id": str, "text_en": str, "literal_zh": str, '
-    '"lang_detected": str, "discourse_role": str, "cn_equivalent": str, '
-    '"annotation": str, "noop_en": bool, "noop_zh": bool}, ...]}\n'
+    '"lang_detected": str, "cn_equivalent": str, "annotation": str, '
+    '"noop_en": bool, "noop_zh": bool}, ...]}\n'
     "2. One result per input tweet, in the same order.\n"
     "3. Total output per post ≤ 280 characters (excluding tweet_id).\n"
     "4. Model names, brand names, personal names, @mentions, URLs, and "
@@ -471,8 +474,7 @@ def build_pragmatics_translation_prompt(
     few_shot_block = ""
     if few_shot_examples:
         few_shot_block = (
-            "\n\nFew-shot examples (one per discourse_role; verified "
-            "live X posts from 2026-06-26):\n"
+            "\n\nFew-shot examples (verified live X posts from 2026-06-26):\n"
             + "\n".join(
                 f"  Input: {ex.get('input', '')!r}\n"
                 f"  Output: {json.dumps(ex.get('output', {}), ensure_ascii=False)}"
@@ -500,19 +502,24 @@ def build_pragmatics_translation_prompt(
 def apply_friction_judge(
     post: dict[str, Any], llm_yaml: dict[str, Any]
 ) -> dict[str, Any]:
-    """Apply the F0–F3 friction-level judgment (research §6.5)."""
+    """Apply the F0–F3 friction-level judgment (research §6.5).
+
+    Picks an annotation tier based on the post's text content and
+    sets `annotation` accordingly. Other fields pass through from
+    `llm_yaml` unchanged.
+
+    Note (plan 2026-07-06-001): previously this function also
+    coerced the translator's post-level `discourse_role` to the
+    9-key vocabulary (mirroring the classifier's per-brand role).
+    With `discourse_role` removed from the translator contract,
+    the F0 role-set check is also gone — F0 roles are no longer
+    distinguished here. The classifier's role taxonomy (per-brand)
+    remains authoritative.
+    """
     text = (post.get("text") or "").lower()
-    raw_role = llm_yaml.get("discourse_role") or ""
-    role = raw_role if raw_role in _DISCOURSE_ROLES else _DISCOURSE_UNCATEGORIZED
     raw_annotation = (llm_yaml.get("annotation") or "").strip()
 
-    f0_roles = {
-        "genuine_hype", "fud", "ai_slop_critique",
-        "distillation_accusation",
-    }
-    if role in f0_roles:
-        annotation = ""
-    elif any(token in text for token in _FIXED_ZH_TRANSLATIONS):
+    if any(token in text for token in _FIXED_ZH_TRANSLATIONS):
         annotation = ""
     elif any(
         marker in text
@@ -528,7 +535,6 @@ def apply_friction_judge(
 
     return {
         **llm_yaml,
-        "discourse_role": role,
         "annotation": annotation,
     }
 
@@ -536,7 +542,7 @@ def apply_friction_judge(
 def _empty_pragmatics_row(
     tweet: dict[str, Any], failed: bool = False, dry_run: bool = False
 ) -> dict[str, Any]:
-    """U3: empty-row shape for the four-pronged contract."""
+    """U3: empty-row shape for the four-pronged contract (no discourse)."""
     row: dict[str, Any] = {
         "tweet_id": str(tweet.get("tweet_id") or tweet.get("id")),
         "brand_id": tweet.get("brand_id"),
@@ -544,7 +550,6 @@ def _empty_pragmatics_row(
         "text_zh_cn": None,
         "literal_zh": None,
         "lang_detected": None,
-        "discourse_role": _DISCOURSE_UNCATEGORIZED,
         "cn_equivalent": None,
         "annotation": None,
     }
@@ -578,8 +583,16 @@ def translate_batch_pragmatics(
     brand_names: list[str] | None = None,
     few_shot_examples: list[dict[str, Any]] | None = None,
     dry_run: bool = False,
+    on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
 ) -> list[dict[str, Any]]:
-    """U3: translate a batch of tweets with the §5.1 four-pronged contract."""
+    """U3: translate a batch of tweets with the §5.1 four-pronged contract.
+
+    on_batch_error (U7): optional callback invoked per-batch when the
+    LLM call raised (after retries exhausted) OR the response failed
+    to parse. Receives the input batch and the exception (for parse
+    failures a synthetic `ValueError("parse failure")` is passed).
+    Used by the smoketest to attribute failures to specific tweet_ids.
+    """
     if not tweets:
         return []
 
@@ -597,14 +610,18 @@ def translate_batch_pragmatics(
         )
         try:
             response = _call_with_retry(client, prompt)
-        except Exception:
+        except Exception as exc:
             for t in batch:
                 out.append(_empty_pragmatics_row(t, failed=True))
+            if on_batch_error is not None:
+                on_batch_error(batch, exc)
             continue
         parsed = _parse_pragmatics_response(response, batch)
         if parsed is None:
             for t in batch:
                 out.append(_empty_pragmatics_row(t, failed=True))
+            if on_batch_error is not None:
+                on_batch_error(batch, ValueError("parse failure"))
             continue
         for t, p in zip(batch, parsed):
             judged = apply_friction_judge(t, p)
@@ -660,7 +677,6 @@ def translate_batch_pragmatics(
                 "noop_en": text_en is None,
                 "noop_zh": text_zh_cn is None,
                 "literal_zh": literal_zh_raw,
-                "discourse_role": judged.get("discourse_role"),
                 "cn_equivalent": judged.get("cn_equivalent"),
                 "annotation": judged.get("annotation"),
             })
