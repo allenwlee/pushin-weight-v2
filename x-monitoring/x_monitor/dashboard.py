@@ -1288,6 +1288,219 @@ def serialize_single_brand_chart(
     }
 
 
+# Pushin' Weight home feed sort columns (R10, U4). The set is a
+# deliberate subset — see Open Question Q2 in the plan. Brand and
+# account.handle are alpha-sortable; classification columns are
+# not single-value sort candidates and ship in v1 as display-only.
+_FEED_SORT_COLUMNS: dict[str, str] = {
+    "created_at": "created_at",
+    "like_count": "like_count",
+}
+
+_FEED_DEFAULT_SORT = "created_at"
+_FEED_DEFAULT_ORDER = "desc"
+_FEED_HARD_CAP = 500
+_FEED_DEFAULT_LIMIT = 50
+
+
+def _feed_encode_cursor(created_at: str, tweet_id: str) -> str:
+    """Encode a (created_at, tweet_id) cursor as a string token.
+
+    Format: "<iso>|tweet_id". Uses a pipe (which is not legal in ISO
+    timestamps or Twitter IDs) as the separator so we don't have to
+    disambiguate from the colons inside ISO 8601 timestamps.
+    """
+    return f"{created_at}|{tweet_id}"
+
+
+def _feed_decode_cursor(cursor: str) -> tuple[str, str] | None:
+    """Decode a cursor token. Returns (created_at, tweet_id) or None
+    on malformed input."""
+    if not cursor or "|" not in cursor:
+        return None
+    iso, _, tweet_id = cursor.partition("|")
+    if not iso or not tweet_id:
+        return None
+    return iso, tweet_id
+
+
+def _feed_row_to_wire(post: dict[str, Any], locale: str) -> dict[str, Any]:
+    """Convert one denormalized post dict to the JSON wire shape (R10)."""
+    text_translated, is_translated = _pick_text(post, locale)
+    text_original = post.get("text")
+    classifications: dict[str, Any] = {}
+    brand_nicknames = post.get("brand_nicknames") or []
+    by_brand = post.get("classifications_by_brand") or {}
+    for nick in brand_nicknames:
+        classifications[nick] = by_brand.get(nick, {})
+    return {
+        "tweet_id": post.get("tweet_id"),
+        "created_at": post.get("created_at"),
+        "lang_detected": post.get("lang_detected"),
+        "text": text_original,
+        "text_translated": text_translated,
+        "is_translated": is_translated,
+        "text_en": post.get("text_en"),
+        "text_zh_cn": post.get("text_zh_cn"),
+        "like_count": post.get("like_count") or 0,
+        "brands": post.get("brands") or [],
+        "brand_nicknames": brand_nicknames,
+        "classifications": classifications,
+        "unsanctioned": bool(post.get("unsanctioned")),
+        "account": post.get("account") or {},
+    }
+
+
+def serialize_feed_page(
+    posts: list[dict[str, Any]],
+    *,
+    filters: dict[str, Any] | None = None,
+    sort: str = _FEED_DEFAULT_SORT,
+    order: str = _FEED_DEFAULT_ORDER,
+    cursor: str | None = None,
+    limit: int = _FEED_DEFAULT_LIMIT,
+    brand_scope: str | None = None,
+    locale: str = "en",
+    seen_cursor_keys: set[tuple[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Return one page of the Pushin' Weight home feed (R9, R10, R11, U4).
+
+    Args:
+        posts: list of denormalized post dicts (see
+            `serialize_home_chart` for the expected fields). The route
+            layer is responsible for the brand-scope narrowing and the
+            joins to `posts_brands_signals`, `posts_brands_discourse`,
+            `posts_unsanctioned_flags`, and `accounts` (for role_key).
+        filters: see `_post_matches_filter` for the shape. None means
+            "all on" (the default UI state).
+        sort: one of the keys in `_FEED_SORT_COLUMNS`. Unknown values
+            fall back to the default.
+        order: "asc" or "desc". Unknown values fall back to the default.
+        cursor: opaque "<iso>:<tweet_id>" token from the previous
+            page's `next_cursor`. When None, returns the first page.
+        limit: page size. Clamped to `_FEED_HARD_CAP / 50 * 50` so the
+            total feed never exceeds 500 rows per KTD2 / R9.
+        brand_scope: when set, only posts whose brand_nicknames contain
+            this value are included (server-side filter, R16).
+        locale: locale to render the translated column in. Affects
+            `_pick_text` only; original text is always returned.
+        seen_cursor_keys: cumulative set of (created_at, tweet_id) keys
+            already returned by previous pages. The hard cap is enforced
+            against this set, NOT against the input `posts` list (the
+            caller may have already filtered / windowed it).
+
+    Returns:
+        {
+            "rows": [<feed wire shape>],
+            "next_cursor": str | None,
+            "applied_filters": {...},
+            "sort": str,
+            "order": str,
+            "locale": str,
+        }
+
+    Pagination semantics:
+        - When `order='desc'`, the cursor is the last row from the
+          previous page and the next page returns rows with
+          (created_at, tweet_id) strictly LESS than the cursor (tie-
+          break on tweet_id for posts sharing the same created_at).
+        - When `order='asc'`, the opposite.
+        - `next_cursor` is None when no more rows fit, OR when the
+          caller has already returned `_FEED_HARD_CAP` rows total.
+    """
+    if filters is None:
+        filters = {}
+    if sort not in _FEED_SORT_COLUMNS:
+        sort = _FEED_DEFAULT_SORT
+    if order not in ("asc", "desc"):
+        order = _FEED_DEFAULT_ORDER
+
+    cursor_pair = _feed_decode_cursor(cursor) if cursor else None
+    if seen_cursor_keys is None:
+        seen_cursor_keys = set()
+
+    # Apply the requested sort in memory. The route layer is still
+    # encouraged to pre-sort via SQL (more efficient at scale), but
+    # this branch handles the in-process case (e.g. a small feed
+    # window or a path that joins in Python).
+    sort_key = _FEED_SORT_COLUMNS[sort]
+    if sort_key == "created_at":
+        # Lexicographic on ISO-8601 strings is chronological for
+        # properly-formatted ISO timestamps (matches cursor narrowing).
+        sorted_posts = sorted(
+            posts, key=lambda p: (p.get("created_at") or "", p.get("tweet_id") or ""),
+            reverse=(order == "desc"),
+        )
+    else:  # like_count
+        sorted_posts = sorted(
+            posts, key=lambda p: p.get("like_count") or 0,
+            reverse=(order == "desc"),
+        )
+
+    def _post_eligible(p: dict[str, Any]) -> tuple[str, str] | None:
+        """Return (created_at, tweet_id) if `p` is eligible for the
+        current page; None otherwise. Centralizes brand-scope, filter,
+        seen-keys, and cursor narrowing."""
+        if brand_scope is not None:
+            nicknames = p.get("brand_nicknames") or []
+            if brand_scope not in nicknames:
+                return None
+        if not _post_matches_filter(p, filters):
+            return None
+        created_at = p.get("created_at") or ""
+        tweet_id = p.get("tweet_id") or ""
+        if not created_at or not tweet_id:
+            return None
+        key = (created_at, tweet_id)
+        if key in seen_cursor_keys:
+            return None
+        if cursor_pair is not None:
+            cur_iso, cur_tweet = cursor_pair
+            if order == "desc":
+                if (created_at, tweet_id) >= (cur_iso, cur_tweet):
+                    return None
+            else:
+                if (created_at, tweet_id) <= (cur_iso, cur_tweet):
+                    return None
+        return key
+
+    rows: list[dict[str, Any]] = []
+    had_more_after = False
+    for p in sorted_posts:
+        if len(rows) >= limit:
+            # Page is full; keep scanning ONLY to determine if there
+            # is at least one more eligible post (sets next_cursor).
+            if _post_eligible(p) is not None:
+                had_more_after = True
+                break
+            continue
+        key = _post_eligible(p)
+        if key is None:
+            continue
+        rows.append(_feed_row_to_wire(p, locale))
+
+    # next_cursor: None if this is the last page, OR the caller has
+    # already returned the hard cap, OR the cursor token was malformed.
+    total_seen = len(seen_cursor_keys) + len(rows)
+    next_cursor: str | None = None
+    if rows and had_more_after and total_seen < _FEED_HARD_CAP:
+        last = rows[-1]
+        next_cursor = _feed_encode_cursor(
+            last["created_at"], last["tweet_id"]
+        )
+    if cursor and cursor_pair is None:
+        next_cursor = None
+
+    return {
+        "rows": rows,
+        "next_cursor": next_cursor,
+        "applied_filters": dict(filters),
+        "sort": sort,
+        "order": order,
+        "locale": locale,
+    }
+
+
 def _build_top3(
     posts: list[dict[str, Any]],
     *,
