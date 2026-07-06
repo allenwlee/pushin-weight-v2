@@ -178,6 +178,37 @@ _DASHBOARD_SENTIMENT_KEYS: tuple[str, ...] = (
 _DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = (
     "buzz_releases", "hands_on_usage",
     "performance_comparisons", "feedback_questions",
+    # v1.12 (migration 027): two new keys for promotional / event posts.
+    # Pushin' Weight home pages (R7, U2) ship these as part of the
+    # post_type filter group.
+    "advertising_marketing", "event_announcement",
+)
+
+# Pushin' Weight home pages (R7) — 10-key discourse taxonomy. Mirrors
+# the 9 keys seeded by migration 026 + the 10th (advertising-marketing
+# with a hyphen, per the existing migration 027 insert) added in the
+# same migration. The order is the same as the on-screen filter
+# checkboxes; do not reorder without updating R7 + A8.
+_DASHBOARD_DISCOURSE_KEYS: tuple[str, ...] = (
+    "genuine_hype", "sarcasm", "dunk_yingyang",
+    "self_deprecation", "cope", "fud",
+    "distillation_accusation", "ai_slop_critique",
+    "absurdist_meme", "advertising-marketing",
+)
+
+# 3-key role taxonomy (R7). Roles live on `brands_accounts.role_id` and
+# are resolved to text keys via the `roles` table. Order is on-screen
+# order; do not reorder without updating R7.
+_DASHBOARD_ROLE_KEYS: tuple[str, ...] = (
+    "official", "staff", "community",
+)
+
+# 6-step nationalism scale (R7, migration 026). One tuple is used for
+# both cn_nationalism and us_nationalism axes; the axis is the dict
+# key on the filter shape.
+_DASHBOARD_NATIONALISM_KEYS: tuple[str, ...] = (
+    "none", "mild_pro", "pro",
+    "constructive_critical", "anti", "mixed",
 )
 
 
@@ -872,6 +903,183 @@ def serialize_combined_chart(
         "series": series,
         "stacked": stacked,
         "colors": colors,
+        "window_days": window_days,
+        "fetched_at": now.isoformat(),
+    }
+
+
+def _post_matches_filter(
+    post: dict[str, Any],
+    filters: dict[str, Any],
+) -> bool:
+    """Return True when a single post satisfies the active control-panel filters.
+
+    The filter contract is a dict with these keys (all optional; an
+    absent key means "no filter on this dimension"):
+
+        - discourse:    list[str] — e.g. ['genuine_hype', 'sarcasm'].
+                        A post matches if its `discourse` list overlaps.
+        - post_types:   list[str] — e.g. ['buzz_releases'].
+                        A post matches if its `post_types` list overlaps.
+        - role:         list[str] — e.g. ['official', 'staff'].
+                        A post matches if its `role_key` is in the set.
+        - cn_nationalism: list[str] | None
+                        A post matches if its `cn_nationalism` key is in the
+                        set; `None` is treated as "any" when the list is empty.
+        - us_nationalism: same shape as cn_nationalism.
+        - unsanctioned: "off" | "only" | "any".
+                        "off"  → posts with `unsanctioned=True` are EXCLUDED.
+                        "only" → posts with `unsanctioned=False` are EXCLUDED.
+                        "any"  → no filter.
+
+    Used by both `serialize_home_chart` (U2) and `serialize_feed_page`
+    (U4) so the chart and feed share one filter-narrowing predicate.
+    """
+    # Discourse: any overlap with the active set wins
+    discourse = filters.get("discourse") or []
+    if discourse:
+        post_disc = post.get("discourse") or []
+        if not any(d in discourse for d in post_disc):
+            return False
+
+    # Post types: any overlap
+    post_types = filters.get("post_types") or []
+    if post_types:
+        post_pts = post.get("post_types") or []
+        if not any(p in post_types for p in post_pts):
+            return False
+
+    # account.role: post's role_key must be in the set
+    role = filters.get("role") or []
+    if role:
+        post_role = post.get("role_key")
+        if post_role not in role:
+            return False
+
+    # Nationalism axes
+    for axis in ("cn_nationalism", "us_nationalism"):
+        active = filters.get(axis) or []
+        if active:
+            post_key = post.get(axis)
+            if post_key not in active:
+                return False
+
+    # unsanctioned
+    mode = filters.get("unsanctioned") or "off"
+    is_flagged = bool(post.get("unsanctioned"))
+    if mode == "off" and is_flagged:
+        return False
+    if mode == "only" and not is_flagged:
+        return False
+
+    return True
+
+
+def serialize_home_chart(
+    enabled_models: list[str],
+    posts_by_brand: dict[str, list[dict[str, Any]]],
+    *,
+    window_days: int = 7,
+    latest_run: dict[str, Any] | None = None,
+    now: datetime | None = None,
+    filters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return the multi-brand Pushin' Weight home chart payload (KTD1, U2).
+
+    Mirrors `serialize_combined_chart`'s per-day bucketing loop, but
+    narrows the count per (brand, day) by the active control-panel
+    filters. The payload shape is:
+
+        {
+            "days": [iso_date_str] * window_days,
+            "series": {brand: [int] * window_days},   # filtered counts
+            "stacked": {brand: {discourse_key: [int] * window_days}},
+            "colors": {brand: hex},
+            "totals": {brand: int},                    # filtered totals
+            "applied_filters": {...},                  # echo of input
+            "window_days": int,
+            "fetched_at": iso_str,
+        }
+
+    Args:
+        enabled_models: list of brand model_ids in render order.
+        posts_by_brand: {brand: [post dict]} aligned with `enabled_models`.
+            Each post dict is expected to carry the filter-narrowing
+            attributes denormalized by the route layer:
+            `discourse: [str]`, `post_types: [str]`, `role_key: str`,
+            `cn_nationalism: str`, `us_nationalism: str`,
+            `unsanctioned: bool`. Posts missing these attributes are
+            treated as having empty/default values.
+        window_days: total window for the chart (default 7).
+        latest_run: parsed LATEST.json (or None) for the now anchor.
+        now: anchor timestamp for window cutoffs (test seam).
+        filters: see `_post_matches_filter` for the shape. None means
+            "all on" (the default UI state).
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+        if latest_run and latest_run.get("finished_at"):
+            try:
+                now = datetime.fromisoformat(
+                    latest_run["finished_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+    if filters is None:
+        filters = {}
+
+    days: list[str] = [
+        (now.date() - timedelta(days=i)).isoformat()
+        for i in range(window_days - 1, -1, -1)
+    ]
+
+    series: dict[str, list[int]] = {b: [0] * window_days for b in enabled_models}
+    stacked: dict[str, dict[str, list[int]]] = {
+        b: {dk: [0] * window_days for dk in _DASHBOARD_DISCOURSE_KEYS}
+        for b in enabled_models
+    }
+    totals: dict[str, int] = {b: 0 for b in enabled_models}
+
+    for brand in enabled_models:
+        for p in posts_by_brand.get(brand, []):
+            if not _post_matches_filter(p, filters):
+                continue
+            dt = _parse_post_timestamp(p.get("created_at"))
+            if dt is None:
+                continue
+            days_ago = (now.date() - dt.date()).days
+            if days_ago < 0 or days_ago >= window_days:
+                continue
+            idx = window_days - 1 - days_ago
+            series[brand][idx] += 1
+            totals[brand] += 1
+            # Per-discourse breakdown for hover overlay (combined chart's
+            # D3 precedent). Posts with no discourse classification
+            # land in a "__none__" bucket so the operator can see how
+            # many posts were uncategorized.
+            post_disc = p.get("discourse") or []
+            if not post_disc:
+                stacked[brand].setdefault("__none__", [0] * window_days)
+                stacked[brand]["__none__"][idx] += 1
+            else:
+                for dk in post_disc:
+                    if dk in _DASHBOARD_DISCOURSE_KEYS:
+                        stacked[brand][dk][idx] += 1
+                    else:
+                        # Unknown discourse key — bucket it so we don't
+                        # drop the count silently.
+                        stacked[brand].setdefault("__none__", [0] * window_days)
+                        stacked[brand]["__none__"][idx] += 1
+
+    colors = {b: MODEL_ACCENT_COLORS.get(b, "#9ca3af") for b in enabled_models}
+
+    return {
+        "days": days,
+        "series": series,
+        "stacked": stacked,
+        "colors": colors,
+        "totals": totals,
+        "applied_filters": dict(filters),
         "window_days": window_days,
         "fetched_at": now.isoformat(),
     }
