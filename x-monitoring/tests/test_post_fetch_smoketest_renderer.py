@@ -1,14 +1,17 @@
-"""U7: smoketest runner update — multi-discourse + unsanctioned flags output.
+"""U7 + U1 + U2: smoketest runner — multi-discourse / unsanctioned / URL / discourse-field-source.
 
-Plan: docs/plans/2026-07-03-003-feat-post-fetch-taxonomy-and-multi-discourse-plan.md
-Unit U7.
+Plans:
+- docs/plans/2026-07-03-003-feat-post-fetch-taxonomy-and-multi-discourse-plan.md (U7)
+- docs/plans/2026-07-04-001-feat-post-fetch-smoketest-and-prompt-tuning-plan.md (U1, U2)
 
 Verifies:
 - _render_sample_posts handles multi-value post_types[] / discourse_roles[]
   arrays by expanding into N rows per brand.
 - _render_sample_posts surfaces unsanctioned flags per post when present.
-- _render_sample_posts renders `discourse: <comma-joined>` when
-  discourse_role is an array.
+- U1: post-level header is `trans_disc:` (not `discourse:`). Per-brand
+  line emits `cls_disc=` when discourse_roles is present, OMITS the
+  field entirely when absent (not a placeholder).
+- U2: each post header includes the full X / Twitter URL.
 - Backwards compat: legacy scalar post_type / discourse_role values
   still render correctly.
 """
@@ -19,9 +22,14 @@ from scripts.post_fetch_smoketest import _render_sample_posts
 
 
 def test_u7_renders_one_line_per_brand_with_scalar_fields():
-    """Legacy shape: scalar post_type + scalar discourse_role."""
+    """Legacy shape: scalar post_type + scalar discourse_role.
+
+    U1 + U2: header now includes URL and uses trans_disc: (translator
+    output) vs cls_disc= (classifier per-brand output).
+    """
     sample = [
-        {"tweet_id": "111", "id": "111", "text": "GLM 5.2 真棒"},
+        {"tweet_id": "111", "id": "111", "text": "GLM 5.2 真棒",
+         "author_handle": "testuser"},
     ]
     trans = [
         {"tweet_id": "111", "text_en": None, "text_zh_cn": "GLM 5.2 真棒",
@@ -38,7 +46,7 @@ def test_u7_renders_one_line_per_brand_with_scalar_fields():
     out = _render_sample_posts(sample, trans, class_rows)
     assert "[brand=glm]" in out
     assert "pt=hands_on_usage" in out
-    assert "disc=genuine_hype" in out
+    assert "cls_disc=genuine_hype" in out
 
 
 def test_u7_renders_n_lines_for_multi_post_types():
@@ -82,8 +90,8 @@ def test_u7_renders_n_lines_for_multi_discourse_roles():
     out = _render_sample_posts(sample, trans, class_rows)
     n_lines = out.count("[brand=glm]")
     assert n_lines == 2
-    assert "disc=genuine_hype" in out
-    assert "disc=advertising-marketing" in out
+    assert "cls_disc=genuine_hype" in out
+    assert "cls_disc=advertising-marketing" in out
 
 
 def test_u7_renders_cartesian_expansion():
@@ -127,7 +135,7 @@ def test_u7_no_unsanctioned_line_when_empty():
 
 
 def test_u7_discourse_role_array_comma_joined():
-    """When discourse_role is an array in the translation row, join with commas."""
+    """U1: translator's `discourse_role` array renders under `trans_disc:`."""
     sample = [{"tweet_id": "777", "id": "777", "text": "test"}]
     trans = [{
         "tweet_id": "777",
@@ -135,26 +143,25 @@ def test_u7_discourse_role_array_comma_joined():
         "discourse_role": ["genuine_hype", "advertising-marketing"],
     }]
     out = _render_sample_posts(sample, trans, {})
-    # The "discourse:" line should show comma-joined values.
-    assert "discourse:   genuine_hype,advertising-marketing" in out
+    assert "trans_disc:  genuine_hype,advertising-marketing" in out
 
 
 def test_u7_empty_discourse_role_defaults_to_uncategorized():
-    """Empty array → 'uncategorized' literal."""
+    """Empty array → 'uncategorized' literal (under trans_disc:)."""
     sample = [{"tweet_id": "888", "id": "888", "text": "test"}]
     trans = [{"tweet_id": "888", "literal_zh": "test",
               "discourse_role": []}]
     out = _render_sample_posts(sample, trans, {})
-    assert "discourse:   uncategorized" in out
+    assert "trans_disc:  uncategorized" in out
 
 
 def test_u7_backwards_compat_legacy_scalar_discourse():
-    """Legacy scalar discourse_role string still renders correctly."""
+    """Legacy scalar `discourse_role` still renders as `trans_disc:` scalar."""
     sample = [{"tweet_id": "999", "id": "999", "text": "test"}]
     trans = [{"tweet_id": "999", "literal_zh": "test",
               "discourse_role": "genuine_hype"}]
     out = _render_sample_posts(sample, trans, {})
-    assert "discourse:   genuine_hype" in out
+    assert "trans_disc:  genuine_hype" in out
     assert "genuine_hype," not in out  # no spurious comma
 
 
@@ -179,5 +186,111 @@ def test_u7_multiple_brands_render_separately():
     out = _render_sample_posts(sample, trans, class_rows)
     assert out.count("[brand=glm]") == 1
     assert out.count("[brand=moonshot_kimi]") == 1
-    assert "disc=genuine_hype" in out
-    assert "disc=self_deprecation" in out
+    assert "cls_disc=genuine_hype" in out
+    assert "cls_disc=self_deprecation" in out
+
+
+# --- U1: post-level trans_disc: vs per-brand cls_disc= -------------------
+
+
+def test_u1_post_level_header_uses_trans_disc_label():
+    """The post-level header is `trans_disc:`, not `discourse:` (U1 rename)."""
+    sample = [{"tweet_id": "100", "id": "100", "text": "hello"}]
+    trans = [{"tweet_id": "100", "literal_zh": "你好",
+              "discourse_role": "genuine_hype"}]
+    out = _render_sample_posts(sample, trans, {})
+    assert "trans_disc:  genuine_hype" in out
+    # The legacy header should NOT appear.
+    assert "\ndiscourse:" not in ("\n" + out)
+
+
+def test_u1_per_brand_cls_disc_emitted_when_in_payload():
+    """cls_disc= comes from cls.discourse_roles when present."""
+    sample = [{"tweet_id": "200", "id": "200", "text": "t"}]
+    trans = [{"tweet_id": "200", "literal_zh": "t"}]
+    class_rows = {
+        "200": [
+            {"brand_id": "kimi",
+             "post_types": ["hands_on_usage"],
+             "sentiment": "positive",
+             "discourse_roles": ["genuine_hype"],
+             "china_nationalism": "none", "us_nationalism": "none"},
+        ],
+    }
+    out = _render_sample_posts(sample, trans, class_rows)
+    assert "cls_disc=genuine_hype" in out
+
+
+def test_u1_per_brand_cls_disc_omitted_when_absent():
+    """U1: when discourse_roles is absent, the cls_disc= field is omitted
+    entirely — NOT emitted as a placeholder `cls_disc=uncategorized`.
+    """
+    sample = [{"tweet_id": "300", "id": "300", "text": "t"}]
+    trans = [{"tweet_id": "300", "literal_zh": "t"}]
+    class_rows = {
+        "300": [
+            # No `discourse_roles` key, no `discourse_role` legacy key.
+            {"brand_id": "kimi",
+             "post_types": ["hands_on_usage"],
+             "sentiment": "positive",
+             "china_nationalism": "none", "us_nationalism": "none"},
+        ],
+    }
+    out = _render_sample_posts(sample, trans, class_rows)
+    assert "[brand=kimi]" in out
+    assert "cls_disc" not in out, (
+        f"cls_disc= should be omitted when payload is absent:\n{out}"
+    )
+
+
+def test_u1_per_brand_legacy_discourse_role_still_emits_cls_disc():
+    """Backwards compat: legacy scalar `discourse_role` on the class
+    row is wrapped into a single-element `cls_disc=`.
+    """
+    sample = [{"tweet_id": "400", "id": "400", "text": "t"}]
+    trans = [{"tweet_id": "400", "literal_zh": "t"}]
+    class_rows = {
+        "400": [
+            {"brand_id": "kimi",
+             "post_types": ["hands_on_usage"],
+             "sentiment": "positive",
+             "discourse_role": "genuine_hype",  # legacy scalar
+             "china_nationalism": "none", "us_nationalism": "none"},
+        ],
+    }
+    out = _render_sample_posts(sample, trans, class_rows)
+    assert "cls_disc=genuine_hype" in out
+
+
+# --- U2: full X / Twitter URL in post header -----------------------------
+
+
+def test_u2_renders_url_when_author_handle_present():
+    """U2: URL included in the post header."""
+    sample = [{"tweet_id": "abc123", "id": "abc123", "text": "x",
+               "author_handle": "adlenesifi"}]
+    trans = [{"tweet_id": "abc123", "literal_zh": "x"}]
+    out = _render_sample_posts(sample, trans, {})
+    assert "url=https://x.com/adlenesifi/status/abc123" in out
+
+
+def test_u2_renders_no_handle_fallback_when_missing():
+    """U2: empty/None author_handle → `(no handle)` so the URL slot
+    is unambiguous.
+    """
+    sample = [{"tweet_id": "xyz", "id": "xyz", "text": "x",
+               "author_handle": None}]
+    trans = [{"tweet_id": "xyz", "literal_zh": "x"}]
+    out = _render_sample_posts(sample, trans, {})
+    assert "url=https://x.com/(no handle)/status/xyz" in out
+
+
+def test_u2_renders_no_handle_fallback_when_empty_string():
+    """U2: empty-string author_handle → `(no handle)` (Postgres NULL
+    vs empty string both treated as missing).
+    """
+    sample = [{"tweet_id": "xyz", "id": "xyz", "text": "x",
+               "author_handle": ""}]
+    trans = [{"tweet_id": "xyz", "literal_zh": "x"}]
+    out = _render_sample_posts(sample, trans, {})
+    assert "url=https://x.com/(no handle)/status/xyz" in out

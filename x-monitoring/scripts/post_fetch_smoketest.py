@@ -74,7 +74,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _load_latest_cycle_posts(
     store, anthropic_client, limit: int
-) -> list[dict]:
+) -> tuple[list[dict], int]:
     """Pull the most recent kept posts from the DB and use the
     deterministic brand-keyword detector to assign brand_ids.
 
@@ -84,6 +84,12 @@ def _load_latest_cycle_posts(
     to the llama brand). For the post-fetch classifier we want
     the same keyword machinery the LLM is told to trust, applied
     deterministically to the post text.
+
+    Returns:
+        (posts, posts_with_no_brand_skipped) — the filtered list
+        of posts with at least one monitored-brand attribution,
+        plus the count of posts that were excluded because none
+        of the 5 monitored brands was detected.
     """
     from x_monitor.attribution import (
         compile_keyword_index,
@@ -95,7 +101,7 @@ def _load_latest_cycle_posts(
 
     rows = store._conn.execute(
         """
-        SELECT p.tweet_id, p.text, p.lang_detected
+        SELECT p.tweet_id, p.text, p.lang_detected, p.author_handle
         FROM posts p
         ORDER BY p.fetched_at DESC
         LIMIT ?
@@ -115,10 +121,16 @@ def _load_latest_cycle_posts(
             "id": r["tweet_id"],
             "text": text,
             "lang_detected": r["lang_detected"],
+            "author_handle": r["author_handle"] if "author_handle" in r.keys() else None,
             "brand_id": brand_ids[0] if brand_ids else "",
             "brand_ids": brand_ids,
         })
-    return out
+    # U5: filter out posts with no monitored-brand attribution.
+    # Posts with empty `brand_ids` get the LLM budget skipped — the
+    # classifier needs a brand list to attach classifications to.
+    filtered = [p for p in out if p.get("brand_ids")]
+    skipped = len(out) - len(filtered)
+    return filtered, skipped
 
 
 def _load_fixture_posts(path: Path) -> list[dict]:
@@ -136,6 +148,7 @@ def _load_fixture_posts(path: Path) -> list[dict]:
                 "id": str(row["tweet_id"]),
                 "text": row.get("text", ""),
                 "lang_detected": row.get("lang_detected"),
+                "author_handle": row.get("author_handle"),
                 "brand_id": (row.get("attributed_brands") or [""])[0],
                 "brand_ids": row.get("attributed_brands") or [],
             })
@@ -154,6 +167,22 @@ def _render_sample_posts(
     brand row. Each (brand × post_type × discourse_role) tuple
     gets its own rendered line.
 
+    U1 (plan 2026-07-04): two discourse fields, named for their
+    provenance:
+      - `trans_disc:`  — the translator's post-level `discourse_role`
+                        (pragmatic-axes output from §5.1 of the
+                        translator prompt).
+      - `cls_disc=`    — the classifier's per-brand `discourse_roles`
+                        array, surfaced per-brand only when present
+                        in the in-memory payload. Omitted entirely
+                        (NOT printed as `uncategorized`) when the
+                        classifier payload does not include it.
+
+    U2 (plan 2026-07-04): each post header includes the full X / Twitter
+    URL `https://x.com/<handle>/status/<tweet_id>` (or `(no handle)`
+    fallback) so reviewers can click through without copy-pasting the
+    tweet_id.
+
     `unsanctioned_flags` is an optional per-post_id list of flag values
     that get surfaced in a dedicated section at the end.
     """
@@ -164,17 +193,25 @@ def _render_sample_posts(
     lines.append("=== SAMPLE POSTS ===")
     for i, post in enumerate(sample_posts, 1):
         tid = str(post.get("tweet_id") or post.get("id"))
-        lines.append("")
-        lines.append(f"--- Post {i} (tweet_id={tid}) ---")
+        # U2: build the URL line. Handle may be None / empty for some
+        # posts (older fixtures, no-handle apify responses); fall back
+        # to "(no handle)" so the URL slot is unambiguous.
+        handle = post.get("author_handle") or "(no handle)"
+        lines.append(
+            f"--- Post {i} (tweet_id={tid} "
+            f"url=https://x.com/{handle}/status/{tid}) ---"
+        )
         lines.append(f"text:        {post.get('text', '')}")
         tr = trans_by_id.get(tid, {})
         lines.append(f"text_en:     {(tr.get('text_en') or '')}")
         lines.append(f"literal_zh:  {(tr.get('literal_zh') or tr.get('text_zh_cn') or '')}")
-        # U7: discourse may now be an array; join for display.
+        # U1: translator's post-level discourse — rename to trans_disc
+        # to disambiguate from cls_disc below. Array values still get
+        # comma-joined for display.
         disc_val = tr.get("discourse_role", "uncategorized")
         if isinstance(disc_val, list):
             disc_val = ",".join(disc_val) if disc_val else "uncategorized"
-        lines.append(f"discourse:   {disc_val}")
+        lines.append(f"trans_disc:  {disc_val}")
         lines.append(f"cn_equiv:    {(tr.get('cn_equivalent') or '')}")
         lines.append(f"annotation:  {(tr.get('annotation') or '(none)')}")
         # U7: per-post unsanctioned flags (if any).
@@ -184,19 +221,42 @@ def _render_sample_posts(
         # U7: render N rows per brand — one per (post_type × discourse_role).
         # If post_types / discourse_roles are arrays, expand. Otherwise
         # fall back to the single scalar values (legacy).
+        # U1: emit cls_disc= from cls.discourse_roles when present;
+        # omit the field entirely (not as a placeholder) when absent.
         for cls in classification_rows.get(tid, []):
             post_types = cls.get("post_types") or (
                 [cls["post_type"]] if cls.get("post_type") else [""]
             )
-            discourse_roles = cls.get("discourse_roles") or (
-                [cls["discourse_role"]] if cls.get("discourse_role") else [""]
-            )
+            has_array = "discourse_roles" in cls
+            raw_drs = cls.get("discourse_roles")
+            if raw_drs is None:
+                legacy_dr = cls.get("discourse_role")
+                discourse_roles = (
+                    [legacy_dr] if legacy_dr else [""]
+                )
+            else:
+                discourse_roles = raw_drs
+            # Build the per-brand line. cls_disc= is omitted (NOT
+            # replaced by a placeholder) when the classifier payload
+            # was missing BOTH `discourse_roles` AND the legacy
+            # `discourse_role` scalar. Otherwise emit the comma-joined
+            # value.
+            has_legacy = bool(cls.get("discourse_role"))
+            omit_cls_disc = not (has_array or has_legacy)
             for pt in post_types:
                 for dr in discourse_roles:
+                    if omit_cls_disc:
+                        cls_disc_field = ""
+                    elif not dr:
+                        cls_disc_field = ""
+                    else:
+                        cls_disc_field = (
+                            f" cls_disc={dr if isinstance(dr, str) else ','.join(dr)}"
+                        )
                     lines.append(
                         f"  [brand={cls['brand_id']}] "
-                        f"pt={pt} sent={cls['sentiment']} "
-                        f"disc={dr} "
+                        f"pt={pt} sent={cls['sentiment']}"
+                        f"{cls_disc_field} "
                         f"cn={cls['china_nationalism']} us={cls['us_nationalism']}"
                     )
     return "\n".join(lines)
@@ -252,9 +312,14 @@ def main(argv: list[str] | None = None) -> int:
         # a fake by setting the env var ANTHROPIC_API_KEY (the
         # real client falls back to no-op), but for a real
         # smoketest against a fresh DB we use the real client.
-        posts = _load_latest_cycle_posts(store, None, args.limit)
+        posts, posts_with_no_brand_skipped = _load_latest_cycle_posts(
+            store, None, args.limit
+        )
         brand_registry_rows = store.read_brands()
-        return _run_pipeline(posts, brand_registry_rows, args)
+        return _run_pipeline(
+            posts, brand_registry_rows, args,
+            posts_with_no_brand_skipped=posts_with_no_brand_skipped,
+        )
     finally:
         store.close()
 
@@ -263,10 +328,23 @@ def _run_pipeline(
     posts: list[dict],
     brand_registry_rows: list,
     args,
+    *,
+    posts_with_no_brand_skipped: int = 0,
+    translation_errors_override: dict | None = None,
 ) -> int:
     """Run the post-fetch pipeline against `posts` and print the
     smoketest report. Returns 0, or 1 if --strict-budget and total
-    elapsed > 90s."""
+    elapsed > 90s.
+
+    U5: `posts_with_no_brand_skipped` is the count of posts excluded
+    from the input because the keyword detector found no monitored
+    brand attribution. Reported in the report header.
+
+    U7: `translation_errors_override` lets tests inject a pre-built
+    `translation_errors` dict (used by the U7 test for the "the LLM
+    call raised" path). When None, the dict is built from the
+    actual call below.
+    """
     # Local imports — these are also imported inside main() but
     # we re-import here so the helper is callable from both
     # the fixture path and the DB path. Tests that monkeypatch
@@ -276,6 +354,7 @@ def _run_pipeline(
     from x_monitor.translator import (
         AnthropicClaudeClient,
         translate_batch_pragmatics,
+        _MAX_RETRIES,
     )
     from x_monitor.attribution import classify_pragmatics_full
 
@@ -287,15 +366,27 @@ def _run_pipeline(
     client = AnthropicClaudeClient()
 
     # --- Stage 1: translate_batch_pragmatics (U3) --------------------
+    translation_errors: dict[str, dict] = translation_errors_override or {}
     t0 = time.monotonic()
     try:
         translation_rows = translate_batch_pragmatics(
             posts, ["en", "zh_cn"], client,
         )
-    except Exception as e:
-        print(f"smoketest: translate stage raised: {e}",
+    except Exception as exc:
+        # U7: whole-batch failure (e.g. proxy 502 across all retries)
+        # — attribute the exception to every tweet in the input so the
+        # === TRANSLATION FAILURES === section can show per-tweet.
+        print(f"smoketest: translate stage raised: {exc}",
               file=sys.stderr)
         translation_rows = []
+        if not translation_errors_override:
+            for post in posts:
+                tid = str(post.get("tweet_id") or post.get("id"))
+                translation_errors[tid] = {
+                    "class": exc.__class__.__name__,
+                    "msg": str(exc)[:200],
+                    "retries": _MAX_RETRIES,
+                }
     t_translate_ms = int((time.monotonic() - t0) * 1000)
 
     # --- Stage 2: classify_pragmatics_full (U4) ----------------------
@@ -369,6 +460,10 @@ def _run_pipeline(
     print("")
     print("=== POST-FETCH SMOKETEST REPORT ===")
     print(f"posts_seen:          {len(posts)}")
+    if posts_with_no_brand_skipped:
+        # U5: surface the count so reviewers know why posts_seen
+        # may be lower than the DB row count.
+        print(f"posts_no_brand_skipped: {posts_with_no_brand_skipped}")
     print(f"n_translated:        {n_translated}")
     print(f"n_failed_translate:  {n_failed_translate}")
     print(f"n_classified:        {n_classified_posts}")
@@ -398,6 +493,22 @@ def _run_pipeline(
         print(f"=== UNSANCTIONED FLAGS ({len(unsanctioned_flags_by_post)} posts) ===")
         for tid, flags in list(unsanctioned_flags_by_post.items())[:5]:
             print(f"  tweet_id={tid} flags={','.join(flags)}")
+
+    # U7: per-tweet translation failure breakdown. Distinct from the
+    # legacy `=== ERRORS ===` block (which only counted) — this one
+    # tells the reviewer WHY the LLM call failed.
+    if translation_errors:
+        print("")
+        print(
+            f"=== TRANSLATION FAILURES ({len(translation_errors)} "
+            "attributed) ==="
+        )
+        for tid, err in list(translation_errors.items())[:5]:
+            msg_short = (err["msg"][:80] + "...") if len(err["msg"]) > 80 else err["msg"]
+            print(
+                f"  tweet_id={tid} class={err['class']} "
+                f"retries={err['retries']} msg={msg_short!r}"
+            )
 
     # Error summary.
     errors = [
