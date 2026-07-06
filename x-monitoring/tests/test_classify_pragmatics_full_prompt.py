@@ -300,3 +300,62 @@ def test_u3u4_prompt_token_count_under_2500():
         f"prompt too big: ~{approx_tokens} tokens "
         f"({len(p.split())} words)"
     )
+
+
+# --- U1 (plan 2026-07-06-001): v12 calibration rules 16-19 ---------------
+
+
+def test_u1_prompt_includes_rule_16_nationalism_framing():
+    """Rule 16: nationalism requires explicit US-China relational framing."""
+    p = _prompt()
+    assert "16." in p
+    assert "US-China relational framing" in p
+
+
+def test_u1_prompt_includes_rule_17_trap_language():
+    """Rule 17: trap-language 'gotcha' / '翻车' disambiguated from US-China framing."""
+    p = _prompt()
+    assert "17." in p
+    assert "trap" in p
+    assert "翻车" in p
+
+
+def test_u1_prompt_includes_rule_18_superlative_praise():
+    """Rule 18: 'fastest' superlative is hype, not nationalism."""
+    p = _prompt()
+    assert "18." in p
+    assert "fastest" in p
+    assert "genuine_hype" in p
+
+
+def test_u1_prompt_includes_rule_19_vendor_not_us():
+    """Rule 19: anti-Chinese-vendor critique is not us_nationalism valence."""
+    p = _prompt()
+    assert "19." in p
+    assert "Qwen" in p
+    assert "us_nationalism" in p
+
+
+def test_u1_prompt_canonical_example_g_dunk_no_nationalism():
+    """Worked example G: anti-vendor dunk on DeepSeek → discourse_roles=[dunk_yingyang],
+    cn/us_nationalism=none (rules 16+17)."""
+    p = _prompt()
+    assert "DeepSeek shipping a benchmark trap" in p
+    assert "dunk_yingyang" in p
+    # The post should explicitly mark us_nationalism as none (per rule 16)
+    # in the worked-example explanation.
+    assert "us_nationalism=none" in p
+
+
+def test_u1_prompt_examples_h_i_j_present():
+    """Worked examples H (Qwen superlative), I (GLM anti-vendor fud), J (US-China framing)."""
+    p = _prompt()
+    # H: superlative praise on Qwen
+    assert "Qwen is the fastest" in p
+    # I: anti-vendor dunk on GLM with fud
+    assert "GLM 5.2 fumbled the launch" in p
+    assert "fud" in p
+    # J: explicit US-China framing — nationalism DOES fire here
+    assert "AI race is heating up" in p
+    assert "cn_nationalism=mild_pro" in p
+    assert "us_nationalism=anti" in p
