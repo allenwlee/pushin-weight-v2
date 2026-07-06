@@ -9,9 +9,10 @@ kept posts OR a fixture file, and prints:
   - counts per stage (n_classified, n_translated, n_discourse,
     n_nationalism)
   - per-stage timing in milliseconds
-  - 5 sample posts with all 7 annotation fields aligned for
-    eyeball coherence (text + text_en + literal_zh + discourse_role
-    + cn_equivalent + china_nationalism + us_nationalism)
+  - 5 sample posts with all annotation fields aligned for
+    eyeball coherence (text + text_en + literal_zh +
+    cn_equivalent + china_nationalism + us_nationalism +
+    per-brand discourse_role)
   - error report grouped by stage (LLM failures, parse failures,
     missing brand attribution)
   - exit code: 0 always; --strict-budget exits 1 if cycle-time
@@ -245,22 +246,18 @@ def _render_sample_posts(
     classification_rows: dict[str, list[dict]],
     unsanctioned_flags: dict[str, list[str]] | None = None,
 ) -> str:
-    """Render N posts with all 7 annotation fields aligned.
+    """Render N posts with translator + classifier fields aligned.
 
     U7: supports multi-value post_types[] and discourse_roles[] per
     brand row. Each (brand × post_type × discourse_role) tuple
     gets its own rendered line.
 
-    U1 (plan 2026-07-04): two discourse fields, named for their
-    provenance:
-      - `trans_disc:`  — the translator's post-level `discourse_role`
-                        (pragmatic-axes output from §5.1 of the
-                        translator prompt).
-      - `cls_disc=`    — the classifier's per-brand `discourse_roles`
-                        array, surfaced per-brand only when present
-                        in the in-memory payload. Omitted entirely
-                        (NOT printed as `uncategorized`) when the
-                        classifier payload does not include it.
+    U1-final (plan 2026-07-06-001): discourse_role is classifier-only.
+    The translator's post-level `discourse_role` was REMOVED from the
+    contract — pragmatic register is exclusively the per-brand
+    classifier output, persisted to `posts_brands_discourse`. So
+    `trans_disc:` is no longer rendered; `cls_disc=` is the only
+    discourse field per brand.
 
     U2 (plan 2026-07-04): each post header includes the full X / Twitter
     URL `https://x.com/<handle>/status/<tweet_id>` (or `(no handle)`
@@ -289,13 +286,7 @@ def _render_sample_posts(
         tr = trans_by_id.get(tid, {})
         lines.append(f"text_en:     {(tr.get('text_en') or '')}")
         lines.append(f"literal_zh:  {(tr.get('literal_zh') or tr.get('text_zh_cn') or '')}")
-        # U1: translator's post-level discourse — rename to trans_disc
-        # to disambiguate from cls_disc below. Array values still get
-        # comma-joined for display.
-        disc_val = tr.get("discourse_role", "uncategorized")
-        if isinstance(disc_val, list):
-            disc_val = ",".join(disc_val) if disc_val else "uncategorized"
-        lines.append(f"trans_disc:  {disc_val}")
+        # No trans_disc — translator no longer emits discourse_role.
         lines.append(f"cn_equiv:    {(tr.get('cn_equivalent') or '')}")
         lines.append(f"annotation:  {(tr.get('annotation') or '(none)')}")
         # U7: per-post unsanctioned flags (if any).

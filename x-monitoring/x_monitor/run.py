@@ -495,7 +495,9 @@ def _run_post_fetch(
 
       1. `translate_batch_pragmatics` (U3) writes text_en / text_zh_cn
          / lang_detected to `posts` and emits the four-pronged row
-         (literal_zh + discourse_role + cn_equivalent + annotation).
+         (literal_zh + cn_equivalent + annotation). Pragmatic register
+         (discourse_role) was REMOVED from the translator in plan
+         2026-07-06-001 — it's the classifier's exclusive output.
       2. `classify_pragmatics_full` (U4) writes the per-brand
          (post_type + sentiment) pair to `posts_brands_signals` AND
          the (discourse_role + china_nationalism + us_nationalism)

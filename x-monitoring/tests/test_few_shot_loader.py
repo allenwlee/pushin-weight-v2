@@ -1,16 +1,15 @@
 """Few-shot loader test: x_monitor.translator._load_few_shot_examples.
 
 Plan: docs/plans/2026-07-02-002-feat-streamlined-post-fetch-pipeline-plan.md
-(Unit 3 of 8). Closes evidence gap: U3 wires a fixture-loader for
-the §3.10 few-shot examples but no test exercised the loader end
-to end against the real fixture.
+(Unit 3 of 8), refined by plan 2026-07-06-001 (translator no longer
+emits discourse_role — fixture cleaned accordingly).
 
 Verifies:
 - The fixture file exists at x_monitor/data/few_shot_pragmatics.jsonl.
 - _load_few_shot_examples() returns a non-empty list of dicts.
 - Each dict has an `input` key and an `output` dict with the
-  §5.1 prongs.
-- The output's `discourse_role` is one of the 9 known keys.
+  §5.1 prongs (literal_zh, cn_equivalent, annotation — no
+  discourse_role, since the translator contract no longer carries it).
 - build_pragmatics_translation_prompt embeds the few-shot block
   when the fixture is loaded.
 - _load_few_shot_examples does not raise on a missing or broken
@@ -54,19 +53,23 @@ def test_loader_returns_dicts_with_required_keys():
         assert isinstance(ex["output"], dict)
 
 
-def test_loader_outputs_have_known_discourse_roles():
-    """Each output's `discourse_role` is one of the 9 known keys
-    (or the coerce path handles unknown — verify the seeded ones
-    are valid)."""
-    from x_monitor.translator import (
-        _load_few_shot_examples, _DISCOURSE_ROLES,
-    )
+def test_loader_outputs_carry_pragmatics_prongs():
+    """Plan 2026-07-06-001: translator fixtures carry literal_zh /
+    cn_equivalent / annotation — NOT discourse_role (the classifier's
+    exclusive output). Verify each output has the three required
+    prongs and does NOT carry a `discourse_role` key."""
+    from x_monitor.translator import _load_few_shot_examples
 
     for ex in _load_few_shot_examples():
-        role = ex["output"].get("discourse_role")
-        assert role in _DISCOURSE_ROLES, (
-            f"fixture row has unknown discourse_role {role!r}; "
-            f"valid: {sorted(_DISCOURSE_ROLES)}"
+        out = ex["output"]
+        # Required prongs.
+        assert "literal_zh" in out, f"missing literal_zh in {out}"
+        assert "cn_equivalent" in out, f"missing cn_equivalent in {out}"
+        assert "annotation" in out, f"missing annotation in {out}"
+        # Gone.
+        assert "discourse_role" not in out, (
+            f"fixture should NOT carry discourse_role (classifier-only): "
+            f"{out}"
         )
 
 

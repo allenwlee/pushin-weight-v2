@@ -9,13 +9,20 @@ populated, and an example.
 
 | Stage | Function | Caller | Output columns on `posts` |
 |---|---|---|---|
-| **Post translator** (lossless with slang) | `translate_batch_pragmatics` | `x-monitor smoketest`, post-fetch pipeline, `x-monitor backfill translate-posts` | `text_en`, `literal_zh`, `text_zh_cn`, `lang_detected`, `discourse_role`, `cn_equivalent`, `annotation` |
+| **Post translator** (lossless with slang) | `translate_batch_pragmatics` | `x-monitor smoketest`, post-fetch pipeline, `x-monitor backfill translate-posts` | `text_en`, `literal_zh`, `text_zh_cn`, `lang_detected`, `cn_equivalent`, `annotation` |
 | **Registry translator** (formal, named-entity-preserving) | `translate_registry_rows` | `x-monitor translate-registry` | per-registry-table locale columns (e.g. `brands.display_name_en`, `brands.display_name_zh_cn`) |
 
 The two stages emit different columns and use different prompts.
 `literal_zh` and `text_zh_cn` look almost the same and both end up on
 `posts` — they reflect **two different rendering styles**, not two
 different languages.
+
+> **Note (plan 2026-07-06-001):** `discourse_role` was removed from the
+> post-translator contract. Pragmatic register is now exclusively the
+> classifier's per-brand output — see `posts_brands_discourse`,
+> populated by `classify_pragmatics_full` (one row per
+> `post_id × brand_id × discourse_key × act_id`). The translator
+> returns translation + netizen voice + friction annotation only.
 
 ## Post-translator output (X / Twitter posts)
 
@@ -29,9 +36,13 @@ annotation) and explicitly preserves slang, memes, brand-voice.
 | `literal_zh` | Source is NOT already Simplified Chinese (deterministic noop) — note that this is the LLM's best-interpretation rendering, NOT a literal word-for-word translation | "GitHub Copilot just dropped Kimi K2.7 like a secret weapon from a sci-fi film" → "GitHub Copilot 刚刚把 Kimi K2.7 像科幻片里的秘密武器一样扔出来" |
 | `text_zh_cn` | Same as `literal_zh` (identical column on `posts`; the registry translator uses `text_zh_cn` for its own output naming on different tables) | see above |
 | `lang_detected` | Always | "en", "zh-Hans", "de", etc. |
-| `discourse_role` | Always | "genuine_hype", "sarcasm", "dunk_yingyang", "uncategorized", etc. |
 | `cn_equivalent` | Always; populated for every input | "Kimi K2.7 Code is generally available in GitHub Copilot" → "Kimi K2.7 Code 正式登陆 Copilot，全量开放" |
 | `annotation` | Only when the post contains F2/F3 friction (meme origin, named event, brand slur). Otherwise empty. | "GPT-4o-mini 的 CodingPlan 试用贴暴露了 OpenAI 的吞量设计哲学" |
+
+For pragmatic register (`discourse_role`), see
+`posts_brands_discourse` — it's emitted exclusively by
+`classify_pragmatics_full` (one row per `post × brand × act`),
+populated by Stage 2 of the post-fetch pipeline.
 
 ## Registry-translator output (brands, products, etc.)
 

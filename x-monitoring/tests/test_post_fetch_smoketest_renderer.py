@@ -3,17 +3,21 @@
 Plans:
 - docs/plans/2026-07-03-003-feat-post-fetch-taxonomy-and-multi-discourse-plan.md (U7)
 - docs/plans/2026-07-04-001-feat-post-fetch-smoketest-and-prompt-tuning-plan.md (U1, U2)
+- docs/plans/2026-07-06-001-feat-remove-trans_disc-plan.md (post-grace:
+  discourse_role is classifier-only; trans_disc: is removed)
 
 Verifies:
 - _render_sample_posts handles multi-value post_types[] / discourse_roles[]
   arrays by expanding into N rows per brand.
 - _render_sample_posts surfaces unsanctioned flags per post when present.
-- U1: post-level header is `trans_disc:` (not `discourse:`). Per-brand
-  line emits `cls_disc=` when discourse_roles is present, OMITS the
-  field entirely when absent (not a placeholder).
+- U1-final (2026-07-06): translator no longer emits discourse_role; the
+  report has NO `trans_disc:` line. Per-brand `cls_disc=` is the only
+  discourse field — emitted when `cls.discourse_roles` or legacy
+  `cls.discourse_role` is present, omitted entirely (not a placeholder)
+  when absent.
 - U2: each post header includes the full X / Twitter URL.
-- Backwards compat: legacy scalar post_type / discourse_role values
-  still render correctly.
+- Backwards compat: legacy scalar `cls.discourse_role` still renders
+  as a single-element `cls_disc=`.
 """
 
 from __future__ import annotations
@@ -22,10 +26,11 @@ from scripts.post_fetch_smoketest import _render_sample_posts
 
 
 def test_u7_renders_one_line_per_brand_with_scalar_fields():
-    """Legacy shape: scalar post_type + scalar discourse_role.
+    """Legacy shape: scalar post_type + scalar `cls.discourse_role`.
 
-    U1 + U2: header now includes URL and uses trans_disc: (translator
-    output) vs cls_disc= (classifier per-brand output).
+    U2: header includes URL. Plan 2026-07-06-001 removed the
+    translator's `trans_disc:` field — pragmatic register is the
+    classifier's exclusive output (`cls_disc=` per brand).
     """
     sample = [
         {"tweet_id": "111", "id": "111", "text": "GLM 5.2 真棒",
@@ -33,7 +38,7 @@ def test_u7_renders_one_line_per_brand_with_scalar_fields():
     ]
     trans = [
         {"tweet_id": "111", "text_en": None, "text_zh_cn": "GLM 5.2 真棒",
-         "literal_zh": "GLM 5.2 真棒", "discourse_role": "genuine_hype",
+         "literal_zh": "GLM 5.2 真棒",
          "cn_equivalent": "GLM 5.2 真棒", "annotation": "(none)"},
     ]
     class_rows = {
@@ -52,8 +57,7 @@ def test_u7_renders_one_line_per_brand_with_scalar_fields():
 def test_u7_renders_n_lines_for_multi_post_types():
     """2 post_types × 1 discourse = 2 lines for the same brand."""
     sample = [{"tweet_id": "222", "id": "222", "text": "GLM vs Kimi?"}]
-    trans = [{"tweet_id": "222", "literal_zh": "GLM vs Kimi?",
-              "discourse_role": "self_deprecation"}]
+    trans = [{"tweet_id": "222", "literal_zh": "GLM vs Kimi?"}]
     class_rows = {
         "222": [
             {"brand_id": "glm",
@@ -76,8 +80,7 @@ def test_u7_renders_n_lines_for_multi_post_types():
 def test_u7_renders_n_lines_for_multi_discourse_roles():
     """1 post_type × 2 discourse_roles = 2 lines."""
     sample = [{"tweet_id": "333", "id": "333", "text": "GLM is great"}]
-    trans = [{"tweet_id": "333", "literal_zh": "GLM 太棒了",
-              "discourse_role": ["genuine_hype", "advertising-marketing"]}]
+    trans = [{"tweet_id": "333", "literal_zh": "GLM 太棒了"}]
     class_rows = {
         "333": [
             {"brand_id": "glm",
@@ -134,35 +137,46 @@ def test_u7_no_unsanctioned_line_when_empty():
     assert "unsanctioned:" not in out
 
 
-def test_u7_discourse_role_array_comma_joined():
-    """U1: translator's `discourse_role` array renders under `trans_disc:`."""
+def test_u7_trans_disc_field_removed_from_render():
+    """Plan 2026-07-06-001: translator no longer emits discourse_role,
+    so the report has NO `trans_disc:` line at all. The translator
+    field is silently absent regardless of input shape (no default
+    placeholder, no `(none)`, nothing)."""
     sample = [{"tweet_id": "777", "id": "777", "text": "test"}]
+    # Even if a stale caller passes the legacy translator dict with
+    # a discourse_role field, the renderer no longer surfaces it.
     trans = [{
         "tweet_id": "777",
         "literal_zh": "test",
         "discourse_role": ["genuine_hype", "advertising-marketing"],
     }]
     out = _render_sample_posts(sample, trans, {})
-    assert "trans_disc:  genuine_hype,advertising-marketing" in out
+    assert "trans_disc:" not in out, (
+        f"trans_disc: must NOT be rendered; classifier is the sole "
+        f"discourse source. Got:\n{out}"
+    )
 
 
-def test_u7_empty_discourse_role_defaults_to_uncategorized():
-    """Empty array → 'uncategorized' literal (under trans_disc:)."""
+def test_u7_empty_discourse_role_also_removed():
+    """Empty `discourse_role` array on translator dict → no
+    `trans_disc: uncategorized` placeholder either. The field is gone."""
     sample = [{"tweet_id": "888", "id": "888", "text": "test"}]
     trans = [{"tweet_id": "888", "literal_zh": "test",
               "discourse_role": []}]
     out = _render_sample_posts(sample, trans, {})
-    assert "trans_disc:  uncategorized" in out
+    assert "trans_disc:" not in out
 
 
-def test_u7_backwards_compat_legacy_scalar_discourse():
-    """Legacy scalar `discourse_role` still renders as `trans_disc:` scalar."""
+def test_u7_legacy_scalar_discourse_ignored():
+    """Legacy scalar `discourse_role` on the translator dict is
+    ignored — the renderer no longer reads `tr.discourse_role`
+    at all (post-grace)."""
     sample = [{"tweet_id": "999", "id": "999", "text": "test"}]
     trans = [{"tweet_id": "999", "literal_zh": "test",
               "discourse_role": "genuine_hype"}]
     out = _render_sample_posts(sample, trans, {})
-    assert "trans_disc:  genuine_hype" in out
-    assert "genuine_hype," not in out  # no spurious comma
+    assert "trans_disc:" not in out
+    assert "discourse:  genuine_hype" not in out  # legacy single-word label also gone
 
 
 def test_u7_multiple_brands_render_separately():
@@ -190,17 +204,21 @@ def test_u7_multiple_brands_render_separately():
     assert "cls_disc=self_deprecation" in out
 
 
-# --- U1: post-level trans_disc: vs per-brand cls_disc= -------------------
+# --- U1-final (2026-07-06): no trans_disc:, only per-brand cls_disc= ----
 
 
-def test_u1_post_level_header_uses_trans_disc_label():
-    """The post-level header is `trans_disc:`, not `discourse:` (U1 rename)."""
+def test_u1_post_level_header_drops_trans_disc_after_grace():
+    """Plan 2026-07-06-001: the previous U1 rename (`discourse:` →
+    `trans_disc:`) is now obsolete because the translator no longer
+    emits `discourse_role` at all. The renderer has no post-level
+    discourse field; per-brand `cls_disc=` is the sole source."""
     sample = [{"tweet_id": "100", "id": "100", "text": "hello"}]
     trans = [{"tweet_id": "100", "literal_zh": "你好",
               "discourse_role": "genuine_hype"}]
     out = _render_sample_posts(sample, trans, {})
-    assert "trans_disc:  genuine_hype" in out
-    # The legacy header should NOT appear.
+    # No post-level discourse line at all (not `trans_disc:`, not
+    # `discourse:`, not `(none)` placeholder).
+    assert "trans_disc:" not in out
     assert "\ndiscourse:" not in ("\n" + out)
 
 

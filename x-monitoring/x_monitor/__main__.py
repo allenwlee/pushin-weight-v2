@@ -743,8 +743,10 @@ def cmd_translate_posts(args, paths) -> int:
     `Store.bulk_update_translations` (the v1.7 Store path — the
     row shape is backward-compatible because U3 still populates
     text_en / text_zh_cn / lang_detected alongside the new
-    literal_zh / discourse_role / cn_equivalent / annotation
-    prongs).
+    literal_zh / cn_equivalent / annotation prongs). Plan
+    2026-07-06-001 dropped `discourse_role` from U3 — pragmatic
+    register is exclusively the classifier's per-brand output
+    (`posts_brands_discourse`).
 
     Usage:
         x-monitor translate --locale both --limit 50
