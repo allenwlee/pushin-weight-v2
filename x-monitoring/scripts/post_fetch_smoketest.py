@@ -46,15 +46,40 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--source",
-        choices=["latest-cycle", "fixture"],
+        choices=["latest-cycle", "fixture", "api-query"],
         default="latest-cycle",
-        help="Where to source the kept posts from (default: latest-cycle).",
+        help="Where to source the kept posts from (default: latest-cycle). "
+             "'api-query' costs real TwitterAPI.io quota — opt-in.",
     )
     p.add_argument(
         "--fixture",
         type=Path,
         help="JSONL fixture file of {tweet_id, text, attributed_brands}. "
              "Required when --source=fixture.",
+    )
+    p.add_argument(
+        "--query",
+        help="Advanced-search string (X operators). Required when "
+             "--source=api-query. e.g. 'kimi K2.7 lang:en min_faves:5'",
+    )
+    p.add_argument(
+        "--since",
+        help="ISO date YYYY-MM-DD; injected as 'since:' operator if "
+             "not already in --query.",
+    )
+    p.add_argument(
+        "--max-pages", type=int, default=5,
+        help="Pagination depth cap for --source=api-query "
+             "(default: 5).",
+    )
+    p.add_argument(
+        "--max-per-page", type=int, default=20,
+        help="Per-page request size for --source=api-query "
+             "(default: 20, the platform cap).",
+    )
+    p.add_argument(
+        "--api-quiet", action="store_true",
+        help="Suppress client._request_log echo for --source=api-query.",
     )
     p.add_argument(
         "--sample", type=int, default=5,
@@ -153,6 +178,65 @@ def _load_fixture_posts(path: Path) -> list[dict]:
                 "brand_ids": row.get("attributed_brands") or [],
             })
     return out
+
+
+def _load_api_posts(
+    args,
+    compiled_index,
+) -> tuple[list[dict], int]:
+    """U6: Fetch posts live from the TwitterAPI.io / Apify client and
+    apply the same brand-keyword detector that the DB path uses.
+
+    Costs real API quota — opt-in via --source=api-query. Returns the
+    filtered (posts, posts_with_no_brand_skipped) tuple, mirroring
+    `_load_latest_cycle_posts`.
+    """
+    from x_monitor.attribution import detect_brand_mentions
+
+    # Lazy import — the live client is only needed on this path.
+    from x_monitor.apify import TwitterApiClient
+
+    client = TwitterApiClient()
+    rows = client.run_search(
+        query=args.query,
+        max_results=args.limit,
+        since=args.since,
+        max_pages=args.max_pages,
+        max_per_page=args.max_per_page,
+    )
+
+    if not getattr(args, "api_quiet", False):
+        print(
+            f"smoketest: api-query '{args.query}' returned "
+            f"{len(rows)} posts",
+            file=sys.stderr,
+        )
+
+    out: list[dict] = []
+    for r in rows:
+        # TwitterAPI.io / Apify rows come back with shapes that vary
+        # by vendor; map the common fields defensively.
+        tweet_id = str(r.get("tweet_id") or r.get("id") or "")
+        text = r.get("text") or r.get("full_text") or ""
+        author_handle = (
+            r.get("author_handle")
+            or (r.get("user") or {}).get("screen_name")
+            or (r.get("user") or {}).get("username")
+        )
+        lang = r.get("lang_detected") or r.get("lang")
+        brand_ids = detect_brand_mentions(text, compiled_index)
+        out.append({
+            "tweet_id": tweet_id,
+            "id": tweet_id,
+            "text": text,
+            "lang_detected": lang,
+            "author_handle": author_handle,
+            "brand_id": brand_ids[0] if brand_ids else "",
+            "brand_ids": brand_ids,
+        })
+    filtered = [p for p in out if p.get("brand_ids")]
+    skipped = len(out) - len(filtered)
+    return filtered, skipped
 
 
 def _render_sample_posts(
@@ -270,6 +354,12 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.source == "api-query" and not args.query:
+        print(
+            "--source=api-query requires --query '...' (advanced-search string)",
+            file=sys.stderr,
+        )
+        return 2
     if args.fixture and not args.fixture.exists():
         print(f"--fixture not found: {args.fixture}", file=sys.stderr)
         return 2
@@ -286,15 +376,43 @@ def main(argv: list[str] | None = None) -> int:
     # caller creates the db first; offline `--dry-run` paths
     # accept an empty store).
     #
-    # --source=fixture bypasses the DB entirely (the post set
-    # comes from the JSONL file); only --source=latest-cycle
-    # requires a DB on disk.
+    # --source=fixture and --source=api-query bypass the DB entirely;
+    # only --source=latest-cycle requires a DB on disk.
+
     if args.source == "fixture":
         # Fixture path was validated by argparse (existence + path).
         # Run the pipeline in-memory; no DB on disk is touched.
         posts = _load_fixture_posts(args.fixture)
         brand_registry_rows = []
         return _run_pipeline(posts, brand_registry_rows, args)
+
+    if args.source == "api-query":
+        # api-query still needs the DB to load brand keywords (the
+        # canonical keyword list lives in the brand_keywords table).
+        # Tests inject a fake via monkeypatch on the api-query helper.
+        from x_monitor.attribution import compile_keyword_index
+        db_path = Path("data") / "x_monitoring.db"
+        if not db_path.exists():
+            print(
+                f"smoketest: --source=api-query needs the DB at {db_path} "
+                "to load brand keywords (run a cycle first).",
+                file=sys.stderr,
+            )
+            return 2
+        store = Store(db_path, auto_migrate=True)
+        try:
+            brand_keywords = store.read_brand_keywords()
+            brand_registry_rows = store.read_brands()
+            compiled_index = compile_keyword_index(brand_keywords)
+            posts, posts_with_no_brand_skipped = _load_api_posts(
+                args, compiled_index
+            )
+            return _run_pipeline(
+                posts, brand_registry_rows, args,
+                posts_with_no_brand_skipped=posts_with_no_brand_skipped,
+            )
+        finally:
+            store.close()
 
     db_path = Path("data") / "x_monitoring.db"
     if not db_path.exists():
