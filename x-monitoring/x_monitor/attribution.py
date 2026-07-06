@@ -1465,7 +1465,40 @@ def classify_pragmatics_full(
             _MAX_RETRIES, e,
         )
         return empty
-    parsed = _parse_pragmatics_full_response(response, registry_ids)
+    # U2b-fix: route through the array-aware parser. The prompt at
+    # build_pragmatics_full_prompt explicitly requests `post_types: [str]`
+    # and `discourse_roles: [str]` arrays (lines 1048, 1060, 1088, 1090),
+    # but the previous scalar parser at line 1263 read `post_type` /
+    # `discourse_role` (singular) — which never matched the LLM's
+    # array output, so every post_type fell through to "hands_on_usage"
+    # and every discourse_role to "uncategorized". Smoketest data on
+    # 2026-07-06 confirmed 20/20 degenerate on those two prongs.
+    #
+    # We reshape the array parser's `rows` back into the legacy
+    # U2a `by_brand` shape by collapsing post_types[] / discourse_roles[]
+    # into their first element. Callers that need the multi-value
+    # structure (Store.bulk_insert_post_brand_signals) call the
+    # array parser directly via `_parse_pragmatics_full_response_arrays`.
+    raw = _parse_pragmatics_full_response_arrays(response, registry_ids)
+    by_brand: dict[str, dict[str, str]] = {}
+    for row in raw["rows"]:
+        bid = row["brand_id"]
+        if bid in by_brand:
+            # Duplicate brand_id in the LLM response — keep the
+            # first row's classification; later rows are ignored.
+            logger.warning(
+                "classify_pragmatics_full: duplicate brand_id=%r in "
+                "response rows; keeping first", bid,
+            )
+            continue
+        by_brand[bid] = {
+            "post_type": row["post_type"],
+            "sentiment": row["sentiment"],
+            "discourse_role": row["discourse_role"],
+            "china_nationalism": row["china_nationalism"],
+            "us_nationalism": row["us_nationalism"],
+        }
+    parsed = {"by_brand": by_brand, "unsanctioned_flags": raw["unsanctioned_flags"]}
     if not parsed["by_brand"]:
         logger.warning(
             "classify_pragmatics_full returned no classifications for "

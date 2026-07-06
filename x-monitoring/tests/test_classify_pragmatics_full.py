@@ -120,12 +120,13 @@ def test_parse_pragmatics_full_response_happy_path():
     parsed = _parse_pragmatics_full_response(
         response, {"anthropic", "deepseek"},
     )
-    assert len(parsed) == 2
-    assert parsed["anthropic"]["post_type"] == "hands_on_usage"
-    assert parsed["anthropic"]["discourse_role"] == "dunk_yingyang"
-    assert parsed["anthropic"]["china_nationalism"] == "none"
-    assert parsed["deepseek"]["sentiment"] == "positive"
-    assert parsed["deepseek"]["discourse_role"] == "genuine_hype"
+    bb = parsed["by_brand"]
+    assert len(bb) == 2
+    assert bb["anthropic"]["post_type"] == "hands_on_usage"
+    assert bb["anthropic"]["discourse_role"] == "dunk_yingyang"
+    assert bb["anthropic"]["china_nationalism"] == "none"
+    assert bb["deepseek"]["sentiment"] == "positive"
+    assert bb["deepseek"]["discourse_role"] == "genuine_hype"
 
 
 def test_parse_pragmatics_full_drops_hallucinated_brand():
@@ -137,7 +138,7 @@ def test_parse_pragmatics_full_drops_hallucinated_brand():
          "china_nationalism": "none", "us_nationalism": "none"},
     ]}
     parsed = _parse_pragmatics_full_response(response, {"anthropic"})
-    assert parsed == {}
+    assert parsed["by_brand"] == {}
 
 
 def test_parse_pragmatics_full_coerces_unknown_post_type():
@@ -149,7 +150,7 @@ def test_parse_pragmatics_full_coerces_unknown_post_type():
          "china_nationalism": "none", "us_nationalism": "none"},
     ]}
     parsed = _parse_pragmatics_full_response(response, {"anthropic"})
-    assert parsed["anthropic"]["post_type"] == "hands_on_usage"
+    assert parsed["by_brand"]["anthropic"]["post_type"] == "hands_on_usage"
 
 
 def test_parse_pragmatics_full_coerces_unknown_sentiment():
@@ -161,7 +162,7 @@ def test_parse_pragmatics_full_coerces_unknown_sentiment():
          "china_nationalism": "none", "us_nationalism": "none"},
     ]}
     parsed = _parse_pragmatics_full_response(response, {"anthropic"})
-    assert parsed["anthropic"]["sentiment"] == "neutral"
+    assert parsed["by_brand"]["anthropic"]["sentiment"] == "neutral"
 
 
 def test_parse_pragmatics_full_coerces_unknown_discourse_to_uncategorized():
@@ -174,7 +175,7 @@ def test_parse_pragmatics_full_coerces_unknown_discourse_to_uncategorized():
          "china_nationalism": "none", "us_nationalism": "none"},
     ]}
     parsed = _parse_pragmatics_full_response(response, {"anthropic"})
-    assert parsed["anthropic"]["discourse_role"] == "uncategorized"
+    assert parsed["by_brand"]["anthropic"]["discourse_role"] == "uncategorized"
 
 
 def test_parse_pragmatics_full_coerces_unknown_nationalism_to_none():
@@ -186,24 +187,26 @@ def test_parse_pragmatics_full_coerces_unknown_nationalism_to_none():
          "china_nationalism": "made_up_axis", "us_nationalism": "made_up_axis"},
     ]}
     parsed = _parse_pragmatics_full_response(response, {"anthropic"})
-    assert parsed["anthropic"]["china_nationalism"] == "none"
-    assert parsed["anthropic"]["us_nationalism"] == "none"
+    assert parsed["by_brand"]["anthropic"]["china_nationalism"] == "none"
+    assert parsed["by_brand"]["anthropic"]["us_nationalism"] == "none"
 
 
 def test_parse_pragmatics_full_non_dict_response_returns_empty():
     from x_monitor.attribution import _parse_pragmatics_full_response
 
+    empty = {"by_brand": {}, "unsanctioned_flags": []}
     for bad in (None, [], "string", 42):
-        assert _parse_pragmatics_full_response(bad, {"anthropic"}) == {}
+        assert _parse_pragmatics_full_response(bad, {"anthropic"}) == empty
 
 
 def test_parse_pragmatics_full_missing_classifications_key_returns_empty():
     from x_monitor.attribution import _parse_pragmatics_full_response
 
-    assert _parse_pragmatics_full_response({}, {"anthropic"}) == {}
+    empty = {"by_brand": {}, "unsanctioned_flags": []}
+    assert _parse_pragmatics_full_response({}, {"anthropic"}) == empty
     assert _parse_pragmatics_full_response(
         {"other_key": "x"}, {"anthropic"}
-    ) == {}
+    ) == empty
 
 
 # --- classify_pragmatics_full surface -----------------------------------
@@ -213,8 +216,9 @@ def test_classify_pragmatics_full_empty_inputs_returns_empty():
     from x_monitor.attribution import classify_pragmatics_full
 
     client = FakeClaudeClient()
-    assert classify_pragmatics_full("", ["anthropic"], [], client) == {}
-    assert classify_pragmatics_full("x", [], [], client) == {}
+    empty = {"by_brand": {}, "unsanctioned_flags": []}
+    assert classify_pragmatics_full("", ["anthropic"], [], client) == empty
+    assert classify_pragmatics_full("x", [], [], client) == empty
     assert client.call_count == 0  # never even called the LLM
 
 
@@ -224,7 +228,7 @@ def test_classify_pragmatics_full_no_client_returns_empty():
     result = classify_pragmatics_full(
         "x", ["anthropic"], [FakeBrandRow("anthropic")], anthropic_client=None,
     )
-    assert result == {}
+    assert result == {"by_brand": {}, "unsanctioned_flags": []}
 
 
 def test_classify_pragmatics_full_happy_path():
@@ -233,14 +237,23 @@ def test_classify_pragmatics_full_happy_path():
     registry = [FakeBrandRow("anthropic"), FakeBrandRow("deepseek")]
     client = FakeClaudeClient()
     def factory(*_):
+        # Array shape (post_types[] / discourse_roles[]) — the schema
+        # the merged prompt at build_pragmatics_full_prompt asks for.
+        # U2b (2026-07-06): classifier routes through the array parser,
+        # so the fixture must use the array shape.
         return {"classifications": [
-            {"brand_id": "anthropic", "post_type": "hands_on_usage",
-             "sentiment": "negative", "discourse_role": "dunk_yingyang",
+            {"brand_id": "anthropic",
+             "post_types": ["hands_on_usage"],
+             "sentiment": "negative",
+             "discourse_roles": ["dunk_yingyang"],
              "china_nationalism": "none",
              "us_nationalism": "constructive_critical"},
-            {"brand_id": "deepseek", "post_type": "performance_comparisons",
-             "sentiment": "positive", "discourse_role": "genuine_hype",
-             "china_nationalism": "pro", "us_nationalism": "mild_pro"},
+            {"brand_id": "deepseek",
+             "post_types": ["performance_comparisons"],
+             "sentiment": "positive",
+             "discourse_roles": ["genuine_hype"],
+             "china_nationalism": "pro",
+             "us_nationalism": "mild_pro"},
         ]}
     client._factory = factory
 
@@ -249,17 +262,20 @@ def test_classify_pragmatics_full_happy_path():
         registry, anthropic_client=client,
     )
     assert client.call_count == 1
-    assert len(out) == 2
-    assert out["anthropic"]["post_type"] == "hands_on_usage"
-    assert out["anthropic"]["discourse_role"] == "dunk_yingyang"
-    assert out["anthropic"]["china_nationalism"] == "none"
-    assert out["anthropic"]["us_nationalism"] == "constructive_critical"
-    assert out["deepseek"]["sentiment"] == "positive"
-    assert out["deepseek"]["china_nationalism"] == "pro"
+    bb = out["by_brand"]
+    assert len(bb) == 2
+    assert bb["anthropic"]["post_type"] == "hands_on_usage"
+    assert bb["anthropic"]["discourse_role"] == "dunk_yingyang"
+    assert bb["anthropic"]["china_nationalism"] == "none"
+    assert bb["anthropic"]["us_nationalism"] == "constructive_critical"
+    assert bb["deepseek"]["sentiment"] == "positive"
+    assert bb["deepseek"]["china_nationalism"] == "pro"
+    assert out["unsanctioned_flags"] == []
 
 
 def test_classify_pragmatics_full_llm_exception_returns_empty():
-    """A raising factory yields {} (caller treats as fail-soft)."""
+    """A raising factory yields the empty envelope (caller treats as
+    fail-soft)."""
     from x_monitor.attribution import classify_pragmatics_full
 
     registry = [FakeBrandRow("anthropic")]
@@ -271,7 +287,7 @@ def test_classify_pragmatics_full_llm_exception_returns_empty():
     out = classify_pragmatics_full(
         "x", ["anthropic"], registry, anthropic_client=client,
     )
-    assert out == {}
+    assert out == {"by_brand": {}, "unsanctioned_flags": []}
 
 
 def test_classify_pragmatics_full_dropped_hallucinated_brands():
@@ -294,12 +310,12 @@ def test_classify_pragmatics_full_dropped_hallucinated_brands():
     out = classify_pragmatics_full(
         "x", ["anthropic"], registry, anthropic_client=client,
     )
-    assert "made_up" not in out
-    assert "anthropic" in out
+    assert "made_up" not in out["by_brand"]
+    assert "anthropic" in out["by_brand"]
 
 
 def test_classify_pragmatics_full_parse_failure_returns_empty():
-    """Empty classifications list → empty dict (logged as warn)."""
+    """Empty classifications list → empty envelope (logged as warn)."""
     from x_monitor.attribution import classify_pragmatics_full
 
     registry = [FakeBrandRow("anthropic")]
@@ -311,7 +327,7 @@ def test_classify_pragmatics_full_parse_failure_returns_empty():
     out = classify_pragmatics_full(
         "x", ["anthropic"], registry, anthropic_client=client,
     )
-    assert out == {}
+    assert out == {"by_brand": {}, "unsanctioned_flags": []}
 
 
 def test_classify_pragmatics_full_nationalism_orthogonal_to_post_type():
@@ -328,8 +344,143 @@ def test_classify_pragmatics_full_nationalism_orthogonal_to_post_type():
          "china_nationalism": "anti", "us_nationalism": "mixed"},
     ]}
     parsed = _parse_pragmatics_full_response(response, {"anthropic"})
-    assert parsed["anthropic"]["post_type"] == "performance_comparisons"
-    assert parsed["anthropic"]["sentiment"] == "positive"
-    assert parsed["anthropic"]["discourse_role"] == "genuine_hype"
-    assert parsed["anthropic"]["china_nationalism"] == "anti"
-    assert parsed["anthropic"]["us_nationalism"] == "mixed"
+    bb = parsed["by_brand"]
+    assert bb["anthropic"]["post_type"] == "performance_comparisons"
+    assert bb["anthropic"]["sentiment"] == "positive"
+    assert bb["anthropic"]["discourse_role"] == "genuine_hype"
+    assert bb["anthropic"]["china_nationalism"] == "anti"
+    assert bb["anthropic"]["us_nationalism"] == "mixed"
+
+
+# --- U2b-fix (2026-07-06): classify_pragmatics_full routes through the
+# array-aware parser, NOT the scalar one. Locked in with the tests below
+# so a future refactor that re-introduces the scalar routing breaks these.
+#
+# Bug: prior to the fix, classify_pragmatics_full called the scalar
+# parser (`_parse_pragmatics_full_response`), which read `post_type` /
+# `discourse_role` (singular). The prompt at
+# `build_pragmatics_full_prompt` explicitly requests `post_types: [str]`
+# and `discourse_roles: [str]` arrays, so the LLM's array output never
+# matched the parser's singular keys, and every classification fell
+# through to `post_type="hands_on_usage"` / `discourse_role="uncategorized"`.
+# 2026-07-06 smoketest on /tmp/v20_fixture.jsonl confirmed 20/20 degenerate.
+
+
+def _by_brand(out: dict[str, Any], bid: str) -> dict[str, str]:
+    """Helper: extract by_brand[bid] from classify_pragmatics_full's U2a
+    return shape (`{"by_brand": {...}, "unsanctioned_flags": [...]}`).
+    """
+    return out["by_brand"][bid]
+
+
+def test_classify_pragmatics_full_array_shape_first_element_used():
+    """U2b-fix: when the LLM emits arrays (the schema the prompt asks
+    for), the first array element survives into by_brand[bid].post_type
+    and by_brand[bid].discourse_role.
+
+    Regression: prior routing parsed `post_type` (singular) instead of
+    `post_types` (array), so this exact response shape degraded to
+    `post_type=hands_on_usage` / `discourse_role=uncategorized`."""
+    from x_monitor.attribution import classify_pragmatics_full
+
+    registry = [FakeBrandRow("moonshot_kimi")]
+    client = FakeClaudeClient()
+
+    def factory(*_):
+        # Note: array shape (post_types[] / discourse_roles[]) matches
+        # the prompt exactly. This is what the live LLM emits.
+        return {"classifications": [
+            {"brand_id": "moonshot_kimi",
+             "post_types": ["event_announcement", "performance_comparisons"],
+             "sentiment": "neutral",
+             "discourse_roles": ["dunk_yingyang"],
+             "china_nationalism": "none",
+             "us_nationalism": "none"},
+        ]}
+    client._factory = factory
+
+    out = classify_pragmatics_full(
+        "Kimi K2.7 Code is generally available in GitHub Copilot",
+        ["moonshot_kimi"], registry, anthropic_client=client,
+    )
+    bb = _by_brand(out, "moonshot_kimi")
+    assert bb["post_type"] == "event_announcement", (
+        "post_type must reflect the array's first element, NOT the "
+        "scalar fallback 'hands_on_usage'. This is the regression test "
+        "for the U2b parser-routing fix."
+    )
+    assert bb["discourse_role"] == "dunk_yingyang", (
+        "discourse_role must reflect the array's first element, NOT "
+        "the scalar fallback 'uncategorized'."
+    )
+    assert bb["sentiment"] == "neutral"
+    assert bb["china_nationalism"] == "none"
+    assert bb["us_nationalism"] == "none"
+    # unsanctioned_flags is part of the U2a envelope.
+    assert out["unsanctioned_flags"] == []
+
+
+def test_classify_pragmatics_full_array_shape_distinct_buckets_propagate():
+    """U2b-fix: distinct post_type / discourse_role values that the
+    LLM emits via array shape reach the caller intact — the routing
+    fix isn't a no-op for the common case.
+
+    Locked-in to prevent re-introducing the scalar parser routing
+    on a refactor that touches `_parse_pragmatics_full_response_arrays`."""
+    from x_monitor.attribution import classify_pragmatics_full
+
+    registry = [FakeBrandRow("llama")]
+    client = FakeClaudeClient()
+
+    def factory(*_):
+        return {"classifications": [
+            {"brand_id": "llama",
+             "post_types": ["buzz_releases"],
+             "sentiment": "positive",
+             "discourse_roles": ["genuine_hype"],
+             "china_nationalism": "none",
+             "us_nationalism": "none"},
+        ]}
+    client._factory = factory
+
+    out = classify_pragmatics_full(
+        "Open-source Llama 4 just dropped",
+        ["llama"], registry, anthropic_client=client,
+    )
+    bb = _by_brand(out, "llama")
+    assert bb["post_type"] == "buzz_releases"
+    assert bb["discourse_role"] == "genuine_hype"
+
+
+def test_classify_pragmatics_full_array_shape_multi_element_picks_first():
+    """U2b-fix: when the LLM emits multiple post_types for one brand
+    (e.g., ['event_announcement', 'performance_comparisons'] for a
+    launch post that also benchmarks), the reshape into the legacy
+    scalar by_brand shape takes the first element. This preserves
+    the most-specific bucket (rule 4 of the prompt: 'most posts have
+    exactly 1 post_type')."""
+    from x_monitor.attribution import classify_pragmatics_full
+
+    registry = [FakeBrandRow("deepseek")]
+    client = FakeClaudeClient()
+
+    def factory(*_):
+        return {"classifications": [
+            {"brand_id": "deepseek",
+             "post_types": ["event_announcement", "buzz_releases"],
+             "sentiment": "positive",
+             "discourse_roles": [],
+             "china_nationalism": "none",
+             "us_nationalism": "none"},
+        ]}
+    client._factory = factory
+
+    out = classify_pragmatics_full(
+        "DeepSeek-V4 just dropped, MIT-licensed open weights.",
+        ["deepseek"], registry, anthropic_client=client,
+    )
+    bb = _by_brand(out, "deepseek")
+    assert bb["post_type"] == "event_announcement", (
+        "multi-element post_types[] must collapse to first element "
+        "(event_announcement in this case), not the default fallback."
+    )

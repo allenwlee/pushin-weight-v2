@@ -69,9 +69,13 @@ class FakeClaudeClient:
         } for t in tweets]}
 
     def _default_classify(self, text, brand_ids):
+        # Array shape (post_types[] / discourse_roles[]) — matches
+        # the schema build_pragmatics_full_prompt asks the LLM to emit.
+        # U2b (2026-07-06): classify_pragmatics_full routes through
+        # the array parser, so fixtures must use the array shape.
         return {"classifications": [
-            {"brand_id": b, "post_type": "hands_on_usage",
-             "sentiment": "neutral", "discourse_role": "genuine_hype",
+            {"brand_id": b, "post_types": ["hands_on_usage"],
+             "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
              "china_nationalism": "none", "us_nationalism": "none"}
             for b in brand_ids
         ]}
@@ -356,8 +360,8 @@ def test_run_post_fetch_classifier_failure_on_one_post_does_not_abort(tmp_path):
             if "Claude could never" in text:
                 raise RuntimeError("classifier boom on t1")
             return {"classifications": [
-                {"brand_id": b, "post_type": "hands_on_usage",
-                 "sentiment": "neutral", "discourse_role": "genuine_hype",
+                {"brand_id": b, "post_types": ["hands_on_usage"],
+                 "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
                  "china_nationalism": "none", "us_nationalism": "none"}
                 for b in brand_ids
             ]}
@@ -412,8 +416,8 @@ def test_run_post_fetch_nationalism_counter_only_when_both_set(tmp_path):
 
         def c_factory(text, brand_ids):
             return {"classifications": [{
-                "brand_id": brand_ids[0], "post_type": "hands_on_usage",
-                "sentiment": "neutral", "discourse_role": "genuine_hype",
+                "brand_id": brand_ids[0], "post_types": ["hands_on_usage"],
+                "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
                 "china_nationalism": "pro", "us_nationalism": "anti",
             }]}
 
@@ -446,9 +450,9 @@ def test_run_post_fetch_discourse_role_coerced_to_known_set(tmp_path):
     try:
         def c_factory(text, brand_ids):
             return {"classifications": [{
-                "brand_id": brand_ids[0], "post_type": "hands_on_usage",
+                "brand_id": brand_ids[0], "post_types": ["hands_on_usage"],
                 "sentiment": "neutral",
-                "discourse_role": "made_up_role",  # unknown
+                "discourse_roles": ["made_up_role"],  # unknown
                 "china_nationalism": "none", "us_nationalism": "none",
             }]}
         client = FakeClaudeClient(classify_factory=c_factory)
@@ -500,10 +504,10 @@ def test_run_post_fetch_per_brand_classifications_loop(tmp_path):
         def c_factory(text, brand_ids):
             # Emit a row for each brand the LLM was asked about.
             return {"classifications": [
-                {"brand_id": b, "post_type": "hands_on_usage",
+                {"brand_id": b, "post_types": ["hands_on_usage"],
                  "sentiment": "positive" if b == "openai" else "negative",
-                 "discourse_role": "genuine_hype" if b == "openai"
-                                   else "dunk_yingyang",
+                 "discourse_roles": ["genuine_hype"] if b == "openai"
+                                    else ["dunk_yingyang"],
                  "china_nationalism": "none", "us_nationalism": "none"}
                 for b in brand_ids
             ]}
