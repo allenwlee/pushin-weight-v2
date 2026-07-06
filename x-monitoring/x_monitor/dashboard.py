@@ -2284,8 +2284,12 @@ class DashboardApp:
             """Set the `home_window` cookie (Pushin' Weight home pages, U1).
 
             Validates against ALLOWED_HOME_WINDOWS = (1, 7, 30, 365). On
-            success, 303 back to the referrer (or `/` when no referrer).
-            On invalid value, 400 with the allowed set.
+            success, 303 back to the home page. On invalid value, 400
+            with the allowed set.
+
+            NOTE: redirect target is a server-side canonical (`/`),
+            NOT `request.referrer` — the latter is attacker-controllable
+            and would enable open redirects (review finding #18).
             """
             if days not in ALLOWED_HOME_WINDOWS:
                 return jsonify(
@@ -2294,14 +2298,15 @@ class DashboardApp:
                         "allowed": list(ALLOWED_HOME_WINDOWS),
                     }
                 ), 400
-            from flask import request
-            resp = make_response(
-                redirect(request.referrer or "/", code=303)
-            )
+            resp = make_response(redirect("/", code=303))
             resp.set_cookie(
                 HOME_WINDOW_COOKIE,
                 str(days),
                 max_age=60 * 60 * 24 * 365,  # 1 year
+                path="/",  # FIX review #2: without path=/, the cookie
+                # is path-scoped to /api/v1/home.window/<int:days> and
+                # unreadable at the home pages, so the toggle appears
+                # to do nothing.
                 samesite="Lax",
                 httponly=True,
             )
@@ -2314,9 +2319,10 @@ class DashboardApp:
             """Set the `locale` cookie (Pushin' Weight home pages, U1).
 
             Accepts "en", "zh-CN" (alias "zh_cn"), and "original". 303
-            back to the referrer (or `/` when no referrer). 400 on invalid.
+            back to the home page (server-side canonical, NOT
+            request.referrer — that would enable open redirects, see
+            review finding #18). 400 on invalid.
             """
-            from flask import request
             canonical: str | None = None
             if locale.casefold() == "original":
                 canonical = "original"
@@ -2332,9 +2338,7 @@ class DashboardApp:
                         "allowed": list(SUPPORTED_LOCALES) + ["original"],
                     }
                 ), 400
-            resp = make_response(
-                redirect(request.referrer or "/", code=303)
-            )
+            resp = make_response(redirect("/", code=303))
             resp.set_cookie(
                 "locale", canonical,
                 max_age=60 * 60 * 24 * 365, path="/", samesite="Lax",

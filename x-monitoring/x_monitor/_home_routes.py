@@ -101,19 +101,11 @@ def _denormalize_posts(
     if not base:
         return []
     # Bound the working set to the requested window (matches chart's
-    # per-day bucketing).
-    latest = _load_latest_run(Path(store._conn.execute(
-        "SELECT 1"  # cheap ping to ensure conn open
-    ).fetchone is not None and "." or "."))
-    if latest and latest.get("finished_at"):
-        try:
-            now = datetime.fromisoformat(
-                latest["finished_at"].replace("Z", "+00:00")
-            )
-        except ValueError:
-            now = datetime.now(timezone.utc)
-    else:
-        now = datetime.now(timezone.utc)
+    # per-day bucketing). The "now" anchor is wall-clock UTC; we don't
+    # thread runs_dir through this helper because the route layer's
+    # serialize_* functions anchor on `latest_run` themselves. The SQL
+    # filter below uses this wall-clock now as the upper bound.
+    now = datetime.now(timezone.utc)
     from datetime import timedelta
     cutoff_iso = (now - timedelta(days=window_days)).isoformat()
     base = [p for p in base if (p.get("created_at") or "") >= cutoff_iso]
@@ -170,6 +162,15 @@ def _denormalize_posts(
         nat_by_tweet[r["tweet_id"]]["us_nationalism"] = r["us_nationalism"]
 
     # posts_unsanctioned_flags → per-post bool
+    # NOTE (review #3): `posts_unsanctioned_flags` is keyed on post_id only
+    # (per migration 027), not (post_id, brand_id). The flag is a property
+    # of the post itself, so cross-brand false positives are NOT possible
+    # at the SQL layer — the flag is global to the post. The plan's
+    # review of this query as missing `AND puf.brand_id = ?` was a
+    # false positive; this query is correct.
+    # FIX (review #1): parameter tuple shape — was `(tweet_ids,)` which
+    # passes a list as a single bound parameter; sqlite3 raised
+    # ProgrammingError because the SQL has `len(tweet_ids)` placeholders.
     flag_rows = store._conn.execute(
         f"""
         SELECT p.tweet_id, 1 AS flagged
@@ -177,7 +178,7 @@ def _denormalize_posts(
         JOIN posts_unsanctioned_flags puf ON puf.post_id = p.id
         WHERE p.tweet_id IN ({placeholders})
         """,
-        (tweet_ids,),
+        tuple(tweet_ids),
     ).fetchall()
     flagged_tweets = {r["tweet_id"] for r in flag_rows}
 
