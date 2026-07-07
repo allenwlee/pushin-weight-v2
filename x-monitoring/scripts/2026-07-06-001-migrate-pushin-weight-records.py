@@ -452,7 +452,7 @@ class TargetWriter:
                 continue
             cur = self._conn.execute(
                 """
-                INSERT OR IGNORE INTO brands_accounts (brand_id, author_id, role_id, added_at)
+                INSERT OR IGNORE INTO brands_accounts (brand_id, accounts_id, role_id, added_at)
                 VALUES (?, ?, ?, ?)
                 """,
                 (brand_id_int, account_id_int, role_id_int,

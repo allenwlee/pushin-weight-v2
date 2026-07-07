@@ -59,8 +59,8 @@ table types — see below):
   `INSERT OR IGNORE`).
 - `dropped_no_alias` — number of source rows whose FK chain failed
   to resolve (e.g. source brand maps to a target brand that doesn't
-  exist; source account author_id has no matching accounts row;
-  source brand is a sentinel that the alias map drops).
+  exist; source X user id (`accounts.author_id`) has no matching
+  `accounts` row; source brand is a sentinel that the alias map drops).
 - `dropped_samples` — first 5 dropped rows with their `reason` field.
   The full dropped list is **not** included to keep the report
   manageable; the `dropped_no_alias` count is the canonical signal.
@@ -80,7 +80,7 @@ table types — see below):
 | `post_type_labels` | no | yes | |
 | `nationalism_labels` | no | yes | |
 | `role_labels` | no | yes | |
-| `accounts` | no | no | The `accounts` table doesn't take aliases (author_id is the natural key); there's no `dropped_no_alias` field — only `inserted` + `skipped_duplicate`. |
+| `accounts` | no | no | The `accounts` table doesn't take aliases (`accounts.author_id` is the natural key); there's no `dropped_no_alias` field — only `inserted` + `skipped_duplicate`. |
 | `brand_search_terms` | no | yes | |
 | `brands_accounts` | no | yes | |
 | `brands_companies` | no | yes | |

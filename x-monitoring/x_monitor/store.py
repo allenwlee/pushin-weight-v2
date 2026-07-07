@@ -1257,9 +1257,9 @@ class Store:
             self._conn.execute(
                 """
                 INSERT INTO brands_accounts(
-                    brand_id, author_id, role_id, added_at
+                    brand_id, accounts_id, role_id, added_at
                 ) VALUES (?,?,?,?)
-                ON CONFLICT(brand_id, author_id) DO UPDATE SET
+                ON CONFLICT(brand_id, accounts_id) DO UPDATE SET
                     role_id = excluded.role_id
                 """,
                 (brand_id_int, author_id_int, role_id_int, now),
@@ -1268,11 +1268,11 @@ class Store:
     def get_account(self, brand_id: str, handle: str) -> dict[str, Any] | None:
         if brand_id not in KNOWN_MODELS:
             raise ValueError(f"unknown brand_id '{brand_id}'")
-        # U8 (migration 020): brands_accounts.brand_id is INTEGER
-        # (FK to brands.id) and brands_accounts.author_id is INTEGER
-        # (FK to accounts.id, the new surrogate PK). Resolve the brand
-        # slug to its id before the JOIN; join on the surrogate
-        # integer key.
+        # U8 (migration 020) + U6 (migration 031):
+        # brands_accounts.brand_id is INTEGER (FK to brands.id) and
+        # brands_accounts.accounts_id is INTEGER (FK to accounts.id,
+        # the new surrogate PK). Resolve the brand slug to its id
+        # before the JOIN; join on the surrogate integer key.
         brand_id_int = self._brand_int_id(brand_id)
         if brand_id_int is None:
             return None
@@ -1284,7 +1284,7 @@ class Store:
             """
             SELECT a.*, ba.role_id, r.key AS role_key
             FROM accounts a
-            JOIN brands_accounts ba ON ba.author_id = a.id
+            JOIN brands_accounts ba ON ba.accounts_id = a.id
             LEFT JOIN roles r ON r.id = ba.role_id
             WHERE ba.brand_id = ? AND a.handle = ?
             """,
@@ -1306,7 +1306,7 @@ class Store:
             """
             SELECT a.*, ba.role_id, r.key AS role_key
             FROM accounts a
-            JOIN brands_accounts ba ON ba.author_id = a.id
+            JOIN brands_accounts ba ON ba.accounts_id = a.id
             LEFT JOIN roles r ON r.id = ba.role_id
             WHERE ba.brand_id = ?
             """,
@@ -2464,18 +2464,18 @@ class Store:
         `entities.user_mentions[].id` (numeric X user id) to a
         `brand_id`.
 
-        U8 (migration 020): `brands_accounts.author_id` is INTEGER
-        (FK to accounts.id) and `brands_accounts.brand_id` is INTEGER
-        (FK to brands.id). JOIN both back to the source tables to
-        recover the TEXT identities the caller cares about — the
-        X user id (`accounts.author_id`) and the brand slug
-        (`brands.brand_id`).
+        U8 (migration 020) + U6 (migration 031):
+        `brands_accounts.accounts_id` is INTEGER (FK to accounts.id) and
+        `brands_accounts.brand_id` is INTEGER (FK to brands.id). JOIN
+        both back to the source tables to recover the TEXT identities
+        the caller cares about — the X user id
+        (`accounts.author_id`) and the brand slug (`brands.nickname`).
         """
         rows = self._conn.execute(
             """
             SELECT a.author_id, b.nickname AS brand_id
             FROM brands_accounts ba
-            JOIN accounts a ON a.id = ba.author_id
+            JOIN accounts a ON a.id = ba.accounts_id
             JOIN brands b   ON b.id = ba.brand_id
             """
         ).fetchall()
