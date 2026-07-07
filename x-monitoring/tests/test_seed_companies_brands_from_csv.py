@@ -47,7 +47,7 @@ def test_slugify_override_hit_cjk():
     """CJK display_name → v1 brand_id via override."""
     assert _slugify("千问", _mod.BRAND_SLUG_OVERRIDES) == "qwen"
     assert _slugify("深度求索", _mod.BRAND_SLUG_OVERRIDES) == "deepseek"
-    assert _slugify("サカナAI", _mod.BRAND_SLUG_OVERRIDES) == "sakana"
+    assert _slugify("サカナAI", _mod.BRAND_SLUG_OVERRIDES) == "sakana_ai"
     assert _slugify("업스테이지", _mod.BRAND_SLUG_OVERRIDES) == "upstage"
 
 
@@ -55,7 +55,7 @@ def test_slugify_override_hit_v1_canonical():
     """v1 brand display_names → their canonical v1 ids."""
     assert _slugify("MiniMax", _mod.BRAND_SLUG_OVERRIDES) == "minimax"
     assert _slugify("GLM / ChatGLM", _mod.BRAND_SLUG_OVERRIDES) == "glm"
-    assert _slugify("Mimo", _mod.BRAND_SLUG_OVERRIDES) == "xiaomi_mimo"
+    assert _slugify("Mimo", _mod.BRAND_SLUG_OVERRIDES) == "mimo"
     assert _slugify("ERNIE / Wenxin", _mod.BRAND_SLUG_OVERRIDES) == "ernie"
 
 
@@ -479,12 +479,12 @@ def test_column_m_notes_is_read_and_discarded(tmp_path):
 def test_overrides_cover_all_20_brand_ids():
     """The override map must cover all 20 brand_ids (11 v1 + 9 new)."""
     expected_v1 = {
-        "qwen", "deepseek", "glm", "xiaomi_mimo", "moonshot_kimi",
+        "qwen", "deepseek", "glm", "mimo", "moonshot_kimi",
         "inclusionai", "mistral", "stepfun", "ernie", "hunyuan", "minimax",
     }
     expected_new = {
-        "llama", "nvidia_nemo", "doubao", "yi", "sensechat",
-        "exaone", "kuaishou", "sakana", "upstage",
+        "llama", "nemo_megatron", "doubao", "yi", "sensechat",
+        "exaone", "kuaishou", "sakana_ai", "upstage",
     }
     override_ids = set(_mod.BRAND_SLUG_OVERRIDES.values())
     assert expected_v1 <= override_ids, (

@@ -30,7 +30,7 @@ import pytest
 V17_LIST_ID = 1234567890
 V17_MODELS = [
     "minimax", "qwen", "deepseek", "glm",
-    "xiaomi_mimo", "moonshot_kimi", "inclusionai",
+    "mimo", "moonshot_kimi", "inclusionai",
 ]
 
 
@@ -70,7 +70,7 @@ def test_plan_calls_v17_emits_call_c_when_spec_provided(v17_data_dir):
     specs = [
         CallCBrandSpec(
             brands={
-                "xiaomi_mimo":  ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
+                "mimo":  ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
                 "moonshot_kimi": ["Kimi", "月之暗面", "暗面"],
             },
             co_occurrence=["api", "llm", "model"],
@@ -90,7 +90,7 @@ def test_plan_calls_v17_emits_call_c_when_spec_provided(v17_data_dir):
     # brand_id is a placeholder (one raw file per call); actual routing
     # is via post-fetch attribute_to_brands matching the per-brand
     # paren group.
-    assert call_c.brand_id in {"xiaomi_mimo", "moonshot_kimi"}
+    assert call_c.brand_id in {"mimo", "moonshot_kimi"}
     # U9 (migration 022): PlannedCall no longer carries
     # `expected_signal` — the 6-signal taxonomy was replaced by
     # (post_type, sentiment) classification at ingestion time.
@@ -211,7 +211,7 @@ def test_plan_calls_v17_call_b_uses_yaml_brand_tokens(v17_data_dir):
         "qwen":          ["Qwen", "通义千问", "通义"],
         "deepseek":      ["DeepSeek", "深度求索"],
         "glm":           ["GLM", "智谱", "ChatGLM"],
-        "xiaomi_mimo":   ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
+        "mimo":   ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
         "moonshot_kimi": ["Kimi", "月之暗面"],  # bare "Moonshot" removed by disambig
         "inclusionai":   ["InclusionAI", "Ling", "Ring", "Ming"],
     }
@@ -267,7 +267,7 @@ def test_plan_calls_v17_handles_missing_brand_query_yaml(v17_data_dir, tmp_path)
     src_queries = v17_data_dir / "queries"
     dst_queries = tmp_path / "queries"
     dst_queries.mkdir()
-    for yaml in ["minimax.yaml", "qwen.yaml", "deepseek.yaml", "glm.yaml", "xiaomi_mimo.yaml"]:
+    for yaml in ["minimax.yaml", "qwen.yaml", "deepseek.yaml", "glm.yaml", "mimo.yaml"]:
         (dst_queries / yaml).write_bytes((src_queries / yaml).read_bytes())
 
     # Build a parallel data dir that mirrors v17_data_dir but with a thin queries/
@@ -315,7 +315,7 @@ def test_plan_calls_v17_call_b_groups_emits_n_calls(v17_data_dir):
     groups = [
         ["minimax", "qwen"],
         ["deepseek", "glm"],
-        ["xiaomi_mimo", "moonshot_kimi", "inclusionai"],
+        ["mimo", "moonshot_kimi", "inclusionai"],
     ]
     calls = plan_calls(v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID, call_b_groups=groups)
     # Call A + 3 Call Bs = 4 calls
@@ -330,7 +330,7 @@ def test_plan_calls_v17_call_b_groups_each_under_cap(v17_data_dir):
 
     groups = [
         ["minimax", "qwen", "deepseek", "glm"],
-        ["xiaomi_mimo", "moonshot_kimi", "inclusionai"],
+        ["mimo", "moonshot_kimi", "inclusionai"],
     ]
     calls = plan_calls(v17_data_dir, V17_MODELS, x_monitor_list_id=V17_LIST_ID, call_b_groups=groups)
     for c in calls[1:]:

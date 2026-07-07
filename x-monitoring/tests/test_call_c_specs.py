@@ -48,7 +48,7 @@ def test_call_c_specs_load_from_repo_config():
 
 
 def test_c1_spec_covers_five_brands():
-    """The C1 spec covers xiaomi_mimo, moonshot_kimi, yi, upstage, llama —
+    """The C1 spec covers mimo, moonshot_kimi, yi, upstage, llama —
     these are the brands whose tokens collide with common nouns and so
     need the AND-filter. Other brands (deepseek, glm, ...) have unique
     enough tokens and rely on Call B alone."""
@@ -62,7 +62,7 @@ def test_c1_spec_covers_five_brands():
     )
     covered = set(c1.brands.keys())
     expected = {
-        "xiaomi_mimo", "moonshot_kimi", "yi", "upstage", "llama",
+        "mimo", "moonshot_kimi", "yi", "upstage", "llama",
     }
     assert covered == expected, (
         f"C1 spec covers {covered}; expected exactly {expected}"

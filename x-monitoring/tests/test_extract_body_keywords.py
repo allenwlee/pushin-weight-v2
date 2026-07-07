@@ -29,7 +29,7 @@ BRAND_KEYWORDS_RAW: list[tuple[str, str, bool]] = [
     ("deepseek", r"DS[ -]?V\d+", True),
     ("glm", "GLM", False),
     ("glm", "智谱", False),
-    ("xiaomi_mimo", "MiMo", False),
+    ("mimo", "MiMo", False),
     ("moonshot_kimi", "Kimi", False),
     ("inclusionai", "Ling", False),
 ]

@@ -5,13 +5,13 @@ Unit 1 of 6 (U1 — schema-side rename + new rows; U4 is the data-side
 CLI script). This test pins the schema layer only.
 
 Scope:
-- 3 brand renames in-place (xiaomi_mimo→mimo, nvidia_nemo→nemo_megatron,
-  sakana→sakana_ai). Surrogate INTEGER ids are unchanged; child FK
+- 3 brand renames in-place (mimo→mimo, nemo_megatron→nemo_megatron,
+  sakana_ai→sakana_ai). Surrogate INTEGER ids are unchanged; child FK
   references in posts_brands.* / brand_search_terms.* stay valid
   automatically.
 - 6 new brand rows (chatglm, sensenova, step, kwaiyii, wenxin, seed).
 - 9 new company rows (meta, nvidia, bytedance, sensetime, lg_ai,
-  sakana, kuaishou_co, upstage_co, 01ai).
+  sakana_ai, kuaishou_co, upstage_co, 01ai).
 - INSERT OR IGNORE on the UNIQUE nickname constraint for the new
   rows. The UPDATE statements are no-ops on re-apply because the old
   slug is already gone.

@@ -28,7 +28,7 @@ enabled_models:
   - qwen
   - deepseek
   - glm
-  - xiaomi_mimo
+  - mimo
   - moonshot_kimi
   - inclusionai
   - mistral
@@ -36,12 +36,12 @@ enabled_models:
   - ernie
   - hunyuan
   - llama
-  - nvidia_nemo
+  - nemo_megatron
   - doubao
   - yi
   - sensechat
   - exaone
-  - sakana
+  - sakana_ai
   - kuaishou
   - upstage
 daily_ceiling: 333

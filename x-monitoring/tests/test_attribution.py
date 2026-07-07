@@ -37,7 +37,7 @@ BRAND_REGISTRY: list[BrandRow] = [
     BrandRow("qwen", "Qwen", "#22c55e", False),
     BrandRow("deepseek", "DeepSeek", "#0ea5e9", False),
     BrandRow("glm", "GLM", "#facc15", False),
-    BrandRow("xiaomi_mimo", "MiMo", "#ef4444", False),
+    BrandRow("mimo", "MiMo", "#ef4444", False),
     BrandRow("moonshot_kimi", "Kimi", "#ec4899", False),
     BrandRow("inclusionai", "InclusionAI", "#3b82f6", False),
     BrandRow("mistral", "Mistral", "#facc15", False),
@@ -71,7 +71,7 @@ BRAND_KEYWORDS_RAW: list[tuple[str, str, bool]] = [
     ("deepseek",      r"DS[ -]?V\d+", True),  # regex: matches DS-V3, DS V3
     ("glm",           "GLM",     False),
     ("glm",           "智谱",     False),
-    ("xiaomi_mimo",   "MiMo",    False),
+    ("mimo",   "MiMo",    False),
     ("moonshot_kimi", "Kimi",    False),
     ("inclusionai",   "Ling",    False),
 ]

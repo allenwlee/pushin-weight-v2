@@ -362,7 +362,7 @@ def _dispatch_relevance(args, action: str, paths) -> int:
                 {"id": "f1", "text": "GLM-4.5 launch", "author_handle": "fan"},
                 {"id": "f2", "text": "hello world", "author_handle": "u"},
             ],
-            "xiaomi_mimo": [
+            "mimo": [
                 {"id": "f1", "text": "Xiaomi MiMo v2.5 release", "author_handle": "fan"},
                 {"id": "f2", "text": "hello world", "author_handle": "u"},
             ],

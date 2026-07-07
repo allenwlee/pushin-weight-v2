@@ -42,7 +42,7 @@ def test_loads_5_queries_per_model():
             "qwen",
             "deepseek",
             "glm",
-            "xiaomi_mimo",
+            "mimo",
             "moonshot_kimi",
             "inclusionai",
         ]

@@ -86,7 +86,7 @@ EXPECTED_HEADER = [
 # Values: canonical id to use for the row.
 # These cover:
 #   - CJK / non-ASCII display_names that slugify() can't handle.
-#   - v1 brand_ids that don't match a naive slug (Mimo→xiaomi_mimo,
+#   - v1 brand_ids that don't match a naive slug (Mimo→mimo,
 #     GLM/ChatGLM→glm, etc.).
 #   - v1 company_ids (mistral_ai, inclusion_ai, deepseek_co, etc.).
 # New rows that slugify cleanly are handled by the regex fallback.
@@ -96,7 +96,7 @@ BRAND_SLUG_OVERRIDES: dict[str, str] = {
     "MiniMax": "minimax",
     "深度求索": "deepseek",
     "GLM / ChatGLM": "glm",
-    "MiMo": "xiaomi_mimo",
+    "MiMo": "mimo",
     "Moonshot / Kimi": "moonshot_kimi",
     "InclusionAI": "inclusionai",
     "Mistral": "mistral",
@@ -105,15 +105,15 @@ BRAND_SLUG_OVERRIDES: dict[str, str] = {
     "腾讯混元": "hunyuan",
     # 9 new brand_ids from plan 2026-06-25-001.
     "Llama": "llama",
-    "NeMo / Megatron": "nvidia_nemo",
+    "NeMo / Megatron": "nemo_megatron",
     "Doubao / Seed": "doubao",
     "零一万物 Yi": "yi",
     "SenseChat / SenseNova": "sensechat",
     "EXAONE": "exaone",
     "Kuaishou / KwaiYii": "kuaishou",
-    "Mimo": "xiaomi_mimo",
-    "Sakana AI": "sakana",
-    "サカナAI": "sakana",
+    "Mimo": "mimo",
+    "Sakana AI": "sakana_ai",
+    "サカナAI": "sakana_ai",
     "업스테이지": "upstage",
 }
 

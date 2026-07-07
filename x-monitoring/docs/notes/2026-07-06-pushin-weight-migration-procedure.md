@@ -89,8 +89,8 @@ The alias map (`scripts/2026-07-06-001-migrate-pushin-weight-records.aliases.yam
 documents every source→target slug mapping the script applies. It has four
 sections:
 
-- **brands** — 3 in-place renames (`xiaomi_mimo`→`mimo`, `nvidia_nemo`→
-  `nemo_megatron`, `sakana`→`sakana_ai`). The 6 new brands
+- **brands** — 3 in-place renames (`mimo`→`mimo`, `nemo_megatron`→
+  `nemo_megatron`, `sakana_ai`→`sakana_ai`). The 6 new brands
   (`chatglm`, `wenxin`, `seed`, `sensenova`, `kwaiyii`, `step`) are 1:1
   and not listed.
 

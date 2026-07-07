@@ -30,9 +30,9 @@
 # are 1:1 between source and target — not listed here, the script
 # handles them as identity.
 brands:
-  mimo:         mimo          # source already uses mimo (target renamed from xiaomi_mimo)
-  nemo_megatron: nemo_megatron  # source uses nemo_megatron (target renamed from nvidia_nemo)
-  sakana_ai:    sakana_ai     # source uses sakana_ai (target renamed from sakana)
+  mimo:         mimo          # source already uses mimo (target renamed from mimo)
+  nemo_megatron: nemo_megatron  # source uses nemo_megatron (target renamed from nemo_megatron)
+  sakana_ai:    sakana_ai     # source uses sakana_ai (target renamed from sakana_ai)
 
 # -----------------------------------------------------------------------------
 # Company slugs
@@ -59,7 +59,7 @@ companies:
   bytedance:    bytedance
   sensetime:    sensetime
   lg_ai:        lg_ai
-  sakana:       sakana
+  sakana_ai:       sakana_ai
   kuaishou_co:  kuaishou      # source uses bare 'kuaishou'
   upstage_co:   upstage       # source uses bare 'upstage'
   01ai:         01ai

@@ -401,7 +401,7 @@ def test_migration_004_brands_seeded(tmp_path):
     sentinel.
 
     Per the brand-model plan: 11 real brand_ids (minimax, qwen, deepseek,
-    glm, xiaomi_mimo, moonshot_kimi, inclusionai, mistral, stepfun,
+    glm, mimo, moonshot_kimi, inclusionai, mistral, stepfun,
     ernie, hunyuan) + the `_unattributed` sentinel. read_brands()
     returns them as BrandRow dataclasses.
 
@@ -426,7 +426,7 @@ def test_migration_004_brands_seeded(tmp_path):
         # 004 is responsible for seeding).
         real_ids = {b.brand_id for b in brands if not b.is_sentinel}
         for required in {
-            "minimax", "qwen", "deepseek", "glm", "xiaomi_mimo",
+            "minimax", "qwen", "deepseek", "glm", "mimo",
             "moonshot_kimi", "inclusionai", "mistral", "stepfun",
             "ernie", "hunyuan",
         }:

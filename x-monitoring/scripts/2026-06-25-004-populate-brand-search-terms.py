@@ -42,17 +42,17 @@ import yaml
 # --- 9 brand_ids without an existing `brands` row. display_name and
 # --- accent_color are operator-curated first-pass placeholders. The
 # --- 11 existing v1 brand_ids (minimax, qwen, deepseek, glm,
-# --- xiaomi_mimo, moonshot_kimi, inclusionai, mistral, stepfun, ernie,
+# --- mimo, moonshot_kimi, inclusionai, mistral, stepfun, ernie,
 # --- hunyuan) are seeded by migration 004 and reused via INSERT OR IGNORE.
 NEW_BRANDS: dict[str, tuple[str, str]] = {
     "llama":       ("Meta Llama",            "#1877f2"),
-    "nvidia_nemo": ("NVIDIA NeMo",           "#76b900"),
+    "nemo_megatron": ("NVIDIA NeMo",           "#76b900"),
     "doubao":      ("ByteDance Doubao",      "#3d5afe"),
     "yi":          ("01.AI Yi",              "#6366f1"),
     "sensechat":   ("SenseTime SenseChat",   "#f97316"),
     "exaone":      ("LG EXAONE",             "#a855f7"),
     "kuaishou":    ("Kuaishou KwaiYii",      "#ef4444"),
-    "sakana":      ("Sakana AI",             "#14b8a6"),
+    "sakana_ai":      ("Sakana AI",             "#14b8a6"),
     "upstage":     ("Upstage Solar",         "#06b6d4"),
 }
 

@@ -393,8 +393,8 @@ def test_new_brands_covers_all_9_missing_brands():
     don't have a `brands` row from migration 004."""
     # All 9 brand_ids from the plan's R4 table.
     expected = {
-        "llama", "nvidia_nemo", "doubao", "yi", "sensechat",
-        "exaone", "kuaishou", "sakana", "upstage",
+        "llama", "nemo_megatron", "doubao", "yi", "sensechat",
+        "exaone", "kuaishou", "sakana_ai", "upstage",
     }
     assert set(_new_brands_keys) == expected
 

@@ -615,7 +615,7 @@ def test_read_brands_returns_12_rows():
             assert sentinels[0].brand_id == "_unattributed"
             real_ids = {b.brand_id for b in brands if not b.is_sentinel}
             for required in {
-                "minimax", "qwen", "deepseek", "glm", "xiaomi_mimo",
+                "minimax", "qwen", "deepseek", "glm", "mimo",
                 "moonshot_kimi", "inclusionai", "mistral", "stepfun",
                 "ernie", "hunyuan",
             }:

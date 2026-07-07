@@ -5,8 +5,8 @@ Unit 3 of 6 (U3 — Resolve llama/yi FK-violation noise; operator-scoped
 to register all 9 missing brands in one migration, not just llama/yi).
 
 Scope:
-- 9 brands (llama, nvidia_nemo, doubao, yi, sensechat, exaone, kuaishou,
-  sakana, upstage) inserted with INSERT OR IGNORE so re-apply is a no-op.
+- 9 brands (llama, nemo_megatron, doubao, yi, sensechat, exaone, kuaishou,
+  sakana_ai, upstage) inserted with INSERT OR IGNORE so re-apply is a no-op.
 - accent_color / display_name_zh_cn populated where a Chinese (or
   Korean) name is conventional.
 - No FK changes; the existing FK on posts_brands.brand_id already
@@ -31,13 +31,13 @@ import pytest
 # Brands the migration is responsible for inserting.
 NEW_BRANDS: tuple[str, ...] = (
     "llama",
-    "nvidia_nemo",
+    "nemo_megatron",
     "doubao",
     "yi",
     "sensechat",
     "exaone",
     "kuaishou",
-    "sakana",
+    "sakana_ai",
     "upstage")
 
 

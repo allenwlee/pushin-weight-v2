@@ -33,7 +33,7 @@ V17_BRAND_TOKENS = {
     "qwen":          ["Qwen", "通义千问", "通义"],
     "deepseek":      ["DeepSeek", "深度求索"],
     "glm":           ["GLM", "智谱", "ChatGLM"],
-    "xiaomi_mimo":   ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
+    "mimo":   ["MiMo", "Xiaomi MiMo", "小米 MiMo"],
     "moonshot_kimi": ["Kimi", "Moonshot", "月之暗面"],
     "inclusionai":   ["InclusionAI", "Ling", "Ring", "Ming"],
 }
@@ -258,7 +258,7 @@ def test_v17_fast_path_matches_legacy_for_full_token_set():
         ("Qwen-72B is amazing", "u1", "qwen"),
         ("DeepSeek-V3 is open", "u1", "deepseek"),
         ("GLM-4 paper on arxiv", "u1", "glm"),
-        ("MiMo 7B is great", "u1", "xiaomi_mimo"),
+        ("MiMo 7B is great", "u1", "mimo"),
         ("Kimi k2 paper", "u1", "moonshot_kimi"),
         ("月之暗面 发布新模型", "u1", "moonshot_kimi"),
         ("InclusionAI Ling model", "u1", "inclusionai"),

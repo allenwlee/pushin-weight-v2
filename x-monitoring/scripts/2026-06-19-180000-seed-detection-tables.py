@@ -25,7 +25,7 @@ print(f'  +{n_accts} new accounts')
 brand_yaml = {
     'deepseek': 'deepseek.yaml', 'glm': 'glm.yaml', 'inclusionai': 'inclusionai.yaml',
     'minimax': 'minimax.yaml', 'moonshot_kimi': 'moonshot_kimi.yaml',
-    'qwen': 'qwen.yaml', 'xiaomi_mimo': 'xiaomi_mimo.yaml',
+    'qwen': 'qwen.yaml', 'mimo': 'mimo.yaml',
 }
 
 print('[2/4] Inserting accounts for canonical_handles...')
