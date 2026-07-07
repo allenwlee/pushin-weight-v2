@@ -296,3 +296,269 @@ def test_u6_main_with_api_query_uses_fake_client(monkeypatch, tmp_path):
         assert fake_api.calls[0]["query"] == "kimi"
     finally:
         monkeypatch.chdir(cwd)
+
+
+# --- --query-from-yaml (plan 2026-07-07-002) ---------------------------
+
+
+_YAML_TWO_ENABLED = """\
+# A test query yaml with two enabled queries.
+queries:
+  - id: Q1
+    query_string: '(kimi OR "Kimi K2.7") min_faves:2'
+    max_results: 50
+    enabled: true
+    min_faves: 2
+  - id: Q2
+    query_string: '(kimi) (broken OR fails OR bad)'
+    max_results: 50
+    enabled: true
+    min_faves: 1
+"""
+
+
+_YAML_FIRST_DISABLED = """\
+queries:
+  - id: Q1
+    query_string: 'q1 disabled'
+    enabled: false
+  - id: Q2
+    query_string: 'q2 enabled (picked)'
+    enabled: true
+"""
+
+
+_YAML_ALL_DISABLED = """\
+queries:
+  - id: Q1
+    query_string: 'q1 disabled'
+    enabled: false
+  - id: Q2
+    query_string: 'q2 disabled'
+    enabled: false
+"""
+
+
+def _write_query_yaml(tmp_path, body: str, brand: str = "_test_brand") -> Path:
+    """Drop a data/queries/<brand>.yaml under tmp_path and return
+    the project-root-relative path the helper expects."""
+    queries_dir = tmp_path / "data" / "queries"
+    queries_dir.mkdir(parents=True, exist_ok=True)
+    yaml_path = queries_dir / f"{brand}.yaml"
+    yaml_path.write_text(body, encoding="utf-8")
+    return yaml_path
+
+
+def test_resolve_query_from_yaml_picks_first_enabled(tmp_path, monkeypatch):
+    """Default picks the first `enabled: true` query's query_string."""
+    from scripts import post_fetch_smoketest as sm
+
+    _write_query_yaml(tmp_path, _YAML_TWO_ENABLED)
+    monkeypatch.chdir(tmp_path)
+
+    result = sm._resolve_query_from_yaml("_test_brand", None)
+    assert result == '(kimi OR "Kimi K2.7") min_faves:2'
+
+
+def test_resolve_query_from_yaml_picks_specific_query_id(
+    tmp_path, monkeypatch
+):
+    """--query-id Q2 selects that query's query_string."""
+    from scripts import post_fetch_smoketest as sm
+
+    _write_query_yaml(tmp_path, _YAML_TWO_ENABLED)
+    monkeypatch.chdir(tmp_path)
+
+    result = sm._resolve_query_from_yaml("_test_brand", "Q2")
+    assert result == '(kimi) (broken OR fails OR bad)'
+
+
+def test_resolve_query_from_yaml_skips_disabled_queries(
+    tmp_path, monkeypatch
+):
+    """When Q1 is disabled, Q2 (the first enabled) is returned."""
+    from scripts import post_fetch_smoketest as sm
+
+    _write_query_yaml(tmp_path, _YAML_FIRST_DISABLED)
+    monkeypatch.chdir(tmp_path)
+
+    result = sm._resolve_query_from_yaml("_test_brand", None)
+    assert result == "q2 enabled (picked)"
+
+
+def test_resolve_query_from_yaml_raises_on_missing_brand(
+    tmp_path, monkeypatch
+):
+    """A brand with no yaml raises ValueError; main() maps that to rc=2."""
+    from scripts import post_fetch_smoketest as sm
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="not found"):
+        sm._resolve_query_from_yaml("nonexistent_brand", None)
+
+
+def test_resolve_query_from_yaml_raises_on_no_enabled_queries(
+    tmp_path, monkeypatch
+):
+    """All-disabled yaml raises ValueError so the operator gets a clear msg."""
+    from scripts import post_fetch_smoketest as sm
+
+    _write_query_yaml(tmp_path, _YAML_ALL_DISABLED)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="no enabled query"):
+        sm._resolve_query_from_yaml("_test_brand", None)
+
+
+def test_smoketest_api_query_uses_yaml_query(monkeypatch, tmp_path):
+    """End-to-end: --source=api-query --query-from-yaml BRAND uses
+    the resolved query string in the live fetch."""
+    from scripts import post_fetch_smoketest
+    from x_monitor import apify
+    from x_monitor import translator
+
+    _write_query_yaml(tmp_path, _YAML_TWO_ENABLED, brand="kimi")
+
+    # The api-query path needs a DB for brand keywords.
+    from x_monitor.store import Store
+    db_path = tmp_path / "x.db"
+    Store(db_path, auto_migrate=True).close()
+    store = Store(db_path, auto_migrate=True)
+    store._conn.execute(
+        "INSERT INTO brand_keywords (brand_id, pattern, is_regex, added_at) "
+        "VALUES (?, ?, ?, ?)",
+        ("moonshot_kimi", "kimi", 0, "2026-07-07T00:00:00+00:00"),
+    )
+    store._conn.commit()
+    store.close()
+
+    cwd = Path.cwd()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    import shutil
+    shutil.copy(str(db_path), str(data_dir / "x_monitoring.db"))
+    monkeypatch.chdir(tmp_path)
+
+    fake_api = _FakeTwitterApiClient(tweets=[
+        {"tweet_id": "y1", "text": "Kimi is great",
+         "user": {"screen_name": "u1"}, "lang": "en"},
+    ])
+    monkeypatch.setattr(apify, "TwitterApiClient", lambda: fake_api)
+
+    class _StubLLM:
+        def messages_create(self, **kwargs):
+            return {"results": [], "classifications": []}
+    monkeypatch.setattr(translator, "AnthropicClaudeClient", lambda: _StubLLM())
+
+    try:
+        out = io.StringIO()
+        err = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = post_fetch_smoketest.main([
+                "--source", "api-query",
+                "--query-from-yaml", "kimi",
+                "--limit", "5",
+                "--api-quiet",
+            ])
+        assert rc == 0, f"rc={rc}; stderr: {err.getvalue()}"
+        # The fake client received the Q1 query string from kimi.yaml.
+        assert fake_api.calls, "run_search was not invoked"
+        assert fake_api.calls[0]["query"] == '(kimi OR "Kimi K2.7") min_faves:2'
+    finally:
+        monkeypatch.chdir(cwd)
+
+
+def test_smoketest_api_query_yaml_and_query_are_mutually_exclusive(
+    monkeypatch, tmp_path
+):
+    """Passing both --query and --query-from-yaml is rejected (rc=2)."""
+    from scripts import post_fetch_smoketest
+
+    monkeypatch.chdir(tmp_path)
+    out = io.StringIO()
+    err = io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        try:
+            rc = post_fetch_smoketest.main([
+                "--source", "api-query",
+                "--query", "X",
+                "--query-from-yaml", "kimi",
+            ])
+        except SystemExit as e:
+            rc = e.code
+    assert rc == 2
+    # argparse's own message; we just want a non-zero exit and an
+    # error on stderr.
+    assert err.getvalue()
+
+
+def test_smoketest_api_query_yaml_without_query_exits_2(
+    monkeypatch, tmp_path
+):
+    """--source=api-query with neither --query nor --query-from-yaml
+    gets the friendly error and rc=2."""
+    from scripts import post_fetch_smoketest
+
+    monkeypatch.chdir(tmp_path)
+    out = io.StringIO()
+    err = io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        rc = post_fetch_smoketest.main(["--source", "api-query"])
+    assert rc == 2
+    msg = err.getvalue()
+    assert "--query" in msg or "--query-from-yaml" in msg
+
+
+def test_cli_forwarder_passes_query_from_yaml(monkeypatch, tmp_path):
+    """`x-monitor smoketest --query-from-yaml kimi` forwards the flag
+    through to the script's main(). Verified by patching main() to
+    capture argv."""
+    from x_monitor import __main__ as cli_main
+
+    seen: dict = {}
+
+    def _capture_main(argv, *_a, **_kw):
+        seen["argv"] = list(argv)
+        return 0
+
+    monkeypatch.setattr(
+        "scripts.post_fetch_smoketest.main", _capture_main
+    )
+
+    # Build a minimal paths dict the way cmd_smoketest expects.
+    paths = {
+        "config": tmp_path / "config.yaml",
+        "data": tmp_path / "data",
+        "db": tmp_path / "data" / "x_monitoring.db",
+    }
+    paths["data"].mkdir(parents=True, exist_ok=True)
+    paths["db"].touch()
+    paths["config"].touch()
+
+    class _Args:
+        source = "api-query"
+        fixture = None
+        query = None
+        query_from_yaml = "kimi"
+        query_id = "Q3"
+        since = None
+        max_pages = 5
+        max_per_page = 20
+        api_quiet = False
+        sample = 5
+        strict_budget = False
+        limit = 200
+        latest = 20
+
+    cwd = Path.cwd()
+    try:
+        rc = cli_main.cmd_smoketest(_Args(), paths)
+    finally:
+        monkeypatch.chdir(cwd)
+
+    assert rc == 0
+    argv = seen["argv"]
+    assert "--query-from-yaml" in argv
+    assert "kimi" in argv
+    assert "--query-id" in argv
+    assert "Q3" in argv
+

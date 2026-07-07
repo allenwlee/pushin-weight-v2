@@ -988,16 +988,19 @@ def cmd_smoketest(args, paths) -> int:
     we pass the explicit path for testability.
 
     Flags:
-      --source          latest-cycle (default) | fixture | api-query
-      --fixture PATH    JSONL file when --source=fixture
-      --query STR       advanced-search string for --source=api-query
-      --since DATE      ISO YYYY-MM-DD; injected as 'since:' operator
-      --max-pages N     pagination cap (api-query, default 5)
-      --max-per-page N  per-page request size (api-query, default 20)
-      --api-quiet       suppress client._request_log echo
-      --sample N        sample-post eyeball section size (default: 5)
-      --strict-budget   exit 1 if total wall-clock exceeds 90s
-      --limit N         cap posts processed (default: 200)
+      --source            latest-cycle (default) | latest-n | fixture | api-query
+      --fixture PATH      JSONL file when --source=fixture
+      --query STR         advanced-search string for --source=api-query
+      --query-from-yaml   BRAND  load query from data/queries/<brand>.yaml
+      --query-id          Q3     select specific query from yaml (api-query)
+      --since DATE        ISO YYYY-MM-DD; injected as 'since:' operator
+      --max-pages N       pagination cap (api-query, default 5)
+      --max-per-page N    per-page request size (api-query, default 20)
+      --api-quiet         suppress client._request_log echo
+      --sample N          sample-post eyeball section size (default: 5)
+      --strict-budget     exit 1 if total wall-clock exceeds 90s
+      --limit N           cap posts for latest-cycle/api-query (default: 200)
+      --latest N          cap posts for --source=latest-n (default: 20)
     """
     import sys as _sys
     from scripts.post_fetch_smoketest import main as _smoke_main
@@ -1007,6 +1010,10 @@ def cmd_smoketest(args, paths) -> int:
         argv.extend(["--fixture", str(args.fixture)])
     if getattr(args, "query", None):
         argv.extend(["--query", args.query])
+    if getattr(args, "query_from_yaml", None):
+        argv.extend(["--query-from-yaml", args.query_from_yaml])
+    if getattr(args, "query_id", None):
+        argv.extend(["--query-id", args.query_id])
     if getattr(args, "since", None):
         argv.extend(["--since", args.since])
     if getattr(args, "max_pages", None) is not None:
@@ -1019,6 +1026,7 @@ def cmd_smoketest(args, paths) -> int:
     if getattr(args, "strict_budget", False):
         argv.append("--strict-budget")
     argv.extend(["--limit", str(args.limit)])
+    argv.extend(["--latest", str(args.latest)])
     # chdir into the project root so the script's hardcoded
     # `data/x_monitoring.db` resolves correctly.
     project_root = paths["db"].parent.parent  # data/ → x-monitoring/
@@ -1373,16 +1381,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_smoke.add_argument(
         "--source",
-        choices=["latest-cycle", "fixture", "api-query"],
+        choices=["latest-cycle", "latest-n", "fixture", "api-query"],
         default="latest-cycle",
     )
     p_smoke.add_argument(
         "--fixture", type=Path, default=None,
     )
-    p_smoke.add_argument(
+    p_smoke_query_group = p_smoke.add_mutually_exclusive_group()
+    p_smoke_query_group.add_argument(
         "--query",
         help="Advanced-search string for --source=api-query (X "
              "operators; costs real TwitterAPI.io quota).",
+    )
+    p_smoke_query_group.add_argument(
+        "--query-from-yaml", metavar="BRAND",
+        help="Load the query string from data/queries/<BRAND>.yaml "
+             "(first enabled query, or --query-id). For --source=api-query.",
+    )
+    p_smoke.add_argument(
+        "--query-id", default=None,
+        help="With --query-from-yaml, select a specific query id "
+             "(e.g. 'Q3') instead of the first enabled. Default: first enabled.",
     )
     p_smoke.add_argument(
         "--since",
@@ -1410,6 +1429,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_smoke.add_argument(
         "--limit", type=int, default=200,
+        help="Cap on posts for --source=latest-cycle and "
+             "--source=api-query (default: 200).",
+    )
+    p_smoke.add_argument(
+        "--latest", type=int, default=20,
+        help="Cap on posts for --source=latest-n (default: 20).",
     )
     p_smoke.set_defaults(func=cmd_smoketest)
 

@@ -1802,6 +1802,36 @@ class Store:
         ).fetchall()
         return [r["tweet_id"] for r in rows]
 
+    def read_recent_posts(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return up to `limit` posts ordered by `fetched_at DESC`.
+
+        Used by the smoketest's `--source=latest-n` mode (see
+        `scripts/post_fetch_smoketest.py`). Surfaces the N most recent
+        production posts regardless of brand attribution — no JOIN, no
+        filter. The smoketest applies its own brand-keyword detector to
+        populate the renderer's `brand_mentions:` block, and a post with
+        no detected brand is still rendered (not silently dropped).
+
+        Returns a list of dicts with keys: `tweet_id`, `text`,
+        `lang_detected`, `author_handle`, `fetched_at`. Matches the row
+        shape `get_posts_missing_translations` returns — TEXT-natural
+        keys only, no INTEGER ids leaking through.
+
+        `fetched_at` is included so callers can assert descending order
+        without re-querying.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT p.tweet_id, p.text, p.lang_detected, p.author_handle,
+                   p.fetched_at
+            FROM posts p
+            ORDER BY p.fetched_at DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def bulk_insert_post_brand_signals(
         self,
         rows: list[dict[str, Any]],

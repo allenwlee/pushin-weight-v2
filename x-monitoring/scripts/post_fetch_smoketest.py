@@ -47,10 +47,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--source",
-        choices=["latest-cycle", "fixture", "api-query"],
+        choices=["latest-cycle", "latest-n", "fixture", "api-query"],
         default="latest-cycle",
         help="Where to source the kept posts from (default: latest-cycle). "
-             "'api-query' costs real TwitterAPI.io quota — opt-in.",
+             "'latest-n' pulls the N most recent prod posts with no brand "
+             "filter. 'api-query' costs real TwitterAPI.io quota — opt-in.",
     )
     p.add_argument(
         "--fixture",
@@ -58,10 +59,24 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="JSONL fixture file of {tweet_id, text, attributed_brands}. "
              "Required when --source=fixture.",
     )
-    p.add_argument(
+    query_group = p.add_mutually_exclusive_group()
+    query_group.add_argument(
         "--query",
         help="Advanced-search string (X operators). Required when "
              "--source=api-query. e.g. 'kimi K2.7 lang:en min_faves:5'",
+    )
+    query_group.add_argument(
+        "--query-from-yaml", metavar="BRAND",
+        help="Load the query string from data/queries/<BRAND>.yaml. "
+             "Uses the first enabled query (Q1 by default; override with "
+             "--query-id). Mutually exclusive with --query. "
+             "For --source=api-query.",
+    )
+    p.add_argument(
+        "--query-id", default=None,
+        help="When using --query-from-yaml, select a specific query id "
+             "(e.g. 'Q3') instead of the first enabled. Default: first "
+             "enabled query.",
     )
     p.add_argument(
         "--since",
@@ -93,7 +108,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--limit", type=int, default=200,
-        help="Cap on posts processed (default: 200).",
+        help="Cap on posts processed for --source=latest-cycle and "
+             "--source=api-query (default: 200).",
+    )
+    p.add_argument(
+        "--latest", type=int, default=20,
+        help="Cap on posts for --source=latest-n (default: 20). "
+             "Distinct from --limit, which caps --source=latest-cycle and "
+             "--source=api-query.",
     )
     return p.parse_args(argv)
 
@@ -179,6 +201,140 @@ def _load_fixture_posts(path: Path) -> list[dict]:
                 "brand_ids": row.get("attributed_brands") or [],
             })
     return out
+
+
+def _load_latest_n_posts(
+    store, limit: int
+) -> tuple[list[dict], int]:
+    """Pull the N most recent posts from the DB for --source=latest-n.
+
+    Mirrors `_load_latest_cycle_posts` (same row shape, same brand-keyword
+    detection) but with two differences:
+    - SQL lives in `Store.read_recent_posts(limit)` (not inline).
+    - No no-brand filter: posts with empty `brand_ids` are still returned
+      so the operator can see the full raw upstream ingest. The renderer
+      already handles empty `brand_ids` (renders `post:` block with
+      `types=(none)` and `brand_mentions: (none)`).
+
+    Returns:
+        (posts, posts_with_no_brand_skipped) — the full post list
+        (no skips) and 0 (this mode does not skip).
+    """
+    from x_monitor.attribution import (
+        compile_keyword_index,
+        detect_brand_mentions,
+    )
+    # Build the keyword index from the live `brand_keywords` table —
+    # same machinery the classifier is told to trust, applied to the
+    # post text.
+    brand_keywords = store.read_brand_keywords()
+    compiled_index = compile_keyword_index(brand_keywords)
+
+    rows = store.read_recent_posts(limit)
+    out: list[dict] = []
+    for r in rows:
+        text = r["text"] or ""
+        brand_ids = detect_brand_mentions(text, compiled_index)
+        out.append({
+            "tweet_id": r["tweet_id"],
+            "id": r["tweet_id"],
+            "text": text,
+            "lang_detected": r["lang_detected"],
+            "author_handle": r.get("author_handle"),
+            "brand_id": brand_ids[0] if brand_ids else "",
+            "brand_ids": brand_ids,
+        })
+    return out, 0
+
+
+def _resolve_query_from_yaml(brand: str, query_id: str | None) -> str:
+    """Load data/queries/<brand>.yaml and return the resolved query string.
+
+    Reads the first enabled query by default; if `query_id` is set
+    (e.g. 'Q3'), selects that specific query. Hand-rolls a minimal yaml
+    parser that walks lines, finds the top-level `queries:` block, and
+    pulls the active entry — avoids adding PyYAML as a dependency just
+    for this read.
+
+    Raises ValueError on missing file, no enabled queries, or a
+    `query_id` that doesn't match any entry. The caller (main())
+    maps these to rc=2.
+    """
+    yaml_path = Path("data") / "queries" / f"{brand}.yaml"
+    if not yaml_path.exists():
+        raise ValueError(
+            f"query yaml not found: {yaml_path} "
+            f"(expected data/queries/<brand>.yaml)"
+        )
+    text = yaml_path.read_text(encoding="utf-8")
+
+    # Walk the lines, locate the `queries:` block, and split on `- id:`
+    # markers (each list item starts with `  - id: <Q?>`).
+    lines = text.splitlines()
+    in_queries = False
+    cur: dict[str, str] | None = None
+    entries: list[dict[str, str]] = []
+    for raw in lines:
+        stripped = raw.strip()
+        if not in_queries:
+            if stripped == "queries:":
+                in_queries = True
+            continue
+        # We left the queries block if a non-list line appears at the
+        # same or lower indent as `queries:` (i.e. 0 indent).
+        if raw and not raw[0].isspace() and stripped:
+            in_queries = False
+            continue
+        if stripped.startswith("- id:"):
+            if cur is not None:
+                entries.append(cur)
+            cur = {"id": stripped.split(":", 1)[1].strip()}
+        elif cur is not None and ":" in stripped:
+            key, _, val = stripped.partition(":")
+            cur[key.strip()] = val.strip()
+    if cur is not None:
+        entries.append(cur)
+
+    if not entries:
+        raise ValueError(
+            f"no queries defined in {yaml_path} (expected `queries:` block "
+            f"with at least one `- id: ...` entry)"
+        )
+
+    # Strip surrounding single/double quotes from any string-typed value
+    # so query_strings like '(...) min_faves:2' don't surface with the
+    # quotes attached.
+    def _unquote(v: str) -> str:
+        v = v.strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+            return v[1:-1]
+        return v
+
+    for e in entries:
+        e["query_string"] = _unquote(e.get("query_string", ""))
+
+    # Pick by query_id, else first `enabled: true`, else first.
+    if query_id is not None:
+        for e in entries:
+            if e.get("id") == query_id:
+                if e.get("query_string"):
+                    return e["query_string"]
+                raise ValueError(
+                    f"query {query_id!r} in {yaml_path} has no "
+                    f"query_string field"
+                )
+        raise ValueError(
+            f"query {query_id!r} not found in {yaml_path} "
+            f"(available: {[e.get('id') for e in entries]})"
+        )
+
+    for e in entries:
+        if e.get("enabled", "").lower() == "true" and e.get("query_string"):
+            return e["query_string"]
+    raise ValueError(
+        f"no enabled query with a query_string in {yaml_path} "
+        f"(entries: {[e.get('id') for e in entries]})"
+    )
 
 
 def _load_api_posts(
@@ -376,15 +532,39 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    if args.source == "api-query" and not args.query:
+    if args.source == "api-query" and not args.query and not args.query_from_yaml:
         print(
-            "--source=api-query requires --query '...' (advanced-search string)",
+            "--source=api-query requires --query '...' (advanced-search string) "
+            "or --query-from-yaml BRAND",
             file=sys.stderr,
         )
         return 2
     if args.fixture and not args.fixture.exists():
         print(f"--fixture not found: {args.fixture}", file=sys.stderr)
         return 2
+    if args.source == "latest-n" and args.latest <= 0:
+        print(
+            f"--latest must be > 0 (got {args.latest})",
+            file=sys.stderr,
+        )
+        return 2
+    if args.latest > args.limit:
+        print(
+            f"WARNING: --latest {args.latest} exceeds --limit {args.limit}; "
+            f"clamping --latest to {args.limit}",
+            file=sys.stderr,
+        )
+        args.latest = args.limit
+    if args.query_from_yaml:
+        # Resolve to a real --query string so the rest of the pipeline
+        # (which only knows about --query) is unchanged.
+        try:
+            args.query = _resolve_query_from_yaml(
+                args.query_from_yaml, args.query_id
+            )
+        except ValueError as e:
+            print(f"--query-from-yaml: {e}", file=sys.stderr)
+            return 2
 
     from x_monitor.store import Store
     from x_monitor.translator import (
@@ -399,7 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     # accept an empty store).
     #
     # --source=fixture and --source=api-query bypass the DB entirely;
-    # only --source=latest-cycle requires a DB on disk.
+    # only --source=latest-cycle and --source=latest-n require a DB on disk.
 
     if args.source == "fixture":
         # Fixture path was validated by argparse (existence + path).
@@ -429,6 +609,32 @@ def main(argv: list[str] | None = None) -> int:
             posts, posts_with_no_brand_skipped = _load_api_posts(
                 args, compiled_index
             )
+            return _run_pipeline(
+                posts, brand_registry_rows, args,
+                posts_with_no_brand_skipped=posts_with_no_brand_skipped,
+            )
+        finally:
+            store.close()
+
+    if args.source == "latest-n":
+        # Mirrors the api-query branch: opens Store, builds the brand
+        # keyword index for the renderer's `brand_mentions:` block, then
+        # dispatches `_run_pipeline`. No brand filter — see
+        # `_load_latest_n_posts` for the rationale.
+        db_path = Path("data") / "x_monitoring.db"
+        if not db_path.exists():
+            print(
+                f"smoketest: --source=latest-n needs the DB at {db_path} "
+                "— run a cycle first or pass --source=fixture",
+                file=sys.stderr,
+            )
+            return 2
+        store = Store(db_path, auto_migrate=True)
+        try:
+            posts, posts_with_no_brand_skipped = _load_latest_n_posts(
+                store, args.latest
+            )
+            brand_registry_rows = store.read_brands()
             return _run_pipeline(
                 posts, brand_registry_rows, args,
                 posts_with_no_brand_skipped=posts_with_no_brand_skipped,
