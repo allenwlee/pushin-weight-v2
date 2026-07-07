@@ -1,0 +1,137 @@
+{
+  "mode": "write",
+  "target_db": "data/staging.db",
+  "source": "postgres:host=localhost port=5432 dbname=pushin_weight user=fuchitalee",
+  "alias_map": "scripts/2026-07-06-001-migrate-pushin-weight-records.aliases.yaml",
+  "started_at": "2026-07-06T08:32:08.290880+00:00",
+  "discourse_keys": {
+    "table": "discourse_keys",
+    "source_rows": 10,
+    "inserted": 0,
+    "skipped_duplicate": 10,
+    "renamed": [
+      {
+        "from": "dunk",
+        "to": "dunk_yingyang"
+      },
+      {
+        "from": "other",
+        "to": "advertising-marketing"
+      }
+    ],
+    "dropped_no_alias": 0
+  },
+  "discourse_labels_labels": {
+    "table": "discourse_labels_labels",
+    "source_rows": 20,
+    "inserted": 0,
+    "skipped_duplicate": 20,
+    "dropped_no_alias": 0
+  },
+  "post_type_keys": {
+    "table": "post_type_keys",
+    "source_rows": 4,
+    "inserted": 1,
+    "skipped_duplicate": 3,
+    "renamed": [
+      {
+        "from": "release",
+        "to": "event_announcement"
+      },
+      {
+        "from": "criticism",
+        "to": "feedback_questions"
+      },
+      {
+        "from": "other",
+        "to": "advertising-marketing"
+      }
+    ],
+    "dropped_no_alias": 0
+  },
+  "post_type_labels_labels": {
+    "table": "post_type_labels_labels",
+    "source_rows": 8,
+    "inserted": 2,
+    "skipped_duplicate": 6,
+    "dropped_no_alias": 0
+  },
+  "nationalism_keys": {
+    "table": "nationalism_keys",
+    "source_rows": 6,
+    "inserted": 0,
+    "skipped_duplicate": 6,
+    "renamed": [],
+    "dropped_no_alias": 0
+  },
+  "nationalism_labels_labels": {
+    "table": "nationalism_labels_labels",
+    "source_rows": 12,
+    "inserted": 0,
+    "skipped_duplicate": 12,
+    "dropped_no_alias": 0
+  },
+  "roles": {
+    "table": "roles",
+    "source_rows": 3,
+    "inserted": 0,
+    "skipped_duplicate": 3,
+    "renamed": [],
+    "dropped_no_alias": 0
+  },
+  "role_labels_labels": {
+    "table": "role_labels_labels",
+    "source_rows": 6,
+    "inserted": 0,
+    "skipped_duplicate": 6,
+    "dropped_no_alias": 0
+  },
+  "accounts": {
+    "table": "accounts",
+    "source_rows": 49,
+    "inserted": 49,
+    "skipped_duplicate": 0
+  },
+  "brand_search_terms": {
+    "table": "brand_search_terms",
+    "source_rows": 72,
+    "inserted": 72,
+    "skipped_duplicate": 0,
+    "dropped_no_alias": 0,
+    "dropped_samples": []
+  },
+  "brands_accounts": {
+    "table": "brands_accounts",
+    "source_rows": 62,
+    "inserted": 62,
+    "skipped_duplicate": 0,
+    "dropped_no_alias": 0,
+    "dropped_samples": []
+  },
+  "brands_companies": {
+    "table": "brands_companies",
+    "source_rows": 11,
+    "inserted": 0,
+    "skipped_duplicate": 6,
+    "dropped_no_alias": 5
+  },
+  "hf_orgs": {
+    "table": "hf_orgs",
+    "source_rows": 21,
+    "inserted": 10,
+    "skipped_duplicate": 6,
+    "dropped_no_alias": 5
+  },
+  "finished_at": "2026-07-06T08:32:08.645919+00:00",
+  "target_row_counts": {
+    "discourse_keys": 10,
+    "post_type_keys": 7,
+    "nationalism_keys": 6,
+    "roles": 3,
+    "accounts": 1571,
+    "brands_accounts": 62,
+    "brands_companies": 11,
+    "hf_orgs": 21,
+    "brand_search_terms": 72
+  }
+}
