@@ -1,0 +1,60 @@
+# {{AGENT_ATTRIBUTION}}
+# x-monitor configuration. PR-reviewable; changes here trigger a re-run via
+# LaunchAgent WatchPaths (only data/queries/ is watched, this file is the
+# config; restart manually after editing).
+
+# Models to monitor. Adding a model = adding model_id here + dropping
+# data/queries/<model_id>.yaml + data/accounts/<model_id>.yaml. No code change.
+enabled_models:
+  - minimax
+  - qwen
+  - deepseek
+  - glm
+  - xiaomi_mimo
+  - moonshot_kimi
+  - inclusionai
+  - mistral
+  - stepfun
+  - ernie
+  - hunyuan
+
+# Daily TwitterAPI.io budget (pay-per-use). Each unit = 1 tweet returned by
+# advanced_search. 333/day gives 6x headroom over the 9x5x50=2250 upper bound
+# from SC1. At $0.15/1k tweets, a full 333/day is ~$0.05/day = ~$1.50/mo.
+daily_ceiling: 333
+
+# Reply-chain cluster threshold (Q3). Tune via PR.
+clustering:
+  min_commenters: 3
+  min_posts: 2
+
+# Query-rot streak threshold (consecutive 0-result days before a query is
+# auto-disabled). Override per-model for known low-volume ones.
+query_rot_streak_threshold: 3
+query_rot_streak_threshold_per_model:
+  xiaomi_mimo: 5
+
+# Reasons a post can be added to the review queue by the rule-based pipeline.
+review_reasons:
+  - low_engagement
+  - off_topic
+  - suspicious_actor
+  - ambiguous_role
+
+# Skip order when budget is exhausted mid-run. Q1 (release, from:official) is
+# last because it has the highest signal-per-tweet ratio.
+degraded_skip_order:
+  - Q6
+  - Q5
+  - Q3
+  - Q2
+  - Q4
+  - Q1
+
+# Dashboard
+dashboard:
+  host: "0.0.0.0"
+  port: 5000
+  poll_seconds: 30
+  # Window of post history rendered on the grid cards.
+  window_days: 14
