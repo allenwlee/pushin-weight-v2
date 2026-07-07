@@ -7,6 +7,12 @@ data/runs/LATEST.running.json
 data/runs/LOCK
 data/x_monitoring.db
 data/x_monitoring.db-*
+# staging.db was retired 2026-07-07 (see data/staging_archive/RETIRED.md).
+# The archive dir + the file patterns below prevent accidental re-introduction
+# of a stale staging.db that diverges from production x_monitoring.db.
+data/staging.db
+data/staging.db-*
+data/staging_archive/
 data/dashboard.pid
 data/dashboard.log
 data/dashboard-worktree.pid

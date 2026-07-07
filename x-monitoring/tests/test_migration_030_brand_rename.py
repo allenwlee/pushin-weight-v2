@@ -27,7 +27,9 @@ Verifies:
 
 Note on counts:
 - Pre-030 brand count in this repo's snapshot is 22 (incl. test_brand
-  in x_monitoring.db, or 21 in staging.db which lacks test_brand).
+  in the live x_monitoring.db). The 2026-07-07 staging.db, now
+  retired (see data/staging_archive/RETIRED.md), had 21 brands
+  because it was a v23-era clone that lacked test_brand.
   Post-030 is +6 (the 6 new brand rows). 3 renames are in-place and
   don't change the row count.
 - Pre-030 company count is 11. Post-030 is +9 (the 9 new company rows).

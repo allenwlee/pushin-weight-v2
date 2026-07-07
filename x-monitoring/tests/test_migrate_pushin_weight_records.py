@@ -11,8 +11,11 @@ Verifies:
   pass-through; empty/None handling.
 - TargetWriter: per-table upserts with FK resolution (brand, account,
   role, company, lookup).
-- End-to-end: SQLite fixture → staging.db (post-migration 030 state),
-  dry-run + write + idempotency.
+- End-to-end: SQLite fixture → fresh tmp DB at post-migration-030
+  schema state, dry-run + write + idempotency. (Historically this was
+  "fixture → staging.db"; the staging.db was retired 2026-07-07 after
+  the production rollout in plan 2026-07-07-001 — see
+  data/staging_archive/RETIRED.md.)
 - Report schema stability: every per-table entry has source_rows,
   inserted, skipped_duplicate.
 - Raw_payload / notes / bio_en / bio_zh_cn are dropped silently.
@@ -206,8 +209,9 @@ def test_read_source_table_sqlite(tmp_path):
 # --- end-to-end: target writer against an in-memory schema -------------
 #
 # Build a fresh in-memory target schema that mirrors the post-migration-030
-# staging.db shape (27 brands, 20 companies, etc.), then run TargetWriter
-# against it with a small synthetic source set.
+# schema state (27 brands, 20 companies, etc. — same shape the retired
+# staging.db had; see data/staging_archive/RETIRED.md), then run
+# TargetWriter against it with a small synthetic source set.
 
 
 def _build_target_schema(db_path: Path) -> None:
@@ -760,7 +764,8 @@ def _target_counts(db_path: Path) -> dict[str, int]:
 )
 def test_live_source_end_to_end(tmp_path):
     """End-to-end against the live pushin_weight Postgres. Writes to a
-    fresh tmp DB so the real staging.db is not touched.
+    fresh tmp DB (the staging.db that this historically referred to
+    was retired 2026-07-07 — see data/staging_archive/RETIRED.md).
 
     Asserts the post-state row counts match the source counts (the
     script's job is to make target match source on the curated layer).

@@ -120,7 +120,7 @@ A successful dry-run report (truncated) looks like:
 ```json
 {
   "mode": "dry-run",
-  "target_db": "data/staging.db",
+  "target_db": "data/x_monitoring.db",
   "source": "postgres:host=localhost port=5432 dbname=pushin_weight user=fuchitalee",
   "alias_map": "scripts/2026-07-06-001-migrate-pushin-weight-records.aliases.yaml",
   "started_at": "2026-07-06T08:32:00+00:00",
