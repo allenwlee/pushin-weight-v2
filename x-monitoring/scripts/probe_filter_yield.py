@@ -387,12 +387,13 @@ def _print_summary(rows: list[dict]) -> None:
         conf = r.get("extrapolation_confidence", "high")
         nr_str = f"{nr}" if nr is not None else "n/a"
         kept_str = f"{kept}" if kept is not None else "n/a"
+        n15_str = f"{n15}" if n15 is not None else "n/a"
         ext_str = (
             f"  ext_15min={ext} ({conf})" if ext is not None else ""
         )
         print(
             f"  {cid:3s}: n_results={nr_str:>4s}  kept={kept_str:>4s}  "
-            f"n_within_15min={n15:>4s}  cost=${cost:.4f}{ext_str}"
+            f"n_within_15min={n15_str:>4s}  cost=${cost:.4f}{ext_str}"
         )
 
 

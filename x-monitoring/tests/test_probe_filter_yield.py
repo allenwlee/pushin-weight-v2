@@ -381,6 +381,50 @@ def test_row_for_csv_failure_path():
     assert row[12] == "TwitterApiRateLimitError"
 
 
+def test_print_summary_handles_int_n_within_15min():
+    """Regression: n_within_15min is an int (default 0 when no
+    timestamps parsed), not a string. Earlier format string used
+    's' on an int and crashed at runtime."""
+    rows = [
+        {
+            "call_id": "A",
+            "max_results": 200,
+            "n_results": 100,
+            "n_kept_after_filter": 11,
+            "n_within_15min": 0,
+            "cost_estimate_usd": 0.015,
+            "extrapolated_n_in_15min": None,
+            "extrapolation_confidence": "high",
+        },
+    ]
+    import io as _io
+    from contextlib import redirect_stdout
+    buf = _io.StringIO()
+    with redirect_stdout(buf):
+        pf._print_summary(rows)
+    out = buf.getvalue()
+    assert "n_within_15min=" in out
+    # Must not have raised.
+    assert "A" in out
+
+
+def test_print_summary_skips_rows_below_summary_level():
+    """Only rows whose max_results == SUMMARY_RAMP_LEVEL are summarized."""
+    rows = [
+        {"call_id": "A", "max_results": 50, "n_results": 50,
+         "n_kept_after_filter": 5, "n_within_15min": 0,
+         "cost_estimate_usd": 0.0075, "extrapolated_n_in_15min": None,
+         "extrapolation_confidence": "high"},
+    ]
+    import io as _io
+    from contextlib import redirect_stdout
+    buf = _io.StringIO()
+    with redirect_stdout(buf):
+        pf._print_summary(rows)
+    # max_results=50 ≠ SUMMARY_RAMP_LEVEL → nothing printed.
+    assert buf.getvalue() == ""
+
+
 # --- live probe: SKIPPED without credentials --------------------------
 
 
