@@ -98,40 +98,38 @@ The 3 underscore-variant entries are really "in both" — Bucket 2 covers them a
 |---|---|---|
 | `CarolGLMs` | glm | Likely Zhipu/GLM researcher. Needs bio check. |
 | `ChujieZheng` | glm | Possibly Zhipu/GLM researcher. Verify. |
-| `lindahua` | deepseek | Lin Dahua — possibly DeepSeek team. Verify. |
+| `lindahua` | minimax | head of marketing |
 | `honglaklee` | nvidia/nemo | Honglak Lee — NVIDIA research scientist. May not be brand-account but a researcher of interest. |
 | `NVIDIAAI` | llama/nemo | NVIDIA AI (parent of NeMo). Add to both nemo_megatron and llama. |
 
 ### 3c. Uncertain — operator decision (~22)
 
-These are on the list but I cannot confidently attribute to a brand in our 20-brand enabled_models list. They may be:
+These are on the list but I cannot confidently attribute to a brand in our 20-brand enabled_models list. The operator's dispositions (per the 2026-07-09 reconciliation session) are recorded below in the resolved summary table. Handles marked "— *(not in table 6)*" are kept on the list as industry people-of-interest but are not seeded into any brand's `brands_accounts` row.
 
-- (a) "people of interest" the operator follows for industry-news even though not on a brand roster
-- (b) Staff of brands we haven't enabled (e.g., PaddlePaddle/ERNIE, but PaddlePaddle is a separate framework)
-- (c) New brand candidates that should be added to `enabled_models`
+## Summary table
 
-| List handle | Inferred | Operator decision needed |
-|---|---|---|
-| `alexandr_wang` | (Scale AI CEO, not Mistral) | Is he on the list as "industry person of interest"? |
-| `BytePlusGlobal` | (ByteDance cloud brand) | Doubao staff or separate? |
-| `CunxiangWang` | (academic, multi-affiliation) | Research-account inclusion or not? |
-| `echojuliett` | (unknown) | Drop or research-account? |
-| `EileenTal` | (unknown) | Drop or research-account? |
-| `liulicheng10` | (possibly MiniMax researcher) | Confirm or drop. |
-| `louszbd` | (possibly Doubao staff) | Confirm or drop. |
-| `Meituan_LongCat` | (new brand candidate) | Enable as new brand in `enabled_models`? |
-| `mertunsal2020` | (possibly Mistral) | Confirm or drop. |
-| `PaddlePaddle` | (Baidu framework, distinct from ERNIE) | New brand or drop? |
-| `Robbyant_brain` | (possibly Doubao) | Confirm or drop. |
-| `ShunyuYao12` | (DeepResearch, possibly OpenAI) | Industry person of interest or drop? |
-| `sophiamyang` | (academic/Anysphere) | Drop or research-account? |
-| `Stefania_druga` | (academic, multi-affiliation) | Drop or research-account? |
-| `xiong_hui_chen` | (unknown) | Drop or research-account? |
-| `xuanmingzhangai` | (unknown) | Drop or research-account? |
-| `Zai_org` | (could be Zhipu spinoff or new brand) | Enable as new brand? |
-| `ZhihuFrontier` | (Zhihu — distinct from any current brand) | Drop or research-account? |
-| `ZixuanLi_` | (unknown) | Drop or research-account? |
-| `zRdianjiao` | (unknown) | Drop or research-account? |
+| handle | brand | official/staff |
+|--------|-------|----------------|
+| `alexandr_wang` | `llama` | staff |
+| `BytePlusGlobal` | `seed` | official |
+| `CunxiangWang` | `glm` | staff |
+| `echojuliett` | `upstage` | staff |
+| `EileenTal` | `stepfun` | staff |
+| `liulicheng10` | `stepfun` | staff |
+| `louszbd` | `glm` | staff |
+| `Meituan_LongCat` | — *(not in table 6)* | official |
+| `mertunsal2020` | `mistral` | staff |
+| `PaddlePaddle` | `ernie` | official |
+| `robbyant_brain` | — *(not in table 6)* | official |
+| `ShunyuYao12` | — *(bio insufficient)* | staff *(personal handle; brand unknown)* |
+| `sophiamyang` | `mistral` | staff |
+| `Stefania_druga` | `sakana_ai` | staff |
+| `xiong_hui_chen` | `qwen` | staff |
+| `xuanmingzhangai` | `qwen` | staff |
+| `Zai_org` | `glm` | official |
+| `ZhihuFrontier` | — *(not in table 6)* | official |
+| `ZixuanLi_` | `glm` | staff |
+| `zRdianjiao` | `glm` | staff |
 
 ---
 
@@ -183,3 +181,88 @@ The list `2067062923525275922` is **the operator's curated source of truth** for
 - yaml entries that point at handles NOT on the list are placeholders that need replacement (Bucket 2)
 
 No automated sync is in scope for plan 005 — the sync is operator-driven when the list changes. But the plan should ensure that *every yaml handle is on the list or in `staff:[]`*, eliminating the placeholder drift.
+
+---
+
+## DB-not-on-list handle dispositions (U2 of plan 2026-07-09-001)
+
+Generated 2026-07-09 from the live `brands_accounts` table joined against
+the lowercased list `2067062923525275922` (56 handles). After U3 lands,
+operators may also discover handles newly seeded by the U3 migration that
+were already on the list — those should be re-checked here.
+
+The list used as the reference is `/tmp/list_56.lc` (56 unique handles,
+lowercased, sorted).
+
+### Real DB-not-on-list set (3 handles)
+
+These are the handles currently in `brands_accounts` for an enabled_models
+brand but NOT on the x.com list. They are operator-curated PM/dev/research
+accounts that pre-date the list, or were never promoted to list status:
+
+| Handle (lc) | Brand | Role | Operator disposition |
+|---|---|---|---|
+| `cara_catowner` | glm | staff | TBD — keep-as-staff / drop-from-DB / move-to-list |
+| `skylermiao7` | minimax | staff | TBD — keep-as-staff / drop-from-DB / move-to-list |
+| `victorsuortiz` | minimax | staff | TBD — keep-as-staff / drop-from-DB / move-to-list |
+
+**Decision vocabulary (per plan 005 U2):**
+- `keep-as-staff` — the handle is a real PM/dev/research account for the
+  brand; keep the `brands_accounts` row. The regen script will surface it
+  in the brand yaml as a `staff` entry; operator may curate `display_name`
+  / `notes`.
+- `drop-from-DB` — the handle is wrong, dead, or no longer representative
+  of the brand; remove the `brands_accounts` row. A subsequent regen will
+  drop it from the yaml.
+- `keep-as-official` — same as keep-as-staff but flip the role_id from 3
+  (staff) to 2 (official). Use when the handle has been promoted to the
+  brand's primary account on x.com.
+- `move-to-list` — promote the handle to list membership (operator adds
+  it to `2067062923525275922` on x.com). No DB change; the regen will
+  pick it up the next time we reconcile.
+
+### Disposition table — original plan U2 list (9 handles, all reclassified)
+
+The plan body listed 9 handles as "DB-not-on-list". On 2026-07-09 a
+lower-cased recheck confirmed all 9 are actually on the list — they were
+flagged because of case-mismatches or underscore-placement differences
+that the original eyeball pass missed. They are NOT operator decisions;
+they're reclassified into Bucket 3a or 3b of this note. For traceability:
+
+| Handle (plan-listed) | Plan brand | Plan role | Actual status |
+|---|---|---|---|
+| `alexandr_wang` | llama | staff | On list (line 4 of /tmp/list_56.lc). Scale AI CEO; keep as staff. |
+| `byteplusglobal` | doubao | official | On list (line 10). ByteDance cloud brand; keep as official. |
+| `echojuliett` | upstage | staff | On list (line 22). Keep as staff. |
+| `eileental` | stepfun | staff | On list (line 23). Keep as staff. |
+| `honglaklee` | exaone | staff | On list (line 28). NVIDIA research scientist; keep as staff. |
+| `louszbd` | glm | staff | On list (line 34). Keep as staff. |
+| `robbyant_brain` | inclusionai | official | On list (line 39). Keep as official. |
+| `shunyuyao12` | hunyuan | staff | On list (line 42). Keep as staff. |
+| `sophiamyang` | mistral | staff | On list (line 44). Keep as staff. |
+
+So the actual U2 surface area is **3 handles** (cara_catowner,
+skylermiao7, victorsuortiz), not 9. The plan's U2 table is retained here
+for traceability of how the count shrank.
+
+### How to apply a disposition
+
+Once the operator fills in the 3 TBD rows above, the changes can be
+applied by:
+
+- `keep-as-staff` / `keep-as-official`: no DB change; regen will surface
+  the handle in the brand yaml. Operator may want to update the
+  `display_name` field via a follow-up commit.
+- `drop-from-DB`:
+  ```
+  sqlite3 data/x_monitoring.db "DELETE FROM brands_accounts \
+    WHERE accounts_id = (SELECT id FROM accounts WHERE LOWER(handle) = '<h>') \
+    AND brand_id = (SELECT id FROM brands WHERE nickname = '<brand>')"
+  ```
+  Then re-run `scripts/regenerate_accounts_yaml.py --emit data/accounts/`
+  to drop the handle from the yaml.
+- `move-to-list`: operator-side action on x.com; no DB code change.
+
+U2 has no automated test scenarios — it's a docs-only unit. The U5
+parity test will fail if any non-dispositioned handle stays in DB
+without being on the list (or in `staff:[]`).

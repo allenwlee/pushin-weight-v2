@@ -230,14 +230,49 @@ The 9 handles (per `sqlite3` query against `brands_accounts`):
 
 The reconciliation note gets an appended table with a `[operator-decision]` column. Operator fills in: `keep-as-staff` / `drop-from-DB` / `keep-as-official` / `move-to-list`.
 
-**Test scenarios:** None (docs-only unit).
+**Resolution status (2026-07-09, operator-confirmed):**
+
+After a lowercased recheck of the 9 plan-listed handles, all 9 were found to be on the list (case-mismatches or underscore-placement differences that the original eyeball pass missed) and were reclassified into Bucket 3a / 3b of the reconciliation note. The actual DB-not-on-list surface area is **3 handles** (`cara_catowner`, `skylermiao7`, `victorsuortiz`) — also resolved in U2's appended "Disposition table" section.
+
+A **separate disposition table** was added under Bucket 3c (`### 3c. Uncertain — operator decision (~22)`) to capture the operator's curated brand + role decisions for the 20 list-handles that couldn't be confidently attributed to a brand in `enabled_models` from the eyeball pass. Resolution per the operator's 2026-07-09 disposition (`## Summary table` in the note):
+
+| handle | brand | official/staff |
+|---|---|---|
+| `alexandr_wang` | `llama` | staff |
+| `BytePlusGlobal` | `seed` | official |
+| `CunxiangWang` | `glm` | staff |
+| `echojuliett` | `upstage` | staff |
+| `EileenTal` | `stepfun` | staff |
+| `liulicheng10` | `stepfun` | staff |
+| `louszbd` | `glm` | staff |
+| `Meituan_LongCat` | — *(not in table 6)* | official |
+| `mertunsal2020` | `mistral` | staff |
+| `PaddlePaddle` | `ernie` | official |
+| `robbyant_brain` | — *(not in table 6)* | official |
+| `ShunyuYao12` | — *(bio insufficient)* | staff *(personal handle; brand unknown)* |
+| `sophiamyang` | `mistral` | staff |
+| `Stefania_druga` | `sakana_ai` | staff |
+| `xiong_hui_chen` | `qwen` | staff |
+| `xuanmingzhangai` | `qwen` | staff |
+| `Zai_org` | `glm` | official |
+| `ZhihuFrontier` | — *(not in table 6)* | official |
+| `ZixuanLi_` | `glm` | staff |
+| `zRdianjiao` | `glm` | staff |
+
+**Operational consequence:** the 16 handles with a non-blank brand (`alexandr_wang`, `BytePlusGlobal`, …, `zRdianjiao`) get a `brands_accounts` row inserted via U3's seed script — they are NOT list-only handles. The 4 handles marked "— *(not in table 6)*" or "— *(bio insufficient)*" (`Meituan_LongCat`, `robbyant_brain`, `ZhihuFrontier`, `ShunyuYao12`) stay on the x.com list but get NO DB row — they are operator-curated industry people-of-interest or personal handles with insufficient brand evidence.
+
+This means **U3's DEFAULT_SEED must be regenerated to include these 16 handles in addition to the original 10 list-not-in-DB handles**, for a total of 26 seed triples. The seed script (`scripts/seed_list_handles_to_db.py`) needs a new `--input` YAML or DEFAULT_SEED extension; the operator's `--no-api` placeholder path remains the auth-fallback (display_name stays blank per `seed_list_handles_to_db.py:237`).
+
+**Test scenarios:** None (docs-only unit for the disposition table itself).
 
 **Verification:**
 
 - The reconciliation note is updated and committed (operator commits via their workflow).
-- The decision table is filled in (operator action, not implementation).
+- The 3 TBD rows in the DB-not-on-list disposition table are filled in.
+- The 3c Summary table is filled in (operator action, not implementation).
+- U3's `DEFAULT_SEED` is regenerated to include the 16 newly-resolved handles from 3c (operator + implementation agent).
 
-**Dependencies:** None.
+**Dependencies:** U3 (the regenerated `DEFAULT_SEED` depends on U2's disposition table being filled in).
 
 ## U3. Seed 10 list-not-in-DB handles + 7 missing brands_companies rows
 
@@ -304,6 +339,41 @@ After the seed script runs, the company cascade will produce these `brands_accou
 - All others → 1 brand
 
 Total new `brands_accounts` rows: 11.
+
+**U2 dependency (2026-07-09 update):** U3's seed script also needs to seed the 16 handles from the reconciliation note's 3c Summary table that have non-blank brand assignments. The 4 handles marked "— *(not in table 6)*" / "— *(bio insufficient)*" (`Meituan_LongCat`, `robbyant_brain`, `ZhihuFrontier`, `ShunyuYao12`) stay on the x.com list but get NO DB row.
+
+The 16 U3-extended handles + company + role (per the 3c Summary table):
+
+| Handle | Company | Role |
+|---|---|---|
+| `alexandr_wang` | *(none — llama has no brands_companies row)* | staff |
+| `BytePlusGlobal` | bytedance | official |
+| `CunxiangWang` | zhipu | staff |
+| `echojuliett` | *(none — upstage has no brands_companies row)* | staff |
+| `EileenTal` | stepfun_inc | staff |
+| `liulicheng10` | stepfun_inc | staff |
+| `louszbd` | zhipu | staff |
+| `mertunsal2020` | mistral_ai | staff |
+| `PaddlePaddle` | baidu | official |
+| `sophiamyang` | mistral_ai | staff |
+| `Stefania_druga` | *(none — sakana_ai has no brands_companies row)* | staff |
+| `xiong_hui_chen` | alibaba | staff |
+| `xuanmingzhangai` | alibaba | staff |
+| `Zai_org` | zhipu | official |
+| `ZixuanLi_` | zhipu | staff |
+| `zRdianjiao` | zhipu | staff |
+
+**Note on missing companies:** 3 of the 16 handles (`alexandr_wang`, `echojuliett`, `Stefania_druga`) target brands that have no `brands_companies` row in the live DB (verified 2026-07-09). Per the seed script's design (`seed_list_handles_to_db.py:283-284`), the account row is inserted but the `brands_accounts` cascade produces 0 rows + a warning. Either:
+- (a) operator adds the missing brands_companies rows via a new migration 034 (one row per missing brand: `meta→llama`, `upstage_inc→upstage`, `sakana→sakana_ai`), then re-runs U3 — preferred, closes the gap
+- (b) operator accepts the warning and the 3 handles stay account-only (yaml regen will surface them as `staff:` entries with no parent-brand cascade)
+
+After the seed script runs the combined 26-triple DEFAULT_SEED, the company cascade will produce these `brands_accounts` rows (estimated):
+- `doubaoai` → doubao + seed (2 brands; cascade uses bytedance → doubao + seed via migration 033's brands_companies rows)
+- `BytePlusGlobal` → seed (1 brand)
+- All others with a company → 1 brand
+- 3 handles without a company → 0 brands_accounts rows + warning
+
+**Total new `brands_accounts` rows: ~24 (was 11 in the original 10-triple plan).** Some handles may overlap with existing rows (e.g. `louszbd`, `sophiamyang`, `xuanmingzhangai`, `zRdianjiao`, `mertunsal2020`, `liulicheng10` already appear in the original 10); the script's `INSERT OR IGNORE` makes re-runs safe.
 
 **Patterns to follow:**
 
@@ -421,8 +491,9 @@ diff -r <(python3 scripts/regenerate_accounts_yaml.py --emit /tmp/x) data/accoun
 - Regen script is idempotent (re-run produces no diff).
 - Migration 033 applies cleanly on a fresh DB (verified via `scripts/migrate.sh --dryrun` or equivalent).
 - No `data/accounts/*.yaml` file references a handle not in `brands_accounts` (yaml ↛ DB leak).
-- All 56 list handles have at least one `brands_accounts` row.
+- All 56 list handles have at least one `brands_accounts` row, **except for the 4 list-only handles** (`Meituan_LongCat`, `robbyant_brain`, `ZhihuFrontier`, `ShunyuYao12`) that are operator-curated as people-of-interest / personal handles with insufficient brand evidence per the 3c Summary table.
 - `enabled_models` count = 20; `data/accounts/*.yaml` count = 20 (no duplicates from migration-030 left over).
+- U3's expanded DEFAULT_SEED has 26 triples (10 original list-not-in-DB + 16 from 3c) and inserts ~24 new `brands_accounts` rows after the company cascade.
 
 # Definition of Done
 
@@ -432,6 +503,9 @@ diff -r <(python3 scripts/regenerate_accounts_yaml.py --emit /tmp/x) data/accoun
 - `data/accounts/*.yaml` regenerated and committed.
 - 3 migration-030 duplicate yamls removed via `git rm`.
 - Reconciliation note's "DB-not-on-list handle dispositions" section filled in by operator.
+- Reconciliation note's 3c Summary table filled in by operator (20 handles resolved: 16 get brands_accounts rows, 4 stay list-only).
+- U3's `DEFAULT_SEED` regenerated to include 26 triples (10 + 16 from 3c).
+- Optional: migration 034 to add missing brands_companies rows for `meta→llama`, `upstage_inc→upstage`, `sakana→sakana_ai` so the 3c handles without a company (`alexandr_wang`, `echojuliett`, `Stefania_druga`) get the cascade row.
 - No regression in `scripts/probe_filter_yield.py` keeps/n_results vs baseline CSV.
 - All future PRs that touch `brands_accounts` or `data/accounts/*.yaml` are caught by the new yaml/DB parity test.
 
