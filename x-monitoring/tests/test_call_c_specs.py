@@ -2,11 +2,17 @@
 
 Plan: docs/plans/2026-07-02-001-feat-configurable-search-limits-and-backlog-plan.md
 Unit 5 of 6 (U5 — Review Call C narrow AND-filter).
+Plus: C2 spec tests for ERNIE (added 2026-07-09 as the follow-up
+to plan 2026-06-25-001 §"Implementation Units" — the dedup of A/B
+brands that already existed in C).
 
 Scope:
 - Verify `config.yaml` `call_c_specs:` parses cleanly and the C1
   spec is well-formed (5 covered brands, min_faves=0 preserved,
   query string stays under 512 chars).
+- Verify the C2 spec for ERNIE is well-formed (single-brand, min_faves=0,
+  query string stays under 512 chars, co-occurrence includes the
+  Baidu/文心 disambiguators).
 - Verify the probe script exits with a clean sentinel when no API
   key is present (so the script is safe to commit + run by anyone).
 - Verify the probe script imports parse cleanly when an API key
@@ -203,14 +209,106 @@ def test_c1_spec_returns_at_least_one_relevant_post():
 # --- spec regression guard ------------------------------------------
 
 
-def test_only_c1_spec_present_in_repo_config():
-    """The U5 scope is the C1 spec specifically. If a second spec is
-    introduced, this test should be updated to enumerate both —
-    the U5 fix must NOT silently add a parallel C2 spec just to
-    hand-wave the n_results=0 problem."""
+def test_call_c_specs_call_ids_are_unique_and_known():
+    """Every spec must have a unique non-empty call_id drawn from {C1, C2, ...}.
+
+    Plan 2026-07-09-001 follow-up added a C2 spec for ERNIE. Future
+    additions should follow the C1/C2/... convention. An empty or
+    duplicate call_id is a planning bug — the auto-assign path is
+    fragile when specs are loaded from yaml in arbitrary order.
+    """
     cfg = load_config(CFG_PATH)
-    call_ids = {getattr(s, "call_id", "") for s in cfg.call_c_specs}
-    assert call_ids == {"C1"}, (
-        f"expected only C1 in repo config; got {call_ids}. Update U5 "
-        "scope before adding more specs."
+    call_ids = [getattr(s, "call_id", "") for s in cfg.call_c_specs]
+    assert all(call_ids), (
+        f"empty call_id in call_c_specs: {call_ids}"
+    )
+    assert len(set(call_ids)) == len(call_ids), (
+        f"duplicate call_ids in call_c_specs: {call_ids}"
+    )
+    # Convention: call_ids match C<N> pattern
+    import re
+    for cid in call_ids:
+        assert re.fullmatch(r"C\d+", cid), (
+            f"call_id {cid!r} does not match C<N> convention"
+        )
+
+
+# --- C2 spec for ERNIE ----------------------------------------------
+
+
+def test_c2_spec_exists_and_covers_ernie():
+    """The C2 spec for ERNIE was added on 2026-07-09 as the follow-up
+    to plan 2026-06-25-001 §"Implementation Units" (the dedup of A/B
+    brands that already existed in C). C1 had only 7 chars of headroom
+    so a separate spec was needed.
+    """
+    cfg = load_config(CFG_PATH)
+    c2 = next(
+        (s for s in cfg.call_c_specs if getattr(s, "call_id", "") == "C2"),
+        None,
+    )
+    assert c2 is not None, (
+        "no spec with call_id='C2' in call_c_specs; the 2026-07-09 "
+        "follow-up to plan 2026-06-25-001 §\"Implementation Units\" "
+        "should have added it"
+    )
+    assert set(c2.brands.keys()) == {"ernie"}, (
+        f"C2 spec covers {set(c2.brands.keys())}; expected exactly {{'ernie'}}"
+    )
+
+
+def test_c2_spec_brands_are_known_models():
+    """ERNIE must be a brand KNOWN_MODELS recognizes."""
+    cfg = load_config(CFG_PATH)
+    c2 = next(
+        s for s in cfg.call_c_specs if getattr(s, "call_id", "") == "C2"
+    )
+    for brand_id in c2.brands:
+        assert brand_id in KNOWN_MODELS, (
+            f"C2 spec brand {brand_id!r} not in KNOWN_MODELS"
+        )
+
+
+def test_c2_spec_min_faves_locks_at_zero():
+    """C2 follows C1's min_faves=0 contract."""
+    cfg = load_config(CFG_PATH)
+    c2 = next(
+        s for s in cfg.call_c_specs if getattr(s, "call_id", "") == "C2"
+    )
+    assert c2.min_faves == 0, (
+        f"C2 min_faves must remain 0 (mirroring C1); got {c2.min_faves}"
+    )
+
+
+def test_c2_spec_query_under_512_chars():
+    """C2's emitted query must be under the 512-char X advanced-search cap."""
+    cfg = load_config(CFG_PATH)
+    c2 = next(
+        s for s in cfg.call_c_specs if getattr(s, "call_id", "") == "C2"
+    )
+    from x_monitor.query_plan import _build_call_c_query
+    q = _build_call_c_query(c2)
+    assert len(q) < 512, (
+        f"C2 query {len(q)} chars exceeds the 512-char X cap: "
+        f"{q[:200]!r}..."
+    )
+
+
+def test_c2_spec_has_co_occurrence_terms():
+    """C2 needs co-occurrence terms to filter Sesame Street + Bert noise."""
+    cfg = load_config(CFG_PATH)
+    c2 = next(
+        s for s in cfg.call_c_specs if getattr(s, "call_id", "") == "C2"
+    )
+    assert len(c2.co_occurrence) >= 5, (
+        f"C2 co_occurrence list has {len(c2.co_occurrence)} terms; "
+        "minimum 5 to carry the AI/LLM/dev AND-filter load."
+    )
+    # The Baidu + 文心 disambiguators must be present (they're what
+    # separates Sesame Street ERNIE from Baidu ERNIE).
+    assert "baidu" in c2.co_occurrence, (
+        "C2 co_occurrence must include 'baidu' to disambiguate from Sesame Street"
+    )
+    assert "文心" in c2.co_occurrence, (
+        "C2 co_occurrence must include '文心' to disambiguate the Chinese token"
     )

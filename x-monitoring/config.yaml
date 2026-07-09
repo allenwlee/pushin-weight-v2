@@ -166,3 +166,39 @@ call_c_specs:
       canonical discovery tool for future reviews; loosening the
       AND-filter here would degrade signal density without evidence
       that recall was the bottleneck.
+
+  # ERNIE (Baidu 文心一言) — single-brand spec. "ERNIE" collides with
+  # the Sesame Street character and (less commonly) the Bert variant;
+  # "文心" alone is rare but ambiguous. Bare "文心一言" is unambiguous
+  # and the safest token; "ERNIE" is kept for English-language coverage.
+  # Co-occurrence terms require an AI/LLM/dev context (api/llm/model/
+  # baidu/文心/code/coding/agent/...), which excludes Sesame Street
+  # threads. Was not in C1 (C1 has 7 chars of headroom only —
+  # adding ERNIE would have exceeded the 512-char cap; see
+  # docs/reference/twitterapi-live-queries-by-model.md:212).
+  # Origin: plan docs/plans/2026-06-25-001 §"Implementation Units"
+  # discusses deduping models from A and B that already exist in C;
+  # ERNIE was the deferred member of that dedup.
+  - brands:
+      ernie: [ERNIE, 文心一言]
+    co_occurrence: [api, llm, model, baidu, 文心, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    min_faves: 0
+    call_id: C2
+    notes: |
+      2026-07-09 (plan 2026-07-09-001 follow-up): ERNIE was originally
+      discussed in plan 2026-06-25-001 as the deferred 6th brand of
+      the C spec dedup, but the C1 spec was already at 505/512 chars
+      so we couldn't add ERNIE's paren group to C1 without either
+      dropping C1's co-occurrence terms or exceeding cap. The fix
+      is a separate C2 spec (this entry).
+
+      Token choice: "ERNIE" (English) + "文心一言" (Chinese product
+      name). Bare "文心" is intentionally absent — it appears in
+      Sesame Street contexts and a few 文心兰 (orchid) product pages;
+      the baidu/文心 co-occurrence terms carry the disambiguation
+      load.
+
+      Co-occurrence terms mirror C1's 22-term list with these swaps:
+      - dropped "xiaomi" + "小米" (ERNIE-irrelevant)
+      - added "baidu" + "文心" (Baidu/ERNIE disambiguators)
+      Tested length: 247 chars (cap 512, headroom 265).
