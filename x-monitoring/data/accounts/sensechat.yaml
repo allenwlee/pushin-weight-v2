@@ -1,10 +1,15 @@
-# {AGENT_ATTRIBUTION}
+# {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: SenseTimeAI
-    display_name: "SenseTime"
-    role: official
-    verified: false
-    notes: Placeholder; operator must confirm SenseTime's official handle. 'Nova' alone is generic; brand-name co_occurrence gate in Call C helps.
+- handle: SenseTime_AI
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: lindahua
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

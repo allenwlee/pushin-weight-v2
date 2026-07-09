@@ -1,10 +1,10 @@
 # {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: MoonshotAI
-    display_name: "Moonshot AI"
-    role: official
-    verified: true
-    notes: Official Moonshot AI (Kimi) handle.
+- handle: Kimi_Moonshot
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

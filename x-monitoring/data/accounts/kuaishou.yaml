@@ -1,10 +1,10 @@
-# {AGENT_ATTRIBUTION}
+# {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: KwaiYii
-    display_name: "KwaiYii (Kuaishou)"
-    role: official
-    verified: false
-    notes: Placeholder; operator must confirm Kuaishou's official KwaiYii LLM handle. 'Kuaishou' alone is the company's video-app brand — non-AI posts dominate; brand co_occurrence gate in Call C helps.
+- handle: Kling_ai
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

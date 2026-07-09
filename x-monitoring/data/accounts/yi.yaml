@@ -1,10 +1,15 @@
-# {AGENT_ATTRIBUTION}
+# {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: 01AI_Yi
-    display_name: "01.AI Yi"
-    role: official
-    verified: false
-    notes: Placeholder; operator must confirm 01.AI's official Yi handle. 'Yi' alone is a common Chinese surname and dynasty name — co_occurrence gate in Call C helps.
+- handle: 01AI_Yi
+  display_name: 01.AI Yi
+  role: official
+  verified: false
+  notes: Placeholder; operator must confirm 01.AI's official Yi handle. 'Yi' alone is a common Chinese surname and dynasty name — co_occurrence gate in Call C helps.
+- handle: kaifulee
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

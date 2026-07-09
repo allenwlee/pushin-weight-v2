@@ -1,10 +1,15 @@
-# {AGENT_ATTRIBUTION}
+# {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: Llama
-    display_name: "Meta Llama (Meta AI)"
-    role: official
-    verified: false
-    notes: Placeholder; operator must confirm Meta's official Llama handle.
+- handle: AIatMeta
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: alexandr_wang
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

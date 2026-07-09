@@ -1,10 +1,20 @@
 # {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: XiaomiMiMo
-    display_name: "Xiaomi MiMo"
-    role: official
-    verified: true
-    notes: Official Xiaomi MiMo handle (verify — may be product-specific).
+- handle: XiaomiMiMo
+  display_name: Xiaomi MiMo
+  role: official
+  verified: true
+  notes: Official Xiaomi MiMo handle (verify — may be product-specific).
+- handle: XiaomiMiMoDevs
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: _LuoFuli
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

@@ -1,10 +1,45 @@
 # {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: Zhipuai_org
-    display_name: "Zhipu AI"
-    role: official
-    verified: true
-    notes: Official Zhipu AI / GLM handle.
+- handle: Zai_org
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: ZhihuFrontier
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: cara_catowner
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: carolglms
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: CunxiangWang
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: louszbd
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: ZixuanLi_
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: zrdianjiao
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

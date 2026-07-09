@@ -1,10 +1,12 @@
 # {{AGENT_ATTRIBUTION}}
 """Tests for scripts.seed_list_handles_to_db (plan 005 U3).
 
-The seed script's job is to insert the 10 list-not-in-DB handles into
+The seed script's job is to insert the 22 list-not-in-DB handles into
 the ``accounts`` table and cross-product each into ``brands_accounts``
-via the company cascade. These tests pin the four behaviors from the
-plan's U3 test scenarios:
+via the company cascade (10 original + 16 from the 3c Summary table,
+4 already in the original 10 so merged total is 22; 4 list-only handles
+excluded). These tests pin the four behaviors from the plan's U3 test
+scenarios:
 
     1. Happy path: 3 handles -> 3 accounts rows + correct brands_accounts
        cross-product (sum of company-owned brand counts).
@@ -340,9 +342,18 @@ def test_author_id_fallback_uses_lowercased_handle(fresh_db: Path) -> None:
 # ----------------------------------------------------------------------
 
 
-def test_default_seed_has_ten_triples() -> None:
-    """The plan requires exactly 10 triples. Pin it."""
-    assert len(DEFAULT_SEED) == 10
+def test_default_seed_has_twenty_two_triples() -> None:
+    """DEFAULT_SEED merges the original plan 005 U3 10 triples with the
+    16 operator-disposed triples from the 3c Summary table (2026-07-09
+    reconciliation). 4 of those 16 were already in the original 10, so
+    the merged count is 22. List-only handles (Meituan_LongCat,
+    robbyant_brain, ZhihuFrontier, ShunyuYao12) are excluded — they
+    stay on the x.com list but never get a brands_accounts row.
+    """
+    assert len(DEFAULT_SEED) == 22, (
+        f"DEFAULT_SEED should have 22 entries after the 2026-07-09 "
+        f"3c merge; got {len(DEFAULT_SEED)}"
+    )
 
 
 def test_role_key_to_id_covers_all_default_roles() -> None:
@@ -354,9 +365,9 @@ def test_role_key_to_id_covers_all_default_roles() -> None:
 
 
 def test_load_seed_with_no_path_returns_defaults() -> None:
-    """No --input -> default 10 triples."""
+    """No --input -> default 22 triples (post-3c merge)."""
     triples = _load_seed(None)
-    assert len(triples) == 10
+    assert len(triples) == 22
     assert all(isinstance(t, SeedTriple) for t in triples)
 
 

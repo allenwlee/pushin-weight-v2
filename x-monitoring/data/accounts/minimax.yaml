@@ -1,10 +1,35 @@
 # {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: MiniMaxAI
-    display_name: "MiniMax AI"
-    role: official
-    verified: true
-    notes: Official MiniMax company handle (verify before launch).
+- handle: hailuo_ai
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: MiniMax_AI
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: MiniMaxAgent
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: RyanLeeMiniMax
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: SkylerMiao7
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: VictorSuOrtiz
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

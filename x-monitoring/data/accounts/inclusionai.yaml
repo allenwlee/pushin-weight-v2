@@ -1,10 +1,20 @@
 # {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: inclusionAI
-    display_name: "InclusionAI"
-    role: official
-    verified: true
-    notes: InclusionAI parent. Per-product handles for Ling/Ring/Ming TBD (Q1 unresolved).
+- handle: AntLingAGI
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: robbyant_brain
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: TheInclusionAI
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

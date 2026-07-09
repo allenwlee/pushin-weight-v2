@@ -1,10 +1,15 @@
-# {AGENT_ATTRIBUTION}
+# {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: upstageAI
-    display_name: "Upstage"
-    role: official
-    verified: false
-    notes: Placeholder; operator must confirm Upstage's official handle. 'Upstage' is a theater term but rare in AI contexts.
+- handle: upstageai
+  display_name: Upstage
+  role: official
+  verified: false
+  notes: Placeholder; operator must confirm Upstage's official handle. 'Upstage' is a theater term but rare in AI contexts.
+- handle: echojuliett
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the

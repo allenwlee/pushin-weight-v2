@@ -1,8 +1,15 @@
 # {{AGENT_ATTRIBUTION}}
-"""One-shot seed for the 10 list-not-in-DB handles (plan 005 U3).
+"""One-shot seed for the 22 list-not-in-DB handles (plan 005 U3).
 
 Plan: docs/plans/2026-07-09-001-feat-list-yaml-db-sync-plan.md (Unit 3)
 Reconciliation note: docs/notes/2026-07-09-list-yaml-reconciliation.md
+
+The seed combines the original 10 triples (plan 005 U3) with the 16
+operator-disposed triples from the 3c Summary table; 4 of those 16
+were already in the original 10, so the merged DEFAULT_SEED has 22
+entries. List-only handles (Meituan_LongCat, robbyant_brain,
+ZhihuFrontier, ShunyuYao12) are excluded — they stay on the x.com list
+but never get a brands_accounts row.
 
 For each (handle, company, role) triple in the operator-confirmed table,
 this script:
@@ -54,10 +61,22 @@ from typing import Any
 
 from x_monitor.store import Store
 
-# Operator-confirmed (handle, company, role) triples from plan 005 U3.
-# `meituan_longcat` is excluded — operator left it blank in the plan,
-# deferring it to a future new-brand-enablement plan.
+# Operator-confirmed (handle, company, role) triples from plan 005 U3
+# + the 3c Summary table (2026-07-09 reconciliation).
+#
+# List-only handles (no brand in enabled_models) are excluded:
+#   Meituan_LongCat, robbyant_brain, ZhihuFrontier, ShunyuYao12
+# They stay on the x.com list but never get a brands_accounts row.
+#
+# Three brands have no brands_companies row in the live DB; those rows
+# are flagged with ``_GAP`` in the company field and the seed script
+# reports them as WARN — operator can fix with a follow-up migration
+# (optional migration 034 per plan 005 Definition of Done):
+#   alexandr_wang     → meta         (no row; llama cascade falls back)
+#   echojuliett       → upstage_inc  (no row; upstage cascade falls back)
+#   Stefania_druga    → sakana       (no row; sakana_ai cascade falls back)
 DEFAULT_SEED: list[dict[str, str]] = [
+    # --- original 10 (plan 005 U3) ---
     {"handle": "bytedanceoss",    "company": "bytedance",   "role": "official"},
     {"handle": "carolglms",       "company": "zhipu",       "role": "staff"},
     {"handle": "chujiezheng",     "company": "alibaba",     "role": "staff"},
@@ -68,6 +87,19 @@ DEFAULT_SEED: list[dict[str, str]] = [
     {"handle": "stepfunai",       "company": "stepfun_inc", "role": "official"},
     {"handle": "xuanmingzhangai", "company": "alibaba",     "role": "staff"},
     {"handle": "zrdianjiao",      "company": "zhipu",       "role": "staff"},
+    # --- 16 new from 3c Summary table (2026-07-09 reconciliation) ---
+    {"handle": "alexandr_wang",   "company": "meta",        "role": "staff"},   # _GAP
+    {"handle": "BytePlusGlobal",  "company": "bytedance",   "role": "official"},
+    {"handle": "CunxiangWang",    "company": "zhipu",       "role": "staff"},
+    {"handle": "echojuliett",     "company": "upstage_inc", "role": "staff"},   # _GAP
+    {"handle": "EileenTal",       "company": "stepfun_inc", "role": "staff"},
+    {"handle": "louszbd",         "company": "zhipu",       "role": "staff"},
+    {"handle": "PaddlePaddle",    "company": "baidu",       "role": "official"},
+    {"handle": "sophiamyang",     "company": "mistral_ai",  "role": "staff"},
+    {"handle": "Stefania_druga",  "company": "sakana",      "role": "staff"},   # _GAP
+    {"handle": "xiong_hui_chen",  "company": "alibaba",     "role": "staff"},
+    {"handle": "Zai_org",         "company": "zhipu",       "role": "official"},
+    {"handle": "ZixuanLi_",       "company": "zhipu",       "role": "staff"},
 ]
 
 # TwitterAPI.io lookup endpoint for v2 user-by-username. The plan documents

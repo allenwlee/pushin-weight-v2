@@ -1,10 +1,30 @@
 # {{AGENT_ATTRIBUTION}}
 accounts:
-  - handle: QwenLM
-    display_name: "Qwen"
-    role: official
-    verified: true
-    notes: Official Qwen (Alibaba) handle.
+- handle: Ali_TongyiLab
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: Alibaba_Qwen
+  display_name: ''
+  role: official
+  verified: false
+  notes: ''
+- handle: chujiezheng
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: xiong_hui_chen
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
+- handle: xuanmingzhangai
+  display_name: ''
+  role: staff
+  verified: false
+  notes: ''
 
 # Manual staff list (you curate). v1.6 OR-collapse: these
 # handles are folded into the per-brand account call alongside the
