@@ -2714,6 +2714,37 @@ class Store:
             (r["brand_id"], r["pattern"], bool(r["is_regex"])) for r in rows
         ]
 
+    def read_primary_brand_keywords(self) -> dict[str, list[str]]:
+        """Return {brand_id: [pattern, ...]} for `brand_keywords` rows
+        where `is_primary=1` (plan 2026-07-11-002 U2).
+
+        Consumed by `RunPipeline.execute` once per cycle to thread the
+        `primary_keywords` kwarg into `plan_calls` for wide-net B-specs.
+        The dict aggregates per-brand patterns into a list (sorted by
+        pattern for hash determinism — irrelevant to the renderer but
+        useful when debugging). Brands with no `is_primary=1` rows are
+        absent from the dict.
+
+        Pre-v36 DBs (where the `is_primary` column doesn't exist)
+        return an empty dict; the planner's wide-net path treats that
+        as "no primary tokens available" — same shape as a brand with
+        zero primary rows.
+        """
+        cols = {
+            c["name"]
+            for c in self._conn.execute("PRAGMA table_info(brand_keywords)").fetchall()
+        }
+        if "is_primary" not in cols:
+            return {}
+        rows = self._conn.execute(
+            "SELECT brand_id, pattern FROM brand_keywords "
+            "WHERE is_primary = 1 ORDER BY brand_id, pattern"
+        ).fetchall()
+        out: dict[str, list[str]] = {}
+        for r in rows:
+            out.setdefault(r["brand_id"], []).append(r["pattern"])
+        return out
+
     def read_brand_search_terms(self) -> dict[str, str]:
         """Return {term: brand_id} for all brand_search_terms (R13).
 

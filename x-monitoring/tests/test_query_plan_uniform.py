@@ -7,6 +7,7 @@ the plan retires alongside the v1.7 Call B path).
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -237,3 +238,232 @@ def test_config_normalizes_legacy_call_c_specs(tmp_path: Path) -> None:
     loaded = load_config(cfg)
     assert len(loaded.x_query_specs) == 1
     assert loaded.x_query_specs[0].call_id == "legacy_c"
+
+
+# ----------------------------------------------------------------------
+# 10. Wide-net B-call revival (plan 2026-07-11-002 U2).
+# ----------------------------------------------------------------------
+
+
+def test_build_query_wide_net_renders_from_primary_keywords() -> None:
+    """A spec with `is_wide_net=True` and `wide_net_brands=['minimax','qwen']`
+    reads per-brand tokens from `primary_keywords` and renders the
+    same `<tokens> (<co_occurrence>) min_faves:N` shape."""
+    spec = XQuerySpec(
+        brands={},
+        co_occurrence=["llm", "api"],
+        min_faves=0,
+        call_id="B1",
+        is_wide_net=True,
+        wide_net_brands=["minimax", "qwen"],
+    )
+    out = _build_query(
+        spec,
+        primary_keywords={
+            "minimax": ["MiniMax", "Hailuo"],
+            "qwen": ["Qwen", "Qwen3"],
+        },
+    )
+    # Per-brand paren groups joined with OR, then OR'd into primary.
+    assert "(MiniMax OR Hailuo)" in out
+    assert "(Qwen OR Qwen3)" in out
+    assert "(llm OR api)" in out
+    assert out.endswith(" min_faves:0")
+    # Rendered form is one big OR-of-paren-groups.
+    assert out == (
+        "((MiniMax OR Hailuo) OR (Qwen OR Qwen3)) (llm OR api) min_faves:0"
+    )
+
+
+def test_build_query_wide_net_requires_primary_keywords() -> None:
+    """A wide-net spec without `primary_keywords` raises (operator
+    misconfiguration — the DB load was forgotten)."""
+    spec = XQuerySpec(
+        brands={},
+        co_occurrence=["llm"],
+        min_faves=0,
+        call_id="B1",
+        is_wide_net=True,
+        wide_net_brands=["minimax"],
+    )
+    with pytest.raises(ValueError, match="primary_keywords"):
+        _build_query(spec)
+
+
+def test_build_query_wide_net_skips_brands_with_no_primary_tokens() -> None:
+    """A brand in `wide_net_brands` that's absent from `primary_keywords`
+    is skipped (defensive — matches the existing all-empty branch).
+    The remaining brands render normally."""
+    spec = XQuerySpec(
+        brands={},
+        co_occurrence=["llm"],
+        min_faves=0,
+        call_id="B1",
+        is_wide_net=True,
+        wide_net_brands=["minimax", "qwen"],
+    )
+    out = _build_query(
+        spec,
+        primary_keywords={"minimax": ["MiniMax"]},  # qwen missing
+    )
+    assert "(MiniMax)" in out
+    assert "qwen" not in out.lower()
+
+
+def test_build_query_call_a_path_unchanged_when_is_wide_net_false() -> None:
+    """A spec with empty brands but `is_wide_net=False` (the Call A
+    degenerate) still renders the list form — the new flag does not
+    accidentally catch this path."""
+    spec = XQuerySpec(
+        brands={},
+        co_occurrence=[],
+        min_faves=1,
+        call_id="A",
+    )
+    out = _build_query(spec, x_monitor_list_id=2067062923525275922)
+    assert out == "(list:2067062923525275922) min_faves:1"
+
+
+def test_build_query_c_spec_ignores_primary_keywords() -> None:
+    """A non-wide-net C-spec (`is_wide_net=False`, `brands={...}`) reads
+    from `spec.brands`, NOT from `primary_keywords`. The kwarg is
+    silently ignored."""
+    spec = XQuerySpec(
+        brands={"minimax": ["MiniMax"]},
+        co_occurrence=["llm"],
+        min_faves=0,
+        call_id="C1",
+    )
+    out_with = _build_query(
+        spec, primary_keywords={"minimax": ["OTHER_TOKEN_THAT_SHOULD_NOT_APPEAR"]}
+    )
+    out_without = _build_query(spec)
+    assert out_with == out_without
+    assert "OTHER_TOKEN" not in out_with
+
+
+def test_plan_calls_emits_six_calls_with_three_wide_net_specs() -> None:
+    """plan_calls synthesizes Call A from `x_monitor_list_id` and emits
+    one call per spec in `x_query_specs`. With 5 specs (C1, C2, B1,
+    B2, B3) and a populated `primary_keywords` dict the planner emits
+    exactly 6 PlannedCall rows in the order [A, C1, C2, B1, B2, B3]."""
+    primary = {
+        "minimax": ["MiniMax"], "qwen": ["Qwen"], "deepseek": ["DeepSeek"],
+        "mistral": ["Mistral"], "stepfun": ["StepFun"], "ernie": ["ERNIE"],
+        "hunyuan": ["Hunyuan"], "doubao": ["Doubao"], "glm": ["GLM"],
+        "moonshot_kimi": ["Kimi"], "mimo": ["MiMo"], "sensechat": ["SenseChat"],
+        "yi": ["Yi"], "inclusionai": ["InclusionAI"],
+        "nemo_megatron": ["NVIDIA NeMo"], "exaone": ["EXAONE"],
+        "sakana_ai": ["Sakana"], "kuaishou": ["Kuaishou"], "upstage": ["Upstage"],
+        "llama": ["Llama"],
+    }
+    # Call A is synthesized by plan_calls from x_monitor_list_id; the
+    # spec list carries only the per-cycle co-occurrence + wide-net
+    # specs. Passing an explicit Call A degenerate in x_query_specs
+    # would cause plan_calls to emit TWO Call A entries.
+    specs = [
+        XQuerySpec(  # C1 — 5 brands, co-occurrence
+            brands={
+                "mimo": ["MiMo"], "moonshot_kimi": ["Kimi"], "yi": ["Yi"],
+                "upstage": ["Upstage"], "llama": ["Llama"],
+            },
+            co_occurrence=["api", "llm"], min_faves=0, call_id="C1",
+        ),
+        XQuerySpec(  # C2 — ERNIE
+            brands={"ernie": ["ERNIE"]},
+            co_occurrence=["baidu"], min_faves=0, call_id="C2",
+        ),
+        XQuerySpec(  # B1 — top-presence / global
+            brands={}, co_occurrence=["api", "llm"], min_faves=0,
+            call_id="B1", is_wide_net=True,
+            wide_net_brands=["llama", "minimax", "qwen", "deepseek",
+                             "mistral", "stepfun", "ernie", "hunyuan"],
+        ),
+        XQuerySpec(  # B2 — Chinese-language
+            brands={}, co_occurrence=["api", "llm"], min_faves=0,
+            call_id="B2", is_wide_net=True,
+            wide_net_brands=["doubao", "glm", "moonshot_kimi", "mimo",
+                             "sensechat", "yi", "inclusionai"],
+        ),
+        XQuerySpec(  # B3 — specialized / smaller
+            brands={}, co_occurrence=["api", "llm"], min_faves=0,
+            call_id="B3", is_wide_net=True,
+            wide_net_brands=["nemo_megatron", "exaone", "sakana_ai",
+                             "kuaishou", "upstage"],
+        ),
+    ]
+    calls = plan_calls(2067062923525275922, specs, primary_keywords=primary)
+    assert len(calls) == 6
+    assert [c.call_id for c in calls] == ["A", "C1", "C2", "B1", "B2", "B3"]
+
+
+def test_plan_calls_wide_net_query_under_cap_with_live_primary_subset() -> None:
+    """The live `brand_keywords.is_primary=1` subset produces B-call
+    query strings under 512 chars (the X advanced-search cap)."""
+    from x_monitor.store import Store
+    from x_monitor.config import load_config
+
+    cfg = load_config(Path("config.yaml"))
+    # Live DB after migration 036.
+    with tempfile_db() as db_path:
+        s = Store(db_path, auto_migrate=True)
+        try:
+            primary = s.read_primary_brand_keywords()
+            # Build the same 3 wide-net specs U3 will write into config.yaml.
+            b_specs = [
+                XQuerySpec(
+                    brands={}, co_occurrence=cfg.x_query_specs[0].co_occurrence,
+                    min_faves=0, call_id="B1", is_wide_net=True,
+                    wide_net_brands=[
+                        "llama", "minimax", "qwen", "deepseek",
+                        "mistral", "stepfun", "ernie", "hunyuan",
+                    ],
+                ),
+                XQuerySpec(
+                    brands={}, co_occurrence=cfg.x_query_specs[0].co_occurrence,
+                    min_faves=0, call_id="B2", is_wide_net=True,
+                    wide_net_brands=[
+                        "doubao", "glm", "moonshot_kimi", "mimo",
+                        "sensechat", "yi", "inclusionai",
+                    ],
+                ),
+                XQuerySpec(
+                    brands={}, co_occurrence=cfg.x_query_specs[0].co_occurrence,
+                    min_faves=0, call_id="B3", is_wide_net=True,
+                    wide_net_brands=[
+                        "nemo_megatron", "exaone", "sakana_ai",
+                        "kuaishou", "upstage",
+                    ],
+                ),
+            ]
+            calls = plan_calls(cfg.x_monitor_list_id, b_specs,
+                                primary_keywords=primary)
+            for c in calls:
+                assert c.query_length < 512, (
+                    f"{c.call_id} query is {c.query_length} chars — "
+                    f"over the 512-char cap: {c.query_string!r}"
+                )
+        finally:
+            s.close()
+
+
+# ----------------------------------------------------------------------
+# Helper — fresh in-memory-ish DB per test (avoids polluting live DB).
+# ----------------------------------------------------------------------
+
+
+import tempfile
+
+
+@contextmanager
+def tempfile_db():
+    """Yield a tmp Path for a fresh DB; auto-cleanup."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        path = Path(f.name)
+    try:
+        yield path
+    finally:
+        try:
+            path.unlink()
+        except OSError:
+            pass

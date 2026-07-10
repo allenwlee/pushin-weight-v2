@@ -934,9 +934,17 @@ class RunPipeline:
                 # `(x_monitor_list_id, x_query_specs)` — no data_dir,
                 # no call_b_groups, no call_c_specs. The legacy
                 # per-brand yaml read path is retired in U3.
+                #
+                # Plan 2026-07-11-002 (U2): wide-net B-specs
+                # (B1/B2/B3) read per-brand tokens from
+                # `brand_keywords.is_primary=1` via the
+                # `primary_keywords` kwarg. Load once per cycle here
+                # (single SQL, single dict build) and thread through.
+                primary_keywords = store.read_primary_brand_keywords()
                 plan = plan_calls(
                     self.config.x_monitor_list_id,
                     self.config.x_query_specs or None,
+                    primary_keywords=primary_keywords,
                 )
                 _t("plan", _t_plan)
                 # Plan 2026-07-11-001 (U3): the per-brand yaml read
