@@ -229,39 +229,44 @@ x_query_specs:
   # `is_primary=1` subset (2-4 tokens per brand), the same shape
   # still fits under cap. Tested live: B1=473 chars, B2=470, B3=375.
   - is_wide_net: true
-    wide_net_brands: [llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan]
+    wide_net_brands: [minimax, qwen, deepseek, mistral, stepfun, hunyuan]
     brands: {}
     co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
     min_faves: 0
     call_id: B1
     notes: |
-      B1 = top-presence / global brands (8 brands). When credits
+      B1 = top-presence / global brands (6 brands after dedup). When credits
       are tight, B1 drops before C2 (co-occurrence-constrained per-
-      brand). The 8 brand-groups render to 473 chars on the live
-      primary subset; under 512 cap with 39 chars headroom.
+      brand). The 6 brand-groups render under 512 chars on the live
+      primary subset. The original 8 included `llama` and `ernie`, which
+      are also covered by C1 and C2 respectively (co-occurrence-constrained);
+      per the dedup decision (operator directive 2026-07-11), those brands
+      are covered exclusively by the C-specs to avoid duplicate TwitterAPI
+      credit spend on the wide-net path.
 
   - is_wide_net: true
-    wide_net_brands: [doubao, glm, moonshot_kimi, mimo, sensechat, yi, inclusionai]
+    wide_net_brands: [doubao, glm, sensechat, inclusionai]
     brands: {}
     co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
     min_faves: 0
     call_id: B2
     notes: |
-      B2 = Chinese-language brands (7 brands). 470 chars on the
-      live primary subset. Note moonshot_kimi and mimo are also
-      in C1 (co-occurrence-constrained); the B2 entry broadens
-      coverage by dropping the C1 co-occurrence AND-filter, so
-      these two brands get TWO calls per cycle. Operator can tune
-      the B2 brand list to drop the duplicates if redundant.
+      B2 = Chinese-language brands (4 brands after dedup). The original
+      7 included `moonshot_kimi`, `mimo`, and `yi`, which are also
+      covered by C1 (co-occurrence-constrained). Per the dedup decision
+      (operator directive 2026-07-11), those brands are covered
+      exclusively by C1 to avoid duplicate TwitterAPI credit spend on
+      the wide-net path.
 
   - is_wide_net: true
-    wide_net_brands: [nemo_megatron, exaone, sakana_ai, kuaishou, upstage]
+    wide_net_brands: [nemo_megatron, exaone, sakana_ai, kuaishou]
     brands: {}
     co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
     min_faves: 0
     call_id: B3
     notes: |
-      B3 = specialized / smaller brands (5 brands). 375 chars on
-      the live primary subset. Note upstage is also in C1; same
-      redundancy note as B2 (operator can drop if signal density
-      drops after the first probe).
+      B3 = specialized / smaller brands (4 brands after dedup). The
+      original 5 included `upstage`, which is also covered by C1
+      (co-occurrence-constrained). Per the dedup decision (operator
+      directive 2026-07-11), upstage is covered exclusively by C1 to
+      avoid duplicate TwitterAPI credit spend on the wide-net path.
