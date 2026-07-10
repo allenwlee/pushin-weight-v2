@@ -313,7 +313,12 @@ def _load_api_posts(
     # Lazy import — the live client is only needed on this path.
     from x_monitor.apify import TwitterApiClient
 
-    client = TwitterApiClient()
+    # Read the API key from the TWITTERAPI_IO_API_KEY env var. The
+    # smoketest's run-pipeline-watchpaths.sh `source ~/.env.secrets`
+    # makes the key available; for ad-hoc CLI runs the operator
+    # sources their own secrets file. from_env raises a clear error
+    # if the key is missing.
+    client = TwitterApiClient.from_env()
     rows = client.run_search(
         query=args.query,
         max_results=args.limit,
