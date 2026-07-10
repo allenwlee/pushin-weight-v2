@@ -45,6 +45,14 @@ VALID_REVIEW_REASONS: frozenset[str] = frozenset(
 )
 
 VALID_QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
+# Plan 2026-07-11-002 (U3): post-consolidation the per-cycle call set is
+# (Call A + C1 + C2 + B1 + B2 + B3). The skip order keys on call_id
+# instead of the retired Q-IDs — Call A is the curated-list wide net
+# (highest signal), the B-specs are wide-net per-brand (lowest recall),
+# the C-specs are co-occurrence-constrained (middle). Skip order is
+# B3 → B2 → B1 → C2 → C1 → A so lowest-recall calls drop first under
+# credit pressure.
+VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "C1", "C2")
 
 
 class ClusteringConfig(BaseModel):
@@ -132,11 +140,17 @@ class Config(BaseModel):
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))
-    # R17: skip order is Q6 first (lowest signal), then Q5, Q3, Q2, Q4, then Q1
-    # last (highest signal-per-tweet — release announcements). Praise (Q6) is
-    # skip-first because it is high-volume / low-decision-signal in a budget crunch.
-    degraded_skip_order: list[Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]] = Field(
-        default_factory=lambda: ["Q6", "Q5", "Q3", "Q2", "Q4", "Q1"]
+    # R17 (legacy): skip order was Q6 → Q5 → Q3 → Q2 → Q4 → Q1 (Q6
+    # praise is high-volume / low-decision-signal).
+    #
+    # Plan 2026-07-11-002 (U3): post-consolidation the per-cycle call
+    # set is (A + B1 + B2 + B3 + C1 + C2). Skip order is
+    # B3 → B2 → B1 → C2 → C1 → A so the lowest-recall per-brand
+    # wide-net calls drop first under credit pressure; the curated
+    # X-list (Call A) is last because it carries the highest
+    # signal-per-tweet ratio.
+    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2"]] = Field(
+        default_factory=lambda: ["B3", "B2", "B1", "C2", "C1", "A"]
     )
     # v1.7: x.com list ID for Call A (list-based fan-in). The list is
     # operator-managed (see v1.7 plan §"Operator manual step"). When
@@ -192,11 +206,13 @@ class Config(BaseModel):
     @field_validator("degraded_skip_order")
     @classmethod
     def _validate_skip_order(cls, v: list[str]) -> list[str]:
-        if set(v) != set(VALID_QUERY_IDS):
+        # Plan 2026-07-11-002 (U3): skip-order keys on call_ids now
+        # (was Q1-Q6 in v1.6 / v1.7).
+        if set(v) != set(VALID_CALL_IDS):
             raise ValueError(
-                f"degraded_skip_order must contain exactly {list(VALID_QUERY_IDS)}, got {v}"
+                f"degraded_skip_order must contain exactly {list(VALID_CALL_IDS)}, got {v}"
             )
-        if len(v) != len(VALID_QUERY_IDS):
+        if len(v) != len(VALID_CALL_IDS):
             raise ValueError(f"degraded_skip_order has duplicates: {v}")
         return v
 

@@ -149,9 +149,24 @@ def test_build_query_min_faves_zero_emitted() -> None:
 
 def test_plan_calls_emits_call_a_plus_each_spec() -> None:
     """The planner emits Call A first, then one PlannedCall per
-    XQuerySpec. With 2 live specs, total = 3 calls."""
+    XQuerySpec. Post-U3 the live config has 5 specs (C1, C2, B1, B2,
+    B3); total = 6 calls. The wide-net specs (B1/B2/B3) read from
+    `primary_keywords`; load them from the live DB."""
     cfg = load_config(Path("config.yaml"))
-    calls = plan_calls(cfg.x_monitor_list_id, cfg.x_query_specs)
+    # Post-U3 the live config has 5 specs; the planner requires
+    # primary_keywords for the B-specs. Load from the live DB.
+    from x_monitor.store import Store
+    primary: dict[str, list[str]] = {}
+    if Path("data/x_monitoring.db").exists():
+        s = Store(Path("data/x_monitoring.db"), auto_migrate=False)
+        try:
+            primary = s.read_primary_brand_keywords()
+        finally:
+            s.close()
+    calls = plan_calls(
+        cfg.x_monitor_list_id, cfg.x_query_specs,
+        primary_keywords=primary,
+    )
     assert len(calls) == len(cfg.x_query_specs) + 1
     assert calls[0].call_id == "A"
     assert calls[0].call_kind == "account"
@@ -181,9 +196,22 @@ def test_plan_calls_requires_list_id() -> None:
 
 
 def test_plan_calls_call_a_query_is_list_form() -> None:
-    """Call A's emitted query is `(list:<x_monitor_list_id>) min_faves:1`."""
+    """Call A's emitted query is `(list:<x_monitor_list_id>) min_faves:1`.
+    Post-U3 the live config has wide-net specs; load primary_keywords
+    from the live DB so the planner doesn't raise."""
     cfg = load_config(Path("config.yaml"))
-    calls = plan_calls(cfg.x_monitor_list_id, cfg.x_query_specs)
+    from x_monitor.store import Store
+    primary: dict[str, list[str]] = {}
+    if Path("data/x_monitoring.db").exists():
+        s = Store(Path("data/x_monitoring.db"), auto_migrate=False)
+        try:
+            primary = s.read_primary_brand_keywords()
+        finally:
+            s.close()
+    calls = plan_calls(
+        cfg.x_monitor_list_id, cfg.x_query_specs,
+        primary_keywords=primary,
+    )
     assert calls[0].query_string == (
         f"(list:{cfg.x_monitor_list_id}) min_faves:1"
     )

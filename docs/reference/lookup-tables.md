@@ -158,7 +158,7 @@ post-`attribute_to_brands` regex routes.
 
 **Country breakdown** (from `companies.hq_country`): **15 CN · 2 US · 2 KR · 1 FR · 1 JP.**
 
-**Per-cycle calls** (plan 2026-07-11-001, post-consolidation):
+**Per-cycle calls** (plan 2026-07-11-002, post-B-revival):
 - **Call A — list-based wide net** (`(list:<x_monitor_list_id>) min_faves:1`).
   The curated X-list, configured via `config.yaml.x_monitor_list_id`.
   Fans in everything from list members regardless of brand.
@@ -167,14 +167,30 @@ post-`attribute_to_brands` regex routes.
   yi, upstage, llama` (5 brands; co-occurrence list stands at
   23 OR-terms; emits one extra API call per cycle). C2 covers `ernie`
   (single brand, disambiguated from Sesame Street via the
-  co-occurrence AND-filter). The legacy `call_c_specs:` config key
-  is now an alias for `x_query_specs:` (auto-normalized at load).
+  co-occurrence AND-filter). C-specs read tokens from `spec.brands`
+  (operator-curated, config-side).
+- **Call B1 / B2 / B3 (wide-net brand-fan-in, plan 2026-07-11-002
+  U3):** B1 covers 8 top-presence brands (`llama, minimax, qwen,
+  deepseek, mistral, stepfun, ernie, hunyuan`); B2 covers 7
+  Chinese-language brands (`doubao, glm, moonshot_kimi, mimo,
+  sensechat, yi, inclusionai`); B3 covers 5 specialized brands
+  (`nemo_megatron, exaone, sakana_ai, kuaishou, upstage`). Each
+  B-spec is `is_wide_net: true` with an empty `brands:` map; the
+  renderer reads per-brand tokens from `brand_keywords.is_primary=1`
+  rows via the `primary_keywords` kwarg. Co-occurrence lists are
+  shared with C1's 22-term set as a first cut. B1=473 chars,
+  B2=470, B3=375 — all under the 512-char cap. Note: `mimo`,
+  `moonshot_kimi`, `upstage`, `ernie`, and `llama` are in both
+  B-groups AND C1/C2 — they get TWO calls per cycle; the operator
+  can prune the duplicates if signal density drops.
 
-**The legacy Call B (per-brand token OR-chain) is RETIRED**
-(plan 2026-07-11-001 U3). The per-brand yamls in `data/queries/`
-are deleted; the runtime source for per-brand tokens is
-`brand_keywords` (a SQL table), and Call A's curated X-list is the
-only wide-net query. The `call_b_groups` config field is removed.
+The legacy `call_c_specs:` config key remains an alias for
+`x_query_specs:` (auto-normalized at load) for v1.7.x compat.
+
+**Per-cycle fan-out is exactly `len(x_query_specs) + 1` = 6 calls
+(post-U3: A + C1 + C2 + B1 + B2 + B3).** TwitterAPI credit
+consumption roughly doubled from the pre-U3 baseline (3 calls);
+the daily `333` ceiling absorbs it.
 
 ### Other rows in `brands` not in `enabled_models`
 

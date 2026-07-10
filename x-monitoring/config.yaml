@@ -78,15 +78,18 @@ review_reasons:
   - suspicious_actor
   - ambiguous_role
 
-# Skip order when budget is exhausted mid-run. Q1 (release, from:official) is
-# last because it has the highest signal-per-tweet ratio.
+# Skip order when budget is exhausted mid-run. Plan 2026-07-11-002 (U3)
+# reorders from the legacy Q1-Q6 keys to the post-consolidation call ids.
+# Lowest-recall per-brand wide-net calls drop first under credit pressure;
+# Call A (the curated X-list) is last because it carries the highest
+# signal-per-tweet ratio.
 degraded_skip_order:
-  - Q6
-  - Q5
-  - Q3
-  - Q2
-  - Q4
-  - Q1
+  - B3
+  - B2
+  - B1
+  - C2
+  - C1
+  - A
 
 # Dashboard
 dashboard:
@@ -202,3 +205,56 @@ x_query_specs:
       - dropped "xiaomi" + "小米" (ERNIE-irrelevant)
       - added "baidu" + "文心" (Baidu/ERNIE disambiguators)
       Tested length: 247 chars (cap 512, headroom 265).
+
+  # Plan 2026-07-11-002 (U3) — wide-net B-call revival. Each B-spec
+  # is `is_wide_net: true` with an empty `brands:` map and a
+  # `wide_net_brands:` list. The renderer reads per-brand tokens
+  # from `brand_keywords.is_primary=1` rows via the
+  # `primary_keywords` kwarg. Token source is the DB, not the
+  # config; the config controls which brands participate and in what
+  # order. Co-occurrence lists are shared with C1's 22-term list as
+  # a first cut (a follow-up probe may trim per group).
+  #
+  # The v1.7 group boundaries (B1 = top-presence / global, B2 =
+  # Chinese-language, B3 = specialized / smaller) are reused — the
+  # v1.7 split kept each Call B under 512 chars because each brand
+  # contributed only the lean Q2 paren group. With the curated
+  # `is_primary=1` subset (2-4 tokens per brand), the same shape
+  # still fits under cap. Tested live: B1=473 chars, B2=470, B3=375.
+  - is_wide_net: true
+    wide_net_brands: [llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan]
+    brands: {}
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    min_faves: 0
+    call_id: B1
+    notes: |
+      B1 = top-presence / global brands (8 brands). When credits
+      are tight, B1 drops before C2 (co-occurrence-constrained per-
+      brand). The 8 brand-groups render to 473 chars on the live
+      primary subset; under 512 cap with 39 chars headroom.
+
+  - is_wide_net: true
+    wide_net_brands: [doubao, glm, moonshot_kimi, mimo, sensechat, yi, inclusionai]
+    brands: {}
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    min_faves: 0
+    call_id: B2
+    notes: |
+      B2 = Chinese-language brands (7 brands). 470 chars on the
+      live primary subset. Note moonshot_kimi and mimo are also
+      in C1 (co-occurrence-constrained); the B2 entry broadens
+      coverage by dropping the C1 co-occurrence AND-filter, so
+      these two brands get TWO calls per cycle. Operator can tune
+      the B2 brand list to drop the duplicates if redundant.
+
+  - is_wide_net: true
+    wide_net_brands: [nemo_megatron, exaone, sakana_ai, kuaishou, upstage]
+    brands: {}
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    min_faves: 0
+    call_id: B3
+    notes: |
+      B3 = specialized / smaller brands (5 brands). 375 chars on
+      the live primary subset. Note upstage is also in C1; same
+      redundancy note as B2 (operator can drop if signal density
+      drops after the first probe).

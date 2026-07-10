@@ -65,14 +65,18 @@ The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海�
 | Call B groups (config) | 3 (B1, B2, B3) |
 | Call C specs (config) | 1 (`call_id: C1`, multi-brand) |
 | Plan size per cycle (live) | **1 Call A + 3 Call B + 1 Call C = 5 calls** (live) |
-| Live call-string lengths | **A 38 / C1 505 / C2 247** (all under 512-char cap) |
-| Deduped brand tokens (in `brand_keywords` SQL table) | **207** — 20 enabled brands + legacy `xiaomi_mimo` covered; sourced from migration 034 + 035 + the 2026-07-10 backfill |
+| Live call-string lengths | **A 38 / C1 505 / C2 247 / B1 473 / B2 470 / B3 375** (all under 512-char cap) |
+| Deduped brand tokens (in `brand_keywords` SQL table) | **207** — 20 enabled brands + legacy `xiaomi_mimo` covered; sourced from migration 034 + 035 + 036 (the last adds `is_primary=1` on a 2-4-token curated subset per brand) + the 2026-07-10 backfill |
 
-> **✅ `plan_calls` now takes only `(x_monitor_list_id, x_query_specs)`.** The
-> pre-2026-07-11-001 signature was
-> `plan_calls(self.data_dir, models, x_monitor_list_id, call_b_groups, call_c_specs)`;
-> plan 2026-07-11-001 (U2) collapsed it to two positional args. The
-> live cycle now emits 3 calls — Call A (38 chars) + Call C1 (505 chars) + Call C2 (247 chars) — all under the 512-char cap. Call B is retired; the curated X-list is the only wide-net query.
+> **✅ `plan_calls` signature is now `(x_monitor_list_id, x_query_specs, *, primary_keywords=None)`.**
+> Plan 2026-07-11-001 (U2) collapsed the pre-2026-07-11-001
+> signature to two positional args; plan 2026-07-11-002 (U2) added
+> the `primary_keywords` kwarg so wide-net B-specs (B1/B2/B3) can
+> pull per-brand tokens from `brand_keywords.is_primary=1` rows.
+> The live cycle now emits **6 calls per cycle** — Call A (38 chars)
+> + Call C1 (505 chars) + Call C2 (247 chars) + Call B1 (473 chars)
+> + Call B2 (470 chars) + Call B3 (375 chars) — all under the
+> 512-char cap.
 
 ---
 

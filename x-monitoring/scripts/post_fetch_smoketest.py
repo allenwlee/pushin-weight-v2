@@ -40,6 +40,51 @@ from pathlib import Path
 # the x-monitoring/ project root.
 
 
+def _print_call_preview() -> None:
+    """Print the planned per-cycle TwitterAPI calls to stderr.
+
+    Used by the `--include-call-preview` smoketest flag. Loads
+    `config.yaml::x_query_specs` and the live DB's primary keyword
+    subset, then renders every spec via `_build_query` / `plan_calls`
+    and prints each line as `CALL <id>: <query_string> | <n> chars`.
+
+    No TwitterAPI calls are made. The DB is opened only to load
+    `brand_keywords.is_primary=1` for the wide-net specs (B1/B2/B3);
+    if the DB is missing, the wide-net specs are rendered with
+    empty tokens (their unions become empty parens — the operator
+    sees the empty-paren defensive branch and knows to migrate).
+    """
+    from x_monitor.config import load_config
+    from x_monitor.query_plan import plan_calls
+    from x_monitor.store import Store
+
+    cfg = load_config(Path("config.yaml"))
+    db_path = Path("data") / "x_monitoring.db"
+    primary_keywords: dict[str, list[str]] = {}
+    if db_path.exists():
+        s = Store(db_path, auto_migrate=False)
+        try:
+            primary_keywords = s.read_primary_brand_keywords()
+        finally:
+            s.close()
+
+    try:
+        calls = plan_calls(
+            cfg.x_monitor_list_id, cfg.x_query_specs,
+            primary_keywords=primary_keywords,
+        )
+    except Exception as exc:
+        print(f"call-preview: planner raised {exc!r}", file=sys.stderr)
+        return
+
+    print("CALL PREVIEW (per-cycle TwitterAPI plan):", file=sys.stderr)
+    for c in calls:
+        print(
+            f"CALL {c.call_id}: {c.query_string} | {c.query_length} chars",
+            file=sys.stderr,
+        )
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="post_fetch_smoketest",
@@ -111,6 +156,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Cap on posts for --source=latest-n (default: 20). "
              "Distinct from --limit, which caps --source=latest-cycle and "
              "--source=api-query.",
+    )
+    p.add_argument(
+        "--include-call-preview", action="store_true",
+        help="Print the planned per-cycle TwitterAPI calls (from "
+             "`x_query_specs:`) to stderr, including each call's "
+             "rendered query string and character length. Operators "
+             "use this to eyeball the v2 B1/B2/B3 fan-out without "
+             "hitting TwitterAPI. Default off so existing smoketest "
+             "output is unchanged.",
     )
     return p.parse_args(argv)
 
@@ -460,6 +514,19 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         args.latest = args.limit
+
+    # Plan 2026-07-11-002 (U3): when --include-call-preview is set,
+    # print the planned per-cycle TwitterAPI calls (from
+    # `x_query_specs:`) to stderr. Each line shows the call_id,
+    # rendered query string, and query_length. Operators use this
+    # to eyeball the B1/B2/B3 fan-out without hitting TwitterAPI.
+    # The DB is opened only to load `brand_keywords.is_primary=1`
+    # for the wide-net specs; if the DB is missing and the call
+    # set has no wide-net specs, the preview still works.
+    if args.include_call_preview:
+        _print_call_preview()
+        # Continue into the normal dispatch — preview is a side
+        # channel, not a replacement for the source-mode pipeline.
     # Plan 2026-07-11-001 (U4): --query-from-yaml is removed. The
     # smoketest's --source=api-query path requires the operator to
     # pass --query <string> directly. Per-brand yamls in data/queries/
