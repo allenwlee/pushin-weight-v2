@@ -1107,7 +1107,7 @@ def test_pipeline_applies_filter_before_insert_v16(monkeypatch):
         )
         (data / "queries" / "minimax.yaml").write_text(
             # v1.6: queries use (brand OR alt) form so
-            # _load_brand_tokens_per_model can pick up multiple brand
+            # parse_brand_tokens can pick up multiple brand
             # tokens per model. attribute_to_brand uses this list to
             # match text-contains attribution.
             "queries:\n  - id: Q1\n    query_string: '(minimax OR MiniMax)'\n    expected_signal: release\n    enabled: true\n"
@@ -1185,7 +1185,7 @@ def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
         )
         (data / "queries" / "moonshot_kimi.yaml").write_text(
             # v1.6: queries use (kimi OR moonshot OR k2) so
-            # _load_brand_tokens_per_model picks up the brand tokens.
+            # parse_brand_tokens picks up the brand tokens.
             # attribute_to_brand matches "kimi" in the F1 tweet text
             # against this list.
             "queries:\n  - id: Q1\n    query_string: '(kimi OR moonshot OR k2)'\n    expected_signal: release\n    enabled: true\n"

@@ -2,7 +2,7 @@
 
 Plan: docs/plans/2026-06-25-004-feat-populate-brand-search-terms-plan.md
 Units 1 + 2 of 4. Verifies:
-- _extract_tokens mirrors query_plan._load_brand_tokens_per_model byte-for-byte
+- _extract_tokens mirrors query_plan.parse_brand_tokens byte-for-byte
   (CJK, quoted, emoji, edge cases).
 - Idempotency: a re-run inserts 0 new rows.
 - Dry-run: no writes.

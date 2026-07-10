@@ -197,11 +197,12 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
 def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
     """Build {brand_id: [brand_token, ...]} from data/queries/<m>.yaml.
 
-    Mirrors query_plan._load_brand_tokens_per_model; duplicated here
-    so RunPipeline doesn't have to import a private function.
+    Delegates to query_plan.parse_brand_tokens (the public surface that
+    replaced the private _load_brand_tokens_per_model). RunPipeline used
+    to import the private name; now it can use the public one.
     """
-    from .query_plan import _load_brand_tokens_per_model
-    return _load_brand_tokens_per_model(enabled_models, data_dir / "queries")
+    from .query_plan import parse_brand_tokens
+    return parse_brand_tokens(enabled_models, data_dir / "queries")
 
 def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
     """Build {brand_id: [handle, ...]} for staff/official attribution.

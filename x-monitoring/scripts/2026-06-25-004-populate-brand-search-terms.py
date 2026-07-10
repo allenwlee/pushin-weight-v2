@@ -15,7 +15,7 @@ Hybrid-by-design contract (x_monitor/migrations/017_brand_search_terms_hybrid.sq
 - The DB is NOT used to build the query string.
 
 This script closes the populate side of the contract: it reads the same
-tokens that x_monitor.query_plan._load_brand_tokens_per_model reads
+tokens that x_monitor.query_plan.parse_brand_tokens reads
 (first paren group of Q2/Q3/Q5/Q6, split on " OR ") and writes them to
 the DB. The drift check at the end reuses
 x_monitor.run._log_brand_search_terms_drift for verification (with a
@@ -86,11 +86,11 @@ def _load_enabled_models(config_path: Path) -> list[str]:
     return list(models)
 
 
-# --- token extraction (mirror of query_plan._load_brand_tokens_per_model)
+# --- token extraction (mirror of query_plan.parse_brand_tokens)
 
 
 def _extract_tokens(yaml_text: str) -> list[str]:
-    """Mirror x_monitor.query_plan._load_brand_tokens_per_model byte-for-byte.
+    """Mirror x_monitor.query_plan.parse_brand_tokens byte-for-byte.
 
     For each Q2/Q3/Q5/Q6 entry, find the first (...) group (the brand
     clause), split on " OR ", strip whitespace, dedup preserving

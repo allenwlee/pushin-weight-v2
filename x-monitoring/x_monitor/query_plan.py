@@ -168,7 +168,39 @@ def _build_call_c_query(spec: CallCBrandSpec) -> str:
     return f"{primary} {secondary} min_faves:{spec.min_faves}"
 
 
-def _load_brand_tokens_per_model(
+def _parse_first_paren_group(query_string: str) -> list[str]:
+    """Extract the tokens from the first balanced `(...)` group of a query.
+
+    Splits on ` OR ` (the only delimiter our intent queries use), strips
+    whitespace, preserves order, returns deduplicated tokens. Multi-byte
+    tokens like `サカナAI` are preserved as-is. Quoted tokens like
+    `"NVIDIA NeMo"` keep their quotes (Call B's downstream OR-join
+    handles them).
+    """
+    depth = 0
+    start = -1
+    for i, ch in enumerate(query_string):
+        if ch == "(":
+            if depth == 0:
+                start = i + 1
+            depth += 1
+        elif ch == ")":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start != -1:
+                    group = query_string[start:i]
+                    seen: set[str] = set()
+                    out: list[str] = []
+                    for tok in group.split(" OR "):
+                        tok = tok.strip()
+                        if tok and tok not in seen:
+                            seen.add(tok)
+                            out.append(tok)
+                    return out
+    return []
+
+
+def parse_brand_tokens(
     enabled_models: list[str], queries_dir: Path
 ) -> dict[str, list[str]]:
     """For each enabled model, return its brand-token list (deduplicated).
@@ -177,6 +209,10 @@ def _load_brand_tokens_per_model(
     intent queries carry the brand OR-clause). If a model has none of
     those enabled, or its yaml is missing, the brand-token list falls
     back to [] — the model contributes 0 paren groups to Call B.
+
+    Reusable from outside ``query_plan`` (e.g., the
+    ``backfill_brand_keywords`` script populates ``brand_keywords`` from
+    the same source this function reads).
     """
     out: dict[str, list[str]] = {}
     for m in enabled_models:
@@ -191,27 +227,10 @@ def _load_brand_tokens_per_model(
             if entry.get("id") not in {"Q2", "Q3", "Q5", "Q6"}:
                 continue
             inner = entry.get("query_string", "")
-            # Pull the first `(...)` group (the brand clause) and split.
-            # No re import — we use a tiny inline parser.
-            depth = 0
-            start = -1
-            for i, ch in enumerate(inner):
-                if ch == "(":
-                    if depth == 0:
-                        start = i + 1
-                    depth += 1
-                elif ch == ")":
-                    if depth > 0:
-                        depth -= 1
-                        if depth == 0 and start != -1:
-                            group = inner[start:i]
-                            for tok in group.split(" OR "):
-                                tok = tok.strip()
-                                if tok and tok not in seen:
-                                    seen.add(tok)
-                                    toks.append(tok)
-                            start = -1
-                            break
+            for tok in _parse_first_paren_group(inner):
+                if tok not in seen:
+                    seen.add(tok)
+                    toks.append(tok)
         out[m] = toks
     return out
 
@@ -305,7 +324,7 @@ def plan_calls(
     call_a_query = f"(list:{x_monitor_list_id}) min_faves:1"
     assert_under_length_cap(call_a_query)
 
-    brand_tokens = _load_brand_tokens_per_model(
+    brand_tokens = parse_brand_tokens(
         enabled_models, data_dir / "queries"
     )
 
