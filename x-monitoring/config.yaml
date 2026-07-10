@@ -110,7 +110,7 @@ x_monitor_list_id: 2067062923525275922
 # are joined with OR; co_occurrence are joined with OR.
 #
 # Default is empty (no Call C emitted; v1.7 stays at 2 calls).
-call_c_specs:
+x_query_specs:
   # Multi-brand spec — covers both MiMo and Kimi in one Call C. The
   # primary group uses Call B's per-brand paren structure (one paren
   # per brand) so the post-fetch attribute_to_brands regex can route
