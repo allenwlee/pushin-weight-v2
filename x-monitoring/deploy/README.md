@@ -33,7 +33,7 @@ The `-k` flag kills any in-flight run and starts a fresh one.
 
 ## Triggers
 
-- **WatchPaths** on `data/queries/` and `data/accounts/` — a PR merge that changes either triggers a re-run.
+- **WatchPaths** on `config.yaml` — a PR merge that changes the config triggers a re-run. `data/queries/` and `data/accounts/` are both retired (plans 2026-07-11-001 + 2026-07-11-002 U4); DB-touching migrations run via `x-monitor migrate`, not via WatchPaths.
 - The pipeline acquires `fcntl.flock` on `data/runs/LOCK` so a WatchPaths double-fire (PR merge mid-run) cleanly exits 0 with `degraded:already_running: true` in the run JSON.
 - TwitterAPI.io is hit directly (no cookies); the API key is the only auth surface. On 429/5xx the client retries with backoff; persistent auth failure aborts the run and records `degraded:twitterapi_auth: true`.
 

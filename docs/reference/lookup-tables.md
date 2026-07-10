@@ -252,24 +252,39 @@ SELECT b.nickname AS brand, c.nickname AS expected_parent
 -- expected: 3 rows
 ```
 
-### Inventory: account yamls on disk
+### Inventory: per-brand official/staff handles
 
-The `data/accounts/<brand>.yaml` files are the operator-managed
-sources for the curated X-list and staff handles (per-brand
-official-handle attribution). The DB rows in `brands_accounts` and
-`account_handle` cover the same surface; the `data/accounts/` file
-stays as the operator-edit form.
+The runtime source of truth for per-brand `official` and `staff`
+handles is the `brands_accounts` table joined to `accounts` and
+`roles`, filtered to `role_id IN (2, 3)`. As of 2026-07-11 the
+DB has 115 rows in `brands_accounts` (every yaml-listed handle
+across the 20 enabled brands is mirrored). Operator contract:
+edit handles via SQL migration inserting into `accounts` +
+`brands_accounts`.
 
-| category | enabled (= 1:1 with `enabled_models`) | ghosts / pre-staged | total on disk |
-|---|---:|---:|---:|
-| `data/accounts/<brand>.yaml` | 16 | 3 staged for delete (xiaomi_mimo, nvidia_nemo, sakana) | 16 |
+```sql
+-- Add a new official handle to the minimax brand:
+INSERT INTO accounts (author_id, handle) VALUES
+    ('1234567890', 'NewMiniMaxHandle');
+INSERT INTO brands_accounts (brand_id, accounts_id, role_id, added_at)
+    SELECT b.id, a.id, r.id, datetime('now')
+    FROM brands b, accounts a, roles r
+    WHERE b.nickname = 'minimax'
+      AND a.handle = 'NewMiniMaxHandle'
+      AND r.key = 'official';
+```
 
-**`data/queries/<brand>.yaml` is RETIRED** (plan 2026-07-11-001 U3).
+`data/accounts/*.yaml` is **retired** (plan 2026-07-11-002 U4).
+The directory is deleted from the repo; the runtime reads from
+DB, never from yaml. The post-step export `data/brands_accounts.json`
+round-trips the current state for PR review.
+
+`data/queries/*.yaml` is **retired** (plan 2026-07-11-001 U3).
 The per-brand token source is now `brand_keywords` (a SQL table
-populated by migration 034 + 035). The `data/queries/` directory
-is deleted from the repo.
+populated by migration 034 + 035 + 036). The `data/queries/`
+directory is deleted from the repo.
 
-**`data/filters/<brand>.yaml` is RETIRED** (plan 2026-07-11-001 U3).
+`data/filters/*.yaml` is **retired** (plan 2026-07-11-001 U3).
 The relevance-filter step was the only consumer; the in-code
 banned-token review-queue and low-engagement-filter steps remain.
 The `data/filters/` directory is deleted from the repo.

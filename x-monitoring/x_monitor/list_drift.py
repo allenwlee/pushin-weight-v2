@@ -43,43 +43,35 @@ from typing import Any
 
 
 def collect_expected_handles(
-    data_dir: Path,
+    store,
     enabled_models: list[str],
 ) -> set[str]:
     """Return the union of `accounts + staff` handles across enabled models.
 
-    Each `data/accounts/<model>.yaml` has shape:
-        accounts:
-          - handle: <str>
-            role: <str>   # 'official' or 'staff'
-    The `role` field is ignored here — every handle in the yaml is
-    considered "expected" for the sanity check (a `staff` handle that
-    is not in the list would also be a drift).
+    Plan 2026-07-11-002 (U4): the yaml read path
+    (`data/accounts/<model>.yaml`) is retired. The DB's
+    `brands_accounts WHERE role_id IN (2, 3)` is canonical; the
+    helper reads from the live DB once via
+    `Store.read_brand_official_staff_handles`. The `role` field is
+    ignored — every handle in the result is considered "expected"
+    for the sanity check (a `staff` handle not in the list is also
+    a drift).
 
-    Missing yaml files for an enabled model are silently skipped
-    (not an error — that brand might just not have an accounts
-    file yet). The function never raises.
+    Brands with no DB rows (no yaml equivalent) silently contribute
+    nothing. The function never raises.
     """
     expected: set[str] = set()
-    accounts_dir = data_dir / "accounts"
-    if not accounts_dir.exists():
-        return expected
     try:
-        import yaml  # local import to keep this module import-cheap
-    except ImportError:
+        seeded = store.read_brand_official_staff_handles(enabled_models)
+    except Exception:
+        # Defensive — a corrupt DB or missing brands_accounts table
+        # shouldn't crash the drift check. The startup sanity check
+        # sees an empty expected set; the list_id_invalid flag fires
+        # immediately. Operator catches it on the first cycle.
         return expected
     for m in enabled_models:
-        path = accounts_dir / f"{m}.yaml"
-        if not path.exists():
-            continue
-        try:
-            raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError):
-            continue
-        for entry in raw.get("accounts", []) or []:
-            h = entry.get("handle")
-            if h and isinstance(h, str):
-                expected.add(h)
+        for handle, _role in seeded.get(m, []):
+            expected.add(handle)
     return expected
 
 

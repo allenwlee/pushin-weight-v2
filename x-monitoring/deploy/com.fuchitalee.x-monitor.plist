@@ -20,12 +20,13 @@
     <array>
         <!-- Plan 2026-07-11-001: data/queries/ is retired (per-brand
              yamls deleted; brand_keywords is the runtime source via DB).
+             Plan 2026-07-11-002 (U4): data/accounts/ is also retired
+             (per-brand official/staff handles live in brands_accounts).
              The only operator-edit surface that needs a launchd rerun
              trigger is config.yaml (x_query_specs:, daily_ceiling, etc.).
-             data/accounts/ stays; the migration-035 to brands_accounts
-             reconciliation is a follow-up plan. -->
+             DB-touching migrations run via x-monitor migrate, not via
+             WatchPaths. -->
         <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/config.yaml</string>
-        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/data/accounts</string>
     </array>
 
     <key>StandardOutPath</key>

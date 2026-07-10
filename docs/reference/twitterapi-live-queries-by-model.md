@@ -28,7 +28,7 @@
 
 ## How it all fits together
 
-A macOS LaunchAgent (`deploy/com.fuchitalee.x-monitor.plist`) invokes `run-pipeline-watchpaths.sh` whenever `config.yaml` or `data/accounts/` change. The plist uses `ThrottleInterval=300` — meaning consecutive runs cannot start within 300 seconds (5 minutes) of each other — and no `StartInterval`/`StartCalendarInterval`. The end-to-end cadence is therefore **watchpath-driven** (a fresh config.yaml triggers re-plan + re-fire) with a 5-minute minimum gap, not a fixed 15-minute tick. The pre-plan 2026-07-11-001 `data/queries/` WatchPaths entry was retargeted to `config.yaml` in U3.
+A macOS LaunchAgent (`deploy/com.fuchitalee.x-monitor.plist`) invokes `run-pipeline-watchpaths.sh` whenever `config.yaml` changes. The plist uses `ThrottleInterval=300` — meaning consecutive runs cannot start within 300 seconds (5 minutes) of each other — and no `StartInterval`/`StartCalendarInterval`. The end-to-end cadence is therefore **watchpath-driven** (a fresh config.yaml triggers re-plan + re-fire) with a 5-minute minimum gap, not a fixed 15-minute tick. The pre-plan 2026-07-11-001 `data/queries/` WatchPaths entry was retargeted to `config.yaml` in U3; the pre-plan 2026-07-11-002 `data/accounts/` WatchPaths entry was dropped in U4.
 
 Each invocation:
 

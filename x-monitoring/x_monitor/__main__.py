@@ -164,52 +164,6 @@ def cmd_migrate(args, paths) -> int:
         store.close()
 
 
-def cmd_accounts(args, paths) -> int:
-    from x_monitor.accounts import load_accounts
-    from x_monitor.apify import TwitterApiClient
-
-    if args.accounts_action == "bootstrap-followers":
-        if not args.model or not args.handle:
-            print("--model and --handle required", file=sys.stderr)
-            return 2
-        try:
-            api = TwitterApiClient.from_env()
-        except Exception as e:
-            print(f"twitterapi.io error: {e}", file=sys.stderr)
-            return 2
-        followers = api.run_followers(args.handle, max_results=200)
-        # Append to data/accounts/<model>.yaml under a `discovered_followers`
-        # section; do not modify the seeded 'accounts' list.
-        import yaml
-
-        yaml_path = paths["accounts"] / f"{args.model}.yaml"
-        existing = {}
-        if yaml_path.exists():
-            existing = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
-        existing.setdefault("discovered_followers", [])
-        for f in followers:
-            if not any(df.get("handle") == f["handle"] for df in existing["discovered_followers"]):
-                existing["discovered_followers"].append(f)
-        yaml_path.write_text(
-            yaml.safe_dump(existing, sort_keys=False, allow_unicode=True),
-            encoding="utf-8",
-        )
-        print(f"wrote {len(followers)} followers to {yaml_path}")
-        return 0
-    if args.accounts_action == "list":
-        for m in args.model.split(",") if args.model else []:
-            try:
-                accts = load_accounts(m, paths["data"])
-                print(f"\n[{m}]")
-                for a in accts:
-                    print(f"  @{a.handle}  role={a.role}  verified={a.verified}")
-            except Exception as e:
-                print(f"  {m}: {e}")
-        return 0
-    print(f"unknown accounts action: {args.accounts_action}", file=sys.stderr)
-    return 2
-
-
 def cmd_queries(args, paths) -> int:
     from x_monitor.queries import load_queries, validate_query_syntax
 
@@ -1235,13 +1189,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_mig = sub.add_parser("migrate", help="Apply forward-only DB migrations")
     p_mig.set_defaults(func=cmd_migrate)
 
-    p_acc = sub.add_parser("accounts", help="Account-graph operations")
-    p_acc.add_argument(
-        "accounts_action", choices=["bootstrap-followers", "list"]
-    )
-    p_acc.add_argument("--model")
-    p_acc.add_argument("--handle")
-    p_acc.set_defaults(func=cmd_accounts)
+    # Plan 2026-07-11-002 (U4): the `accounts` subcommand is retired.
+    # The per-brand official/staff handle source moved from
+    # `data/accounts/*.yaml` to `brands_accounts` (DB). The
+    # `bootstrap-followers` subcommand wrote to yaml and is gone; the
+    # `list` subcommand read yaml and is also gone. Operator adds
+    # handles via SQL migration inserting into `accounts` +
+    # `brands_accounts`; surfaces for that live in the dashboard
+    # (drill-down graph from post body) and in `docs/reference/`.
 
     p_q = sub.add_parser("queries", help="Query-library operations")
     p_q.add_argument("queries_action", choices=["list-disabled", "validate"])

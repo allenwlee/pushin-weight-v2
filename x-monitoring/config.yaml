@@ -3,8 +3,15 @@
 # LaunchAgent WatchPaths (only data/queries/ is watched, this file is the
 # config; restart manually after editing).
 
-# Models to monitor. Adding a model = adding model_id here + dropping
-# data/queries/<model_id>.yaml + data/accounts/<model_id>.yaml. No code change.
+# Models to monitor. Adding a model = adding model_id here + an INSERT
+# into `brands_accounts` (canonical) + an INSERT into `account_handle`
+# for any new handles. No code change.
+#
+# Plan 2026-07-11-001 retired data/queries/<brand>.yaml.
+# Plan 2026-07-11-002 (U4) retired data/accounts/<brand>.yaml; the
+# runtime source for per-brand official/staff handles is the
+# `brands_accounts` DB table (joined to `accounts` and `roles`,
+# filtered to role_id IN (2, 3)).
 enabled_models:
   - minimax
   - qwen

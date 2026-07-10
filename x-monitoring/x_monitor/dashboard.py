@@ -1518,7 +1518,10 @@ class DashboardApp:
             finally:
                 store.close()
             # Re-derive edges from posts for the drill-down graph
-            from .accounts import derive_edges, find_clusters
+            # Plan 2026-07-11-002 (U4): Account/Edge/derive_edges/
+            # find_clusters moved from x_monitor.accounts (deleted) to
+            # x_monitor.account_graph.
+            from .account_graph import derive_edges, find_clusters
 
             posts_for_edges = [
                 {
@@ -1543,7 +1546,9 @@ class DashboardApp:
             # build_force_directed expects Account objects with .handle, so
             # convert dicts to Account. If accounts is empty, fall back to
             # unique authors in posts.
-            from .accounts import Account as _Acc
+            # Plan 2026-07-11-002 (U4): Account moved from
+            # x_monitor.accounts (deleted) to x_monitor.account_graph.
+            from .account_graph import Account as _Acc
             nodes: list[_Acc] = []
             for a in accounts:
                 h = a.get("handle") or a.get("author_handle")

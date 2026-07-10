@@ -14,7 +14,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .accounts import Account, derive_edges, find_clusters, load_accounts, role_tag
+# Plan 2026-07-11-002 (U4): Account / derive_edges / find_clusters /
+# role_tag moved from x_monitor.accounts (deleted) to
+# x_monitor.account_graph.
+from .account_graph import Account, derive_edges, find_clusters, role_tag
 from .apify import (
     TwitterApiAuthError,
     TwitterApiClient,
@@ -201,27 +204,22 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
 # the brand_keywords table (DB) when downstream consumers need it.
 # (Kept as a marker; see also `_log_brand_search_terms_drift` removal.)
 
-def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
+def _staff_handles_map(store, enabled_models: list[str]) -> dict[str, list[str]]:
     """Build {brand_id: [handle, ...]} for staff/official attribution.
 
-    For v1.6 the attribute_to_brand prefers author_handle match over
-    text-contains, so we fold the official handle into the per-brand
-    list alongside staff.
+    Plan 2026-07-11-002 (U4): the data/accounts/*.yaml file read is
+    retired. The DB's `brands_accounts WHERE role_id IN (2, 3)` is
+    canonical; we read once via
+    `Store.read_brand_official_staff_handles` and return only the
+    handle list (the role_key discriminator is unused at this call
+    site — v1.6 attribute_to_brand folds official + staff into a
+    single per-brand list).
     """
-    from .accounts import load_accounts, load_staff
     out: dict[str, list[str]] = {}
+    seeded = store.read_brand_official_staff_handles(enabled_models)
     for m in enabled_models:
-        try:
-            accts = load_accounts(m, data_dir)
-        except (FileNotFoundError, ValueError):
-            out[m] = []
-            continue
-        handles = [a.handle for a in accts if a.role == "official"]
-        try:
-            staff = load_staff(m, data_dir)
-        except (FileNotFoundError, ValueError):
-            staff = []
-        out[m] = handles + [s.handle for s in staff]
+        pairs = seeded.get(m, [])
+        out[m] = [handle for handle, _role in pairs]
     return out
 
 # v1.7: brand-alias map for tokens v1.7 yamls use that don't match the
@@ -760,9 +758,10 @@ class RunPipeline:
         self.db_path = db_path
         self.runs_dir = data_dir / "runs"
         # Plan 2026-07-11-001: data/queries/ is gone; runtime token
-        # source is brand_keywords (DB). data/accounts/ stays (curated
-        # X-list is config-side; see plan 005 follow-up).
-        self.accounts_dir = data_dir / "accounts"
+        # source is brand_keywords (DB).
+        # Plan 2026-07-11-002 (U4): data/accounts/ is also gone; the
+        # per-brand official/staff handle source is `brands_accounts`
+        # (DB). See `Store.read_brand_official_staff_handles`.
         self.raw_dir = self.runs_dir / "raw"
         self.lock_path = self.runs_dir / "LOCK"
         self.review_queue_path = data_dir / "_review_queue.json"
@@ -948,12 +947,11 @@ class RunPipeline:
                 )
                 _t("plan", _t_plan)
                 # Plan 2026-07-11-001 (U3): the per-brand yaml read
-                # path is gone. The body_keyword attribution index is
-                # now self-brand-only (see _build_brand_index).
-                # staff_handles is the one remaining per-brand file
-                # read; that surface (data/accounts/*.yaml) is kept
-                # per the plan's Scope Boundaries.
-                staff_handles = _staff_handles_map(models, self.data_dir)
+                # path is gone. Plan 2026-07-11-002 (U4):
+                # `data/accounts/*.yaml` is also gone; staff_handles
+                # now reads from `brands_accounts WHERE role_id IN (2,
+                # 3)` via Store.read_brand_official_staff_handles.
+                staff_handles = _staff_handles_map(store, models)
                 _t_loop = time.monotonic()
                 # U5: per-cycle accumulator for the post-fetch
                 # transformers. Each `_attribute_call_items` returns
@@ -1287,7 +1285,7 @@ class RunPipeline:
                     # gone. The body_keyword index is now self-brand-
                     # only.
                     qt_index, _ = _build_brand_index(models)
-                    qt_staff = _staff_handles_map(models, self.data_dir)
+                    qt_staff = _staff_handles_map(store, models)
                     _t_qt_o = time.monotonic()
                     try:
                         qt_out = self._capture_official_quote_tweets(
@@ -1560,28 +1558,41 @@ class RunPipeline:
         return out
 
     def _update_accounts(self, store: Store, summary: dict[str, Any]) -> None:
-        """Regenerate accounts/<brand_id>.yaml-derived upserts from posts."""
+        """Re-upsert per-brand official/staff handles from the DB +
+        discover commenters from posts and upsert them as 'community'
+        or 'unknown' role.
+
+        Plan 2026-07-11-002 (U4): the per-brand yaml seed
+        (`data/accounts/<brand>.yaml`) is retired. The DB's
+        `brands_accounts WHERE role_id IN (2, 3)` is canonical; the
+        `Store.read_brand_official_staff_handles` helper returns
+        `(handle, role_key)` pairs that this method threads through
+        `upsert_account`. The yaml `display_name / verified /
+        bio_contains_brand / multi_brand_voice / notes` metadata is
+        lost in the transition — operator-managed handles carry
+        `verified=False, bio_contains_brand=False,
+        multi_brand_voice=False, notes=""` defaults unless they
+        update the row directly via SQL.
+
+        Commenter discovery (the in-code post-body loop below)
+        continues unchanged: it reads from `posts`, not yaml.
+        """
+        # Read seeded (handle, role_key) pairs from the DB once.
+        seeded = store.read_brand_official_staff_handles(
+            self.config.enabled_models
+        )
         for m in self.config.enabled_models:
-            try:
-                seed = load_accounts(m, self.accounts_dir)
-            except (FileNotFoundError, ValueError):
-                continue
-            # Always re-upsert seeded accounts (roles, last_seen_at).
-            for a in seed:
+            seed_pairs = seeded.get(m, [])
+            # Re-upsert seeded accounts (role + last_seen_at).
+            for handle, role_key in seed_pairs:
                 store.upsert_account(
                     brand_id=m,
-                    handle=a.handle,
-                    role=a.role,
-                    source_query_ids=a.source_query_ids,
-                    display_name=a.display_name,
-                    verified=a.verified,
-                    bio_contains_brand=a.bio_contains_brand,
-                    multi_brand_voice=a.multi_brand_voice,
-                    notes=a.notes,
+                    handle=handle,
+                    role=role_key,
                 )
-            # Discover commenters from posts and upsert them as 'community'
-            # or 'unknown' role. The role_tag rules (Q5) will upgrade
-            # suspicious/developer/employee on the next pass.
+            # Discover commenters from posts and upsert them as
+            # 'community' or 'unknown' role. The role_tag rules
+            # upgrade suspicious/developer/employee on the next pass.
             posts = store.get_all_posts(m)
             commenters: dict[str, dict[str, Any]] = {}
             for p in posts:
@@ -1600,14 +1611,14 @@ class RunPipeline:
                     )
                     a["multi_posts"] += 1
                     a["posts"].append(p)
+            seeded_handles = {h for h, _ in seed_pairs}
             for handle, info in commenters.items():
-                if any(s.handle == handle for s in seed):
+                if handle in seeded_handles:
                     continue
                 role = role_tag(
                     Account(handle=handle, role=info["role"]),
                     posts_for_account=info["posts"][:10],
                 )
-                # Count multi-thread appearances
                 thread_count = sum(
                     1 for p in info["posts"] if p.get("in_reply_to_user_id")
                 )
@@ -1621,7 +1632,6 @@ class RunPipeline:
                     multi_brand_voice=False,
                     multiple_posts_in_thread_with_official=thread_count,
                 )
-                # Record appearances
                 for p in info["posts"]:
                     store.record_appearance(m, handle, p["tweet_id"], role_at_time=role)
 

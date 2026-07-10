@@ -297,6 +297,13 @@ class Store:
             elif artifact == "x_query_specs":
                 target = project_root / "data" / "x_query_specs.json"
                 self.export_query_specs_json(target)
+            elif artifact == "brands_accounts":
+                # Plan 2026-07-11-002 (U4): brands_accounts is now
+                # canonical for per-brand official/staff handles. The
+                # post-step writes data/brands_accounts.json whenever
+                # a migration's KTD7 header lists brands_accounts.
+                target = project_root / "data" / "brands_accounts.json"
+                self.export_brands_accounts_json(target)
 
     def export_brand_keywords_json(self, target: Path) -> bool:
         """Export the brand_keywords table to `target` as deterministic JSON.
@@ -2744,6 +2751,120 @@ class Store:
         for r in rows:
             out.setdefault(r["brand_id"], []).append(r["pattern"])
         return out
+
+    def read_brand_official_staff_handles(
+        self, enabled_models: list[str] | None = None,
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Return {brand_id: [(handle, role_key), ...]} for
+        `brands_accounts` rows where `role_id IN (2, 3)` (plan
+        2026-07-11-002 U4).
+
+        `roles.key` mapping:
+          - 1 = community
+          - 2 = official
+          - 3 = staff
+
+        Operator contract: edit handles via SQL migrations inserting
+        into `accounts` + `brands_accounts` (the same shape plan
+        2026-07-11-001's deferred reconciler would have produced).
+        `data/accounts/*.yaml` is retired.
+
+        Consumed by:
+          - `RunPipeline._update_accounts` (replaces the yaml load);
+            passes `(handle, role_key)` pairs to `upsert_account`.
+          - `list_drift.collect_expected_handles` (replaces the yaml
+            iter); reads only `handle` and ignores `role_key`.
+
+        If `enabled_models` is supplied, the result is filtered to
+        those brands only. The function orders by `brand_id,
+        handle` for hash determinism (irrelevant to consumers but
+        useful when debugging).
+        """
+        params: tuple = ()
+        sql = (
+            "SELECT b.nickname AS brand_id, a.handle, r.key AS role_key "
+            "FROM brands b "
+            "JOIN brands_accounts ba ON ba.brand_id = b.id "
+            "JOIN accounts a ON a.id = ba.accounts_id "
+            "JOIN roles r ON r.id = ba.role_id "
+            "WHERE ba.role_id IN (2, 3)"
+        )
+        if enabled_models is not None:
+            placeholders = ",".join("?" for _ in enabled_models)
+            sql += f" AND b.nickname IN ({placeholders})"
+            params = tuple(enabled_models)
+        sql += " ORDER BY b.nickname, a.handle"
+
+        rows = self._conn.execute(sql, params).fetchall()
+        out: dict[str, list[tuple[str, str]]] = {}
+        for r in rows:
+            out.setdefault(r["brand_id"], []).append(
+                (r["handle"], r["role_key"])
+            )
+        return out
+
+    def export_brands_accounts_json(self, target: Path) -> bool:
+        """Export the brands_accounts table (joined to accounts + roles)
+        to `target` as deterministic JSON.
+
+        Mirror of `export_brand_keywords_json`: SELECT with explicit
+        ORDER BY for hash determinism (KTD4); SHA256 over canonical
+        JSON; compare against `_applied_config_snapshot.content_hash`;
+        write on difference. Returns True if the file was written,
+        False if it was a no-op (hash unchanged).
+
+        Operators PR-review `data/brands_accounts.json` to confirm
+        handle assignments, mirroring the existing
+        `data/brand_keywords.json` workflow.
+        """
+        import hashlib
+        import json
+
+        rows = self._conn.execute(
+            "SELECT b.nickname AS brand_id, a.handle, r.key AS role_key, "
+            "       ba.added_at "
+            "FROM brands b "
+            "JOIN brands_accounts ba ON ba.brand_id = b.id "
+            "JOIN accounts a ON a.id = ba.accounts_id "
+            "JOIN roles r ON r.id = ba.role_id "
+            "ORDER BY b.nickname, a.handle, r.key"
+        ).fetchall()
+        payload = [
+            {
+                "brand_id": r["brand_id"],
+                "handle": r["handle"],
+                "role_key": r["role_key"],
+                "added_at": r["added_at"],
+            }
+            for r in rows
+        ]
+        body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+        prior = self._conn.execute(
+            "SELECT content_hash FROM _applied_config_snapshot "
+            "WHERE artifact = ?",
+            ("brands_accounts",),
+        ).fetchone()
+        if prior is not None and prior["content_hash"] == digest:
+            return False
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body + "\n", encoding="utf-8")
+        if prior is None:
+            self._conn.execute(
+                "INSERT INTO _applied_config_snapshot "
+                "(artifact, content_hash, written_at) VALUES (?, ?, ?)",
+                ("brands_accounts", digest, _now_iso()),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE _applied_config_snapshot "
+                "SET content_hash = ?, written_at = ? WHERE artifact = ?",
+                (digest, _now_iso(), "brands_accounts"),
+            )
+        self._conn.commit()
+        return True
 
     def read_brand_search_terms(self) -> dict[str, str]:
         """Return {term: brand_id} for all brand_search_terms (R13).
