@@ -270,25 +270,14 @@ def filter_posts(
     return kept, stats, soft_dropped
 
 
-# --- YAML loader ---------------------------------------------------------
-
-
-def load_filter(brand_id: str, root: Path) -> RelevanceConfig:
-    """Load data/filters/<brand_id>.yaml, return RelevanceConfig.
-
-    If the file is missing, returns an empty config (no filter applied).
-    This is intentional: legacy models can be added without a filter,
-    and the user can drop in a YAML later to enable one.
-    """
-    path = root / "filters" / f"{brand_id}.yaml"
-    if not path.exists():
-        return RelevanceConfig()
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    # Allow either a top-level dict or a wrapped {"filter": {...}} for
-    # future expansion (mirrors the queries.py loader shape).
-    if isinstance(raw, dict) and "filter" in raw and isinstance(raw["filter"], dict):
-        raw = raw["filter"]
-    return RelevanceConfig.model_validate(raw)
+# Plan 2026-07-11-001 (U3): the per-brand YAML loader
+# `load_filter(brand_id, root)` and the `data/filters/<brand>.yaml`
+# surface it consumed are retired. Operators who want per-brand
+# hijack exclusions add terms to the relevant spec's `co_occurrence`
+# list in `x_query_specs` (config-side, PR-reviewable). The
+# `filter_posts(items, cfg)` API is preserved for unit tests; in
+# production, the `filter_and_review` stage in x_monitor.run drops
+# the `cfg: RelevanceConfig` parameter entirely.
 
 
 # --- Audit helper --------------------------------------------------------

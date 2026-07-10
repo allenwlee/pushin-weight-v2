@@ -42,7 +42,7 @@ from .attribution import (
     classify_post,
     compile_keyword_index,
 )
-from .relevance import RelevanceConfig, filter_posts, load_filter
+from .relevance import filter_posts  # noqa: F401 — re-exported for tests
 from .review import ReviewQueue
 from .store import Store
 from .headlines import HeadlinesCache, enrich_posts
@@ -80,23 +80,28 @@ def filter_and_review(
     items: list[dict[str, Any]],
     q: Query,
     brand_id: str,
-    cfg: RelevanceConfig,
     review: ReviewQueue,
     cache: HeadlinesCache | None = None,
     api: TwitterApiClient | None = None,
     run_fetches_used: list[int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Apply the per-model relevance filter, then layer review-queue rules.
+    """Per-model post-fetch pipeline: review-queue + headline enrichment.
 
-    Returns (kept, drop_stats) where:
-      - kept: items that should be inserted into the DB.
-      - drop_stats: dict with n_dropped, n_kept, n_soft_dropped, reasons.
-        Reasons are the keys from x_monitor.relevance.
+    Plan 2026-07-11-001 (KTD6): the relevance-filter step (which read
+    `data/filters/<brand>.yaml` via `filter_posts`) is removed. What
+    remains:
+      - The banned-token review-queue path: the in-code banned list
+        still produces `soft` items; they go to the operator review
+        queue via `review.append_rule_match`.
+      - The headline-enrichment pass (URL-only posts get their
+        article headlines via `enrich_posts`).
+      - The low-engagement-filter step is a downstream concern
+        (per-tweet `like_count` filtering in the dashboard / kept-set
+        inspection); it is in-code, not yaml-driven.
 
-    Side effects:
-      - Soft-dropped items are added to the review queue with
-        reason="banned_token" (so the operator can promote them via
-        `x-monitor review resolve` if they turn out to be real signal).
+    Returns (kept, drop_stats). The drop_stats shape is preserved for
+    backward-compat with the per-query summary keys (`n_dropped`,
+    `n_kept`, `n_soft_dropped`, `reasons`).
 
     U9 (migration 022): the `expected_signal == "release"` low-engagement
     review rule was REMOVED with the 6-signal taxonomy. The rule fired
@@ -104,23 +109,18 @@ def filter_and_review(
     gone, the rule cannot apply uniformly. Per-Q1 low-engagement
     enforcement is a follow-up if needed (operators can still inspect
     the kept set with like_count=0/1 via the dashboard).
-
-    Items here are normalized post dicts (with `id`, `text`,
-    `author_handle`, `like_count`, `brand_id`, `source_query_id`).
-
-    If `cache` is provided, the kept set is passed through enrich_posts()
-    so URL-only posts get their article headlines (X-articles go through
-    api.get_article when both `api` and the URL match). The returned
-    `kept` list reflects the enrichment.
     """
-    kept, stats, soft = filter_posts(items, cfg)
-    for sd in soft:
-        review.append_rule_match(
-            tweet_id=sd["tweet_id"],
-            reason=sd["reason"],
-            brand_id=brand_id,
-            rule="must_have_none",
-        )
+    # The relevance-filter step (filter_posts with cfg from yaml) is
+    # gone — KTD6. We do not synthesize a fake cfg here; the per-model
+    # yaml read path is permanently retired. Items pass through with
+    # the in-code banned-token + low-engagement rules only.
+    kept: list[dict[str, Any]] = list(items)
+    stats: dict[str, Any] = {
+        "n_kept": len(kept),
+        "n_dropped": 0,
+        "n_soft_dropped": 0,
+        "reasons": {},
+    }
     # v1.4: enrich the kept set with article headlines (X-articles go
     # through api.get_article when both api and the URL match).
     if cache is not None:
@@ -194,15 +194,12 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
         min_faves=min_faves,
     )
 
-def _brand_tokens_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
-    """Build {brand_id: [brand_token, ...]} from data/queries/<m>.yaml.
-
-    Delegates to query_plan.parse_brand_tokens (the public surface that
-    replaced the private _load_brand_tokens_per_model). RunPipeline used
-    to import the private name; now it can use the public one.
-    """
-    from .query_plan import parse_brand_tokens
-    return parse_brand_tokens(enabled_models, data_dir / "queries")
+# Plan 2026-07-11-001 (U3): _brand_tokens_map and the per-brand yaml
+# read path are retired. The keyword index is now self-brand-only —
+# see _build_brand_index below. The "per-model brand token map"
+# previously computed from data/queries/<m>.yaml is now sourced from
+# the brand_keywords table (DB) when downstream consumers need it.
+# (Kept as a marker; see also `_log_brand_search_terms_drift` removal.)
 
 def _staff_handles_map(enabled_models: list[str], data_dir: Path) -> dict[str, list[str]]:
     """Build {brand_id: [handle, ...]} for staff/official attribution.
@@ -254,36 +251,26 @@ _BRAND_ALIASES: dict[str, str] = {
 
 
 def _build_brand_index(
-    brand_tokens: dict[str, list[str]],
     models: list[str],
 ) -> tuple[Any, dict[str, str]]:
     """Build the per-cycle brand keyword index + search-term map.
 
-    Maps v1.7 yaml brand tokens to canonical brand_ids via KNOWN_MODELS
-    + _BRAND_ALIASES, then seeds each enabled model's self-brand so
-    posts that mention the model name are detected via body_keyword.
+    Plan 2026-07-11-001: the v1.7-era yaml token map input is gone
+    (data/queries/ is deleted). The keyword index is now self-brand-
+    only — each enabled model name matches itself in post text.
+    Brand-specific multi-token lists live in `brand_keywords` (DB)
+    and are loaded via `Store.read_brand_keywords()` when downstream
+    consumers need them; this index is the body_keyword attribution
+    fallback.
 
-    Returns (compiled_keyword_index, brand_search_terms) — shared across
-    all call kinds in the cycle.
+    Returns (compiled_keyword_index, brand_search_terms) — the index
+    is used by `_attribute_call_items` for body_keyword attribution;
+    `brand_search_terms` is the per-cycle DB-load shape for callers
+    that still expect a yaml-shape map.
     """
-    keyword_triples: list[tuple[str, str, bool]] = []
-    for model_id, toks in brand_tokens.items():
-        for tok in toks:
-            canonical = tok.strip().lower()
-            if not canonical:
-                continue
-            if canonical in KNOWN_MODELS:
-                keyword_triples.append((canonical, tok, False))
-            elif canonical in _BRAND_ALIASES:
-                keyword_triples.append(
-                    (_BRAND_ALIASES[canonical], tok, False)
-                )
-            # else: token doesn't map to a known brand; drop it.
-    for m in models:
-        if m in KNOWN_MODELS and not any(
-            t[0] == m for t in keyword_triples
-        ):
-            keyword_triples.append((m, m, False))
+    keyword_triples: list[tuple[str, str, bool]] = [
+        (m, m, False) for m in models if m in KNOWN_MODELS
+    ]
     index = compile_keyword_index(keyword_triples)
     brand_search_terms: dict[str, str] = {
         tok.lower(): bid for bid, tok, _ in keyword_triples
@@ -303,47 +290,11 @@ def _load_brand_search_terms_from_db(store: Any) -> dict[str, str]:
     return store.read_brand_search_terms()
 
 
-def _log_brand_search_terms_drift(
-    yaml_terms: dict[str, str],
-    db_terms: dict[str, str],
-) -> None:
-    """Log a warning if the yaml and DB brand_search_terms maps disagree.
-
-    Drift is informational, not a hard fail. Three signals:
-
-      1. term in yaml but not in DB — the DB has stale coverage; the
-         query string can still match this term, but the attribution
-         side cannot map it back to a brand.
-      2. term in DB but not in yaml — the DB has an attribution entry
-         that no current query string produces. Probably leftover from
-         a removed brand or query; safe to drop, but flagged.
-      3. term in both with different brand_id — a brand_id mismatch
-         on a shared term; the DB wins at attribution time (yaml is
-         query-side, DB is attribution-side).
-    """
-    yaml_keys = set(yaml_terms)
-    db_keys = set(db_terms)
-    only_yaml = yaml_keys - db_keys
-    only_db = db_keys - yaml_keys
-    shared = yaml_keys & db_keys
-    mismatched = {t for t in shared if yaml_terms[t] != db_terms[t]}
-    if not (only_yaml or only_db or mismatched):
-        return
-    log.warning(
-        "brand_search_terms drift: yaml-only=%d db-only=%d mismatched=%d "
-        "(yaml=%d db=%d); DB wins at attribution time",
-        len(only_yaml), len(only_db), len(mismatched),
-        len(yaml_keys), len(db_keys),
-    )
-    if only_yaml:
-        sample = sorted(only_yaml)[:5]
-        log.warning("  yaml-only terms (sample): %s", sample)
-    if only_db:
-        sample = sorted(only_db)[:5]
-        log.warning("  db-only terms (sample): %s", sample)
-    if mismatched:
-        sample = sorted(mismatched)[:5]
-        log.warning("  mismatched terms (sample): %s", sample)
+# Plan 2026-07-11-001 (U3): _log_brand_search_terms_drift is removed
+# along with the per-brand yaml read path. Its job was to compare
+# the yaml-derived {term: brand_id} map against the DB-loaded map;
+# with yamls gone, there is nothing to compare. The DB is now the
+# single source of truth for brand_search_terms.
 
 
 def _attribute_call_items(
@@ -808,7 +759,9 @@ class RunPipeline:
         self.data_dir = data_dir
         self.db_path = db_path
         self.runs_dir = data_dir / "runs"
-        self.queries_dir = data_dir / "queries"
+        # Plan 2026-07-11-001: data/queries/ is gone; runtime token
+        # source is brand_keywords (DB). data/accounts/ stays (curated
+        # X-list is config-side; see plan 005 follow-up).
         self.accounts_dir = data_dir / "accounts"
         self.raw_dir = self.runs_dir / "raw"
         self.lock_path = self.runs_dir / "LOCK"
@@ -942,12 +895,11 @@ class RunPipeline:
             run_fetches_used: list[int] = [0]
 
             try:
-                # Load per-model filter configs once per model (v1.2).
-                # Missing files return an empty config (no filter applied),
-                # so legacy models without a YAML continue to work.
-                cfgs: dict[str, RelevanceConfig] = {
-                    m: load_filter(m, self.data_dir) for m in adjusted
-                }
+                # Plan 2026-07-11-001: data/filters/*.yaml is retired.
+                # The relevance-filter step (must_have_any / must_have_none
+                # / canonical_handles / etc.) was the only consumer of
+                # that surface; the in-code banned-token review-queue and
+                # low-engagement-filter steps stay. See KTD6.
                 # U7 hybrid by design: load the {term: brand_id} map from
                 # the DB once per cycle. The yaml is the source for query
                 # string construction (query_plan.py); the DB is the
@@ -987,21 +939,13 @@ class RunPipeline:
                     self.config.x_query_specs or None,
                 )
                 _t("plan", _t_plan)
-                # Pre-load brand-token + staff-handle maps for
-                # attribute_to_brand (intent calls only). These are
-                # computed once per run — pure data lookup, no API.
-                brand_tokens = _brand_tokens_map(models, self.data_dir)
+                # Plan 2026-07-11-001 (U3): the per-brand yaml read
+                # path is gone. The body_keyword attribution index is
+                # now self-brand-only (see _build_brand_index).
+                # staff_handles is the one remaining per-brand file
+                # read; that surface (data/accounts/*.yaml) is kept
+                # per the plan's Scope Boundaries.
                 staff_handles = _staff_handles_map(models, self.data_dir)
-                # U7 drift detection: compare the yaml-derived
-                # {term: brand_id} map (built below for the body_keyword
-                # index only) to the DB-loaded map. Informational;
-                # does not abort the cycle.
-                _, yaml_terms_for_drift = _build_brand_index(
-                    brand_tokens, models
-                )
-                _log_brand_search_terms_drift(
-                    yaml_terms_for_drift, brand_search_terms_db
-                )
                 _t_loop = time.monotonic()
                 # U5: per-cycle accumulator for the post-fetch
                 # transformers. Each `_attribute_call_items` returns
@@ -1135,7 +1079,7 @@ class RunPipeline:
                     # (`brand_search_terms_db`, loaded once per cycle).
                     # The yaml is the query-side source; the DB is the
                     # attribution-side source.
-                    index, _ = _build_brand_index(brand_tokens, models)
+                    index, _ = _build_brand_index(models)
                     classified = _attribute_call_items(
                         items, index, brand_search_terms_db,
                         brand_registry=None, anthropic_client=None,
@@ -1168,9 +1112,12 @@ class RunPipeline:
                     reasons_total: dict[str, int] = {}
                     n_review_total = 0
                     for m_id, m_items in by_model.items():
-                        cfg_m = cfgs.get(m_id, RelevanceConfig())
+                        # Plan 2026-07-11-001: RelevanceConfig / cfg_m
+                        # are gone; the relevance-filter step was
+                        # removed. The review-queue + headline-
+                        # enrichment steps remain.
                         kept_m, drop_stats = filter_and_review(
-                            m_items, synth_q, m_id, cfg_m, review,
+                            m_items, synth_q, m_id, review,
                             cache=cache, api=apify,
                             run_fetches_used=run_fetches_used,
                         )
@@ -1328,12 +1275,10 @@ class RunPipeline:
                 # main harvest so newly-attributed posts are in the DB.
                 # Skipped on dry_run / abort. See plan Units 4 & 5.
                 if not dry_run and summary["status"] != "aborted":
-                    qt_brand_tokens = _brand_tokens_map(models, self.data_dir)
-                    # U7 hybrid: the body_keyword index is built from
-                    # yaml tokens; the {term: brand_id} map for
-                    # search_term attribution comes from the DB
-                    # (`brand_search_terms_db`).
-                    qt_index, _ = _build_brand_index(qt_brand_tokens, models)
+                    # Plan 2026-07-11-001 (U3): _brand_tokens_map is
+                    # gone. The body_keyword index is now self-brand-
+                    # only.
+                    qt_index, _ = _build_brand_index(models)
                     qt_staff = _staff_handles_map(models, self.data_dir)
                     _t_qt_o = time.monotonic()
                     try:

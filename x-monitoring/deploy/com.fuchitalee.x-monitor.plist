@@ -18,7 +18,13 @@
 
     <key>WatchPaths</key>
     <array>
-        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/data/queries</string>
+        <!-- Plan 2026-07-11-001: data/queries/ is retired (per-brand
+             yamls deleted; brand_keywords is the runtime source via DB).
+             The only operator-edit surface that needs a launchd rerun
+             trigger is config.yaml (x_query_specs:, daily_ceiling, etc.).
+             data/accounts/ stays; the migration-035 to brands_accounts
+             reconciliation is a follow-up plan. -->
+        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/config.yaml</string>
         <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/data/accounts</string>
     </array>
 
