@@ -45,7 +45,7 @@ def test_export_brand_keywords_json_first_write(tmp_path: Path) -> None:
         # brand_keywords is non-empty after auto_migrate.
         assert len(body) > 0
         first = body[0]
-        assert set(first.keys()) == {"brand_id", "pattern", "is_regex"}
+        assert set(first.keys()) == {"brand_id", "pattern", "is_regex", "is_primary"}
     finally:
         s.close()
 

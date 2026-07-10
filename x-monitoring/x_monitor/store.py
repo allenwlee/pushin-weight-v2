@@ -310,16 +310,36 @@ class Store:
         import json
         from pathlib import Path as _Path
 
-        rows = self._conn.execute(
-            "SELECT brand_id, pattern, is_regex "
-            "FROM brand_keywords "
-            "ORDER BY brand_id, pattern"
-        ).fetchall()
+        # Detect is_primary column presence — pre-v36 DBs don't have it
+        # yet, so the post-step on migration 035 must still work on a
+        # fresh DB. PRAGMA table_info is the portable check.
+        cols = {
+            c["name"]
+            for c in self._conn.execute("PRAGMA table_info(brand_keywords)").fetchall()
+        }
+        if "is_primary" in cols:
+            rows = self._conn.execute(
+                "SELECT brand_id, pattern, is_regex, is_primary "
+                "FROM brand_keywords "
+                "ORDER BY brand_id, pattern"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT brand_id, pattern, is_regex "
+                "FROM brand_keywords "
+                "ORDER BY brand_id, pattern"
+            ).fetchall()
+
         payload = [
             {
                 "brand_id": r["brand_id"],
                 "pattern": r["pattern"],
                 "is_regex": bool(r["is_regex"]),
+                **(
+                    {"is_primary": int(r["is_primary"])}
+                    if "is_primary" in cols
+                    else {}
+                ),
             }
             for r in rows
         ]
