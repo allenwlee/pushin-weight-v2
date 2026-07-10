@@ -47,7 +47,14 @@ from pathlib import Path
 from typing import Iterable
 
 from x_monitor.config import load_config
-from x_monitor.query_plan import parse_brand_tokens
+# Plan 2026-07-11-001 retires `x_monitor.query_plan.parse_brand_tokens`.
+# Migration 035 covers the brand-keyword seed; this script is
+# effectively obsolete but kept for one-shot operator reruns against
+# an unusual DB. Import the parser from the U1 authoring tool
+# (which inlined its own copy) so we don't re-import a deleted symbol.
+from x_monitor.migrations._authoring.seed_residual_keywords import (
+    _parse_brand_tokens as _parse_brand_tokens_legacy,
+)
 from x_monitor.store import Store
 
 
@@ -106,7 +113,7 @@ def _enumerate_pairs(
     is missing or whose Q2/Q3/Q5/Q6 have no parseable paren group — the
     caller surfaces these as warnings (rc=2 if any).
     """
-    tokens = parse_brand_tokens(enabled_models, queries_dir)
+    tokens = _parse_brand_tokens_legacy(enabled_models, queries_dir)
     pairs: list[tuple[str, str]] = []
     empty_brands: list[str] = []
     for brand in enabled_models:

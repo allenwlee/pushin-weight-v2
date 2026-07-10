@@ -29,7 +29,13 @@ from scripts.backfill_brand_keywords import (
     main as backfill_main,
 )
 from x_monitor.config import load_config
-from x_monitor.query_plan import parse_brand_tokens
+# Plan 2026-07-11-001 retires `x_monitor.query_plan.parse_brand_tokens`.
+# The backfill script and its tests now use the inlined parser from
+# the U1 authoring tool (`migrations/_authoring/seed_residual_keywords`)
+# which owns its own copy.
+from x_monitor.migrations._authoring.seed_residual_keywords import (
+    _parse_brand_tokens as parse_brand_tokens,
+)
 from x_monitor.store import Store
 
 

@@ -10,28 +10,30 @@ real cap is **character length** (~512, per docs.x.com), not operator
 count — and that the `list:<id>` operator (~12 chars) returns tweets
 from any list (public or private) without scaling the query string.
 
-v1.7 collapses all per-cycle work to **2 calls** by default:
+v1.7 collapses all per-cycle work to **2 calls** by default.
 
-  Call A (account):   (list:<x_monitor_list_id>) min_faves:1
-                       — picks up everything from list members,
-                         one place to manage brand coverage.
-  Call B (brand_wide): ((BrandTok1a OR BrandTok1b) OR
-                        (BrandTok2a OR BrandTok2b) OR ... OR
-                        (BrandTokNa OR ...)) min_faves:0
-                       — paren-grouped brand tokens across all
-                         yaml-defined brands, regardless of list
-                         membership. Catches the long tail of
-                         mentions not from the curated handles.
+v1.7.x (call_c_specs) and v2 (x_query_specs):
 
-v1.7.x adds an optional **Call C** — a per-brand brand-wide query with
-a co-occurrence constraint — for brands whose tokens collide with
-unrelated common nouns. Shape: `(<tokens>) (<co_occurrence>) min_faves:N`
-— implicit AND between the two groups, so every result matches BOTH
-a brand token AND at least one co-occurrence term. Configured via
-`call_c_specs:` in config.yaml; default empty list emits no Call C.
+  Every per-cycle TwitterAPI call conforms to the same
+  `<tokens> (<co_occurrence>) min_faves:N` shape. The renderer is one
+  function (`_build_query`) that handles two spec kinds via one
+  documented branch:
+    - Call A: `not spec.brands` → `(list:<x_monitor_list_id>) min_faves:1`
+    - Call C-body (any other spec): `(<tokens>) (<co_occurrence>) min_faves:N`
+  KTD1 forbids additional renderers per call kind; if a future Call D
+  is added, it must conform to the same shape or this KTD is revised.
+
+The legacy v1.6 "Call B" (a separate per-brand-wider call with its own
+renderer) was retired in plan 2026-07-11-001 — the per-brand yamls are
+gone and the curated X-list (Call A) plus the `x_query_specs` co-occurrence
+specs (Call C) cover the same ground with one renderer and no runtime
+yaml reads.
+
+Configured via `x_query_specs:` in config.yaml; default empty list emits
+no calls beyond Call A.
 
 U9 (migration 022): the legacy 6-signal `expected_signal` field was
-removed from PlannedCall and CallCBrandSpec. Per-tweet classification
+removed from PlannedCall and XQuerySpec. Per-tweet classification
 (post_type × sentiment) is post-fetch in `attribution.classify_post`
 and applied per-brand in `store.insert_posts`. The query shape no
 longer encodes signal intent — the structure is one wide net, one
@@ -41,9 +43,10 @@ Length cap guard: `assert_under_length_cap` is called on every emitted
 query so an over-cap query short-circuits to a per-query summary entry
 (status: "length_cap_exceeded") and no credits are burned.
 
-The retired v1.6 `INTENT_BUCKETS`, `_split_brands_to_fit_cap`, and
-`_compose_intent_query` are gone. Tests assert their absence
-(see test_query_plan_v17.py).
+The retired v1.6 `INTENT_BUCKETS`, `_split_brands_to_fit_cap`,
+`_compose_intent_query`, the v1.7-era `parse_brand_tokens`,
+`_parse_first_paren_group`, and `_build_brand_wide_query` are gone.
+Tests assert their absence (see test_query_plan_uniform.py).
 """
 
 from __future__ import annotations
@@ -51,8 +54,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-
-import yaml
 
 from .queries import X_LENGTH_CAP, assert_under_length_cap
 
@@ -99,36 +100,33 @@ class PlannedCall:
 
 
 @dataclass
-class CallCBrandSpec:
-    """Multi-brand spec for an optional Call C co-occurrence-constrained
-    brand-wide query.
+class XQuerySpec:
+    """One entry in config.yaml's `x_query_specs:` block.
 
-    Read from config.yaml `call_c_specs:` (not from data/queries/) so
-    the spec stays operator-tunable in the same PR-reviewable file as
-    other config. Each spec emits one extra API call per cycle.
-
-    Structure mirrors Call B: the primary group is a paren-grouped
-    OR-of-ORs with one outer paren per brand. Post-fetch attribution
-    (`attribute_to_brands`) routes each result to the brand whose
-    tokens matched, so multiple brands in one spec is the natural
-    shape — same as Call B.
+    Plan 2026-07-11-001 retires the v1.7-era CallCBrandSpec name. The
+    schema is identical — only the type name changed so that Call A
+    (list-based wide net) and Call C (co-occurrence-constrained) can
+    share the same uniform renderer.
 
     Attributes:
-        brands: {brand_id: [tokens, ...]} mapping. One entry per brand
-            to include in this call's primary group. Each brand's
-            tokens are OR-joined inside a paren; the per-brand paren
-            groups are then OR-joined into the outer primary group.
-            This is identical to Call B's per-brand grouping.
+        brands: {brand_id: [tokens, ...]} mapping. Empty for Call A
+            (the renderer substitutes the curated X-list). For Call C
+            (and any future call kind with a per-brand token group),
+            each brand's tokens are OR-joined inside a paren; the
+            per-brand paren groups are then OR-joined into the outer
+            primary group.
         co_occurrence: list of co-occurrence terms to OR-join in the
             secondary group. Shared across all brands in this spec.
-            Posts must match at least one term from the primary group
-            AND at least one term from the co-occurrence group
-            (implicit AND between the two parenthesised groups in X
-            advanced-search syntax).
+            For Call A, this list is semantically inert — the renderer
+            substitutes the list-based form. Posts must match at least
+            one term from the primary group AND at least one term from
+            the co_occurrence group (implicit AND between the two
+            parenthesised groups in X advanced-search syntax).
         min_faves: lower bound on the call's min_faves. 0 by default
-            (no lower bound).
-        call_id: stable label for this spec ("C1", "C2", ...). Optional;
-            planner auto-assigns C1/C2/... if empty.
+            (no lower bound). For Call A the renderer hard-codes 1
+            regardless of this field.
+        call_id: stable label for this spec ("A", "C1", "C2", ...).
+            For Call A, the planner auto-assigns "A" if empty.
 
     U9 (migration 022): `expected_signal` was REMOVED. The legacy
         6-signal taxonomy is gone.
@@ -139,21 +137,42 @@ class CallCBrandSpec:
     call_id: str = ""
 
 
-def _build_call_c_query(spec: CallCBrandSpec) -> str:
-    """Compose one Call C from a CallCBrandSpec.
+# Backwards-compat alias for any external imports still using the
+# v1.7-era name. Marked deprecated; will be removed when the
+# `data/queries/` runtime read path is fully retired (U3).
+CallCBrandSpec = XQuerySpec
 
-    Shape: `((brand1_tok1 OR brand1_tok2) OR (brand2_tok1 OR ...))
-    (<co_occurrence>) min_faves:N` — same per-brand paren-group shape
-    as Call B, with a shared co-occurrence group. Implicit AND between
-    the primary and co-occurrence groups; implicit OR inside each
-    group. Length-cap assertion is the caller's responsibility
-    (mirrors _build_brand_wide_query).
+
+def _build_query(
+    spec: XQuerySpec,
+    *,
+    x_monitor_list_id: int | str | None = None,
+) -> str:
+    """Compose one query from an XQuerySpec — the uniform renderer.
+
+    Two documented spec kinds (KTD1):
+      - Call A: `not spec.brands` → `(list:<x_monitor_list_id>) min_faves:1`
+      - Call C-body (any other spec): `(<tokens>) (<co_occurrence>) min_faves:N`
+
+    The Call A branch requires `x_monitor_list_id` to be passed in
+    (the renderer doesn't read config itself). The Call C body branch
+    is the legacy v1.7 `_build_call_c_query` logic with no other
+    behavioral change.
 
     Brands with empty token lists are skipped (defensive — should not
     happen in practice).
     """
+    if not spec.brands:
+        # Call A — the curated X-list wide net.
+        if x_monitor_list_id is None:
+            raise ValueError(
+                "_build_query: Call A spec (empty brands) requires "
+                "x_monitor_list_id to be passed in"
+            )
+        return f"(list:{x_monitor_list_id}) min_faves:1"
+
     parts: list[str] = []
-    for brand_id, toks in spec.brands.items():
+    for _brand_id, toks in spec.brands.items():
         if not toks:
             continue
         parts.append(f"({' OR '.join(toks)})")
@@ -168,146 +187,41 @@ def _build_call_c_query(spec: CallCBrandSpec) -> str:
     return f"{primary} {secondary} min_faves:{spec.min_faves}"
 
 
-def _parse_first_paren_group(query_string: str) -> list[str]:
-    """Extract the tokens from the first balanced `(...)` group of a query.
-
-    Splits on ` OR ` (the only delimiter our intent queries use), strips
-    whitespace, preserves order, returns deduplicated tokens. Multi-byte
-    tokens like `サカナAI` are preserved as-is. Quoted tokens like
-    `"NVIDIA NeMo"` keep their quotes (Call B's downstream OR-join
-    handles them).
-    """
-    depth = 0
-    start = -1
-    for i, ch in enumerate(query_string):
-        if ch == "(":
-            if depth == 0:
-                start = i + 1
-            depth += 1
-        elif ch == ")":
-            if depth > 0:
-                depth -= 1
-                if depth == 0 and start != -1:
-                    group = query_string[start:i]
-                    seen: set[str] = set()
-                    out: list[str] = []
-                    for tok in group.split(" OR "):
-                        tok = tok.strip()
-                        if tok and tok not in seen:
-                            seen.add(tok)
-                            out.append(tok)
-                    return out
-    return []
-
-
-def parse_brand_tokens(
-    enabled_models: list[str], queries_dir: Path
-) -> dict[str, list[str]]:
-    """For each enabled model, return its brand-token list (deduplicated).
-
-    Brand tokens are read from the Q2 / Q3 / Q5 / Q6 query strings (the
-    intent queries carry the brand OR-clause). If a model has none of
-    those enabled, or its yaml is missing, the brand-token list falls
-    back to [] — the model contributes 0 paren groups to Call B.
-
-    Reusable from outside ``query_plan`` (e.g., the
-    ``backfill_brand_keywords`` script populates ``brand_keywords`` from
-    the same source this function reads).
-    """
-    out: dict[str, list[str]] = {}
-    for m in enabled_models:
-        path = queries_dir / f"{m}.yaml"
-        if not path.exists():
-            out[m] = []
-            continue
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        seen: set[str] = set()
-        toks: list[str] = []
-        for entry in raw.get("queries", []):
-            if entry.get("id") not in {"Q2", "Q3", "Q5", "Q6"}:
-                continue
-            inner = entry.get("query_string", "")
-            for tok in _parse_first_paren_group(inner):
-                if tok not in seen:
-                    seen.add(tok)
-                    toks.append(tok)
-        out[m] = toks
-    return out
-
-
-def _build_brand_wide_query(
-    brand_tokens_per_model: dict[str, list[str]],
-    enabled_models: list[str],
-) -> str:
-    """Compose Call B from per-model brand tokens.
-
-    Shape: `((BrandTok1a OR BrandTok1b) OR (BrandTok2a OR ...) OR ...
-    OR (BrandTokNa OR ...)) min_faves:0`. The outer paren around the
-    whole brand OR chain is required so the trailing `min_faves:0`
-    binds to the whole expression. Each per-model group is itself a
-    paren to keep its inner ORs together.
-
-    Iteration order follows `enabled_models` (NOT alphabetical) so the
-    plan is deterministic and the post-fetch `attribute_to_brand`
-    regex can match brand group boundaries in a known order.
-
-    Models with empty token lists contribute 0 paren groups.
-    """
-    parts: list[str] = []
-    for m in enabled_models:
-        toks = brand_tokens_per_model.get(m, [])
-        if not toks:
-            continue
-        parts.append(f"({' OR '.join(toks)})")
-    if not parts:
-        # Defensive — should not happen at the 7-brand baseline, but
-        # an all-empty configuration still returns a syntactically
-        # valid (if useless) query.
-        return "(empty) min_faves:0"
-    return f"({' OR '.join(parts)}) min_faves:0"
+# Retired v1.7-era helpers — removed in plan 2026-07-11-001 (U2).
+# The runtime no longer reads `data/queries/<brand>.yaml`; per-brand
+# tokens come from `brand_keywords` (DB) via `Store.read_brand_keywords`.
+# Kept as `hasattr() == False` markers in test_query_plan_uniform.py.
+# def parse_brand_tokens(...): ...
+# def _parse_first_paren_group(...): ...
+# def _build_brand_wide_query(...): ...
 
 
 def plan_calls(
-    data_dir: Path,
-    enabled_models: list[str],
-    *,
     x_monitor_list_id: int | str,
-    call_c_specs: list[CallCBrandSpec] | None = None,
-    call_b_groups: list[list[str]] | None = None,
+    x_query_specs: list[XQuerySpec] | None = None,
 ) -> list[PlannedCall]:
-    """Build the per-cycle call list (v1.7: 2 calls; v1.7.x: 2 + N).
+    """Build the per-cycle call list.
 
-    Call A — `(list:<x_monitor_list_id>) min_faves:1` — fans in all
-    curated list members in one go. The list is operator-managed (see
-    the v1.7 plan's "Operator manual step"). Length: ~29 chars
-    regardless of list size.
-
-    Call B — `((BrandTok_a OR BrandTok_b) OR ... OR (BrandTok_n OR ...))
-    min_faves:0` — catches the long tail of brand mentions from
-    non-list accounts. ~218 chars at the 7-brand baseline; well under
-    the 512-char cap. v1.7 keeps this as a single paren-grouped call
-    because we have well under 17 brands (the threshold where Call B
-    would need splitting — see queries.py:212 docstring).
-
-    Call C (optional, one per CallCBrandSpec) — `(<tokens>) (<co_occurrence>)
-    min_faves:N` — per-brand co-occurrence-constrained brand-wide query
-    for brands whose bare tokens collide with unrelated common nouns.
+    v2 (plan 2026-07-11-001): a single uniform renderer handles every
+    spec kind. The planner iterates ``x_query_specs`` and emits one
+    ``PlannedCall`` per spec via ``_build_query``:
+      - Call A: an XQuerySpec with empty `brands` and empty
+        `co_occurrence`. Renders `(list:<x_monitor_list_id>) min_faves:1`.
+      - Call C-body (and any future call kind with the same shape):
+        the legacy `(<tokens>) (<co_occurrence>) min_faves:N` form.
 
     Args:
-        data_dir: project data/ directory (yaml files live under
-            data/queries/<model>.yaml).
-        enabled_models: brands to include, in the order Call B's paren
-            groups are emitted.
-        x_monitor_list_id: numeric X list ID for Call A. Required —
-            v1.7 does not operate without a list, because Call A is
-            the only place we get "faved by official handles" signal
-            at scale.
-        call_c_specs: optional list of CallCBrandSpec. Each spec emits
-            one extra API call per cycle. Default: empty (no Call C;
-            v1.7 stays at 2 calls).
+        x_monitor_list_id: numeric X list ID for Call A. Required — v2
+            does not operate without a list, because Call A is the
+            only place we get "faved by official handles" signal at
+            scale. Pass through to `_build_query` for the Call A
+            branch.
+        x_query_specs: list of XQuerySpec (C1/C2/etc.) — each spec
+            emits one extra API call per cycle. Default: empty list
+            (only Call A fires).
 
     Returns:
-        [Call A, Call B, *Call C specs]. Each call has already been
+        [Call A, *x_query_specs]. Each call has already been
         length-capped.
 
     Raises:
@@ -317,26 +231,25 @@ def plan_calls(
     """
     if x_monitor_list_id is None:
         raise TypeError(
-            "plan_calls() requires x_monitor_list_id (v1.7's Call A is "
+            "plan_calls() requires x_monitor_list_id (v2's Call A is "
             "list-based; no fallback to per-brand account calls)."
         )
 
-    call_a_query = f"(list:{x_monitor_list_id}) min_faves:1"
-    assert_under_length_cap(call_a_query)
+    result: list[PlannedCall] = []
 
-    brand_tokens = parse_brand_tokens(
-        enabled_models, data_dir / "queries"
+    # Call A — synthesized from the configured list ID. It is NOT
+    # carried in x_query_specs; the spec field is reserved for
+    # per-cycle co-occurrence specs. Render the Call A degenerate
+    # case via the same uniform renderer so the dispatch is
+    # well-tested.
+    call_a_spec = XQuerySpec(
+        brands={}, co_occurrence=[], min_faves=1, call_id="A"
     )
-
-    # Resolve Call B groups: explicit (operator-set) list-of-lists wins;
-    # otherwise one Call B spanning all enabled_models. Each group's
-    # emitted query is the OR of ORs of the brands in the group.
-    if call_b_groups is None:
-        b_groups = [list(enabled_models)]
-    else:
-        b_groups = [list(g) for g in call_b_groups]
-
-    result: list[PlannedCall] = [
+    call_a_query = _build_query(
+        call_a_spec, x_monitor_list_id=x_monitor_list_id
+    )
+    assert_under_length_cap(call_a_query)
+    result.append(
         PlannedCall(
             call_id="A",
             call_kind="account",
@@ -344,27 +257,15 @@ def plan_calls(
             bucket=None,
             query_string=call_a_query,
             query_length=len(call_a_query),
-        ),
-    ]
-    for i, group in enumerate(b_groups):
-        group_b_query = _build_brand_wide_query(brand_tokens, group)
-        assert_under_length_cap(group_b_query)
-        b_label = "B" if len(b_groups) == 1 else f"B{i+1}"
-        result.append(
-            PlannedCall(
-                call_id=b_label,
-                call_kind="brand_wide",
-                brand_id=group[0] if group else "*",
-                bucket=None,
-                query_string=group_b_query,
-                query_length=len(group_b_query),
-            )
         )
-    for i, spec in enumerate(call_c_specs or []):
-        call_c_query = _build_call_c_query(spec)
-        assert_under_length_cap(call_c_query)
-        # Call C may cover multiple brands (mirrors Call B's per-brand
-        # grouping). Pick a placeholder brand_id for raw-file naming
+    )
+
+    for i, spec in enumerate(x_query_specs or []):
+        call_query = _build_query(
+            spec, x_monitor_list_id=x_monitor_list_id
+        )
+        assert_under_length_cap(call_query)
+        # Pick a placeholder brand_id for raw-file naming
         # (one raw file per call) — prefer an explicit `call_id` from
         # the spec, else the first brand in iteration order, else "*".
         if spec.call_id:
@@ -379,14 +280,18 @@ def plan_calls(
                 call_kind="brand_wide",
                 brand_id=c_brand_placeholder,
                 bucket=None,
-                query_string=call_c_query,
-                query_length=len(call_c_query),
+                query_string=call_query,
+                query_length=len(call_query),
             )
         )
     return result
 
 
-# Retired v1.6 symbols — referenced in tests as `hasattr() == False`.
+# Retired v1.7-era symbols — referenced in tests as `hasattr() == False`.
 # Kept here ONLY as a structural marker; do not uncomment or call.
 # def _split_brands_to_fit_cap(...): ...
 # INTENT_BUCKETS: dict = {}  # removed in v1.7
+# _build_call_c_query(...) -- removed in v2 (renamed to _build_query)
+# _build_brand_wide_query(...) -- removed in v2 (Call B retired)
+# parse_brand_tokens(...) -- removed in v2 (no runtime yaml read)
+# _parse_first_paren_group(...) -- removed in v2 (no runtime yaml read)

@@ -51,8 +51,70 @@ import argparse
 import sys
 from pathlib import Path
 
+import yaml
+
 from x_monitor.config import load_config
-from x_monitor.query_plan import parse_brand_tokens
+
+
+def _parse_first_paren_group(query_string: str) -> list[str]:
+    """Extract tokens from the first balanced `(...)` group.
+
+    Inlined here (rather than imported from `x_monitor.query_plan`)
+    because the plan 2026-07-11-001 retires the public surface — the
+    runtime no longer reads `data/queries/<brand>.yaml`. This script
+    is the only remaining parser call, so it owns its own copy.
+    """
+    depth = 0
+    start = -1
+    for i, ch in enumerate(query_string):
+        if ch == "(":
+            if depth == 0:
+                start = i + 1
+            depth += 1
+        elif ch == ")":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start != -1:
+                    group = query_string[start:i]
+                    seen: set[str] = set()
+                    out: list[str] = []
+                    for tok in group.split(" OR "):
+                        tok = tok.strip()
+                        if tok and tok not in seen:
+                            seen.add(tok)
+                            out.append(tok)
+                    return out
+    return []
+
+
+def _parse_brand_tokens(
+    enabled_models: list[str], queries_dir: Path
+) -> dict[str, list[str]]:
+    """Per-brand deduplicated token list from Q2/Q3/Q5/Q6 paren groups.
+
+    Inlined (see `_parse_first_paren_group` for why). Mirrors the
+    legacy `x_monitor.query_plan.parse_brand_tokens` byte-for-byte
+    so the U1 test fixtures still parse identically.
+    """
+    out: dict[str, list[str]] = {}
+    for m in enabled_models:
+        path = queries_dir / f"{m}.yaml"
+        if not path.exists():
+            out[m] = []
+            continue
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        seen: set[str] = set()
+        toks: list[str] = []
+        for entry in raw.get("queries", []):
+            if entry.get("id") not in {"Q2", "Q3", "Q5", "Q6"}:
+                continue
+            inner = entry.get("query_string", "")
+            for tok in _parse_first_paren_group(inner):
+                if tok not in seen:
+                    seen.add(tok)
+                    toks.append(tok)
+        out[m] = toks
+    return out
 
 
 def _emit_sql(
@@ -61,7 +123,7 @@ def _emit_sql(
     """Return the static SQL body — pre-computed INSERTs that match
     the current ``data/queries/*.yaml`` state.
     """
-    tokens = parse_brand_tokens(enabled_models, queries_dir)
+    tokens = _parse_brand_tokens(enabled_models, queries_dir)
     blocks: list[str] = []
     for brand in enabled_models:
         toks = tokens.get(brand, [])

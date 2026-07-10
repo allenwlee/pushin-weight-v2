@@ -9,7 +9,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from .query_plan import CallCBrandSpec
+from .query_plan import XQuerySpec
 
 
 # Canonical model registry — adding a model here is the only "code change" needed.
@@ -146,43 +146,22 @@ class Config(BaseModel):
     # docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
     # §"Call A — list-based fan-in".
     x_monitor_list_id: int | None = None
-    # v1.7.x: optional Call C co-occurrence-constrained brand-wide
-    # queries. See x_monitor.query_plan.CallCBrandSpec. Default empty
-    # (no Call C; v1.7's 2-call baseline is preserved).
-    call_c_specs: list[CallCBrandSpec] = Field(default_factory=list)
-    # v1.7.x: optional Call B group split. When None (default), one
-    # Call B is emitted spanning all enabled_models (legacy v1.7
-    # behavior). When set, one Call B is emitted per inner list, in
-    # the order given — each Call B's query is the OR of ORs of the
-    # brands in its group. Use when the union of all enabled_models'
-    # brand tokens exceeds the 512-char X advanced-search cap.
-    # Each brand_id in a group must be in enabled_models and in
-    # KNOWN_MODELS. Brands not in any group are skipped from Call B.
-    call_b_groups: list[list[str]] | None = None
+    # v2 (plan 2026-07-11-001): unified per-cycle call specs. Replaces
+    # the v1.7.x `call_c_specs:` field. Each entry is an XQuerySpec
+    # (see x_monitor.query_plan.XQuerySpec). Empty brands + empty
+    # co_occurrence = Call A (the curated X-list wide net, rendered
+    # with the list ID below). Non-empty brands = Call C-body shape
+    # (the legacy co-occurrence-constrained form). See KTD1 / KTD5
+    # in docs/plans/2026-07-11-001-*.md.
+    #
+    # For backwards compatibility with v1.7.x config files that still
+    # use the old field name, ``load_config`` normalizes the legacy
+    # `call_c_specs:` block to `x_query_specs:` at parse time.
+    x_query_specs: list[XQuerySpec] = Field(default_factory=list)
+    # Retired v1.7-era alias — kept so legacy config files parse
+    # cleanly. U4 (smoketest) removal is a future plan.
+    call_c_specs: list[XQuerySpec] = Field(default_factory=list)
     dashboard: DashboardConfig = DashboardConfig()
-
-    @field_validator("call_b_groups")
-    @classmethod
-    def _validate_call_b_groups(cls, v: list[list[str]] | None) -> list[list[str]] | None:
-        if v is None:
-            return v
-        if not v:
-            raise ValueError("call_b_groups must be None or non-empty list of lists")
-        seen: set[str] = set()
-        for i, grp in enumerate(v):
-            if not isinstance(grp, list) or not grp:
-                raise ValueError(f"call_b_groups[{i}] must be a non-empty list of brand_ids")
-            for b in grp:
-                if b not in KNOWN_MODELS:
-                    raise ValueError(
-                        f"call_b_groups[{i}]: unknown brand_id '{b}'. Known: {sorted(KNOWN_MODELS)}"
-                    )
-                if b in seen:
-                    raise ValueError(
-                        f"call_b_groups: brand_id '{b}' appears in more than one group"
-                    )
-                seen.add(b)
-        return v
 
     @field_validator("enabled_models")
     @classmethod
@@ -239,6 +218,14 @@ class Config(BaseModel):
 def load_config(path: Path) -> Config:
     """Load and validate config.yaml. Raises ValidationError on bad input."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return Config.model_validate(raw)
+    # Plan 2026-07-11-001 renamed `call_c_specs:` to `x_query_specs:` in
+    # config.yaml. Older config files may still use the old key — copy
+    # it into the new key when present so the Config model loads
+    # regardless of which name the operator has.
+    if "x_query_specs" not in raw and "call_c_specs" in raw:
+        raw = {**raw, "x_query_specs": raw["call_c_specs"]}
     try:
         return Config.model_validate(raw)
     except ValidationError:

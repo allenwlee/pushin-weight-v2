@@ -978,11 +978,13 @@ class RunPipeline:
                         "fan-in' for the operator steps to create the list."
                     )
                 _t_plan = time.monotonic()
+                # Plan 2026-07-11-001: plan_calls() signature is now
+                # `(x_monitor_list_id, x_query_specs)` — no data_dir,
+                # no call_b_groups, no call_c_specs. The legacy
+                # per-brand yaml read path is retired in U3.
                 plan = plan_calls(
-                    self.data_dir, models,
-                    x_monitor_list_id=self.config.x_monitor_list_id,
-                    call_b_groups=self.config.call_b_groups,
-                    call_c_specs=self.config.call_c_specs or None,
+                    self.config.x_monitor_list_id,
+                    self.config.x_query_specs or None,
                 )
                 _t("plan", _t_plan)
                 # Pre-load brand-token + staff-handle maps for
