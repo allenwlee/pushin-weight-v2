@@ -991,8 +991,6 @@ def cmd_smoketest(args, paths) -> int:
       --source            latest-cycle (default) | latest-n | fixture | api-query
       --fixture PATH      JSONL file when --source=fixture
       --query STR         advanced-search string for --source=api-query
-      --query-from-yaml   BRAND  load query from data/queries/<brand>.yaml
-      --query-id          Q3     select specific query from yaml (api-query)
       --since DATE        ISO YYYY-MM-DD; injected as 'since:' operator
       --max-pages N       pagination cap (api-query, default 5)
       --max-per-page N    per-page request size (api-query, default 20)
@@ -1010,8 +1008,6 @@ def cmd_smoketest(args, paths) -> int:
         argv.extend(["--fixture", str(args.fixture)])
     if getattr(args, "query", None):
         argv.extend(["--query", args.query])
-    if getattr(args, "query_from_yaml", None):
-        argv.extend(["--query-from-yaml", args.query_from_yaml])
     if getattr(args, "query_id", None):
         argv.extend(["--query-id", args.query_id])
     if getattr(args, "since", None):
@@ -1393,15 +1389,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Advanced-search string for --source=api-query (X "
              "operators; costs real TwitterAPI.io quota).",
     )
-    p_smoke_query_group.add_argument(
-        "--query-from-yaml", metavar="BRAND",
-        help="Load the query string from data/queries/<BRAND>.yaml "
-             "(first enabled query, or --query-id). For --source=api-query.",
-    )
+    # Plan 2026-07-11-001 (U4): --query-from-yaml is REMOVED. The
+    # per-brand yamls in data/queries/ are gone; only inline --query
+    # remains.
     p_smoke.add_argument(
         "--query-id", default=None,
-        help="With --query-from-yaml, select a specific query id "
-             "(e.g. 'Q3') instead of the first enabled. Default: first enabled.",
+        help="Reserved for future spec-id selection (currently unused).",
     )
     p_smoke.add_argument(
         "--since",

@@ -29,12 +29,17 @@ def test_fresh_db_migrates_to_v35_with_snapshot_table(tmp_path: Path) -> None:
     p = tmp_path / "fresh.db"
     s = Store(p, auto_migrate=True)
     try:
-        # _applied_config_snapshot table exists, empty (the post-step
-        # hasn't fired yet — that's U4's responsibility).
-        n_snapshot = s._conn.execute(
-            "SELECT COUNT(*) FROM _applied_config_snapshot"
-        ).fetchone()[0]
-        assert n_snapshot == 0
+        # _applied_config_snapshot table exists. After U4, the post-step
+        # wires apply_migrations to fire the JSON export for migration
+        # 035's KTD7 header; on a fresh DB the brand_keywords snapshot
+        # row is written as a side effect. x_query_specs has no DB table
+        # yet (it's a follow-up), so that row is absent.
+        rows = s._conn.execute(
+            "SELECT artifact FROM _applied_config_snapshot"
+        ).fetchall()
+        artifacts = {r["artifact"] for r in rows}
+        assert "brand_keywords" in artifacts
+        assert "x_query_specs" not in artifacts
 
         # _migrations recorded v35.
         assert 35 in s.applied_migrations()

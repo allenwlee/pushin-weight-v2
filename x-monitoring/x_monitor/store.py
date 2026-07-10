@@ -248,8 +248,166 @@ class Store:
                 raise
             finally:
                 self._conn.execute("PRAGMA foreign_keys = ON")
+            # Plan 2026-07-11-001 (U4): post-step JSON export. Reads
+            # the migration file's KTD7 header to decide whether to
+            # fire the export for this version.
+            self._post_migration_step(version, f, sql)
             newly.append(version)
         return newly
+
+    # --- U4: post-step JSON export ------------------------------------
+
+    def _post_migration_step(
+        self, version: int, sql_path: Path, sql_body: str
+    ) -> None:
+        """Fire the post-step JSON export if the migration declares it.
+
+        Plan 2026-07-11-001 KTD7: migration files declare
+        `-- post_step_touches: <artifact_csv>` in their header. The
+        runner reads the FIRST non-comment line that matches this
+        convention; absent = no export.
+
+        Crash-recovery: if a migration fails, this method is not
+        called (apply_migrations raises before reaching here), so
+        retry-from-failed-state does not re-fire the export.
+        """
+        import json
+        import re
+        from pathlib import Path as _Path
+
+        # Parse the KTD7 header from the SQL body.
+        m = re.search(
+            r"--\s*post_step_touches:\s*([\w,\s]+?)\s*(?:--|$)",
+            sql_body,
+            re.MULTILINE,
+        )
+        if m is None:
+            return
+        artifacts = {a.strip() for a in m.group(1).split(",") if a.strip()}
+        if not artifacts:
+            return
+
+        # The DB is co-located with the project root (data/x_monitoring.db);
+        # the JSON files land at the project root, two levels up.
+        project_root = sql_path.parent.parent.parent  # migrations/ -> x_monitor/ -> x-monitoring/
+        for artifact in artifacts:
+            if artifact == "brand_keywords":
+                target = project_root / "data" / "brand_keywords.json"
+                self.export_brand_keywords_json(target)
+            elif artifact == "x_query_specs":
+                target = project_root / "data" / "x_query_specs.json"
+                self.export_query_specs_json(target)
+
+    def export_brand_keywords_json(self, target: Path) -> bool:
+        """Export the brand_keywords table to `target` as deterministic JSON.
+
+        Returns True if the file was written, False if it was a no-op
+        (hash unchanged from the prior export). Per KTD4, the SELECT
+        uses explicit ORDER BY so SHA256 hashes are stable across
+        VACUUM/REINDEX.
+        """
+        import hashlib
+        import json
+        from pathlib import Path as _Path
+
+        rows = self._conn.execute(
+            "SELECT brand_id, pattern, is_regex "
+            "FROM brand_keywords "
+            "ORDER BY brand_id, pattern"
+        ).fetchall()
+        payload = [
+            {
+                "brand_id": r["brand_id"],
+                "pattern": r["pattern"],
+                "is_regex": bool(r["is_regex"]),
+            }
+            for r in rows
+        ]
+        body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+        prior = self._conn.execute(
+            "SELECT content_hash FROM _applied_config_snapshot "
+            "WHERE artifact = ?",
+            ("brand_keywords",),
+        ).fetchone()
+        if prior is not None and prior["content_hash"] == digest:
+            return False
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body + "\n", encoding="utf-8")
+        # Upsert snapshot row.
+        if prior is None:
+            self._conn.execute(
+                "INSERT INTO _applied_config_snapshot "
+                "(artifact, content_hash, written_at) VALUES (?, ?, ?)",
+                ("brand_keywords", digest, _now_iso()),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE _applied_config_snapshot "
+                "SET content_hash = ?, written_at = ? WHERE artifact = ?",
+                (digest, _now_iso(), "brand_keywords"),
+            )
+        self._conn.commit()
+        return True
+
+    def export_query_specs_json(self, target: Path) -> bool:
+        """Export the x_query_specs table to `target` as deterministic JSON.
+
+        The x_query_specs table is populated from config.yaml at
+        startup via a one-shot seeder (U4 wired in plan 2026-07-11-001).
+        If the table is empty, this export is a no-op (writes an
+        empty list).
+        """
+        import hashlib
+        import json
+
+        try:
+            rows = self._conn.execute(
+                "SELECT call_id, brands_json, co_occurrence_json, min_faves "
+                "FROM x_query_specs "
+                "ORDER BY call_id"
+            ).fetchall()
+        except Exception:
+            # Table doesn't exist yet (pre-migration 035 follow-up).
+            return False
+        payload = [
+            {
+                "call_id": r["call_id"],
+                "brands": json.loads(r["brands_json"]),
+                "co_occurrence": json.loads(r["co_occurrence_json"]),
+                "min_faves": r["min_faves"],
+            }
+            for r in rows
+        ]
+        body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+        prior = self._conn.execute(
+            "SELECT content_hash FROM _applied_config_snapshot "
+            "WHERE artifact = ?",
+            ("x_query_specs",),
+        ).fetchone()
+        if prior is not None and prior["content_hash"] == digest:
+            return False
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body + "\n", encoding="utf-8")
+        if prior is None:
+            self._conn.execute(
+                "INSERT INTO _applied_config_snapshot "
+                "(artifact, content_hash, written_at) VALUES (?, ?, ?)",
+                ("x_query_specs", digest, _now_iso()),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE _applied_config_snapshot "
+                "SET content_hash = ?, written_at = ? WHERE artifact = ?",
+                (digest, _now_iso(), "x_query_specs"),
+            )
+        self._conn.commit()
+        return True
 
     # --- call_state (U2: since= cursor persistence) -------------------
 

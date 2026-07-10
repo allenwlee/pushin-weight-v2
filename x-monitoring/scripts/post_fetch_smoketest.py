@@ -65,18 +65,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Advanced-search string (X operators). Required when "
              "--source=api-query. e.g. 'kimi K2.7 lang:en min_faves:5'",
     )
-    query_group.add_argument(
-        "--query-from-yaml", metavar="BRAND",
-        help="Load the query string from data/queries/<BRAND>.yaml. "
-             "Uses the first enabled query (Q1 by default; override with "
-             "--query-id). Mutually exclusive with --query. "
-             "For --source=api-query.",
-    )
+    # Plan 2026-07-11-001 (U4): --query-from-yaml is RETIRED. The
+    # per-brand yamls in data/queries/ are gone; the only operator-
+    # facing source for a query string is the inline --query flag or
+    # the `x_query_specs[*].rendered` precomputation in config.
     p.add_argument(
         "--query-id", default=None,
-        help="When using --query-from-yaml, select a specific query id "
-             "(e.g. 'Q3') instead of the first enabled. Default: first "
-             "enabled query.",
+        help="Reserved for future spec-id selection (currently unused).",
     )
     p.add_argument(
         "--since",
@@ -246,95 +241,6 @@ def _load_latest_n_posts(
         })
     return out, 0
 
-
-def _resolve_query_from_yaml(brand: str, query_id: str | None) -> str:
-    """Load data/queries/<brand>.yaml and return the resolved query string.
-
-    Reads the first enabled query by default; if `query_id` is set
-    (e.g. 'Q3'), selects that specific query. Hand-rolls a minimal yaml
-    parser that walks lines, finds the top-level `queries:` block, and
-    pulls the active entry — avoids adding PyYAML as a dependency just
-    for this read.
-
-    Raises ValueError on missing file, no enabled queries, or a
-    `query_id` that doesn't match any entry. The caller (main())
-    maps these to rc=2.
-    """
-    yaml_path = Path("data") / "queries" / f"{brand}.yaml"
-    if not yaml_path.exists():
-        raise ValueError(
-            f"query yaml not found: {yaml_path} "
-            f"(expected data/queries/<brand>.yaml)"
-        )
-    text = yaml_path.read_text(encoding="utf-8")
-
-    # Walk the lines, locate the `queries:` block, and split on `- id:`
-    # markers (each list item starts with `  - id: <Q?>`).
-    lines = text.splitlines()
-    in_queries = False
-    cur: dict[str, str] | None = None
-    entries: list[dict[str, str]] = []
-    for raw in lines:
-        stripped = raw.strip()
-        if not in_queries:
-            if stripped == "queries:":
-                in_queries = True
-            continue
-        # We left the queries block if a non-list line appears at the
-        # same or lower indent as `queries:` (i.e. 0 indent).
-        if raw and not raw[0].isspace() and stripped:
-            in_queries = False
-            continue
-        if stripped.startswith("- id:"):
-            if cur is not None:
-                entries.append(cur)
-            cur = {"id": stripped.split(":", 1)[1].strip()}
-        elif cur is not None and ":" in stripped:
-            key, _, val = stripped.partition(":")
-            cur[key.strip()] = val.strip()
-    if cur is not None:
-        entries.append(cur)
-
-    if not entries:
-        raise ValueError(
-            f"no queries defined in {yaml_path} (expected `queries:` block "
-            f"with at least one `- id: ...` entry)"
-        )
-
-    # Strip surrounding single/double quotes from any string-typed value
-    # so query_strings like '(...) min_faves:2' don't surface with the
-    # quotes attached.
-    def _unquote(v: str) -> str:
-        v = v.strip()
-        if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
-            return v[1:-1]
-        return v
-
-    for e in entries:
-        e["query_string"] = _unquote(e.get("query_string", ""))
-
-    # Pick by query_id, else first `enabled: true`, else first.
-    if query_id is not None:
-        for e in entries:
-            if e.get("id") == query_id:
-                if e.get("query_string"):
-                    return e["query_string"]
-                raise ValueError(
-                    f"query {query_id!r} in {yaml_path} has no "
-                    f"query_string field"
-                )
-        raise ValueError(
-            f"query {query_id!r} not found in {yaml_path} "
-            f"(available: {[e.get('id') for e in entries]})"
-        )
-
-    for e in entries:
-        if e.get("enabled", "").lower() == "true" and e.get("query_string"):
-            return e["query_string"]
-    raise ValueError(
-        f"no enabled query with a query_string in {yaml_path} "
-        f"(entries: {[e.get('id') for e in entries]})"
-    )
 
 
 def _load_api_posts(
@@ -532,10 +438,9 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    if args.source == "api-query" and not args.query and not args.query_from_yaml:
+    if args.source == "api-query" and not args.query:
         print(
-            "--source=api-query requires --query '...' (advanced-search string) "
-            "or --query-from-yaml BRAND",
+            "--source=api-query requires --query '...' (advanced-search string)",
             file=sys.stderr,
         )
         return 2
@@ -555,16 +460,10 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         args.latest = args.limit
-    if args.query_from_yaml:
-        # Resolve to a real --query string so the rest of the pipeline
-        # (which only knows about --query) is unchanged.
-        try:
-            args.query = _resolve_query_from_yaml(
-                args.query_from_yaml, args.query_id
-            )
-        except ValueError as e:
-            print(f"--query-from-yaml: {e}", file=sys.stderr)
-            return 2
+    # Plan 2026-07-11-001 (U4): --query-from-yaml is removed. The
+    # smoketest's --source=api-query path requires the operator to
+    # pass --query <string> directly. Per-brand yamls in data/queries/
+    # are gone.
 
     from x_monitor.store import Store
     from x_monitor.translator import (

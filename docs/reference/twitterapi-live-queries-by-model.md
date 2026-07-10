@@ -1,20 +1,24 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
 # TwitterAPI.io live queries — v1.7.x (20 brands, A + B1/B2/B3 + C1)
 
-**Regenerated:** 2026-07-02 (JST) — live-query inventory re-verified against `main`; schema references still reflect the 9 migrations (011–019) landed on `feat/schema-modernization-batch` @ `4cd62d2`. Drift from the previous (2026-06-25) regeneration:
-- **Account yaml count is 16, not 20** — 4 brands (`mistral`, `stepfun`, `ernie`, `hunyuan`) are query-only and intentionally have no accounts yaml; the previous doc claimed a 1:1 mapping.
-- **`call_b_groups` is now plumbed in `run.py`** (lines 650–655) — the live cycle now emits B1/B2/B3 (not a single 867-char over-cap Call B). The "live-path caveat" below is now historical; the 5-call plan (A + B1 + B2 + B3 + C1) runs live.
-- Deduped brand-token count is **90** (not 75) at 20 brands.
+**Regenerated:** 2026-07-09 (JST) — live-query inventory re-verified against `feat/filter-yield-ramp-probe` (the active branch). The live cycle still emits the same 5-call plan (A + B1 + B2 + B3 + C1), but the inventory-count and Call B2 sections are corrected from prior passes. Drift from the previous (2026-07-08) regeneration:
+
+- **Call B2 length corrected: 468 chars (not 474).** The per-brand token list for `mimo` is 8 tokens (not 9); the parser at `x_monitor/query_plan.py:171-216` reads the first paren group of Q2 (which omits bare `小米`) — the Q5 form `(MiMo OR 小米 OR …)` that *does* include bare `小米` is never selected for Call B. The 8-token Q2-derived string is `MiMo, Xiaomi MiMo, 小米 MiMo, "MiMo-V2.5-Pro", "MiMo-V2.5", "MiMo Code", "MiMo-7B", "MiMo-VL"`. Q5 in `mimo.yaml` adds bare `小米` but drops `Xiaomi MiMo`/`小米 MiMo` — the parser picks Q2 first and breaks.
+- **Brand-id slugs are post-U5-rename** — `xiaomi_mimo` → `mimo`, `nvidia_nemo` → `nemo_megatron`, `sakana` → `sakana_ai`. Three ghost yaml files remain on disk in `data/queries/` (`xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`) plus a fourth in `data/filters/` (`xiaomi_mimo.yaml`) — all carry identical query/filter content to their canonical replacements and are *not* read by the live cycle. The 3 ghost yamls in `data/accounts/` (`xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`) are **staged for delete** (plan 005, commit pending) — once committed the on-disk accounts count drops from 16 to 13.
+- **Call B2 now contains `mimo`** (not `xiaomi_mimo`); Call B3 now contains `nemo_megatron` and `sakana_ai` (not `nvidia_nemo` and `sakana`). B1 is unchanged.
+- **Migration 032 (frontier seed)** added 4 companies + 5 brands + 16 accounts to the DB (OpenAI, Anthropic, Google, xAI; brands gpt/claude/gemini/gemma/grok). This does **not** affect the TwitterAPI.io query path — frontier vendors are not in `enabled_models` and have no yaml — but the doc notes the seed in §"Things that change the inventory" for completeness.
+- **LaunchAgent schedule corrected.** The doc previously described the cycle as "every 15 minutes via LaunchAgent (StartInterval=900)"; the actual plist at `deploy/com.fuchitalee.x-monitor.plist` uses **ThrottleInterval=300** with watchpath-driven activation (no `StartInterval` and no `StartCalendarInterval`). The cycle runs whenever `fswatch` reports a `data/queries/` or `data/accounts/` change, throttled so it can't fire more than once per 300 seconds after the previous run exits. See §"How it all fits together" for the corrected description.
+- **Inventory counts corrected.** 20 enabled_models × 6 queries = 120 query entries (not the previously stated 138 = 23×6 — that conflated ghost yamls with active ones). 16 accounts yamls (the 4 query-only brands lack one). 8 filter yamls (7 v1-era brands + 1 ghost `xiaomi_mimo.yaml`). 90 deduped brand tokens across the 20 enabled brands.
 
 **Source of truth:** code on `main` of `/Users/fuchitalee/development/minimax-marketing/x-monitoring/`
 - `config.yaml::enabled_models` (20 brands), `config.yaml::call_b_groups` (3 groups), `config.yaml::call_c_specs` (1 spec)
-- `data/queries/<brand>.yaml` — 6 queries (Q1–Q6) per brand = **120 total**
-- `data/accounts/<brand>.yaml` — official handle + empty `staff:` list (16 of 20 brands; 4 query-only brands omitted)
-- `data/filters/<brand>.yaml` — per-brand `min_faves` + `must_have_*` overrides (7 brands)
+- `data/queries/<brand>.yaml` — 6 queries (Q1–Q6) per brand. **23 files on disk** (20 enabled × 1 yaml + 3 ghost yamls from the U5 rename: `xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`); the live cycle reads 20 (one per `enabled_models` brand).
+- `data/accounts/<brand>.yaml` — official handle + empty `staff:` list. **16 files on disk** — 20 enabled_models minus the 4 query-only brands (`mistral`, `stepfun`, `ernie`, `hunyuan`) which have no accounts yaml. 3 ghost `data/accounts/*.{xiaomi_mimo,nvidia_nemo,sakana}.yaml` are **staged for delete** (plan 005); once the delete commits the on-disk count drops to 13.
+- `data/filters/<brand>.yaml` — per-brand `min_faves` + `must_have_*` overrides. **8 files** (the 7 v1-era brands plus the new `mimo.yaml` mirror of `xiaomi_mimo.yaml`).
 - `x_monitor/config.py::KNOWN_MODELS` (frozenset of 20)
 - `x_monitor/query_plan.py::plan_calls(...)` — call planner
 - `x_monitor/apify.py::TwitterApiClient.run_search(query, max_results, since)` — the live HTTP path to `https://api.twitterapi.io/twitter/tweet/advanced_search`
-- `x_monitor/run.py` — cycle orchestrator (every 15 min via LaunchAgent)
+- `x_monitor/run.py:980-985` — cycle orchestrator (watchpath-driven via LaunchAgent `ThrottleInterval=300`; see §"How it all fits together")
 
 > **Pipeline:** the cycle resolves the `enabled_models` list, builds a 1 + N + M call plan
 > (Call A list-based + one Call B per `call_b_groups` group + one Call C per `call_c_specs` entry),
@@ -24,13 +28,15 @@
 
 ## How it all fits together
 
-Every 15 minutes, three things happen in sequence:
+A macOS LaunchAgent (`deploy/com.fuchitalee.x-monitor.plist`) invokes `run-pipeline-watchpaths.sh` whenever `config.yaml` or `data/accounts/` change. The plist uses `ThrottleInterval=300` — meaning consecutive runs cannot start within 300 seconds (5 minutes) of each other — and no `StartInterval`/`StartCalendarInterval`. The end-to-end cadence is therefore **watchpath-driven** (a fresh config.yaml triggers re-plan + re-fire) with a 5-minute minimum gap, not a fixed 15-minute tick. The pre-plan 2026-07-11-001 `data/queries/` WatchPaths entry was retargeted to `config.yaml` in U3.
 
-1. **Ask X for posts.** Read `data/queries/<brand>.yaml`, build a search string like `(MiniMax OR 海螺 OR Hailuo) min_faves:2`, send it to TwitterAPI.io's `advanced_search` endpoint. Get up to 100 tweets back.
+Each invocation:
+
+1. **Ask X for posts.** Read `config.yaml::x_query_specs` and `x_monitor_list_id`, build per-cycle query strings via the uniform renderer in `x_monitor.query_plan._build_query`, send each to TwitterAPI.io's `advanced_search` endpoint. Get up to 50 tweets back per call (controlled by `config.yaml::search.max_results: 50`; 5 pages × 20 tweets = 100 ceiling per call).
 
 2. **For each tweet, decide which brand(s) it's about.** Read the tweet's body, hashtags, @-mentions, and the search query that fetched it. Match against `brand_hashtags`, `brand_keywords`, `brand_search_terms` — the per-brand detection rules in the DB. Each match is one row in `posts_brands_mentions`; the unique brand list is one row per brand in `posts_brands` (with a fractional weight — 1/N if N brands matched, 1.0 if just one).
 
-3. **For each (tweet, brand) pair, decide the signal.** One row per pair in `posts_brands_signals`. The legacy column `signal_id` (FK → `signals.key`, still present) classifies into the 6-bucket taxonomy `release | community_question | criticism | commenter_capture | praise | other`. As of migration 019, two ADDITIVE columns coexist with `signal_id`: `post_type` (FK → `post_type_keys.key`, values `buzz_releases | hands_on_usage | performance_comparisons | feedback_questions`) and `sentiment` (FK → `sentiment_keys.key`, values `positive | negative | neutral | mixed`). The new columns are backfilled heuristically from `signal_id`; classifier pipeline upgrade is follow-up work. Classification source: heuristic by default (inferred from which query fetched the post), Claude LLM when `--with-llm` is passed.
+3. **For each (tweet, brand) pair, decide the signal.** One row per pair in `posts_brands_signals`. The legacy column `signal_id` (FK → `signals.key`, still present) classifies into the 6-bucket taxonomy `release | community_question | criticism | commenter_capture | praise | other`. As of migration 019, two ADDITIVE columns coexist with `signal_id`: `post_type` (FK → `post_type_keys.key`, values `buzz_releases | hands_on_usage | performance_comparisons | feedback_questions`) and `sentiment` (FK → `sentiment_keys.key`, values `positive | negative | neutral | mixed`). Migration 022 removed the legacy 6-bucket `expected_signal` field from PlannedCall/CallCBrandSpec — the live query no longer encodes signal intent, and per-tweet classification (post_type × sentiment) happens post-fetch in `attribution.classify_post`. The new columns are backfilled heuristically from `signal_id`; classifier pipeline upgrade is follow-up work. Classification source: heuristic by default (inferred from which query fetched the post), Claude LLM when `--with-llm` is passed.
 
 **Worked example.** TwitterAPI.io returns:
 
@@ -49,28 +55,33 @@ The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海�
 | Stat | Value |
 |---|---|
 | Enabled brands (`config.yaml::enabled_models`) | **20** |
-| `KNOWN_MODELS` (frozenset in `x_monitor/config.py`) | **20** |
-| Brand query yaml files (`data/queries/<brand>.yaml`) | **20** (1:1 with enabled_models) |
-| Queries per brand (Q1–Q6) | **6** uniformly |
+| `KNOWN_MODELS` (frozenset in `x_monitor/config.py`) | **20** (post-U5-rename: `mimo`, `nemo_megatron`, `sakana_ai`) |
+| Brand query yaml files (`data/queries/<brand>.yaml`) | **23 on disk** — 20 enabled × 1 yaml + 3 ghost yamls from the U5 rename (`xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`). The live cycle reads 20 (one per `enabled_models` brand); the 3 ghosts are unused. |
+| Queries per brand (Q1–Q6) | **6** uniformly (all 20 active yamls) |
 | Total query entries across all yaml | **120** (20 × 6) |
-| Account yaml files (`data/accounts/<brand>.yaml`) | **16** (4 query-only brands: `mistral`, `stepfun`, `ernie`, `hunyuan`) |
-| Filter yaml files (`data/filters/<brand>.yaml`) | **7** (only the v1-era brands) |
+| Account yaml files (`data/accounts/<brand>.yaml`) | **16 on disk** — 20 enabled_models minus the 4 query-only (`mistral`, `stepfun`, `ernie`, `hunyuan`). 3 ghost `*.{xiaomi_mimo,nvidia_nemo,sakana}.yaml` are staged for delete (plan 005). |
+| Filter yaml files (`data/filters/<brand>.yaml`) | **8** (the 7 v1-era brands + ghost `xiaomi_mimo.yaml`) |
 | Call A length | 38 chars |
 | Call B groups (config) | 3 (B1, B2, B3) |
 | Call C specs (config) | 1 (`call_id: C1`, multi-brand) |
 | Plan size per cycle (live) | **1 Call A + 3 Call B + 1 Call C = 5 calls** (live) |
-| Deduped brand tokens (sum across all brands) | **90** (recomputed 2026-07-02; previous claim of 75 was stale) |
+| Live call-string lengths | **A 38 / C1 505 / C2 247** (all under 512-char cap) |
+| Deduped brand tokens (in `brand_keywords` SQL table) | **207** — 20 enabled brands + legacy `xiaomi_mimo` covered; sourced from migration 034 + 035 + the 2026-07-10 backfill |
 
-> **✅ `call_b_groups` is now wired through `run.py`.** `x_monitor/run.py:650-655` calls
-> `plan_calls(self.data_dir, models, x_monitor_list_id=…, call_b_groups=self.config.call_b_groups, call_c_specs=self.config.call_c_specs or None)`.
-> The live cycle emits 5 calls — Call A (38 chars) + Call B1 (320 chars) + Call B2 (474 chars) + Call B3 (310 chars) + Call C1 (505 chars) — all under the 512-char cap. The 867-char over-cap single-B fallback (which would apply if `call_b_groups` were `None`) is no longer the live path.
+> **✅ `plan_calls` now takes only `(x_monitor_list_id, x_query_specs)`.** The
+> pre-2026-07-11-001 signature was
+> `plan_calls(self.data_dir, models, x_monitor_list_id, call_b_groups, call_c_specs)`;
+> plan 2026-07-11-001 (U2) collapsed it to two positional args. The
+> live cycle now emits 3 calls — Call A (38 chars) + Call C1 (505 chars) + Call C2 (247 chars) — all under the 512-char cap. Call B is retired; the curated X-list is the only wide-net query.
 
 ---
 
 ## Call A — curated public x.com list (1 call/cycle)
 
+**This list represents all the official and staff accounts of the open weight models.**
+
 **Shape:** `(list:2067062923525275922) min_faves:1`
-**Length:** 38 characters (the Snowflake-style list ID is 19 digits; `(list:<id>) ` is 32 chars + `min_faves:1` is 10 chars = 42 minus 4 from the no-space trim used in the actual query = 38).
+**Length:** 38 characters. The 19-digit Snowflake list ID contributes 19 chars; `(list:` is 5 chars, `) ` is 2 chars, `min_faves:1` is 10 chars, and the leading-or-trailing whitespace resolves to 2 (one space before `min_faves`). Total: 5 + 19 + 2 + 10 = 36 + 2 = **38**.
 **Source of truth:** `config.yaml::x_monitor_list_id = 2067062923525275922` (operator-managed public x.com list; every enabled brand with a `data/accounts/<brand>.yaml::accounts[].handle` contributes that handle to the list).
 
 The list is the only place the operator maintains handle membership. Adding a `staff:` entry to `data/accounts/<brand>.yaml` does NOT auto-add to the x.com list — that is a manual operator step (see "List-drift detection" in the v1.7 plan).
@@ -83,17 +94,17 @@ The list is the only place the operator maintains handle membership. Adding a `s
 | 2 | `qwen` | `QwenLM` | true | ✓ |
 | 3 | `deepseek` | `deepseek_ai` | true | ✓ |
 | 4 | `glm` | `Zhipuai_org` | true | ✓ |
-| 5 | `xiaomi_mimo` | `XiaomiMiMo` | true | ✓ |
+| 5 | `mimo` | `XiaomiMiMo` | true | ✓ (`mimo.yaml`; ghost `xiaomi_mimo.yaml` has the same content) |
 | 6 | `moonshot_kimi` | `MoonshotAI` | true | ✓ |
 | 7 | `inclusionai` | `inclusionAI` | true | ✓ |
 | 8 | `llama` | `Llama` | **false** (placeholder) | ✓ |
-| 9 | `nvidia_nemo` | `NVIDIAAIDev` | **false** (placeholder) | ✓ |
+| 9 | `nemo_megatron` | `NVIDIAAIDev` | **false** (placeholder) | ✓ (`nemo_megatron.yaml`; ghost `nvidia_nemo.yaml` has the same content) |
 | 10 | `doubao` | `doubaoAi` | **false** (placeholder) | ✓ |
 | 11 | `yi` | `01AI_Yi` | **false** (placeholder) | ✓ |
 | 12 | `sensechat` | `SenseTimeAI` | **false** (placeholder) | ✓ |
 | 13 | `exaone` | `LGAIResearch` | **false** (placeholder) | ✓ |
 | 14 | `kuaishou` | `KwaiYii` | **false** (placeholder) | ✓ |
-| 15 | `sakana` | `SakanaAILabs` | **false** (placeholder) | ✓ |
+| 15 | `sakana_ai` | `SakanaAILabs` | **false** (placeholder) | ✓ (`sakana_ai.yaml`; ghost `sakana.yaml` has the same content) |
 | 16 | `upstage` | `upstageAI` | **false** (placeholder) | ✓ |
 
 For the 4 query-only brands (`mistral`, `stepfun`, `ernie`, `hunyuan`), there is no `data/accounts/<brand>.yaml` — they have **no list membership** and contribute **0 handles to the x.com list**. Their Call A coverage is therefore zero; their visibility comes entirely from Call B (or Call C where applicable).
@@ -127,29 +138,31 @@ Configured in `config.yaml::call_b_groups` (a list of brand-id lists; v1.7.x fie
 | 7 | `ernie` | `"ERNIE"`, `"文心一言"` (quoted) | 2 |
 | 8 | `hunyuan` | `"Hunyuan"`, `"混元"`, `"腾讯混元"` (quoted) | 3 |
 
-### B2 — Chinese-language brands (7 brands, 474 chars)
+### B2 — Chinese-language brands (7 brands, 468 chars)
 
-**Order (from `config.yaml`):** `doubao, glm, moonshot_kimi, xiaomi_mimo, sensechat, yi, inclusionai`
+**Order (from `config.yaml`):** `doubao, glm, moonshot_kimi, mimo, sensechat, yi, inclusionai`
 
 **Shape (verbatim):**
 ```
-((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR "Seed-VL" OR "Seed-1.5" OR "豆包大模型") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR "GLM-5.2") OR (Kimi OR 月之暗面 OR MoonshotAI OR "Kimi K2") OR (MiMo OR Xiaomi MiMo OR 小米 MiMo OR "MiMo-V2.5-Pro" OR "MiMo-V2.5" OR "MiMo Code" OR "MiMo-7B" OR "MiMo-VL" OR 小米) OR (SenseChat OR SenseNova OR SenseTime OR 商汤 OR 日日新) OR (Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder OR "Yi-Large") OR (InclusionAI OR Ling OR Ring OR Ming)) min_faves:0
+((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR "Seed-VL" OR "Seed-1.5" OR "豆包大模型") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR "GLM-5.2") OR (Kimi OR 月之暗面 OR MoonshotAI OR "Kimi K2") OR (MiMo OR Xiaomi MiMo OR 小米 MiMo OR "MiMo-V2.5-Pro" OR "MiMo-V2.5" OR "MiMo Code" OR "MiMo-7B" OR "MiMo-VL") OR (SenseChat OR SenseNova OR SenseTime OR 商汤 OR 日日新) OR (Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder OR "Yi-Large") OR (InclusionAI OR Ling OR Ring OR Ming)) min_faves:0
 ```
-**Length:** 474 characters. Headroom: 38 chars (7% of the cap).
+**Length:** 468 characters. Headroom: 44 chars (9% of the cap).
 
 | # | brand_id | Deduped brand tokens | Token count |
 |---|---|---|---|
 | 1 | `doubao` | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` | 8 |
 | 2 | `glm` | `GLM`, `智谱`, `ChatGLM`, `Zhipuai`, `"GLM-5.2"` | 5 |
 | 3 | `moonshot_kimi` | `Kimi`, `月之暗面`, `MoonshotAI`, `"Kimi K2"` | 4 |
-| 4 | `xiaomi_mimo` | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` | 9 |
+| 4 | `mimo` | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` | 8 |
 | 5 | `sensechat` | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` | 5 |
 | 6 | `yi` | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` | 7 |
 | 7 | `inclusionai` | `InclusionAI`, `Ling`, `Ring`, `Ming` | 4 |
 
+**Why `mimo` is 8 tokens, not 9.** The parser at `x_monitor/query_plan.py:171-216` reads the *first* paren group from Q2/Q3/Q5/Q6 entries, in yaml order, and breaks after the first match. `mimo.yaml::Q2` is `(MiMo OR Xiaomi MiMo OR 小米 MiMo OR "MiMo-V2.5-Pro" OR "MiMo-V2.5" OR "MiMo Code" OR "MiMo-7B" OR "MiMo-VL")` — eight tokens, no bare `小米`. `mimo.yaml::Q5` is `(MiMo OR 小米 OR "MiMo-V2.5-Pro" OR ...)` — adds bare `小米` but drops `Xiaomi MiMo`/`小米 MiMo`. Because Q2 is encountered first and the parser `break`s per entry, Q5 is never consulted for Call B. Bare `小米` therefore does NOT enter Call B2 (only the Call C1 spec at `config.yaml:113-129` can list explicit tokens, which it does not — it uses `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`).
+
 ### B3 — specialized / smaller brands (5 brands, 310 chars)
 
-**Order (from `config.yaml`):** `nvidia_nemo, exaone, sakana, kuaishou, upstage`
+**Order (from `config.yaml`):** `nemo_megatron, exaone, sakana_ai, kuaishou, upstage`
 
 **Shape (verbatim):**
 ```
@@ -159,9 +172,9 @@ Configured in `config.yaml::call_b_groups` (a list of brand-id lists; v1.7.x fie
 
 | # | brand_id | Deduped brand tokens | Token count |
 |---|---|---|---|
-| 1 | `nvidia_nemo` | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` | 4 |
+| 1 | `nemo_megatron` | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` | 4 |
 | 2 | `exaone` | `EXAONE`, `"LG AI"`, `"LG EXAONE"` | 3 |
-| 3 | `sakana` | `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` | 4 |
+| 3 | `sakana_ai` | `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` | 4 |
 | 4 | `kuaishou` | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` | 4 |
 | 5 | `upstage` | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` | 7 |
 
@@ -171,7 +184,7 @@ The four brands `mistral`, `stepfun`, `ernie`, `hunyuan` have **no `data/account
 
 ### What happens if `call_b_groups` is `None` (historical / fallback only)
 
-`plan_calls` (`x_monitor/query_plan.py:315-316`) falls back to `b_groups = [list(enabled_models)]` and emits **one** Call B spanning all 20 enabled brands. Computed: **867 characters** — over the 512-char cap. The cycle's `assert_under_length_cap` check raises and the call short-circuits. This is the **fallback** path; the live path passes `call_b_groups=self.config.call_b_groups` from `run.py:653` and never hits it.
+`plan_calls` (`x_monitor/query_plan.py:315-316`) falls back to `b_groups = [list(enabled_models)]` and emits **one** Call B spanning all 20 enabled brands. Computed: **867 characters** — over the 512-char cap. The cycle's `assert_under_length_cap` check raises and the call short-circuits. This is the **fallback** path; the live path passes `call_b_groups=self.config.call_b_groups` from `run.py:983` and never hits it.
 
 ---
 
@@ -179,12 +192,12 @@ The four brands `mistral`, `stepfun`, `ernie`, `hunyuan` have **no `data/account
 
 Configured in `config.yaml::call_c_specs` (list of `CallCBrandSpec` from `x_monitor/query_plan.py:99-137`). Default empty → no Call C emitted. v1.7.x ships with one operator-curated spec.
 
-### C1 — MiMo + Kimi + Yi + Upstage + Llama (multi-brand co-occurrence)
+### C1 — mimo + moonshot_kimi + yi + upstage + llama (multi-brand co-occurrence)
 
 **`call_id: C1`**, **5 brands in the primary group, 22 co-occurrence terms.**
 
 **Primary group tokens (verbatim from `config.yaml`):**
-- `xiaomi_mimo`: `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`
+- `mimo`: `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`
 - `moonshot_kimi`: `[Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]`
 - `yi`: `[Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]`
 - `upstage`: `[Upstage, Solar, "Solar Pro", "업스테이지"]`
@@ -192,7 +205,7 @@ Configured in `config.yaml::call_c_specs` (list of `CallCBrandSpec` from `x_moni
 
 **Co-occurrence group:** `[api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]`
 
-**Min-faves floor:** 0. **Expected signal:** `other` (Call C targets the long tail; the post-fetch `classify_signal` may upgrade).
+**Min-faves floor:** 0. **Expected signal:** `other` (Call C targets the long tail; the post-fetch `classify_post` upgrades to a `post_type` × `sentiment` per migration 019/022).
 
 **Shape (verbatim from `_build_call_c_query`):**
 ```
@@ -213,7 +226,7 @@ Co-occurrence terms exclude non-AI false positives. The `must_have_none` keys in
 
 ## Per-brand breakdown (20 brands)
 
-Every brand listed in `config.yaml::enabled_models` is documented below. The "yaml" column points at the curated query file; "accounts" points at the per-brand staff/official file; "filter" points at the per-brand `min_faves` / `must_have_*` file (only 7 brands have one — the v1-era brands).
+Every brand listed in `config.yaml::enabled_models` is documented below. The "yaml" column points at the curated query file; "accounts" points at the per-brand staff/official file; "filter" points at the per-brand `min_faves` / `must_have_*` file (only 8 brands have one — the v1-era brands plus the new `mimo.yaml` mirror of `xiaomi_mimo.yaml`).
 
 Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **Q1 (release):** `from:<official_handle> [context OR exclusions] min_faves:N` (or brand-name fallback for unconfirmed-handle brands)
@@ -246,7 +259,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 
 - **yaml:** `data/queries/qwen.yaml`
 - **accounts:** `data/accounts/qwen.yaml` (official `QwenLM`, verified=true, staff=[])
-- **filter:** `data/filters/qwen.yaml` (present — content not audited in this pass)
+- **filter:** `data/filters/qwen.yaml` (canonical handles: `Alibaba_Qwen`, `QwenLM`, `alibaba`; must_have_any: `qwen`, `qwen2`, `qwen2.5`, `qwen3`, `qwen-max`, `qwen-plus`, `qwen-vl`, `qwen-coder`, `qwen-long`, `qwen-7b`, `qwen-72b`, `qwen3-max`, `qwen3-vl`, `alibaba qwen`, `qwen lm`)
 - **Call group:** B1
 - **Brand tokens:** `Qwen`, `通义千问`, `通义`, `Qwen3` (4)
 - **Q1:** `from:QwenLM min_faves:5`
@@ -261,7 +274,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 
 - **yaml:** `data/queries/deepseek.yaml`
 - **accounts:** `data/accounts/deepseek.yaml` (official `deepseek_ai`, verified=true, staff=[])
-- **filter:** `data/filters/deepseek.yaml` (present)
+- **filter:** `data/filters/deepseek.yaml` (canonical handles: `deepseek_ai`, `deepseek`; must_have_any: `deepseek`, `v3`, `v3.2`, `v4`, `deepseek v`, `deepseek-r1`, `deepseek-coder`, `deepseek-vl`, `deepseek-pro`, `deepseekmoe`)
 - **Call group:** B1
 - **Brand tokens:** `DeepSeek`, `深度求索`, `"DeepSeek V4"` (3)
 - **Q1:** `from:deepseek_ai min_faves:5`
@@ -275,7 +288,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 
 - **yaml:** `data/queries/glm.yaml`
 - **accounts:** `data/accounts/glm.yaml` (official `Zhipuai_org`, verified=true, staff=[])
-- **filter:** `data/filters/glm.yaml` (present)
+- **filter:** `data/filters/glm.yaml` (canonical handles: `ZhipuAI`, `THUDM`, `zhipuai`, `zhipu_org`; must_have_any: `glm`, `glm-4`, `glm-5`, `glm4.5`, `glm5`, `chatglm`, `zhipu`, `zhipu ai`, `cogvideox`, `cogview`)
 - **Call group:** B2
 - **Brand tokens:** `GLM`, `智谱`, `ChatGLM`, `Zhipuai`, `"GLM-5.2"` (5 — `Zhipuai` is the org name; every Q uses all 5 tokens)
 - **Q1:** `from:Zhipuai_org min_faves:5`
@@ -286,11 +299,11 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **Q6:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
 - **Per-brand quirks:** 5-token brand group (notable vs. most brands' 2-3); every query uses the full set; no `Q5` notes line.
 
-### 5. `xiaomi_mimo` (小米 MiMo) — 6 queries
+### 5. `mimo` (小米 MiMo) — 6 queries (post-U5-rename)
 
-- **yaml:** `data/queries/xiaomi_mimo.yaml`
-- **accounts:** `data/accounts/xiaomi_mimo.yaml` (official `XiaomiMiMo`, verified=true, staff=[])
-- **filter:** `data/filters/xiaomi_mimo.yaml` (present; rot threshold 5 per `config.yaml::query_rot_streak_threshold_per_model`)
+- **yaml:** `data/queries/mimo.yaml` (canonical). A ghost `data/queries/xiaomi_mimo.yaml` exists on disk with identical content from before the U5 rename; it is not referenced by `enabled_models` and is not read by the live cycle.
+- **accounts:** `data/accounts/mimo.yaml` (official `XiaomiMiMo`, verified=true, staff=[]). A ghost `data/accounts/xiaomi_mimo.yaml` exists with identical content.
+- **filter:** `data/filters/mimo.yaml` (canonical, identical content to `xiaomi_mimo.yaml`).
 - **Call group:** B2
 - **Brand tokens:** `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` (9 — broader than other brands' brand tokens)
 - **Q1:** `from:XiaomiMiMo min_faves:3` (lowered from 5 — low-volume brand)
@@ -299,13 +312,13 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **Q4:** `to:XiaomiMiMo min_faves:3` (lowered)
 - **Q5:** `(MiMo OR 小米) (benchmark OR eval OR paper OR github OR 开源) min_faves:2` (no `code` token)
 - **Q6:** `(MiMo OR Xiaomi MiMo OR 小米 MiMo) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** Q1/Q4 use `min_faves:3` instead of the default 5 (volume tuning); rot threshold 5 (vs default 3); bare `小米` is part of brand tokens but excluded from Q2/Q3/Q6 paren groups.
+- **Per-brand quirks:** Q1/Q4 use `min_faves:3` instead of the default 5 (volume tuning); rot threshold 5 (vs default 3) per `config.yaml::query_rot_streak_threshold_per_model: mimo: 5`; bare `小米` is part of brand tokens but excluded from Q2/Q3/Q6 paren groups.
 
 ### 6. `moonshot_kimi` (Kimi / 月之暗面) — 6 queries
 
 - **yaml:** `data/queries/moonshot_kimi.yaml`
 - **accounts:** `data/accounts/moonshot_kimi.yaml` (official `MoonshotAI`, verified=true, staff=[])
-- **filter:** `data/filters/moonshot_kimi.yaml` (must_have_none: F1, antonelli, verstappen, hamilton, pirelli, pole position, formula 1, mclaren, mercedes, red bull, qualifying, sprint race, race result — F1 hijack mitigation)
+- **filter:** `data/filters/moonshot_kimi.yaml` (canonical handles: `Kimi_Moonshot`, `MoonshotAI`, `dotey`; must_have_any: `kimi`, `k2`, `k2.5`, `kimi k`, `kimi work`, `kimi code`, `kimi thinker`, `kimi k2`, `kimi-researcher`, `moonshot ai`; must_have_none: 14 F1 tokens including F1, antonelli, verstappen, hamilton, pirelli, "pole position", "formula 1", formula1, mclaren, mercedes, red bull, qualifying, sprint race, race result — F1 hijack mitigation)
 - **Call group:** B2
 - **Brand tokens:** `Kimi`, `月之暗面`, `MoonshotAI`, `"Kimi K2"` (4)
 - **Q1:** `from:MoonshotAI min_faves:5`
@@ -320,7 +333,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 
 - **yaml:** `data/queries/inclusionai.yaml`
 - **accounts:** `data/accounts/inclusionai.yaml` (official `inclusionAI`, verified=true, staff=[])
-- **filter:** `data/filters/inclusionai.yaml` (must_have_none: tolkien, middle-earth, wwe, wrestling, fanfic, smackdown, rollins, reigns, undertaker, "aj styles", "raw results")
+- **filter:** `data/filters/inclusionai.yaml` (canonical handles: `InclusionAI`, `inclusionai_lab`, `inclusion_ai`; must_have_any: `inclusion`, `inclusionai`, `inclusion ai`, `inclusion-ai`, `ring-1`, `ring-1t`, `ling-mini`, `ling-flash`, `ming-lite`; must_have_none: 11 Tolkien/WWE tokens)
 - **Call group:** B2
 - **Brand tokens:** `InclusionAI`, `Ling`, `Ring`, `Ming` (4)
 - **Q1:** `from:inclusionAI min_faves:3` (lowered from 5 — low volume)
@@ -406,10 +419,10 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
 - **Per-brand quirks:** no `from:`/`to:`-shape on Q1/Q4 (no confirmed handle); all 7 brand tokens repeat in every query; accounts yaml says `verified: false` with `Llama` as the placeholder handle (note: `Llama` is also the animal and the broader family of Meta's open models); included in Call C1.
 
-### 13. `nvidia_nemo` (NVIDIA NeMo / Megatron) — 6 queries
+### 13. `nemo_megatron` (NVIDIA NeMo / Megatron) — 6 queries (post-U5-rename)
 
-- **yaml:** `data/queries/nvidia_nemo.yaml`
-- **accounts:** `data/accounts/nvidia_nemo.yaml` (official `NVIDIAAIDev`, **verified=false**)
+- **yaml:** `data/queries/nemo_megatron.yaml` (canonical). A ghost `data/queries/nvidia_nemo.yaml` exists on disk with identical content from before the U5 rename; it is not referenced by `enabled_models` and is not read by the live cycle.
+- **accounts:** `data/accounts/nemo_megatron.yaml` (official `NVIDIAAIDev`, **verified=false**). A ghost `data/accounts/nvidia_nemo.yaml` exists with identical content.
 - **filter:** **none**
 - **Call group:** B3
 - **Brand tokens:** `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` (4 — both the NeMo framework and the Megatron training stack)
@@ -493,10 +506,10 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
 - **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
 
-### 19. `sakana` (Sakana AI) — 6 queries (replaces `karakuri`)
+### 19. `sakana_ai` (Sakana AI) — 6 queries (replaces `sakana`; post-U5-rename)
 
-- **yaml:** `data/queries/sakana.yaml`
-- **accounts:** `data/accounts/sakana.yaml` (official `SakanaAILabs`, **verified=false**; note: `Sakana` is Japanese for `fish` — collides with food/restaurant/fishing posts)
+- **yaml:** `data/queries/sakana_ai.yaml` (canonical). A ghost `data/queries/sakana.yaml` exists on disk with identical content from before the U5 rename; it is not referenced by `enabled_models` and is not read by the live cycle.
+- **accounts:** `data/accounts/sakana_ai.yaml` (official `SakanaAILabs`, **verified=false**; note: `Sakana` is Japanese for `fish` — collides with food/restaurant/fishing posts). A ghost `data/accounts/sakana.yaml` exists with identical content.
 - **filter:** **none**
 - **Call group:** B3
 - **Brand tokens:** `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` (4)
@@ -506,7 +519,7 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 - **Q4:** `(…) min_faves:5` (brand-name fallback)
 - **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
 - **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** `sakana` replaced `karakuri` in commit `887f50e` (2026-06-23) — Karakuri was a speculative Japanese brand that collided heavily with anime/dining/figure posts. Sakana AI (Evolutionary Model Merge) is the replacement. The `Sakana` (fish) collision risk is the same as `Karakuri`'s anime/dining risk; no `must_have_none` filter currently exists for sakana (unlike moonshot_kimi/inclusionai).
+- **Per-brand quirks:** `sakana_ai` (slug) replaced `sakana` in commit `887f50e` (2026-06-23), then was renamed again in the U5 commit `c7b877f` (2026-07-07) from `sakana` → `sakana_ai` to match the `KNOWN_MODELS` registry. Karakuri was an earlier speculative Japanese brand that collided heavily with anime/dining/figure posts; Sakana AI (Evolutionary Model Merge) is the replacement. The `Sakana` (fish) collision risk is the same as `Karakuri`'s anime/dining risk; no `must_have_none` filter currently exists for sakana_ai (unlike moonshot_kimi/inclusionai).
 
 ### 20. `upstage` (Upstage / Solar / Solar Pro / Solar Mini) — 6 queries
 
@@ -530,24 +543,24 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 | brand_id | Official handle | Verified | Tokens in Call B (deduped) |
 |---|---|---|---|
 | `minimax` | `MiniMaxAI` | true | `MiniMax`, `海螺`, `Hailuo` |
-| `qwen` | `QwenLM` | true | `Qwen`, `通义千问`, `通义` |
-| `deepseek` | `deepseek_ai` | true | `DeepSeek`, `深度求索` |
-| `glm` | `Zhipuai_org` | true | `GLM`, `智谱`, `ChatGLM`, `Zhipuai` |
-| `xiaomi_mimo` | `XiaomiMiMo` | true | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米` |
-| `moonshot_kimi` | `MoonshotAI` | true | `Kimi`, `月之暗面`, `MoonshotAI` |
+| `qwen` | `QwenLM` | true | `Qwen`, `通义千问`, `通义`, `Qwen3` |
+| `deepseek` | `deepseek_ai` | true | `DeepSeek`, `深度求索`, `"DeepSeek V4"` |
+| `glm` | `Zhipuai_org` | true | `GLM`, `智谱`, `ChatGLM`, `Zhipuai`, `"GLM-5.2"` |
+| `mimo` | `XiaomiMiMo` | true | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` |
+| `moonshot_kimi` | `MoonshotAI` | true | `Kimi`, `月之暗面`, `MoonshotAI`, `"Kimi K2"` |
 | `inclusionai` | `inclusionAI` | true | `InclusionAI`, `Ling`, `Ring`, `Ming` |
 | `mistral` | (no accounts yaml) | n/a | `"Mistral"`, `"Mixtral"` |
 | `stepfun` | (no accounts yaml) | n/a | `"StepFun"`, `"阶跃星辰"` |
 | `ernie` | (no accounts yaml) | n/a | `"ERNIE"`, `"文心一言"` |
 | `hunyuan` | (no accounts yaml) | n/a | `"Hunyuan"`, `"混元"`, `"腾讯混元"` |
 | `llama` | `Llama` (placeholder) | **false** | `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"`, `"Llama 3.1"` |
-| `nvidia_nemo` | `NVIDIAAIDev` (placeholder) | **false** | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` |
+| `nemo_megatron` | `NVIDIAAIDev` (placeholder) | **false** | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` |
 | `doubao` | `doubaoAi` (placeholder) | **false** | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` |
 | `yi` | `01AI_Yi` (placeholder) | **false** | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` |
 | `sensechat` | `SenseTimeAI` (placeholder) | **false** | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` |
 | `exaone` | `LGAIResearch` (placeholder) | **false** | `EXAONE`, `"LG AI"`, `"LG EXAONE"` |
 | `kuaishou` | `KwaiYii` (placeholder) | **false** | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` |
-| `sakana` | `SakanaAILabs` (placeholder) | **false** | `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` |
+| `sakana_ai` | `SakanaAILabs` (placeholder) | **false** | `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` |
 | `upstage` | `upstageAI` (placeholder) | **false** | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` |
 
 ---
@@ -557,10 +570,10 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 | brand_id | `min_faves` floor (query) | `query_rot_streak_threshold` | `data/filters/<brand>.yaml` | Special notes |
 |---|---|---|---|---|
 | `minimax` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 (default) | ✓ | must_have_none: hailuo-2.3 noise |
-| `qwen` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | (audited filter not in this pass) |
-| `deepseek` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | |
-| `glm` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | |
-| `xiaomi_mimo` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | **5** (override in `query_rot_streak_threshold_per_model`) | ✓ | Low-volume tuning |
+| `qwen` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | canonical_handles: Alibaba_Qwen, QwenLM, alibaba |
+| `deepseek` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_any: 10 v3/v4/coder/vl/pro tokens |
+| `glm` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_any: glm-4/5, chatglm, zhipu, cogvideox |
+| `mimo` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | **5** (override in `query_rot_streak_threshold_per_model`) | ✓ | Low-volume tuning; ghost `xiaomi_mimo.yaml` filter mirror exists |
 | `moonshot_kimi` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_none: 14 F1 tokens |
 | `inclusionai` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | 3 | ✓ | must_have_none: 11 Tolkien/WWE tokens |
 | `mistral` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Tokens quoted; Q1 has `-weather -meteorology` |
@@ -568,13 +581,13 @@ Query IDs Q1–Q6 are present in every yaml with the same shape:
 | `ernie` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 has `-"Sesame Street" -Bert` |
 | `hunyuan` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 disambiguator includes `混元`, `腾讯` |
 | `llama` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 7 tokens; placeholder handle |
-| `nvidia_nemo` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens (incl. Megatron); placeholder |
+| `nemo_megatron` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens (incl. Megatron); placeholder; ghost `nvidia_nemo.yaml` exists |
 | `doubao` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 8 tokens (largest); placeholder |
 | `yi` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 7 tokens; in Call C1 |
 | `sensechat` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 5 tokens; placeholder |
 | `exaone` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 3 tokens (incl. "LG AI", "LG EXAONE") |
 | `kuaishou` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; `Kuaishou` is the video app |
-| `sakana` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; replaces `karakuri` (2026-06-23); `Sakana` = fish |
+| `sakana_ai` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; replaces `karakuri` (2026-06-23, commit `887f50e`) then `sakana` (U5, 2026-07-07, commit `c7b877f`); `Sakana` = fish; ghost `sakana.yaml` exists |
 | `upstage` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 7 tokens; in Call C1 |
 
 **`LANG_ALLOWLIST` is empty** in `x_monitor/queries.py:54` — the default is "all-languages" (no `lang:` operator in any query). The `since:`/`until:` operators are unused in the curated queries (recency is implicit in the TwitterAPI.io 7-day recent-search default for self-serve).
@@ -600,9 +613,9 @@ ssh fuchitalee 'cd ~/development/minimax-marketing/x-monitoring && \
   [print(c.call_id, c.call_kind, c.brand_id, c.query_length, c.query_string) for c in plan]"'
 ```
 
-**Expected (live, as of 2026-07-02):** 5 entries — Call A (38 chars), Call B1 (320 chars), Call B2 (474 chars), Call B3 (310 chars), Call C1 (505 chars — multi-brand co-occurrence). All under the 512-char cap.
+**Expected (live, as of 2026-07-09):** 5 entries — Call A (38 chars), Call B1 (320 chars), **Call B2 (468 chars)**, Call B3 (310 chars), Call C1 (505 chars — multi-brand co-occurrence). All under the 512-char cap. Note that Call B2 and B3 reference the new slugs (`mimo`, `nemo_megatron`, `sakana_ai`) at runtime, not the ghost yamls.
 
-**Currently emitted (verified 2026-07-02):** 5 entries — Call A (38 chars), Call B1 (320 chars), Call B2 (474 chars), Call B3 (310 chars), Call C1 (505 chars). All under the 512-char cap. (`call_b_groups` is plumbed in `run.py:650-655`; the 867-char single-B over-cap fallback no longer applies.)
+**Currently emitted (verified 2026-07-09):** 5 entries — Call A (38 chars), Call B1 (320 chars), **Call B2 (468 chars)**, Call B3 (310 chars), Call C1 (505 chars). All under the 512-char cap. (`call_b_groups` is plumbed in `run.py:980-985`; the 867-char single-B over-cap fallback no longer applies.)
 
 ```bash
 # In dry-run mode, the cycle still plans the calls but doesn't fire them
@@ -611,11 +624,13 @@ python -m x_monitor dry-run
 
 **Test evidence 2026-06-25 (plan `2026-06-25-001`):** Lengths verified live against TwitterAPI.io before widening:
 - B1: 279 → **320** chars (+41, new tokens: `"Llama 3.1"`, `Qwen3`, `"DeepSeek V4"`)
-- B2: 359 → **474** chars (+115, new tokens: 5 MiMo variants, `"Yi-Large"`, `"Kimi K2"`, `"GLM-5.2"`)
+- B2: 359 → **468** chars (+109, new tokens: 8 MiMo variants in Q2's first paren, `"Yi-Large"`, `"Kimi K2"`, `"GLM-5.2"` — `mimo` contributes 8 tokens, not 9; bare `小米` does not enter the brand-token list because the parser reads Q2's first paren and breaks)
 - B3: 249 → **310** chars (+61, new tokens: `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"`, `"サカナAI"`)
 - C1: 471 → **505** chars (+34, added 12 co-occurrence terms + 1 Korean brand alias)
 
 C1 has only **7 chars of headroom** under the cap. Any further co-occurrence or brand additions require either dropping terms, splitting into C1/C2, or moving to `live/archived` query shape. The 12 added co-occurrence terms (`code`, `coding`, `agent`, `agentic`, `benchmark`, `reasoning`, `release`, `"open source"`, `huggingface`, `inference`, `moe`, `"tool calling"`) were each validated against live `x_keyword_search` returns to surface relevant posts the original 10-term list missed.
+
+**The U5 rename (2026-07-07, commit `c7b877f`) did not change any of the Call B/C1 lengths** — the rename is a slug-only change (`xiaomi_mimo` → `mimo`, `nvidia_nemo` → `nemo_megatron`, `sakana` → `sakana_ai`). The brand tokens and query strings emitted by the planner are identical to the 2026-07-02 numbers above; only the brand_id labels in the resulting `PlannedCall.brand_id` field changed.
 
 ---
 
@@ -630,13 +645,15 @@ C1 has only **7 chars of headroom** under the cap. Any further co-occurrence or 
 | Add a `CallCBrandSpec` to `config.yaml::call_c_specs` | One extra Call C per cycle. The spec is read in order, gets a `C1`/`C2`/… label. |
 | Disable a brand in `enabled_models` | The brand's paren group drops from its Call B; the `data/accounts/<brand>.yaml` handle stays on the x.com list (operator must remove it manually). |
 | Per-brand `min_faves` in `data/filters/<brand>.yaml` | Filters out low-engagement posts after Call A/B returns and after brand attribution. Default no filter (file absent). |
-| Swap one brand for another (e.g. `karakuri` → `sakana`, commit `887f50e`) | Edit `data/queries/<brand>.yaml` and `data/accounts/<brand>.yaml`, swap the brand_id in `enabled_models` and in `call_b_groups`. The old yaml files can be removed. |
+| Swap one brand for another (e.g. `karakuri` → `sakana` → `sakana_ai`, commits `887f50e` + `c7b877f`) | Edit `data/queries/<brand>.yaml` and `data/accounts/<brand>.yaml`, swap the brand_id in `enabled_models` and in `call_b_groups`. The old yaml files can be removed (a follow-up cleanup is pending for the U5 ghost yamls: `xiaomi_mimo.yaml`/`nvidia_nemo.yaml`/`sakana.yaml` in both `data/queries/` and `data/accounts/`). |
+| **Rename a brand slug (e.g. `xiaomi_mimo` → `mimo`, commit `c7b877f`)** | Update `enabled_models`, `call_b_groups`, `call_c_specs.brands`, `data/queries/<slug>.yaml`, `data/accounts/<slug>.yaml`, `data/filters/<slug>.yaml` (if present), and any `qwen_rot_streak_threshold_per_model` entries. KNOWN_MODELS in `x_monitor/config.py` is the canonical registry. The old slug's yaml files can stay on disk as ghosts (current state) or be removed; the live cycle only reads the slug referenced by `enabled_models`. |
+| **DB-side frontier seed (migration 032, 2026-07-08)** | Adds frontier companies/brands/accounts (OpenAI/Anthropic/Google/xAI; gpt/claude/gemini/gemma/grok) to the DB. Does **not** add anything to the TwitterAPI.io query path — frontier vendors are not in `enabled_models` and have no yaml. The seed is for downstream brand-attribution: when a Chinese-model post mentions "GPT" / "Claude" / "Gemini" / "Grok", the attribution layer now has a real brand row to route to. |
 
 ---
 
 ## Schema references (post schema-modernization batch)
 
-This doc is about the live TwitterAPI.io query path, not direct SQL against the DB. The pipeline's downstream tables (`posts_brands`, `posts_brands_mentions`, `posts_brands_signals`, `signals`, `roles`, …) are touched only as sinks — the query string is built purely from yaml. For convenience, the DB-side names referenced in step 2 / step 3 above reflect the state after the 9-unit schema modernization batch landed on `feat/schema-modernization-batch` at commit `4cd62d2` (migrations 011–019):
+This doc is about the live TwitterAPI.io query path, not direct SQL against the DB. The pipeline's downstream tables (`posts_brands`, `posts_brands_mentions`, `posts_brands_signals`, `signals`, `roles`, …) are touched only as sinks — the query string is built purely from yaml. For convenience, the DB-side names referenced in step 2 / step 3 above reflect the state after the 9-unit schema modernization batch landed on `feat/schema-modernization-batch` at commit `4cd62d2` (migrations 011–019), plus the post-batch migrations 020–032:
 
 | Old name (pre-batch) | New name (post-batch) | Migration | Query-shape impact |
 |---|---|---|---|
@@ -654,10 +671,17 @@ This doc is about the live TwitterAPI.io query path, not direct SQL against the 
 | (n/a) | `posts_brands_signals.sentiment` (column) | 019 | Additive nullable TEXT FK → `sentiment_keys.key`. Coexists with `signal_id`. |
 | Roles seeded in 008: `{official, community, researcher, press, vendor}` | Trimmed to `{official, staff, community}` | 016 | `researcher` / `press` / `vendor` keys (and their label rows) deleted; any FK rows pointing at them backfilled to `'community'`. `staff` added. |
 | `signals` / `roles` PK was TEXT (the key string) | PK is now INTEGER AUTOINCREMENT; `key` column stays TEXT UNIQUE | 018 | FK columns (`signal_id`, `role_id`) still store the TEXT key — no consumer rewrite required. |
+| All tables: TEXT primary keys (e.g. `brands.nickname` as PK) | PK is INTEGER AUTOINCREMENT; `nickname` (or equivalent) becomes UNIQUE | 020 | Cross-table rename; the live query path is unaffected (yaml is the source of truth, not PK ids). |
+| `brands.id` / `companies.id` (old INTEGER autoincrement) | `brands.nickname` / `companies.nickname` (TEXT, the natural key) | 023 | Brand-name resolution now goes by nickname; the live query path emits brand slugs (`mimo`, `nemo_megatron`, `sakana_ai`) that match `brands.nickname` directly. |
+| `posts_brands_signals.signal_id` (column) | **dropped** | 022 | The 6-bucket legacy `signals` taxonomy is gone; `expected_signal` was removed from `PlannedCall` / `CallCBrandSpec` in the same unit. The live query no longer encodes signal intent — post-fetch `attribution.classify_post` writes the new `post_type` × `sentiment` pair directly. |
+| `brands_accounts.author_id` (column) | `brands_accounts.accounts_id` (column, INTEGER FK → `accounts.id`) | 031 | Schema-level column rename. Live query path is unaffected. The `accounts.author_id` column (X/Twitter user id) is unchanged — `author_id` still appears on `accounts`, but the M:N join column on `brands_accounts` is now `accounts_id`. |
+| (n/a) | Migration 030 — brand rename in `brands` table | 030 | The 3 brand slugs `xiaomi_mimo` → `mimo`, `nvidia_nemo` → `nemo_megatron`, `sakana` → `sakana_ai` were first applied at the DB level (m30). The U5 commit `c7b877f` propagated the same rename to `config.yaml`, `call_b_groups`, `call_c_specs.brands`, and the yaml filenames. |
+| (n/a) | Migration 032 — frontier seed | 032 | Adds 4 companies (openai/anthropic/google/xai), 5 brands (gpt/claude/gemini/gemma/grok), 16 accounts, and the cross-product in `brands_accounts` (5 brands × 16 accounts = up to 80 rows). Live query path is unaffected. |
 
-**Why this section is here.** The live query string (Calls A/B/C) is unaffected by these schema changes — yaml is the source of truth for query construction. But the *pipeline outputs* that the live path writes into (`posts_brands_mentions`, `posts_brands_signals.signal_id` / `post_type` / `sentiment`, `brands_accounts.role_id`, etc.) are all renamed. If you are debugging "the live call returned a row but it isn't classified correctly," the DB-side name you read from is the new name, not the legacy name.
+**Why this section is here.** The live query string (Calls A/B/C) is unaffected by these schema changes — yaml is the source of truth for query construction. But the *pipeline outputs* that the live path writes into (`posts_brands_mentions`, `posts_brands_signals.signal_id` / `post_type` / `sentiment`, `brands_accounts.role_id` / `accounts_id`, etc.) are all renamed. If you are debugging "the live call returned a row but it isn't classified correctly," the DB-side name you read from is the new name, not the legacy name.
 
 **Out of scope for this doc** (covered by other reference docs):
 - The `_pick_enum_label` and label-table read path (see migration 011 / 008 comments for the i18n detail).
 - The TEMP TABLE backup pattern used to preserve label rows across DROP TABLE CASCADE FK in migration 018.
 - The full classifier pipeline rewrite that consumes the new `post_type` / `sentiment` columns (U9 follow-up — see plan `docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md`).
+- Migration 032's frontier seed (DB-only; no TwitterAPI.io yaml side). See `docs/plans/2026-07-08-001-feat-frontier-brands-companies-seed-plan.md`.
