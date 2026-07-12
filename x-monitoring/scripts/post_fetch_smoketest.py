@@ -166,6 +166,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
              "hitting TwitterAPI. Default off so existing smoketest "
              "output is unchanged.",
     )
+    p.add_argument(
+        "--include-all-list-posts", action="store_true",
+        help="Skip the brand-keyword filter for --source=api-query. "
+             "Used for Call A (list-based fan-in) where the list is "
+             "pre-curated and the value signal is who said it (staff "
+             "vs. personal), not whether a brand keyword appears in "
+             "the text. Posts with no detected brand attribution are "
+             "still rendered with `types=(none)` and the brand is "
+             "inferred from the role annotation (official|staff|"
+             "community|none). Default off so existing behavior is "
+             "unchanged.",
+    )
     return p.parse_args(argv)
 
 
@@ -358,7 +370,44 @@ def _load_api_posts(
         })
     filtered = [p for p in out if p.get("brand_ids")]
     skipped = len(out) - len(filtered)
+    # --include-all-list-posts: keep list-member posts whose text did
+    # not trigger a brand-keyword match. Used for Call A where the
+    # value signal is the handle/role, not brand text. Posts with
+    # empty brand_ids stay in the list; classification stage will
+    # skip them (`if not brand_ids: continue`) but the renderer will
+    # still show them with `types=(none)` so the operator can see
+    # the raw return.
+    if getattr(args, "include_all_list_posts", False):
+        return out, 0
     return filtered, skipped
+
+
+def _load_handle_roles(store, handles: list[str]) -> dict[str, str]:
+    """For each handle in `handles`, look up the highest-rank role
+    (official > staff > community, by MIN(role_id)) the handle
+    currently holds in `brands_accounts`. Returns {handle:
+    "official"|"staff"|"community"}.
+
+    Used by the smoketest renderer to annotate list-member posts
+    with their DB-canonical role so the operator can eyeball the
+    "official/staff news vs. personal take" split for Call A. Only
+    handles with a role match appear in the result; the caller
+    should default to "none" for any handle not present.
+    """
+    if not handles:
+        return {}
+    placeholders = ",".join("?" for _ in handles)
+    sql = (
+        "SELECT a.handle AS handle, r.key AS role_key "
+        "FROM accounts a "
+        "JOIN brands_accounts ba ON ba.accounts_id = a.id "
+        "JOIN roles r ON r.id = ba.role_id "
+        f"WHERE a.handle IN ({placeholders}) "
+        "GROUP BY a.handle "
+        "ORDER BY MIN(ba.role_id) ASC"
+    )
+    rows = store._conn.execute(sql, tuple(handles)).fetchall()
+    return {r["handle"]: r["role_key"] for r in rows}
 
 
 def _render_sample_posts(
@@ -366,6 +415,7 @@ def _render_sample_posts(
     translation_rows: list[dict],
     classification_rows: dict[str, list[dict]],
     unsanctioned_flags: dict[str, list[str]] | None = None,
+    role_by_handle: dict[str, str] | None = None,
 ) -> str:
     """Render N posts with translator + classifier fields aligned.
 
@@ -398,6 +448,7 @@ def _render_sample_posts(
     that get surfaced in a dedicated section at the end.
     """
     unsanctioned_flags = unsanctioned_flags or {}
+    role_by_handle = role_by_handle or {}
     trans_by_id = {r["tweet_id"]: r for r in translation_rows}
     lines: list[str] = []
     lines.append("")
@@ -412,6 +463,14 @@ def _render_sample_posts(
             f"--- Post {i} (tweet_id={tid} "
             f"url=https://x.com/{handle}/status/{tid}) ---"
         )
+        # Role annotation (smoketest --include-all-list-posts):
+        # surfaces the DB-canonical role (official/staff/community)
+        # for the author handle so the operator can eyeball the
+        # "official news vs. personal take" split for Call A. Only
+        # emitted when caller passed a non-empty role_by_handle map.
+        if role_by_handle:
+            role = role_by_handle.get(handle, "none") if handle != "(no handle)" else "none"
+            lines.append(f"role:        {role}")
         lines.append(f"text:        {post.get('text', '')}")
         tr = trans_by_id.get(tid, {})
         lines.append(f"text_en:     {(tr.get('text_en') or '')}")
@@ -580,6 +639,10 @@ def main(argv: list[str] | None = None) -> int:
             posts, posts_with_no_brand_skipped = _load_api_posts(
                 args, compiled_index
             )
+            # Pass the open store to _run_pipeline so it can resolve
+            # per-handle roles from brands_accounts (Call A's
+            # "official/staff news vs. personal take" annotation).
+            args._role_lookup_store = store
             return _run_pipeline(
                 posts, brand_registry_rows, args,
                 posts_with_no_brand_skipped=posts_with_no_brand_skipped,
@@ -606,6 +669,7 @@ def main(argv: list[str] | None = None) -> int:
                 store, args.latest
             )
             brand_registry_rows = store.read_brands()
+            args._role_lookup_store = store
             return _run_pipeline(
                 posts, brand_registry_rows, args,
                 posts_with_no_brand_skipped=posts_with_no_brand_skipped,
@@ -633,6 +697,7 @@ def main(argv: list[str] | None = None) -> int:
             store, None, args.limit
         )
         brand_registry_rows = store.read_brands()
+        args._role_lookup_store = store
         return _run_pipeline(
             posts, brand_registry_rows, args,
             posts_with_no_brand_skipped=posts_with_no_brand_skipped,
@@ -679,6 +744,22 @@ def _run_pipeline(
     if not posts:
         print("smoketest: no posts to process; nothing to report")
         return 0
+
+    # Role annotation (--include-all-list-posts / api-query Call A):
+    # load the DB-canonical role per author_handle so the renderer
+    # can show `role=official|staff|community|none` next to each post.
+    # Only populated when the smoketest was launched from the api-query
+    # path (where we have a `store` reference); the latest-cycle /
+    # latest-n / fixture paths don't bother since the per-post author
+    # context there is already in-DB.
+    role_by_handle: dict[str, str] = {}
+    role_store = getattr(args, "_role_lookup_store", None)
+    if role_store is not None:
+        handles = sorted({
+            p.get("author_handle") for p in posts
+            if p.get("author_handle")
+        })
+        role_by_handle = _load_handle_roles(role_store, handles)
 
     client = AnthropicClaudeClient()
 
@@ -810,6 +891,7 @@ def _run_pipeline(
     print(_render_sample_posts(
         sample, translation_rows, classification_rows,
         unsanctioned_flags=unsanctioned_flags_by_post,
+        role_by_handle=role_by_handle,
     ))
 
     # Unsanctioned flags summary.

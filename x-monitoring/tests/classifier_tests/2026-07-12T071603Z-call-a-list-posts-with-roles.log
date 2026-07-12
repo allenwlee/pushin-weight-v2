@@ -1,0 +1,263 @@
+classify_pragmatics_full returned no classifications for text='Paris made one thing clear: open models are no longer a side conversation, they’' brand_ids=['minimax']
+smoketest: source=api-query n_posts=20
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          20
+n_translated:        20
+n_failed_translate:  0
+n_classified:        0
+n_discourse:         0
+n_nationalism:       0
+n_unsanctioned:      0
+t_translate_ms:      13632
+t_classify_ms:       1041
+t_total_ms:          14673
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2076168553036763523 url=https://x.com/alexandr_wang/status/2076168553036763523) ---
+role:        staff
+text:        @scaling01 we’re working on it
+text_en:     
+literal_zh:  @scaling01 我们正在搞
+cn_equiv:    在做了在做了
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 2 (tweet_id=2076168503590011233 url=https://x.com/alexandr_wang/status/2076168503590011233) ---
+role:        staff
+text:        @teortaxesTex this isn’t true we’re going to increase access to muse spark incl openrouter
+text_en:     
+literal_zh:  @teortaxesTex 这不是真的，我们将增加对 muse spark 的访问，包括 openrouter
+cn_equiv:    我们会更开放的
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 3 (tweet_id=2076166702291992928 url=https://x.com/RyanLeeMiniMax/status/2076166702291992928) ---
+role:        staff
+text:        If any lab or company develops RL environments and long-horizon coding task datasets, feel free to reach out to me directly 📮 -&gt; "yuanhe at https://t.co/VWbIoE2DeY"
+text_en:     
+literal_zh:  如果任何实验室或公司开发 RL 环境和长视野编码任务数据集，欢迎直接联系我 📮 -> "yuanhe at https://t.co/VWbIoE2DeY"
+cn_equiv:    求合作，求数据集
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 4 (tweet_id=2076137501128036463 url=https://x.com/Stefania_druga/status/2076137501128036463) ---
+role:        staff
+text:        @zacharylipton Congratulations and nice to meet you in person at ICML!
+text_en:     
+literal_zh:  @zacharylipton 恭喜，ICML 现场见到你很高兴！
+cn_equiv:    恭喜大佬，ICML 面基快乐
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 5 (tweet_id=2076137257564823956 url=https://x.com/Stefania_druga/status/2076137257564823956) ---
+role:        staff
+text:        @badlogicgames @pidotdev Done :)
+text_en:     
+literal_zh:  @badlogicgames @pidotdev 搞定 :)
+cn_equiv:    已搞定 :)
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 6 (tweet_id=2076114980429312456 url=https://x.com/SakanaAILabs/status/2076114980429312456) ---
+role:        official
+text:        This is our attempt to recreate the Picbreeder Experiment (2008) with AI agents:
+
+https://t.co/lYICnepPH8
+
+Here, we populate an homage to the original site with CPPN-images bred by VLMs over the course of our experiments. All images can be branched, rated, and inspected. https://t.co/g0hkvSSrK0
+text_en:     
+literal_zh:  这是我们尝试用 AI agent 复刻 Picbreeder 实验（2008）：
+
+https://t.co/lYICnepPH8
+
+在这里，我们用 CPPN-图片（由 VLM 在实验过程中培育）填满了向原站致敬的页面。所有图片都可以分支、评分、检视。https://t.co/g0hkvSSrK0
+cn_equiv:    AI 玩复刻实验
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 7 (tweet_id=2076107026602840138 url=https://x.com/NVIDIAAI/status/2076107026602840138) ---
+role:        official
+text:        And huge thank you @swyx and AIEWF for providing the platform!
+text_en:     
+literal_zh:  非常感谢 @swyx 和 AIEWF 提供平台！
+cn_equiv:    感谢平台支持
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 8 (tweet_id=2076094185812472055 url=https://x.com/Kling_ai/status/2076094185812472055) ---
+role:        official
+text:        What if your life was just a prompt? 💻
+
+Discover Seo Yoonjung & Shin Seoyeon’s “PROMPT” — an animated journey exploring choices, identity, and the stories we create.
+Congratulations Seo Yoonjung, Shin Seoyeon on winning Kling AI NEXTGEN 2026 Korea University Creative Challenge Best Animation!
+text_en:     
+literal_zh:  如果你的生活只是一个 prompt 呢？💻
+
+来认识 Seo Yoonjung 和 Shin Seoyeon 的「PROMPT」——一段探索选择、身份与我们所创造故事的动画之旅。
+
+恭喜 Seo Yoonjung、Shin Seoyeon 斩获 Kling AI NEXTGEN 2026 韩国大学创意挑战最佳动画奖！
+cn_equiv:    恭喜获奖
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 9 (tweet_id=2076086311375822856 url=https://x.com/NVIDIAAI/status/2076086311375822856) ---
+role:        official
+text:        @dee_hw 🙌
+text_en:     
+literal_zh:  @dee_hw 🙌
+cn_equiv:    冲冲冲
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 10 (tweet_id=2076081196170403869 url=https://x.com/NVIDIAAI/status/2076081196170403869) ---
+role:        official
+text:        @mervenoyann 💚
+text_en:     
+literal_zh:  @mervenoyann 💚
+cn_equiv:    ❤️
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 11 (tweet_id=2076056236643307953 url=https://x.com/NVIDIAAI/status/2076056236643307953) ---
+role:        official
+text:        Epic panel - let's run it back soon.
+text_en:     
+literal_zh:  神仙圆桌——下次再来一场。
+cn_equiv:    下次再约
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 12 (tweet_id=2076042099326361989 url=https://x.com/MiniMax_AI/status/2076042099326361989) ---
+role:        official
+text:        Paris made one thing clear: open models are no longer a side conversation, they’re becoming central to how frontier AI is built, and scaled. 🇫🇷
+
+Across RAISE week:
+
+— Linda Sheng, President of Global Business at MiniMax, joined Luca Schmid, Managing Director HSG, on the Ada Lovelace Stage to discuss open models, and native multimodality, and the new enterprise use cases they make possible.
+
+— RAISE House brought @togethercompute, @cast_ai, and @magnific together for a panel on open frontier models, applications, and infrastructure.
+
+— Our private MiniMax Salon created space for deeper conversations with founders, developers, investors, and partners from @runware, @youdotcom, @ExaAILabs, and @FeatherlessAI 
+
+— Our reception with @SambaNovaAI, we brought together builders and infrastructure partners—including @InfercomAI, Argyll, and SCX ai—above Paris for live demos and discussions.
+
+— At the booth, we met builders exploring how open models can move into production.
+
+Thank you to everyone who joined us. Until next time, Paris.
+
+Intelligence with Everyone. 🌍
+text_en:     
+literal_zh:  巴黎之行说明了一件事：开放模型不再是边角话题，正在成为前沿 AI 构建与扩展的核心。🇫🇷
+
+RAISE 周期间：
+
+— MiniMax 全球业务总裁 Linda Sheng 与 HSG 董事总经理 Luca Schmid 在 Ada Lovelace 舞台讨论开放模型、原生多模态及其带来的新企业用例。
+
+— RAISE House 邀请 @togethercompute、@cast_ai、@magnific 围绕开放前沿模型、应用与基础设施举办圆桌。
+
+— 我们的私有 MiniMax Salon 为来自 @runware、@youdotcom、@ExaAILabs、@FeatherlessAI 的创始人、开发者、投资人和伙伴提供了深度对话空间。
+
+— 与 @SambaNovaAI 联合举办的 reception，邀来 @InfercomAI、Argyll、SCX ai 等构建者和基础设施伙伴，在巴黎高空进行现场 demo 与讨论。
+
+— 在展台，我们与探索将开放模型落地的构建者深入交流。
+
+感谢每一位参与者。下次见，巴黎。
+
+Intelligence with Everyone. 🌍
+cn_equiv:    开放模型成主旋律了
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 13 (tweet_id=2076040063306072398 url=https://x.com/alexandr_wang/status/2076040063306072398) ---
+role:        staff
+text:        muse spark can serve all your particle playground needs
+text_en:     
+literal_zh:  muse spark 能满足你所有的粒子 playground 需求
+cn_equiv:    这个 playground 能处
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 14 (tweet_id=2076039126126612675 url=https://x.com/alexandr_wang/status/2076039126126612675) ---
+role:        staff
+text:        @DaytonDavis all these are coming!!!
+text_en:     
+literal_zh:  @DaytonDavis 这些都要来了！！！
+cn_equiv:    都在路上
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 15 (tweet_id=2076038889500807471 url=https://x.com/alexandr_wang/status/2076038889500807471) ---
+role:        staff
+text:        okay this looks fun
+text_en:     
+literal_zh:  好吧这看起来很好玩
+cn_equiv:    整活儿
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 16 (tweet_id=2076038743912259879 url=https://x.com/alexandr_wang/status/2076038743912259879) ---
+role:        staff
+text:        ok the whale from muse spark 1.1 was a total surprise
+text_en:     
+literal_zh:  ok muse spark 1.1 出来的鲸鱼完全是个惊喜
+cn_equiv:    意外之喜
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 17 (tweet_id=2076036790880755897 url=https://x.com/alexandr_wang/status/2076036790880755897) ---
+role:        staff
+text:        um can’t we all be friends 🥺
+text_en:     
+literal_zh:  嗯…我们不能都做朋友吗 🥺
+cn_equiv:    大家都是朋友嘛
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 18 (tweet_id=2076007357079756914 url=https://x.com/sophiamyang/status/2076007357079756914) ---
+role:        staff
+text:        @noctus91 💯 I need it every week
+text_en:     
+literal_zh:  @noctus91 💯 我每周都需要
+cn_equiv:    求每周更新
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 19 (tweet_id=2075978341312868450 url=https://x.com/NVIDIAAI/status/2075978341312868450) ---
+role:        official
+text:        @googlegemma 🦾💪
+text_en:     
+literal_zh:  @googlegemma 🦾💪
+cn_equiv:    冲！
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 20 (tweet_id=2075973784864256360 url=https://x.com/RyanLeeMiniMax/status/2075973784864256360) ---
+role:        staff
+text:        @FireworksAI_HQ @MiniMax_AI awesome work
+text_en:     
+literal_zh:  @FireworksAI_HQ @MiniMax_AI 干得漂亮
+cn_equiv:    大佬厉害
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
