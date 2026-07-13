@@ -175,14 +175,19 @@ classifier run, not by argument from text.
 
 - U2 — `posts_brands_discourse` uncategorized dead-letter disposition.
   Question is scoped here; the implementation choice is not.
-- U5 — additional classifier signal-coverage items the user identifies
-  while reviewing U3 evidence. Slot reserved; content TBD.
 - Classifier call-site batching visibility (the 12-row dead-letter
   pile hints at per-brand dedup happening inside the batch boundary) —
   tracked separately once U1 emits enable the next measurement.
 - LLM-driven classifier cost reduction (3-of-3 retry rules, prompt
   caching for the prefix) — separate from this plan; already partially
   addressed by the batched-classify refactor in plan 2026-07-13-001 U1.
+- Brand-yaml negative-keywords (per-brand blocklist for drama,
+  celebrity, common-name false positives — e.g. `yi` blocks
+  "Cho-Yi", `kimi` blocks given-name contexts) — surfaced by U3
+  review #5/#15; tracked separately.
+- Parent-company → LLM alias mapping (e.g. `ByteDance` → `doubao`,
+  `Tencent`/`WeChat` → `hunyuan`, `Alibaba` → `qwen`) — surfaced
+  by U3 review #11; non-trivial schema work, separate plan.
 
 ### Out of Scope
 
@@ -397,6 +402,22 @@ Per-unit gates:
   unsanctioned-flags emission-rate line per post.
 - U2: TBD at plan-write; consistent with the per-unit field.
 - U3: TBD.
+- U4: `python -m pytest tests/test_config.py -v` green; live run
+  with the dedup'd `call_b_groups` emits no dupe warnings at
+  `load_config` time; the 6 dropped brands retain identical
+  `posts_brands` recall via C1/C2.
+- U5: `python -m pytest tests/test_classify_pragmatics_full.py
+  tests/test_store.py -v` green; live run inserts at least one
+  `china_nationalism` / `us_nationalism` pair for a post whose
+  `discourse_key` was dead-lettered; U3 evidence report's next
+  regeneration shows tweets #5/#8/#11/#12 with non-NULL nationalism
+  columns even where `posts_brands_discourse` row is missing.
+- U6: `python -m pytest tests/test_store.py tests/test_dashboard_v17.py -v`
+  green; live run produces identical dashboard brand counts;
+  `sqlite3 data/x_monitoring.db ".schema posts_brands"` shows no
+  `weight` column.
+- U7: `grep -rE 'discours_key' x-monitoring/` returns no matches;
+  the new regression test pins the spelling.
 
 Cross-unit gate: the evidence report
 `tests/classifier_tests/20260713T040301_0000-bbf72b83-u3-evidence.md`
@@ -448,3 +469,264 @@ closed-DB crash.
   cross-reference rule (operator's call)? U1 implements the
   cross-reference rule; tightening to hard enforcement is a follow-up
   if the rate stays high.
+- Q4. Should the dead-letter prompt-coverage measurement for U2 also
+  measure a separate "discourse-key coverage" rate so we can
+  distinguish "LLM emits `uncategorized` deliberately" vs "LLM emits
+  a hallucinated key that fails the FK"? The two failure modes need
+  different fixes (prompt tightening vs lookup-table extension).
+
+# Additional U-IDs surfaced by the U3 evidence-review pass
+
+The reviewer (Allen) walked every `#### #N` entry in the U3 evidence
+report on 2026-07-13 and captured the per-tweet verdicts in
+`tests/classifier_tests/20260713T040301_0000-bbf72b83-u3-evidence-review-notes.md`.
+The review confirmed the U1 / U2 / U4 framing above and surfaced four
+new work items that did not fit any existing unit, plus one new unit
+that splits a single classifier step into two. These are listed below
+as U5 (the previously-open slot, now filled), U6 (the nationalism split),
+and U7 (legacy weight column).
+
+### U5. Run nationalism as an independent classifier step (do not gate on discourse success)
+
+**Context**: Today the classifier runs `discourse_key` and
+`china_nationalism` / `us_nationalism` inside the same `_parse_post_classifications`
+fan-out. When the LLM emits a `discourse_key` that does not match any
+row in the `discourse_keys` lookup table, the FK insert into
+`posts_brands_discourse` fails and the entire classification result
+for that post — including the otherwise-valid `china_nationalism` /
+`us_nationalism` pair — is dead-lettered at
+`data/runs/2026-07-13/enum_dead_letter.jsonl`. The brief renderer
+already knows how to show `discourse_key = uncategorized` (KTD5
+sentinel); it does not need a nationalism value to do so.
+
+In the U3 evidence report, tweets #5, #8, #11, and #12 hit this path —
+4 posts × 8 brand edges ≈ 12 dead-lettered rows that have a perfectly
+good nationalism label sitting in the LLM response that we throw away.
+Fixing this recovers those rows without weakening the KTD5 dead-letter
+behavior (which still protects `posts_brands_discourse` from unknown
+keys).
+
+**Goal**: The `china_nationalism` / `us_nationalism` pair persists to
+`posts_brands_discourse` (where migration 026 placed them; user
+decision 2026-07-13 to keep them there) even when the LLM emits an
+unknown `discourse_role` that fails the FK gate. The KTD5 dead-letter
+behavior for `discourse_role` stays strict — unknown roles still do
+not get persisted as `uncategorized` — but the dead-letter path
+becomes a partial-row write (discourse_role NULL, nationalism pair
+populated) instead of a full-row drop. The user confirmed during
+plan execution that nationalism's logical position is on the discourse
+row (it shares the LLM's per-post judgment with discourse_role), and
+that the bug is the *coupling* of the two fields at the FK gate, not
+the *placement* of the columns.
+
+**Requirements**: New — issued 2026-07-13 by the user after the U3
+review pass; surfaces a structural coupling between discourse and
+nationalism that was latent in v1.6 and inherited by v1.7.
+
+**Files**:
+- `x-monitoring/x_monitor/store.py` (modify — `insert_posts_brands_discourse`
+  at lines 1816-1855 splits into two paths: when `discourse_role` FK
+  is satisfied, the existing full-row UPSERT runs; when `discourse_role`
+  FK fails (KTD5 dead-letter), a separate partial-row UPSERT writes
+  `(post_id, brand_id, discourse_role=NULL, china_nationalism=?,
+  us_nationalism=?)`. The `discourse_role` FK target is `discourse_keys.id`
+  per migration 026 — confirm with the live schema. If `discourse_role`
+  is NULLable in the FK definition, the partial-row write is the
+  same UPSERT with the unknown value replaced by NULL. If it is
+  NOT NULL, the migration must relax that constraint first.)
+- `x-monitoring/x_monitor/migrations/<next>.sql` (NEW migration —
+  only if the existing `posts_brands_discourse.discourse_role` column
+  is NOT NULL; the migration drops the NOT NULL constraint before
+  the partial-row path can write NULL. Verify by reading migration
+  026 schema at lines 130-170.)
+- `x-monitoring/x_monitor/attribution.py` (no change required — the
+  LLM already emits both `discourse_role` and the nationalism pair
+  in the same JSON object per attribution.py:1132-1133; the parser
+  at 1391-1392 already extracts both. The fix is purely on the
+  store-side persistence path.)
+- `x-monitoring/tests/test_classify_pragmatics_full.py` (modify —
+  add a fixture where the LLM emits an unknown `discourse_role`
+  + valid `china_nationalism=constructive_critical` /
+  `us_nationalism=none`; assert the row persists with discourse_role
+  NULL and the pair populated)
+- `x-monitoring/tests/test_store.py` (modify — assert the partial-row
+  write path on a fixture LLM output that triggers KTD5; assert
+  the dead-letter JSONL still receives the failed `discourse_role`
+  entry for human review)
+
+**Approach**: (1) Read `insert_posts_brands_discourse` at
+`store.py:1816-1855` and identify the FK-failure handling. (2) Read
+migration 026 schema at `x_monitor/migrations/026_pragmatics_axes.sql:130-170`
+to confirm whether `discourse_role` is NOT NULL. (3) If NOT NULL,
+add a migration that drops the NOT NULL constraint before the
+partial-row path can write NULL. (4) Modify `insert_posts_brands_discourse`
+so that when the FK target lookup for `discourse_role` returns no
+match, the method writes a partial row with `discourse_role=NULL`
+and the nationalism pair populated, while still emitting the
+failed `discourse_role` value to the dead-letter JSONL for human
+review. (5) Verify with the fixture from the test scenarios below.
+
+**Patterns to follow**: The current KTD5 dead-letter path lives in
+`x_monitor/store.py:1759-1773` (note field `uncategorized-sentinel
+(KTD5): row skipped, no FK target`). The fix layers a partial-row
+write *alongside* the dead-letter emit — the dead-letter file still
+captures the unknown `discourse_role` for human review, and the
+row still lands in the DB with what we can persist.
+
+**Test scenarios**:
+- *Happy path*: An LLM fixture that emits `discourse_role="dunk_yingyang"`
+  (a valid FK target) + `china_nationalism="mild_pro"` +
+  `us_nationalism="none"` results in a single `posts_brands_discourse`
+  row with all three populated (existing behavior, no regression).
+- *Partial path*: An LLM fixture that emits
+  `discourse_role="some_future_key_not_in_lookup"` (invalid FK) +
+  `china_nationalism="mild_pro"` + `us_nationalism="none"` results in
+  a `posts_brands_discourse` row with `discourse_role=NULL` +
+  `china_nationalism="mild_pro"` (id 2) + `us_nationalism="none"`
+  (id 1). The dead-letter JSONL for this run also gets an entry
+  naming the failed `discourse_role` value. Verify both writes happen.
+- *Error path*: An LLM fixture that emits an invalid
+  `china_nationalism` value (not in `nationalism_keys`) gets the
+  existing treatment at `store.py:1825-1831` — the entire row is
+  still dead-lettered. The partial-row path is only triggered by
+  the `discourse_role` FK failure, not by nationalism FK failures
+  (those are harder to recover from because both fields would have
+  to be NULLable).
+- *Integration*: Driving the U3 fixture through
+  `_run_classification_for_post` results in `posts_brands_discourse`
+  rows for tweets #5/#8/#11/#12 with non-NULL `china_nationalism`
+  and `us_nationalism` columns where they were previously NULL
+  (because the entire row was dead-lettered).
+
+**Verification**: (a) `python -m pytest tests/test_classify_pragmatics_full.py
+tests/test_store.py -v` passes all old + new tests. (b) A live run
+via `scripts/live_a_z_populate.py --limit-per-call 5` that triggers
+KTD5 inserts partial `posts_brands_discourse` rows for the KTD5
+posts. (c) The U3 evidence report's next regeneration shows tweets
+#5/#8/#11/#12 with non-NULL `china_nationalism` / `us_nationalism`
+columns even where `discourse_role` is NULL.
+
+**Test scenarios**:
+- *Happy path*: An LLM fixture that emits `china_nationalism=2`
+  (`mild_pro`) and `us_nationalism=1` (`none`) alongside
+  `discourse_key="some_future_key_not_in_lookup"` results in
+  `posts_brands_nationalism` (or the new columns on
+  `posts_brands_signals`) carrying the pair, AND the
+  `enum_dead_letter.jsonl` for the same post carrying only the
+  `discourse_key` entry. Verify both writes happen.
+- *Happy path*: An LLM fixture that emits a valid `discourse_key`
+  AND the nationalism pair results in both tables being populated
+  (no behavior change for the working case).
+- *Edge case*: An LLM fixture that emits only `discourse_key` and
+  no nationalism fields results in `posts_brands_nationalism`
+  getting a row with both FKs set to `none` (id 1) — the default
+  for "the LLM was not asked or chose not to opine."
+- *Error path*: An LLM fixture that emits
+  `china_nationalism="foo_bar"` (invalid value) is filtered by
+  the same allow-list pattern that `_parse_unsanctioned_flags` uses;
+  the row persists with `china_nationalism=none` (id 1) and the
+  dead-letter file gets a separate entry for the invalid value.
+- *Integration*: Driving the full U3 fixture through
+  `_run_classification_for_post` results in the same
+  `posts_brands` rows as before, with `posts_brands_nationalism`
+  (or the new columns) populated for all 12/36 INSERTED posts, and
+  0 additional dead-letter entries beyond the existing 12.
+
+**Verification**: (a) `python -m pytest tests/test_classify_pragmatics_full.py
+tests/test_store.py -v` passes all old + new tests. (b) A live run
+via `scripts/live_a_z_populate.py --limit-per-call 5` inserts at
+least one `china_nationalism` / `us_nationalism` pair for a post
+whose `posts_brands_discourse` row was dead-lettered. (c) The U3
+evidence report's next regeneration shows tweets #5 / #8 / #11 / #12
+with non-NULL `china_nationalism` / `us_nationalism` columns even
+where the `posts_brands_discourse` row is missing.
+
+### U6. Drop the `posts_brands.weight` 1/N uniform split (legacy read path)
+
+**Context**: `posts_brands.weight` is a `1/N` uniform split across
+the N brand edges for a post (e.g. 4 brands → 0.25 each). It is a
+legacy read path; the UI rendering layer treats brand presence as
+binary. The uniform split only makes sense for fractional attribution
+and is a poor fit for the use case the schema actually serves.
+
+**Goal**: Replace `posts_brands.weight` with a `presence` boolean
+(or remove the column entirely if the UI layer reads presence from
+the row's existence, not from a column value). Pick the option that
+matches how the dashboard currently consumes the table.
+
+**Requirements**: New — surfaced by the U3 review (#2 reviewer
+question).
+
+**Files**:
+- `x-monitoring/x_monitor/store.py` (modify — change the `INSERT
+  INTO posts_brands` payload to drop `weight` or replace with
+  `presence`; update read methods)
+- `x-monitoring/x_monitor/migrations/<next>.sql` (NEW migration —
+  drop `posts_brands.weight`, add `posts_brands.presence INTEGER
+  NOT NULL DEFAULT 1` if option (b))
+- `x-monitoring/x_monitor/dashboard.py` (modify — update any read
+  site that referenced `weight` to reference `presence` or the row's
+  existence)
+- `x-monitoring/tests/test_store.py` (modify — assert the new
+  column shape and that legacy `weight` no longer exists)
+
+**Approach**: (1) `grep -nE '\bweight\b' x_monitor/dashboard.py
+x_monitor/store.py` to find all read sites. (2) Pick option (a)
+"remove column" vs option (b) "replace with `presence` boolean"
+based on what the dashboard actually needs. (3) Migration drops
+`weight` (and adds `presence` if option b). (4) Update read sites
+and tests.
+
+**Open question Q6 (decide at U6 plan-write)**: does the dashboard
+ever need the fractional value (e.g. for a stacked-bar chart where
+brand share within a post is meaningful)? If yes, replace with
+`presence` AND keep a separate `mention_count` column derived from
+the post-fetch classifier; if no, just remove.
+
+**Test scenarios**:
+- *Happy path*: After the migration, `posts_brands` has no `weight`
+  column and the UI render path still works against the new
+  `presence` (or row-existence) semantics.
+- *Integration*: A live run inserts `posts_brands` rows with the
+  new shape and the dashboard renders the same brand counts as
+  before.
+
+**Verification**: (a) `python -m pytest tests/test_store.py
+tests/test_dashboard_v17.py -v` green. (b) Live run produces the
+same brand counts on the dashboard. (c)
+`sqlite3 data/x_monitoring.db ".schema posts_brands"` shows no
+`weight` column.
+
+### U7. Fix the `discours_key` typo in the U3 evidence report and emit script
+
+**Context**: The U3 evidence report uses `discours_key` (missing
+the `e`) in 10 places, all in the "no discourse rows" footnote.
+The codebase uses the correct spelling `discourse_key` everywhere.
+The typo originated in `scripts/build_u3_evidence_live_run.py`'s
+emit function.
+
+**Goal**: Replace `discours_key` with `discourse_key` in the
+report and in the script's emit function.
+
+**Files**:
+- `x-monitoring/tests/classifier_tests/20260713T040301_0000-bbf72b83-u3-evidence.md`
+  (modify — replace all 10 occurrences of `discours_key` with
+  `discourse_key`)
+- `x-monitoring/scripts/build_u3_evidence_live_run.py` (modify —
+  fix the emit function so future regenerations do not regress)
+- `x-monitoring/tests/test_evidence_report.py` (NEW — pin that
+  the report's text contains `discourse_key` and does NOT contain
+  `discours_key`)
+
+**Approach**: trivial single-character fix; one sed pass + a
+regression test that pins the spelling.
+
+**Test scenarios**:
+- *Happy path*: After the fix, `grep -n 'discours_key'
+  tests/classifier_tests/20260713T040301_0000-bbf72b83-u3-evidence.md
+  scripts/build_u3_evidence_live_run.py` returns no matches.
+- *Regression*: The new test fails on a regression (typo
+  re-introduced) and passes after the fix.
+
+**Verification**: `grep -rE 'discours_key' x-monitoring/`
+returns no matches.
