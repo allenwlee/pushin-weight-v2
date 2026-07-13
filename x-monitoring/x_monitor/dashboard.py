@@ -32,35 +32,54 @@ from .treemap import (
 log = logging.getLogger(__name__)
 
 
-# Display name map for the 11 v1 models. PR-reviewable; tweak per brand team
-# feedback without touching the rest of the code.
+# Display name map for the 20 v1 models (11 v1 + 9 pushin_weight additions).
+# PR-reviewable; tweak per brand team feedback without touching the rest of the code.
 MODEL_DISPLAY_NAMES: dict[str, str] = {
     "minimax": "MiniMax AI",
     "qwen": "Qwen",
     "deepseek": "DeepSeek",
     "glm": "Zhipu GLM",
-    "xiaomi_mimo": "Xiaomi MiMo",
+    "mimo": "Xiaomi MiMo",
     "moonshot_kimi": "Moonshot Kimi",
     "inclusionai": "InclusionAI",
     "mistral": "Mistral",
     "stepfun": "StepFun",
     "ernie": "Baidu ERNIE",
     "hunyuan": "Tencent Hunyuan",
+    "llama": "Meta Llama",
+    "nemo_megatron": "NVIDIA Megatron",
+    "doubao": "ByteDance Doubao",
+    "yi": "01.AI Yi",
+    "sensechat": "SenseTime SenseChat",
+    "exaone": "LG EXAONE",
+    "kuaishou": "Kuaishou Kling",
+    "sakana_ai": "Sakana AI",
+    "upstage": "Upstage Solar",
 }
 
 # Accent color per model — drives the card border-left + sparkline stroke.
+# 20-color palette tuned for the dark bg; adjacent brands are visually distinct.
 MODEL_ACCENT_COLORS: dict[str, str] = {
     "minimax": "#3b82f6",
     "qwen": "#f97316",
     "deepseek": "#10b981",
     "glm": "#a855f7",
-    "xiaomi_mimo": "#eab308",
+    "mimo": "#eab308",
     "moonshot_kimi": "#ec4899",
     "inclusionai": "#06b6d4",
     "mistral": "#facc15",
     "stepfun": "#22c55e",
     "ernie": "#0ea5e9",
     "hunyuan": "#ec4899",
+    "llama": "#14b8a6",
+    "nemo_megatron": "#84cc16",
+    "doubao": "#f43f5e",
+    "yi": "#8b5cf6",
+    "sensechat": "#d946ef",
+    "exaone": "#0d9488",
+    "kuaishou": "#fb923c",
+    "sakana_ai": "#6366f1",
+    "upstage": "#dc2626",
 }
 
 
