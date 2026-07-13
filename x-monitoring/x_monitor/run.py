@@ -1084,6 +1084,7 @@ class RunPipeline:
                         call.bucket,
                         synth_q.id,
                     )
+                    since_time_epoch: int | None = None
                     since_cursor: str | None = None
                     if prior_iso:
                         try:
@@ -1093,8 +1094,15 @@ class RunPipeline:
                             since_dt = prior_dt - timedelta(
                                 hours=CURSOR_OVERLAP_HOURS
                             )
-                            # TwitterAPI.io's `since:` is a YYYY-MM-DD
-                            # operator. Use the date in UTC.
+                            # TwitterAPI.io's `sinceTime` query param
+                            # (unix epoch) is the sub-day-precision
+                            # cursor. The `since:` operator truncates
+                            # to date-only — using it would over-fetch
+                            # by up to 24h per cycle.
+                            since_time_epoch = int(since_dt.timestamp())
+                            # Keep the date form as a hard floor (in case
+                            # TwitterAPI.io's `sinceTime` semantics drift
+                            # in the future).
                             since_cursor = since_dt.date().isoformat()
                         except (ValueError, TypeError):
                             # Defensive: a row with a malformed
@@ -1137,6 +1145,7 @@ class RunPipeline:
                             call.query_string,
                             max_results=max_results_cap,
                             since=since_cursor,
+                            since_time=since_time_epoch,
                             max_pages=max_pages_cap,
                             max_per_page=s.max_per_page,
                         )

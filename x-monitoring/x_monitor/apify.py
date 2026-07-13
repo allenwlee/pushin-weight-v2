@@ -234,6 +234,7 @@ class TwitterApiClient:
         *,
         max_pages: int = 5,
         max_per_page: int = 20,
+        since_time: int | None = None,
     ) -> list[dict[str, Any]]:
         """Paginate advanced_search via next_cursor. Returns up to max_results.
 
@@ -255,6 +256,12 @@ class TwitterApiClient:
                 "queryType": "Latest",
                 "limit": min(max_per_page, max_results - len(out)),
             }
+            if since_time is not None:
+                # TwitterAPI.io's `sinceTime` query param (unix epoch) —
+                # sub-day precision. Preferred over the `since:` operator
+                # (date-only) so the runtime cursor can advance minute-
+                # to-minute instead of resetting to midnight each cycle.
+                params["sinceTime"] = int(since_time)
             if cursor:
                 params["cursor"] = cursor
             data = self._get(SEARCH_PATH, params)
@@ -279,6 +286,7 @@ class TwitterApiClient:
         *,
         max_pages: int = 5,
         max_per_page: int = 20,
+        since_time: int | None = None,
     ) -> list[dict[str, Any]]:
         """Run an X advanced-search query via TwitterAPI.io.
 
@@ -299,6 +307,13 @@ class TwitterApiClient:
         request size — default 20 (the platform cap). Both are passed
         through to `_walk_search`.
 
+        `since_time` (kw-only, unix epoch seconds) is passed as the
+        `sinceTime` query param to TwitterAPI.io. Preferred over the
+        `since:` operator for sub-day precision: the operator form
+        truncates to date-only, while `sinceTime` honors the exact
+        timestamp. The two can be used together (sinceTime wins for
+        time precision; `since:` adds a hard date floor).
+
         Returns up to max_results tweets, paginated via next_cursor (see
         _walk_search).
         """
@@ -310,6 +325,7 @@ class TwitterApiClient:
             max_results,
             max_pages=max_pages,
             max_per_page=max_per_page,
+            since_time=since_time,
         )
 
     def get_quote_tweets(
