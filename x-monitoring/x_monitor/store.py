@@ -1758,28 +1758,69 @@ class Store:
                 # `uncategorized` is the sentinel for LLM-hallucinated
                 # discourse keys (KTD5); it's NOT a row in
                 # discourse_keys (the table is intentionally tight).
-                # We drop `uncategorized` rows with a dead-letter
-                # note: they carry no actionable discourse signal,
-                # the brief renderer cites them in the limitations
-                # paragraph. Persisting them as rows would require
-                # adding `uncategorized` to discourse_keys (which
-                # would muddy the taxonomy — explicitly avoided).
-                if discourse_key == "uncategorized":
+                # Plan 2026-07-13-002 U5: when the discourse FK fails,
+                # we still write a PARTIAL row with discourse_key=NULL
+                # and the nationalism pair preserved (so the LLM's
+                # valid china_nationalism/us_nationalism judgment is
+                # not thrown away). The dead-letter JSONL still
+                # captures the unknown key for human review.
+                #
+                # Partial rows use act_id=0 as the KTD5 sentinel;
+                # legitimate act_ids are 1..99 (relaxed to 0..99 in
+                # migration 038).
+                if (discourse_key == "uncategorized"
+                        or discourse_key not in self._known_discourse_keys()):
+                    note = (
+                        "uncategorized-sentinel (KTD5): row skipped, no FK target"
+                        if discourse_key == "uncategorized"
+                        else "unknown-discourse-key (KTD5): row skipped, no FK target"
+                    )
                     self._dead_letter_enum(
                         "discourse", discourse_key,
                         table="posts_brands_discourse",
                         post_id=tweet_id,
                         brand_id=brand_id,
-                        note="uncategorized-sentinel (KTD5): row skipped, no FK target",
+                        note=note,
                     )
-                    continue
-                if discourse_key not in self._known_discourse_keys():
-                    self._dead_letter_enum(
-                        "discourse", discourse_key,
-                        table="posts_brands_discourse",
-                        post_id=tweet_id,
-                        brand_id=brand_id,
+                    # Partial-row write: discourse_key=NULL, act_id=0
+                    # (KTD5 sentinel), nationalism pair populated if
+                    # the LLM emitted one.
+                    china_natl_int = self._nationalism_int_id(
+                        r.get("china_nationalism")
                     )
+                    us_natl_int = self._nationalism_int_id(
+                        r.get("us_nationalism")
+                    )
+                    post_id_int = self._tweet_int_id(tweet_id)
+                    brand_id_int = self._brand_int_id(brand_id)
+                    if post_id_int is not None and brand_id_int is not None:
+                        try:
+                            conn.execute(
+                                """
+                                INSERT INTO posts_brands_discourse(
+                                    post_id, brand_id, discourse_key, act_id,
+                                    china_nationalism, us_nationalism
+                                ) VALUES (?, ?, NULL, 0, ?, ?)
+                                ON CONFLICT(post_id, brand_id, discourse_key, act_id)
+                                DO UPDATE SET
+                                    china_nationalism = excluded.china_nationalism,
+                                    us_nationalism = excluded.us_nationalism
+                                """,
+                                (
+                                    post_id_int,
+                                    brand_id_int,
+                                    china_natl_int,
+                                    us_natl_int,
+                                ),
+                            )
+                            n_written += 1
+                        except Exception as e:
+                            _log.warning(
+                                "bulk_insert_post_brand_discourse: partial-row "
+                                "write failed for KTD5 row "
+                                "(tweet_id=%s brand_id=%s discourse_key=%s): %s",
+                                tweet_id, brand_id, discourse_key, e,
+                            )
                     continue
                 # Brand FK guard (drop with warning; mirrors the
                 # pre-019 signal handler).
