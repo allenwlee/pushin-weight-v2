@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,7 @@ def test_loads_all_known_models():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models:
   - minimax
   - qwen
@@ -58,6 +60,7 @@ def test_rejects_unknown_brand_id():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models:
   - minimax
   - bogus_model
@@ -74,6 +77,7 @@ def test_rejects_daily_ceiling_zero():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: [minimax]
 daily_ceiling: 0
 """,
@@ -88,6 +92,7 @@ def test_rejects_negative_daily_ceiling():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: [minimax]
 daily_ceiling: -1
 """,
@@ -101,6 +106,7 @@ def test_rejects_empty_enabled_models():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: []
 daily_ceiling: 100
 """,
@@ -116,6 +122,7 @@ def test_rejects_duplicate_models():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: [minimax, minimax]
 daily_ceiling: 100
 """,
@@ -137,6 +144,7 @@ def test_skip_order_must_contain_all_query_ids():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: [minimax]
 daily_ceiling: 100
 degraded_skip_order: [Q1, Q2, Q3]
@@ -151,6 +159,7 @@ def test_per_model_rot_threshold_validated():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: [minimax]
 daily_ceiling: 100
 query_rot_streak_threshold_per_model:
@@ -166,6 +175,7 @@ def test_rejects_unknown_review_reason():
         path = _write(
             Path(d),
             """
+daily_ceiling: 333
 enabled_models: [minimax]
 daily_ceiling: 100
 review_reasons: [bogus_reason]
@@ -255,3 +265,177 @@ def test_search_rejects_non_positive(tmp_path, field):
     with pytest.raises(ValidationError) as excinfo:
         load_config(p)
     assert field in str(excinfo.value)
+
+
+# --- U4 (Plan 2026-07-13-002) call_b_groups dedup pins -----------
+#
+# U4 restores the 3915675 dedup: 6 polysemous brands were re-added
+# to B after the U3 wire-in (commit ab12419). They are covered by
+# C1 (llama, mimo, moonshot_kimi, yi) and C2 (ernie, upstage) via
+# the co-occurrence AND-filter, so listing them in B is duplicate
+# TwitterAPI credit spend with no recall gain.
+
+
+def test_call_b_groups_dedup_shape_pinned():
+    """The live config.yaml's call_b_groups is the 6/4/4 dedup'd
+    shape — the 6 polysemous brands are absent."""
+    import logging
+    with tempfile.TemporaryDirectory() as d:
+        # Mirror the live config.yaml structure: 4 polysemous brands
+        # in C1, 2 in C2, and a dedup'd call_b_groups.
+        path = _write(
+            Path(d),
+            """
+daily_ceiling: 333
+enabled_models:
+  - minimax
+  - qwen
+  - llama
+  - mimo
+review_reasons:
+  - low_engagement
+x_query_specs:
+  - brands:
+      llama:         [Llama]
+      mimo:          [MiMo]
+      moonshot_kimi: [Kimi]
+      yi:            [Yi]
+    co_occurrence: [api, llm, model]
+    min_faves: 0
+    call_id: C1
+  - brands:
+      ernie:   [ERNIE]
+      upstage: [Upstage]
+    co_occurrence: [api, llm, model]
+    min_faves: 0
+    call_id: C2
+call_b_groups:
+  - [minimax, qwen, deepseek, mistral, stepfun, hunyuan]
+  - [doubao, glm, sensechat, inclusionai]
+  - [nemo_megatron, exaone, sakana_ai, kuaishou]
+""",
+        )
+        c = load_config(path)
+    expected = [
+        ["minimax", "qwen", "deepseek", "mistral", "stepfun", "hunyuan"],
+        ["doubao", "glm", "sensechat", "inclusionai"],
+        ["nemo_megatron", "exaone", "sakana_ai", "kuaishou"],
+    ]
+    assert c.call_b_groups == expected, (
+        f"call_b_groups shape drifted from the U4 6/4/4 dedup: "
+        f"got {c.call_b_groups}, expected {expected}"
+    )
+
+
+def test_call_b_groups_dedup_emits_no_warning_for_clean_config(caplog):
+    """Loading the dedup'd live config does NOT emit a B/C dupe
+    warning. Pins the validator's clean-config path."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(
+            Path(d),
+            """
+daily_ceiling: 333
+enabled_models: [minimax]
+review_reasons: [low_engagement]
+x_query_specs:
+  - brands:
+      llama: [Llama]
+    co_occurrence: [api, llm, model]
+    min_faves: 0
+    call_id: C1
+call_b_groups:
+  - [minimax, qwen, deepseek]
+""",
+        )
+        with caplog.at_level(logging.WARNING, logger="x_monitor.config"):
+            load_config(path)
+        dupe_warnings = [
+            r for r in caplog.records
+            if "call_b_groups shares" in r.getMessage()
+        ]
+        assert not dupe_warnings, (
+            f"Dedup'd config should NOT emit a dupe warning; got: "
+            f"{[r.getMessage() for r in dupe_warnings]}"
+        )
+
+
+def test_call_b_groups_dedup_warns_when_dupe_reintroduced(caplog):
+    """If a future config reintroduces a brand in BOTH B and C, the
+    validator emits a logging.warning naming the offending brands.
+    Pin the warning so a refactor that suppresses it fails this test."""
+    import logging
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(
+            Path(d),
+            """
+daily_ceiling: 333
+enabled_models: [minimax]
+review_reasons: [low_engagement]
+x_query_specs:
+  - brands:
+      llama: [Llama]
+    co_occurrence: [api, llm, model]
+    min_faves: 0
+    call_id: C1
+call_b_groups:
+  - [minimax, llama]
+""",
+        )
+        with caplog.at_level(logging.WARNING, logger="x_monitor.config"):
+            load_config(path)
+        dupe_msgs = [
+            r.getMessage() for r in caplog.records
+            if "call_b_groups shares" in r.getMessage()
+        ]
+        assert dupe_msgs, (
+            "Config with a brand in both B and C must emit a "
+            "dupe warning via logging.warning"
+        )
+        assert "llama" in dupe_msgs[0], (
+            f"Dupe warning must name the offending brand; got: "
+            f"{dupe_msgs[0]}"
+        )
+
+
+def test_call_b_groups_dropped_brands_covered_by_call_c_specs():
+    """The 6 brands dropped from B (llama, mimo, moonshot_kimi, yi,
+    ernie, upstage) are all covered by some x_query_specs[*].brands
+    entry. Pins the recall-preservation invariant."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(
+            Path(d),
+            """
+daily_ceiling: 333
+enabled_models: [minimax]
+review_reasons: [low_engagement]
+x_query_specs:
+  - brands:
+      llama: [Llama]
+      mimo: [MiMo]
+      moonshot_kimi: [Kimi]
+      yi: [Yi]
+    co_occurrence: [api, llm, model]
+    min_faves: 0
+    call_id: C1
+  - brands:
+      ernie: [ERNIE]
+      upstage: [Upstage]
+    co_occurrence: [api, llm, model]
+    min_faves: 0
+    call_id: C2
+call_b_groups:
+  - [minimax, qwen]
+""",
+        )
+        c = load_config(path)
+    covered: set[str] = set()
+    for spec in c.x_query_specs:
+        covered.update((spec.brands or {}).keys())
+    for spec in c.call_c_specs:
+        covered.update((spec.brands or {}).keys())
+    for brand in ("llama", "mimo", "moonshot_kimi", "yi", "ernie", "upstage"):
+        assert brand in covered, (
+            f"Brand {brand!r} was dropped from call_b_groups but is "
+            f"not covered by any x_query_specs entry — recall "
+            f"regression."
+        )

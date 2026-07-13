@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -175,6 +176,15 @@ class Config(BaseModel):
     # Retired v1.7-era alias — kept so legacy config files parse
     # cleanly. U4 (smoketest) removal is a future plan.
     call_c_specs: list[XQuerySpec] = Field(default_factory=list)
+    # Plan 2026-07-13-002 U4: the wide-net B path's per-brand split.
+    # Brands listed here MUST NOT also appear in any call_c_specs /
+    # x_query_specs entry — the C specs already cover polysemous
+    # brands (llama, mimo, moonshot_kimi, yi via C1; ernie, upstage
+    # via C2) via the co-occurrence AND-filter, so listing them in B
+    # is duplicate TwitterAPI credit spend with no recall gain. The
+    # model_validator below emits a warning if a future config
+    # reintroduces a dupe.
+    call_b_groups: list[list[str]] = Field(default_factory=list)
     dashboard: DashboardConfig = DashboardConfig()
 
     @field_validator("enabled_models")
@@ -216,6 +226,42 @@ class Config(BaseModel):
             raise ValueError(f"degraded_skip_order has duplicates: {v}")
         return v
 
+    @model_validator(mode="after")
+    def _warn_on_call_b_call_c_duplicates(self) -> "Config":
+        """Plan 2026-07-13-002 U4: surface a warning when a brand
+        appears in BOTH call_b_groups AND any x_query_specs / call_c_specs
+        entry.
+
+        The C specs cover polysemous brands (llama, mimo, moonshot_kimi,
+        yi via C1; ernie, upstage via C2) via the co-occurrence
+        AND-filter, so they should not also appear in the wide-net B
+        path — that's duplicate TwitterAPI credit spend on the same
+        recall. The validator emits logging.warning (NOT raise) so
+        operators can override for A/B comparison runs.
+
+        Reads x_query_specs (the v2 field) AND call_c_specs (the v1.7
+        legacy alias) so legacy configs that still use call_c_specs:
+        also get checked."""
+        c_brands: set[str] = set()
+        for spec in self.x_query_specs:
+            c_brands.update((spec.brands or {}).keys())
+        for spec in self.call_c_specs:
+            c_brands.update((spec.brands or {}).keys())
+        b_brands: set[str] = set()
+        for group in self.call_b_groups:
+            b_brands.update(group)
+        dupes = sorted(b_brands & c_brands)
+        if dupes:
+            logging.warning(
+                "call_b_groups shares %d brands with x_query_specs/"
+                "call_c_specs: %s. The C specs already cover these via "
+                "co-occurrence; removing them from B halves TwitterAPI "
+                "credit spend on the wide-net path with no recall "
+                "loss. See plan 2026-07-13-002 U4.",
+                len(dupes), dupes,
+            )
+        return self
+
     @field_validator("query_rot_streak_threshold_per_model")
     @classmethod
     def _validate_rot_per_model(cls, v: dict[str, int]) -> dict[str, int]:
@@ -242,6 +288,9 @@ def load_config(path: Path) -> Config:
     # regardless of which name the operator has.
     if "x_query_specs" not in raw and "call_c_specs" in raw:
         raw = {**raw, "x_query_specs": raw["call_c_specs"]}
+    # Plan 2026-07-13-002 U4: same rename handling for call_b_groups.
+    # Legacy v1.7.x config files may also carry this under a different
+    # shape — pass through as-is when the key is present.
     try:
         return Config.model_validate(raw)
     except ValidationError:

@@ -39,16 +39,25 @@ enabled_models:
 # 9 new brands (Llama, NeMo, Doubao, Yi, SenseChat, EXAONE, Karakuri,
 # Kuaishou, Upstage). Splitting into three semantic groups keeps each
 # Call B under cap:
-#   B1: top-presence / global brands (8 brands, ~280 chars)
-#   B2: Chinese-language brands (7 brands, ~360 chars)
-#   B3: specialized / smaller brands (5 brands, ~245 chars)
+#   B1: top-presence / global brands (6 brands)
+#   B2: Chinese-language brands (4 brands)
+#   B3: specialized / smaller brands (4 brands)
+# Plan 2026-07-13-002 U4: 6 polysemous brands are intentionally absent
+# from B because the C1/C2 specs already cover them via co-occurrence
+# AND-filter (the dedup from commit 3915675):
+#   - llama, mimo, moonshot_kimi, yi → C1 (call_c_specs[0].brands)
+#   - ernie, upstage                    → C2 (call_c_specs[1].brands)
+# Recall for the 6 dropped brands is preserved via the C1/C2
+# co-occurrence path; this change halves the duplicate TwitterAPI
+# credit spend on the B path. The validator at x_monitor/config.py
+# emits a warning if a future config reintroduces a dupe.
 # When `call_b_groups` is absent or null, plan_calls emits one Call B
 # spanning all enabled_models (legacy v1.7 behavior). Set to null to
 # disable the split.
 call_b_groups:
-  - [llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan]
-  - [doubao, glm, moonshot_kimi, mimo, sensechat, yi, inclusionai]
-  - [nemo_megatron, exaone, sakana_ai, kuaishou, upstage]
+  - [minimax, qwen, deepseek, mistral, stepfun, hunyuan]
+  - [doubao, glm, sensechat, inclusionai]
+  - [nemo_megatron, exaone, sakana_ai, kuaishou]
 
 # Daily TwitterAPI.io budget (pay-per-use). Each unit = 1 tweet returned by
 # advanced_search. 333/day gives 6x headroom over the 9x5x50=2250 upper bound
