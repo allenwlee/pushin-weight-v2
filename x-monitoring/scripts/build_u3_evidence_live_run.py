@@ -218,52 +218,49 @@ def main() -> int:
       "to free the LOCK before U3 fired).")
     a("")
 
-    a("## 3. Per-call raw fetched tweets")
-    a("")
-    a("Each `*.json` under `data/runs/raw/{run_id}/` is the raw TwitterAPI.io "
-      "response for one (brand_id, call_kind, bucket) tuple. The file `*_account_acct.json` "
-      "is the placeholder for Call A when no list posts were returned "
-      "(the file is 2 bytes — an empty array).")
-    a("")
+    # Build a flat (tweet_id → source-call-file) index from raw_calls
+    # so the per-post section can mark each tweet with its fetch source
+    # and we can compute per-call rollups below. Tweets that landed in
+    # the DB are tagged "INSERTED IN DB"; the rest "DROPPED BY FILTER".
+    raw_by_tweet_id: dict[str, str] = {}
     for call_name, call_payload in raw_calls.items():
-        a(f"### {call_name}  — {len(call_payload)} tweet(s)")
-        a("")
-        if not call_payload:
-            a("_(empty response)_")
-            a("")
-            continue
-        for i, tweet in enumerate(call_payload, 1):
-            tweet_id_str = (
-                str(tweet.get('id') or tweet.get('tweet_id') or '')
-            )
-            a(f"**#{i}  tweet_id={tweet_id_str}**  ")
-            user_obj = tweet.get("user") or {}
-            author = (
-                tweet.get("author_handle")
-                or user_obj.get("screen_name")
-                or user_obj.get("username")
-                or "(no handle)"
-            )
-            created = (
-                tweet.get("created_at")
-                or tweet.get("tweetCreatedAt")
-                or ""
-            )
-            lang = (
-                tweet.get("lang")
-                or tweet.get("lang_detected")
-                or ""
-            )
-            text = (
-                tweet.get("text")
-                or tweet.get("full_text")
-                or ""
-            )
-            a(f"- author: @{author}  ·  created_at: `{created}`  ·  "
-              f"lang: `{lang}`")
-            a("")
-            a("> " + (text.replace("\n", "\n> ") or "(empty text)"))
-            a("")
+        for tweet in call_payload:
+            tid = str(tweet.get("id") or tweet.get("tweet_id") or "")
+            if tid:
+                raw_by_tweet_id[tid] = call_name
+
+    # Set of tweet_ids that landed in `posts` table during this run's
+    # window — used to tag each raw tweet with INSERTED vs DROPPED.
+    db_inserted_tweet_ids: set[str] = {
+        str(r[0]) for r in db.execute(
+            "SELECT tweet_id FROM posts WHERE fetched_at >= ? AND fetched_at < ?",
+            (RUN_WINDOW_START, RUN_WINDOW_END),
+        ).fetchall()
+    }
+
+    # Per-call rollup: how many fetched → how many inserted.
+    a("## 3. Per-call rollup (fetched → filtered → inserted)")
+    a("")
+    a("Each `data/runs/raw/{run_id}/<brand>_<kind>_acct.json` file is the "
+      "raw TwitterAPI.io response for one call. The table below pairs "
+      "fetched count with the inserted count (DB-side via tweet_id match) "
+      "and the dropped count. Section 5 below renders every tweet with "
+      "an explicit `INSERTED IN DB` / `DROPPED BY FILTER` tag.")
+    a("")
+    a("| Call | Source file | Fetched | Inserted | Dropped |")
+    a("|---|---|---|---|---|")
+    for call_name, call_payload in sorted(raw_calls.items()):
+        fetched_ids = [
+            str(t.get("id") or t.get("tweet_id") or "")
+            for t in call_payload
+        ]
+        fetched_ids = [t for t in fetched_ids if t]
+        n_fetched = len(fetched_ids)
+        n_inserted = sum(1 for t in fetched_ids if t in db_inserted_tweet_ids)
+        a(f"| `{call_name.replace('_acct.json','')}` | "
+          f"`runs/raw/{RUN_ID}/{call_name}` | {n_fetched} | "
+          f"{n_inserted} | {n_fetched - n_inserted} |")
+    a("")
 
     # Classifier output summary (aggregated across the run). This sits
     # BEFORE the per-post section so the operator sees the rollup first.
@@ -347,113 +344,161 @@ def main() -> int:
         a("_(no unsanctioned rows for this run)_")
     a("")
 
-    a("## 5. Per-post: tweet content + classification side-by-side")
+    a("## 5. Per-tweet: source call + content + (if inserted) classification")
     a("")
-    a(f"Count: **{len(posts)} posts** "
-      f"(verified: `SELECT COUNT(*) FROM posts WHERE fetched_at >= '{RUN_WINDOW_START}'`)")
-    a("")
-    a("Each post is rendered as one block: metadata + the verbatim tweet text, "
-      "followed by its brand-edge rows, signal rows (post_type × sentiment), "
-      "discourse rows (role × nationalism axes), and unsanctioned flags. "
-      "Post N's tweet text is directly above its classification rows so the "
-      "operator can match content to classifier output without scrolling.")
+    n_total = sum(len(p) for p in raw_calls.values())
+    a(f"This section walks every tweet the run fetched ({n_total} total "
+      f"across {len(raw_calls)} calls). Each tweet is tagged either "
+      f"`INSERTED IN DB` (persisted to `data/x_monitoring.db` during this "
+      f"run window) or `DROPPED BY FILTER` (fetched but excluded by the "
+      f"filter pipeline — no DB row). Inserted tweets additionally carry "
+      f"their classification rows (brand edges + signals + discourse).")
     a("")
 
-    # First pass: render the per-post blocks (text + classification together).
-    for i, p in enumerate(posts, 1):
-        a(f"### #{i}  tweet_id=`{p['tweet_id']}`  "
-          f"(internal id={p['id']})")
-        a("")
-        a(f"- author: @{p.get('author_handle') or '(no handle)'}")
-        a(f"- created_at: `{p.get('created_at')}`")
-        a(f"- fetched_at: `{p.get('fetched_at')}`")
-        a(f"- lang_detected: `{p.get('lang_detected')}`")
-        a(f"- text_en: `{(p.get('text_en') or '')[:160]}`")
-        a(f"- text_zh_cn: `{(p.get('text_zh_cn') or '')[:160]}`")
-        a("")
-        a("**Original post text** (verbatim from TwitterAPI.io):")
-        a("")
-        original = p.get("text") or ""
-        if original:
-            a("> " + original.replace("\n", "\n> "))
-        else:
-            a("_(empty)_")
-        a("")
+    # Build a tweet_id → posts-row lookup so we can find the DB-side
+    # post for each fetched tweet that landed in `posts`.
+    posts_by_tweet_id = {p["tweet_id"]: p for p in posts}
 
-        # Classification rows for THIS post, embedded inline so the
-        # operator sees content + classification together.
-        edges = p["brand_edges"]
-        signals = p["signals"]
-        discourse = p["discourse"]
-        unsanc = p["unsanctioned"]
-
-        if not edges:
-            a("_(no attributed brands — dropped as unattributed at `_attribute_call_items`)_")
+    # Walk raw_calls in order; for each tweet, render metadata + text +
+    # INSERTED/DROPPED tag + classification (if inserted). Tweets are
+    # numbered globally across all calls so the operator sees a single
+    # sequence.
+    n = 0
+    for call_name, call_payload in sorted(raw_calls.items()):
+        if not call_payload:
+            a(f"### Call `{call_name}` — 0 tweets")
+            a("")
+            a("_(empty response)_")
             a("")
             continue
+        a(f"### Call `{call_name}` — {len(call_payload)} tweet(s)")
+        a("")
+        for tweet in call_payload:
+            n += 1
+            tid = str(tweet.get("id") or tweet.get("tweet_id") or "")
+            inserted = tid in db_inserted_tweet_ids
+            tag = "**INSERTED IN DB**" if inserted else "**DROPPED BY FILTER**"
+            user_obj = tweet.get("user") or {}
+            author = (
+                tweet.get("author_handle")
+                or user_obj.get("screen_name")
+                or user_obj.get("username")
+                or "(no handle)"
+            )
+            created = (
+                tweet.get("created_at")
+                or tweet.get("tweetCreatedAt")
+                or ""
+            )
+            lang = (
+                tweet.get("lang")
+                or tweet.get("lang_detected")
+                or ""
+            )
+            text = (
+                tweet.get("text")
+                or tweet.get("full_text")
+                or ""
+            )
+            a(f"#### #{n}  tweet_id=`{tid}`  ·  {tag}")
+            a("")
+            a(f"- author: @{author}  ·  created_at: `{created}`  ·  lang: `{lang}`")
+            a("")
+            if text:
+                a("> " + text.replace("\n", "\n> "))
+            else:
+                a("_(empty text)_")
+            a("")
 
-        a("**Brand edges** (`posts_brands`):")
-        a("")
-        for e in edges:
-            bid = e["brand_id"]
-            meta = (brands.get(bid)
-                    or (isinstance(bid, int) and brands_by_id.get(bid))
-                    or {})
-            nick = meta.get("nickname", str(bid))
-            disp = meta.get("display_name", "")
-            a(f"- `{nick}` (brand_id={bid})"
-              f"{(' · ' + disp) if disp else ''} · weight={e['weight']}")
-        a("")
-        if signals:
-            a("**Signals** (`posts_brands_signals`, post_type × sentiment):")
+            if not inserted:
+                a("_(no classification rows — post was filtered out before persist)_")
+                a("")
+                continue
+
+            # Find the DB-side post for this tweet and emit classification.
+            p = posts_by_tweet_id.get(tid)
+            if p is None:
+                a("_(DB row not found despite tag — anomaly)_")
+                a("")
+                continue
+            a(f"- internal id: `{p['id']}`  ·  fetched_at: `{p.get('fetched_at')}`  ·  "
+              f"lang_detected: `{p.get('lang_detected')}`")
+            a(f"- text_en: `{(p.get('text_en') or '')[:160]}`")
+            a(f"- text_zh_cn: `{(p.get('text_zh_cn') or '')[:160]}`")
             a("")
-            for s in signals:
-                bid = s["brand_id"]
+
+            edges = p["brand_edges"]
+            signals = p["signals"]
+            discourse = p["discourse"]
+            unsanc = p["unsanctioned"]
+
+            if not edges:
+                a("_(no attributed brands — should not happen for INSERTED tag; double-check)_")
+                a("")
+                continue
+
+            a("**Brand edges** (`posts_brands`):")
+            a("")
+            for e in edges:
+                bid = e["brand_id"]
                 meta = (brands.get(bid)
                         or (isinstance(bid, int) and brands_by_id.get(bid))
                         or {})
                 nick = meta.get("nickname", str(bid))
-                a(f"- `{nick}` (brand_id={bid}) → post_type=`{s['post_type_key']}`, "
-                  f"sentiment=`{s['sentiment']}`")
+                disp = meta.get("display_name", "")
+                a(f"- `{nick}` (brand_id={bid})"
+                  f"{(' · ' + disp) if disp else ''} · weight={e['weight']}")
             a("")
-        else:
-            a("_(no signal rows for this post)_")
-            a("")
-        if discourse:
-            a("**Discourse** (`posts_brands_discourse`):")
-            a("")
-            for d in discourse:
-                bid = d["brand_id"]
-                meta = (brands.get(bid)
-                        or (isinstance(bid, int) and brands_by_id.get(bid))
-                        or {})
-                nick = meta.get("nickname", str(bid))
-                dk_raw = d["discourse_key"]
-                dk_name = discourse_by_id.get(dk_raw, f"unknown({dk_raw})")
-                cn_id = d["china_nationalism"]
-                cn_name = nationalism_by_id.get(cn_id, f"unknown({cn_id})")
-                us_id = d["us_nationalism"]
-                us_name = nationalism_by_id.get(us_id, f"unknown({us_id})")
-                a(f"- `{nick}` (brand_id={bid}) → "
-                  f"role=`{dk_name}` (id={dk_raw}), "
-                  f"act_id={d['act_id']}, "
-                  f"china_nationalism=`{cn_name}` (id={cn_id}), "
-                  f"us_nationalism=`{us_name}` (id={us_id})")
-            a("")
-        else:
-            a("_(no discourse rows — `discours_key` likely fell through to "
-              "the KTD5 `uncategorized-sentinel` and was dead-lettered)_")
-            a("")
-        if unsanc:
-            a("**Unsanctioned flags** (`posts_unsanctioned_flags`):")
-            a("")
-            for u in unsanc:
-                evidence_str = u.get("evidence", "")
-                if evidence_str:
-                    evidence_str = evidence_str[:200]
-                a(f"- flags=`{u['flags']}` · evidence=`{evidence_str}`  ")
-                a(f"  decided_at: `{u.get('decided_at')}`")
-            a("")
+            if signals:
+                a("**Signals** (`posts_brands_signals`, post_type × sentiment):")
+                a("")
+                for s in signals:
+                    bid = s["brand_id"]
+                    meta = (brands.get(bid)
+                            or (isinstance(bid, int) and brands_by_id.get(bid))
+                            or {})
+                    nick = meta.get("nickname", str(bid))
+                    a(f"- `{nick}` (brand_id={bid}) → post_type=`{s['post_type_key']}`, "
+                      f"sentiment=`{s['sentiment']}`")
+                a("")
+            else:
+                a("_(no signal rows for this post)_")
+                a("")
+            if discourse:
+                a("**Discourse** (`posts_brands_discourse`):")
+                a("")
+                for d in discourse:
+                    bid = d["brand_id"]
+                    meta = (brands.get(bid)
+                            or (isinstance(bid, int) and brands_by_id.get(bid))
+                            or {})
+                    nick = meta.get("nickname", str(bid))
+                    dk_raw = d["discourse_key"]
+                    dk_name = discourse_by_id.get(dk_raw, f"unknown({dk_raw})")
+                    cn_id = d["china_nationalism"]
+                    cn_name = nationalism_by_id.get(cn_id, f"unknown({cn_id})")
+                    us_id = d["us_nationalism"]
+                    us_name = nationalism_by_id.get(us_id, f"unknown({us_id})")
+                    a(f"- `{nick}` (brand_id={bid}) → "
+                      f"role=`{dk_name}` (id={dk_raw}), "
+                      f"act_id={d['act_id']}, "
+                      f"china_nationalism=`{cn_name}` (id={cn_id}), "
+                      f"us_nationalism=`{us_name}` (id={us_id})")
+                a("")
+            else:
+                a("_(no discourse rows — `discours_key` likely fell through to "
+                  "the KTD5 `uncategorized-sentinel` and was dead-lettered)_")
+                a("")
+            if unsanc:
+                a("**Unsanctioned flags** (`posts_unsanctioned_flags`):")
+                a("")
+                for u in unsanc:
+                    evidence_str = u.get("evidence", "")
+                    if evidence_str:
+                        evidence_str = evidence_str[:200]
+                    a(f"- flags=`{u['flags']}` · evidence=`{evidence_str}`  ")
+                    a(f"  decided_at: `{u.get('decided_at')}`")
+                a("")
 
     a("## 6. KTD5 dead-letter rows this run produced")
     a("")
