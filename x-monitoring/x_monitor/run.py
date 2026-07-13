@@ -1683,9 +1683,17 @@ class RunPipeline:
                     Account(handle=handle, role=info["role"]),
                     posts_for_account=info["posts"][:10],
                 )
+                # NOTE(task #308): `thread_count` is computed but not
+                # persisted. `Store.upsert_account` does not accept the
+                # `multiple_posts_in_thread_with_official` kwarg, and we
+                # are intentionally NOT extending the schema right now
+                # (the metric is not load-bearing; nothing reads it back).
+                # If a future feature needs the metric, either add a
+                # column here or log it to the run-summary JSON instead.
                 thread_count = sum(
                     1 for p in info["posts"] if p.get("in_reply_to_user_id")
                 )
+                del thread_count  # marker for future wiring
                 store.upsert_account(
                     brand_id=m,
                     handle=handle,
@@ -1694,7 +1702,6 @@ class RunPipeline:
                     verified=False,
                     bio_contains_brand=False,
                     multi_brand_voice=False,
-                    multiple_posts_in_thread_with_official=thread_count,
                 )
                 for p in info["posts"]:
                     store.record_appearance(m, handle, p["tweet_id"], role_at_time=role)
