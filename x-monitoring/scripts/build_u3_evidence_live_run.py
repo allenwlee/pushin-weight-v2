@@ -221,7 +221,10 @@ def main() -> int:
     # Build a flat (tweet_id → source-call-file) index from raw_calls
     # so the per-post section can mark each tweet with its fetch source
     # and we can compute per-call rollups below. Tweets that landed in
-    # the DB are tagged "INSERTED IN DB"; the rest "DROPPED BY FILTER".
+    # the DB are tagged "INSERTED IN DB"; the rest "DROPPED BY FILTER"
+    # unless they exist in `posts` outside the run window, in which
+    # case they're tagged "DUPLICATE — ALREADY IN DB" (an earlier run
+    # like the LaunchAgent inserted them).
     raw_by_tweet_id: dict[str, str] = {}
     for call_name, call_payload in raw_calls.items():
         for tweet in call_payload:
@@ -231,12 +234,40 @@ def main() -> int:
 
     # Set of tweet_ids that landed in `posts` table during this run's
     # window — used to tag each raw tweet with INSERTED vs DROPPED.
-    db_inserted_tweet_ids: set[str] = {
-        str(r[0]) for r in db.execute(
-            "SELECT tweet_id FROM posts WHERE fetched_at >= ? AND fetched_at < ?",
-            (RUN_WINDOW_START, RUN_WINDOW_END),
-        ).fetchall()
-    }
+    # Pull from the DB using the run-summary's started_at as the lower
+    # bound so any tweet the run inserted within the wall-clock lifetime
+    # of the run counts as INSERTED, regardless of which wall-second the
+    # fetch landed on. Tweet_ids present in `posts` but OUTSIDE this
+    # window are tagged as DUPLICATE_PRECEDED (already in DB from an
+    # earlier run — e.g. the LaunchAgent firing every few minutes —
+    # not a filter rejection). Tweet_ids in the raw fetched set that
+    # have NO `posts` row at all are tagged DROPPED_BY_FILTER.
+    db_inserted_tweet_ids: set[str] = set()
+    db_already_in_db_tweet_ids: set[str] = set()
+    # First: bucket by fetched_at vs RUN_WINDOW_START (this-run inserts
+    # vs earlier-run rows). Use the `T`-separator form (no offset suffix)
+    # because the DB stores `2026-07-13T03:55:49+00:00` — a space-separator
+    # threshold like `2026-07-13 04:03:00` would lex-sort AFTER every
+    # T-separator row (space=0x20 < T=0x54), falsely tagging them all
+    # as INSERTED.
+    for r in db.execute(
+        "SELECT tweet_id, fetched_at FROM posts WHERE fetched_at >= ?",
+        (RUN_WINDOW_START,),
+    ).fetchall():
+        tid = str(r[0])
+        db_inserted_tweet_ids.add(tid)
+    # Second: any tweet_id that exists in `posts` but predates the run
+    # window is a prior-run row (DUPLICATE — ALREADY IN DB), regardless
+    # of whether its fetched_at falls in our query range.
+    for r in db.execute(
+        "SELECT tweet_id, fetched_at FROM posts",
+    ).fetchall():
+        tid = str(r[0])
+        fetched_at = r[1] or ""
+        if tid in db_inserted_tweet_ids:
+            continue
+        if fetched_at and fetched_at < RUN_WINDOW_START:
+            db_already_in_db_tweet_ids.add(tid)
 
     # Per-call rollup: how many fetched → how many inserted.
     a("## 3. Per-call rollup (fetched → filtered → inserted)")
@@ -245,10 +276,11 @@ def main() -> int:
       "raw TwitterAPI.io response for one call. The table below pairs "
       "fetched count with the inserted count (DB-side via tweet_id match) "
       "and the dropped count. Section 5 below renders every tweet with "
-      "an explicit `INSERTED IN DB` / `DROPPED BY FILTER` tag.")
+      "an explicit `INSERTED IN DB` / `DUPLICATE — ALREADY IN DB` / "
+      "`DROPPED BY FILTER` tag.")
     a("")
-    a("| Call | Source file | Fetched | Inserted | Dropped |")
-    a("|---|---|---|---|---|")
+    a("| Call | Source file | Fetched | Inserted (this run) | Duplicates (prior run) | Dropped |")
+    a("|---|---|---|---|---|---|")
     for call_name, call_payload in sorted(raw_calls.items()):
         fetched_ids = [
             str(t.get("id") or t.get("tweet_id") or "")
@@ -257,9 +289,11 @@ def main() -> int:
         fetched_ids = [t for t in fetched_ids if t]
         n_fetched = len(fetched_ids)
         n_inserted = sum(1 for t in fetched_ids if t in db_inserted_tweet_ids)
+        n_dup = sum(1 for t in fetched_ids if t in db_already_in_db_tweet_ids)
+        n_dropped = n_fetched - n_inserted - n_dup
         a(f"| `{call_name.replace('_acct.json','')}` | "
           f"`runs/raw/{RUN_ID}/{call_name}` | {n_fetched} | "
-          f"{n_inserted} | {n_fetched - n_inserted} |")
+          f"{n_inserted} | {n_dup} | {n_dropped} |")
     a("")
 
     # Classifier output summary (aggregated across the run). This sits
@@ -348,16 +382,149 @@ def main() -> int:
     a("")
     n_total = sum(len(p) for p in raw_calls.values())
     a(f"This section walks every tweet the run fetched ({n_total} total "
-      f"across {len(raw_calls)} calls). Each tweet is tagged either "
+      f"across {len(raw_calls)} calls). Each tweet is tagged one of "
       f"`INSERTED IN DB` (persisted to `data/x_monitoring.db` during this "
-      f"run window) or `DROPPED BY FILTER` (fetched but excluded by the "
-      f"filter pipeline — no DB row). Inserted tweets additionally carry "
-      f"their classification rows (brand edges + signals + discourse).")
+      f"run), `DUPLICATE — ALREADY IN DB` (fetched again but the tweet_id "
+      f"was already in the DB from an earlier run — e.g. the LaunchAgent "
+      f"that fires every few minutes — so no new row was written; this is "
+      f"NOT a filter rejection), or `DROPPED BY FILTER` (fetched, no DB "
+      f"row anywhere — a true filter rejection). Inserted tweets "
+      f"additionally carry their classification rows (brand edges + "
+      f"signals + discourse).")
     a("")
 
     # Build a tweet_id → posts-row lookup so we can find the DB-side
     # post for each fetched tweet that landed in `posts`.
     posts_by_tweet_id = {p["tweet_id"]: p for p in posts}
+
+    # DUPLICATE-tagged tweets are rows the run re-fetched but that an
+    # earlier run already persisted to `posts` (LaunchAgent pre-inserts
+    # every few minutes). Their classification data lives in the same
+    # tables — pull the prior-run posts here so we can render their
+    # brand edges / signals / discourse / unsanctioned flags alongside
+    # the fetched text. Classification was generated by an earlier run
+    # with the same classifier, so it's just as valid as the run that
+    # is the subject of this report.
+    prior_run_posts = [
+        dict(r) for r in db.execute(
+            """
+            SELECT id, tweet_id, text, text_en, text_zh_cn, lang_detected,
+                   author_handle, source_query_id, fetched_at, created_at
+              FROM posts
+             WHERE tweet_id IN (
+                 SELECT DISTINCT tweet_id FROM posts WHERE fetched_at < ?
+             )
+            """,
+            (RUN_WINDOW_START,),
+        ).fetchall()
+    ]
+    for p in prior_run_posts:
+        p["brand_edges"] = [
+            dict(r) for r in db.execute(
+                "SELECT brand_id, weight FROM posts_brands WHERE post_id=?",
+                (p["id"],),
+            )
+        ]
+        p["signals"] = [
+            dict(r) for r in db.execute(
+                "SELECT brand_id, post_type_key, sentiment "
+                "FROM posts_brands_signals WHERE post_id=?",
+                (p["tweet_id"],),
+            )
+        ]
+        p["discourse"] = [
+            dict(r) for r in db.execute(
+                "SELECT brand_id, discourse_key, act_id, "
+                "china_nationalism, us_nationalism "
+                "FROM posts_brands_discourse WHERE post_id=?",
+                (p["id"],),
+            )
+        ]
+        p["unsanctioned"] = [
+            dict(r) for r in db.execute(
+                "SELECT flags, evidence, decided_at "
+                "FROM posts_unsanctioned_flags WHERE post_id=?",
+                (p["id"],),
+            )
+        ]
+        p["mentions"] = []
+    prior_run_by_tweet_id = {p["tweet_id"]: p for p in prior_run_posts}
+
+    # Helper: emit the brand-edges / signals / discourse / unsanctioned
+    # block for a post-row that already has those sublists attached.
+    # Used by both the INSERTED branch (current-run posts) and the
+    # DUPLICATE branch (prior-run posts with valid classification).
+    def _emit_classification(p):
+        edges = p["brand_edges"]
+        signals = p["signals"]
+        discourse = p["discourse"]
+        unsanc = p["unsanctioned"]
+        if not edges:
+            a("_(no attributed brands for this post)_")
+            a("")
+            return
+        a("**Brand edges** (`posts_brands`):")
+        a("")
+        for e in edges:
+            bid = e["brand_id"]
+            meta = (brands.get(bid)
+                    or (isinstance(bid, int) and brands_by_id.get(bid))
+                    or {})
+            nick = meta.get("nickname", str(bid))
+            disp = meta.get("display_name", "")
+            a(f"- `{nick}` (brand_id={bid})"
+              f"{(' · ' + disp) if disp else ''} · weight={e['weight']}")
+        a("")
+        if signals:
+            a("**Signals** (`posts_brands_signals`, post_type × sentiment):")
+            a("")
+            for s in signals:
+                bid = s["brand_id"]
+                meta = (brands.get(bid)
+                        or (isinstance(bid, int) and brands_by_id.get(bid))
+                        or {})
+                nick = meta.get("nickname", str(bid))
+                a(f"- `{nick}` (brand_id={bid}) → post_type=`{s['post_type_key']}`, "
+                  f"sentiment=`{s['sentiment']}`")
+            a("")
+        else:
+            a("_(no signal rows for this post)_")
+            a("")
+        if discourse:
+            a("**Discourse** (`posts_brands_discourse`):")
+            a("")
+            for d in discourse:
+                bid = d["brand_id"]
+                meta = (brands.get(bid)
+                        or (isinstance(bid, int) and brands_by_id.get(bid))
+                        or {})
+                nick = meta.get("nickname", str(bid))
+                dk_raw = d["discourse_key"]
+                dk_name = discourse_by_id.get(dk_raw, f"unknown({dk_raw})")
+                cn_id = d["china_nationalism"]
+                cn_name = nationalism_by_id.get(cn_id, f"unknown({cn_id})")
+                us_id = d["us_nationalism"]
+                us_name = nationalism_by_id.get(us_id, f"unknown({us_id})")
+                a(f"- `{nick}` (brand_id={bid}) → "
+                  f"role=`{dk_name}` (id={dk_raw}), "
+                  f"act_id={d['act_id']}, "
+                  f"china_nationalism=`{cn_name}` (id={cn_id}), "
+                  f"us_nationalism=`{us_name}` (id={us_id})")
+            a("")
+        else:
+            a("_(no discourse rows — `discours_key` likely fell through to "
+              "the KTD5 `uncategorized-sentinel` and was dead-lettered)_")
+            a("")
+        if unsanc:
+            a("**Unsanctioned flags** (`posts_unsanctioned_flags`):")
+            a("")
+            for u in unsanc:
+                evidence_str = u.get("evidence", "")
+                if evidence_str:
+                    evidence_str = evidence_str[:200]
+                a(f"- flags=`{u['flags']}` · evidence=`{evidence_str}`  ")
+                a(f"  decided_at: `{u.get('decided_at')}`")
+            a("")
 
     # Walk raw_calls in order; for each tweet, render metadata + text +
     # INSERTED/DROPPED tag + classification (if inserted). Tweets are
@@ -376,8 +543,15 @@ def main() -> int:
         for tweet in call_payload:
             n += 1
             tid = str(tweet.get("id") or tweet.get("tweet_id") or "")
-            inserted = tid in db_inserted_tweet_ids
-            tag = "**INSERTED IN DB**" if inserted else "**DROPPED BY FILTER**"
+            if tid in db_inserted_tweet_ids:
+                tag = "**INSERTED IN DB**"
+                inserted = True
+            elif tid in db_already_in_db_tweet_ids:
+                tag = "**DUPLICATE — ALREADY IN DB**"
+                inserted = False
+            else:
+                tag = "**DROPPED BY FILTER**"
+                inserted = False
             user_obj = tweet.get("user") or {}
             author = (
                 tweet.get("author_handle")
@@ -411,6 +585,21 @@ def main() -> int:
             a("")
 
             if not inserted:
+                # DUPLICATE — already in DB from an earlier run (LaunchAgent).
+                # The earlier run's classification is just as valid (same
+                # classifier, same DB), so look it up and emit it alongside
+                # the fetched text. DROPPED (no DB row anywhere) genuinely
+                # has no classification.
+                if "**DUPLICATE — ALREADY IN DB**" in tag:
+                    p = prior_run_by_tweet_id.get(tid)
+                    if p is not None and p["brand_edges"]:
+                        a(f"- prior-run id: `{p['id']}`  ·  fetched_at: `{p.get('fetched_at')}`  ·  "
+                          f"lang_detected: `{p.get('lang_detected')}`")
+                        a(f"- text_en: `{(p.get('text_en') or '')[:160]}`")
+                        a(f"- text_zh_cn: `{(p.get('text_zh_cn') or '')[:160]}`")
+                        a("")
+                        _emit_classification(p)
+                        continue
                 a("_(no classification rows — post was filtered out before persist)_")
                 a("")
                 continue
@@ -427,78 +616,7 @@ def main() -> int:
             a(f"- text_zh_cn: `{(p.get('text_zh_cn') or '')[:160]}`")
             a("")
 
-            edges = p["brand_edges"]
-            signals = p["signals"]
-            discourse = p["discourse"]
-            unsanc = p["unsanctioned"]
-
-            if not edges:
-                a("_(no attributed brands — should not happen for INSERTED tag; double-check)_")
-                a("")
-                continue
-
-            a("**Brand edges** (`posts_brands`):")
-            a("")
-            for e in edges:
-                bid = e["brand_id"]
-                meta = (brands.get(bid)
-                        or (isinstance(bid, int) and brands_by_id.get(bid))
-                        or {})
-                nick = meta.get("nickname", str(bid))
-                disp = meta.get("display_name", "")
-                a(f"- `{nick}` (brand_id={bid})"
-                  f"{(' · ' + disp) if disp else ''} · weight={e['weight']}")
-            a("")
-            if signals:
-                a("**Signals** (`posts_brands_signals`, post_type × sentiment):")
-                a("")
-                for s in signals:
-                    bid = s["brand_id"]
-                    meta = (brands.get(bid)
-                            or (isinstance(bid, int) and brands_by_id.get(bid))
-                            or {})
-                    nick = meta.get("nickname", str(bid))
-                    a(f"- `{nick}` (brand_id={bid}) → post_type=`{s['post_type_key']}`, "
-                      f"sentiment=`{s['sentiment']}`")
-                a("")
-            else:
-                a("_(no signal rows for this post)_")
-                a("")
-            if discourse:
-                a("**Discourse** (`posts_brands_discourse`):")
-                a("")
-                for d in discourse:
-                    bid = d["brand_id"]
-                    meta = (brands.get(bid)
-                            or (isinstance(bid, int) and brands_by_id.get(bid))
-                            or {})
-                    nick = meta.get("nickname", str(bid))
-                    dk_raw = d["discourse_key"]
-                    dk_name = discourse_by_id.get(dk_raw, f"unknown({dk_raw})")
-                    cn_id = d["china_nationalism"]
-                    cn_name = nationalism_by_id.get(cn_id, f"unknown({cn_id})")
-                    us_id = d["us_nationalism"]
-                    us_name = nationalism_by_id.get(us_id, f"unknown({us_id})")
-                    a(f"- `{nick}` (brand_id={bid}) → "
-                      f"role=`{dk_name}` (id={dk_raw}), "
-                      f"act_id={d['act_id']}, "
-                      f"china_nationalism=`{cn_name}` (id={cn_id}), "
-                      f"us_nationalism=`{us_name}` (id={us_id})")
-                a("")
-            else:
-                a("_(no discourse rows — `discours_key` likely fell through to "
-                  "the KTD5 `uncategorized-sentinel` and was dead-lettered)_")
-                a("")
-            if unsanc:
-                a("**Unsanctioned flags** (`posts_unsanctioned_flags`):")
-                a("")
-                for u in unsanc:
-                    evidence_str = u.get("evidence", "")
-                    if evidence_str:
-                        evidence_str = evidence_str[:200]
-                    a(f"- flags=`{u['flags']}` · evidence=`{evidence_str}`  ")
-                    a(f"  decided_at: `{u.get('decided_at')}`")
-                a("")
+            _emit_classification(p)
 
     a("## 6. KTD5 dead-letter rows this run produced")
     a("")
