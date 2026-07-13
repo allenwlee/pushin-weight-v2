@@ -831,6 +831,7 @@ class RunPipeline:
         dry_run: bool = False,
         limit_per_call: int | None = None,
         no_skip_under_budget: bool = False,
+        max_pages_per_call: int | None = None,
     ) -> dict[str, Any]:
         """Run the daily harvest.
 
@@ -849,6 +850,39 @@ class RunPipeline:
         # read them without a parameter refactor through 5 layers.
         self.limit_per_call = limit_per_call
         self.no_skip_under_budget = no_skip_under_budget
+        self.max_pages_per_call = max_pages_per_call
+
+        # Pre-flight $20 budget guard (plan 2026-07-13-001 follow-up).
+        # TwitterAPI.io charges 300 credits per /twitter/tweet/advanced_search
+        # page regardless of `n_results`. The 6-call smoketest shape
+        # (A + B1 + B2 + B3 + C1 + C2) means worst-case spend is:
+        #     6 calls × max_pages × 300 credits
+        # We refuse to start if would_spend > 2,000,000 credits ($20).
+        # This is hard-fail: an accidental `--max-pages-per-call 99999`
+        # can never drain the budget silently.
+        _BUDGET_HARD_CAP_CREDITS = 2_000_000  # $20 at TwitterAPI.io pricing
+        _CREDITS_PER_ADVANCED_SEARCH_PAGE = 300
+        _N_CALLS = 6  # A, B1, B2, B3, C1, C2
+        _effective_max_pages = (
+            self.max_pages_per_call
+            if self.max_pages_per_call is not None
+            else self.config.search.max_pages
+        )
+        _would_spend = (
+            _N_CALLS * _effective_max_pages * _CREDITS_PER_ADVANCED_SEARCH_PAGE
+        )
+        if _would_spend > _BUDGET_HARD_CAP_CREDITS:
+            raise RuntimeError(
+                f"Pre-flight budget guard: would burn "
+                f"{_would_spend:,} credits (${_would_spend / 100_000:.2f}) "
+                f"at max_pages={_effective_max_pages} × {_N_CALLS} calls × "
+                f"{_CREDITS_PER_ADVANCED_SEARCH_PAGE} credits/page, which "
+                f"exceeds the ${_BUDGET_HARD_CAP_CREDITS // 100_000} hard cap "
+                f"({_BUDGET_HARD_CAP_CREDITS:,} credits). Lower "
+                f"--max-pages-per-call to "
+                f"{_BUDGET_HARD_CAP_CREDITS // (_N_CALLS * _CREDITS_PER_ADVANCED_SEARCH_PAGE)} "
+                f"or less and re-run."
+            )
         run_id = f"{_now_iso().replace(':', '').replace('+', '_').replace('-', '')}-{uuid.uuid4().hex[:8]}"
         phase_timings: dict[str, float] = {}
         _run_t0 = time.monotonic()
@@ -1080,11 +1114,20 @@ class RunPipeline:
                             if self.limit_per_call is not None
                             else s.max_results
                         )
+                        # `max_pages_per_call` overrides the config-driven
+                        # pagination safety cap when set (operator-driven
+                        # production-shape runs). At 20 posts/page, the
+                        # per-call ceiling is `max_pages × max_per_page`.
+                        max_pages_cap = (
+                            self.max_pages_per_call
+                            if self.max_pages_per_call is not None
+                            else s.max_pages
+                        )
                         items = apify.run_search(
                             call.query_string,
                             max_results=max_results_cap,
                             since=since_cursor,
-                            max_pages=s.max_pages,
+                            max_pages=max_pages_cap,
                             max_per_page=s.max_per_page,
                         )
                     except TwitterApiAuthError as e:

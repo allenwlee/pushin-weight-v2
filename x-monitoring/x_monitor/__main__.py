@@ -70,6 +70,7 @@ def cmd_run(args, paths) -> int:
         dry_run=args.dry_run,
         limit_per_call=getattr(args, "limit_per_call", None),
         no_skip_under_budget=getattr(args, "no_skip_under_budget", False),
+        max_pages_per_call=getattr(args, "max_pages_per_call", None),
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
     if args.dry_run:
@@ -1180,6 +1181,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-skip-under-budget", action="store_true",
         help="Force every per-model query through, bypassing the "
              "daily_ceiling skip-order (default: honor skip order).",
+    )
+    p_run.add_argument(
+        "--max-pages-per-call", type=int, default=None,
+        help="Override cfg.search.max_pages for this run. Bounds "
+             "pagination depth per call (each page is up to 20 posts). "
+             "Default None preserves the config-driven safety cap "
+             "(5 pages = 100 posts max per call).",
     )
     p_run.set_defaults(func=cmd_run)
 
