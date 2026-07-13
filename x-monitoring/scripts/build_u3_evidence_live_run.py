@@ -347,11 +347,19 @@ def main() -> int:
         a("_(no unsanctioned rows for this run)_")
     a("")
 
-    a("## 5. Posts table — every post the run inserted (DB rows)")
+    a("## 5. Per-post: tweet content + classification side-by-side")
     a("")
     a(f"Count: **{len(posts)} posts** "
       f"(verified: `SELECT COUNT(*) FROM posts WHERE fetched_at >= '{RUN_WINDOW_START}'`)")
     a("")
+    a("Each post is rendered as one block: metadata + the verbatim tweet text, "
+      "followed by its brand-edge rows, signal rows (post_type × sentiment), "
+      "discourse rows (role × nationalism axes), and unsanctioned flags. "
+      "Post N's tweet text is directly above its classification rows so the "
+      "operator can match content to classifier output without scrolling.")
+    a("")
+
+    # First pass: render the per-post blocks (text + classification together).
     for i, p in enumerate(posts, 1):
         a(f"### #{i}  tweet_id=`{p['tweet_id']}`  "
           f"(internal id={p['id']})")
@@ -372,25 +380,18 @@ def main() -> int:
             a("_(empty)_")
         a("")
 
-    a("## 6. Per-post brand-classification rows")
-    a("")
-    a("Each post has 0..N rows in `posts_brands` (the brand-edge), "
-      "`posts_brands_signals` (post_type × sentiment), "
-      "`posts_brands_discourse` (discourse_role × nationalism axes), and "
-      "`posts_unsanctioned_flags` (top-level marketing_spam/scam/crypto/"
-      "unauthorized sentinel).")
-    a("")
-    for i, p in enumerate(posts, 1):
+        # Classification rows for THIS post, embedded inline so the
+        # operator sees content + classification together.
         edges = p["brand_edges"]
         signals = p["signals"]
         discourse = p["discourse"]
         unsanc = p["unsanctioned"]
-        a(f"### #{i}  tweet_id=`{p['tweet_id']}`")
-        a("")
+
         if not edges:
             a("_(no attributed brands — dropped as unattributed at `_attribute_call_items`)_")
             a("")
             continue
+
         a("**Brand edges** (`posts_brands`):")
         a("")
         for e in edges:
@@ -415,6 +416,9 @@ def main() -> int:
                 a(f"- `{nick}` (brand_id={bid}) → post_type=`{s['post_type_key']}`, "
                   f"sentiment=`{s['sentiment']}`")
             a("")
+        else:
+            a("_(no signal rows for this post)_")
+            a("")
         if discourse:
             a("**Discourse** (`posts_brands_discourse`):")
             a("")
@@ -424,7 +428,6 @@ def main() -> int:
                         or (isinstance(bid, int) and brands_by_id.get(bid))
                         or {})
                 nick = meta.get("nickname", str(bid))
-                # Resolve integer FKs to human names via lookup tables.
                 dk_raw = d["discourse_key"]
                 dk_name = discourse_by_id.get(dk_raw, f"unknown({dk_raw})")
                 cn_id = d["china_nationalism"]
@@ -451,11 +454,8 @@ def main() -> int:
                 a(f"- flags=`{u['flags']}` · evidence=`{evidence_str}`  ")
                 a(f"  decided_at: `{u.get('decided_at')}`")
             a("")
-        if not signals and not discourse and not unsanc:
-            a("_(no classification rows)_")
-            a("")
 
-    a("## 7. KTD5 dead-letter rows this run produced")
+    a("## 6. KTD5 dead-letter rows this run produced")
     a("")
     a("`posts_brands_discourse.discourse_key = 'uncategorized'` is a sentinel "
       "— the FK constraint requires a real key. The dead-letter file at "
@@ -474,7 +474,7 @@ def main() -> int:
             a(f"- … ({len(dead_letters) - 30} more)")
     a("")
 
-    a("## 8. Brand registry (referenced by brand_ids above)")
+    a("## 7. Brand registry (referenced by brand_ids above)")
     a("")
     a("| nickname | display_name |")
     a("|---|---|")
