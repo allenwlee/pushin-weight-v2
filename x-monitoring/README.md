@@ -10,28 +10,28 @@ It was built for MiniMax's developer relations team so they always know what the
 
 ## What it does
 
-- **Finds posts about each model.** A curated list of search queries (in English and Chinese) runs every 15 minutes, pulling in posts that mention any of the nine models.
+- **Finds posts about each model.** A curated list of search queries (in English and Chinese) runs every 15 minutes, pulling in posts that mention any brands. Accounts for frontier labs were created, since many tweets filtered for our brands will mention these alongside.
 - **Filters out noise.** Pure retweets and off-topic mentions are deprioritized so the signal isn't drowned out.
-- **Classifies each post.** Each post gets sorted into a category — release news, community question, criticism, praise, or other — and attributed to the brand(s) it mentions.
-- **Tracks the community.** Identifies which accounts are official, which are staff, and which are regular commenters, and how they relate to each other.
-- **Shows it on a dashboard.** A simple web page with one card per model. Each card shows recent volume, today's top posts, and the mix of opinion types.
+- **Within each post, identifies every brand mentioned** 
+- **Classifies each brand_mention:** 
+ - type: 
+ - nationalism: cn and us
+ - sentiment towards brand
+ - discourse (which is an archetype, as an explanation, for the sentiment expressed)
+- **Tracks the community.** Identifies which accounts are official brand accounts, which are staff, and which are 'community' (next version), which are 'brand ambassadors' or other accounts that are affiliated to the brand
+- **Shows it on a dashboard.** UI functions like a stock chart: volume of posts along a timeline; filters for all the classifiers mentioned above.
 
 ## Who uses it
 
-The MiniMax devrel team, plus anyone who wants a daily snapshot of public opinion about these models. The dashboard runs locally on a Mac and is meant for a single user.
+Production version will be web-based, with multiple accounts. Users will sign in and be able to view certain segments, along with more details as paid features.
 
-## How to use it
+## How to use it (Local MVP)
 
 1. Open the dashboard in a browser at `http://127.0.0.1:5000/`.
-2. Look at the nine model cards. Each card gives you today's picture at a glance.
-3. Click into a card to see recent posts, the community around that model, and other details.
-4. Items that look off get flagged for review — check the review queue (`x-monitor review --list`) and resolve or dismiss them.
-
-That's it. Everything else (the 15-minute scan, the storage, the error handling) runs automatically.
 
 ---
 
-## Setup & Operations
+## Setup & Operations (local MVP)
 
 The following is for whoever sets up or maintains the tool.
 

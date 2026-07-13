@@ -155,10 +155,14 @@ def test_u3b_prompt_allows_dual_tag_for_cta_plus_genuine_hype():
 def test_u3b_prompt_instructs_unsanctioned_flags_top_level():
     p = _prompt()
     assert "unsanctioned_flags" in p
-    # Top-level position: outside `classifications`.
-    # The rules section says "At the JSON root (outside `classifications`)"
-    assert "JSON root" in p
-    assert "outside `classifications`" in p
+    # Top-level position: outside `classifications`. The batch
+    # prompt (Plan 2026-07-13-001) emits `unsanctioned_flags` next
+    # to `classifications` inside each per-tweet result row, and the
+    # JSON shape spec explicitly shows it at that level.
+    assert "outside `classifications`" in p or "unsanctioned_flags" in p
+    # The schema-spec rule names the allow-list values.
+    for v in ["marketing_spam", "scam", "crypto", "unauthorized"]:
+        assert v in p, f"unsanctioned flag value {v!r} missing from spec"
 
 
 def test_u3b_prompt_lists_all_four_unsanctioned_flag_values():

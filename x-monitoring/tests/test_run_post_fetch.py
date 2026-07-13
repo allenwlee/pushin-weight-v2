@@ -69,16 +69,26 @@ class FakeClaudeClient:
         } for t in tweets]}
 
     def _default_classify(self, text, brand_ids):
-        # Array shape (post_types[] / discourse_roles[]) — matches
-        # the schema build_pragmatics_full_prompt asks the LLM to emit.
-        # U2b (2026-07-06): classify_pragmatics_full routes through
-        # the array parser, so fixtures must use the array shape.
-        return {"classifications": [
-            {"brand_id": b, "post_types": ["hands_on_usage"],
-             "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
-             "china_nationalism": "none", "us_nationalism": "none"}
-            for b in brand_ids
-        ]}
+        # Plan 2026-07-13-001: classify_batch_pragmatics_full wire format
+        # is `{"results": [{"tweet_id": ..., "classifications": [...], ...}]}`
+        # The per-post `classify_pragmatics_full` adapter (the bridge the
+        # old tests stub here) accepts both shapes; for the batch fixture
+        # we emit the new shape. Real tweet_id round-trip happens in the
+        # dispatch path (line ~198) — this default emits a single result
+        # with the real tweet_ids_in_batch[0] substituted in.
+        # The dispatch sees the result as already in `results` form and
+        # passes it through; we still must use a sentinel here that the
+        # dispatch know how to upgrade on its way out.
+        return {"results": [{
+            "tweet_id": "_legacy_default_",  # overwritten in dispatch
+            "classifications": [
+                {"brand_id": b, "post_types": ["hands_on_usage"],
+                 "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
+                 "china_nationalism": "none", "us_nationalism": "none"}
+                for b in brand_ids
+            ],
+            "unsanctioned_flags": [],
+        }]}
 
     def messages_create(self, **kwargs):
         prompt = kwargs.get("messages", [{}])[0].get("content", "")
@@ -104,34 +114,150 @@ class FakeClaudeClient:
                 tweets,
                 kwargs.get("_test_target_locales", []),
             )
-        if "across FIVE dimensions" in prompt:
+        if ("across FIVE dimensions" in prompt
+                or "_PRAGMATICS_FULL_SYSTEM_PROMPT" in prompt
+                or "You classify one or more tweets" in prompt):
             self.classify_calls.append(kwargs)
-            # Pull `Tweet text:\n"""\n<text>\n"""` and `Brands (in
-            # order): a, b, c` out of the prompt.
+            # Pull the per-tweet payload and brand list(s) out of the
+            # prompt. The batch path emits the payload as a JSON array
+            # after "Tweets (JSON array"; the per-post path emits a
+            # single tweet as `Tweet text:\n"""\n<text>\n"""` plus
+            # `Brands (in order): a, b, c`.
             text = ""
             brand_ids: list[str] = []
+            tweet_ids_in_batch: list[str] = []
             if "_test_text" in kwargs and "_test_brand_ids" in kwargs:
                 text = kwargs["_test_text"]
                 brand_ids = kwargs["_test_brand_ids"]
             else:
-                # Parse from prompt.
-                t_marker = '"""\n'
-                t_start = prompt.find(t_marker)
-                if t_start >= 0:
-                    t_end = prompt.find('\n"""', t_start + len(t_marker))
-                    if t_end > t_start:
-                        text = prompt[t_start + len(t_marker):t_end]
-                b_marker = "Brands (in order): "
-                b_idx = prompt.find(b_marker)
+                batch_marker = "Tweets (JSON array of "
+                b_idx = prompt.find(batch_marker)
                 if b_idx >= 0:
-                    rest = prompt[b_idx + len(b_marker):]
-                    line_end = rest.find("\n")
-                    brand_line = rest[:line_end if line_end > 0 else len(rest)]
-                    if brand_line and brand_line != "(none)":
-                        brand_ids = [
-                            b.strip() for b in brand_line.split(",")
+                    # Batch prompt — find the `[` that opens the
+                    # JSON payload (skip past the "1):" header).
+                    import json as _json
+                    payload_start = prompt.find("[", b_idx)
+                    if payload_start < 0:
+                        batch_tweets = []
+                    else:
+                        payload = prompt[payload_start:].strip()
+                        try:
+                            batch_tweets = _json.loads(payload)
+                        except Exception:
+                            batch_tweets = []
+                    if batch_tweets:
+                        # Use the first tweet's text + brand_ids as
+                        # the synthetic (text, brand_ids) the legacy
+                        # per-post factory expects. Each per-post call
+                        # in the batch then asks the factory once and
+                        # we lift the legacy shape into the new batch
+                        # shape below.
+                        first = batch_tweets[0]
+                        text = first.get("text", "")
+                        brand_ids = list(first.get("brand_ids") or [])
+                        tweet_ids_in_batch = [
+                            str(t.get("tweet_id") or t.get("id") or "")
+                            for t in batch_tweets
                         ]
-            return self._c_factory(text, brand_ids)
+                else:
+                    # Single-post prompt — the new format (Plan
+                    # 2026-07-13-001) emits `Tweet text:\n<text>\n\n`
+                    # (no triple quotes). Fall back to the legacy
+                    # triple-quote form for callers that still
+                    # construct their own prompt.
+                    text = ""
+                    t_marker = "Tweet text:\n"
+                    t_start = prompt.find(t_marker)
+                    if t_start >= 0:
+                        text = prompt[t_start + len(t_marker):]
+                        for stop in ("\n\nBrands", "\nBrands"):
+                            stop_idx = text.find(stop)
+                            if stop_idx >= 0:
+                                text = text[:stop_idx]
+                                break
+                    tq_marker = '"""\n'
+                    tq_start = prompt.find(tq_marker)
+                    if tq_start >= 0:
+                        tq_end = prompt.find('\n"""', tq_start + len(tq_marker))
+                        if tq_end > tq_start:
+                            legacy_text = prompt[tq_start + len(tq_marker):tq_end]
+                            if legacy_text:
+                                text = legacy_text
+                    b_marker = "Brands (in order): "
+                    b_idx = prompt.find(b_marker)
+                    if b_idx >= 0:
+                        rest = prompt[b_idx + len(b_marker):]
+                        line_end = rest.find("\n")
+                        brand_line = rest[:line_end if line_end > 0 else len(rest)]
+                        if brand_line and brand_line != "(none)":
+                            brand_ids = [
+                                b.strip() for b in brand_line.split(",")
+                            ]
+            legacy = self._c_factory(text, brand_ids)
+            # Lift the legacy per-post shape ({"classifications": [...]})
+            # into the batch wire shape ({"results": [{"tweet_id": ...,
+            # "classifications": [...], "unsanctioned_flags": [...]}]}).
+            # If the factory already returned the new shape, pass it through.
+            if isinstance(legacy, dict) and "results" in legacy:
+                # `_default_classify` emits a single result with the
+                # sentinel tweet_id `_legacy_default_`. Overwrite it
+                # with the real tweet_id from the parsed payload so the
+                # batch parser can round-trip.
+                rs = legacy.get("results") or []
+                if (isinstance(rs, list) and len(rs) == 1
+                        and isinstance(rs[0], dict)
+                        and rs[0].get("tweet_id") == "_legacy_default_"
+                        and tweet_ids_in_batch
+                        and len(tweet_ids_in_batch) == 1):
+                    rs[0]["tweet_id"] = tweet_ids_in_batch[0]
+                return legacy
+            if isinstance(legacy, dict) and "classifications" in legacy:
+                rows = legacy.get("classifications") or []
+                # Re-key post_types / discourse_roles to arrays if the
+                # factory emitted scalars (most existing factories do).
+                reshaped_rows = []
+                for r in rows:
+                    if not isinstance(r, dict):
+                        continue
+                    new_r = dict(r)
+                    if isinstance(new_r.get("post_types"), list):
+                        pass
+                    elif isinstance(new_r.get("post_type"), str):
+                        new_r["post_types"] = [new_r["post_type"]]
+                    if isinstance(new_r.get("discourse_roles"), list):
+                        pass
+                    elif isinstance(new_r.get("discourse_role"), str):
+                        new_r["discourse_roles"] = [new_r["discourse_role"]]
+                    reshaped_rows.append(new_r)
+                if tweet_ids_in_batch and len(tweet_ids_in_batch) == 1:
+                    # Single-post call (the legacy test fixture contract):
+                    # round-trip the real tweet_id so the batch parser
+                    # can match the response entry back to the input.
+                    tid = tweet_ids_in_batch[0]
+                elif tweet_ids_in_batch and len(tweet_ids_in_batch) > 1:
+                    # Multi-post batch — extend the legacy single-post
+                    # response across all input tweet_ids. Reuse the
+                    # same classifications list for each so the test
+                    # fixture's content is preserved per-post. Each
+                    # tweet gets the legacy response as its entry.
+                    tid_results = []
+                    for t_id in tweet_ids_in_batch:
+                        tid_results.append({
+                            "tweet_id": t_id,
+                            "classifications": reshaped_rows,
+                            "unsanctioned_flags": [],
+                        })
+                    return {"results": tid_results}
+                else:
+                    tid = "_legacy_"
+                return {
+                    "results": [{
+                        "tweet_id": tid,
+                        "classifications": reshaped_rows,
+                        "unsanctioned_flags": [],
+                    }]
+                }
+            return legacy
         return {"classifications": [], "results": []}
 
 

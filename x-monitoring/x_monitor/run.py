@@ -546,7 +546,10 @@ def _run_post_fetch(
     # modules when the caller is offline (the no-`anthropic_client`
     # path is the offline-test path).
     from .translator import translate_batch_pragmatics
-    from .attribution import classify_pragmatics_full
+    from .attribution import (
+        classify_pragmatics_full,
+        classify_batch_pragmatics_full,
+    )
 
     # --- Stage 1: translate_batch_pragmatics (U3) ------------------------
     # Build the per-post translation batch (one call per 20-post batch).
@@ -595,39 +598,54 @@ def _run_post_fetch(
         1 for r in translation_rows if r.get("translation_failed")
     )
 
-    # --- Stage 2: classify_pragmatics_full (U4) -------------------------
-    # One LLM call per post (not batched here — the U4 prompt is
-    # already structured for per-brand output; batching posts is the
-    # Store's job, not the LLM call's). For ~200 kept posts at the
-    # typical 15-min cadence this is ~200 calls; the
-    # `_call_signal_with_retry` retry policy handles transient 429/5xx.
-    # U2a/U2b: classify_pragmatics_full returns the new shape
-    # {"by_brand": {...}, "unsanctioned_flags": [...]}. We use the
-    # by_brand dict for signal/discourse persistence and the
-    # unsanctioned_flags for the new posts_unsanctioned_flags write.
+    # --- Stage 2: classify_pragmatics_full (U4, batched) -----------------
+    # Plan 2026-07-13-001 (timeout investigation): the prior per-post
+    # serial LLM call (one Haiku call per kept post) cost ~1.5 s × N
+    # posts and dominated wall time at N=20. `classify_batch_pragmatics_full`
+    # batches 20 posts per LLM call using `_PRAGMATICS_FULL_SYSTEM_PROMPT`
+    # as the shared prefix — Anthropic's prompt-cache amortizes the
+    # ~11 KB of rules + examples across the batch, and across cycles.
+    # Result shape is index-aligned with `kept_posts` so the loop below
+    # can range-index without re-keying.
     t0 = time.monotonic()
     discourse_rows: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
     unsanctioned_by_post: dict[str, list[str]] = {}
     n_nationalism = 0
-    for it in kept_posts:
-        brand_ids = it.get("brand_ids") or []
-        if not brand_ids:
-            continue
-        try:
-            classified = classify_pragmatics_full(
-                text=it.get("text") or "",
-                brand_ids=list(brand_ids),
-                brand_registry=brand_registry_rows,
-                anthropic_client=anthropic_client,
-            )
-        except Exception as e:
-            log.warning(
-                "_run_post_fetch: classify_pragmatics_full failed for "
-                "tweet_id=%s: %s",
-                it.get("id") or it.get("tweet_id"), e,
-            )
-            continue
+
+    # Build the per-post payload list. Posts with no brand_ids are
+    # skipped here (the classifier's purpose is per-brand) and
+    # surfaced in the result list as empty-shape entries.
+    batch_inputs: list[dict[str, Any]] = [
+        {
+            "tweet_id": str(it.get("id") or it.get("tweet_id") or ""),
+            "text": it.get("text") or "",
+            "brand_ids": list(it.get("brand_ids") or []),
+        }
+        for it in kept_posts
+    ]
+    try:
+        classification_results = classify_batch_pragmatics_full(
+            batch_inputs,
+            brand_registry_rows,
+            anthropic_client,
+        )
+    except Exception as e:
+        log.warning(
+            "_run_post_fetch: classify_batch_pragmatics_full failed: %s", e,
+        )
+        classification_results = [
+            {"by_brand": {}, "unsanctioned_flags": []}
+            for _ in kept_posts
+        ]
+
+    # Pair `kept_posts` with `classification_results` (index-aligned) and
+    # emit the same `(signal_rows, discourse_rows, unsanctioned_by_post,
+    # n_nationalism)` rows the prior per-post loop produced. The downstream
+    # write paths (`insert_posts_brands_signals`,
+    # `bulk_insert_post_brand_discourse`) are unchanged.
+    for it, classified in zip(kept_posts, classification_results):
+        tid = str(it.get("id") or it.get("tweet_id"))
         # U2a: pull the per-brand dict out of the new return shape.
         by_brand = classified.get("by_brand", {}) if isinstance(
             classified, dict) else {}
@@ -644,13 +662,13 @@ def _run_post_fetch(
             log.warning(
                 "_run_post_fetch: _post_process_pragmatics failed for "
                 "tweet_id=%s: %s",
-                it.get("id") or it.get("tweet_id"), e,
+                tid, e,
             )
         for brand_id, prongs in by_brand.items():
             # posts_brands_signals: (post_type, sentiment) per brand.
             # Scalar fields preserved from the legacy shape.
             signal_rows.append({
-                "tweet_id": str(it.get("id") or it.get("tweet_id")),
+                "tweet_id": tid,
                 "brand_id": brand_id,
                 "post_type": prongs["post_type"],
                 "sentiment": prongs["sentiment"],
@@ -659,7 +677,7 @@ def _run_post_fetch(
             # axes) per brand. act_id = 1 (v1 always writes a single
             # speech-act per post × brand).
             discourse_rows.append({
-                "tweet_id": str(it.get("id") or it.get("tweet_id")),
+                "tweet_id": tid,
                 "brand_id": brand_id,
                 "discourse_key": prongs["discourse_role"],
                 "act_id": 1,
@@ -675,11 +693,10 @@ def _run_post_fetch(
         flags = classified.get("unsanctioned_flags", []) if isinstance(
             classified, dict) else []
         if flags:
-            tid = str(it.get("id") or it.get("tweet_id"))
             unsanctioned_by_post[tid] = list(flags)
     t_classify = time.monotonic() - t0
     log.info(
-        "_run_post_fetch: classify_pragmatics_full %d brand rows "
+        "_run_post_fetch: classify_batch_pragmatics_full %d brand rows "
         "(%d discourse, %d signal) in %.2fs",
         len(discourse_rows), len(discourse_rows),
         len(signal_rows), t_classify,
@@ -812,11 +829,26 @@ class RunPipeline:
         model_filter: list[str] | None = None,
         query_filter: list[str] | None = None,
         dry_run: bool = False,
+        limit_per_call: int | None = None,
+        no_skip_under_budget: bool = False,
     ) -> dict[str, Any]:
         """Run the daily harvest.
 
+        Plan 2026-07-13-001 (live_a_z_populate): the two new args
+        thread the smoketest-style operator overrides through to the
+        TwitterAPI.io max_results cap and the skip-order loop. When
+        the operator runs `x-monitor run --limit-per-call 20
+        --no-skip-under-budget` from `scripts.live_a_z_populate`, the
+        pipeline behaves like the v1.6 smoketest (small-batch, no
+        budget gating) while still writing to `data/x_monitoring.db`.
+
         Returns the run summary dict (also written to data/runs/<run_id>.json).
         """
+        # Plan 2026-07-13-001: stash on `self` so the deeply nested
+        # call site (`_query_twitterapi` + `apply_skip_order`) can
+        # read them without a parameter refactor through 5 layers.
+        self.limit_per_call = limit_per_call
+        self.no_skip_under_budget = no_skip_under_budget
         run_id = f"{_now_iso().replace(':', '').replace('+', '_').replace('-', '')}-{uuid.uuid4().hex[:8]}"
         phase_timings: dict[str, float] = {}
         _run_t0 = time.monotonic()
@@ -867,8 +899,16 @@ class RunPipeline:
             # Apply skip order per model
             budget = self.config.daily_ceiling
             adjusted: dict[str, list[Query]] = {}
+            # Plan 2026-07-13-001: --no-skip-under-budget forces every
+            # per-model query through, bypassing the
+            # daily_ceiling-based skip-order. In v1.7 this is largely
+            # a no-op (per-model yaml is retired), but the knob keeps
+            # the operator intent explicit.
             for m, qs in queries_per_model.items():
-                kept, skipped = self.apply_skip_order(qs, budget)
+                if self.no_skip_under_budget:
+                    kept, skipped = qs, []
+                else:
+                    kept, skipped = self.apply_skip_order(qs, budget)
                 adjusted[m] = kept
                 for q in skipped:
                     summary["queries"].append(
@@ -1029,9 +1069,20 @@ class RunPipeline:
                     _t_fetch = time.monotonic()
                     try:
                         s = self.config.search
+                        # Plan 2026-07-13-001 (live_a_z_populate):
+                        # `limit_per_call` overrides the config-driven
+                        # per-call result cap when set (operator-driven
+                        # smoketest-style runs). The TwitterAPI.io
+                        # client caps each response at 20/page, so the
+                        # upper bound is `max_pages * 20`.
+                        max_results_cap = (
+                            self.limit_per_call
+                            if self.limit_per_call is not None
+                            else s.max_results
+                        )
                         items = apify.run_search(
                             call.query_string,
-                            max_results=s.max_results,
+                            max_results=max_results_cap,
                             since=since_cursor,
                             max_pages=s.max_pages,
                             max_per_page=s.max_per_page,

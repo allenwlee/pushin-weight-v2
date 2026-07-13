@@ -68,6 +68,8 @@ def cmd_run(args, paths) -> int:
         model_filter=args.models.split(",") if args.models else None,
         query_filter=args.queries.split(",") if args.queries else None,
         dry_run=args.dry_run,
+        limit_per_call=getattr(args, "limit_per_call", None),
+        no_skip_under_budget=getattr(args, "no_skip_under_budget", False),
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
     if args.dry_run:
@@ -1165,6 +1167,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--models", help="comma-separated brand_id filter")
     p_run.add_argument("--queries", help="comma-separated query_id filter (Q1..Q6)")
+    # Plan 2026-07-13-001 (live_a_z_populate): per-call result cap
+    # and a forced-no-skip toggle for the smoketest-style 6-call
+    # small-batch runs. Default None / False preserves the daily
+    # LaunchAgent behavior.
+    p_run.add_argument(
+        "--limit-per-call", type=int, default=None,
+        help="Per-call result cap forwarded to RunPipeline (overrides "
+             "cfg.search.max_results when set).",
+    )
+    p_run.add_argument(
+        "--no-skip-under-budget", action="store_true",
+        help="Force every per-model query through, bypassing the "
+             "daily_ceiling skip-order (default: honor skip order).",
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_dr = sub.add_parser("dry-run", help="Alias for `run --dry-run`")

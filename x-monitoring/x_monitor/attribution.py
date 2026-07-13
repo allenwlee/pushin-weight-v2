@@ -993,6 +993,15 @@ def classify_post(
 # prongs (post_type, sentiment, discourse_role, china_nationalism,
 # us_nationalism) per attributed brand.
 
+# Plan 2026-07-13-001 (timeout investigation): the system prompt body
+# (rules + worked examples + taxonomy lists) is byte-identical between
+# the per-post and batch paths. Factor it into a module-level constant
+# so Anthropic's prompt-cache stays warm across calls — the cache key
+# is a function of the prefix bytes, so reusing the same prefix lets
+# both the single-post `classify_pragmatics_full` and the batch
+# `classify_batch_pragmatics_full` ride the same cache entry.
+_CLASSIFY_BATCH_SIZE: int = 20
+
 
 _VALID_DISCOURSE: frozenset[str] = frozenset({
     "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
@@ -1036,227 +1045,288 @@ def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
         scalar `post_type` / `discourse_role`.
       - A top-level `unsanctioned_flags: [str]` field for
         marketing_spam / scam / crypto / unauthorized.
+
+    For multi-post classification, prefer `classify_batch_pragmatics_full`
+    (~20× LLM cost reduction at 20 posts/cycle). The single-post
+    variant delegates to the same `_PRAGMATICS_FULL_SYSTEM_PROMPT`
+    prefix the batch path uses, so Anthropic's prompt-cache stays
+    warm across call kinds.
     """
     brand_list = ", ".join(brand_ids) if brand_ids else "(none)"
     return (
-        "You classify a tweet's relationship to a list of brands, "
-        "across FIVE dimensions.\n\n"
-        "Tweet text:\n"
-        f"\"\"\"\n{text}\n\"\"\"\n\n"
+        _PRAGMATICS_FULL_SYSTEM_PROMPT
+        + f"\n\nTweet text:\n{text}\n\n"
         f"Brands (in order): {brand_list}\n\n"
-        "For each brand, return FIVE fields from these exact sets:\n\n"
-        "post_types (6 buckets — what KIND of post; ARRAY, max 3):\n"
-        "  - buzz_releases            (brand announced something new)\n"
-        "  - hands_on_usage           (user is using / showing the brand)\n"
-        "  - performance_comparisons  (benchmark / eval / head-to-head)\n"
-        "  - feedback_questions       (user asking how-to / help / complaint)\n"
-        "  - advertising_marketing   (CTA, promo, wrapper, free-credit pitch)\n"
-        "  - event_announcement      (official event / community meetup)\n\n"
-        "sentiment (4 values — the VALENCE; scalar):\n"
-        "  - positive                 (praise, enthusiasm)\n"
-        "  - negative                 (criticism, disappointment)\n"
-        "  - neutral                  (informational / question)\n"
-        "  - mixed                    (multiple valences in one post)\n\n"
-        "discourse_roles (10 keys — pragmatic register, §2; ARRAY, max 3):\n"
-        "  - genuine_hype             (straight praise)\n"
-        "  - sarcasm                  (English verbal irony)\n"
-        "  - dunk_yingyang            (阴阳怪气 / passive-aggressive dunk)\n"
-        "  - self_deprecation         (自嘲 / self-mockery)\n"
-        "  - cope                     (嘴硬 / stubborn denial)\n"
-        "  - fud                      (唱衰 / spreading doom)\n"
-        "  - distillation_accusation  (套壳 / 蒸馏指控)\n"
-        "  - ai_slop_critique         (AI content-garbage accusation)\n"
-        "  - absurdist_meme           (抽象整活 / absurdist antics)\n"
-        "  - advertising-marketing    (salesy, CTA-heavy marketing speak — "
-        "NOTE: hyphenated, not underscored)\n\n"
-        "china_nationalism (6-step scale, §4.4; scalar):\n"
-        "  - none                     (no China-nationalism layer)\n"
-        "  - mild_pro                 (温和亲华 — subtle positive)\n"
-        "  - pro                      (亲华 — open positive)\n"
-        "  - constructive_critical   (建设性批评 — pro-CN criticism)\n"
-        "  - anti                     (反华 — hostile)\n"
-        "  - mixed                    (mixed modes in one post)\n\n"
-        "us_nationalism (6-step scale, same as china_nationalism but\n"
-        "applied to the US axis — anti = 反美, etc.; scalar):\n"
-        "  - none / mild_pro / pro / constructive_critical / anti / mixed\n\n"
-        "Rules:\n"
-        "1. Return ONLY a JSON object matching this shape:\n"
-        "   {\n"
-        "     \"classifications\": [\n"
-        "       {\n"
-        "         \"brand_id\": str,\n"
-        "         \"post_types\": [str],         // ARRAY, max 3\n"
-        "         \"sentiment\": str,             // scalar\n"
-        "         \"discourse_roles\": [str],     // ARRAY, max 3\n"
-        "         \"china_nationalism\": str,     // scalar\n"
-        "         \"us_nationalism\": str         // scalar\n"
-        "       }, ...\n"
-        "     ],\n"
-        "     \"unsanctioned_flags\": [str]       // ARRAY, top-level\n"
-        "   }\n"
-        "2. RETURN ONE OBJECT PER BRAND LISTED. The brand list "
-        "is what the keyword detector found in the text — if a "
-        "brand name appears, you MUST produce an object. Cross-brand "
-        "comparison posts (\"GLM 5.2 vs Kimi K2.7\"), reply chains "
-        "where the brand is mentioned, posts sharing screenshots "
-        "with the brand name — ALL count. Only skip a brand if "
-        "the post text contains ZERO mention of it (this should be "
-        "impossible given how the brand list was derived).\n"
-        "3. Use the EXACT brand_id strings from the list above.\n"
-        "4. Most posts have exactly 1 post_type and 1 discourse_role. "
-        "Multi-value is allowed when a post legitimately has more than "
-        "one (e.g., a benchmark write-up that is also a "
-        "`performance_comparisons` AND `feedback_questions` because it "
-        "asks 'am I running behind?'). MAXIMUM 3 of each per brand.\n"
-        "5. nationalism is ORTHOGONAL to post_types × sentiment × "
-        "discourse_roles — a single post can be e.g. "
-        "([perf_compare, feedback], positive, [genuine_hype], none, "
-        "constructive_critical).\n"
-        "6. If the tweet is off-topic for all brands (shouldn't "
-        "happen if the brand list is non-empty), return "
-        "{\"classifications\": []}.\n"
-        "7. genuine_hype is incompatible with explicit call-to-action. "
-        "If the post contains a CTA (URL + verb like 'try', 'sign up', "
-        "'join', 'get', 'limited-time', 'free access', 限时免费, 立即体验, "
-        "注册, 点击), discount offer, or wrapper/promo language "
-        "('one API key', 'OpenAI-compatible gateway', 'free credit no card'), "
-        "prefer discourse_role `advertising-marketing` over `genuine_hype`. "
-        "If both genuine praise AND a CTA coexist, emit BOTH "
-        "discourse_roles values — let downstream consumers decide.\n"
-        "8. At the JSON root (outside `classifications`), emit "
-        "`unsanctioned_flags: [str]`. Allowed values: "
-        "`marketing_spam`, `scam`, `crypto`, `unauthorized`. Empty "
-        "array if none apply. Use this for promotional/crypto/scam/"
-        "unauthorized brand use that the post_type and discourse_role "
-        "taxonomies don't fully capture.\n"
-        "9. No prose, no explanation, no code fences.\n"
-        "\n"
-        "10. sent=neutral for launch announcements with no evaluative "
-        "language. A post that says only 'X is generally available', "
-        "'Y launched today', 'Z shipped v3.2', or 'W is now in beta' "
-        "(without praise/criticism) is INFORMATIONAL. emit sent=neutral "
-        "regardless of whether the brand would benefit from the "
-        "announcement. Optimistic framing like 'now available for "
-        "everyone' is still neutral (vendor announcement voice, not "
-        "user praise).\n"
-        "11. sent=positive for long analytical / investment posts "
-        "with explicit positive framing. If the post says 'the model "
-        "is strategically positive for X's cloud multiple', "
-        "'increasingly important as a strategic asset', 'supports the "
-        "valuation narrative', or similar investment-grade positive "
-        "language, that IS positive sentiment — do not water it down "
-        "to sent=mixed because there are also caveats in the post. "
-        "Caveats and positive framing coexist; positive framing wins.\n"
-        "12. sent=neutral for multi-brand state-of-market posts that "
-        "are factual updates per brand ('X climbed 20 spots to #138, "
-        "'Y price dropped 8.2%', 'Z was degraded for 45 min'). emit "
-        "sent=neutral for each brand UNLESS a specific positive/"
-        "negative evaluative claim is made about that brand in the "
-        "same post.\n"
-        "13. pt=event_announcement for one-line 'X is generally "
-        "available / Y launched / Z shipped' posts. NOT hands_on_usage "
-        "(the user isn't using the brand — the brand is announcing). "
-        "NOT buzz_releases (that's a brand-side press release; this "
-        "rule covers third-party reshares of an announcement too).\n"
-        "14. pt=performance_comparisons for any post mentioning TTFT "
-        "(time-to-first-token), latency, benchmark, ranking, '#N "
-        "ranking', 'N spots climbed/dropped', 'side-by-side race', "
-        "'vs <other model>'. The LLM Drag Race write-up ('races GPT-"
-        "4o-mini vs Llama 3.3 70B side-by-side, measure TTFT') is the "
-        "canonical example.\n"
-        "15. pt=performance_comparisons OR pt=feedback_questions for "
-        "pure analytical commentary (price/perf framing, model "
-        "governance framing, 'should I switch?' framing). NOT "
-        "hands_on_usage — the author is analyzing, not using.\n"
-        "16. Nationalism requires explicit US-China relational framing. "
-        "Do not infer `china_nationalism` or `us_nationalism` from "
-        "generic anti-vendor dunk on a Chinese (or US) brand's product "
-        "failure, benchmark miss, or release reception. A post dunking "
-        "on Qwen for a benchmark miss is `sentiment=anti-Qwen` and "
-        "`nationalism=neutral`, NOT `us_nationalism=anti`. The "
-        "nationalism axes measure US-China framing, not anti-vendor "
-        "hostility.\n"
-        "17. Trap-language handling. When the post text contains "
-        "\"trap\", \"gotcha\", \"embarrassing\", \"fumbled\", or "
-        "\"翻车\" AND the subject is a Chinese-vendor product failure, "
-        "the post's `discourse_roles` should include `dunk_yingyang` "
-        "if the tone is passive-aggressive, or `fud` if the tone is "
-        "doom-spreading. The post's `us_nationalism` should remain "
-        "`none` per rule 16 — trap-language is surface vocabulary, "
-        "not a US-China framing signal.\n"
-        "18. Superlative praise (`fastest`, `best`, `strongest`, "
-        "`first to ship`, `most powerful`) describes the brand being "
-        "praised, NOT a US-China framing. The post is "
-        "`discourse_roles=[genuine_hype]` for the brand being praised "
-        "— NOT `us_nationalism=pro/anti` based on which country the "
-        "praised brand is from. 'Qwen is the fastest model' is hype, "
-        "not a nationalism statement about China.\n"
-        "19. Qwen-vendor-not-US distinction. Posts critiquing a "
-        "Chinese-vendor's product behavior (Qwen, GLM, DeepSeek, Kimi) "
-        "do not carry `us_nationalism` valence by default. Even when "
-        "the critique is harsh (\"Qwen faded\", \"DeepSeek shipped a "
-        "broken model\"), the axis measures US-China framing, not "
-        "anti-Chinese-vendor sentiment. emit `us_nationalism=none` "
-        "unless the post explicitly invokes US-China framing.\n"
-        "\n"
-        "Worked examples (reference cases; match these patterns):\n"
-        "  A. 'Kimi K2.7 Code is generally available in GitHub Copilot'\n"
-        "     → per brand: pt=[event_announcement], sent=neutral,\n"
-        "       discourse_roles=[uncategorized].\n"
-        "  B. 'K2.7 Code climbed 20 spots to #138; Deepseek V4 price "
-        "dropped 8.2%'\n"
-        "     → per brand: pt=[hands_on_usage], sent=neutral for both,\n"
-        "       discourse_roles=[uncategorized]. (factual updates, no\n"
-        "       aggregate judgment.)\n"
-        "  C. 'Alibaba's Qwen franchise is increasingly important as a\n"
-        "strategic cloud and platform asset... strategically positive "
-        "for BABA's cloud multiple'\n"
-        "     → qwen: pt=[performance_comparisons],\n"
-        "       sent=positive, discourse_roles=[genuine_hype].\n"
-        "       other brands mentioned in same post without explicit\n"
-        "       positive framing: sent=neutral.\n"
-        "  D. 'I built LLM Drag Race: races GPT-4o-mini vs Llama 3.3 "
-        "70B, measure TTFT'\n"
-        "     → brands present: pt=[performance_comparisons],\n"
-        "       sent=neutral (showcase, no evaluative claim).\n"
-        "  E. 'This changes how GitHub routes coding tasks — model "
-        "picker vs single assistant' (price/perf analytical piece)\n"
-        "     → pt=[performance_comparisons] OR\n"
-        "       [feedback_questions] (user implicitly asking 'where "
-        "does this leave me?'), NOT hands_on_usage.\n"
-        "  F. 'Kimi K2.7 Code makes Copilot a model marketplace' "
-        "(rhetorical questions + analytical commentary)\n"
-        "     → pt=[feedback_questions] (asks 4 rhetorical "
-        "performance/pricing questions), NOT hands_on_usage.\n"
-        "  G. 'DeepSeek shipping a benchmark trap — gotcha benchmarks "
-        "that nobody can reproduce' (anti-vendor dunk on Chinese-vendor "
-        "product failure)\n"
-        "     → deepseek: pt=[performance_comparisons], sent=negative,\n"
-        "       discourse_roles=[dunk_yingyang], cn_nationalism=none,\n"
-        "       us_nationalism=none. (per rules 16, 17: dunk tone is\n"
-        "       surface vocabulary, NOT US-China framing.)\n"
-        "  H. 'Qwen is the fastest model I've benchmarked this month, "
-        "scored 89% on MMLU'\n"
-        "     → qwen: pt=[performance_comparisons], sent=positive,\n"
-        "       discourse_roles=[genuine_hype], cn_nationalism=none,\n"
-        "       us_nationalism=none. (per rule 18: superlative praise\n"
-        "       is hype, not a US-China statement.)\n"
-        "  I. 'GLM 5.2 fumbled the launch — benchmarks collapsed, "
-        "everyone noticed' (anti-vendor dunk on Chinese-vendor release)\n"
-        "     → glm: pt=[buzz_releases], sent=negative,\n"
-        "       discourse_roles=[fud], cn_nationalism=none,\n"
-        "       us_nationalism=none. (per rules 16, 19: harsh critique\n"
-        "       of Chinese-vendor product is anti-vendor sentiment,\n"
-        "       not US-China framing.)\n"
-        "  J. 'Kimi K2.7 is fast but DeepSeek V4 is faster on coding "
-        "tasks; the AI race is heating up between US and Chinese "
-        "vendors'\n"
-        "     → kimi + deepseek: pt=[performance_comparisons],\n"
-        "       sent=neutral, discourse_roles=[uncategorized],\n"
-        "       cn_nationalism=mild_pro, us_nationalism=anti. (this\n"
-        "       post DOES invoke US-China framing explicitly — rule 16\n"
-        "       applies the other way: nationalism fires when the post\n"
-        "       actually names the AI race.)\n"
+        f"(Apply the rules and worked examples to this single tweet. "
+        f"Return ONE entry in `results` whose `tweet_id` is "
+        f"`_single_`.)"
+    )
+
+
+# Plan 2026-07-13-001 (timeout investigation): the system prompt body
+# (rules + worked examples + taxonomy lists) is byte-identical between
+# the per-post and batch paths. Factor it into a module-level constant
+# so Anthropic's prompt-cache stays warm across calls — the cache key
+# is a function of the prefix bytes, so reusing the same prefix lets
+# both the single-post `classify_pragmatics_full` and the batch
+# `classify_batch_pragmatics_full` ride the same cache entry.
+_CLASSIFY_BATCH_SIZE: int = 20
+
+
+_PRAGMATICS_FULL_SYSTEM_PROMPT: str = (
+    "You classify one or more tweets about their relationship to a "
+    "list of brands, across FIVE dimensions per brand: post_types "
+    "(array), sentiment (scalar), discourse_roles (array), "
+    "china_nationalism (scalar), us_nationalism (scalar). You also "
+    "emit a top-level `unsanctioned_flags: [str]` per tweet for "
+    "marketing_spam / scam / crypto / unauthorized signals.\n\n"
+    "For each brand in each tweet, return FIVE fields from these "
+    "exact sets:\n\n"
+    "post_types (6 buckets — what KIND of post; ARRAY, max 3):\n"
+    "  - buzz_releases            (brand announced something new)\n"
+    "  - hands_on_usage           (user is using / showing the brand)\n"
+    "  - performance_comparisons  (benchmark / eval / head-to-head)\n"
+    "  - feedback_questions       (user asking how-to / help / complaint)\n"
+    "  - advertising_marketing    (CTA, promo, wrapper, free-credit pitch)\n"
+    "  - event_announcement       (official event / community meetup)\n\n"
+    "sentiment (4 values — the VALENCE; scalar):\n"
+    "  - positive                 (praise, enthusiasm)\n"
+    "  - negative                 (criticism, disappointment)\n"
+    "  - neutral                  (informational / question)\n"
+    "  - mixed                    (multiple valences in one post)\n\n"
+    "discourse_roles (10 keys — pragmatic register, §2; ARRAY, max 3):\n"
+    "  - genuine_hype             (straight praise)\n"
+    "  - sarcasm                  (English verbal irony)\n"
+    "  - dunk_yingyang            (阴阳怪气 / passive-aggressive dunk)\n"
+    "  - self_deprecation         (自嘲 / self-mockery)\n"
+    "  - cope                     (嘴硬 / stubborn denial)\n"
+    "  - fud                      (唱衰 / spreading doom)\n"
+    "  - distillation_accusation  (套壳 / 蒸馏指控)\n"
+    "  - ai_slop_critique         (AI content-garbage accusation)\n"
+    "  - absurdist_meme           (抽象整活 / absurdist antics)\n"
+    "  - advertising-marketing    (salesy, CTA-heavy marketing speak — "
+    "NOTE: hyphenated, not underscored)\n"
+    "  - uncategorized            (catch-all when none of the above fit)\n\n"
+    "china_nationalism (6-step scale, §4.4; scalar):\n"
+    "  - none                     (no China-nationalism layer)\n"
+    "  - mild_pro                 (温和亲华 — subtle positive)\n"
+    "  - pro                      (亲华 — open positive)\n"
+    "  - constructive_critical   (建设性批评 — pro-CN criticism)\n"
+    "  - anti                     (反华 — hostile)\n"
+    "  - mixed                    (mixed modes in one post)\n\n"
+    "us_nationalism (6-step scale, same as china_nationalism but\n"
+    "applied to the US axis — anti = 反美, etc.; scalar):\n"
+    "  - none / mild_pro / pro / constructive_critical / anti / mixed\n\n"
+    "Rules:\n"
+    "1. Return ONLY a JSON object matching this shape:\n"
+    "   {\n"
+    "     \"results\": [\n"
+    "       {\n"
+    "         \"tweet_id\": str,\n"
+    "         \"classifications\": [\n"
+    "           {\n"
+    "             \"brand_id\": str,\n"
+    "             \"post_types\": [str],         // ARRAY, max 3\n"
+    "             \"sentiment\": str,             // scalar\n"
+    "             \"discourse_roles\": [str],     // ARRAY, max 3\n"
+    "             \"china_nationalism\": str,     // scalar\n"
+    "             \"us_nationalism\": str         // scalar\n"
+    "           }, ...\n"
+    "         ],\n"
+    "         \"unsanctioned_flags\": [str]      // ARRAY, top-level\n"
+    "       }, ...\n"
+    "     ]\n"
+    "   }\n"
+    "2. ONE result per input tweet, IN THE SAME ORDER as the input.\n"
+    "3. Per tweet, RETURN ONE OBJECT PER BRAND LISTED. The brand list "
+    "is what the keyword detector found in the text — if a "
+    "brand name appears, you MUST produce an object. Cross-brand "
+    "comparison posts (\"GLM 5.2 vs Kimi K2.7\"), reply chains "
+    "where the brand is mentioned, posts sharing screenshots "
+    "with the brand name — ALL count. Only skip a brand if "
+    "the post text contains ZERO mention of it (this should be "
+    "impossible given how the brand list was derived).\n"
+    "4. Use the EXACT brand_id strings from each tweet's brand list.\n"
+    "5. Most posts have exactly 1 post_type and 1 discourse_role. "
+    "Multi-value is allowed when a post legitimately has more than "
+    "one (e.g., a benchmark write-up that is also a "
+    "`performance_comparisons` AND `feedback_questions` because it "
+    "asks 'am I running behind?'). MAXIMUM 3 of each per brand.\n"
+    "6. nationalism is ORTHOGONAL to post_types × sentiment × "
+    "discourse_roles — a single post can be e.g. "
+    "([perf_compare, feedback], positive, [genuine_hype], none, "
+    "constructive_critical).\n"
+    "7. If a tweet is off-topic for all brands (shouldn't "
+    "happen if the brand list is non-empty), return "
+    "{\"tweet_id\": \"<id>\", \"classifications\": [], "
+    "\"unsanctioned_flags\": []}.\n"
+    "8. genuine_hype is incompatible with explicit call-to-action. "
+    "If the post contains a CTA (URL + verb like 'try', 'sign up', "
+    "'join', 'get', 'limited-time', 'free access', 限时免费, 立即体验, "
+    "注册, 点击), discount offer, or wrapper/promo language "
+    "('one API key', 'OpenAI-compatible gateway', 'free credit no card'), "
+    "prefer discourse_role `advertising-marketing` over `genuine_hype`. "
+    "If both genuine praise AND a CTA coexist, emit BOTH "
+    "discourse_roles values — let downstream consumers decide.\n"
+    "9. No prose, no explanation, no code fences.\n"
+    "\n"
+    "10. sent=neutral for launch announcements with no evaluative "
+    "language. A post that says only 'X is generally available', "
+    "'Y launched today', 'Z shipped v3.2', or 'W is now in beta' "
+    "(without praise/criticism) is INFORMATIONAL. emit sent=neutral "
+    "regardless of whether the brand would benefit from the "
+    "announcement. Optimistic framing like 'now available for "
+    "everyone' is still neutral (vendor announcement voice, not "
+    "user praise).\n"
+    "11. sent=positive for long analytical / investment posts "
+    "with explicit positive framing. If the post says 'the model "
+    "is strategically positive for X's cloud multiple', "
+    "'increasingly important as a strategic asset', 'supports the "
+    "valuation narrative', or similar investment-grade positive "
+    "language, that IS positive sentiment — do not water it down "
+    "to sent=mixed because there are also caveats in the post. "
+    "Caveats and positive framing coexist; positive framing wins.\n"
+    "12. sent=neutral for multi-brand state-of-market posts that "
+    "are factual updates per brand ('X climbed 20 spots to #138, "
+    "'Y price dropped 8.2%', 'Z was degraded for 45 min'). emit "
+    "sent=neutral for each brand UNLESS a specific positive/"
+    "negative evaluative claim is made about that brand in the "
+    "same post.\n"
+    "13. pt=event_announcement for one-line 'X is generally "
+    "available / Y launched / Z shipped' posts. NOT hands_on_usage "
+    "(the user isn't using the brand — the brand is announcing). "
+    "NOT buzz_releases (that's a brand-side press release; this "
+    "rule covers third-party reshares of an announcement too).\n"
+    "14. pt=performance_comparisons for any post mentioning TTFT "
+    "(time-to-first-token), latency, benchmark, ranking, '#N "
+    "ranking', 'N spots climbed/dropped', 'side-by-side race', "
+    "'vs <other model>'. The LLM Drag Race write-up ('races GPT-"
+    "4o-mini vs Llama 3.3 70B side-by-side, measure TTFT') is the "
+    "canonical example.\n"
+    "15. pt=performance_comparisons OR pt=feedback_questions for "
+    "pure analytical commentary (price/perf framing, model "
+    "governance framing, 'should I switch?' framing). NOT "
+    "hands_on_usage — the author is analyzing, not using.\n"
+    "16. Nationalism requires explicit US-China relational framing. "
+    "Do not infer `china_nationalism` or `us_nationalism` from "
+    "generic anti-vendor dunk on a Chinese (or US) brand's product "
+    "failure, benchmark miss, or release reception. A post dunking "
+    "on Qwen for a benchmark miss is `sentiment=anti-Qwen` and "
+    "`nationalism=neutral`, NOT `us_nationalism=anti`. The "
+    "nationalism axes measure US-China framing, not anti-vendor "
+    "hostility.\n"
+    "17. Trap-language handling. When the post text contains "
+    "\"trap\", \"gotcha\", \"embarrassing\", \"fumbled\", or "
+    "\"翻车\" AND the subject is a Chinese-vendor product failure, "
+    "the post's `discourse_roles` should include `dunk_yingyang` "
+    "if the tone is passive-aggressive, or `fud` if the tone is "
+    "doom-spreading. The post's `us_nationalism` should remain "
+    "`none` per rule 16 — trap-language is surface vocabulary, "
+    "not a US-China framing signal.\n"
+    "18. Superlative praise (`fastest`, `best`, `strongest`, "
+    "`first to ship`, `most powerful`) describes the brand being "
+    "praised, NOT a US-China framing. The post is "
+    "`discourse_roles=[genuine_hype]` for the brand being praised "
+    "— NOT `us_nationalism=pro/anti` based on which country the "
+    "praised brand is from. 'Qwen is the fastest model' is hype, "
+    "not a nationalism statement about China.\n"
+    "19. Qwen-vendor-not-US distinction. Posts critiquing a "
+    "Chinese-vendor's product behavior (Qwen, GLM, DeepSeek, Kimi) "
+    "do not carry `us_nationalism` valence by default. Even when "
+    "the critique is harsh (\"Qwen faded\", \"DeepSeek shipped a "
+    "broken model\"), the axis measures US-China framing, not "
+    "anti-Chinese-vendor sentiment. emit `us_nationalism=none` "
+    "unless the post explicitly invokes US-China framing.\n"
+    "\n"
+    "Worked examples (reference cases; match these patterns):\n"
+    "  A. 'Kimi K2.7 Code is generally available in GitHub Copilot'\n"
+    "     → per brand: pt=[event_announcement], sent=neutral,\n"
+    "       discourse_roles=[uncategorized].\n"
+    "  B. 'K2.7 Code climbed 20 spots to #138; Deepseek V4 price "
+    "dropped 8.2%'\n"
+    "     → per brand: pt=[hands_on_usage], sent=neutral for both,\n"
+    "       discourse_roles=[uncategorized]. (factual updates, no\n"
+    "       aggregate judgment.)\n"
+    "  C. 'Alibaba's Qwen franchise is increasingly important as a\n"
+    "strategic cloud and platform asset... strategically positive "
+    "for BABA's cloud multiple'\n"
+    "     → qwen: pt=[performance_comparisons],\n"
+    "       sent=positive, discourse_roles=[genuine_hype].\n"
+    "       other brands mentioned in same post without explicit\n"
+    "       positive framing: sent=neutral.\n"
+    "  D. 'I built LLM Drag Race: races GPT-4o-mini vs Llama 3.3 "
+    "70B, measure TTFT'\n"
+    "     → brands present: pt=[performance_comparisons],\n"
+    "       sent=neutral (showcase, no evaluative claim).\n"
+    "  E. 'This changes how GitHub routes coding tasks — model "
+    "picker vs single assistant' (price/perf analytical piece)\n"
+    "     → pt=[performance_comparisons] OR\n"
+    "       [feedback_questions] (user implicitly asking 'where "
+    "does this leave me?'), NOT hands_on_usage.\n"
+    "  F. 'Kimi K2.7 Code makes Copilot a model marketplace' "
+    "(rhetorical questions + analytical commentary)\n"
+    "     → pt=[feedback_questions] (asks 4 rhetorical "
+    "performance/pricing questions), NOT hands_on_usage.\n"
+    "  G. 'DeepSeek shipping a benchmark trap — gotcha benchmarks "
+    "that nobody can reproduce' (anti-vendor dunk on Chinese-vendor "
+    "product failure)\n"
+    "     → deepseek: pt=[performance_comparisons], sent=negative,\n"
+    "       discourse_roles=[dunk_yingyang], cn_nationalism=none,\n"
+    "       us_nationalism=none. (per rules 16, 17: dunk tone is\n"
+    "       surface vocabulary, NOT US-China framing.)\n"
+    "  H. 'Qwen is the fastest model I've benchmarked this month, "
+    "scored 89% on MMLU'\n"
+    "     → qwen: pt=[performance_comparisons], sent=positive,\n"
+    "       discourse_roles=[genuine_hype], cn_nationalism=none,\n"
+    "       us_nationalism=none. (per rule 18: superlative praise\n"
+    "       is hype, not a US-China statement.)\n"
+    "  I. 'GLM 5.2 fumbled the launch — benchmarks collapsed, "
+    "everyone noticed' (anti-vendor dunk on Chinese-vendor release)\n"
+    "     → glm: pt=[buzz_releases], sent=negative,\n"
+    "       discourse_roles=[fud], cn_nationalism=none,\n"
+    "       us_nationalism=none. (per rules 16, 19: harsh critique\n"
+    "       of Chinese-vendor product is anti-vendor sentiment,\n"
+    "       not US-China framing.)\n"
+    "  J. 'Kimi K2.7 is fast but DeepSeek V4 is faster on coding "
+    "tasks; the AI race is heating up between US and Chinese "
+    "vendors'\n"
+    "     → kimi + deepseek: pt=[performance_comparisons],\n"
+    "       sent=neutral, discourse_roles=[uncategorized],\n"
+    "       cn_nationalism=mild_pro, us_nationalism=anti. (this\n"
+    "       post DOES invoke US-China framing explicitly — rule 16\n"
+    "       applies the other way: nationalism fires when the post\n"
+    "       actually names the AI race.)\n"
+)
+
+
+def build_batch_pragmatics_full_prompt(
+    tweets: list[dict[str, Any]],
+) -> str:
+    """Build the batch (N tweets) variant of the per-post prompt.
+
+    Each tweet dict has keys: `tweet_id` (str), `text` (str), and
+    `brand_ids` (list[str]). The system rules + worked examples are
+    shared across all tweets via the `_PRAGMATICS_FULL_SYSTEM_PROMPT`
+    constant — meaning a single API call can amortize ~3.5 KB of
+    prefix tokens across up to 20 posts before the per-tweet payload
+    even starts. Prompt-cache hits stay warm cycle-to-cycle.
+    """
+    import json as _json
+
+    payload = _json.dumps(
+        [
+            {
+                "tweet_id": str(t.get("tweet_id") or t.get("id") or ""),
+                "text": t.get("text") or "",
+                "brand_ids": list(t.get("brand_ids") or []),
+            }
+            for t in tweets
+        ],
+        ensure_ascii=False,
+    )
+    return (
+        _PRAGMATICS_FULL_SYSTEM_PROMPT
+        + f"\n\nTweets (JSON array of {len(tweets)}):\n{payload}"
     )
 
 
@@ -1294,9 +1364,30 @@ def _parse_pragmatics_full_response(
         b = item.get("brand_id")
         if not isinstance(b, str) or b not in brand_registry_ids:
             continue
-        pt = item.get("post_type")
+        # Plan 2026-07-13-001 compat: the new batch wire format emits
+        # `post_types: [str]` and `discourse_roles: [str]` (arrays).
+        # The legacy scalar format emits `post_type` / `discourse_role`
+        # as single strings. Accept either — take the first allowed
+        # array element when an array is present.
+        raw_pt = item.get("post_types")
+        if isinstance(raw_pt, list) and raw_pt:
+            pt = next(
+                (p for p in raw_pt
+                 if isinstance(p, str) and p in _VALID_POST_TYPES),
+                None,
+            )
+        else:
+            pt = item.get("post_type")
+        raw_dr = item.get("discourse_roles")
+        if isinstance(raw_dr, list) and raw_dr:
+            dr = next(
+                (d for d in raw_dr
+                 if isinstance(d, str) and d in _VALID_DISCOURSE),
+                None,
+            )
+        else:
+            dr = item.get("discourse_role")
         sent = item.get("sentiment")
-        dr = item.get("discourse_role")
         cn = item.get("china_nationalism")
         un = item.get("us_nationalism")
         post_type = pt if pt in _VALID_POST_TYPES else "hands_on_usage"
@@ -1305,6 +1396,10 @@ def _parse_pragmatics_full_response(
             dr if isinstance(dr, str) and dr in _VALID_DISCOURSE
             else "uncategorized"
         )
+        # `post_type` and `discourse_role` are only assigned when the
+        # raw value passed the enum check; otherwise the above
+        # `hands_on_usage` / `uncategorized` defaults apply. No
+        # additional normalization needed below.
         china = (
             cn if isinstance(cn, str) and cn in _VALID_NATIONALISM
             else "none"
@@ -1500,12 +1595,248 @@ def classify_pragmatics_full(
         }
     parsed = {"by_brand": by_brand, "unsanctioned_flags": raw["unsanctioned_flags"]}
     if not parsed["by_brand"]:
+        # Compat shim: the new batch wire format wraps each per-tweet
+        # entry in a `results: [{tweet_id, classifications, ...}]` array.
+        # The per-post caller (and the legacy / non-batch response path)
+        # may receive either shape from a client adapter; if the
+        # `classifications` top-level key is missing, descend into the
+        # first `results` entry.
+        if isinstance(response, dict):
+            results_arr = response.get("results")
+            if isinstance(results_arr, list) and results_arr:
+                first = results_arr[0]
+                if isinstance(first, dict):
+                    parsed = _parse_pragmatics_full_response(
+                        first, registry_ids,
+                    )
+    if not parsed["by_brand"]:
         logger.warning(
             "classify_pragmatics_full returned no classifications for "
             "text=%r brand_ids=%r",
             text[:80], brand_ids,
         )
     return parsed
+
+
+def _classify_one_batch_to_by_brand(
+    per_tweet: dict[str, Any],
+    registry_ids: set[str],
+    tweet_id: str,
+) -> dict[str, Any]:
+    """Reduce one `results[i]` entry to the legacy U2a by_brand shape.
+
+    Mirrors the array-reshape loop at the bottom of `classify_pragmatics_full`
+    (first-row-wins per brand_id, dedup warning logged). Posts with
+    no `classifications` key return the empty shape.
+
+    Returns:
+        {"by_brand": {brand_id: {...scalar prongs...}},
+         "unsanctioned_flags": [str, ...]}
+    """
+    if not isinstance(per_tweet, dict):
+        return {"by_brand": {}, "unsanctioned_flags": []}
+    rows = per_tweet.get("classifications")
+    if not isinstance(rows, list):
+        return {"by_brand": {}, "unsanctioned_flags": []}
+    by_brand: dict[str, dict[str, str]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        b = row.get("brand_id")
+        if not isinstance(b, str) or b not in registry_ids:
+            continue
+        if b in by_brand:
+            logger.warning(
+                "classify_batch_pragmatics_full: duplicate brand_id=%r "
+                "in tweet_id=%r; keeping first", b, tweet_id,
+            )
+            continue
+        # Per-brand array fields — collapse to the first allowed value
+        # (the legacy `by_brand` shape is scalar; the multi-value path
+        # is the array parser in `_parse_pragmatics_full_response_arrays`).
+        raw_pts = row.get("post_types") or []
+        raw_drs = row.get("discourse_roles") or []
+        pt = next(
+            (p for p in raw_pts
+             if isinstance(p, str) and p in _VALID_POST_TYPES),
+            "hands_on_usage",
+        )
+        dr = next(
+            (d for d in raw_drs
+             if isinstance(d, str) and d in _VALID_DISCOURSE),
+            "uncategorized",
+        )
+        sent = row.get("sentiment")
+        cn = row.get("china_nationalism")
+        un = row.get("us_nationalism")
+        by_brand[b] = {
+            "post_type": pt if pt in _VALID_POST_TYPES else "hands_on_usage",
+            "sentiment": sent if sent in _VALID_SENTIMENTS else "neutral",
+            "discourse_role": dr,
+            "china_nationalism": (
+                cn if isinstance(cn, str) and cn in _VALID_NATIONALISM
+                else "none"
+            ),
+            "us_nationalism": (
+                un if isinstance(un, str) and un in _VALID_NATIONALISM
+                else "none"
+            ),
+        }
+    flags = _parse_unsanctioned_flags(per_tweet.get("unsanctioned_flags"))
+    return {"by_brand": by_brand, "unsanctioned_flags": flags}
+
+
+def classify_batch_pragmatics_full(
+    tweets: list[dict[str, Any]],
+    brand_registry: list,
+    anthropic_client: "ClaudeClient | None" = None,
+    *,
+    on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
+) -> list[dict[str, Any]]:
+    """U4 (batched): per-post classification across N tweets, one LLM call per batch.
+
+    Each tweet dict MUST have keys: `tweet_id` (or `id`), `text`, and
+    `brand_ids` (list[str]). Tweets without brands are skipped — but they
+    still occupy a slot in the returned list so the caller can index
+    `result[i]` ↔ `tweets[i]`. For tweets with no brands the result is
+    `{"by_brand": {}, "unsanctioned_flags": []}` (the same empty shape
+    `classify_pragmatics_full` returns in that case).
+
+    Batching mirrors `translate_batch_pragmatics`: outer loop walks
+    `range(0, len(tweets), _CLASSIFY_BATCH_SIZE)` (20 posts/batch), the
+    `_PRAGMATICS_FULL_SYSTEM_PROMPT` prefix is shared across every batch
+    so Anthropic's prompt-cache stays warm. At 200 posts this is
+    ~10 LLM calls instead of 200 — a ~20× cost reduction that fits
+    Cycle 1's 15-min budget.
+
+    Args:
+        tweets: list of `{"tweet_id": str, "text": str, "brand_ids": [str]}`.
+        brand_registry: list of `BrandRow`-like (read brand_id). When
+            empty, the union of all `brand_ids` arguments is used.
+        anthropic_client: a ClaudeClient instance. None → short-circuit
+            to per-tweet empty shape (the no-LLM path).
+        on_batch_error: optional callback `(batch, exc)` invoked per-batch
+            when the LLM call raised (after retries exhausted) OR the
+            response failed to parse. Per-tweet failure is isolated — the
+            rest of the run continues with empty-shape entries.
+
+    Returns:
+        list of length `len(tweets)`, index-aligned. Each entry is
+        `{"by_brand": {brand_id: {"post_type", "sentiment", "discourse_role",
+         "china_nationalism", "us_nationalism"}}, "unsanctioned_flags": [str]}` —
+        the same shape `classify_pragmatics_full` returns, so the
+        `_run_post_fetch` Stage 2 loop body does not need to change.
+    """
+    empty = {"by_brand": {}, "unsanctioned_flags": []}
+    if not tweets:
+        return []
+    if anthropic_client is None:
+        return [dict(empty) for _ in tweets]
+
+    if brand_registry:
+        registry_ids = {b.brand_id for b in brand_registry}
+    else:
+        registry_ids = set().union(
+            *(set(t.get("brand_ids") or []) for t in tweets)
+        )
+
+    results: list[dict[str, Any]] = []
+    for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE):
+        batch = tweets[start: start + _CLASSIFY_BATCH_SIZE]
+        # Skip posts that carry no brand list — emit empty shape in
+        # their slot so the result list is index-aligned with the
+        # input. The classifier's purpose is per-brand classification;
+        # unattributed posts have nothing to classify.
+        kept: list[dict[str, Any]] = []
+        kept_indexes: list[int] = []
+        skipped_count = 0
+        for i, t in enumerate(batch):
+            if not (t.get("brand_ids") or []):
+                skipped_count += 1
+                continue
+            kept.append(t)
+            kept_indexes.append(i)
+        if not kept:
+            results.extend([dict(empty) for _ in batch])
+            continue
+        prompt = build_batch_pragmatics_full_prompt(kept)
+        try:
+            response = _call_signal_with_retry(anthropic_client, prompt)
+        except Exception as exc:
+            # Plan 2026-07-13-001 fail-soft contract: when a batch
+            # fails to classify, fall back to per-post retries so a
+            # single bad post doesn't poison the rest of the batch.
+            # This preserves the legacy per-post granularity under the
+            # v1.7 batched API. If the per-post fallback also raises
+            # for a particular post, that single post gets empty shape
+            # and the others still get their per-post classification.
+            logger.warning(
+                "classify_batch_pragmatics_full: batch LLM call failed "
+                "after %d retries for batch of %d posts; falling back "
+                "to per-post retries: %s",
+                _MAX_RETRIES, len(kept), exc,
+            )
+            if on_batch_error is not None:
+                on_batch_error(batch, exc)
+            for t in batch:
+                try:
+                    single = classify_pragmatics_full(
+                        text=t.get("text") or "",
+                        brand_ids=list(t.get("brand_ids") or []),
+                        brand_registry=list(brand_registry) if brand_registry else [],
+                        anthropic_client=anthropic_client,
+                    )
+                    results.append(
+                        single if isinstance(single, dict) else dict(empty),
+                    )
+                except Exception as single_exc:
+                    logger.warning(
+                        "classify_batch_pragmatics_full: per-post fallback "
+                        "also failed for tweet_id=%s: %s",
+                        t.get("tweet_id") or t.get("id"), single_exc,
+                    )
+                    results.append(dict(empty))
+            continue
+        parsed = response.get("results") if isinstance(response, dict) else None
+        if not isinstance(parsed, list) or len(parsed) != len(kept):
+            logger.warning(
+                "classify_batch_pragmatics_full: response has %d entries "
+                "for batch of %d posts; emitting empty for entire batch",
+                len(parsed) if isinstance(parsed, list) else 0,
+                len(kept),
+            )
+            for _ in batch:
+                results.append(dict(empty))
+            if on_batch_error is not None:
+                on_batch_error(batch, ValueError("parse failure"))
+            continue
+        # Build a tweet_id → entry map so the result list is robust
+        # to the LLM emitting them out of order.
+        per_id: dict[str, dict[str, Any]] = {}
+        for entry in parsed:
+            if isinstance(entry, dict):
+                tid = entry.get("tweet_id")
+                if isinstance(tid, str):
+                    per_id[tid] = entry
+        # Walk the input batch (so order matches) and decode each.
+        for t in batch:
+            tid = str(t.get("tweet_id") or t.get("id") or "")
+            entry = per_id.get(tid)
+            if entry is None:
+                results.append(dict(empty))
+                continue
+            decoded = _classify_one_batch_to_by_brand(
+                entry, registry_ids, tid,
+            )
+            results.append(decoded)
+        # Sanity warning — useful for catching LLM drift on the
+        # prompt cache (e.g. a system change that drops tweet_id).
+        if skipped_count:
+            logger.debug(
+                "classify_batch_pragmatics_full: skipped %d tweets with "
+                "no brand_ids in batch of %d", skipped_count, len(batch),
+            )
+    return results
 
 
 # --- Real Anthropic client (lazy import) --------------------------------
@@ -1582,7 +1913,11 @@ __all__ = [
     "compute_post_brands",
     "attribute_to_brands",
     "classify_post",
+    "classify_pragmatics_full",
+    "classify_batch_pragmatics_full",
     "build_signal_prompt",
+    "build_pragmatics_full_prompt",
+    "build_batch_pragmatics_full_prompt",
     # LLM client (Protocol + concrete)
     "AnthropicClaudeClient",
 ]
