@@ -512,7 +512,7 @@ def main() -> int:
                   f"us_nationalism=`{us_name}` (id={us_id})")
             a("")
         else:
-            a("_(no discourse rows — `discours_key` likely fell through to "
+            a("_(no discourse rows — `discourse_key` likely fell through to "
               "the KTD5 `uncategorized-sentinel` and was dead-lettered)_")
             a("")
         if unsanc:
