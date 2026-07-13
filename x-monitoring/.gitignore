@@ -2,6 +2,7 @@
 # Runtime data (not committed)
 data/runs/raw/
 data/runs/[0-9]*.json
+data/runs/2026-*/
 data/runs/LATEST.json
 data/runs/LATEST.running.json
 data/runs/LOCK
@@ -40,3 +41,12 @@ venv
 # Cookies (defense in depth — never commit)
 config.local.yaml
 safe-backups/
+
+# Pre-migration DB snapshots and dryrun DBs (large binaries; not for git)
+data/*.bak
+data/*.bak-shm
+data/*.bak-wal
+data/*.db.dryrun-*
+data/*.db.dryrun-*-shm
+data/*.db.dryrun-*-wal
+data/*.test*
