@@ -55,6 +55,25 @@ def main() -> int:
     }
     brands = brands_by_nickname  # legacy alias used by edge renderers
 
+    # Classifier FK lookups — discourse_keys (id→key), sentiment_keys
+    # (id→key), nationalism_keys (id→key). The schema stores discourse_key
+    # as INTEGER FK (e.g. 1, 3, 6, 10); we resolve to the human name
+    # (genuine_hype, dunk_yingyang, fud, advertising-marketing, etc.)
+    # for the report. Nationalism scales: none, mild_pro, pro,
+    # constructive_critical, anti, mixed (per nationalism_keys).
+    discourse_by_id = {
+        r["id"]: r["key"]
+        for r in db.execute("SELECT id, key FROM discourse_keys")
+    }
+    sentiment_by_key = {
+        r["key"]: r["key"]  # already a TEXT FK; key resolves to itself
+        for r in db.execute("SELECT id, key FROM sentiment_keys")
+    }
+    nationalism_by_id = {
+        r["id"]: r["key"]
+        for r in db.execute("SELECT id, key FROM nationalism_keys")
+    }
+
     # Posts the run inserted (fetched_at in the run window).
     posts = [dict(r) for r in db.execute(
         """
@@ -79,7 +98,7 @@ def main() -> int:
             dict(r) for r in db.execute(
                 "SELECT brand_id, post_type_key, sentiment "
                 "FROM posts_brands_signals WHERE post_id=?",
-                (p["id"],),
+                (p["tweet_id"],),  # signals.post_id is TEXT FK to posts.tweet_id
             )
         ]
         p["discourse"] = [
@@ -246,7 +265,89 @@ def main() -> int:
             a("> " + (text.replace("\n", "\n> ") or "(empty text)"))
             a("")
 
-    a("## 4. Posts table — every post the run inserted (DB rows)")
+    # Classifier output summary (aggregated across the run). This sits
+    # BEFORE the per-post section so the operator sees the rollup first.
+    a("## 4. Classifier output summary (aggregated across the run)")
+    a("")
+    # Per-brand × post_type × sentiment rollup from posts_brands_signals.
+    sig_rows = db.execute(
+        """
+        SELECT s.brand_id, s.post_type_key, s.sentiment, COUNT(*) AS n
+          FROM posts_brands_signals s
+          JOIN posts p ON p.tweet_id = s.post_id
+         WHERE p.fetched_at >= ? AND p.fetched_at < ?
+         GROUP BY s.brand_id, s.post_type_key, s.sentiment
+         ORDER BY s.brand_id, s.post_type_key, s.sentiment
+        """,
+        (RUN_WINDOW_START, RUN_WINDOW_END),
+    ).fetchall()
+    a("### Per-brand signals (`posts_brands_signals`, post_type × sentiment)")
+    a("")
+    a("| brand | post_type | sentiment | n |")
+    a("|---|---|---|---|")
+    for r in sig_rows:
+        bid = r["brand_id"]
+        nick = (brands_by_nickname.get(bid, {}).get("nickname")
+                or brands_by_id.get(bid, {}).get("nickname")
+                or str(bid))
+        a(f"| `{nick}` | `{r['post_type_key']}` | `{r['sentiment']}` | {r['n']} |")
+    a("")
+
+    # Per-brand × discourse_key × nationalism rollup from
+    # posts_brands_discourse. Joins against the lookup tables loaded at
+    # startup so the operator sees resolved names (genuine_hype, fud,
+    # etc.) plus the integer FK in parens for debugging.
+    dis_rows = db.execute(
+        """
+        SELECT d.brand_id, d.discourse_key, d.china_nationalism,
+               d.us_nationalism, COUNT(*) AS n
+          FROM posts_brands_discourse d
+          JOIN posts p ON p.id = d.post_id
+         WHERE p.fetched_at >= ? AND p.fetched_at < ?
+         GROUP BY d.brand_id, d.discourse_key, d.china_nationalism, d.us_nationalism
+         ORDER BY d.brand_id, d.discourse_key
+        """,
+        (RUN_WINDOW_START, RUN_WINDOW_END),
+    ).fetchall()
+    a("### Per-brand discourse (`posts_brands_discourse`, role × nationalism)")
+    a("")
+    a("| brand | role (id) | china_nationalism (id) | us_nationalism (id) | n |")
+    a("|---|---|---|---|---|")
+    for r in dis_rows:
+        bid = r["brand_id"]
+        nick = (brands_by_id.get(bid, {}).get("nickname") or str(bid))
+        dk = r["discourse_key"]
+        cn = r["china_nationalism"]
+        us = r["us_nationalism"]
+        a(f"| `{nick}` | `{discourse_by_id.get(dk, '?')}` ({dk}) | "
+          f"`{nationalism_by_id.get(cn, '?')}` ({cn}) | "
+          f"`{nationalism_by_id.get(us, '?')}` ({us}) | {r['n']} |")
+    a("")
+
+    # Top-level unsanctioned flag rollup.
+    uns_rows = db.execute(
+        """
+        SELECT u.flags, COUNT(*) AS n
+          FROM posts_unsanctioned_flags u
+          JOIN posts p ON p.id = u.post_id
+         WHERE p.fetched_at >= ? AND p.fetched_at < ?
+         GROUP BY u.flags
+         ORDER BY 2 DESC
+        """,
+        (RUN_WINDOW_START, RUN_WINDOW_END),
+    ).fetchall()
+    a("### Unsanctioned-flag rollup (`posts_unsanctioned_flags`)")
+    a("")
+    if uns_rows:
+        a("| flag | n |")
+        a("|---|---|")
+        for r in uns_rows:
+            a(f"| `{r['flags']}` | {r['n']} |")
+    else:
+        a("_(no unsanctioned rows for this run)_")
+    a("")
+
+    a("## 5. Posts table — every post the run inserted (DB rows)")
     a("")
     a(f"Count: **{len(posts)} posts** "
       f"(verified: `SELECT COUNT(*) FROM posts WHERE fetched_at >= '{RUN_WINDOW_START}'`)")
@@ -271,7 +372,7 @@ def main() -> int:
             a("_(empty)_")
         a("")
 
-    a("## 5. Per-post brand-classification rows")
+    a("## 6. Per-post brand-classification rows")
     a("")
     a("Each post has 0..N rows in `posts_brands` (the brand-edge), "
       "`posts_brands_signals` (post_type × sentiment), "
@@ -323,10 +424,18 @@ def main() -> int:
                         or (isinstance(bid, int) and brands_by_id.get(bid))
                         or {})
                 nick = meta.get("nickname", str(bid))
-                a(f"- `{nick}` (brand_id={bid}) → role=`{d['discourse_key']}`, "
+                # Resolve integer FKs to human names via lookup tables.
+                dk_raw = d["discourse_key"]
+                dk_name = discourse_by_id.get(dk_raw, f"unknown({dk_raw})")
+                cn_id = d["china_nationalism"]
+                cn_name = nationalism_by_id.get(cn_id, f"unknown({cn_id})")
+                us_id = d["us_nationalism"]
+                us_name = nationalism_by_id.get(us_id, f"unknown({us_id})")
+                a(f"- `{nick}` (brand_id={bid}) → "
+                  f"role=`{dk_name}` (id={dk_raw}), "
                   f"act_id={d['act_id']}, "
-                  f"china_nationalism=`{d['china_nationalism']}`, "
-                  f"us_nationalism=`{d['us_nationalism']}`")
+                  f"china_nationalism=`{cn_name}` (id={cn_id}), "
+                  f"us_nationalism=`{us_name}` (id={us_id})")
             a("")
         else:
             a("_(no discourse rows — `discours_key` likely fell through to "
@@ -346,7 +455,7 @@ def main() -> int:
             a("_(no classification rows)_")
             a("")
 
-    a("## 6. KTD5 dead-letter rows this run produced")
+    a("## 7. KTD5 dead-letter rows this run produced")
     a("")
     a("`posts_brands_discourse.discourse_key = 'uncategorized'` is a sentinel "
       "— the FK constraint requires a real key. The dead-letter file at "
@@ -365,7 +474,7 @@ def main() -> int:
             a(f"- … ({len(dead_letters) - 30} more)")
     a("")
 
-    a("## 7. Brand registry (referenced by brand_ids above)")
+    a("## 8. Brand registry (referenced by brand_ids above)")
     a("")
     a("| nickname | display_name |")
     a("|---|---|")
