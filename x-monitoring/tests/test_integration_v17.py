@@ -115,7 +115,7 @@ def test_v17_pipeline_emits_exactly_two_calls():
         assert calls[0].call_kind == "account"
         assert calls[0].brand_id == "*"
         assert f"list:{cfg.x_monitor_list_id}" in calls[0].query_string
-        assert "min_faves:1" in calls[0].query_string
+        assert "min_faves:0" in calls[0].query_string
         # Call B is the brand-wide paren-grouped one
         # (brand_id = first enabled model — used as a "primary key"
         # for the per-call summary, not a hard filter on results)

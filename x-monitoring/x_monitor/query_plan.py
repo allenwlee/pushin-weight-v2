@@ -77,6 +77,13 @@ from typing import Literal
 
 from .queries import X_LENGTH_CAP, assert_under_length_cap
 
+# Centralized min_faves floor for Call A (the curated-handles list call).
+# Defined here (not in run.py) to avoid the circular import — query_plan
+# is imported by run.py, not the other way around. brand_wide calls
+# (B1/B2/B3/C1/C2) use min_faves=0 directly; this constant only governs
+# the `account` (Call A) path. Pinned by tests/test_min_faves_list_call.py.
+MIN_FAVES_FOR_LIST_CALL: int = 0
+
 
 CallKind = Literal["account", "brand_wide"]
 
@@ -221,7 +228,7 @@ def _build_query(
                 "_build_query: Call A spec (empty brands) requires "
                 "x_monitor_list_id to be passed in"
             )
-        return f"(list:{x_monitor_list_id}) min_faves:1"
+        return f"(list:{x_monitor_list_id}) min_faves:{MIN_FAVES_FOR_LIST_CALL}"
 
     # Wide-net B-call path (plan 2026-07-11-002): read per-brand
     # tokens from a pre-loaded primary_keywords dict instead of from
@@ -331,7 +338,7 @@ def plan_calls(
     # case via the same uniform renderer so the dispatch is
     # well-tested.
     call_a_spec = XQuerySpec(
-        brands={}, co_occurrence=[], min_faves=1, call_id="A"
+        brands={}, co_occurrence=[], min_faves=MIN_FAVES_FOR_LIST_CALL, call_id="A"
     )
     call_a_query = _build_query(
         call_a_spec, x_monitor_list_id=x_monitor_list_id

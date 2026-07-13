@@ -175,18 +175,28 @@ def _signal_to_qid(signal: str) -> str:
     return "Q5"
 
 
+# Centralized min_faves floor for Call A (the curated-handles list call).
+# Imported from query_plan (not declared here) to avoid the circular
+# import — query_plan is imported by run.py, not the other way around.
+# Was 1 historically (the "release-like" preset) — lowered to 0 so the
+# list call surfaces every post from the curated handles, not just
+# ones that already have traction. brand_wide calls (B1/B2/B3/C1/C2)
+# have always been 0; this constant only governs the `account` path.
+# Pinned by tests/test_min_faves_list_call.py.
+from .query_plan import MIN_FAVES_FOR_LIST_CALL  # noqa: E402
+
+
 def _planned_call_to_query(call: "PlannedCall") -> Query:
     """Synthesize a Query object for the v1.2 filter_and_review helper.
 
     U9 (migration 022): the Query model no longer carries
     `expected_signal` (the 6-signal taxonomy was killed). The filter
-    only reads .id, .min_faves, .query_string. Account calls get
-    Q1 (min_faves=1, the "release-like" preset); brand_wide calls
-    get a generic Q5 (min_faves=0).
+    only reads .id, .min_faves, .query_string. Account calls use
+    MIN_FAVES_FOR_LIST_CALL (currently 0); brand_wide calls use 0.
     """
     from .query_plan import PlannedCall  # local to avoid circular at import
     if call.call_kind == "account":
-        qid, min_faves = "Q1", 1
+        qid, min_faves = "Q1", MIN_FAVES_FOR_LIST_CALL
     else:
         qid, min_faves = "Q5", 0
     return Query(

@@ -69,10 +69,10 @@ def _seed_minimal_data(data: Path):
     (data / "queries" / "minimax.yaml").write_text(
         "queries:\n"
         "  - id: Q1\n"
-        "    query_string: 'from:MiniMaxAI min_faves:1'\n"
+        "    query_string: 'from:MiniMaxAI min_faves:0'\n"
         "    max_results: 50\n"
         "    enabled: true\n"
-        "    min_faves: 1\n"
+        "    min_faves: 0\n"
         "    notes: stub\n",
         encoding="utf-8",
     )

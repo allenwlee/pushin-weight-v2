@@ -7,7 +7,7 @@ docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
 against the v1.6 implementation and PASS against the v1.7 rewrite.
 
 v1.7 shape:
-  Call A (account):   (list:<x_monitor_list_id>) min_faves:1   (29 chars)
+  Call A (account):   (list:<x_monitor_list_id>) min_faves:0   (29 chars)
   Call B (brand_wide): ((BrandTok1a OR BrandTok1b) OR ... OR
                          (BrandTokNa OR ...)) min_faves:0       (218 chars at 7 brands)
 

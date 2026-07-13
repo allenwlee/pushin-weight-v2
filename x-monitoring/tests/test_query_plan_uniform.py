@@ -46,18 +46,18 @@ def test_call_c_brand_spec_alias_is_x_query_spec() -> None:
 
 def test_build_query_call_a_renders_list_form() -> None:
     """A spec with empty `brands` and empty `co_occurrence` renders as
-    `(list:<id>) min_faves:1` — the Call A degenerate case."""
+    `(list:<id>) min_faves:0` — the Call A degenerate case."""
     spec = XQuerySpec(
         brands={}, co_occurrence=[], min_faves=99, call_id="A"
     )
     out = _build_query(spec, x_monitor_list_id=2067062923525275922)
-    assert out == "(list:2067062923525275922) min_faves:1"
+    assert out == "(list:2067062923525275922) min_faves:0"
 
 
 def test_build_query_call_a_requires_list_id() -> None:
     """An empty-brands spec WITHOUT x_monitor_list_id raises — the
     Call A branch needs the list ID to render."""
-    spec = XQuerySpec(brands={}, co_occurrence=[], min_faves=1)
+    spec = XQuerySpec(brands={}, co_occurrence=[], min_faves=0)
     with pytest.raises(ValueError, match="x_monitor_list_id"):
         _build_query(spec)
 
@@ -196,7 +196,7 @@ def test_plan_calls_requires_list_id() -> None:
 
 
 def test_plan_calls_call_a_query_is_list_form() -> None:
-    """Call A's emitted query is `(list:<x_monitor_list_id>) min_faves:1`.
+    """Call A's emitted query is `(list:<x_monitor_list_id>) min_faves:0`.
     Post-U3 the live config has wide-net specs; load primary_keywords
     from the live DB so the planner doesn't raise."""
     cfg = load_config(Path("config.yaml"))
@@ -213,7 +213,7 @@ def test_plan_calls_call_a_query_is_list_form() -> None:
         primary_keywords=primary,
     )
     assert calls[0].query_string == (
-        f"(list:{cfg.x_monitor_list_id}) min_faves:1"
+        f"(list:{cfg.x_monitor_list_id}) min_faves:0"
     )
     assert calls[0].query_length == len(calls[0].query_string)
 
@@ -345,11 +345,11 @@ def test_build_query_call_a_path_unchanged_when_is_wide_net_false() -> None:
     spec = XQuerySpec(
         brands={},
         co_occurrence=[],
-        min_faves=1,
+        min_faves=0,
         call_id="A",
     )
     out = _build_query(spec, x_monitor_list_id=2067062923525275922)
-    assert out == "(list:2067062923525275922) min_faves:1"
+    assert out == "(list:2067062923525275922) min_faves:0"
 
 
 def test_build_query_c_spec_ignores_primary_keywords() -> None:
