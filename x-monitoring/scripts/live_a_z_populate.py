@@ -56,11 +56,62 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Forward --dry-run to `x-monitor run` (no DB writes, "
              "no API quota).",
     )
+    p.add_argument(
+        "--secrets", type=Path, default=_DEFAULT_SECRETS_PATH,
+        help="Path to the dotenv-style secrets file to source before "
+             "launching the subprocess (default: ~/.env.secrets). "
+             "Existing env vars are preserved; only unset keys are "
+             "loaded from the file.",
+    )
     return p.parse_args(argv)
 
 
 def _utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+
+
+_DEFAULT_SECRETS_PATH = Path.home() / ".env.secrets"
+
+
+def _source_secrets(path: Path = _DEFAULT_SECRETS_PATH) -> int:
+    """Source a dotenv-style `export KEY="value"` file into os.environ.
+
+    Lines starting with `#` or blank are skipped. Each `export KEY="VALUE"`
+    line strips the `export ` prefix and the surrounding quotes, then sets
+    `os.environ[KEY] = VALUE`. Single-quoted values are stripped the same
+    way. Existing os.environ values are not overwritten (caller wins).
+
+    Returns the number of vars loaded (0 if path missing / no parsable lines).
+    Used by main() before launching the x-monitor subprocess so the
+    subprocess inherits the operator's TWITTERAPI_IO_API_KEY without
+    requiring the caller to source the file in their shell.
+
+    Plan 2026-07-13-001 R1 mitigation: caller (main) checks
+    `TWITTERAPI_IO_API_KEY in os.environ` after this returns and prints
+    a stderr diagnostic + exits rc=2 if absent.
+    """
+    if not path.exists():
+        return 0
+    loaded = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not line.startswith("export "):
+            continue
+        line = line[len("export "):].strip()
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        # Strip surrounding quotes (single or double).
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        if key and key not in os.environ:
+            os.environ[key] = value
+            loaded += 1
+    return loaded
 
 
 def _build_log_path(log_dir: Path, stamp: str) -> Path:
@@ -141,6 +192,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit_per_call <= 0:
         print(
             f"--limit-per-call must be > 0 (got {args.limit_per_call})",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Plan 2026-07-13-001 R1: source ~/.env.secrets before launching the
+    # subprocess so TWITTERAPI_IO_API_KEY reaches TwitterApiClient.from_env()
+    # without the caller needing to `source ~/.env.secrets` themselves.
+    loaded = _source_secrets(args.secrets)
+    if loaded:
+        print(
+            f"_source_secrets: loaded {loaded} vars from {args.secrets}",
+            file=sys.stderr,
+        )
+    if not args.dry_run and "TWITTERAPI_IO_API_KEY" not in os.environ:
+        print(
+            "TWITTERAPI_IO_API_KEY not in environment and not found in "
+            f"{args.secrets}. TwitterApiClient.from_env() will raise at "
+            "subprocess start. Recovery: add `export TWITTERAPI_IO_API_KEY=\"...\"` "
+            "to your secrets file or pass --secrets <path>.",
             file=sys.stderr,
         )
         return 2

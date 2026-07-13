@@ -208,3 +208,79 @@ def test_precheck_skipped_on_dry_run(
     assert "DB schema precheck FAILED" not in captured.err
     # dry-run passes through subprocess rc.
     assert rc == 0
+
+
+def test_source_secrets_loads_export_lines(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """`_source_secrets` parses `export KEY="value"` lines into
+    os.environ, skipping blanks, comments, and lines without `export`.
+    Existing env vars are preserved (caller wins)."""
+    secrets = tmp_path / ".env.secrets"
+    secrets.write_text(
+        "# header comment\n"
+        "\n"
+        'export NEW_VAR="hello"\n'
+        "export SINGLE_QUOTED='world'\n"
+        "export MULTI=value with spaces\n"
+        "export NOQUOTES=plain\n"
+        "not_an_export=ignored\n"
+        "export ONLY_KEY # no equals\n"
+    )
+    monkeypatch.delenv("NEW_VAR", raising=False)
+    monkeypatch.delenv("SINGLE_QUOTED", raising=False)
+    monkeypatch.delenv("MULTI", raising=False)
+    monkeypatch.delenv("NOQUOTES", raising=False)
+    loaded = lap._source_secrets(secrets)
+    assert loaded == 4
+    import os
+    assert os.environ["NEW_VAR"] == "hello"
+    assert os.environ["SINGLE_QUOTED"] == "world"
+    assert os.environ["MULTI"] == "value with spaces"
+    assert os.environ["NOQUOTES"] == "plain"
+
+
+def test_source_secrets_does_not_overwrite_existing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Existing os.environ values must win — the helper only fills in
+    unset keys (so the caller's shell-exported TWITTERAPI_IO_API_KEY is
+    preserved across runs)."""
+    secrets = tmp_path / ".env.secrets"
+    secrets.write_text('export TWITTERAPI_IO_API_KEY="from_file"\n')
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "from_shell")
+    loaded = lap._source_secrets(secrets)
+    assert loaded == 0  # already in env, not loaded
+    import os
+    assert os.environ["TWITTERAPI_IO_API_KEY"] == "from_shell"
+
+
+def test_source_secrets_returns_zero_when_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Missing secrets file → 0 loaded, no exception. Caller checks
+    for the specific TWITTERAPI_IO_API_KEY in os.environ afterwards."""
+    missing = tmp_path / "does_not_exist"
+    loaded = lap._source_secrets(missing)
+    assert loaded == 0
+
+
+def test_missing_twitterapi_key_exits_rc_two(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """When neither os.environ nor the secrets file contains
+    TWITTERAPI_IO_API_KEY, main() prints a stderr diagnostic and
+    returns rc=2 BEFORE launching the subprocess (no API quota burned)."""
+    secrets = tmp_path / ".env.secrets"
+    secrets.write_text('export SOMETHING_ELSE="x"\n')
+    monkeypatch.delenv("TWITTERAPI_IO_API_KEY", raising=False)
+    rc = lap.main([
+        "--limit-per-call", "5",
+        "--secrets", str(secrets),
+        "--log-dir", str(tmp_path),
+    ])
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "TWITTERAPI_IO_API_KEY" in captured.err
+    assert "Recovery:" in captured.err
