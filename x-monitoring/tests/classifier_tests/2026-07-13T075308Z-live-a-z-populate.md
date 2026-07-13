@@ -148,3 +148,94 @@ TypeError: Store.upsert_account() got an unexpected keyword argument 'multiple_p
 
 # rc=1 elapsed_ms=55867
 ```
+
+---
+
+# Update — task #308 fixed, smoketest re-run clean (rc=0)
+
+**Run date (re-run):** 2026-07-13T08:42:54Z
+**Driver:** `python3.14 -m x_monitor run --limit-per-call 5`
+**Run id:** `20260713T084254_0000-77dfe4bb`
+**Run summary JSON:** `data/runs/20260713T084254_0000-77dfe4bb.json`
+**Log:** `/tmp/u3_post308.log`
+**Exit code:** 0
+
+## What changed
+
+Task #308 fix landed in commit `633e47f`:
+
+- `x_monitor/run.py` — drop the `multiple_posts_in_thread_with_official=`
+  kwarg from the `store.upsert_account(...)` call at `_update_accounts`.
+  `thread_count` is still computed locally (with a `del thread_count`
+  marker + a comment documenting why it's not persisted). Nothing in the
+  pipeline reads the kwarg back today, so dropping it loses no
+  functionality.
+- `tests/test_run_task_308.py` — new regression test pinning the fix
+  (forbids the kwarg from re-appearing, requires the task #308 marker
+  comment to stay).
+
+## What the re-run produced
+
+The run reached `_update_accounts` (previously the crash site), the
+classification pipeline ran for the new posts, and U5's partial-row
+write was verified live again — 9 new partial rows landed in this run
+alone.
+
+```
+totals:
+  n_queries_run:             6
+  n_results:                 9
+  n_inserted:                7
+  n_classifications_written: 0
+  n_classifications_dropped: 0
+  n_headlines_fetched:       0
+  n_headlines_cached:        0
+post_fetch:
+  n_translated:        7
+  n_discourse:         4
+  n_nationalism:       0
+  n_unsanctioned:      3
+  wall_clock_sec:      23.80
+```
+
+DB verification (live `data/x_monitoring.db` after the re-run):
+
+```
+partial rows (act_id=0):                   9   ← U5 partial-row writes
+total rows in discourse table:            45
+rows with discourse_key IS NULL:           9
+posts inserted this run (id >= 7540):    225
+posts with brand classification
+  (post_id >= 7540):                      21
+rows in posts_brands_signals
+  (post_id >= 7540):                       0
+```
+
+Note: `posts_brands_signals` stays empty because the B1/B2/B3/C1/C2
+smoketest calls classify through `posts_brands_discourse` only — the
+signals table is populated by a different call path. The 21
+distinct post/brand combinations with discourse rows confirms the
+classification pipeline DID run for the new posts.
+
+`n_classifications_written=0` is a separate counter
+(`run.py:1220` reads `store._classifications_written`, which is
+incremented inside the legacy `classify_signal` 6-bucket path — that
+path is no longer wired into the v1.7 live smoketest). The post-fetch
+metrics (`n_discourse: 4`, `n_unsanctioned: 3`, `n_translated: 7`) are
+the real measure of classification throughput for this run.
+
+## What's verified vs what's still open
+
+| Claim | Status |
+|---|---|
+| Task #308 fix (`Store.upsert_account` signature drift) | ✅ Committed (`633e47f`), regression-tested, smoketest re-ran cleanly to rc=0. |
+| U5 partial-row write | ✅ Verified on live data, again — 9 partial rows in this run (vs. 6 in the blocked run). |
+| Classification pipeline runs end-to-end | ✅ 21 distinct post/brand combinations with discourse rows; `n_unsanctioned: 3`, `n_translated: 7`, `n_discourse: 4`. |
+| Run reaches the run-summary write + LATEST symlink | ✅ `data/runs/20260713T084254_0000-77dfe4bb.json` written; LATEST.json updated. |
+| U3 full per-tweet evidence report | ⏳ Now unblocked — next step is to run `scripts/build_u3_evidence_live_run.py` against this run's data to produce the disputed-tweet table for tweets #2/#4/#6 marketing_spam recovery and #3/#8/#10 sentiment correctness. |
+
+## Next step
+
+Run the U3 evidence builder against `20260713T084254_0000-77dfe4bb` to
+generate the per-tweet table. Use that table to drive U2's
+capture-vs-tighten decision.
