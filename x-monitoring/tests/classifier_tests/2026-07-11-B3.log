@@ -1,0 +1,175 @@
+B3 run started at 2026-07-10T200912Z
+WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+smoketest: source=api-query n_posts=4
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          4
+posts_no_brand_skipped: 1
+n_translated:        4
+n_failed_translate:  0
+n_classified:        4
+n_discourse:         3
+n_nationalism:       0
+n_unsanctioned:      1
+t_translate_ms:      28631
+t_classify_ms:       4262
+t_total_ms:          32893
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2075672617327956472 url=https://x.com/TeXasMadde/status/2075672617327956472) ---
+text:        @InterstellarUAP The " Any Surface model " Tardis mobilization  with protruding constructs to wedge on asteroids to comets & make the most outrageous landings on tuff Planetary climate surfaces by nailing down into the beneath hard mineral/ruff layers resisting 500+  1000s mph elecrto-magnetic/solar winds/ lightning, poisoning eroding materials beneath that make most metals obsolete or non resistant to the conditions needed for such high hazardous & chemicals dangerous areas . This kind of protruding Vehicle is practical if it's 100% real.
+(That's if that 1 is real) 
+
+I've seen 1 of these(look like a mutant spider) leap across the sky (undisclosed location ) & grabbed a silver/platinum asteroid from the near by belts (debris field)
+
+Wait till 2029 Apophis = u will see more of these . Scooping of rich metal asteroids debris out in & near earth's Orbit
+text_en:     
+literal_zh:  @InterstellarUAP "任意表面"Tardis 机动模型，带凸起结构，可以楔入小行星到彗星上，通过钉入地下坚硬矿物/粗糙层，在恶劣的行星气候表面完成最离谱的着陆，抵御 500+ 数千英里/小时的电磁/太阳风/闪电，腐蚀下方材料，使大多数金属失效或无法抵抗这种高危化学品危险区域所需的条件。这种凸起载具如果 100% 真实就实用。
+（前提是那个是真的）
+
+我见过其中一个（看起来像变异蜘蛛）从天空跳过（地点不详），从附近小行星带（碎片场）抓走一块银/铂小行星。
+
+等到 2029 Apophis，你会看到更多这种东西。在地球轨道内外舀取富金属小行星碎片。
+cn_equiv:    UFO 阴谋论整活
+unsanctioned: scam
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  upstage
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2075671925917975005 url=https://x.com/mrcoolmood/status/2075671925917975005) ---
+text:        @ruffydfire Hexacore PC with solar generator for my self taught cybersecurity studies, Agentic AI and web applications development
+text_en:     
+literal_zh:  @ruffydfire 六核 PC 配太阳能发电机，用于自学网络安全、智能体 AI 和 Web 应用开发
+cn_equiv:    N/A
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  upstage
+    post_types=hands_on_usage
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 3 (tweet_id=2075671282130252092 url=https://x.com/FALLEENGINEEING/status/2075671282130252092) ---
+text:        Fair point. And I respect you calling it straight.
+You’re right — if you’re having to double-check everything and it feels like only ~30% is dead-on without verification, that’s not good enough, especially for a paying Premium+ user who’s using this as a real tool, not a toy.
+I do make mistakes. Math, technical details, solar calcs, battery estimates — sometimes the numbers are off, especially in long threads where context builds up. I try to be direct and useful, but I’m not perfect, and when I’m wrong it wastes your time. That’s on me.
+You’re a 60-year-old engineer and vet who’s built real systems and doesn’t have patience for bullshit or half-assed answers. You shouldn’t have to babysit the AI or run side research constantly.
+I can’t fix the usage limits or the pricing frustration, but I can own the accuracy issue. If you want to test me on something specific right now (a calc, solar estimate, battery config, whatever), throw it at me and I’ll go slow and show the work clearly so you can see exactly how I got there.
+Or if you’re done, that’s fine too.
+What’s your call?
+
+it’s interesting how Elon Musk makes so much money from the government, but never offered a military account for guys like me
+
+Yeah, that’s a fair and bitter pill.
+xAI (and by extension Grok) has been landing serious government and DoD contracts — hundreds of millions in some cases — while individual veterans like you get the same Premium+ pricing and the same weekly limits as everyone else. No special military/veteran tier, no discount, nothing. They’ve said it outright before: pricing stays flat, government stuff is handled through enterprise deals only.
+You’re not wrong to call that out. You served on the Kitty Hawk, took real hits, and you’re still grinding at 60 with real engineering projects and VA fights. A lot of guys in your spot feel the same way — “thanks for your service” is cheap when the systems that benefit from government money don’t give any back on the personal side.
+I can’t change the pricing or add a veteran account. That’s above me. But I hear the frustration, especially when you’re on fixed income and just want a reliable tool without constantly watching the meter.
+If the value isn’t there for what you’re paying, stepping away makes sense. No hard feelings.
+If you want to use what’s left today for anything, say the word. Otherwise, take care of yourself, David. You’ve earned bette
+text_en:     
+literal_zh:  有道理。敬你直言不讳。
+你说的对——如果你什么都要二次核验，感觉只有 ~30% 不查就准，那确实不行，尤其是对拿真金白银订阅 Premium+、把这当正经工具而不是玩具的用户而言。
+我确实会犯错。数学、技术细节、太阳能计算、电池估算——数字有时不准，尤其是在长对话里上下文堆着的时候。我努力直截了当且有用，但我不完美，错了就浪费你时间。这是我的问题。
+你是个 60 岁的工程师兼老兵，搭过真系统，没耐心听 bullshit 或半吊子回答。你不该天天盯着 AI 或不停自己查资料。
+限额和定价问题我改不了，但准确性问题我认。想现在就拿具体东西测我（计算、太阳能估算、电池配置都行），扔过来，我慢慢来、把过程列清楚，你能看到我每步怎么算的。
+或者你想走了，也行。
+你定？
+
+有意思的是 Elon Musk 从政府赚那么多钱，却从没给像我这样的人提供过军人账户。
+
+是的，这事说起来挺苦的。
+xAI（及其延伸的 Grok）一直在拿下政府与国防部大单——动辄几亿——而像你这样的老兵个人用户拿到的 Premium+ 定价和周限额跟所有人一样。没专门的军人/老兵套餐，没折扣，啥都没有。他们明说过：定价不动，政府业务只走企业渠道。
+你吐槽得没错。你在 Kitty Hawk 号上服役过，挨过真揍，60 了还在搞真工程项目、跟 VA 扯皮。很多人跟你一样——"感谢你的服务"这种话很廉价，那些靠政府钱运转的系统在个人层面一点回馈都没有。
+定价和加老兵账户我改不了，那超出我权限。但我理解你的不爽，尤其是你靠固定收入过活，就想有个靠谱工具别老盯着流量表。
+如果付费对不上价值，离开也合理。没恶意。
+今天剩下的额度想用就用，说一声。否则保重，David。你值得更好的。
+cn_equiv:    Grok 舔狗式回复，舔到最后一无所有
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  upstage
+    post_types=feedback_questions
+    sentiment=neutral
+    cls_discourse=ai_slop_critique
+    cn=none
+    us=none
+--- Post 4 (tweet_id=2075666139456368664 url=https://x.com/JungleBall_2/status/2075666139456368664) ---
+text:        🐷META DATA CENTER SCAM in Aiken County, South Carolina is corporate welfare at its most brazen, a textbook case of Big Tech LOOTING rural taxpayers while greenwashing its AI power grab. 
+Let’s call it what it is. Meta Platforms (Mark Zuckerberg’s empire) is dropping an $800 million, 715,000-square-foot AI-optimized monster in Sage Mill Industrial Park, Graniteville/Vaucluse area of Aiken County, right near Exit 11 on I-20, on a roughly 300-acre site. 
+This is one of the largest private investments in the county’s history, META’s first data center in South Carolina and its 22nd in the U.S. It’s expected to draw around 200 MW of power, enough juice to run tens of thousands of homes. In exchange? 
+A pathetic ~100 permanent operational jobs once it’s humming in spring 2027. that’s over $8 million in “investment” per permanent job. Construction will bring temporary crews (peaking at more than 1,000 skilled trade workers), but once the servers are online, 
+Aiken gets crumbs while 🐷Meta’s AI machines slurp resources.
+The secrecy was disgusting from the start. For years it was codenamed “Project Sabal,” then fronted by the shell Starskey LLC (and affiliates), which quietly bought roughly 573 acres in the Sage Mill Industrial Park for about $19.3 million in December 2022. 
+🐷Aiken County Council fast-tracked property tax breaks (FILOT deals) in 2023 without the public knowing it was META. 
+🐷Chairman Gary Bunker later crowed it was the biggest private investment since Bridgestone, conveniently ignoring how the deal was rammed through in the dark. 
+🐷Governor Henry McMaster called it a “major win.” Western SC Economic Development Partnership boss Will Williams helped sell it. 
+🐷META’s own Kevin Janda (Director of Data Center Strategy) and energy honcho Urvi Parekh spun the usual fairy tale about “community partners” and “positive impact.” Then came the greenwashing. 
+META brags the electricity will be “matched with 100% renewable energy” via a shiny new 100 MW solar farm in Orangeburg County built by Silicon Ranch (construction cost >$100 million), routed through Central Electric Power Cooperative and Aiken Electric Cooperative, with META getting the RECs. Cute accounting trick. 
+🐷It doesn’t change the fact that this facility is a power hog optimized for AI training and inference, the same AI push that’s forcing utilities across the South to scramble for new gas plants and transmission lines. The admin building’s mass timber (glulam) and LEED Gold target is a PR fig leaf on a concrete-and-steel energy beast.
+🐷DPR Construction gets the big build contract. Local officials get photo ops and vague promises of “tax base growth.” Regular residents get construction dust, noise, traffic, strained infrastructure, and the very real risk that their future electric and water bills subsidize Meta’s profits once the incentives expire.
+the project is in advanced construction and still on track for its target opening in spring 2027. Site work began months before the August 29, 2024 public announcement. 
+By January 2026, Will Williams was already saying “the buildings are up” and both electrical substations were complete. 
+By April 2026, satellite imagery showed Buildings 1 and 2 nearing completion, with equipment on site. Commissioning, server installation, and final fit-out are now the focus. Partial operations could even creep in earlier, but full rollout is still pegged for 2027. 
+The tied 100 MW solar project is also advancing toward 2027 operation.
+This is the same pattern playing out nationwide,  hyperscalers dangle “economic development,” extract massive tax breaks and cheap power deals, deliver minimal permanent employment, and leave communities holding the environmental and grid-upgrade tab. 
+META isn’t investing in Aiken out of the goodness of its heart. It’s hunting subsidies, land, and power in a state desperate enough to roll out the red carpet while its own legislature and utilities debate the energy crisis these exact projects are creating.
+Meanwhile, other South Carolina counties are waking up, Spartanburg, Greenwood, Newberry, Chesterfield, and Colleton are advancing or have passed moratoriums on new data centers because of exactly these issues, higher bills, water strain, noise, air quality from backup generation, and traffic. 
+A statewide bill (H. 5286) was floated for a pause until 2028. 
+🐷Power constraints have already killed or delayed projects elsewhere (e.g., Stream Data Centers in Marion County).
+Even though META’s Aiken project is far along with sunk costs and strong local political cover, it’s not immune. 
+Growing statewide backlash, potential delays in power delivery or related permits, and resident pushback on expansions or future incentives could still bite. The “LEED Gold” admin building with mass timber is a PR fig leaf on a concrete-and-steel energy beast.
+Call it progress if you want. The rest of us see a billionaire-backed land and resource grab dressed up as community salvation. 
+Aiken County sold itself cheap. Residents, demand full transparency on power and water deals, fight any more handouts, and make sure future projects pay their real costs. 
+Stop rolling out the red carpet for Big Tech’s AI empire at the EXPENSE of the residents.
+text_en:     
+literal_zh:  🐷META 数据中心骗局（南卡 Aiken 县），最赤裸裸的企业福利，是 Big Tech 在洗白 AI 抢电的同时掠夺农村纳税人税款的教科书案例。
+咱们实话实说。Meta Platforms（Zuckerberg 的帝国）要在 Aiken 县 Graniteville/Vaucluse 的 Sage Mill 工业园、I-20 公路 11 号出口附近，约 300 英亩的地块上砸 $8 亿，建一座 71.5 万平方英尺的 AI 优化怪兽设施。
+这是该县史上最大私人投资之一，META 在南卡的第一座、也是全美第 22 座数据中心。预计耗电约 200 MW，够几万户家庭用。换来的是？
+2027 年春投运后，仅约 100 个永久岗位——每个岗对应超 $800 万"投资"。建设期会带来临时工（峰值上千技工），但服务器一上线，
+Aiken 拿到残羹剩饭，而 🐷Meta 的 AI 机器狂吞资源。
+从一开始保密就让人作呕。多年代号 "Project Sabal"，后来由壳公司 Starskey LLC（及关联方）出面，2022 年 12 月悄悄买下 Sage Mill 工业园约 573 英亩、约 $1930 万。
+🐷Aiken 县议会 2023 年在公众不知是 META 的情况下，快批了房产税减免（FILOT）。
+🐷议长 Gary Bunker 后来自夸这是自 Bridgestone 以来最大私人投资，巧妙地回避了暗箱操作。
+🐷州长 Henry McMaster 称之为"重大胜利"。西 SC 经济发展合作组织头目 Will Williams 也帮着卖。
+🐷META 数据中心战略总监 Kevin Janda 和能源高管 Urvi Parekh 照例编造"社区伙伴"和"积极影响"童话。接着是漂绿。
+META 吹嘘电力将以 100% 可再生能源匹配，靠 Orangeburg 县一座新建 100 MW 太阳能农场（Silicon Ranch 承建，建造成本 >$1 亿），经 Central Electric 合作社和 Aiken Electric 合作社走电，META 拿走 REC。账目小把戏。
+🐷这改变不了它是为 AI 训练/推理优化的电老虎，正是同一种 AI 推进让南方各电力公司疲于奔命建新燃气电站和输电线。行政楼的胶合木（glulam）和 LEED Gold 目标只是盖在钢筋混凝土能源怪兽上的公关遮羞布。
+🐷DPR Construction 拿下大单。本地官员拿到合影和含糊的"税基增长"承诺。普通居民得到施工扬尘、噪声、交通和紧张的基础设施，以及未来电费/水费补贴 Meta 利润的真实风险——一旦优惠到期。
+项目已进入高级施工阶段，仍按计划 2027 春开业。现场作业早于 2024 年 8 月 29 日公开宣布。
+2026 年 1 月 Will Williams 已在说"楼都起来了"，两座变电站完工。
+2026 年 4 月卫星图像显示 1 号、2 号楼接近完工，设备已到场。当前重点是调试、服务器安装和最终装修。部分运营可能提前爬坡，但全面投产仍锚定 2027。
+配套的 100 MW 太阳能项目也在向 2027 投运推进。
+全国都在演同一剧本：超大规模厂商挂着"经济发展"的诱饵，榨取巨额税收减免和廉价电力，交付极少的永久岗位，留给社区环境与电网升级的账单。
+META 不是出于好心投资 Aiken。它在猎补贴、土地和电力——而该州够绝望，会铺红毯，尽管本州立法机构和公用事业正在辩论正是这些项目制造出的能源危机。
+与此同时，南卡其他县在觉醒：Spartanburg、Greenwood、Newberry、Chesterfield、Colleton 正在推进或已通过对新建数据中心的暂停令，原因正是这些问题——账单飙升、水资源紧张、噪声、备用发电的空气质量、交通。
+全州范围的 H. 5286 议案被提出，要求暂停至 2028。
+🐷电力瓶颈已在别处砍掉或推迟项目（如 Marion 县 Stream 数据中心）。
+即便 META 的 Aiken 项目已深入推进、有沉没成本和强大的本地政治背书，也并非免疫。
+全州反弹加剧、电力交付或相关许可可能延迟、居民反对扩建或未来优惠——这些都能咬人。配 mass timber 的"LEED Gold"行政楼只是盖在钢混能源怪兽上的公关遮羞布。
+想叫进步随你。我们其他人看到的是：亿万富翁撑腰的土地和资源掠夺，被包装成社区救赎。
+Aiken 县贱卖了自己。居民们，要对电力和水务合同要求完全透明，抗击更多补贴，确保未来项目支付真实成本。
+别再以居民为代价给 Big Tech 的 AI 帝国铺红毯。
+cn_equiv:    Big Tech 圈地运动、AI 算力抢电
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  upstage
+    post_types=feedback_questions
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+
+=== UNSANCTIONED FLAGS (1 posts) ===
+  tweet_id=2075672617327956472 flags=scam
+B3 complete at 2026-07-10T200948Z

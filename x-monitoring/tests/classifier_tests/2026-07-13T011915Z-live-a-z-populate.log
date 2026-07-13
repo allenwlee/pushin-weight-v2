@@ -1,0 +1,33 @@
+# live_a_z_populate
+# started_at=2026-07-13T011915Z
+# cmd=/opt/homebrew/opt/python@3.14/bin/python3.14 -m x_monitor run --limit-per-call 20 --no-skip-under-budget
+# log_path=/Users/fuchitalee/development/minimax-marketing/x-monitoring/tests/classifier_tests/2026-07-13T011915Z-live-a-z-populate.log
+
+=== STDOUT ===
+{
+  "run_id": "20260713T011915_0000-40e5975b",
+  "started_at": "2026-07-13T01:19:15+00:00",
+  "finished_at": "2026-07-13T01:19:15+00:00",
+  "status": "degraded",
+  "degraded": {
+    "already_running": true
+  },
+  "queries": [],
+  "phase_timings_sec": {},
+  "totals": {
+    "n_queries_run": 0,
+    "n_results": 0,
+    "n_unattributed": 0,
+    "n_inserted": 0,
+    "n_classifications_written": 0,
+    "n_classifications_dropped": 0,
+    "n_headlines_fetched": 0,
+    "n_headlines_cached": 0
+  }
+}
+
+=== STDERR ===
+
+# rc=0 elapsed_ms=179
+
+# inserted=15 posts in last 10 min (pre=0, post=15); see /Users/fuchitalee/development/minimax-marketing/x-monitoring/tests/classifier_tests/2026-07-13T011915Z-live-a-z-populate.log

@@ -1,0 +1,504 @@
+Smoketest run started at 2026-07-10T200552Z
+=== A (n_chars=38) ===
+smoketest: source=api-query n_posts=0
+smoketest: no posts to process; nothing to report
+---
+=== C1 (n_chars=505) ===
+smoketest: source=api-query n_posts=3
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          3
+posts_no_brand_skipped: 2
+n_translated:        3
+n_failed_translate:  0
+n_classified:        3
+n_discourse:         3
+n_nationalism:       0
+n_unsanctioned:      0
+t_translate_ms:      8608
+t_classify_ms:       3045
+t_total_ms:          11653
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2075672617327956472 url=https://x.com/TeXasMadde/status/2075672617327956472) ---
+text:        @InterstellarUAP The " Any Surface model " Tardis mobilization  with protruding constructs to wedge on asteroids to comets & make the most outrageous landings on tuff Planetary climate surfaces by nailing down into the beneath hard mineral/ruff layers resisting 500+  1000s mph elecrto-magnetic/solar winds/ lightning, poisoning eroding materials beneath that make most metals obsolete or non resistant to the conditions needed for such high hazardous & chemicals dangerous areas . This kind of protruding Vehicle is practical if it's 100% real.
+(That's if that 1 is real) 
+
+I've seen 1 of these(look like a mutant spider) leap across the sky (undisclosed location ) & grabbed a silver/platinum asteroid from the near by belts (debris field)
+
+Wait till 2029 Apophis = u will see more of these . Scooping of rich metal asteroids debris out in & near earth's Orbit
+text_en:     
+literal_zh:  @InterstellarUAP 这种「任意表面」Tardis 机动装置，带有突出构造，可以楔入小行星到彗星上，在 tough 的行星气候表面完成最离谱的着陆——钉入底下坚硬的矿物/粗糙层，抵御 500+、上千英里每小时的电磁/太阳风/闪电，以及底下那些让大多数金属失效或无法抵抗此类高危化学品区域所需的腐蚀性物质。这种突出载具如果 100% 真实的话是实用的。
+（前提是那个是真的）
+
+我见过其中一架（看起来像变异蜘蛛）在天空中跳跃（地点未公开），从附近的 debris field 小行星带抓取了一颗银/铂小行星。
+
+等到 2029 Apophis 你们会看到更多这种东西。在地球轨道内及附近 scooping 富金属小行星碎片。
+cn_equiv:    这都什么跟什么，外星人阴谋论？
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  upstage
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2075672361270141304 url=https://x.com/pierceboggan/status/2075672361270141304) ---
+text:        @awakecoding FYI, we dug into this today.
+
+It looks like Kimi really doesn't like tool IDs in a different format than they natively accept.
+
+Are you doing any changing of models in this conversation? We primarily observed early stops in conversations where the model changed (which confused Kimi).
+text_en:     
+literal_zh:  @awakecoding 顺便说一下，我们今天挖了一下这个问题。
+
+看起来 Kimi 真的不喜欢用跟它原生接受格式不同的工具 ID。
+
+你们在这个对话里有切换过模型吗？我们主要观察到在模型被切换过的对话里会出现 early stops（这让 Kimi 很困惑）。
+cn_equiv:    Kimi 工具调用兼容性拉了
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=hands_on_usage
+    sentiment=mixed
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+--- Post 3 (tweet_id=2075672131304833085 url=https://x.com/ChimeraDefi/status/2075672131304833085) ---
+text:        Im surprised no one else is talking about just how unreliable and volatile AI is. Half the time I ask I get a error. Gemini says its having problems, ChatGPT and Claude say they’re at capacity. Kimi just fails silently. And even if it does answer it can either be what I expect or way worse like a lobotomized model
+text_en:     
+literal_zh:  我很惊讶居然没人聊 AI 到底有多不稳定、多不可靠。一半时间我提问就直接报错。Gemini 说它有问题，ChatGPT 和 Claude 说他们满负荷了。Kimi 直接静默失败。就算它答了，要么是我想要的，要么烂得像被脑叶切除的模型。
+cn_equiv:    AI 全在翻车，Kimi 尤其拉
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=feedback_questions
+    sentiment=negative
+    cls_discourse=fud
+    cn=none
+    us=none
+---
+=== C2 (n_chars=247) ===
+smoketest: source=api-query n_posts=1
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          1
+posts_no_brand_skipped: 4
+n_translated:        0
+n_failed_translate:  0
+n_classified:        1
+n_discourse:         1
+n_nationalism:       0
+n_unsanctioned:      0
+t_translate_ms:      13423
+t_classify_ms:       1924
+t_total_ms:          15347
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2075655539405770809 url=https://x.com/valentinlulu/status/2075655539405770809) ---
+text:        有些人走散了，就当通讯录翻篇了吧！
+
+人这一辈子，真的别太纠结。
+
+有些人，有些事，错过了就错过了；看清了，也就看轻了。
+不是每段关系都值得追问为什么，也不是每份情分，都能撑得住现实的一次考验。
+我有个老同事，曹姐。
+
+2010年，我回国进第一家国企工厂时认识她。后来我跳槽，她下岗。2013年，我们一起到我舅舅的铝工厂做外贸。
+
+这些年，我们也算一起扛过不少难关。
+
+我舅舅舅妈心宽，对人也好，大家平时和和气气。很多时候，我还真以为，几十年的同事情分，不说多深，至少也经得起一点风浪。
+
+可人心这东西，不到关键时刻，你真的看不明白。
+
+上个月海关查验，因为HS code申报问题，我们被无端怀疑骗退税。我和她一起准备资料，我也一直据理力争，想着问题总能讲清楚，事情总会解决。
+
+可她倒好，关键时候不问专家，天天问豆包。豆包到后来胡编乱造，说什么报关员要坐牢，把她吓得魂都没了。
+
+人一怕，就容易乱。
+
+她突然撂挑子不干了，催老板报销，催我问客户提前结款。
+
+可我不可能这么做。客户是唯一且忠实的客户，我们自己的问题，不能让客户来买单。做人做事，总得有底线。
+
+结果呢？
+
+客户不交接，FedEx账号不给密码，企业微信也卡着不转让。
+
+说真的，那一刻挺寒心的。
+
+原来几十年的同事情谊，有时候真抵不过几千块遣散费。
+原来你曾经以为的“自己人”，也可能在利益面前，突然变成最陌生的人。
+
+她是本地人，平时婚丧嫁娶、家长里短、婆婆妈妈的事很多，经常丢下工作，我一直没说什么。她家里有事，我也理解。甚至她自己兄弟开按摩店出事，我过世的父亲也帮过她。
+可人和人之间最遗憾的地方就在这里：
+你记得的是情分，别人算的是得失。
+
+后来因为交接的问题，她把我微信删了。
+
+删就删吧。
+人生嘛，有些人退出，就当通讯录翻过去了一页。
+不必追问，不必解释，更不必内耗。
+
+白马过隙，日子一晃就是十几年。能同行一程，是缘分；走不到最后，也是正常。
+
+人到了一定年纪，慢慢就懂了：
+有些关系，不是你珍惜就不会散；
+有些人，不是你帮过，就会记得；
+有些事，不是你问心无愧，别人就会同样体面。
+
+以后我还是会认真做事，真诚待人，但不会再拿旧情分去消耗自己。
+该交接的交接，该解决的解决。
+至于人心，就不强求了。
+
+人生有时候，真的不要纠结，不要内耗。
+谁走谁留，时间都会给答案。
+
+删了就删了。
+翻篇就翻篇了。
+往后的日子，珍惜当下，照顾好自己，守住自己的原则，好好过。
+text_en:     
+literal_zh:  
+cn_equiv:    N/A
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  doubao
+    post_types=hands_on_usage
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+---
+=== B1 (n_chars=473) ===
+smoketest: source=api-query n_posts=5
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          5
+n_translated:        5
+n_failed_translate:  0
+n_classified:        4
+n_discourse:         2
+n_nationalism:       2
+n_unsanctioned:      2
+t_translate_ms:      26272
+t_classify_ms:       6427
+t_total_ms:          32699
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2075672424323207422 url=https://x.com/KeorUnreal/status/2075672424323207422) ---
+text:        Let's go to Tokyo tonight and hang out with friends!✌🏻🌃
+Good night folks!!💫
+
+Freya Allan, Natalie Portman, My Model, Kate Upton 🔥
+👉🏻Subscribe for more content!⚡
+
+Nano Banana 2 & GPT Image 2.0 via Hailuo AI 
+Prompt:
+
+Ultra-realistic high-fashion editorial close-up portrait of a confident adult woman in Tokyo's Akihabara district, wearing premium Harajuku Decora and Fairy Kei fashion in pastel lavender, pink, and white. Blonde twin space buns with pastel highlights, flawless glamorous makeup, glossy lips, shimmering eyes, luminous skin. She stands is crouching with hands among legs making peace symbol with fingers. Chin slightly lowered with intense eye contact, subtle seductive smile, luxurious body language, elegant posture, runway confidence, long legs emphasized through camera angle. Anime-inspired cropped sailor knit top, layered plaid mini skirt, decorative chains, heart accessories, transparent ita bag filled with collectible anime merchandise, fluffy leg warmers, chunky platform shoes. Vibrant neon Akihabara streets, colorful storefronts, gachapon machines, neon purple written 'Keor' somewhere, cinematic evening lighting, soft bokeh, shallow depth of field, Vogue magazine editorial, 85mm lens, f/1.4, photorealistic skin texture, HDR, masterpiece, premium fashion campaign, luxury street style, ultra-detailed, 8K.
+text_en:     
+literal_zh:  今晚去东京和朋友们嗨！✌🏻🌃
+晚安家人们！！💫
+
+Freya Allan、Natalie Portman、My Model、Kate Upton 🔥
+👉🏻订阅看更多内容！⚡
+
+Nano Banana 2 & GPT Image 2.0 via 海螺 AI
+Prompt：
+
+超写实高级时尚编辑特写人像，御姐系熟女在东京秋叶原街头，身穿高端原宿 Decora 与 Fairy Kei 穿搭，配色粉紫、粉、白。双丸子头金色挑染，妆容无瑕高级，玻璃唇，水灵大眼，肌肤发光。蹲姿双腿间双手比耶，下巴微低眼神带电，微挑诱惑微笑，肢体语言奢贵，姿态优雅，T台气场，镜头拉长腿部线条。动漫风短款水手针织上衣，格纹迷你裙叠搭，装饰链条，桃心配饰，透明痛包塞满动漫周边，蓬松腿套，厚底松糕鞋。秋叶原霓虹街景，店铺五彩斑斓，扭蛋机，某处紫色霓虹字'Keor'，电影感夜景灯光，柔焦虚化，浅景深，Vogue 杂志大片，85mm 镜头，f/1.4，照片级皮肤质感，HDR，神作，高奢时尚大片，奢牌街头风，超细节，8K。
+cn_equiv:    今晚秋叶原整活！
+unsanctioned: marketing_spam
+post:
+  types=advertising_marketing
+  annotation=(none)
+brand_mentions:
+  minimax
+    post_types=advertising_marketing
+    sentiment=neutral
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2075672209037971487 url=https://x.com/FicusAgentLtd/status/2075672209037971487) ---
+text:        AI is becoming a strategic fence.
+
+Beijing is weighing curbs on overseas access to China's most advanced AI models — including open-weight systems not yet released.
+
+Reuters reports Alibaba, ByteDance, and https://t.co/jKwgDq6Fb8 were in the talks, and leaking frontier models could become a national-security offence.
+
+Financial market impact: mixed. Cheap Chinese models like Qwen and GLM-5.2 helped pull global AI costs down. Restricting access pushes those costs back up — bullish for US cloud and model vendors if enterprises re-shore, bearish if fragmentation slows global AI adoption and raises everyone's bill.
+
+The key condition: if the curbs move from talks to binding rules, expect a reordering of where the world's AI runs and who pays for it.
+
+Not financial advice. For research, simulation, and educational purposes.
+text_en:     
+literal_zh:  AI 正变成一道战略围墙。
+
+北京正考虑限制海外获取中国最先进的 AI 模型——包括尚未发布的开放权重系统。
+
+路透报道 Alibaba、ByteDance 及 https://t.co/jKwgDq6Fb8 参与了相关谈判，泄露前沿模型可能成为国安罪名。
+
+金融市场影响：喜忧参半。Qwen、GLM-5.2 这类便宜的中国模型曾拉低全球 AI 成本。限制访问会推高成本——企业若回流，则利好美国云与模型厂商；若碎片化拖慢全球 AI 普及并抬升所有人账单，则利空。
+
+关键变量：若限制从谈判升级为强制性规则，全球 AI 跑在哪、谁来买单将重新洗牌。
+
+非投资建议。仅供研究、模拟与学习使用。
+cn_equiv:    N/A
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  doubao
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  qwen
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=uncategorized
+    cn=pro
+    us=anti
+  glm
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=uncategorized
+    cn=pro
+    us=anti
+--- Post 3 (tweet_id=2075671967517262112 url=https://x.com/Earth_1729/status/2075671967517262112) ---
+text:        China’s MiniMax founder will put 1% of total share capital supporting the open-source community.
+
+CEO IO's internal all-hands letter made two moves I haven't really seen a Chinese AI lab founder do at this scale:
+
+- Forgo salary entirely until AGI is reached.
+
+- Pledge shares equivalent to 1% of total share capital from his personal holdings to a dedicated open-source community fund (plus another 4% over four years to long-term team incentives).
+
+The interesting frame: most "commitments to open source" come out of a CSR budget. This one comes out of the founder's equity. Different signal.
+
+I build on open-weight models every single day. When the founder funding them gives up his own paycheck to keep them alive, I pay attention.
+text_en:     
+literal_zh:  中国 MiniMax 创始人将拿出总股本的 1% 支持开源社区。
+
+CEO IO 的内部全员信做了两件我真没见过中国 AI 实验室创始人这种量级会做的事：
+
+- 在 AGI 实现前放弃全部工资。
+
+- 承诺将其个人持有的、相当于总股本 1% 的股份注入专项开源社区基金（另有 4% 在四年内用于长期团队激励）。
+
+有意思的视角：多数"对开源的承诺"出自 CSR 预算。这笔出自创始人个人股权。信号不一样。
+
+我每天都在用开放权重模型做开发。当拿自己工资养活这些模型的创始人愿意放弃薪酬来维持它们，我得认真看。
+cn_equiv:    格局打开了
+post:
+  types=(none)
+  annotation=(none)
+brand_mentions: (none)
+--- Post 4 (tweet_id=2075671457774907665 url=https://x.com/Bag_Investing/status/2075671457774907665) ---
+text:        Chinese regulators have informed Alibaba $BABA, ByteDance, and DeepSeek they may soon receive permission to purchase Nvidia $NVDA H200 processors, though approvals come with strict conditions. 
+Total imports are expected to be capped at fewer than 200,000 units, less than half of what the firms originally requested.
+
+H200 approvals are restricted to AI training on public data only, inference workloads and anything touching sensitive customer data must route through Huawei and other domestic chips.
+
+The Commerce Department had already cleared roughly ten Chinese firms to buy up to 75,000 H200 units each, but not a single delivery had been made, as Beijing told buyers to hold off while a State Council supply chain security review was conducted.
+
+The potential approval comes as a relief to Nvidia, whose CEO Jensen Huang said as recently as May that he had "no expectation" that Beijing would approve sales of its advanced AI chips in the country, with the company having previously told investors to expect nothing from China.
+
+Beijing is simultaneously backing domestic alternatives with massive capital, planning to invest approximately 2 trillion yuan (~$294 billion) in data center construction over the next 5 years, with a goal of having domestic firms supply more than 80% of core technologies including semiconductors, underscoring that this H200 opening is tactical, not a structural market shift for Nvidia.
+text_en:     
+literal_zh:  中国监管已通知 Alibaba $BABA、ByteDance 和 DeepSeek，它们可能很快获批采购 Nvidia $NVDA H200 处理器，但审批附带严格条件。
+总进口量预计被限制在 20 万颗以下，不到这些公司最初申请量的一半。
+
+H200 审批仅限用于公共数据训练的 AI 负载，推理任务及任何涉及敏感客户数据的工作必须走 Huawei 等国产芯片。
+
+商务部此前已批准约十家中国公司各购买最多 75,000 颗 H200，但实际一笔交付都没有，因为北京让买家在国务院供应链安全审查期间先按兵不动。
+
+此次潜在获批对 Nvidia 是一剂宽心，CEO 黄仁勋 5 月才公开表示对北京放行其先进 AI 芯片"不抱期望"，公司此前也告诉投资者不要指望中国市场。
+
+与此同时北京正以重金扶持国产替代，计划未来 5 年投入约 2 万亿元人民币（约 2940 亿美元）建设数据中心，目标让本土企业供应包括半导体在内的 80% 以上核心技术——这说明 H200 的开闸是战术性的，并非 Nvidia 的结构性市场转向。
+cn_equiv:    N/A
+post:
+  types=hands_on_usage,buzz_releases
+  annotation=(none)
+brand_mentions:
+  doubao
+    post_types=hands_on_usage
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  deepseek
+    post_types=buzz_releases
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 5 (tweet_id=2075671342829961442 url=https://x.com/EugenioFierro3/status/2075671342829961442) ---
+text:        Meta opens its new AI model's API to developers
+
+Meta says its new Muse Spark 1.1 model is ready to compete on coding and agentic tasks, and for the first time developers can plug it in through a brand new paid API.
+
+🧠 After relaunching its in-house AI ambitions with the first Muse Spark model back in April, Meta is now rolling out Muse Spark 1.1, which the company calls a step-change from the first generation. Meta says it can detect and fix complex bugs, handle end-to-end agentic workflows across multiple apps including multi-agent systems, and natively understand images, video and documents.
+
+💰 The bigger news, though, is business, not just tech. For the first time, Meta is putting a price tag on one of its own frontier models through the new Meta Model API, now in public preview for US developers, with $20 in free credits for every new account. That's a real shift for a company that built its AI reputation on giving away open weight Llama models.
+
+📸 This launch lands just days after Muse Image, Meta's image generation model, drew criticism for pulling other users' Instagram content into its outputs. Both releases are part of Meta's push to justify the billions it has poured into catching up with OpenAI, Google and Anthropic, following high-profile hires and an internal reorg over the past year.
+
+📱 Muse Spark 1.1 is already live in Thinking mode inside the Meta AI app and website, and it's likely to eventually power the chatbots inside Instagram and WhatsApp, plus Meta's smart glasses, the same path the first Muse Spark took.
+
+Why it matters: if Meta can genuinely deliver a model that's competitive on coding and automation at an aggressive price compared to OpenAI and Anthropic, that changes the calculation for anyone picking a provider to build production AI agents on. This isn't just about downloading open weights anymore, it's about choosing managed infrastructure to build on, with everything that means for cost and vendor lock-in.
+
+What strikes me most isn't the spec sheet, it's the shift in posture. Going from "here are the weights, build whatever you want" to "pay us to use our model" tells me Meta finally believes it has something good enough to sell, not just give away to grow an ecosystem. Whether developers trust a closed Meta model as much as they trust OpenAI or Anthropic today is the real question this launch raises.
+
+📱 Want AI updates on WhatsApp? DM me "AI" and I'll send you access.
+🔔 Follow me for the last AI updates!
+
+#AInews #Meta #MuseSpark #AICoding #TechNews
+text_en:     
+literal_zh:  Meta 向开发者开放新 AI 模型 API
+
+Meta 表示新 Muse Spark 1.1 模型已准备好在编程和 Agent 任务上竞争，开发者首次可通过全新付费 API 接入。
+
+🧠 在 4 月用初代 Muse Spark 重启自研 AI 战略后，Meta 正在推出 Muse Spark 1.1，公司称之为代际跃迁。Meta 称其能检测并修复复杂 bug，跨多个 App 跑端到端 Agent 工作流（包含多 Agent 系统），并原生理解图像、视频与文档。
+
+💰 但更大的新闻在商业层面，不只是技术。Meta 首次通过全新 Meta Model API 给自家前沿模型明码标价，现已对美国开发者公测预览，新账号送 $20 免费额度。对一家靠送 Llama 开放权重打江山 AI 口碑的公司来说，这是个真转变。
+
+📸 这次发布落地前几天，Muse Image——Meta 的图像生成模型——刚因把其他用户的 Instagram 内容混进输出而挨骂。两项发布都服务于 Meta 证明自己烧了几十亿追 OpenAI、Google、Anthropic 是合理的，过去一年的重磅招聘与内部重组都为此铺垫。
+
+📱 Muse Spark 1.1 已在 Meta AI App 和网站内的 Thinking 模式上线，并很可能最终接入 Instagram、WhatsApp 内的聊天机器人，以及 Meta 智能眼镜——和初代 Muse Spark 的路径一致。
+
+为何重要：如果 Meta 真能在编程与自动化任务上以激进价格拿出与 OpenAI、Anthropic 抗衡的模型，那就改变了任何人在挑选生产级 AI Agent 供应商时的算式。这已不只是下载开放权重的事，而是选择在哪家托管基础设施上盖楼，连带着成本与供应商锁定问题。
+
+最让我在意的不是参数表，而是姿态的转变。从"权重给你，爱怎么玩怎么玩"到"付钱用我们的模型"，这告诉我 Meta 终于相信自己手里这东西好到能卖，而不是只靠白送去养生态。开发者能否像信任 OpenAI、Anthropic 那样信任一个闭源的 Meta 模型，才是这次发布真正抛出的问题。
+
+📱 想在 WhatsApp 收 AI 快讯？DM 我"AI"我给你开通。
+🔔 关注我获取最新 AI 动态！
+
+#AInews #Meta #MuseSpark #AICoding #TechNews
+cn_equiv:    Meta 这波收费了，生态玩不转了？
+unsanctioned: marketing_spam
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  llama
+    post_types=buzz_releases
+    sentiment=neutral
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+
+=== UNSANCTIONED FLAGS (2 posts) ===
+  tweet_id=2075672424323207422 flags=marketing_spam
+  tweet_id=2075671342829961442 flags=marketing_spam
+---
+=== B2 (n_chars=470) ===
+smoketest: source=api-query n_posts=3
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          3
+posts_no_brand_skipped: 2
+n_translated:        3
+n_failed_translate:  0
+n_classified:        3
+n_discourse:         4
+n_nationalism:       0
+n_unsanctioned:      0
+t_translate_ms:      8078
+t_classify_ms:       3784
+t_total_ms:          11862
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2075672361270141304 url=https://x.com/pierceboggan/status/2075672361270141304) ---
+text:        @awakecoding FYI, we dug into this today.
+
+It looks like Kimi really doesn't like tool IDs in a different format than they natively accept.
+
+Are you doing any changing of models in this conversation? We primarily observed early stops in conversations where the model changed (which confused Kimi).
+text_en:     
+literal_zh:  @awakecoding 仅供参考，我们今天深挖了一下。看起来 Kimi 真的不喜欢工具 ID 用跟它原生接受格式不同的写法。你们这个对话里有切换过模型吗？我们主要观察到的是那些中途换模型的对话里会出现早停（Kimi 被搞懵了）。
+cn_equiv:    Kimi 这就抽风了
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=feedback_questions
+    sentiment=mixed
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2075672209037971487 url=https://x.com/FicusAgentLtd/status/2075672209037971487) ---
+text:        AI is becoming a strategic fence.
+
+Beijing is weighing curbs on overseas access to China's most advanced AI models — including open-weight systems not yet released.
+
+Reuters reports Alibaba, ByteDance, and https://t.co/jKwgDq6Fb8 were in the talks, and leaking frontier models could become a national-security offence.
+
+Financial market impact: mixed. Cheap Chinese models like Qwen and GLM-5.2 helped pull global AI costs down. Restricting access pushes those costs back up — bullish for US cloud and model vendors if enterprises re-shore, bearish if fragmentation slows global AI adoption and raises everyone's bill.
+
+The key condition: if the curbs move from talks to binding rules, expect a reordering of where the world's AI runs and who pays for it.
+
+Not financial advice. For research, simulation, and educational purposes.
+text_en:     
+literal_zh:  AI 正在变成一道战略围墙。
+
+北京在权衡限制海外获取中国最先进的 AI 模型——包括尚未发布的开放权重系统。
+
+Reuters 报道 Alibaba、ByteDance 和 https://t.co/jKwgDq6Fb8 参与了相关讨论，泄漏前沿模型可能成为危害国家安全的罪名。
+
+对金融市场的影响：喜忧参半。Qwen 和 GLM-5.2 这类便宜的中国模型曾把全球 AI 成本拉下来。限制访问会把成本重新推高——对企业回流来说对美国云和模型厂商是利好，如果碎片化拖慢全球 AI 普及并抬高所有人账单则是利空。
+
+关键条件：如果这些限制从讨论变成具有约束力的规则，全球 AI 的运行地和买单者将重新洗牌。
+
+非投资建议。供研究、模拟和教学用途。
+cn_equiv:    闭源锁国了属于是
+post:
+  types=buzz_releases,performance_comparisons
+  annotation=(none)
+brand_mentions:
+  doubao
+    post_types=buzz_releases
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  qwen
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+  glm
+    post_types=performance_comparisons
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 3 (tweet_id=2075672131304833085 url=https://x.com/ChimeraDefi/status/2075672131304833085) ---
+text:        Im surprised no one else is talking about just how unreliable and volatile AI is. Half the time I ask I get a error. Gemini says its having problems, ChatGPT and Claude say they’re at capacity. Kimi just fails silently. And even if it does answer it can either be what I expect or way worse like a lobotomized model
+text_en:     
+literal_zh:  我很惊讶居然没人聊 AI 到底有多不稳定、多能抽风。一半时间我问下去直接报错。Gemini 说它自己出问题了，ChatGPT 和 Claude 说他们满负载了。Kimi 干脆静默失败。就算它真回了，要么是我要的，要么差得离谱像个被阉割的模型。
+cn_equiv:    全都在翻车
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=feedback_questions
+    sentiment=negative
+    cls_discourse=dunk_yingyang
+    cn=none
+    us=none
+---
+=== B3 (n_chars=375) ===

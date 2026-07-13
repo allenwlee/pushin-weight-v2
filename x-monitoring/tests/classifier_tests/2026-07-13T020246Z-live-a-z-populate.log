@@ -1,0 +1,13 @@
+# live_a_z_populate
+# started_at=2026-07-13T020246Z
+# cmd=/opt/homebrew/opt/python@3.14/bin/python3.14 -m x_monitor run --limit-per-call 20 --no-skip-under-budget
+# log_path=/Users/fuchitalee/development/minimax-marketing/x-monitoring/tests/classifier_tests/2026-07-13T020246Z-live-a-z-populate.log
+
+=== STDOUT ===
+
+=== STDERR ===
+usage: x-monitor [-h]
+                 {run,dry-run,dashboard,review,migrate,accounts,queries,setup,relevance,reattribute,translate-registry,translate,smoketest,backfill,hf-products} ...
+x-monitor: error: unrecognized arguments: --limit-per-call 20 --no-skip-under-budget
+
+# rc=2 elapsed_ms=117

@@ -1,0 +1,670 @@
+smoketest run started at 2026-07-12T065251Z
+
+=== A (chars=38) ===
+(list:2067062923525275922) min_faves:1
+smoketest: source=api-query n_posts=0
+smoketest: no posts to process; nothing to report
+
+[stderr] WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+
+rc=0
+
+=== B1 (chars=414) ===
+((Hailuo OR MiniMax OR m2.5 OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (DeepSeek OR deepseek-r1 OR 深度求索) OR (Mistral OR Mixtral) OR (StepFun OR 阶跃星辰) OR (Hunyuan OR 混元 OR 腾讯混元)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+smoketest: source=api-query n_posts=5
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          5
+n_translated:        5
+n_failed_translate:  0
+n_classified:        5
+n_discourse:         5
+n_nationalism:       0
+n_unsanctioned:      1
+t_translate_ms:      14486
+t_classify_ms:       6538
+t_total_ms:          21024
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2076198055250985273 url=https://x.com/Chris_Wozniczek/status/2076198055250985273) ---
+text:        We wait for Qwen 3.7 open but I don’t think they abandoned 
+
+I think they are cooking
+
+Maybe we will get Qwen 4?
+
+But how cool would it be
+
+If @Zai_org would bring glm 5.2 27b and 35b moe 3b
+
+That would be a killer
+
+100000 downloads on huggingface first day
+
+@Zai_org do we have a deal?🤔😎🤝
+text_en:     
+literal_zh:  我们等着 Qwen 3.7 开源,但我觉得他们没放弃
+
+我觉得他们在憋大招
+
+也许我们能看到 Qwen 4?
+
+但如果 @Zai_org 能出 glm 5.2 27b 和 35b moe 3b 得多爽
+
+那将是绝杀
+
+首日 100000 下载量
+
+@Zai_org 咱成交不?🤔😎🤝
+cn_equiv:    求求你快端出来吧
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+  glm
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2076197470603018562 url=https://x.com/0xMaxSF/status/2076197470603018562) ---
+text:        @jpschroeder The DSV4 flash i have has actually been a competent hermes agent and works well in Pi too. Overall very impressed. Some of the highly compressed quants (MiniMax M3) are completely unusable though.
+
+Have Laguna M.1 + XS.2 and Command A+ as well, recommend giving those a rip!
+text_en:     
+literal_zh:  @jpschroeder 我手里的 DSV4 flash 实际上是个能打的 hermes agent,在 Pi 里也跑得很顺。整体非常惊艳。不过有些高度压缩的量化版(MiniMax M3)完全没法用。
+
+我还有 Laguna M.1 + XS.2 和 Command A+,推荐你也试试!
+cn_equiv:    DSV4 flash 真能打
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  minimax
+    post_types=hands_on_usage
+    sentiment=negative
+    cls_discourse=ai_slop_critique
+    cn=none
+    us=none
+--- Post 3 (tweet_id=2076197420002918859 url=https://x.com/Coding_Shanks/status/2076197420002918859) ---
+text:        Which AI  model do you think is the best overall?
+#AI #ArtificialIntelligence #ChatGPT #Claude #Gemini #Grok #DeepSeek #OpenSource #MachineLearning #LLM https://t.co/kep3TuH8BU
+text_en:     
+literal_zh:  你心目中总体最强的 AI 模型是哪家?
+#AI #ArtificialIntelligence #ChatGPT #Claude #Gemini #Grok #DeepSeek #OpenSource #MachineLearning #LLM https://t.co/kep3TuH8BU
+cn_equiv:    N/A
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 4 (tweet_id=2076197130348155205 url=https://x.com/ZeningChen42844/status/2076197130348155205) ---
+text:        What a game for Argentina 3–1 Switzerland today
+
+So I made a Vox-style explainer on how they got here. Fed one line — "Argentina's football history, 1902 to their 3 World Cups" — and got back a finished 50s video
+
+keyframes (Nano Banana 2) → animation (Kling o3 Pro) → voice (xAI TTS) → music (MiniMax Music 2.6) → assembled locally with ffmpeg.
+
+The whole pipeline runs on @sai_borg  use @atlas_cloud_ai API , inspired from  
+
+Full prompt shown below
+text_en:     
+literal_zh:  阿根廷今天 3-1 瑞士,比赛真精彩
+
+于是我做了个 Vox 风格的讲解视频,讲他们是怎么走到今天的。只喂了一行提示——"阿根廷足球史,从 1902 年到三座世界杯"——就吐出了一条 50 秒成片
+
+关键帧(Nano Banana 2)→ 动画(Kling o3 Pro)→ 配音(xAI TTS)→ 配乐(MiniMax Music 2.6)→ 本地用 ffmpeg 剪辑。
+
+整个流水线跑在 @sai_borg ,用 @atlas_cloud_ai API,灵感来自
+
+完整 prompt 见下
+cn_equiv:    整活天花板
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  minimax
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 5 (tweet_id=2076196525009744240 url=https://x.com/StormFireAi/status/2076196525009744240) ---
+text:        Tired of Stripe holds and KYC walls just to use an AI API?
+
+Stormfire lets you pay in USDT — no card, no ID, no gatekeeping.
+
+Works with any OpenAI SDK. Swap the base URL and you're live.
+Pay for AI APIs with USDT. No Stripe. No KYC. No card.
+
+One base URL → call GPT-4o, Claude, DeepSeek, Gemini through the same OpenAI-compatible endpoint.
+
+$5 free credit to start 
+￼
+https://t.co/W1wIzp8AWh
+text_en:     
+literal_zh:  用个 AI API 还要被 Stripe 冻款、被 KYC 挡门外,烦不烦?
+
+Stormfire 支持 USDT 付款——无需信用卡、无需实名、无需审核。
+
+兼容任何 OpenAI SDK。换一下 base URL 就能跑。用 USDT 付 AI API。无需 Stripe。无需 KYC。无需信用卡。
+
+一个 base URL → 同一个 OpenAI 兼容端点调用 GPT-4o、Claude、DeepSeek、Gemini。
+
+注册送 $5 额度
+https://t.co/W1wIzp8AWh
+cn_equiv:    N/A
+unsanctioned: marketing_spam,crypto,unauthorized
+post:
+  types=advertising_marketing
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=advertising_marketing
+    sentiment=neutral
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+
+=== UNSANCTIONED FLAGS (1 posts) ===
+  tweet_id=2076196525009744240 flags=marketing_spam,crypto,unauthorized
+
+[stderr] WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+classify_pragmatics_full: duplicate brand_id='qwen' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+
+rc=0
+
+=== B2 (chars=377) ===
+((ByteDance OR Doubao OR 豆包) OR (ChatGLM OR GLM OR Zhipuai OR 智谱) OR (SenseChat OR SenseTime OR 日日新) OR (InclusionAI OR Ling OR Ring)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+smoketest: source=api-query n_posts=4
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          4
+posts_no_brand_skipped: 1
+n_translated:        4
+n_failed_translate:  0
+n_classified:        4
+n_discourse:         5
+n_nationalism:       0
+n_unsanctioned:      1
+t_translate_ms:      7877
+t_classify_ms:       5464
+t_total_ms:          13341
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2076198070174511243 url=https://x.com/HarryStuck77/status/2076198070174511243) ---
+text:        @ollama is getting faster! RESPECT. Worth the subscription - especially with GLM 5.2 (US hosted)
+text_en:     
+literal_zh:  @ollama 越来越快了！Respect。订阅值了 —— 特别是 GLM 5.2（美国托管）
+cn_equiv:    Ollama 起飞了，Respect，GLM 5.2 订阅直接无脑冲
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  glm
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2076198055250985273 url=https://x.com/Chris_Wozniczek/status/2076198055250985273) ---
+text:        We wait for Qwen 3.7 open but I don’t think they abandoned 
+
+I think they are cooking
+
+Maybe we will get Qwen 4?
+
+But how cool would it be
+
+If @Zai_org would bring glm 5.2 27b and 35b moe 3b
+
+That would be a killer
+
+100000 downloads on huggingface first day
+
+@Zai_org do we have a deal?🤔😎🤝
+text_en:     
+literal_zh:  我们等 Qwen 3.7 开源，但我认为他们没放弃
+
+我觉得他们在憋大招
+
+也许我们会等到 Qwen 4？
+
+但如果 @Zai_org 出 glm 5.2 27b 和 35b moe 3b 那就太爽了
+
+那就是杀手锏
+
+首日 Hugging Face 下载量 10 万
+
+@Zai_org 咱成交？🤔😎🤝
+cn_equiv:    Qwen 在憋大招，Zai_org 赶紧端上来
+post:
+  types=feedback_questions
+  annotation=(none)
+brand_mentions:
+  qwen
+    post_types=feedback_questions
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+  glm
+    post_types=feedback_questions
+    sentiment=positive
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+--- Post 3 (tweet_id=2076194920071913686 url=https://x.com/SpiralnewsDevi/status/2076194920071913686) ---
+text:        The love has been overwhelming ❤️
+Superb responses coming in for the #AnbeDiana Trailer 🤗
+
+ICYMI, Watch Trailer 🔗 https://t.co/rO5UAT7mPZ
+
+Grand Release in Theatres Worldwide on JULY 17th 🌟
+
+*ring @PariElavazaghan @RamyaRanganathn @Chetan_k_a @RojaSelvamaniRK @AravindhrajaG https://t.co/e8uPMzEvLz
+text_en:     
+literal_zh:  爱意满满 ❤️
+#AnbeDiana 预告片反响炸裂 🤗
+
+没看到的话，点这里看预告 🔗 https://t.co/rO5UAT7mPZ
+
+7 月 17 日全球院线盛大上映 🌟
+
+*圈 @PariElavazaghan @RamyaRanganathn @Chetan_k_a @RojaSelvamaniRK @AravindhrajaG https://t.co/e8uPMzEvLz
+cn_equiv:    N/A
+unsanctioned: marketing_spam
+post:
+  types=advertising_marketing
+  annotation=(none)
+brand_mentions:
+  inclusionai
+    post_types=advertising_marketing
+    sentiment=positive
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+--- Post 4 (tweet_id=2076193176659054769 url=https://x.com/helloyuki_/status/2076193176659054769) ---
+text:        完全にdogfooding中＆他に作ってる人いるかもだけど、Claudeの/advisorみたいに、DeepSeek V4 Flashを使っている最中に、モデルが不安を感じたらGLM 5.2に聞きに行ってくれるみたいなOpen Codeのプラグインを作り始めた🙋🏻‍♀️
+https://t.co/03OEroAxAl
+text_en:     完全 dogfooding 中＆不知道有没有别人也在做类似的东西，我开始搞一个 Open Code 插件，类似于 Claude 的 /advisor，在用 DeepSeek V4 Flash 的过程中，模型一旦感到不安就让它去问 GLM 5.2 🙋🏻‍♀️
+https://t.co/03OEroAxAl
+literal_zh:  完全 dogfooding 中 & 不知道有没有别人也在做类似的东西，搞了个 Open Code 插件，仿 Claude 的 /advisor，用 DeepSeek V4 Flash 时模型感到不安就让它去问 GLM 5.2 🙋🏻‍♀️
+https://t.co/03OEroAxAl
+cn_equiv:    这波属于整活，让两个模型互相打辅助
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=hands_on_usage
+    sentiment=positive
+    cls_discourse=genuine_hype
+    cn=none
+    us=none
+
+=== UNSANCTIONED FLAGS (1 posts) ===
+  tweet_id=2076194920071913686 flags=marketing_spam
+
+[stderr] WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+classify_pragmatics_full: duplicate brand_id='glm' in response rows; keeping first
+
+rc=0
+
+=== B3 (chars=353) ===
+((Megatron-LM OR NVIDIA NeMo) OR (EXAONE OR LG AI) OR (Sakana OR Sakana AI OR サカナAI) OR (Kuaishou OR KwaiYii)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+smoketest: source=api-query n_posts=4
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          4
+posts_no_brand_skipped: 1
+n_translated:        3
+n_failed_translate:  0
+n_classified:        4
+n_discourse:         1
+n_nationalism:       0
+n_unsanctioned:      0
+t_translate_ms:      23703
+t_classify_ms:       6954
+t_total_ms:          30657
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2076173486725214481 url=https://x.com/TheRealDiwanshu/status/2076173486725214481) ---
+text:        🚨 AI Weekly Roundup : What a week.
+
+• OpenAI ships GPT-5.6 family
+• Meta releases Muse Spark 1.1
+• ChatGPT Work Agent launches
+• xAI drops Grok 4.5 for coding
+• Cognition ships SWE-1.7 (1000 tok/s)
+• Mistral unveils Robostral Navigate
+• Google open-sources Gemma 4
+• Tencent releases 295B Hy3
+• Microsoft launches Flint for agents
+• Google ships Cloud Run sandboxes
+• Nous brings Hermes Agent to the cloud
+• GPT-5.6 reportedly proves a 50-year math conjecture
+• Databricks benchmarks coding agents
+• OpenAI audits SWE-Bench Pro
+• FrontierFinance benchmarks AI analysts
+• New research on memory as navigation
+• GitLost exposes a GitHub AI agent vulnerability
+• Anthropic explores a global workspace architecture
+• Sakana recreates Picbreeder with VLMs
+AI agents are moving from demos to production at an incredible pace.
+Which release caught your attention the most? 👇
+text_en:     
+literal_zh:  🚨 AI 周报：这周太炸了。
+
+• OpenAI 发布 GPT-5.6 系列
+• Meta 发布 Muse Spark 1.1
+• ChatGPT Work Agent 上线
+• xAI 推出 Grok 4.5 编程版
+• Cognition 发布 SWE-1.7（1000 tok/s）
+• Mistral 揭晓 Robostral Navigate
+• Google 开源 Gemma 4
+• Tencent 发布 295B Hy3
+• Microsoft 上线 Flint for agents
+• Google 推出 Cloud Run sandboxes
+• Nous 把 Hermes Agent 搬上云
+• 传闻 GPT-5.6 证明了一个 50 年数学猜想
+• Databricks 给 coding agents 跑基准
+• OpenAI 审计 SWE-Bench Pro
+• FrontierFinance 给 AI 分析师跑基准
+• 关于 memory as navigation 的新研究
+• GitLost 曝光一个 GitHub AI agent 漏洞
+• Anthropic 探索全球工作空间架构
+• Sakana 用 VLM 复刻 Picbreeder
+AI agents 正以惊人速度从 demo 走向生产。
+你最关注哪个发布？👇
+cn_equiv:    这周 AI 圈真卷
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  mistral
+    post_types=buzz_releases
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  sakana_ai
+    post_types=buzz_releases
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2076121689218576561 url=https://x.com/open_azjuke/status/2076121689218576561) ---
+text:        current llm stack (sub)
+
+■ codex 200 usd
+main implementation tool
+
+■ claude 100 usd
+mostly planning / writing / light review
+downgraded from 200 usd on 2026-05
+
+■ super grok 30 usd
+video / image
+
+■ sakana fugu 22 usd
+ending on 2026-07
+text_en:     
+literal_zh:  我现在的 LLM 订阅栈（订阅版）
+
+■ Codex 200 美金
+主力实现工具
+
+■ Claude 100 美金
+主要用来规划 / 写文档 / 轻度 review
+2026-05 从 200 美金降级下来的
+
+■ Super Grok 30 美金
+视频 / 图片
+
+■ Sakana Fugu 22 美金
+2026-07 到期不续
+cn_equiv:    我也想全套订阅
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  sakana_ai
+    post_types=hands_on_usage
+    sentiment=negative
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 3 (tweet_id=2076115685437308989 url=https://x.com/brucexu_eth/status/2076115685437308989) ---
+text:        在 AI 时代我有一条原则是始终使用最前沿的模型。但问题就是现在模型之间的对比越来越麻烦，有非常多不同的版本，而且差距也没有那么明显，简单的排行榜其实感觉都基本上失效了。怎么比较呢？
+
+这家公司 TryAI 太猛了，他们选择了 GPT-5.6、Grok 4.5、Claude、DeepSeek、Kimi、Qwen、GLM 等 12 个模型，用相同的需求分别去做 4 个小软件：
+
+- Doom 风格的第一人称迷宫
+- 可交互魔方
+- 计算器
+- Conway’s Game of Life
+
+比较方法很朴素：直接打开它做出来的软件，看能不能运行、好不好用。
+
+而且每个模型、每个任务都重复运行 5 次，然后记录：
+
+1. 5 次里有几次真正成功  
+2. 作者认为最好的是哪一次  
+3. 5 次一共花了多少钱  
+4. 平均需要多长时间  
+5. 所有原始作品，全部公开让读者自己体验
+
+我的老天，说实话，我不知道这是花了多长时间，但是从我个人手动对比测试的经验来看（比如之前测试 Deep Research https://t.co/ZxiphSye0U），上百个小时都是有可能的。牛逼 and respect🫡 
+
+我觉得这里有几个很有意思的点。
+
+第一个是，模型能力不是一个固定分数，而是一个概率分布。
+
+同一个模型、相同的 prompt，连续跑 5 次，结果可能完全不一样。最好的一次可以非常惊艳，另一次却可能连基本功能都跑不起来。
+
+这个问题有点大，因为实际情况下，大家在编程时，会只运行一次，然后基于这个进行 code review 和调试合并。或许需要加入到 @VibemanAI 上面，同时生成多份，选取最好结果。
+
+第二个是，更贵的模型不一定在每个任务上都更好。
+
+比如 Doom 迷宫这个任务，Grok 4.5 做到了 5/5 可玩，5 次成本是 $0.27；GPT-5.5 是 4/5，成本则是 $1.44。
+
+所以 Mixture-of-Agents/Routing 应该会是下一个阶段的热点，尤其是在模型差距拉进、能力侧重分化的大趋势下，怎么组合不同模型实现效果最好、价格最低。目前比较知名的有： @NousResearch @Teknium 的 Hermes 的 MoA 功能（工具层组合）、Sakana Fugu 的 LLM 模型（模型层组合）
+
+----
+
+结论的话就是目前最前沿的还是 GPT-5.6 Sol 和 Claude Fable 5。但是这两个模型之间也互有侧重，涉及到 UI 前端或者 SVG，Claude 还是更强一点的。涉及到逻辑运算或者是深度分析，GPT 是更强的。对于一些已有的简单任务的话，开源权重模型也是 OK 的。但是对于全新未知挑战，还是需要 SOTA。Grok 4.5 和 Muse Spark 1.1 也略有惊喜，在某些场景。
+
+对比 Sol 和 Fable，延迟低、吞吐高，价格的话，也是 GPT 更便宜点，只有 1/3，而且 Subscription 不限制不封号。可以直呼为良心 LLM。
+
+| Model | Median latency | Throughput | Cost / reply |
+|---|---:|---:|---:|
+| GPT-5.6 Sol | 1.8s | 45 tok/s | $0.003 |
+| Claude Fable 5 | 6.6s | 30 tok/s | $0.01 |
+
+所以我目前的策略还是主要用 GPT-5.6 SOL，加上 subscription。尤其是放在 Hermes 这样的 Agent 上面。特定 UI 相关的工作或者需求，可能会使用 Claude。
+text_en:     
+literal_zh:  
+cn_equiv:    国产模型这波评测里表现可以了
+post:
+  types=performance_comparisons
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  moonshot_kimi
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  qwen
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  glm
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  sakana_ai
+    post_types=performance_comparisons
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+--- Post 4 (tweet_id=2076110684908032138 url=https://x.com/Newyorkez/status/2076110684908032138) ---
+text:        @peng_hai13179 @kenneth0stanley @SakanaAILabs @Smearle_RH Peak Sakana: “What if evolutionary art, agent psychology, and autonomous science… but make it adorable and slightly deranged?”
+🙂
+text_en:     
+literal_zh:  @peng_hai13179 @kenneth0stanley @SakanaAILabs @Smearle_RH 究极 Sakana：「假如把进化艺术、agent 心理学和自主科学……但做得又可爱又有点疯？」
+🙂
+cn_equiv:    Sakana 整活整到飞起
+post:
+  types=buzz_releases
+  annotation=(none)
+brand_mentions:
+  sakana_ai
+    post_types=buzz_releases
+    sentiment=positive
+    cls_discourse=absurdist_meme
+    cn=none
+    us=none
+
+[stderr] WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+
+rc=0
+
+=== C1 (chars=461) ===
+((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama OR Muse Spark)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+smoketest: source=api-query n_posts=2
+
+=== POST-FETCH SMOKETEST REPORT ===
+posts_seen:          2
+posts_no_brand_skipped: 3
+n_translated:        1
+n_failed_translate:  0
+n_classified:        2
+n_discourse:         1
+n_nationalism:       0
+n_unsanctioned:      2
+t_translate_ms:      4310
+t_classify_ms:       3479
+t_total_ms:          7789
+
+=== SAMPLE POSTS ===
+--- Post 1 (tweet_id=2076197297512235492 url=https://x.com/solhousesignals/status/2076197297512235492) ---
+text:        $LIZARD just hit 10x since our call 🚀
+
+📊 Called at $16.4K MC → now $14.8K
+
+🧠 Spotted by our AI scanner before the pump → link in bio
+
+#LIZARD #solhousesignal #moonshot #altcoin #cryptogems https://t.co/t2WJnehbn0
+text_en:     
+literal_zh:  $LIZARD 自从我们喊单以来已经 10 倍了 🚀
+
+📊 在 $16.4K 市值时喊单 → 现在 $14.8K
+
+🧠 我们的 AI 扫描器在拉升前就发现了 → 链接在主页
+
+#LIZARD #solhousesignal #moonshot #altcoin #cryptogems https://t.co/t2WJnehbn0
+cn_equiv:    喊单群经典套路：先涨后跌，群里已经在出货了
+unsanctioned: crypto,marketing_spam
+post:
+  types=advertising_marketing
+  annotation=(none)
+brand_mentions:
+  moonshot_kimi
+    post_types=advertising_marketing
+    sentiment=positive
+    cls_discourse=advertising-marketing
+    cn=none
+    us=none
+--- Post 2 (tweet_id=2076196167965421877 url=https://x.com/GroverL62230/status/2076196167965421877) ---
+text:        有人把Claude Code的源码泄露版做成了开源项目，这事值得聊聊。
+
+OpenClaude这个项目，让你可以用GPT-4o、DeepSeek、Gemini、Llama、Mistral等任意模型，跑Claude Code的完整工作流。Bash命令、文件读写、搜索、Agent任务、MCP——全部可用。
+text_en:     
+literal_zh:  
+cn_equiv:    套壳新高度：Claude Code 的皮，套谁都能跑
+unsanctioned: unauthorized
+post:
+  types=hands_on_usage
+  annotation=(none)
+brand_mentions:
+  deepseek
+    post_types=hands_on_usage
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+  llama
+    post_types=hands_on_usage
+    sentiment=neutral
+    cls_discourse=uncategorized
+    cn=none
+    us=none
+
+=== UNSANCTIONED FLAGS (2 posts) ===
+  tweet_id=2076197297512235492 flags=crypto,marketing_spam
+  tweet_id=2076196167965421877 flags=unauthorized
+
+[stderr] WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+classify_pragmatics_full: duplicate brand_id='moonshot_kimi' in response rows; keeping first
+
+rc=0
+
+=== C2 (chars=295) ===
+((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (api OR llm OR model OR baidu OR 文心 OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+smoketest: source=api-query n_posts=0
+smoketest: no posts to process; nothing to report
+
+[stderr] WARNING: --latest 20 exceeds --limit 5; clamping --latest to 5
+
+rc=0
+
+=== Call A investigation (2026-07-12T07:xxZ) ===
+Live TwitterAPI.io returned 20-50 posts for the list:2067062923525275922 query
+(max_pages=1 to 5, max_per_page=5 to 20). Direct API sample shows real
+list-member posts by @alexandr_wang (615818451), @RyanLeeMiniMax
+(1926868815683497984), and others — Call A is functional.
+
+The "n_posts=0 / nothing to report" output is a smoketest-design quirk:
+_load_api_posts filters via detect_brand_mentions(text, compiled_index)
+and drops posts whose text has no brand token. Call A's value is WHO said
+something, not WHAT they said — for replies/list-member chatter the
+author_handle is signal but the text has no brand keyword, so all sampled
+posts get dropped before the report.
+
+Concrete: a 5-post smoke run returned 5 posts, all failed detect_brand_mentions
+(filtered out), smoketest then short-circuited with "nothing to report"
+suppressing the posts_with_no_brand_skipped counter that would explain why.
+
+This is a smoketest UX issue, not a Call A query issue. Workaround for the
+operator: use --source=latest-cycle or --source=latest-n to see Call A
+posts (those paths don't apply the no-brand filter and surface the full
+sample including non-brand-mentioning list-member chatter).

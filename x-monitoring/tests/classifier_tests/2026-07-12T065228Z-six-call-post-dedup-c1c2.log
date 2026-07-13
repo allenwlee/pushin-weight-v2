@@ -1,0 +1,31 @@
+smoketest run started at 2026-07-12T065228Z
+
+=== A (chars=       0) ===
+
+--source=api-query requires --query '...' (advanced-search string)
+rc=2
+
+=== B1 (chars=       0) ===
+
+--source=api-query requires --query '...' (advanced-search string)
+rc=2
+
+=== B2 (chars=       0) ===
+
+--source=api-query requires --query '...' (advanced-search string)
+rc=2
+
+=== B3 (chars=       0) ===
+
+--source=api-query requires --query '...' (advanced-search string)
+rc=2
+
+=== C1 (chars=       0) ===
+
+--source=api-query requires --query '...' (advanced-search string)
+rc=2
+
+=== C2 (chars=       0) ===
+
+--source=api-query requires --query '...' (advanced-search string)
+rc=2

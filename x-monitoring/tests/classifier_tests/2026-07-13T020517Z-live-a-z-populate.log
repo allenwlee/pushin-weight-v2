@@ -1,0 +1,268 @@
+# live_a_z_populate
+# started_at=2026-07-13T020517Z
+# cmd=/opt/homebrew/opt/python@3.14/bin/python3.14 -m x_monitor run --limit-per-call 20 --no-skip-under-budget
+# log_path=/Users/fuchitalee/development/minimax-marketing/x-monitoring/tests/classifier_tests/2026-07-13T020517Z-live-a-z-populate.log
+
+=== STDOUT ===
+{
+  "run_id": "20260713T020518_0000-8377ca67",
+  "started_at": "2026-07-13T02:05:18+00:00",
+  "finished_at": "2026-07-13T02:07:27+00:00",
+  "status": "degraded",
+  "degraded": {
+    "missing_queries:mimo": "missing query file: /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/queries/mimo.yaml",
+    "missing_queries:nemo_megatron": "missing query file: /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/queries/nemo_megatron.yaml",
+    "missing_queries:sakana_ai": "missing query file: /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/queries/sakana_ai.yaml"
+  },
+  "queries": [
+    {
+      "brand_id": "*",
+      "call_kind": "account",
+      "bucket": null,
+      "query_id": "Q1",
+      "query_length": 38,
+      "status": "completed",
+      "n_results": 0,
+      "n_kept": 0,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 0,
+      "raw_path": "runs/raw/20260713T020518_0000-8377ca67/*_account_acct.json"
+    },
+    {
+      "brand_id": "llama",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "Q5",
+      "query_length": 320,
+      "status": "completed",
+      "n_results": 20,
+      "n_kept": 20,
+      "n_filtered": 0,
+      "filter_reasons": {
+        "kept": 20
+      },
+      "n_review_added": 0,
+      "n_inserted": 20,
+      "raw_path": "runs/raw/20260713T020518_0000-8377ca67/llama_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "doubao",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "Q5",
+      "query_length": 357,
+      "status": "completed",
+      "n_results": 15,
+      "n_kept": 4,
+      "n_filtered": 11,
+      "filter_reasons": {
+        "hard_drop_no_signal": 10,
+        "soft_drop_banned": 1,
+        "kept": 4
+      },
+      "n_review_added": 1,
+      "n_inserted": 4,
+      "raw_path": "runs/raw/20260713T020518_0000-8377ca67/doubao_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "nemo_megatron",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "Q5",
+      "query_length": 199,
+      "status": "completed",
+      "n_results": 0,
+      "n_kept": 0,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 0,
+      "raw_path": "runs/raw/20260713T020518_0000-8377ca67/nemo_megatron_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "mimo",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "Q5",
+      "query_length": 505,
+      "status": "completed",
+      "n_results": 0,
+      "n_kept": 0,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 0,
+      "raw_path": "runs/raw/20260713T020518_0000-8377ca67/mimo_brand_wide_acct.json"
+    }
+  ],
+  "phase_timings_sec": {
+    "plan": 0.029,
+    "call.*.account.acct.fetch": 0.802,
+    "call.*.account.acct.attribute": 0.0,
+    "call.*.account.acct.filter+store": 0.001,
+    "call.llama.brand_wide.acct.fetch": 3.32,
+    "call.llama.brand_wide.acct.attribute": 0.002,
+    "call.llama.brand_wide.acct.filter+store": 0.009,
+    "call.doubao.brand_wide.acct.fetch": 5.413,
+    "call.doubao.brand_wide.acct.attribute": 0.013,
+    "call.doubao.brand_wide.acct.filter+store": 0.007,
+    "call.nemo_megatron.brand_wide.acct.fetch": 1.776,
+    "call.nemo_megatron.brand_wide.acct.attribute": 0.005,
+    "call.nemo_megatron.brand_wide.acct.filter+store": 0.0,
+    "call.mimo.brand_wide.acct.fetch": 7.878,
+    "call.mimo.brand_wide.acct.attribute": 0.0,
+    "call.mimo.brand_wide.acct.filter+store": 0.0,
+    "calls_loop_total": 19.228,
+    "post_fetch": 109.487,
+    "qt_official": 0.031,
+    "qt_daily": 0.0,
+    "account_graph": 0.0,
+    "total": 128.915
+  },
+  "totals": {
+    "n_queries_run": 5,
+    "n_results": 35,
+    "n_inserted": 24,
+    "n_classifications_written": 0,
+    "n_classifications_dropped": 0,
+    "n_headlines_fetched": 0,
+    "n_headlines_cached": 0
+  },
+  "post_fetch": {
+    "n_translated": 24,
+    "n_discourse": 7,
+    "n_nationalism": 0,
+    "n_failed_translate": 0,
+    "n_unsanctioned": 2,
+    "t_unsanctioned_ms": 0,
+    "wall_clock_sec": 109.48727641673759
+  },
+  "quote_tweets": {
+    "official_n_tracked": 0,
+    "daily_ran": false
+  },
+  "http_log": [
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "(list:2067062923525275922) min_faves:1 since:2026-07-13",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 0,
+      "duration_ms": 799,
+      "attempts": 1,
+      "has_next_page": false
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 19,
+      "duration_ms": 1759,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Llama OR \"Llama 3\" OR \"Llama 4\" OR \"Meta Llama\" OR \"Code Llama\" OR \"Muse Spark\" OR \"Llama 3.1\") OR (MiniMax OR 海螺 OR H…",
+        "queryType": "Latest",
+        "limit": "1",
+        "cursor": "DAADDAABCgABHNEq7MUW4KsKAAIc0So08ddxrwAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUc0Srv7UAnEAoABhzRKu_tP9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 1557,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 19,
+      "duration_ms": 2100,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR \"Seed-VL\" OR \"Seed-1.5\" OR \"豆包大模型\") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR …",
+        "queryType": "Latest",
+        "limit": "1",
+        "cursor": "DAADDAABCgABHNEq77daYUEKAAIc0SrFthcRtwAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUc0SrzSUAnEAoABhzRKvNJP9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 3295,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((EXAONE OR \"LG AI\" OR \"LG EXAONE\") OR (KwaiYii OR 快意 OR \"KwaiYii LLM\" OR Kuaishou) OR (Upstage OR Solar OR \"Solar Pro\" …",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 1770,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 0,
+      "duration_ms": 7877,
+      "attempts": 1,
+      "has_next_page": false
+    }
+  ]
+}
+
+=== STDERR ===
+brand_search_terms drift: yaml-only=20 db-only=61 mismatched=0 (yaml=31 db=72); DB wins at attribution time
+  yaml-only terms (sample): ['chatglm', 'doubao', 'ernie', 'exaone', 'glm']
+  db-only terms (sample): ['ChatGLM', 'CodeGeeX', 'CogAgent', 'CogVLM', 'CogVideoX']
+classify_batch_pragmatics_full: batch LLM call failed after 3 retries for batch of 20 posts; falling back to per-post retries: Unterminated string starting at: line 1 column 3343 (char 3342)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076488088570790214', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076488067444080906', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076488017942827507', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487849185042770', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487836207849520', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487835490631836', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487790502481979', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487702497604067', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487697334685907', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487671237537938', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487663075340661', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487615490961620', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487417238847494', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487310078603695', 'brand_id': 'llama', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487468308713916', 'brand_id': 'mistral', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487932433584448', 'brand_id': 'yi', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+dead-letter enum: family=discourse value='uncategorized' context={'table': 'posts_brands_discourse', 'post_id': '2076487931481510359', 'brand_id': 'yi', 'note': 'uncategorized-sentinel (KTD5): row skipped, no FK target'} (logged to /Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/2026-07-13/enum_dead_letter.jsonl)
+
+# rc=0 elapsed_ms=129372
+
+# inserted=75 posts in last 10 min (pre=0, post=75); see /Users/fuchitalee/development/minimax-marketing/x-monitoring/tests/classifier_tests/2026-07-13T020517Z-live-a-z-populate.log
