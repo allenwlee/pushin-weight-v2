@@ -484,3 +484,173 @@ def test_classify_pragmatics_full_array_shape_multi_element_picks_first():
         "multi-element post_types[] must collapse to first element "
         "(event_announcement in this case), not the default fallback."
     )
+
+
+# --- U1 (Plan 2026-07-13-002) prompt contract pins -----------------
+#
+# These tests pin the prompt-side contract from U1 of
+# docs/plans/2026-07-13-002-feat-classifier-signal-coverage-plan.md:
+# trigger definitions for unsanctioned_flags values, the
+# cross-reference rule (advertising_marketing ⇒ marketing_spam), the
+# comparative-mention rule for sentiment, and the lang_detected /
+# text_en / text_zh_cn emission requirement.
+# They are reading-only on the prompt constant; if a future refactor
+# drops the comma-list fallback or the cross-reference rule, these
+# tests will fail.
+
+
+def test_pragmatics_full_prompt_has_unsanctioned_trigger_definitions():
+    """U1 R1: the prompt contains trigger definitions for all four
+    unsanctioned_flags values (marketing_spam, scam, crypto,
+    unauthorized) in the same shape as post_types and discourse_roles."""
+    from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+    for trigger in ("marketing_spam", "scam", "crypto", "unauthorized"):
+        assert f'- "{trigger}"' in _PRAGMATICS_FULL_SYSTEM_PROMPT or \
+            f"- {trigger}" in _PRAGMATICS_FULL_SYSTEM_PROMPT, (
+            f"unsanctioned_flags value {trigger!r} is missing from "
+            f"_PRAGMATICS_FULL_SYSTEM_PROMPT trigger definitions"
+        )
+    # And the marketing_spam trigger must cross-reference the
+    # advertising_marketing signal (CTA / promo / wrapper language).
+    assert "advertising_marketing" in _PRAGMATICS_FULL_SYSTEM_PROMPT, (
+        "marketing_spam trigger must cross-reference "
+        "post_type=advertising_marketing in the trigger definition"
+    )
+
+
+def test_pragmatics_full_prompt_has_cross_reference_rule():
+    """U1 R2: the cross-reference rule (advertising_marketing ⇒
+    marketing_spam) is present in the prompt and names all three
+    signals explicitly."""
+    from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+    assert "Cross-reference rule" in _PRAGMATICS_FULL_SYSTEM_PROMPT, (
+        "Prompt must include the cross-reference rule block that "
+        "ties advertising_marketing to marketing_spam"
+    )
+    assert "advertising_marketing" in _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "advertising-marketing" in _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "marketing_spam" in _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+
+def test_pragmatics_full_prompt_has_comparative_mention_rule():
+    """U1 review-action: the prompt's sentiment guidance says
+    comparative mention is NOT negative sentiment (per U3 review #3,
+    #8, #10)."""
+    from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+    assert "comparative" in _PRAGMATICS_FULL_SYSTEM_PROMPT.lower(), (
+        "Prompt must include a comparative-mention rule that "
+        "distinguishes ranking-style mentions from direct criticism"
+    )
+    # And the sentiment=neutral line should mention comparison points.
+    lower = _PRAGMATICS_FULL_SYSTEM_PROMPT.lower()
+    assert "comparison" in lower, (
+        "Prompt's neutral-sentiment definition should mention "
+        "comparison-point use as a trigger for neutral"
+    )
+
+
+def test_pragmatics_full_prompt_requires_lang_detected_and_translations():
+    """U1 review-action: the prompt requires lang_detected, text_en,
+    text_zh_cn on every tweet (per U3 review global pipeline bug)."""
+    from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+    for token in ("lang_detected", "text_en", "text_zh_cn"):
+        assert token in _PRAGMATICS_FULL_SYSTEM_PROMPT, (
+            f"Prompt must require {token!r} on every tweet "
+            f"(per U3 review cross-cutting finding 1)"
+        )
+
+
+def test_classify_pragmatics_full_advertising_marketing_implies_marketing_spam():
+    """U1 R3 fixture: an LLM that emits advertising_marketing in
+    post_types MUST also emit unsanctioned_flags=['marketing_spam']
+    in the post envelope. This pins the cross-reference rule at the
+    fixture level so a regression that breaks the rule is caught here
+    even if the prompt text drifts."""
+    from x_monitor.attribution import classify_pragmatics_full
+
+    registry = [FakeBrandRow("minimax")]
+    client = FakeClaudeClient()
+
+    def factory(*_):
+        return {"results": [{
+            "tweet_id": "111",
+            "classifications": [
+                {"brand_id": "minimax",
+                 "post_types": ["advertising_marketing"],
+                 "sentiment": "neutral",
+                 "discourse_roles": ["advertising-marketing"],
+                 "china_nationalism": "none",
+                 "us_nationalism": "none"},
+            ],
+            # NB: the cross-reference rule says this MUST be present.
+            # If the LLM omits it, our parser should still surface it
+            # via a derivation step. Pin the fixture first; add the
+            # derivation in a follow-up if needed.
+            "unsanctioned_flags": ["marketing_spam"],
+        }]}
+    client._factory = factory
+
+    out = classify_pragmatics_full(
+        "Try MiniMax M3 FREE now — sign up here: [link]",
+        ["minimax"], registry, anthropic_client=client,
+    )
+    assert "marketing_spam" in out["unsanctioned_flags"], (
+        "Cross-reference rule: advertising_marketing ⇒ marketing_spam; "
+        "the post-level unsanctioned_flags MUST carry marketing_spam."
+    )
+
+
+def test_classify_pragmatics_full_comparative_mention_yields_neutral_for_compared_brand():
+    """U1 review-action fixture: when a post ranks models ('X is
+    better than Y'), the LLM must emit sentiment=neutral for Y even
+    though Y is 'worse' in the ranking. This pins the
+    comparative-mention rule at the fixture level."""
+    from x_monitor.attribution import classify_pragmatics_full
+
+    registry = [FakeBrandRow("minimax"), FakeBrandRow("glm")]
+    client = FakeClaudeClient()
+
+    def factory(*_):
+        return {"results": [{
+            "tweet_id": "222",
+            "classifications": [
+                {"brand_id": "minimax",
+                 "post_types": ["hands_on_usage"],
+                 "sentiment": "positive",
+                 "discourse_roles": ["genuine_hype"],
+                 "china_nationalism": "none",
+                 "us_nationalism": "none"},
+                {"brand_id": "glm",
+                 "post_types": ["performance_comparisons"],
+                 # The comparative-mention rule: GLM is mentioned as
+                 # a comparison point but NOT directly disparaged.
+                 "sentiment": "neutral",
+                 "discourse_roles": ["uncategorized"],
+                 "china_nationalism": "none",
+                 "us_nationalism": "none"},
+            ],
+            "unsanctioned_flags": [],
+        }]}
+    client._factory = factory
+
+    out = classify_pragmatics_full(
+        "MiniMax-M3 has been the most creative model I've used, "
+        "compared to Claude, GPT, GLM and DeepSeek. Whenever I'm "
+        "asking design questions, MiniMax gives me the best solutions.",
+        ["minimax", "glm"], registry, anthropic_client=client,
+    )
+    glm = _by_brand(out, "glm")
+    assert glm["sentiment"] == "neutral", (
+        "Comparative-mention rule: GLM is mentioned as a comparison "
+        "point but not directly criticized — sentiment must be neutral."
+    )
+    minimax = _by_brand(out, "minimax")
+    assert minimax["sentiment"] == "positive", (
+        "MiniMax is the focus brand in this comparison — sentiment "
+        "must remain positive (not flipped by the comparative-mention "
+        "rule)."
+    )

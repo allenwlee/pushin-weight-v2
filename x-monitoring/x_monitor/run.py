@@ -1363,7 +1363,13 @@ class RunPipeline:
                         ] = str(e)
                     _t("qt_daily", _t_qt_d)
             finally:
-                store.close()
+                # Account graph update MUST run on an open DB. Previously
+                # the close() here meant _update_accounts below crashed
+                # with `sqlite3.ProgrammingError: Cannot operate on a
+                # closed database` (task #288). The store stays open
+                # through the account-graph step and closes once the
+                # summary write is done.
+                pass
 
             # Account graph update
             _t_acc = time.monotonic()
@@ -1384,6 +1390,13 @@ class RunPipeline:
                 summary["http_log"] = []
             self._write_summary(run_id, summary)
             self._update_latest_symlink(run_id, running=False)
+            # Close the store at the very end (task #288 — was
+            # previously inside the post-fetch finally block, which
+            # caused _update_accounts above to crash on a closed DB).
+            try:
+                store.close()
+            except Exception:
+                pass
             return summary
 
     def _capture_official_quote_tweets(

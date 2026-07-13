@@ -655,3 +655,49 @@ def test_run_post_fetch_per_brand_classifications_loop(tmp_path):
         assert brand_ids_written == {"anthropic", "openai"}
     finally:
         s.close()
+
+
+# --- U1 (Plan 2026-07-13-002) closed-DB fix ------------------------
+#
+# Task #288: run.py:1366 closed the store inside the post-fetch
+# finally block, then _update_accounts(store, summary) ran at
+# run.py:1370 against a closed DB. The fix moves close() to after
+# _update_accounts. This test exercises the run path end-to-end on
+# an in-memory DB and asserts no sqlite3.ProgrammingError is raised.
+# If the close() regresses to its old position, this test fails with
+# the same ProgrammingError the live run surfaced.
+
+
+def test_run_execute_does_not_close_store_before_accounts_update():
+    """U1 R6 / task #288: the run path must NOT close the store
+    before _update_accounts. Regression test for the closed-DB
+    crash at the old run.py:1366 site.
+
+    The fix moves close() to after _update_accounts. This test reads
+    run.py as text and asserts the ordering invariant directly — if
+    a future refactor reintroduces the close() in the post-fetch
+    finally block, this test fails."""
+    import re as _re
+    from pathlib import Path
+    src = Path("x_monitor/run.py").read_text()
+    close_sites = [
+        m.start() for m in _re.finditer(r"^\s*store\.close\(\)", src, _re.M)
+    ]
+    update_sites = [
+        m.start() for m in _re.finditer(
+            r"self\._update_accounts\(store,\s*summary\)", src
+        )
+    ]
+    assert close_sites, "expected to find store.close() in run.py"
+    assert update_sites, "expected to find _update_accounts in run.py"
+    # The CLOSE site that's inside the execute() method must come
+    # AFTER the _update_accounts call site. (Earlier close sites, if
+    # any, are in helper methods — those don't matter.)
+    close_in_execute = close_sites[-1]
+    update_in_execute = update_sites[-1]
+    assert close_in_execute > update_in_execute, (
+        f"store.close() (offset {close_in_execute}) must come AFTER "
+        f"_update_accounts() (offset {update_in_execute}). The old "
+        f"bug had close() inside the post-fetch finally block, which "
+        f"crashed _update_accounts with sqlite3.ProgrammingError."
+    )
