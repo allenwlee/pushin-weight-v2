@@ -16,6 +16,16 @@
 # is still running.
 set -uo pipefail
 
+# Kill switch (2026-07-14): operator paused all TwitterAPI.io calls.
+# Sentinel file at /tmp/x-monitor-paused gates the actual pipeline run.
+# To resume, remove the file. Both this WatchPaths wrapper and the
+# scheduled wrapper check the same sentinel so a config edit can't
+# fire a stray run either.
+if [[ -f /tmp/x-monitor-paused ]]; then
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) paused: /tmp/x-monitor-paused exists; skipping pipeline run" >> /tmp/x-monitor-pipeline.log
+  exit 0
+fi
+
 cd /Users/fuchitalee/development/minimax-marketing/x-monitoring
 source ~/.env.secrets
 
