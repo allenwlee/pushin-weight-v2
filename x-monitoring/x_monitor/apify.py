@@ -256,12 +256,12 @@ class TwitterApiClient:
                 "queryType": "Latest",
                 "limit": min(max_per_page, max_results - len(out)),
             }
-            if since_time is not None:
-                # TwitterAPI.io's `sinceTime` query param (unix epoch) —
-                # sub-day precision. Preferred over the `since:` operator
-                # (date-only) so the runtime cursor can advance minute-
-                # to-minute instead of resetting to midnight each cycle.
-                params["sinceTime"] = int(since_time)
+            # NB: do NOT add a URL-side time-filter param here — TwitterAPI.io
+            # silently drops unknown URL params on advanced_search. The time
+            # floor is injected into the query string as an inline
+            # `since_time:<n>` operator, handled in run_search before we get
+            # here. See docs/debug/2026-07-14-160222-call-state-not-persisting.md
+            # for the API test that proved the URL-param form is ignored.
             if cursor:
                 params["cursor"] = cursor
             data = self._get(SEARCH_PATH, params)
@@ -307,12 +307,13 @@ class TwitterApiClient:
         request size — default 20 (the platform cap). Both are passed
         through to `_walk_search`.
 
-        `since_time` (kw-only, unix epoch seconds) is passed as the
-        `sinceTime` query param to TwitterAPI.io. Preferred over the
-        `since:` operator for sub-day precision: the operator form
-        truncates to date-only, while `sinceTime` honors the exact
-        timestamp. The two can be used together (sinceTime wins for
-        time precision; `since:` adds a hard date floor).
+        `since_time` (kw-only, unix epoch seconds) is injected into the
+        query string as the inline operator `since_time:<epoch>`. TwitterAPI.io
+        honors this form for sub-day precision. NB: TwitterAPI.io does NOT
+        honor a separate `sinceTime` URL param (it silently drops unknown
+        URL params; verified by direct API test 2026-07-14 — see
+        docs/debug/2026-07-14-160222-call-state-not-persisting.md). The
+        `since:` operator form remains supported as a defensive date floor.
 
         Returns up to max_results tweets, paginated via next_cursor (see
         _walk_search).
@@ -320,6 +321,11 @@ class TwitterApiClient:
         effective_query = query
         if since and "since:" not in query:
             effective_query = f"{query} since:{since}"
+        if since_time is not None:
+            # Inline operator — the only form TwitterAPI.io honors.
+            # Idempotent: if the caller already injected it, leave it alone.
+            if "since_time:" not in effective_query:
+                effective_query = f"{effective_query} since_time:{int(since_time)}"
         return self._walk_search(
             effective_query,
             max_results,
@@ -348,6 +354,10 @@ class TwitterApiClient:
         the TwitterAPI.io docs warn `has_next_page` can return true even
         when no more data exists (subsequent calls return empty), so the
         empty-page guard is load-bearing. `max_pages` bounds mega-floods.
+
+        NB: unlike advanced_search (which silently drops `sinceTime`), the
+        /twitter/tweet/quotes endpoint officially documents `sinceTime` as
+        a URL param. We pass it as a URL param here.
         """
         out: list[dict[str, Any]] = []
         cursor: str | None = None
@@ -357,6 +367,8 @@ class TwitterApiClient:
                 "includeReplies": "true" if include_replies else "false",
             }
             if since_time is not None:
+                # Officially documented URL param for /twitter/tweet/quotes;
+                # NOT the same broken form as advanced_search.
                 params["sinceTime"] = int(since_time)
             if cursor:
                 params["cursor"] = cursor

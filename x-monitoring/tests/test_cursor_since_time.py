@@ -7,13 +7,22 @@ the window to midnight UTC). The DB-level dedupe then dropped
 them as duplicates — wasted TwitterAPI.io credits, but the user
 saw it as low `n_inserted` relative to `n_results`.
 
-Fix: thread a unix-epoch cursor (`sinceTime` query param) through
-the advanced_search path so the window can advance minute-to-minute.
-The `since:` operator form is kept as a defensive date floor.
+First fix (commit 37c5f08): thread a unix-epoch cursor via a
+`sinceTime` query param so the window can advance minute-to-minute.
+
+Second fix (this commit, 2026-07-14): TwitterAPI.io silently DROPS
+unknown URL parameters on `advanced_search`, so `sinceTime` as a
+URL param was a no-op (verified by direct API test — see
+docs/debug/2026-07-14-160222-call-state-not-persisting.md). The
+working form is the inline operator `since_time:<epoch>` injected
+into the `query` parameter itself. This test was rewritten to pin
+that behavior. The `since:` operator form remains as a defensive
+date floor.
 
 This test pins:
-  (a) apify.run_search accepts `since_time` and passes it as the
-      `sinceTime` query param (NOT as a `since:` operator injection).
+  (a) apify.run_search accepts `since_time` and injects it into the
+      query string as ` since_time:<epoch>` (NOT as a `sinceTime`
+      URL param, which TwitterAPI.io silently drops).
   (b) run.py converts prior_iso to unix epoch (NOT date-only
       truncation) when computing the cursor.
   (c) CURSOR_OVERLAP_HOURS is still subtracted before the timestamp
@@ -25,9 +34,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,34 +53,58 @@ def test_apify_run_search_accepts_since_time_kwarg() -> None:
     )
 
 
-def test_walk_search_passes_since_time_as_query_param() -> None:
-    """_walk_search must pass sinceTime (NOT since: operator injection)
-    as a separate query param when since_time is set."""
+def test_run_search_injects_since_time_as_inline_operator() -> None:
+    """run_search must inject `since_time:<epoch>` INTO THE QUERY STRING
+    (the only form TwitterAPI.io honors on advanced_search), NOT as a
+    separate URL param."""
     src = _read("x_monitor/apify.py")
-    # Look for the explicit sinceTime param write.
-    assert 'params["sinceTime"] = int(since_time)' in src, (
-        "_walk_search must write `params['sinceTime'] = int(since_time)` "
-        "when since_time is set."
+    # Look for the explicit inline-operator injection in run_search.
+    pattern = r"effective_query\s*=\s*f\"\{effective_query\}\s*since_time:\{int\(since_time\)\}\""
+    assert re.search(pattern, src), (
+        "run_search must inject `since_time:<int(since_time)>` into the "
+        "query string. TwitterAPI.io silently drops sinceTime as a URL "
+        "param on advanced_search; the inline operator is the only "
+        "working form."
+    )
+
+
+def test_walk_search_does_not_write_since_time_as_url_param() -> None:
+    """_walk_search must NOT write `params['sinceTime']` in its body —
+    TwitterAPI.io silently drops unknown URL params on advanced_search."""
+    src = _read("x_monitor/apify.py")
+    # We slice from the first executable statement after the docstring
+    # (the `out: list[dict[str, Any]] = []` line) up to the matching
+    # `return` — docstrings may legitimately mention `sinceTime`.
+    body_pattern = re.compile(
+        r"def _walk_search.*?\"\"\"\s*\n\s*out:.*?(?=^    def )",
+        re.DOTALL | re.MULTILINE,
+    )
+    walk_body = body_pattern.search(src)
+    assert walk_body, "_walk_search body slice not found"
+    assert 'params["sinceTime"]' not in walk_body.group(0), (
+        "_walk_search must NOT write params['sinceTime'] in its body — "
+        "TwitterAPI.io advanced_search silently drops unknown URL params. "
+        "The time filter must be in the query string."
     )
 
 
 def test_walk_search_does_not_inject_since_time_into_query_string() -> None:
-    """Critical: since_time must NOT be appended to the query string
-    as `since:<epoch>` (the operator form has no time precision and
-    would defeat the fix)."""
+    """_walk_search delegates query assembly to run_search; it must
+    not re-inject since_time itself."""
     src = _read("x_monitor/apify.py")
-    # The query string assembly block must not include since_time.
-    # Walk the function body and confirm no `f"...{since_time}"` or
-    # similar leakage.
+    walk_section_pattern = re.compile(
+        r"def _walk_search.*?def run_search", re.DOTALL
+    )
+    walk_body = walk_section_pattern.search(src).group(0)
     bad_patterns = [
         r"effective_query\s*=.*since_time",
         r"query\s*\+.*since_time",
-        r"since:\{\s*since_time",
+        r"since_time:\{",
     ]
     for pat in bad_patterns:
-        assert not re.search(pat, src), (
-            f"_walk_search / run_search must NOT inject since_time "
-            f"into the query string. Found pattern: {pat}"
+        assert not re.search(pat, walk_body), (
+            f"_walk_search must not inject since_time into query itself; "
+            f"run_search owns query assembly. Found pattern: {pat}"
         )
 
 
@@ -113,7 +143,7 @@ def test_cursor_overlap_still_subtracted() -> None:
 
 def test_since_date_form_kept_as_defensive_floor() -> None:
     """The `since:` (date-only) form is preserved as a hard floor in
-    case TwitterAPI.io's sinceTime semantics drift."""
+    case TwitterAPI.io's `since_time:` operator semantics drift."""
     src = _read("x_monitor/run.py")
     assert "since_cursor = since_dt.date().isoformat()" in src, (
         "run.py must still emit `since_cursor = since_dt.date().isoformat()` "
@@ -121,14 +151,15 @@ def test_since_date_form_kept_as_defensive_floor() -> None:
     )
 
 
-def test_apify_run_search_passes_since_time_through_to_walk() -> None:
+def test_apify_run_search_injects_since_time_into_query_end_to_end() -> None:
     """End-to-end smoke: when apify.run_search is called with
-    since_time, _walk_search receives it and the params dict has
-    `sinceTime` as a separate query param."""
+    since_time, the rendered query string contains `since_time:<n>`
+    and the URL params dict does NOT carry a separate sinceTime."""
     from x_monitor.apify import TwitterApiClient
 
     # Mock the network layer so we can introspect the params dict.
     captured: dict = {}
+
     def fake_get(path, params):
         captured["path"] = path
         captured["params"] = dict(params)
@@ -144,12 +175,14 @@ def test_apify_run_search_passes_since_time_through_to_walk() -> None:
         since_time=1735689600,  # 2025-01-01 00:00:00 UTC
     )
 
-    assert captured["params"].get("sinceTime") == 1735689600, (
-        f"expected sinceTime=1735689600 in query params, got "
-        f"{captured['params']}"
+    # The inline operator MUST be in the query.
+    assert "since_time:1735689600" in captured["params"]["query"], (
+        f"expected inline `since_time:1735689600` in query, got "
+        f"{captured['params']['query']!r}"
     )
-    # Confirm `since:` operator is NOT in the query string.
-    assert "since:" not in captured["params"]["query"], (
-        f"since_time must NOT be appended to the query as `since:<n>`. "
-        f"Got query: {captured['params']['query']!r}"
+    # The URL params dict MUST NOT carry `sinceTime` — TwitterAPI.io
+    # silently drops it on advanced_search.
+    assert "sinceTime" not in captured["params"], (
+        f"`sinceTime` must NOT be a URL param on advanced_search; "
+        f"got {captured['params']}"
     )
