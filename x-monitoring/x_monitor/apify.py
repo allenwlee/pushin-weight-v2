@@ -315,6 +315,12 @@ class TwitterApiClient:
         docs/debug/2026-07-14-160222-call-state-not-persisting.md). The
         `since:` operator form remains supported as a defensive date floor.
 
+        When `since_time` is set, we ALSO inject the matching upper bound
+        `until_time:<now>` (the operator is exclusive). TwitterAPI.io's
+        verified-working pattern for advanced_search uses both bounds;
+        the upper bound makes the time envelope explicit. `until_time:`
+        is also silently dropped as a URL param — must be inline.
+
         Returns up to max_results tweets, paginated via next_cursor (see
         _walk_search).
         """
@@ -326,6 +332,14 @@ class TwitterApiClient:
             # Idempotent: if the caller already injected it, leave it alone.
             if "since_time:" not in effective_query:
                 effective_query = f"{effective_query} since_time:{int(since_time)}"
+            # Always inject the matching upper bound too. TwitterAPI.io's
+            # working pattern uses both bounds: `since_time:<floor>
+            # until_time:<now>`. The upper bound is "now" — every x-monitor
+            # call wants everything up through the moment of the cycle.
+            # The `until_time:` operator is exclusive; that's the desired
+            # semantics here (don't include posts at second N+1).
+            if "until_time:" not in effective_query:
+                effective_query = f"{effective_query} until_time:{int(time.time())}"
         return self._walk_search(
             effective_query,
             max_results,

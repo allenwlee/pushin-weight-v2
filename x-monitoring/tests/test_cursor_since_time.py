@@ -186,3 +186,97 @@ def test_apify_run_search_injects_since_time_into_query_end_to_end() -> None:
         f"`sinceTime` must NOT be a URL param on advanced_search; "
         f"got {captured['params']}"
     )
+
+
+def test_run_search_injects_until_time_when_since_time_set() -> None:
+    """When since_time is provided, run_search must ALSO inject the
+    matching upper bound `until_time:<now>` per TwitterAPI.io's working
+    pattern. Both bounds must be inline operators (URL-param forms are
+    silently dropped)."""
+    src = _read("x_monitor/apify.py")
+    # The injection block in run_search must reference until_time.
+    pattern = (
+        r'if "until_time:" not in effective_query:\s*\n'
+        r'\s*effective_query = f"\{effective_query\} until_time:\{int\(time\.time\(\)\)\}"'
+    )
+    assert re.search(pattern, src), (
+        "run_search must inject `until_time:<int(time.time())>` when "
+        "since_time is provided. TwitterAPI.io's verified-working pattern "
+        "uses both bounds — `since_time:<floor> until_time:<now>`."
+    )
+
+
+def test_apify_run_search_injects_both_bounds_end_to_end() -> None:
+    """End-to-end smoke: when since_time is set, the rendered query
+    string contains BOTH `since_time:<n>` and `until_time:<now>`."""
+    import time as _time
+    from x_monitor.apify import TwitterApiClient
+
+    captured: dict = {}
+
+    def fake_get(path, params):
+        captured["params"] = dict(params)
+        return {"tweets": [], "has_next_page": False, "next_cursor": None}
+
+    api = TwitterApiClient(api_key="test")
+    api._get = fake_get  # type: ignore[method-assign]
+
+    before = int(_time.time())
+    api.run_search(
+        "(minimax OR 海螺) min_faves:0",
+        max_results=10,
+        max_pages=1,
+        since_time=1735689600,
+    )
+    after = int(_time.time())
+
+    query = captured["params"]["query"]
+    assert "since_time:1735689600" in query, (
+        f"expected inline `since_time:1735689600` in query, got {query!r}"
+    )
+    # Upper bound must be present, bracketing the call moment.
+    import re as _re
+    m = _re.search(r"until_time:(\d+)", query)
+    assert m is not None, (
+        f"expected inline `until_time:<n>` in query, got {query!r}"
+    )
+    until_ts = int(m.group(1))
+    assert before <= until_ts <= after + 1, (
+        f"until_time:{until_ts} is not bracketing the call moment "
+        f"[{before}, {after}]"
+    )
+    # URL params dict must NOT carry untilTime either.
+    assert "untilTime" not in captured["params"], (
+        f"`untilTime` must NOT be a URL param on advanced_search; "
+        f"got {captured['params']}"
+    )
+
+
+def test_run_search_no_until_time_when_no_since_time() -> None:
+    """If the caller doesn't pass since_time, run_search must NOT inject
+    until_time either — that would be a behavior change for callers that
+    only want a static query."""
+    from x_monitor.apify import TwitterApiClient
+
+    captured: dict = {}
+
+    def fake_get(path, params):
+        captured["params"] = dict(params)
+        return {"tweets": [], "has_next_page": False, "next_cursor": None}
+
+    api = TwitterApiClient(api_key="test")
+    api._get = fake_get  # type: ignore[method-assign]
+
+    api.run_search(
+        "(minimax OR 海螺) min_faves:0",
+        max_results=10,
+        max_pages=1,
+    )
+
+    assert "until_time:" not in captured["params"]["query"], (
+        "run_search must NOT inject until_time when since_time is unset "
+        "(that's a behavior change for callers using a static query)."
+    )
+    assert "since_time:" not in captured["params"]["query"], (
+        "run_search must NOT inject since_time when since_time is unset."
+    )
