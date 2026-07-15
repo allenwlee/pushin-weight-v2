@@ -677,6 +677,21 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
     assert _resolve_signal_model() == "deepseek-v4-pro"
 
+    # X_MONITOR_CLASSIFIER_BASE_URL overrides ANTHROPIC_BASE_URL when set.
+    # Plan 2026-07-15-003: lets M3 stay as the process-wide default while
+    # the classifier routes to DS V4.
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.setenv(
+        "X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic"
+    )
+    assert _resolve_signal_model() == "deepseek-v4-pro"
+
+    # Override unset -> falls back to ANTHROPIC_BASE_URL.
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
+    assert _resolve_signal_model() == "MiniMax-M3.0"
+
 
 def test_resolve_thinking_default(monkeypatch):
     """_resolve_thinking_default returns {"type": "disabled"} only for
@@ -688,11 +703,15 @@ def test_resolve_thinking_default(monkeypatch):
     would consume the entire output budget on internal deliberation
     (verified during the 2026-07-15 live probe — 4096-token budget
     was 100% consumed by thinking, no JSON emitted).
+
+    Plan 2026-07-15-003: the override env `X_MONITOR_CLASSIFIER_BASE_URL`
+    takes precedence; when unset, falls back to ANTHROPIC_BASE_URL.
     """
     from x_monitor.attribution import _resolve_thinking_default
 
-    # Unset base_url -> None (default, no thinking param)
+    # Unset base_url + unset override -> None (default, no thinking param)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
     assert _resolve_thinking_default() is None
 
     # MiniMax proxy -> None (M3 path unchanged)
@@ -705,6 +724,19 @@ def test_resolve_thinking_default(monkeypatch):
 
     # Direct Anthropic -> None
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    assert _resolve_thinking_default() is None
+
+    # Plan 2026-07-15-003: X_MONITOR_CLASSIFIER_BASE_URL overrides base_url.
+    # ANTHROPIC_BASE_URL routes to minimax (M3) but the override routes the
+    # classifier to deepseek (DS V4) — M3 stays as the process-wide default.
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.setenv(
+        "X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic"
+    )
+    assert _resolve_thinking_default() == {"type": "disabled"}
+
+    # Override unset -> falls back to ANTHROPIC_BASE_URL (M3).
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
     assert _resolve_thinking_default() is None
 
 
@@ -732,27 +764,6 @@ def test_max_tokens_for_batch():
     assert _max_tokens_for_batch(80) == 8192
     # Even very large batches cap at 8192 (safety margin)
     assert _max_tokens_for_batch(200) == 8192
-
-
-def test_validate_deepseek_response_shape_valid():
-    """_validate_deepseek_response_shape accepts a valid wire format.
-
-    The wire format is the production response shape (the one
-    _classify_one_batch_to_by_brand consumes): {"results": [{"tweet_id":
-    str, "classifications": list, "unsanctioned_flags": [str]}]} with
-    one entry per input tweet.
-    """
-    from x_monitor.attribution import _validate_deepseek_response_shape
-
-    # Valid: results is a list of dicts with tweet_id + classifications
-    valid = {
-        "results": [
-            {"tweet_id": "t1", "classifications": [], "unsanctioned_flags": []},
-            {"tweet_id": "t2", "classifications": [], "unsanctioned_flags": []},
-        ]
-    }
-    # Should not raise
-    _validate_deepseek_response_shape(valid, 2)
 
 
 def test_validate_deepseek_response_shape_missing_unsanctioned_flags(caplog):

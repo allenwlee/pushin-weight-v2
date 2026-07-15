@@ -149,3 +149,47 @@ def test_deepseek_branch_takes_precedence_over_minimax(monkeypatch):
     assert client is not None
     # minimax branch wins (the elif is checked first)
     assert client._client.api_key == "sk-cp-minimax"
+
+
+def test_classifier_override_routes_to_deepseek_while_process_stays_minimax(
+    monkeypatch,
+):
+    """X_MONITOR_CLASSIFIER_BASE_URL overrides ANTHROPIC_BASE_URL when set.
+
+    Plan 2026-07-15-003: lets M3 stay as the process-wide default
+    (ANTHROPIC_BASE_URL=minimax.io) while the classifier routes to DS V4
+    via the override. The factory picks up the override and constructs
+    a client with the deepseek api_key + deepseek base_url.
+    """
+    from x_monitor.reattribute import build_anthropic_client_from_env
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.setenv("MINIMAX_API_TOKEN", "sk-cp-minimax")
+    monkeypatch.setenv(
+        "X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic"
+    )
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-override")
+    client = build_anthropic_client_from_env()
+    assert client is not None
+    # Override wins: deepseek key + deepseek base_url
+    assert client._client.api_key == "sk-deepseek-override"
+    assert "deepseek.com" in str(client._client.base_url or "")
+
+
+def test_classifier_override_unset_falls_back_to_anthropic_base_url(
+    monkeypatch,
+):
+    """X_MONITOR_CLASSIFIER_BASE_URL unset -> falls back to ANTHROPIC_BASE_URL.
+
+    Regression net for the precedence rule. Without the fallback, the
+    factory would only route via the override, breaking operators who
+    haven't set it.
+    """
+    from x_monitor.reattribute import build_anthropic_client_from_env
+
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.setenv("MINIMAX_API_TOKEN", "sk-cp-minimax-fb")
+    client = build_anthropic_client_from_env()
+    assert client is not None
+    assert client._client.api_key == "sk-cp-minimax-fb"

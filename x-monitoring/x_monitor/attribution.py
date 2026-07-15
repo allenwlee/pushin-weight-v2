@@ -775,10 +775,17 @@ class ClaudeClient(Protocol):
 def _resolve_signal_model() -> str:
     """Return the model id for signal classification.
 
+    The classifier's effective base URL is `X_MONITOR_CLASSIFIER_BASE_URL`
+    when set, otherwise `ANTHROPIC_BASE_URL`. This lets M3 stay as the
+    process-wide default while the classifier routes to DS V4 — set
+    `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`
+    in the shell to override just the classifier without flipping
+    other LLM callers in the same process.
+
     Direct Anthropic API: "claude-haiku-4-5" (cheapest Claude, fits the
     structured-JSON signal task).
 
-    Minimax proxy (ANTHROPIC_BASE_URL points at api.minimax.io/anthropic):
+    Minimax proxy (classifier base URL points at api.minimax.io/anthropic):
     the proxy only routes the operator's registered model id
     (ANTHROPIC_MODEL env). Default to "MiniMax-M3.0" — it does NOT emit
     a thinking block for structured JSON (6 output tokens per request).
@@ -787,7 +794,7 @@ def _resolve_signal_model() -> str:
     ANTHROPIC_MODEL=MiniMax-M2.7 set, which silently triggered that
     slower path.
 
-    DeepSeek V4 Pro (ANTHROPIC_BASE_URL points at api.deepseek.com/anthropic):
+    DeepSeek V4 Pro (classifier base URL points at api.deepseek.com/anthropic):
     Anthropic-compatible endpoint. Default to "deepseek-v4-pro". The
     per-call `thinking={"type": "disabled"}` is applied via
     `_resolve_thinking_default()` (see below) so the reasoning model
@@ -795,15 +802,18 @@ def _resolve_signal_model() -> str:
 
     Resolution order:
       1. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
-      2. "MiniMax-M3.0" if ANTHROPIC_BASE_URL routes through api.minimax.io
-      3. "deepseek-v4-pro" if ANTHROPIC_BASE_URL routes through api.deepseek.com
+      2. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
+      3. "deepseek-v4-pro" if classifier base URL routes through api.deepseek.com
       4. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
     explicit = os.environ.get("ANTHROPIC_MODEL")
     if explicit:
         return explicit
-    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+    base_url = os.environ.get(
+        "X_MONITOR_CLASSIFIER_BASE_URL",
+        os.environ.get("ANTHROPIC_BASE_URL", ""),
+    )
     if "minimax.io" in base_url:
         return "MiniMax-M3.0"
     if "deepseek.com" in base_url:
@@ -825,7 +835,10 @@ def _resolve_thinking_default() -> "dict | None":
         {"type": "disabled"} for the DeepSeek path, else None.
     """
     import os
-    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+    base_url = os.environ.get(
+        "X_MONITOR_CLASSIFIER_BASE_URL",
+        os.environ.get("ANTHROPIC_BASE_URL", ""),
+    )
     if "deepseek.com" in base_url:
         return {"type": "disabled"}
     return None
