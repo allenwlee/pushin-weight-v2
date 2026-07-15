@@ -941,15 +941,35 @@ class RunPipeline:
             self._write_summary(run_id, summary)
             self._update_latest_symlink(run_id, running=True)
 
-            # Load queries
+            # Load brand tokens from the DB (Plan 2026-07-15-003 U1).
+            # The per-brand `data/queries/<m>.yaml` files were retired by
+            # migration 030 (brand_keywords table). The legacy Query list
+            # shape is preserved here only as a placeholder for the v1.6
+            # budget/skip-order machinery, which is a no-op in v1.7 (cost
+            # <= budget always). The single Query stub per brand feeds
+            # `apply_skip_order` without surfacing as a real signal.
             models = model_filter or self.config.enabled_models
-            queries_per_model: dict[str, list[Query]] = {}
+            store = Store(self.db_path)
+            try:
+                primary_keywords = store.read_primary_brand_keywords()
+            except Exception as e:
+                summary["degraded"]["missing_brand_keywords"] = str(e)
+                primary_keywords = {}
             for m in models:
-                try:
-                    queries_per_model[m] = load_queries(m, self.data_dir)
-                except (FileNotFoundError, ValueError) as e:
-                    summary["degraded"][f"missing_queries:{m}"] = str(e)
-                    queries_per_model[m] = []
+                if m not in primary_keywords:
+                    summary["degraded"][f"missing_brand_keywords:{m}"] = (
+                        f"no rows in brand_keywords for brand_id={m!r}"
+                    )
+            queries_per_model: dict[str, list[Query]] = {
+                m: [
+                    Query(
+                        id="Q5",  # legacy Q-id; never reaches the DB
+                        query_string="(placeholder)",
+                        enabled=True,
+                    )
+                ]
+                for m in models
+            }
 
             # Apply skip order per model
             budget = self.config.daily_ceiling
@@ -978,8 +998,9 @@ class RunPipeline:
                         summary["degraded"]["skipped_budget"] = []
                     summary["degraded"]["skipped_budget"].append(f"{m}/{q.id}")
 
-            # Store init (auto-migrates)
-            store = Store(self.db_path)
+            # Store init (auto-migrates) — note: Store was created earlier
+            # (Plan 2026-07-15-003 U1 lifted this so read_primary_brand_keywords
+            # can feed both the legacy stub list and the planner).
             review = ReviewQueue(self.review_queue_path)
             # v1.4: headline cache for URL-only posts (lives in data/).
             cache = HeadlinesCache(self.data_dir / "headlines_cache.json")
@@ -1032,9 +1053,10 @@ class RunPipeline:
                 # Plan 2026-07-11-002 (U2): wide-net B-specs
                 # (B1/B2/B3) read per-brand tokens from
                 # `brand_keywords.is_primary=1` via the
-                # `primary_keywords` kwarg. Load once per cycle here
-                # (single SQL, single dict build) and thread through.
-                primary_keywords = store.read_primary_brand_keywords()
+                # `primary_keywords` kwarg. Already loaded once per run
+                # at the top of cmd_run (Plan 2026-07-15-003 U1) — reuse
+                # the cached dict here to avoid a second SQL roundtrip
+                # per cycle.
                 plan = plan_calls(
                     self.config.x_monitor_list_id,
                     self.config.x_query_specs or None,
