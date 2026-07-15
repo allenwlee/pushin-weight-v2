@@ -3,6 +3,7 @@
 data/runs/raw/
 data/runs/[0-9]*.json
 data/runs/2026-*/
+data/runs/probe_*.json
 data/runs/LATEST.json
 data/runs/LATEST.running.json
 data/runs/LOCK
