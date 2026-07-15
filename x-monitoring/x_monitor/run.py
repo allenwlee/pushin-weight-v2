@@ -44,6 +44,7 @@ from .attribution import (
     attribute_to_brands,
     classify_post,
     compile_keyword_index,
+    _max_tokens_for_batch,
 )
 from .relevance import filter_posts  # noqa: F401 — re-exported for tests
 from .review import ReviewQueue
@@ -618,11 +619,14 @@ def _run_post_fetch(
     # Result shape is index-aligned with `kept_posts` so the loop below
     # can range-index without re-keying.
     #
-    # NOTE: pass explicit max_tokens=4096 (M3.0 via proxy needs headroom
-    # for the ~3000-token structured JSON response of a 20-post batch;
-    # the 1M context window is input-side only). See
+    # NOTE: pass per-batch max_tokens via _max_tokens_for_batch (computed
+    # from len(batch_inputs)). The helper uses 200 tokens/tweet linear
+    # estimate, clamped to [4096, 8192], grounded in the DS V4 probe at
+    # data/runs/dsv4-probe-20260715T071331Z.json. Pre-swap, M3.0 via proxy
+    # needed 4096 headroom for the ~3000-token structured JSON response of
+    # a 20-post batch (the 1M context window is input-side only). See
     # docs/debug/2026-07-15-max-tokens-not-threaded-into-classify-batch.md
-    # for the truncation analysis.
+    # for the original truncation analysis.
     t0 = time.monotonic()
     discourse_rows: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
@@ -645,7 +649,7 @@ def _run_post_fetch(
             batch_inputs,
             brand_registry_rows,
             anthropic_client,
-            max_tokens=4096,
+            max_tokens=_max_tokens_for_batch(len(batch_inputs)),
         )
     except Exception as e:
         log.warning(

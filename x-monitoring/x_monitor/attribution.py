@@ -787,10 +787,17 @@ def _resolve_signal_model() -> str:
     ANTHROPIC_MODEL=MiniMax-M2.7 set, which silently triggered that
     slower path.
 
+    DeepSeek V4 Pro (ANTHROPIC_BASE_URL points at api.deepseek.com/anthropic):
+    Anthropic-compatible endpoint. Default to "deepseek-v4-pro". The
+    per-call `thinking={"type": "disabled"}` is applied via
+    `_resolve_thinking_default()` (see below) so the reasoning model
+    does not consume the entire output budget on internal deliberation.
+
     Resolution order:
       1. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
       2. "MiniMax-M3.0" if ANTHROPIC_BASE_URL routes through api.minimax.io
-      3. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
+      3. "deepseek-v4-pro" if ANTHROPIC_BASE_URL routes through api.deepseek.com
+      4. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
     explicit = os.environ.get("ANTHROPIC_MODEL")
@@ -799,7 +806,29 @@ def _resolve_signal_model() -> str:
     base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
     if "minimax.io" in base_url:
         return "MiniMax-M3.0"
+    if "deepseek.com" in base_url:
+        return "deepseek-v4-pro"
     return "claude-haiku-4-5"
+
+
+def _resolve_thinking_default() -> "dict | None":
+    """Return the `thinking` kwarg for the Anthropic SDK messages.create call.
+
+    When routing through the DeepSeek V4 Pro endpoint, the model is a
+    reasoning model that would consume the entire output budget on
+    internal deliberation unless `thinking={"type": "disabled"}` is
+    passed. The MiniMax M3 path and direct Anthropic path do not need
+    this — return `None` so the parameter is omitted from the SDK call
+    and behavior is unchanged from the pre-swap state.
+
+    Returns:
+        {"type": "disabled"} for the DeepSeek path, else None.
+    """
+    import os
+    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+    if "deepseek.com" in base_url:
+        return {"type": "disabled"}
+    return None
 
 
 _SIGNAL_MODEL = _resolve_signal_model()
@@ -918,6 +947,7 @@ def _call_signal_with_retry(
     prompt: str,
     *,
     max_tokens: int = 4096,
+    thinking: "dict | None" = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential backoff (mirrors translator).
 
@@ -926,15 +956,25 @@ def _call_signal_with_retry(
     (~3000 tokens of structured JSON output). Lower values (the old 1024
     default) cause mid-JSON truncation ("Unterminated string" at ~col 32xx)
     exactly as seen in production on 2026-07-15 for N=20 batches.
+
+    `thinking` defaults to None (parameter omitted from the SDK call) for
+    backward compatibility with the M3 and direct-Anthropic paths. When
+    routing through the DeepSeek V4 Pro endpoint, the caller passes
+    `thinking={"type": "disabled"}` (resolved via
+    `_resolve_thinking_default()`) to prevent the reasoning model from
+    consuming the entire output budget on internal deliberation.
     """
     last_exc: Exception | None = None
+    create_kwargs: dict[str, Any] = {
+        "model": _SIGNAL_MODEL,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if thinking is not None:
+        create_kwargs["thinking"] = thinking
     for attempt in range(_MAX_RETRIES):
         try:
-            return client.messages_create(
-                model=_SIGNAL_MODEL,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            return client.messages_create(**create_kwargs)
         except Exception as e:
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
@@ -1080,6 +1120,27 @@ def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
 # both the single-post `classify_pragmatics_full` and the batch
 # `classify_batch_pragmatics_full` ride the same cache entry.
 _CLASSIFY_BATCH_SIZE: int = 20
+
+
+def _max_tokens_for_batch(batch_size: int) -> int:
+    """Compute the LLM `max_tokens` budget for a batched classifier call.
+
+    The DeepSeek V4 Pro endpoint returns valid JSON for batch_size=20 in
+    ~1975 output tokens (probe at data/runs/dsv4-probe-20260715T071331Z.json)
+    and for batch_size=40 with max_tokens=8192 in ~4310 output tokens.
+    The 200-tokens-per-tweet linear coefficient is conservative: the
+    empirical usage at batch_size=20 was 99 tokens/tweet; at batch_size=40
+    with max_tokens=8192 it was 108 tokens/tweet. The 200 coefficient
+    gives 100% headroom for any 2x growth from multi-brand or
+    unsanctioned-flags-heavy tweets.
+
+    The min(8192, ...) cap prevents unbounded budgets on misconfigured
+    large batches (KTD7 confirmed 8192 is empirically reachable on DS V4).
+    The max(4096, ...) floor ensures even single-post calls get the
+    headroom the M3 path needed (per
+    docs/debug/2026-07-15-max-tokens-not-threaded-into-classify-batch.md).
+    """
+    return min(8192, max(4096, 200 * batch_size))
 
 
 _PRAGMATICS_FULL_SYSTEM_PROMPT: str = (
@@ -1729,6 +1790,88 @@ def _classify_one_batch_to_by_brand(
     return {"by_brand": by_brand, "unsanctioned_flags": flags}
 
 
+def _validate_deepseek_response_shape(
+    parsed: Any,
+    expected_count: int,
+) -> None:
+    """Assert the wire format of a batched classifier response.
+
+    The DeepSeek V4 Pro endpoint (and the production prompt, per
+    `_PRAGMATICS_FULL_SYSTEM_PROMPT`) emits a wire shape of:
+        {
+          "results": [
+            {"tweet_id": str, "classifications": [...], "unsanctioned_flags": [...]},
+            ...
+          ]
+        }
+    with one entry per input tweet. The shape is consumed by
+    `_classify_one_batch_to_by_brand` above, which already handles a
+    missing `unsanctioned_flags` gracefully via `_parse_unsanctioned_flags`.
+
+    This validator is a defense-in-depth check that runs before the
+    parser, so a future DS V4 prompt drift (e.g. a model that wraps
+    results differently or drops the `tweet_id` field) surfaces as a
+    typed `ValueError` with a clear message, rather than a generic
+    KeyError deep in the parser. The fail-soft contract at lines
+    1815-1849 already catches `Exception` and falls back to per-post
+    retries, so a shape-drift exception routes through the same
+    recovery path.
+
+    Args:
+        parsed: the deserialized JSON response from the LLM.
+        expected_count: number of input tweets in the batch (the
+            validator asserts `len(results) == expected_count`).
+
+    Raises:
+        ValueError: with a descriptive message identifying the missing
+            or malformed element. Missing `unsanctioned_flags` is
+            logged at WARNING but does not raise (the existing parser
+            defaults to `[]`).
+    """
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"shape drift: response is {type(parsed).__name__}, expected dict"
+        )
+    if "results" not in parsed:
+        raise ValueError("shape drift: response missing 'results' key")
+    results = parsed["results"]
+    if not isinstance(results, list):
+        raise ValueError(
+            f"shape drift: 'results' is {type(results).__name__}, expected list"
+        )
+    if len(results) != expected_count:
+        raise ValueError(
+            f"shape drift: 'results' has {len(results)} entries, "
+            f"expected {expected_count}"
+        )
+    for i, entry in enumerate(results):
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"shape drift: results[{i}] is {type(entry).__name__}, "
+                f"expected dict"
+            )
+        if not isinstance(entry.get("tweet_id"), str):
+            raise ValueError(
+                f"shape drift: results[{i}].tweet_id is "
+                f"{type(entry.get('tweet_id')).__name__}, expected str"
+            )
+        if not isinstance(entry.get("classifications"), list):
+            raise ValueError(
+                f"shape drift: results[{i}].classifications is "
+                f"{type(entry.get('classifications')).__name__}, expected list"
+            )
+        if "unsanctioned_flags" not in entry:
+            # Log at WARNING but do not raise — the existing parser
+            # defaults to [] via `_parse_unsanctioned_flags` (which
+            # returns [] for non-list input per the helper at line
+            # 1467). This is the documented graceful-default path.
+            logger.warning(
+                "shape drift: results[%d] (tweet_id=%r) missing "
+                "'unsanctioned_flags'; parser will default to []",
+                i, entry.get("tweet_id"),
+            )
+
+
 def classify_batch_pragmatics_full(
     tweets: list[dict[str, Any]],
     brand_registry: list,
@@ -1736,6 +1879,7 @@ def classify_batch_pragmatics_full(
     *,
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
     max_tokens: int = 4096,
+    thinking: "dict | None" = None,
 ) -> list[dict[str, Any]]:
     """U4 (batched): per-post classification across N tweets, one LLM call per batch.
 
@@ -1781,6 +1925,14 @@ def classify_batch_pragmatics_full(
     if anthropic_client is None:
         return [dict(empty) for _ in tweets]
 
+    # Resolve `thinking` default from env: when not explicitly passed
+    # (None), use the env-driven helper. The M3/direct paths resolve to
+    # None so behavior is unchanged. The deepseek path resolves to
+    # {"type": "disabled"} so the reasoning model does not consume the
+    # entire output budget on internal deliberation.
+    if thinking is None:
+        thinking = _resolve_thinking_default()
+
     if brand_registry:
         registry_ids = {b.brand_id for b in brand_registry}
     else:
@@ -1810,7 +1962,8 @@ def classify_batch_pragmatics_full(
         prompt = build_batch_pragmatics_full_prompt(kept)
         try:
             response = _call_signal_with_retry(
-                anthropic_client, prompt, max_tokens=max_tokens,
+                anthropic_client, prompt,
+                max_tokens=max_tokens, thinking=thinking,
             )
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
@@ -1847,19 +2000,24 @@ def classify_batch_pragmatics_full(
                     )
                     results.append(dict(empty))
             continue
-        parsed = response.get("results") if isinstance(response, dict) else None
-        if not isinstance(parsed, list) or len(parsed) != len(kept):
+        # Validate the wire shape BEFORE consuming entries. The validator
+        # raises ValueError on drift, which is caught below by the
+        # fail-soft contract. (The redundant count check that lived here
+        # pre-swap is now subsumed by `_validate_deepseek_response_shape`.)
+        try:
+            _validate_deepseek_response_shape(response, len(kept))
+        except ValueError as shape_exc:
             logger.warning(
-                "classify_batch_pragmatics_full: response has %d entries "
-                "for batch of %d posts; emitting empty for entire batch",
-                len(parsed) if isinstance(parsed, list) else 0,
-                len(kept),
+                "classify_batch_pragmatics_full: %s; emitting empty "
+                "for entire batch of %d posts",
+                shape_exc, len(kept),
             )
             for _ in batch:
                 results.append(dict(empty))
             if on_batch_error is not None:
-                on_batch_error(batch, ValueError("parse failure"))
+                on_batch_error(batch, shape_exc)
             continue
+        parsed = response.get("results")  # validator already proved this is a list
         # Build a tweet_id → entry map so the result list is robust
         # to the LLM emitting them out of order.
         per_id: dict[str, dict[str, Any]] = {}

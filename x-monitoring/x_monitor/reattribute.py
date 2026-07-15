@@ -372,6 +372,14 @@ def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
         MINIMAX_API_TOKEN (the `sk-cp-uh…` token from `~/.env.secrets`)
         and the operator-registered model id (ANTHROPIC_MODEL, typically
         "MiniMax-M2.7"). ANTHROPIC_API_KEY is silently rejected (401).
+      * If ANTHROPIC_BASE_URL contains "deepseek.com", the operator is
+        routing through DeepSeek V4 Pro's Anthropic-compatible endpoint.
+        The endpoint accepts DEEPSEEK_API_TOKEN (or DEEPSEEK_API_KEY) and
+        the model id ANTHROPIC_MODEL (default "deepseek-v4-pro" via
+        `_resolve_signal_model`). The Anthropic SDK call threads
+        `thinking={"type": "disabled"}` automatically (see
+        `_resolve_thinking_default`); the factory itself is identical
+        to the other branches.
       * Otherwise, talk to api.anthropic.com directly using
         ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
 
@@ -384,6 +392,7 @@ def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
     import os
     base_url = os.environ.get("ANTHROPIC_BASE_URL")
     use_minimax_proxy = bool(base_url) and "minimax.io" in base_url
+    use_deepseek = bool(base_url) and "deepseek.com" in base_url
 
     if use_minimax_proxy:
         api_key = os.environ.get("MINIMAX_API_TOKEN")
@@ -391,6 +400,18 @@ def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
             logger.warning(
                 "reattribute: ANTHROPIC_BASE_URL routes through the minimax "
                 "proxy but MINIMAX_API_TOKEN is not set; running without "
+                "signal classification"
+            )
+            return None
+    elif use_deepseek:
+        api_key = (
+            os.environ.get("DEEPSEEK_API_KEY")
+            or os.environ.get("DEEPSEEK_API_TOKEN")
+        )
+        if not api_key:
+            logger.warning(
+                "reattribute: ANTHROPIC_BASE_URL routes through the deepseek "
+                "endpoint but DEEPSEEK_API_KEY is not set; running without "
                 "signal classification"
             )
             return None
