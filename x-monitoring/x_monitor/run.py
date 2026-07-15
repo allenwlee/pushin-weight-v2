@@ -1368,7 +1368,11 @@ class RunPipeline:
                             "brand_id": call.brand_id,
                             "call_kind": call.call_kind,
                             "bucket": call.bucket,
-                            "query_id": synth_q.id,
+                            # Plan 2026-07-15-003 U2: emit the planner's
+                            # A/B/C call_id, not the v1.6 Query stub's
+                            # Q-string id. (U1 keeps the Query stub only
+                            # to satisfy apply_skip_order's type signature.)
+                            "query_id": call.call_id,
                             "query_length": call.query_length,
                             "status": "completed",
                             "n_results": len(items),
