@@ -159,19 +159,28 @@ def _fire_one_batch(
     """Fire one classify_batch_pragmatics_full call against the given client.
 
     Returns ``{"status": str, "wall_clock_s": float, "response_chars": int,
-    "input_tokens": int|None, "exc": Exception|None, "response": Any}``.
+    "input_tokens": int|None, "exc": Exception|None, "response": Any,
+    "batch_error": Exception|None}``.
 
     The timeout is enforced via ThreadPoolExecutor + future.result(timeout=)
-    (KTD4). FakeClaudeClient is supported by importing it from tests, but
-    for production use the probe routes through the real classifier.
+    (KTD4). The `on_batch_error` callback is wired so that when the batched
+    LLM call fails (and the production code falls back to per-post retries),
+    the probe captures the original failure as `batch_error` — the
+    per-post fallback would otherwise mask it as a successful response.
     """
     from x_monitor.attribution import classify_batch_pragmatics_full
+
+    batch_error: list[Exception] = []
+
+    def _on_batch_error(_batch: list, exc: Exception) -> None:
+        batch_error.append(exc)
 
     def _do() -> Any:
         return classify_batch_pragmatics_full(
             tweets=tweets,
             brand_registry=[],
             anthropic_client=client,
+            on_batch_error=_on_batch_error,
         )
 
     started = time.time()
@@ -193,6 +202,11 @@ def _fire_one_batch(
     except Exception as e:  # surface the real exception to the classifier
         exc = e
     wall_clock_s = time.time() - started
+    # If the batch LLM call failed but the per-post fallback returned a
+    # valid list, classify the row by the batch_error, not the (masked)
+    # response.
+    if batch_error and exc is None:
+        exc = batch_error[0]
     status = _classify_status(exc, response)
     return {
         "status": status,
@@ -200,6 +214,7 @@ def _fire_one_batch(
         "response_chars": response_chars,
         "input_tokens": input_tokens,
         "exc": exc,
+        "batch_error": batch_error[0] if batch_error else None,
         "response": response,
     }
 

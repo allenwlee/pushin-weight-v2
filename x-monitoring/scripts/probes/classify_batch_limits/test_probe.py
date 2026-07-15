@@ -223,3 +223,39 @@ def test_missing_api_key_exits_with_clear_message(tmp_path, monkeypatch, capsys)
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert "ANTHROPIC_API_KEY" in err
+
+
+def test_fire_one_batch_surfaces_on_batch_error(monkeypatch):
+    """When the batched LLM call fails but per-post fallback returns
+    a valid list, _fire_one_batch must classify as `unterminated_json`
+    (or similar), not `success`. Regression test for the live
+    batch_size sweep that masked real failures.
+
+    Strategy: monkeypatch classify_batch_pragmatics_full so it fires
+    on_batch_error with an Unterminated-string exception, then returns
+    a valid list (the per-post fallback shape)."""
+    probe = _import_probe()
+
+    fake_exc = ValueError(
+        'Unterminated string starting at: line 1 column 3345 (char 3344)'
+    )
+    fake_response = [{"by_brand": {}, "unsanctioned_flags": []}]
+
+    def _fake_classify(tweets, brand_registry, anthropic_client, **kwargs):
+        on_err = kwargs.get("on_batch_error")
+        if on_err is not None:
+            on_err(tweets, fake_exc)
+        return fake_response
+
+    # Patch the function imported into probe's namespace.
+    import x_monitor.attribution as _attr
+    monkeypatch.setattr(_attr, "classify_batch_pragmatics_full", _fake_classify)
+
+    fc = probe._FakeClient()
+    result = probe._fire_one_batch(
+        tweets=[{"tweet_id": "t1", "text": "x", "brand_ids": ["minimax"]}],
+        max_tokens=1024, timeout=5.0, client=fc,
+    )
+    assert result["status"] == "unterminated_json"
+    assert result["batch_error"] is fake_exc
+    assert result["exc"] is fake_exc

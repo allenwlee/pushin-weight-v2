@@ -96,6 +96,54 @@ I deliberately did NOT run the live versions of these axes:
   focused diagnostic session when the other axes have narrowed the
   search space.
 
+## Run 1 — live `batch_size` sweep (2026-07-15T04:38Z)
+
+Ran live `batch_size ∈ [1, 5, 10, 15]` with `--timeout=30` and a fix
+to surface the production classifier's `on_batch_error` callback
+(previously masked by the per-post fallback). Result:
+
+```
+=== batch_size ===
+value | status  | wall_clock_s | input_tokens | response_chars
+1     | success | 5.076        | 60           | 352
+5     | success | 5.806        | 300          | 1926
+10    | timeout | 56.909       | None         | 0
+15    | timeout | 59.115       | None         | 0
+
+VERDICT: limit hit: batch_size=10 -> timeout
+```
+
+JSON: `data/runs/probe_20260715T043808Z.json`.
+
+**Reading:** the production batch_size (20) is past the ceiling.
+batch_size=1 and batch_size=5 round-trip in 5-6 s with full JSON
+responses (the classifier path works at low cardinality). At
+batch_size=10 the batch LLM call fails after 3 retries with
+"Unterminated string" at column 3242-3345 — the same shape observed
+in this morning's 20-post production run (column 3831 was just
+scaled up with more posts). The per-post fallback would have masked
+this as success without the `on_batch_error` fix.
+
+**Probe-internal fix landed for this run:** wired
+`classify_batch_pragmatics_full`'s `on_batch_error` callback into
+`_fire_one_batch` so when the batched call fails, the probe
+classifies by the original batch exception (not the masked
+per-post-fallback response). Added a regression test
+(`test_fire_one_batch_surfaces_on_batch_error`); 20/20 tests pass.
+
+**What's left to answer:**
+
+- Is the limit actually at batch_size=10, or somewhere between 5 and
+  10? A finer sweep (`[6, 7, 8, 9, 10]`) would localize it.
+- Is the ceiling response-side (`max_tokens=1024` truncating the
+  batch JSON) or request-side (the prompt exceeding some
+  gateway cap)? Run `max_tokens ∈ [2048, 4096]` next — if
+  batch_size=10 starts succeeding at `max_tokens=2048`, the
+  response cap was the limit.
+- Lowering `_CLASSIFY_BATCH_SIZE` from 20 to 5 or 10 is now the
+  immediate production fix. The probe's verdict line is the
+  artifact.
+
 ## Probe-internal issues surfaced (not blocking)
 
 1. **`sweep_cache_state` inter-call sleep interacts badly with
