@@ -181,6 +181,7 @@ def _fire_one_batch(
             brand_registry=[],
             anthropic_client=client,
             on_batch_error=_on_batch_error,
+            max_tokens=max_tokens,
         )
 
     started = time.time()

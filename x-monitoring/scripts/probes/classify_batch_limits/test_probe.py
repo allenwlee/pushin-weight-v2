@@ -259,3 +259,32 @@ def test_fire_one_batch_surfaces_on_batch_error(monkeypatch):
     assert result["status"] == "unterminated_json"
     assert result["batch_error"] is fake_exc
     assert result["exc"] is fake_exc
+
+
+def test_fire_one_batch_threads_max_tokens_to_classify(monkeypatch):
+    """Pin that `_fire_one_batch` forwards `max_tokens` into
+    `classify_batch_pragmatics_full`. Without this, the A3 axis
+    (`sweep_max_tokens`) is a no-op — every value sends max_tokens=1024
+    to the SDK regardless of what the probe asked for, which is exactly
+    what masked the 2026-07-15 batch-truncation bug.
+    """
+    probe = _import_probe()
+
+    captured: dict = {}
+
+    def _fake_classify(tweets, brand_registry, anthropic_client, **kwargs):
+        captured.update(kwargs)
+        return [{"by_brand": {}, "unsanctioned_flags": []}]
+
+    import x_monitor.attribution as _attr
+    monkeypatch.setattr(_attr, "classify_batch_pragmatics_full", _fake_classify)
+
+    fc = probe._FakeClient()
+    probe._fire_one_batch(
+        tweets=[{"tweet_id": "t1", "text": "x", "brand_ids": ["minimax"]}],
+        max_tokens=4096, timeout=5.0, client=fc,
+    )
+    assert captured.get("max_tokens") == 4096, (
+        f"max_tokens not threaded through to classify_batch_pragmatics_full; "
+        f"got kwargs={captured!r}"
+    )

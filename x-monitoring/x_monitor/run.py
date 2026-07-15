@@ -617,6 +617,12 @@ def _run_post_fetch(
     # ~11 KB of rules + examples across the batch, and across cycles.
     # Result shape is index-aligned with `kept_posts` so the loop below
     # can range-index without re-keying.
+    #
+    # NOTE: pass explicit max_tokens=4096 (M3.0 via proxy needs headroom
+    # for the ~3000-token structured JSON response of a 20-post batch;
+    # the 1M context window is input-side only). See
+    # docs/debug/2026-07-15-max-tokens-not-threaded-into-classify-batch.md
+    # for the truncation analysis.
     t0 = time.monotonic()
     discourse_rows: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
@@ -639,6 +645,7 @@ def _run_post_fetch(
             batch_inputs,
             brand_registry_rows,
             anthropic_client,
+            max_tokens=4096,
         )
     except Exception as e:
         log.warning(

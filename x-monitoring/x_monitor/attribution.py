@@ -916,14 +916,23 @@ def _parse_signal_response(
 def _call_signal_with_retry(
     client: ClaudeClient,
     prompt: str,
+    *,
+    max_tokens: int = 4096,
 ) -> dict[str, Any]:
-    """Call the LLM with exponential backoff (mirrors translator)."""
+    """Call the LLM with exponential backoff (mirrors translator).
+
+    `max_tokens` defaults to 4096. This is enough for single-post paths
+    (~250-400 output tokens) and for the batched path at batch_size=20
+    (~3000 tokens of structured JSON output). Lower values (the old 1024
+    default) cause mid-JSON truncation ("Unterminated string" at ~col 32xx)
+    exactly as seen in production on 2026-07-15 for N=20 batches.
+    """
     last_exc: Exception | None = None
     for attempt in range(_MAX_RETRIES):
         try:
             return client.messages_create(
                 model=_SIGNAL_MODEL,
-                max_tokens=1024,
+                max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as e:
@@ -1726,6 +1735,7 @@ def classify_batch_pragmatics_full(
     anthropic_client: "ClaudeClient | None" = None,
     *,
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
+    max_tokens: int = 4096,
 ) -> list[dict[str, Any]]:
     """U4 (batched): per-post classification across N tweets, one LLM call per batch.
 
@@ -1753,6 +1763,10 @@ def classify_batch_pragmatics_full(
             when the LLM call raised (after retries exhausted) OR the
             response failed to parse. Per-tweet failure is isolated — the
             rest of the run continues with empty-shape entries.
+        max_tokens: output token budget for the LLM generation. Default
+            4096 (covers N=20 structured JSON ~3000 tokens). Must be
+            high enough or the response truncates mid-JSON (the
+            "Unterminated string" failure mode).
 
     Returns:
         list of length `len(tweets)`, index-aligned. Each entry is
@@ -1795,7 +1809,9 @@ def classify_batch_pragmatics_full(
             continue
         prompt = build_batch_pragmatics_full_prompt(kept)
         try:
-            response = _call_signal_with_retry(anthropic_client, prompt)
+            response = _call_signal_with_retry(
+                anthropic_client, prompt, max_tokens=max_tokens,
+            )
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
             # fails to classify, fall back to per-post retries so a
