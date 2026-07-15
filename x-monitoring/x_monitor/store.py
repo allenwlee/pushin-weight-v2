@@ -1692,6 +1692,11 @@ class Store:
             (post_id, brand_id, post_type, sentiment),
         )
         self._conn.commit()
+        # Plan 2026-07-15-003 U3: bump the run-level classification
+        # counter so the post-fetch path's writes count toward
+        # `totals.n_classifications_written`. Mirror the inline writer
+        # at the legacy `insert_posts` site.
+        self._classifications_written += 1
 
     # --- U1: posts_brands_discourse helpers (migration 025) ----------------
     #

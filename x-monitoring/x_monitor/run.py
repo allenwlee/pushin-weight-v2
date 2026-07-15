@@ -1312,8 +1312,13 @@ class RunPipeline:
                         if _tid and _tid not in cycle_kept_ids:
                             cycle_kept.append(_it)
                             cycle_kept_ids.add(_tid)
-                    summary["totals"]["n_classifications_written"] += store._classifications_written
-                    summary["totals"]["n_classifications_dropped"] += store._classifications_dropped
+                    # Plan 2026-07-15-003 U3: n_classifications_written is
+                    # read once after _run_post_fetch completes (further
+                    # below), so post-fetch writes via
+                    # `insert_posts_brands_signals` count toward the
+                    # total. Do NOT accumulate it here — the per-cycle
+                    # value is meaningless since post-fetch runs after
+                    # the loop.
                     _t(f"call.{call.brand_id}.{call.call_kind}.{call.bucket or 'acct'}.filter+store", _t_filter)
 
                     log.info(
@@ -1429,6 +1434,16 @@ class RunPipeline:
                             "error"
                         ] = str(e)
                     _t("post_fetch", _t_pf)
+                    # Plan 2026-07-15-003 U3: read the final classification
+                    # counters once after _run_post_fetch completes (both
+                    # the inline `insert_posts` writer at store.py:780 and
+                    # `insert_posts_brands_signals` bump them).
+                    summary["totals"]["n_classifications_written"] = (
+                        store._classifications_written
+                    )
+                    summary["totals"]["n_classifications_dropped"] = (
+                        store._classifications_dropped
+                    )
 
                 # v1.9 (2026-06-22): quote-tweet capture. Runs after the
                 # main harvest so newly-attributed posts are in the DB.
