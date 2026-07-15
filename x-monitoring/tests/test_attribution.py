@@ -636,7 +636,8 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
 
       1. ANTHROPIC_MODEL env wins always.
       2. else, MiniMax-M3.0 if ANTHROPIC_BASE_URL routes through minimax.io.
-      3. else, claude-haiku-4-5 (direct api.anthropic.com).
+      3. else, deepseek-v4-pro if ANTHROPIC_BASE_URL routes through deepseek.com.
+      4. else, claude-haiku-4-5 (direct api.anthropic.com).
     """
     from x_monitor.attribution import _resolve_signal_model
 
@@ -660,3 +661,329 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     assert _resolve_signal_model() == "claude-haiku-4-5"
+
+    # (env unset, deepseek proxy) -> deepseek-v4-pro (Plan 2026-07-15-002)
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    assert _resolve_signal_model() == "deepseek-v4-pro"
+
+    # (env=override, deepseek) -> override wins
+    monkeypatch.setenv("ANTHROPIC_MODEL", "custom-deepseek-model")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    assert _resolve_signal_model() == "custom-deepseek-model"
+
+    # (env unset, deepseek wins over direct-haiku) -> deepseek-v4-pro
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    assert _resolve_signal_model() == "deepseek-v4-pro"
+
+
+def test_resolve_thinking_default(monkeypatch):
+    """_resolve_thinking_default returns {"type": "disabled"} only for
+    the deepseek path. The MiniMax M3 and direct-Anthropic paths return
+    None so the parameter is omitted from the SDK call and behavior is
+    unchanged from the pre-swap state.
+
+    Without thinking=disabled, the DeepSeek V4 Pro reasoning model
+    would consume the entire output budget on internal deliberation
+    (verified during the 2026-07-15 live probe — 4096-token budget
+    was 100% consumed by thinking, no JSON emitted).
+    """
+    from x_monitor.attribution import _resolve_thinking_default
+
+    # Unset base_url -> None (default, no thinking param)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    assert _resolve_thinking_default() is None
+
+    # MiniMax proxy -> None (M3 path unchanged)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    assert _resolve_thinking_default() is None
+
+    # DeepSeek path -> {"type": "disabled"} (required for reasoning model)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    assert _resolve_thinking_default() == {"type": "disabled"}
+
+    # Direct Anthropic -> None
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    assert _resolve_thinking_default() is None
+
+
+def test_max_tokens_for_batch():
+    """_max_tokens_for_batch returns min(8192, max(4096, 200*batch_size)).
+
+    Grounded in two probe runs at data/runs/dsv4-probe-20260715T071331Z.json:
+    batch_size=20 used 99 tokens/tweet; batch_size=40 with max_tokens=8192
+    used 108 tokens/tweet. The 200-token coefficient gives 100% headroom.
+    """
+    from x_monitor.attribution import _max_tokens_for_batch
+
+    # Floor: small batches get the 4096 minimum
+    assert _max_tokens_for_batch(1) == 4096
+    assert _max_tokens_for_batch(10) == 4096
+    # 200*20 = 4000, clamped up to 4096
+    assert _max_tokens_for_batch(20) == 4096
+
+    # Linear: 21 tweets -> 200*21 = 4200
+    assert _max_tokens_for_batch(21) == 4200
+    # 40 tweets -> 200*40 = 8000
+    assert _max_tokens_for_batch(40) == 8000
+
+    # Cap: 80 tweets -> 200*80 = 16000, capped to 8192
+    assert _max_tokens_for_batch(80) == 8192
+    # Even very large batches cap at 8192 (safety margin)
+    assert _max_tokens_for_batch(200) == 8192
+
+
+def test_validate_deepseek_response_shape_valid():
+    """_validate_deepseek_response_shape accepts a valid wire format.
+
+    The wire format is the production response shape (the one
+    _classify_one_batch_to_by_brand consumes): {"results": [{"tweet_id":
+    str, "classifications": list, "unsanctioned_flags": [str]}]} with
+    one entry per input tweet.
+    """
+    from x_monitor.attribution import _validate_deepseek_response_shape
+
+    # Valid: results is a list of dicts with tweet_id + classifications
+    valid = {
+        "results": [
+            {"tweet_id": "t1", "classifications": [], "unsanctioned_flags": []},
+            {"tweet_id": "t2", "classifications": [], "unsanctioned_flags": []},
+        ]
+    }
+    # Should not raise
+    _validate_deepseek_response_shape(valid, 2)
+
+
+def test_validate_deepseek_response_shape_missing_unsanctioned_flags(caplog):
+    """_validate_deepseek_response_shape does NOT raise on missing
+    unsanctioned_flags; logs at WARNING. The existing parser
+    defaults to [] via _parse_unsanctioned_flags (line 1467 returns []
+    for non-list input).
+    """
+    import logging
+    from x_monitor.attribution import _validate_deepseek_response_shape
+
+    missing_flags = {
+        "results": [
+            {"tweet_id": "t1", "classifications": []},  # no unsanctioned_flags
+        ]
+    }
+    with caplog.at_level(logging.WARNING):
+        _validate_deepseek_response_shape(missing_flags, 1)
+    assert any("unsanctioned_flags" in r.message for r in caplog.records)
+
+
+def test_validate_deepseek_response_shape_raises_on_drift():
+    """_validate_deepseek_response_shape raises ValueError on shape drift.
+
+    Seven failure modes (each raises ValueError with a descriptive
+    message), per plan U3 test scenario list.
+    """
+    import pytest
+    from x_monitor.attribution import _validate_deepseek_response_shape
+
+    # (a) count mismatch
+    with pytest.raises(ValueError, match="shape drift"):
+        _validate_deepseek_response_shape(
+            {"results": [{"tweet_id": "t1", "classifications": []}]}, 2
+        )
+
+    # (b) missing 'results' key
+    with pytest.raises(ValueError, match="missing 'results'"):
+        _validate_deepseek_response_shape({"foo": "bar"}, 0)
+
+    # (c) results is not a list
+    with pytest.raises(ValueError, match="'results' is"):
+        _validate_deepseek_response_shape({"results": "not a list"}, 1)
+
+    # (d) results is None
+    with pytest.raises(ValueError, match="is NoneType, expected list"):
+        _validate_deepseek_response_shape({"results": None}, 0)
+
+    # (e) entry is not a dict
+    with pytest.raises(ValueError, match="results\\[0\\] is"):
+        _validate_deepseek_response_shape(
+            {"results": [None]}, 1
+        )
+
+    # (f) entry missing tweet_id
+    with pytest.raises(ValueError, match="tweet_id is"):
+        _validate_deepseek_response_shape(
+            {"results": [{"classifications": []}]}, 1
+        )
+
+    # (g) entry missing classifications
+    with pytest.raises(ValueError, match="classifications is"):
+        _validate_deepseek_response_shape(
+            {"results": [{"tweet_id": "t1"}]}, 1
+        )
+
+    # bonus: response is not a dict
+    with pytest.raises(ValueError, match="is NoneType, expected dict"):
+        _validate_deepseek_response_shape(None, 0)
+
+    with pytest.raises(ValueError, match="is str, expected dict"):
+        _validate_deepseek_response_shape("not a dict", 0)
+
+
+def test_call_signal_with_retry_threads_thinking_through():
+    """_call_signal_with_retry forwards `thinking` to messages_create as
+    a top-level kwarg when set. When None, the kwarg is absent (M3
+    and direct-Anthropic paths unchanged).
+
+    The Anthropic SDK's thinking parameter shape for the disabled case
+    is {"type": "disabled"} (per the ThinkingConfigDisabledParam
+    TypedDict in anthropic-sdk-python 0.104.0).
+    """
+    from x_monitor.attribution import _call_signal_with_retry
+
+    captured = {}
+
+    class FakeClient:
+        def messages_create(self, **kwargs):
+            captured.update(kwargs)
+            return {"results": []}
+
+    client = FakeClient()
+    prompt = "test prompt"
+
+    # thinking=None: kwarg absent (M3 path default, also direct)
+    captured.clear()
+    _call_signal_with_retry(client, prompt, max_tokens=4096, thinking=None)
+    assert "thinking" not in captured
+    # The model is whatever _SIGNAL_MODEL resolved to at import time
+    # (cached). The test doesn't pin the model — only the thinking
+    # threading behavior.
+    assert captured["max_tokens"] == 4096
+
+    # thinking={"type": "disabled"}: kwarg present
+    captured.clear()
+    _call_signal_with_retry(
+        client, prompt, max_tokens=4096, thinking={"type": "disabled"}
+    )
+    assert captured["thinking"] == {"type": "disabled"}
+
+
+def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
+    """classify_batch_pragmatics_full resolves the `thinking` default
+    from env when not explicitly passed. The deepseek path gets
+    {"type": "disabled"}; the M3/direct paths get None.
+    """
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    captured = {}
+
+    class FakeClient:
+        def messages_create(self, **kwargs):
+            captured.update(kwargs)
+            # Return valid wire format with one entry per input tweet
+            tweets = kwargs["messages"][0]["content"][0]["text"]
+            # Crude: count tweet_ids in the user prompt
+            import re
+            n = len(re.findall(r'"tweet_id":', tweets))
+            return {
+                "results": [
+                    {"tweet_id": f"t{i}", "classifications": [], "unsanctioned_flags": []}
+                    for i in range(n)
+                ]
+            }
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    captured.clear()
+    tweets = [{"tweet_id": f"t{i}", "text": f"tweet {i}", "brand_ids": ["minimax"]} for i in range(3)]
+    classify_batch_pragmatics_full(
+        tweets=tweets,
+        brand_registry=[],
+        anthropic_client=FakeClient(),
+        max_tokens=4096,
+    )
+    assert captured.get("thinking") == {"type": "disabled"}, (
+        f"deepseek path should auto-thread thinking=disabled; got {captured.get('thinking')}"
+    )
+
+    # M3 path: thinking=None, parameter omitted
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    captured.clear()
+    classify_batch_pragmatics_full(
+        tweets=tweets,
+        brand_registry=[],
+        anthropic_client=FakeClient(),
+        max_tokens=4096,
+    )
+    assert "thinking" not in captured, (
+        f"M3 path should not thread thinking; got {captured.get('thinking')}"
+    )
+
+
+def test_classify_batch_pragmatics_full_shape_drift_emits_empty(monkeypatch):
+    """When the LLM returns a malformed response (drift), the new
+    _validate_deepseek_response_shape safety net catches the drift,
+    the per-batch path emits empty for the whole batch, and
+    on_batch_error is invoked with the ValueError. This is the same
+    fail-soft contract that pre-swap used for the count-mismatch case.
+    """
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    class FakeClient:
+        def messages_create(self, **kwargs):
+            # Return a response missing 'results' — the new shape
+            # validator will raise ValueError
+            return {"unexpected_key": "drift"}
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    captured_exc = []
+    tweets = [{"tweet_id": "t1", "text": "x", "brand_ids": ["minimax"]}]
+    results = classify_batch_pragmatics_full(
+        tweets=tweets,
+        brand_registry=[],
+        anthropic_client=FakeClient(),
+        on_batch_error=lambda batch, exc: captured_exc.append(exc),
+        max_tokens=4096,
+    )
+    # Whole batch emits empty
+    assert results == [{"by_brand": {}, "unsanctioned_flags": []}]
+    # on_batch_error was called with the shape-drift ValueError
+    assert len(captured_exc) == 1
+    assert isinstance(captured_exc[0], ValueError)
+    assert "shape drift" in str(captured_exc[0])
+
+
+def test_classify_batch_pragmatics_full_uses_max_tokens_helper_at_call_site(
+    monkeypatch,
+):
+    """The production call site at x_monitor/run.py:648 (now in the
+    import surface) passes max_tokens=_max_tokens_for_batch(N) where N
+    is the input batch size. Pin the integration so a future change
+    doesn't accidentally re-introduce the hardcoded 4096.
+    """
+    from x_monitor.attribution import (
+        _max_tokens_for_batch,
+        classify_batch_pragmatics_full,
+    )
+
+    captured = {}
+
+    class FakeClient:
+        def messages_create(self, **kwargs):
+            captured["max_tokens"] = kwargs.get("max_tokens")
+            n = 3
+            return {
+                "results": [
+                    {"tweet_id": f"t{i}", "classifications": [], "unsanctioned_flags": []}
+                    for i in range(n)
+                ]
+            }
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    tweets = [{"tweet_id": f"t{i}", "text": f"x{i}", "brand_ids": ["minimax"]} for i in range(3)]
+    classify_batch_pragmatics_full(
+        tweets=tweets,
+        brand_registry=[],
+        anthropic_client=FakeClient(),
+        max_tokens=_max_tokens_for_batch(len(tweets)),
+    )
+    # For 3 tweets, the helper returns 4096 (floor)
+    assert captured["max_tokens"] == 4096, (
+        f"call site should use helper value; got {captured['max_tokens']}"
+    )

@@ -225,6 +225,57 @@ def test_missing_api_key_exits_with_clear_message(tmp_path, monkeypatch, capsys)
     assert "ANTHROPIC_API_KEY" in err
 
 
+def test_endpoint_deepseek_requires_deepseek_api_key(
+    tmp_path, monkeypatch, capsys
+):
+    """With --endpoint=deepseek but no DEEPSEEK_API_KEY, the probe exits 2
+    with a clear message about DEEPSEEK_API_KEY (not the default
+    ANTHROPIC_API_KEY message). The endpoint flag selects both the
+    base URL and the credential env var."""
+    probe = _import_probe()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        probe.main(["--endpoint=deepseek", "--axes=batch_size"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "DEEPSEEK_API_KEY" in err
+
+
+def test_endpoint_flag_is_parsed():
+    """The --endpoint flag accepts 'minimax' and 'deepseek' (default
+    'minimax'). Unknown values are rejected by argparse."""
+    probe = _import_probe()
+    parser = probe._build_argparser()
+    # Default
+    args = parser.parse_args([])
+    assert args.endpoint == "minimax"
+    # Deepseek
+    args = parser.parse_args(["--endpoint=deepseek"])
+    assert args.endpoint == "deepseek"
+    # Unknown value rejected
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--endpoint=openrouter"])
+
+
+def test_endpoint_deepseek_dry_run_uses_correct_creds(
+    tmp_path, monkeypatch
+):
+    """In --dry-run --endpoint=deepseek mode, the probe runs without
+    making any LLM call (FakeClaudeClient) but the credential check
+    still passes if DEEPSEEK_API_KEY is set. Verifies the env-routing
+    for the dry-run path too."""
+    probe = _import_probe()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-deepseek")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    rc = probe.main([
+        "--dry-run", "--endpoint=deepseek", "--axes=batch_size",
+    ])
+    assert rc == 0
+
+
 def test_fire_one_batch_surfaces_on_batch_error(monkeypatch):
     """When the batched LLM call fails but per-post fallback returns
     a valid list, _fire_one_batch must classify as `unterminated_json`

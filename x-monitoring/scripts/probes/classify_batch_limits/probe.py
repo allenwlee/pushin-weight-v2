@@ -82,13 +82,25 @@ VALID_AXES = {
 # --- helpers --------------------------------------------------------------
 
 
-def _have_api_creds() -> tuple[bool, str | None]:
-    """ANTHROPIC_API_KEY is the only required credential (KTD1, R7).
+def _have_api_creds(endpoint: str = "minimax") -> tuple[bool, str | None]:
+    """Return whether the env has the right credential for the chosen endpoint.
 
-    The probe runs against the same MiniMax proxy the production pipeline
-    uses; the proxy is selected via ANTHROPIC_BASE_URL by x_monitor.attribution
-    at module load, so we don't set it here.
+    For 'minimax' (the default), the credential is ANTHROPIC_API_KEY (the
+    same credential the production pipeline uses, routed through the
+    minimax proxy at api.minimax.io/anthropic).
+
+    For 'deepseek', the credential is DEEPSEEK_API_KEY (routed through
+    api.deepseek.com/anthropic). The probe is endpoint-aware so the same
+    script can validate either provider's behavior; the production
+    classifier (x_monitor.attribution) auto-resolves the endpoint from
+    ANTHROPIC_BASE_URL, so the probe's endpoint flag is a one-off
+    override for testing.
     """
+    if endpoint == "deepseek":
+        v = os.environ.get("DEEPSEEK_API_KEY")
+        if v:
+            return True, v
+        return False, None
     v = os.environ.get("ANTHROPIC_API_KEY")
     if v:
         return True, v
@@ -532,6 +544,17 @@ def _build_argparser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="Build every prompt and report len/estimated tokens, never fire any LLM call.",
     )
+    p.add_argument(
+        "--endpoint", default="minimax",
+        choices=("minimax", "deepseek"),
+        help=(
+            "LLM endpoint to probe against. 'minimax' (default) uses the "
+            "production MiniMax M3 path via api.minimax.io/anthropic. "
+            "'deepseek' uses DeepSeek V4 Pro via api.deepseek.com/anthropic "
+            "(requires DEEPSEEK_API_KEY). The endpoint flag selects both the "
+            "base URL and the credential env var."
+        ),
+    )
     return p
 
 
@@ -547,10 +570,14 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_argparser().parse_args(argv)
     axes = _parse_axes(args.axes)
 
-    have_creds, _key = _have_api_creds()
+    have_creds, _key = _have_api_creds(args.endpoint)
     if not args.dry_run and not have_creds:
+        cred_name = (
+            "DEEPSEEK_API_KEY" if args.endpoint == "deepseek"
+            else "ANTHROPIC_API_KEY"
+        )
         print(
-            "missing ANTHROPIC_API_KEY — set it in the environment "
+            f"missing {cred_name} — set it in the environment "
             "(see ~/.env.secrets) or pass --dry-run to skip live calls.",
             file=sys.stderr,
         )
@@ -565,13 +592,20 @@ def main(argv: list[str] | None = None) -> int:
         client: Any = _FakeClient()
     else:
         from x_monitor.attribution import AnthropicClaudeClient as _RealClient
-        client = _RealClient()
+        if args.endpoint == "deepseek":
+            client = _RealClient(
+                api_key=os.environ["DEEPSEEK_API_KEY"],
+                base_url="https://api.deepseek.com/anthropic",
+            )
+        else:
+            client = _RealClient()
 
     # Probe entry: dispatch each axis to its sweep function.
     print(f"axes: {axes}")
     print(f"dry_run: {args.dry_run}")
     print(f"timeout: {args.timeout}s")
     print(f"batch_size: {args.batch_size}")
+    print(f"endpoint: {args.endpoint}")
     print()
 
     all_rows: dict[str, list[dict[str, Any]]] = {}
