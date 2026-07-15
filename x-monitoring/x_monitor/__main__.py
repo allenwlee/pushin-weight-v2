@@ -1167,7 +1167,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="Run the daily harvest")
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--models", help="comma-separated brand_id filter")
-    p_run.add_argument("--queries", help="comma-separated query_id filter (Q1..Q6)")
+    p_run.add_argument("--queries", help="comma-separated query_id filter (A, B1, B2, B3, C1, C2)")
     # Plan 2026-07-13-001 (live_a_z_populate): per-call result cap
     # and a forced-no-skip toggle for the smoketest-style 6-call
     # small-batch runs. Default None / False preserves the daily
