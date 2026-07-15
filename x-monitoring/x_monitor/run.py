@@ -1373,10 +1373,17 @@ class RunPipeline:
                         # SDK at module load (offline / no-key paths
                         # still work via _run_post_fetch's no-client
                         # short-circuit).
-                        from x_monitor.translator import (
-                            AnthropicClaudeClient,
+                        # Use the env-driven factory so the classifier
+                        # respects ANTHROPIC_BASE_URL /
+                        # X_MONITOR_CLASSIFIER_BASE_URL / DEEPSEEK_API_KEY
+                        # routing. Constructing AnthropicClaudeClient()
+                        # bare here would route to api.anthropic.com via
+                        # the SDK's default (ANTHROPIC_API_KEY), bypassing
+                        # the operator's proxy / DeepSeek override.
+                        from x_monitor.reattribute import (
+                            build_anthropic_client_from_env,
                         )
-                        anthropic_client = AnthropicClaudeClient()
+                        anthropic_client = build_anthropic_client_from_env()
                         # brand_registry_rows from the open Store;
                         # brand_tokens from the cycle's per-model map.
                         pf_counters = _run_post_fetch(
