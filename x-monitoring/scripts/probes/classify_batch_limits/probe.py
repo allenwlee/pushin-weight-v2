@@ -216,11 +216,274 @@ def _print_table(headers: list[str], rows: list[list[str]]) -> None:
 
 
 def _verdict_line(axis: str, rows: list[dict[str, Any]]) -> str | None:
-    """Return the smallest-axis-value-that-failed verdict, or None if all green."""
+    """Return the smallest-axis-value-that-failed verdict, or None if all green.
+
+    In --dry-run mode every row is `status=dry_run`, which is not a failure —
+    the verdict is suppressed.
+    """
     for r in rows:
-        if r["status"] != "success":
-            return f"limit hit: {axis}={r['value']} -> {r['status']}"
+        s = r["status"]
+        if s == "success" or s == "dry_run":
+            continue
+        return f"limit hit: {axis}={r['value']} -> {s}"
     return None
+
+
+# --- U2: per-axis sweeps --------------------------------------------------
+
+
+def sweep_batch_size(
+    client: Any,
+    base_batch_size: int,
+    timeout: float,
+    brand_ids: list[str],
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    """A1 — vary n_posts at default text length."""
+    rows: list[dict[str, Any]] = []
+    for n_posts in BATCH_SIZE_VALUES:
+        if dry_run:
+            tweets = _build_synthetic_tweets(n_posts, brand_ids, text_len=240)
+            rows.append({
+                "value": str(n_posts),
+                "status": "dry_run",
+                "wall_clock_s": 0.0,
+                "response_chars": 0,
+                "input_tokens": sum(len(t["text"]) for t in tweets) // 4,
+            })
+            continue
+        tweets = _build_synthetic_tweets(n_posts, brand_ids, text_len=240)
+        result = _fire_one_batch(tweets, max_tokens=1024, timeout=timeout, client=client)
+        rows.append({
+            "value": str(n_posts),
+            "status": result["status"],
+            "wall_clock_s": round(result["wall_clock_s"], 3),
+            "response_chars": result["response_chars"],
+            "input_tokens": result["input_tokens"],
+        })
+    return rows
+
+
+def sweep_max_tokens(
+    client: Any,
+    base_batch_size: int,
+    timeout: float,
+    brand_ids: list[str],
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    """A3 — vary max_tokens at fixed batch_size=base_batch_size (production value)."""
+    rows: list[dict[str, Any]] = []
+    for max_tokens in MAX_TOKENS_VALUES:
+        if dry_run:
+            rows.append({
+                "value": str(max_tokens),
+                "status": "dry_run",
+                "wall_clock_s": 0.0,
+                "response_chars": 0,
+                "input_tokens": None,
+            })
+            continue
+        tweets = _build_synthetic_tweets(base_batch_size, brand_ids, text_len=240)
+        result = _fire_one_batch(tweets, max_tokens=max_tokens, timeout=timeout, client=client)
+        rows.append({
+            "value": str(max_tokens),
+            "status": result["status"],
+            "wall_clock_s": round(result["wall_clock_s"], 3),
+            "response_chars": result["response_chars"],
+            "input_tokens": result["input_tokens"],
+        })
+    return rows
+
+
+def sweep_input_tokens(
+    client: Any,
+    base_batch_size: int,
+    timeout: float,
+    brand_ids: list[str],
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    """A2 — vary text length at fixed batch_size=base_batch_size."""
+    rows: list[dict[str, Any]] = []
+    for text_len in INPUT_TOKEN_VALUES:
+        if dry_run:
+            tweets = _build_synthetic_tweets(base_batch_size, brand_ids, text_len=text_len)
+            rows.append({
+                "value": str(text_len),
+                "status": "dry_run",
+                "wall_clock_s": 0.0,
+                "response_chars": 0,
+                "input_tokens": sum(len(t["text"]) for t in tweets) // 4,
+            })
+            continue
+        tweets = _build_synthetic_tweets(base_batch_size, brand_ids, text_len=text_len)
+        result = _fire_one_batch(tweets, max_tokens=1024, timeout=timeout, client=client)
+        rows.append({
+            "value": str(text_len),
+            "status": result["status"],
+            "wall_clock_s": round(result["wall_clock_s"], 3),
+            "response_chars": result["response_chars"],
+            "input_tokens": result["input_tokens"],
+        })
+    return rows
+
+
+def sweep_rpm(
+    client: Any,
+    base_batch_size: int,
+    timeout: float,
+    brand_ids: list[str],
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    """A4 — serial request rate; fire for RPM_DURATION_SECONDS per row."""
+    rows: list[dict[str, Any]] = []
+    for target_rpm in RPM_VALUES:
+        if dry_run:
+            rows.append({
+                "value": str(target_rpm),
+                "status": "dry_run",
+                "wall_clock_s": 0.0,
+                "achieved_rpm": 0.0,
+                "rate_limited_count": 0,
+            })
+            continue
+        tweets = _build_synthetic_tweets(base_batch_size, brand_ids, text_len=240)
+        interval = 60.0 / target_rpm
+        started = time.time()
+        calls = 0
+        rate_limited = 0
+        while time.time() - started < RPM_DURATION_SECONDS:
+            result = _fire_one_batch(tweets, max_tokens=1024, timeout=timeout, client=client)
+            calls += 1
+            if result["status"] == "rate_limited":
+                rate_limited += 1
+            time.sleep(max(0.0, interval - result["wall_clock_s"]))
+        wall_clock_s = time.time() - started
+        achieved_rpm = round(calls / wall_clock_s * 60.0, 1) if wall_clock_s > 0 else 0.0
+        rows.append({
+            "value": str(target_rpm),
+            "status": "rate_limited" if rate_limited > 0 else "success",
+            "wall_clock_s": round(wall_clock_s, 3),
+            "achieved_rpm": achieved_rpm,
+            "rate_limited_count": rate_limited,
+        })
+    return rows
+
+
+def sweep_cache_state(
+    client: Any,
+    base_batch_size: int,
+    timeout: float,
+    brand_ids: list[str],
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    """A5 — fire 3 consecutive calls at batch_size=1 with 30s gaps.
+
+    Anthropic's prompt-cache TTL is 5 min, so each call should still
+    hit cache (read) — the first fresh-process call writes the cache.
+    """
+    rows: list[dict[str, Any]] = []
+    for i in range(3):
+        if dry_run:
+            rows.append({
+                "value": f"call_{i + 1}",
+                "status": "dry_run",
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+            })
+            continue
+        tweets = _build_synthetic_tweets(1, brand_ids, text_len=240)
+        result = _fire_one_batch(tweets, max_tokens=1024, timeout=timeout, client=client)
+        rows.append({
+            "value": f"call_{i + 1}",
+            "status": result["status"],
+            "wall_clock_s": round(result["wall_clock_s"], 3),
+            "cache_creation_input_tokens": 0,  # usage not surfaced via batched path
+            "cache_read_input_tokens": 0,
+        })
+        if i < 2 and not dry_run:
+            time.sleep(30.0)  # keep cache warm across calls
+    return rows
+
+
+def sweep_concurrency(
+    client: Any,
+    base_batch_size: int,
+    timeout: float,
+    brand_ids: list[str],
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    """A6 — fan out N parallel calls; observe degradation under load (KTD9)."""
+    rows: list[dict[str, Any]] = []
+    for max_workers in CONCURRENCY_VALUES:
+        if dry_run:
+            rows.append({
+                "value": str(max_workers),
+                "status": "dry_run",
+                "achieved_calls_per_sec": 0.0,
+                "status_histogram": {},
+                "in_flight_max": 0,
+            })
+            continue
+        tweets = _build_synthetic_tweets(base_batch_size, brand_ids, text_len=240)
+        started = time.time()
+        statuses: list[str] = []
+        in_flight_max = 0
+        in_flight = 0
+
+        def _worker() -> str:
+            nonlocal in_flight, in_flight_max
+            in_flight += 1
+            in_flight_max = max(in_flight_max, in_flight)
+            try:
+                result = _fire_one_batch(tweets, max_tokens=1024, timeout=timeout, client=client)
+                return result["status"]
+            finally:
+                in_flight -= 1
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = [ex.submit(_worker) for _ in range(max_workers)]
+            for f in concurrent.futures.as_completed(futures, timeout=CONCURRENCY_DURATION_SECONDS + 10):
+                try:
+                    statuses.append(f.result())
+                except Exception:
+                    statuses.append("other")
+        wall_clock_s = time.time() - started
+        achieved = round(len(statuses) / wall_clock_s, 2) if wall_clock_s > 0 else 0.0
+        histogram: dict[str, int] = {}
+        for s in statuses:
+            histogram[s] = histogram.get(s, 0) + 1
+        # Failure if any non-success status
+        any_fail = any(s != "success" for s in statuses)
+        rows.append({
+            "value": str(max_workers),
+            "status": "degraded" if any_fail else "success",
+            "wall_clock_s": round(wall_clock_s, 3),
+            "achieved_calls_per_sec": achieved,
+            "status_histogram": histogram,
+            "in_flight_max": in_flight_max,
+        })
+    return rows
+
+
+class _FakeClient:
+    """In-memory Claude client used by --dry-run. Module-scope (not nested
+    in main()) so test_probe.py can import and exercise it directly.
+
+    Tracks in-flight call count via class attributes so the concurrency
+    sweep can observe the max parallelism the probe actually achieved.
+    """
+    in_flight: int = 0
+    in_flight_max: int = 0
+    calls: list[dict[str, Any]] = []
+
+    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+        type(self).in_flight += 1
+        type(self).in_flight_max = max(type(self).in_flight_max, type(self).in_flight)
+        try:
+            type(self).calls.append(kwargs)
+            return {"results": [], "usage": {"input_tokens": 0}}
+        finally:
+            type(self).in_flight -= 1
 
 
 # --- CLI ------------------------------------------------------------------
@@ -275,48 +538,103 @@ def main(argv: list[str] | None = None) -> int:
             "(see ~/.env.secrets) or pass --dry-run to skip live calls.",
             file=sys.stderr,
         )
-        return 2
+        raise SystemExit(2)
 
     # Real client when not dry-run; FakeClaudeClient when dry-run.
     if args.dry_run:
-        from x_monitor.attribution import AnthropicClaudeClient  # noqa: F401  (smoke import)
-
-        class _FakeClient:
-            in_flight = 0
-            in_flight_max = 0
-            calls: list[dict[str, Any]] = []
-
-            def messages_create(self, **kwargs):
-                _FakeClient.in_flight += 1
-                _FakeClient.in_flight_max = max(_FakeClient.in_flight_max, _FakeClient.in_flight)
-                try:
-                    _FakeClient.calls.append(kwargs)
-                    # Build a trivial valid response so success verdicts work.
-                    return {"results": [], "usage": {"input_tokens": 0}}
-                finally:
-                    _FakeClient.in_flight -= 1
-
+        # Reset class-level in-flight counters so each --dry-run run is independent.
+        _FakeClient.in_flight = 0
+        _FakeClient.in_flight_max = 0
+        _FakeClient.calls = []
         client: Any = _FakeClient()
     else:
-        # Lazy-import the real client only when needed so a missing API key
-        # in --dry-run doesn't blow up at import time.
-        from x_monitor.attribution import AnthropicClaudeClient  # noqa: F401
-
-        # The production pipeline instantiates the client elsewhere; for
-        # the probe we use the same `AnthropicClaudeClient` class.
         from x_monitor.attribution import AnthropicClaudeClient as _RealClient
         client = _RealClient()
 
-    # Probe entry: each axis is delegated to a sweep function in U2.
-    # For now (U1) only the spine + dry-run path are exercised. The U2
-    # dispatch is wired up in a follow-up commit (the file evolves with
-    # each unit's tests).
+    # Probe entry: dispatch each axis to its sweep function.
     print(f"axes: {axes}")
     print(f"dry_run: {args.dry_run}")
     print(f"timeout: {args.timeout}s")
     print(f"batch_size: {args.batch_size}")
     print()
-    print("U1 spine online. U2 sweeps wire up in the next commit.")
+
+    all_rows: dict[str, list[dict[str, Any]]] = {}
+    verdict: str | None = None
+    sweep_dispatch = {
+        "batch_size": sweep_batch_size,
+        "max_tokens": sweep_max_tokens,
+        "input_tokens": sweep_input_tokens,
+        "rpm": sweep_rpm,
+        "cache_state": sweep_cache_state,
+        "concurrency": sweep_concurrency,
+    }
+    for axis in axes:
+        fn = sweep_dispatch[axis]
+        rows = fn(client, args.batch_size, args.timeout, DEFAULT_BRAND_IDS, args.dry_run)
+        all_rows[axis] = rows
+        if axis == "cache_state":
+            print(f"=== {axis} ===")
+            _print_table(
+                ["call", "status", "wall_clock_s", "cache_write", "cache_read"],
+                [[r["value"], r["status"], str(r.get("wall_clock_s", "")),
+                  str(r.get("cache_creation_input_tokens", "")),
+                  str(r.get("cache_read_input_tokens", ""))]
+                 for r in rows],
+            )
+            print()
+        elif axis == "rpm":
+            print(f"=== {axis} ===")
+            _print_table(
+                ["target_rpm", "status", "wall_clock_s", "achieved_rpm", "rate_limited"],
+                [[r["value"], r["status"], str(r.get("wall_clock_s", "")),
+                  str(r.get("achieved_rpm", "")),
+                  str(r.get("rate_limited_count", ""))]
+                 for r in rows],
+            )
+            if verdict is None:
+                verdict = _verdict_line(axis, rows)
+            print()
+        elif axis == "concurrency":
+            print(f"=== {axis} ===")
+            _print_table(
+                ["max_workers", "status", "wall_clock_s", "calls/sec", "in_flight_max", "histogram"],
+                [[r["value"], r["status"], str(r.get("wall_clock_s", "")),
+                  str(r.get("achieved_calls_per_sec", "")),
+                  str(r.get("in_flight_max", "")),
+                  json.dumps(r.get("status_histogram", {}), default=str)]
+                 for r in rows],
+            )
+            if verdict is None:
+                verdict = _verdict_line(axis, rows)
+            print()
+        else:  # batch_size, max_tokens, input_tokens
+            print(f"=== {axis} ===")
+            _print_table(
+                ["value", "status", "wall_clock_s", "input_tokens", "response_chars"],
+                [[r["value"], r["status"], str(r.get("wall_clock_s", "")),
+                  str(r.get("input_tokens", "")),
+                  str(r.get("response_chars", ""))]
+                 for r in rows],
+            )
+            if verdict is None:
+                verdict = _verdict_line(axis, rows)
+            print()
+
+    if verdict:
+        print(f"VERDICT: {verdict}")
+    else:
+        print("VERDICT: all green — no axis failed.")
+
+    # U3: write JSON next to the pipeline's run files for follow-up diff.
+    json_path = Path("data/runs") / f"probe_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps({
+        "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "axes_run": axes,
+        "rows": all_rows,
+        "verdict": verdict,
+    }, indent=2, default=str))
+    print(f"\nwrote {json_path}")
     return 0
 
 

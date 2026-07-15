@@ -92,3 +92,134 @@ def test_verdict_line_names_smallest_failing_value():
     ]
     assert probe._verdict_line("batch_size", rows) == "limit hit: batch_size=10 -> ssl_hang"
     assert probe._verdict_line("batch_size", [{"value": "1", "status": "success"}]) is None
+    # dry_run rows are NOT failures — verdict suppressed
+    assert probe._verdict_line(
+        "batch_size",
+        [{"value": "1", "status": "dry_run"}, {"value": "5", "status": "dry_run"}],
+    ) is None
+
+
+# --- U2 tests (7 sweep tests) ---------------------------------------------
+
+
+def test_sweep_batch_size_emits_nine_rows_in_dry_run():
+    probe = _import_probe()
+    rows = probe.sweep_batch_size(
+        client=None, base_batch_size=20, timeout=1.0,
+        brand_ids=["minimax"], dry_run=True,
+    )
+    assert len(rows) == len(probe.BATCH_SIZE_VALUES)
+    assert [r["value"] for r in rows] == [str(v) for v in probe.BATCH_SIZE_VALUES]
+    assert all(r["status"] == "dry_run" for r in rows)
+
+
+def test_sweep_max_tokens_uses_production_batch_size_in_dry_run():
+    probe = _import_probe()
+    rows = probe.sweep_max_tokens(
+        client=None, base_batch_size=20, timeout=1.0,
+        brand_ids=["minimax"], dry_run=True,
+    )
+    assert len(rows) == len(probe.MAX_TOKENS_VALUES)
+    assert [r["value"] for r in rows] == [str(v) for v in probe.MAX_TOKENS_VALUES]
+
+
+def test_sweep_input_tokens_text_length_varies_in_dry_run():
+    probe = _import_probe()
+    rows = probe.sweep_input_tokens(
+        client=None, base_batch_size=20, timeout=1.0,
+        brand_ids=["minimax"], dry_run=True,
+    )
+    assert len(rows) == len(probe.INPUT_TOKEN_VALUES)
+    # input_tokens should scale with the configured text length
+    token_counts = [r["input_tokens"] for r in rows]
+    assert all(t2 > t1 for t1, t2 in zip(token_counts, token_counts[1:]))
+
+
+def test_sweep_cache_state_fires_three_calls_in_dry_run():
+    probe = _import_probe()
+    rows = probe.sweep_cache_state(
+        client=None, base_batch_size=20, timeout=1.0,
+        brand_ids=["minimax"], dry_run=True,
+    )
+    assert len(rows) == 3
+    assert [r["value"] for r in rows] == ["call_1", "call_2", "call_3"]
+
+
+def test_sweep_rpm_dry_run_rows_carry_target_rpm():
+    probe = _import_probe()
+    rows = probe.sweep_rpm(
+        client=None, base_batch_size=20, timeout=1.0,
+        brand_ids=["minimax"], dry_run=True,
+    )
+    assert [r["value"] for r in rows] == [str(v) for v in probe.RPM_VALUES]
+    assert all(r["status"] == "dry_run" for r in rows)
+
+
+def test_sweep_concurrency_dry_run_rows_carry_max_workers():
+    probe = _import_probe()
+    rows = probe.sweep_concurrency(
+        client=None, base_batch_size=20, timeout=1.0,
+        brand_ids=["minimax"], dry_run=True,
+    )
+    assert [r["value"] for r in rows] == [str(v) for v in probe.CONCURRENCY_VALUES]
+    assert all(r["status"] == "dry_run" for r in rows)
+
+
+def test_fake_client_in_flight_counter_tracks_concurrency():
+    """Pin the FakeClaudeClient's in-flight tracking so the A6 sweep
+    can read in_flight_max and verify the thread-pool actually ran
+    N calls in parallel."""
+    probe = _import_probe()
+    # Reset class-level counters
+    probe._FakeClient.in_flight = 0  # type: ignore[attr-defined]
+    probe._FakeClient.in_flight_max = 0  # type: ignore[attr-defined]
+
+    # The fake's in_flight_max is incremented per call; a sequential
+    # invocation should report in_flight_max == 1.
+    fc = probe._FakeClient()
+    fc.messages_create(model="x", max_tokens=10, messages=[])
+    fc.messages_create(model="x", max_tokens=10, messages=[])
+    assert fc.in_flight_max == 1
+
+
+# --- U3 tests (4) ---------------------------------------------------------
+
+
+def test_axes_subset_parser_rejects_unknown_axis():
+    probe = _import_probe()
+    with pytest.raises(SystemExit):
+        probe._parse_axes("batch_size,bogus_axis")
+
+
+def test_axes_subset_parser_accepts_valid_subset():
+    probe = _import_probe()
+    assert probe._parse_axes("batch_size,max_tokens") == ["batch_size", "max_tokens"]
+    assert probe._parse_axes("concurrency") == ["concurrency"]
+
+
+def test_dry_run_emits_valid_json(tmp_path, monkeypatch):
+    """The probe writes data/runs/probe_<utc>.json in dry-run mode."""
+    import re as _re
+    probe = _import_probe()
+    monkeypatch.chdir(tmp_path)
+    rc = probe.main(["--dry-run", "--axes=batch_size"])
+    assert rc == 0
+    runs = list((tmp_path / "data" / "runs").glob("probe_*.json"))
+    assert len(runs) == 1
+    payload = json.loads(runs[0].read_text())
+    assert payload["axes_run"] == ["batch_size"]
+    assert payload["verdict"] is None  # all dry_run → suppressed
+    assert "batch_size" in payload["rows"]
+    assert _re.match(r"probe_\d{8}T\d{6}Z\.json", runs[0].name)
+
+
+def test_missing_api_key_exits_with_clear_message(tmp_path, monkeypatch, capsys):
+    """With no ANTHROPIC_API_KEY and no --dry-run, the probe exits 2."""
+    probe = _import_probe()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        probe.main(["--axes=batch_size"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "ANTHROPIC_API_KEY" in err
