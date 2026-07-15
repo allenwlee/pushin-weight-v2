@@ -10,7 +10,7 @@ product_contract_source: ce-plan-bootstrap
 
 # Goal Capsule
 
-Build a standalone, easily repeatable CLI probe at `scripts/probe_classify_batch_limits.py` that sweeps the 6 axes which could be the "limit" of `classify_batch_pragmatics_full` (batch size, total input tokens, `max_tokens` output cap, request-per-minute pressure, prompt-cache state, and concurrent parallel calls), and prints a per-axis ceiling table plus a one-line verdict naming the smallest axis that fails. No production code change, no DB write, no migration — diagnostic only.
+Build a standalone, easily repeatable CLI probe at `x-monitoring/scripts/probes/classify_batch_limits/probe.py` (with a colocated `test_probe.py` and a `README.md` in the same folder) that sweeps the 6 axes which could be the "limit" of `classify_batch_pragmatics_full` (batch size, total input tokens, `max_tokens` output cap, request-per-minute pressure, prompt-cache state, and concurrent parallel calls), and prints a per-axis ceiling table plus a one-line verdict naming the smallest axis that fails. No production code change, no DB write, no migration — diagnostic only. Each probe owns a folder under `x-monitoring/scripts/probes/<name>/` so future probes can land alongside without polluting the `scripts/` root.
 
 # Product Contract
 
@@ -53,19 +53,19 @@ A lightweight probe script that fires synthetic-tweet batches at the live LLM th
 
 ### Repeatability
 
-- R10. The probe must run from a fresh `python -m scripts.probe_classify_batch_limits --axes=...` invocation with no side effects beyond the JSON file from R6.
+- R10. The probe must run from a fresh `python -m scripts.probes.classify_batch_limits.probe --axes=...` invocation with no side effects beyond the JSON file from R6.
 - R11. The probe must support a `--axes=batch_size,max_tokens` subset syntax so a re-run can target the failed axis without re-firing the others.
 - R12. The probe must support `--dry-run` that builds every prompt and reports `len(prompt)` / estimated token counts without firing any LLM call, so the user can sanity-check the input shape offline.
 
 ## Key Flows
 
 - F1. Operator-driven diagnostic
-  - **Trigger:** Operator notices the secondary 20-post batch truncation issue, runs `python -m scripts.probe_classify_batch_limits --axes=batch_size`.
+  - **Trigger:** Operator notices the secondary 20-post batch truncation issue, runs `python -m scripts.probes.classify_batch_limits.probe --axes=batch_size`.
   - **Actors:** Operator (A1).
   - **Steps:** Probe fires batch_size=[1,5,10,15,20,25,30,40,50] in sequence, each with a fresh 30 s timeout, captures status + timing + usage per row, prints ceiling table.
   - **Outcome:** Operator sees the smallest batch_size that returns `unterminated_json` (or sees all green, in which case batch size is not the limit).
 - F2. Targeted axis re-run
-  - **Trigger:** F1 identified batch_size=25 as the failure point. Operator runs `python -m scripts.probe_classify_batch_limits --axes=max_tokens`.
+  - **Trigger:** F1 identified batch_size=25 as the failure point. Operator runs `python -m scripts.probes.classify_batch_limits.probe --axes=max_tokens`.
   - **Steps:** Probe fires max_tokens=[256..4096] sweep at fixed batch_size=20 (production value) and reports whether `max_tokens` is independently the limit.
   - **Outcome:** Operator now knows if raising `max_tokens` alone fixes the issue (yes → cap it at e.g. 2048; no → the limit is elsewhere).
 - F3. Cache-state isolation
@@ -80,7 +80,7 @@ A lightweight probe script that fires synthetic-tweet batches at the live LLM th
 - Standalone probe script in `scripts/`.
 - Probe driver + per-axis sweep loops + JSON output + table output.
 - No-touch on `x_monitor/attribution.py` or `x_monitor/run.py` — the probe uses the public API.
-- A single new test in `tests/test_probe_classify_batch_limits.py` covering the synthetic-tweet builder, the status classifier, the `--dry-run` flag, and the verdict line.
+- A single new test in `scripts/probes/classify_batch_limits/test_probe.py` covering the synthetic-tweet builder, the status classifier, the `--dry-run` flag, and the verdict line.
 
 ### Deferred to Follow-Up Work
 
@@ -108,6 +108,7 @@ A lightweight probe script that fires synthetic-tweet batches at the live LLM th
 - KTD7. **Status classifier uses string-pattern matching on the exception's repr.** `Unterminated string` → `unterminated_json`; `_ssl__SSLSocket_read` / `Read timed out` / `timeout` → `ssl_hang`; HTTP 4xx / 5xx from the SDK's own errors → `4xx` / `5xx`; everything else → `other`. Reason: the SDK raises a small zoo of exception types; pattern matching on the message is more robust than isinstance checks against the SDK's full exception tree.
 - KTD8. **`--dry-run` builds every prompt, prints `len(prompt)` and `len(prompt)//4` estimated tokens, never fires a request.** Reason: lets the operator verify the input shape before paying for 50+ LLM calls; mirrors the existing `probe_filter_yield.py` pattern of safe offline diagnostics.
 - KTD9. **Concurrency sweep (A6) measures concurrent capacity, not serial rate.** `sweep_concurrency` fires N parallel calls via `ThreadPoolExecutor(max_workers=N)` and reports (a) status counts across the N concurrent calls, (b) the smallest N at which any call's status degrades (ssl_hang / unterminated_json / 429 / 5xx), (c) achieved calls/sec under load. A4's serial pressure and A6's concurrent fan-out are kept as separate axes — they catch different failure modes (rate-limit quota vs connection-pool exhaustion / gateway SSL state).
+- KTD10. **Each probe owns a folder under `x-monitoring/scripts/probes/<name>/`.** The folder holds the script (`probe.py`), its colocated test (`test_probe.py`), an empty `__init__.py` so `python -m scripts.probes.<name>.probe` resolves, and a short `README.md` for operator-facing quickstart. Reason: probes are leaf diagnostics that ship with their own fixtures, expected outputs, and operator notes; co-locating them keeps each probe self-contained, makes review/deletion atomic (one folder per probe), and avoids polluting `x-monitoring/scripts/` root as more probes land. The existing `x-monitoring/scripts/probe_filter_yield.py` / `probe_call_a.py` / `probe_call_c_spec.py` probes predate this convention; they remain at the scripts root for now and can be folded into `scripts/probes/` opportunistically (out of scope for this plan). Production code in `x_monitor/` is never touched by probe work — that boundary stays clean.
 
 ## High-Level Technical Design
 
@@ -115,7 +116,7 @@ The probe is a single CLI with five subcommands (or `--axes=` flags) driving ind
 
 ```mermaid
 flowchart TB
-  CLI["scripts/probe_classify_batch_limits.py --axes=..."] --> Parser["argparse: --axes subset, --batch-size default 20, --timeout 30, --dry-run"]
+  CLI["scripts/probes/classify_batch_limits/probe.py --axes=..."] --> Parser["argparse: --axes subset, --batch-size default 20, --timeout 30, --dry-run"]
   Parser -->|_axes_=_ batch_size| Sweep1[BatchSizeSweep]
   Parser -->|_axes_=_ max_tokens| Sweep2[MaxTokensSweep]
   Parser -->|_axes_=_ input_tokens| Sweep3[InputTokensSweep]
@@ -150,12 +151,14 @@ The plan is implementable as a single commit. No inter-unit dependencies; the pr
 
 ## U1. Probe scaffolding + synthetic-tweet builder
 
-- **Goal:** Stand up `scripts/probe_classify_batch_limits.py` with argument parsing, synthetic-tweet construction, and the `_fire_one_batch` helper. No axes yet — just the spine.
+- **Goal:** Stand up `scripts/probes/classify_batch_limits/probe.py` with argument parsing, synthetic-tweet construction, and the `_fire_one_batch` helper. No axes yet — just the spine.
 - **Requirements:** R1, R2, R7, R8, R9, R12.
 - **Dependencies:** None.
 - **Files:**
-  - `x-monitoring/scripts/probe_classify_batch_limits.py` (new)
-  - `x-monitoring/tests/test_probe_classify_batch_limits.py` (new)
+  - `x-monitoring/scripts/probes/classify_batch_limits/__init__.py` (new — empty; marks the package so `python -m scripts.probes.classify_batch_limits.probe` resolves)
+  - `x-monitoring/scripts/probes/classify_batch_limits/probe.py` (new)
+  - `x-monitoring/scripts/probes/classify_batch_limits/test_probe.py` (new — colocated next to the script it tests; mirrors the `tests/classifier_tests/` precedent for probe-style artifacts that own their own outputs)
+  - `x-monitoring/scripts/probes/classify_batch_limits/README.md` (new — operator-facing quickstart: which axes exist, how to dry-run, where the JSON lands)
 - **Approach:**
   - Build synthetic tweets by reading `Store.read_brands()` when available, otherwise the 20 hardcoded brand_ids (`minimax`, `hailuo`, `kimi`, `deepseek`, `qwen`, `glm`, `yi`, `baichuan`, `doubao`, `ernie`, `hunyuan`, `spark`, `wenxin`, `tongyi`, `abab`, `rohan`, `minimax_m2`, `kuaishou_kling`, `tencent_hunyuan`, `iflytek_spark`). Each tweet carries 1-3 brand_ids drawn from that set; text length is a parameter.
   - `_fire_one_batch(client, tweets, max_tokens, timeout)` calls `classify_batch_pragmatics_full` directly when `client` is real; when `client` is a `FakeClaudeClient`, it short-circuits to the JSON shape so `--dry-run` is testable.
@@ -170,14 +173,14 @@ The plan is implementable as a single commit. No inter-unit dependencies; the pr
   - `test_classify_status_ssl_hang_pattern` — feeding an exception whose msg contains `_ssl__SSLSocket_read` returns `ssl_hang`.
   - `test_missing_api_key_exits_clean` — with `ANTHROPIC_API_KEY` unset and `--no-dry-run`, the script prints `missing ANTHROPIC_API_KEY` and exits 0 (or exits 2 with a clear message — pick the convention that matches `scripts/probe_filter_yield.py`).
   - `test_dry_run_does_not_call_llm` — with a `FakeClaudeClient` whose `messages_create` raises if called, `--dry-run` exits 0 and the fake is never invoked.
-- **Verification:** `python -m pytest tests/test_probe_classify_batch_limits.py -v` passes all 8 tests.
+- **Verification:** `python -m pytest scripts/probes/classify_batch_limits/test_probe.py -v` passes all 8 tests.
 
-## U2. Five axis sweeps + ceiling table
+## U2. Six axis sweeps + ceiling table
 
 - **Goal:** Implement the 5 axis sweeps (A1-A5 from R3), each as a function that takes the configured base parameters and emits its rows to the shared ceiling table.
 - **Requirements:** R3, R4, R5.
 - **Dependencies:** U1.
-- **Files:** `x-monitoring/scripts/probe_classify_batch_limits.py` (modify).
+- **Files:** `x-monitoring/scripts/probes/classify_batch_limits/probe.py` (modify).
 - **Approach:**
   - `sweep_batch_size(client, base_kwargs)`: iterates `n_posts ∈ [1, 5, 10, 15, 20, 25, 30, 40, 50]`, builds tweets at default text length, fires one call per value, prints a row with `n_posts | status | wall_clock_s | response_chars | input_tokens`.
   - `sweep_max_tokens(client, base_kwargs)`: iterates `max_tokens ∈ [256, 512, 1024, 2048, 4096]` at fixed `n_posts=20` (the production value).
@@ -198,7 +201,7 @@ The plan is implementable as a single commit. No inter-unit dependencies; the pr
 
   ```bash
   cd x-monitoring
-  python -m scripts.probe_classify_batch_limits --axes=batch_size,max_tokens
+  python -m scripts.probes.classify_batch_limits.probe --axes=batch_size,max_tokens
   ```
 
   produces two ASCII tables and a verdict line.
@@ -208,7 +211,7 @@ The plan is implementable as a single commit. No inter-unit dependencies; the pr
 - **Goal:** Wire `--axes=` subset syntax, write `data/runs/probe_<utc>.json`, ensure `--dry-run` works across every axis.
 - **Requirements:** R6, R10, R11, R12.
 - **Dependencies:** U2.
-- **Files:** `x-monitoring/scripts/probe_classify_batch_limits.py` (modify).
+- **Files:** `x-monitoring/scripts/probes/classify_batch_limits/probe.py` (modify).
 - **Approach:**
   - `--axes=batch_size,max_tokens,concurrency` parses comma-separated; only those sweeps run. The valid axis names are `{batch_size, max_tokens, input_tokens, rpm, cache_state, concurrency}`.
   - `--dry-run` makes every sweep skip `_fire_one_batch` and instead print `len(prompt) / 4` estimated tokens + `len(prompt)` chars. Status column reads `dry_run`.
@@ -221,24 +224,24 @@ The plan is implementable as a single commit. No inter-unit dependencies; the pr
 - **Verification:** After U3, both forms of the probe produce their expected outputs:
 
   ```bash
-  python -m scripts.probe_classify_batch_limits --axes=batch_size --dry-run
-  python -m scripts.probe_classify_batch_limits --axes=cache_state,concurrency --no-dry-run
+  python -m scripts.probes.classify_batch_limits.probe --axes=batch_size --dry-run
+  python -m scripts.probes.classify_batch_limits.probe --axes=cache_state,concurrency --no-dry-run
   ```
 
 # Verification Contract
 
 | Check | Command | Expected |
 |---|---|---|
-| Unit tests | `cd x-monitoring && python -m pytest tests/test_probe_classify_batch_limits.py -v` | All 19 tests pass (8 in U1 + 7 in U2 + 4 in U3). |
-| Probe dry-run, all axes | `cd x-monitoring && python -m scripts.probe_classify_batch_limits --dry-run` | One ASCII table per axis, every row's status is `dry_run`, no LLM call fires, exit 0. |
-| Probe subset, axes=batch_size | `cd x-monitoring && python -m scripts.probe_classify_batch_limits --axes=batch_size --no-dry-run` (with valid `ANTHROPIC_API_KEY`) | One table for `batch_size`, verdict line, JSON file under `data/runs/`. |
-| Missing-credential guard | `unset ANTHROPIC_API_KEY && python -m scripts.probe_classify_batch_limits --axes=batch_size` | Exits with a clear `missing ANTHROPIC_API_KEY` message; does not call the LLM. |
+| Unit tests | `cd x-monitoring && python -m pytest scripts/probes/classify_batch_limits/test_probe.py -v` | All 19 tests pass (8 in U1 + 7 in U2 + 4 in U3). |
+| Probe dry-run, all axes | `cd x-monitoring && python -m scripts.probes.classify_batch_limits.probe --dry-run` | One ASCII table per axis, every row's status is `dry_run`, no LLM call fires, exit 0. |
+| Probe subset, axes=batch_size | `cd x-monitoring && python -m scripts.probes.classify_batch_limits.probe --axes=batch_size --no-dry-run` (with valid `ANTHROPIC_API_KEY`) | One table for `batch_size`, verdict line, JSON file under `data/runs/`. |
+| Missing-credential guard | `unset ANTHROPIC_API_KEY && python -m scripts.probes.classify_batch_limits.probe --axes=batch_size` | Exits with a clear `missing ANTHROPIC_API_KEY` message; does not call the LLM. |
 | JSON output | `cat data/runs/probe_*.json \| python -m json.tool` | Valid JSON with `ts_utc`, `axes_run`, `rows`, `verdict` keys. |
 
 # Definition of Done
 
-- All 19 tests in `tests/test_probe_classify_batch_limits.py` pass (8 from U1, 7 from U2, 4 from U3).
-- `scripts/probe_classify_batch_limits.py` runs end-to-end in `--dry-run` mode (no creds, no LLM, exit 0) and in `--no-dry-run` mode (with valid creds, 6 sweeps, JSON output).
+- All 19 tests in `scripts/probes/classify_batch_limits/test_probe.py` pass (8 from U1, 7 from U2, 4 from U3).
+- `scripts/probes/classify_batch_limits/probe.py` runs end-to-end in `--dry-run` mode (no creds, no LLM, exit 0) and in `--no-dry-run` mode (with valid creds, 6 sweeps, JSON output).
 - The probe identifies the smallest axis that fails on the live gateway at probe time, and the verdict line is the artifact a future implementer acts on.
 - No production code in `x_monitor/` was touched. The probe is a leaf diagnostic.
 
