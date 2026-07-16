@@ -74,19 +74,17 @@ def cmd_run(args, paths) -> int:
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
     if args.dry_run:
-        # Print the per-model, per-query list
+        # Print the per-model, per-query list.
+        # The retired data/queries/<m>.yaml path raised FileNotFoundError;
+        # route through the same DB read as cmd_run's primary path.
         print("\n--- Estimated cost per model ---", file=sys.stderr)
-        from x_monitor.queries import load_queries
+        from x_monitor.queries import estimated_cost
+        from x_monitor.run import load_brand_queries_or_stub
 
+        queries_per_model, _ = load_brand_queries_or_stub(cfg, paths["db"])
         total = 0
         for m in (args.models.split(",") if args.models else cfg.enabled_models):
-            try:
-                qs = load_queries(m, paths["data"])
-            except Exception as e:
-                print(f"  {m}: ERROR {e}", file=sys.stderr)
-                continue
-            from x_monitor.queries import estimated_cost
-
+            qs = queries_per_model.get(m, [])
             cost = estimated_cost(qs)
             total += cost
             print(f"  {m}: {cost}", file=sys.stderr)
@@ -168,30 +166,24 @@ def cmd_migrate(args, paths) -> int:
 
 
 def cmd_queries(args, paths) -> int:
-    from x_monitor.queries import load_queries, validate_query_syntax
+    from x_monitor.queries import validate_query_syntax
+    from x_monitor.run import load_brand_queries_or_stub
 
     if args.queries_action == "list-disabled":
         cfg = _load_config_or_die(paths["config"])
+        queries_per_model, _ = load_brand_queries_or_stub(cfg, paths["db"])
         for m in cfg.enabled_models:
-            try:
-                qs = load_queries(m, paths["data"])
-            except Exception as e:
-                print(f"  {m}: {e}")
-                continue
+            qs = queries_per_model.get(m, [])
             for q in qs:
                 if not q.enabled:
                     print(f"  {m}/{q.id}: disabled  ({q.notes or 'no notes'})")
         return 0
     if args.queries_action == "validate":
         cfg = _load_config_or_die(paths["config"])
+        queries_per_model, _ = load_brand_queries_or_stub(cfg, paths["db"])
         any_errors = False
         for m in cfg.enabled_models:
-            try:
-                qs = load_queries(m, paths["data"])
-            except Exception as e:
-                print(f"  {m}: load error: {e}")
-                any_errors = True
-                continue
+            qs = queries_per_model.get(m, [])
             for q in qs:
                 errs = validate_query_syntax(q)
                 if errs:

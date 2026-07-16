@@ -787,6 +787,69 @@ def _run_post_fetch(
     return counters
 
 
+def load_brand_queries_or_stub(
+    cfg: Config, db_path: Path, store: Store | None = None
+) -> tuple[dict[str, list[Query]], dict[str, list[str]]]:
+    """Load per-brand keywords from the DB and synthesize Query stubs.
+
+    Returns:
+        (queries_per_model, primary_keywords) where:
+          - queries_per_model: {brand_id: [Query(...)]} — a single stub Query
+            per brand, sufficient to satisfy `apply_skip_order`'s type
+            signature. The v1.7 budget/skip-order machinery is a no-op
+            (cost <= budget always), so the stub never reaches the planner.
+          - primary_keywords: {brand_id: [pattern, ...]} — the raw DB read,
+            surfaced so callers can report `missing_brand_keywords:*` entries
+            in degraded blocks.
+
+    `store` is optional — pass an existing `Store` (with `auto_migrate=False`
+    in tests) to avoid the migration runner hitting a fresh tmp DB and
+    seeding canonical brand rows from migration 034.
+
+    Replaces the v1.6 `load_queries(m, data_dir)` reader used by `cmd_run`'s
+    dry-run cost calc and by `__main__.cmd_queries` (list-disabled / validate).
+    The per-brand `data/queries/<m>.yaml` files were retired by migration 030
+    in favor of the `brand_keywords` table (with `is_primary=1` rows); reading
+    from the file path now raises `FileNotFoundError`. Plan 2026-07-15-003 U1
+    moved `cmd_run` to this DB path; this helper extends the same read to
+    the sibling CLI commands.
+    """
+    if store is None:
+        store = Store(db_path)
+    try:
+        primary_keywords = store.read_primary_brand_keywords()
+    except Exception as e:
+        primary_keywords = {}
+    queries_per_model: dict[str, list[Query]] = {
+        m: [
+            Query(
+                id="Q5",  # legacy Q-id; never reaches the DB
+                query_string="(placeholder)",
+                enabled=True,
+            )
+        ]
+        for m in cfg.enabled_models
+    }
+    return queries_per_model, primary_keywords
+    if store is None:
+        store = Store(db_path)
+    try:
+        primary_keywords = store.read_primary_brand_keywords()
+    except Exception as e:
+        primary_keywords = {}
+    queries_per_model: dict[str, list[Query]] = {
+        m: [
+            Query(
+                id="Q5",  # legacy Q-id; never reaches the DB
+                query_string="(placeholder)",
+                enabled=True,
+            )
+        ]
+        for m in cfg.enabled_models
+    }
+    return queries_per_model, primary_keywords
+
+
 class RunPipeline:
     """The x-monitor daily collection pipeline."""
 
@@ -941,13 +1004,15 @@ class RunPipeline:
             self._write_summary(run_id, summary)
             self._update_latest_symlink(run_id, running=True)
 
-            # Load brand tokens from the DB (Plan 2026-07-15-003 U1).
-            # The per-brand `data/queries/<m>.yaml` files were retired by
-            # migration 030 (brand_keywords table). The legacy Query list
-            # shape is preserved here only as a placeholder for the v1.6
-            # budget/skip-order machinery, which is a no-op in v1.7 (cost
-            # <= budget always). The single Query stub per brand feeds
-            # `apply_skip_order` without surfacing as a real signal.
+            # Load brand tokens from the DB (Plan 2026-07-15-003 U1 + sibling
+            # fix): the per-brand `data/queries/<m>.yaml` files were retired
+            # by migration 030 in favor of the `brand_keywords` table. The
+            # legacy Query list shape is preserved as a placeholder for the
+            # v1.6 budget/skip-order machinery (no-op in v1.7 — cost <= budget
+            # always). The shared `load_brand_queries_or_stub` helper is what
+            # the sibling CLI commands (`cmd_dry_run` cost calc, `cmd_queries`
+            # list-disabled / validate) also use; keeping one read site avoids
+            # the silent FileNotFoundError that the retired file path raises.
             models = model_filter or self.config.enabled_models
             store = Store(self.db_path)
             try:
