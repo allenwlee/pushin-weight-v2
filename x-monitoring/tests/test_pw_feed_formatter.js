@@ -67,6 +67,64 @@ assertEq(formatLocalTooltip(null), '', 'null input');
 assertEq(formatLocalTooltip('not a date'), '', 'invalid string');
 assertEq(formatLocalTooltip('2026-07-15T21:00:00+00:00').length > 0, true, 'ISO input: non-empty tooltip');
 
+// (summary + process.exit moved to end after U4 buildQuery tests)
+
+
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// U4 (2026-07-16): pw-feed.js fetchBatch builds the right query with the
+// current filter. We extract the buildQuery function and test it
+// directly — no browser needed.
+// ---------------------------------------------------------------------------
+
+const feedSrc = fs.readFileSync(
+  path.join(__dirname, '..', 'x_monitor', 'static', 'pw-feed.js'),
+  'utf8'
+);
+const bqMatch = feedSrc.match(/function buildQuery\([^)]*\)\s*\{[\s\S]*?\n  \}/m);
+if (!bqMatch) {
+  console.error('  FAIL: buildQuery not found in pw-feed.js');
+  failed++;
+} else {
+  const bqSandbox = new Module('buildQuery');
+  bqSandbox._compile(bqMatch[0] + '\nmodule.exports = buildQuery;\n', 'buildQuery.js');
+  const buildQuery = bqSandbox.exports;
+
+  console.log('\n--- buildQuery encodes filters ---');
+  const out1 = buildQuery(
+    { brands: ['qwen'] },
+    { cursor: null, sort: 'created_at', order: 'desc', limit: 50 }
+  );
+  assertEq(
+    out1.indexOf('filters=' + encodeURIComponent(JSON.stringify({ brands: ['qwen'] }))) >= 0,
+    true,
+    'buildQuery encodes brands filter into filters= param'
+  );
+  assertEq(out1.indexOf('cursor=null') < 0, true, 'buildQuery omits null cursor');
+  assertEq(out1.indexOf('limit=50') >= 0, true, 'buildQuery includes limit');
+  assertEq(out1.indexOf('sort=created_at') >= 0, true, 'buildQuery includes sort');
+
+  console.log('\n--- buildQuery handles empty filters ---');
+  const out2 = buildQuery(
+    {},
+    { cursor: null, sort: 'created_at', order: 'desc', limit: 50 }
+  );
+  assertEq(
+    out2.indexOf('filters=' + encodeURIComponent('{}')) >= 0,
+    true,
+    'buildQuery encodes empty filters as {}'
+  );
+
+  console.log('\n--- buildQuery forwards cursor, order ---');
+  const out3 = buildQuery(
+    { brands: ['minimax'] },
+    { cursor: '2026-07-15T20:00:00+00:00|tweet1', sort: 'created_at', order: 'asc', limit: 25 }
+  );
+  assertEq(out3.indexOf('cursor=2026-07-15T20') >= 0, true, 'buildQuery includes cursor');
+  assertEq(out3.indexOf('order=asc') >= 0, true, 'buildQuery includes order=asc');
+}
+
 console.log('\n--- summary ---');
-console.log(`${passed} passed, ${failed} failed`);
+console.log(passed + ' passed, ' + failed + ' failed');
 process.exit(failed > 0 ? 1 : 0);

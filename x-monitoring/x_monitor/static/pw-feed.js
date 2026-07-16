@@ -293,8 +293,11 @@
     state.exhausted = false;
     // Clear the body but preserve the first batch (already rendered by
     // Jinja). For the simplest behavior, refetch from the server and
-    // replace the entire tbody.
-    fetchBatch().then(function (payload) {
+    // replace the entire tbody. U4 (2026-07-16): pass the current
+    // control-panel filter so the immediate refetch honors it (was
+    // previously fetching the un-filtered feed on every toggle).
+    var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
+    fetchBatch(filters).then(function (payload) {
       if (!payload || !payload.rows) return;
       tbody.innerHTML = '';
       payload.rows.forEach(function (row) {
@@ -422,9 +425,12 @@
       if (!root) return;
       var tbody = $('[data-pw-feed-body]', root);
       if (!tbody) return;
-      // Refetch the first page and replace the body.
+      // Refetch the first page and replace the body. U4: pass the
+      // current control-panel filter so the auto-refresh keeps the
+      // feed aligned with whatever the user has selected.
       state.cursor = null;
-      fetchBatch().then(function (payload) {
+      var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
+      fetchBatch(filters).then(function (payload) {
         if (!payload || !payload.rows) return;
         tbody.innerHTML = '';
         payload.rows.forEach(function (row) {
