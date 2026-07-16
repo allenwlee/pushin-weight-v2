@@ -118,44 +118,55 @@ def _denormalize_posts(
         return base
     placeholders = ",".join("?" for _ in tweet_ids)
     brand_id_int = store._brand_int_id(brand_id)
-    if brand_id_int is None:
-        return base
+    # NOTE: posts_brands_signals (migration 028) is keyed by
+    # `posts.tweet_id` (TEXT) and `brands.nickname` (TEXT), not by
+    # posts.id / brands.id. Only posts_brands_discourse (migration 026)
+    # needs the integer brand_id. We deliberately do NOT early-return
+    # when `brand_id_int is None` — signals should still resolve for the
+    # `_unattributed` sentinel and any orphaned nickname brands.
 
     # posts_brands_signals → per-(post, post_type) row; collect post_types.
-    # Migration 028 changed the schema: post_type_key and sentiment are
-    # TEXT-natural-key values (no longer integer FKs to key tables).
+    # Migration 028 schema: post_type_key + sentiment are TEXT-natural-key
+    # values. JOIN on tweet_id (not posts.id) and pass the nickname
+    # directly (not the integer brands.id).
     pt_rows = store._conn.execute(
         f"""
         SELECT p.tweet_id, pbs.post_type_key, pbs.sentiment
         FROM posts p
-        JOIN posts_brands_signals pbs ON pbs.post_id = p.id
+        JOIN posts_brands_signals pbs ON pbs.post_id = p.tweet_id
         WHERE p.tweet_id IN ({placeholders})
           AND pbs.brand_id = ?
         """,
-        (*tweet_ids, brand_id_int),
+        (*tweet_ids, brand_id),
     ).fetchall()
     pt_by_tweet: dict[str, list[str]] = {}
     sent_by_tweet: dict[str, list[str]] = {}
     for r in pt_rows:
         pt_by_tweet.setdefault(r["tweet_id"], []).append(r["post_type_key"])
-        sent_by_tweet.setdefault(r["tweet_id"], []).append(r["sentiment_key"])
+        sent_by_tweet.setdefault(r["tweet_id"], []).append(r["sentiment"])
 
     # posts_brands_discourse → per-(post, discourse) row.
-    # Migration 026 schema: the discourse and nationalism columns are
-    # TEXT-natural-key values (no longer integer FKs to key tables).
-    disc_rows = store._conn.execute(
-        f"""
-        SELECT p.tweet_id, pbd.discourse_key,
-               pbd.china_nationalism, pbd.us_nationalism
-        FROM posts p
-        JOIN posts_brands_discourse pbd ON pbd.post_id = p.id
-        WHERE p.tweet_id IN ({placeholders})
-          AND pbd.brand_id = ?
-        """,
-        (*tweet_ids, brand_id_int),
-    ).fetchall()
+    # Migration 026 schema: post_id and brand_id are INTEGER FKs to
+    # posts.id and brands.id respectively. Only run this query when the
+    # int brand_id resolved — the `_unattributed` sentinel and any
+    # orphaned nickname have no entry in brands.id and would otherwise
+    # silently produce empty discourse data.
     disc_by_tweet: dict[str, list[str]] = {}
     nat_by_tweet: dict[str, dict[str, str]] = {}
+    if brand_id_int is not None:
+        disc_rows = store._conn.execute(
+            f"""
+            SELECT p.tweet_id, pbd.discourse_key,
+                   pbd.china_nationalism, pbd.us_nationalism
+            FROM posts p
+            JOIN posts_brands_discourse pbd ON pbd.post_id = p.id
+            WHERE p.tweet_id IN ({placeholders})
+              AND pbd.brand_id = ?
+            """,
+            (*tweet_ids, brand_id_int),
+        ).fetchall()
+    else:
+        disc_rows = []
     for r in disc_rows:
         disc_by_tweet.setdefault(r["tweet_id"], []).append(r["discourse_key"])
         nat_by_tweet.setdefault(r["tweet_id"], {})
@@ -172,12 +183,14 @@ def _denormalize_posts(
     # FIX (review #1): parameter tuple shape — was `(tweet_ids,)` which
     # passes a list as a single bound parameter; sqlite3 raised
     # ProgrammingError because the SQL has `len(tweet_ids)` placeholders.
+    # Migration 027 schema: puf.post_id is TEXT and FKs to posts.tweet_id
+    # (not posts.id), so we read directly from the flags table without a
+    # posts JOIN.
     flag_rows = store._conn.execute(
         f"""
-        SELECT p.tweet_id, 1 AS flagged
-        FROM posts p
-        JOIN posts_unsanctioned_flags puf ON puf.post_id = p.id
-        WHERE p.tweet_id IN ({placeholders})
+        SELECT puf.post_id AS tweet_id
+        FROM posts_unsanctioned_flags puf
+        WHERE puf.post_id IN ({placeholders})
         """,
         tuple(tweet_ids),
     ).fetchall()
