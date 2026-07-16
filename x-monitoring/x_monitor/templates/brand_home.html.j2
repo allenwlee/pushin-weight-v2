@@ -60,7 +60,8 @@
            id="brand-chart"
            hx-get="/api/v1/home.brand.chart.html?brand={{ brand_id }}"
            hx-trigger="every {{ poll_seconds }}s"
-           hx-swap="innerHTML">
+           hx-swap="innerHTML"
+           hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'>
         {% with payload=chart, brand=brand_id %}
           {% include "_brand_chart.html.j2" %}
         {% endwith %}

@@ -49,7 +49,8 @@
              id="home-chart"
              hx-get="/api/v1/home.chart.html"
              hx-trigger="every {{ poll_seconds }}s"
-             hx-swap="innerHTML">
+             hx-swap="innerHTML"
+             hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'>
       {% with chart=chart, payload=chart %}
         {% include "_home_chart.html.j2" %}
       {% endwith %}
