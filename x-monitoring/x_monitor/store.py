@@ -175,6 +175,12 @@ class Store:
         # nationalism_keys (mirrors the pattern at _post_type_id_map).
         self._discourse_id_map: dict[str, int] | None = None
         self._nationalism_id_map: dict[str, int] | None = None
+        # Reverse maps (id → key) for FK translation at the wire
+        # layer. `discourse: [1]` in the wire shape is meaningless to
+        # a UI; `discourse: ['genuine_hype']` is meaningful. Populated
+        # lazily on first call.
+        self._discourse_id_to_key: dict[int, str] | None = None
+        self._nationalism_id_to_key: dict[int, str] | None = None
 
     def close(self) -> None:
         self._conn.close()
@@ -2555,6 +2561,49 @@ class Store:
                 ).fetchall()
             }
         return self._nationalism_id_map.get(nationalism_key)
+
+    def _discourse_key_by_id(self, discourse_id: int | None) -> str | None:
+        """Reverse of `_discourse_int_id`: map `discourse_keys.id`
+        (INTEGER FK) to `discourse_keys.key` (TEXT label).
+
+        Returns None when `discourse_id is None` (a KTD5 partial row
+        with `discourse_key IS NULL` legitimately has no FK id). Returns
+        None when the FK id isn't in the table (defensive — the FK
+        constraint should prevent this, but a future migration could
+        leave dangling ids during a backfill).
+        """
+        if discourse_id is None:
+            return None
+        if self._discourse_id_to_key is None:
+            self._discourse_id_to_key = {
+                r["id"]: r["key"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM discourse_keys"
+                ).fetchall()
+            }
+        return self._discourse_id_to_key.get(int(discourse_id))
+
+    def _nationalism_key_by_id(
+        self, nationalism_id: int | None
+    ) -> str | None:
+        """Reverse of `_nationalism_int_id`: map `nationalism_keys.id`
+        (INTEGER FK) to `nationalism_keys.key` (TEXT label).
+
+        Returns None when `nationalism_id is None` (nationalism FKs
+        are nullable during the backfill window). Returns None when
+        the FK id isn't in the table (defensive — the FK constraint
+        should prevent this).
+        """
+        if nationalism_id is None:
+            return None
+        if self._nationalism_id_to_key is None:
+            self._nationalism_id_to_key = {
+                r["id"]: r["key"]
+                for r in self._conn.execute(
+                    "SELECT id, key FROM nationalism_keys"
+                ).fetchall()
+            }
+        return self._nationalism_id_to_key.get(int(nationalism_id))
 
     def _dead_letter_enum(
         self, family: str, value: str, **context: Any

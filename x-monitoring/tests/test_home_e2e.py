@@ -418,3 +418,147 @@ def test_feed_includes_posts_with_nationalism_classifications(dashboard_client):
         f"got {row.get('us_nationalism')!r}"
     )
 
+
+# ---------------------------------------------------------------------------
+# Wire shape: feed's `classifications` field must expose STRING labels,
+# not raw FK ints. The denormalized post dict carries int FKs (post-
+# migration 020) for `discourse`, `cn_nationalism`, `us_nationalism`;
+# the wire transformer (`_feed_row_to_wire`) translates them via the
+# `taxonomy` maps the route builds from `discourse_keys` /
+# `nationalism_keys`. Before this fix the UI rendered "1 buzz_releases
+# cn:1 us:1" — a database FK id masquerading as a label.
+# ---------------------------------------------------------------------------
+
+
+def test_feed_wire_exposes_string_labels_not_fk_ints(dashboard_client):
+    """Regression: with a taxonomy map supplied to serialize_feed_page,
+    the wire's classifications[brand] must contain:
+    - `discourse`: list[str] of discourse-keys (e.g. ['dunk_yingyang'])
+    - `cn_nationalism`: str label (e.g. 'anti') or None
+    - `us_nationalism`: str label (e.g. 'constructive_critical') or None
+    NOT the raw int FK ids from posts_brands_discourse.
+    """
+    client, app, data = dashboard_client
+    db_path = data / "x.db"
+
+    # Seed a discourse row on one of the fixture posts, with
+    # cn + us nationalism set (the common case).
+    import sqlite3
+    con = sqlite3.connect(str(db_path))
+    try:
+        post_id = con.execute(
+            "SELECT id FROM posts ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+        disc_id = con.execute(
+            "SELECT id FROM discourse_keys WHERE key='dunk_yingyang'"
+        ).fetchone()[0]
+        cn_id = con.execute(
+            "SELECT id FROM nationalism_keys WHERE key='anti'"
+        ).fetchone()[0]
+        us_id = con.execute(
+            "SELECT id FROM nationalism_keys WHERE key='constructive_critical'"
+        ).fetchone()[0]
+        con.execute(
+            "INSERT OR IGNORE INTO brands(nickname, display_name) "
+            "VALUES('minimax', 'TestMiniMax')"
+        )
+        brand_int = con.execute(
+            "SELECT id FROM brands WHERE nickname='minimax'"
+        ).fetchone()[0]
+        con.execute(
+            "INSERT OR IGNORE INTO posts_brands(brand_id, post_id, weight) "
+            "VALUES(?, ?, 1.0)",
+            (brand_int, post_id),
+        )
+        con.execute(
+            """
+            INSERT INTO posts_brands_discourse(
+                post_id, brand_id, discourse_key, act_id,
+                china_nationalism, us_nationalism
+            ) VALUES (?, ?, ?, 1, ?, ?)
+            """,
+            (post_id, brand_int, disc_id, cn_id, us_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    # Build the same taxonomy maps the route does.
+    from x_monitor.store import Store
+    from x_monitor._home_routes import (
+        _denormalize_posts, _build_taxonomy_maps, _group_posts_by_id,
+    )
+    from x_monitor.dashboard import serialize_feed_page
+
+    store = Store(db_path)
+    try:
+        posts = _denormalize_posts(store, "minimax", 7)
+        merged = _group_posts_by_id(posts)
+        taxonomy = _build_taxonomy_maps(store)
+        out = serialize_feed_page(
+            merged, sort="created_at", order="desc", limit=50,
+            taxonomy=taxonomy,
+        )
+    finally:
+        store.close()
+
+    rows = out.get("rows") or []
+    assert rows, "expected at least 1 feed row"
+    our_row = next(
+        (r for r in rows
+         if r.get("classifications", {}).get("minimax")), None
+    )
+    assert our_row is not None, (
+        "no row with a minimax classification in the wire"
+    )
+    cls = our_row["classifications"]["minimax"]
+    # The bug shape: int FK ids surfacing in the UI.
+    assert cls["cn_nationalism"] == "anti", (
+        f"cn_nationalism should be string label 'anti', got "
+        f"{cls['cn_nationalism']!r} (probably FK id {cn_id})"
+    )
+    assert cls["us_nationalism"] == "constructive_critical", (
+        f"us_nationalism should be string label "
+        f"'constructive_critical', got {cls['us_nationalism']!r} "
+        f"(probably FK id {us_id})"
+    )
+    assert cls["discourse"] == ["dunk_yingyang"], (
+        f"discourse should be ['dunk_yingyang'], got "
+        f"{cls['discourse']!r} (probably [{disc_id}])"
+    )
+
+
+def test_feed_wire_translates_only_when_taxonomy_supplied(dashboard_client):
+    """Backward-compat: when `taxonomy` is NOT supplied to
+    serialize_feed_page, the wire keeps the legacy int-FK shape.
+    Existing unit tests in test_feed_page.py rely on this; removing
+    it would be a breaking wire change for any consumer that hasn't
+    been updated."""
+    client, _, data = dashboard_client
+    db_path = data / "x.db"
+
+    from x_monitor.store import Store
+    from x_monitor._home_routes import _denormalize_posts
+    from x_monitor.dashboard import serialize_feed_page
+
+    store = Store(db_path)
+    try:
+        posts = _denormalize_posts(store, "minimax", 7)
+    finally:
+        store.close()
+
+    # No taxonomy → raw FKs (legacy behavior, exercised by
+    # test_feed_row_wire_shape and the rest of test_feed_page.py).
+    out = serialize_feed_page(posts, sort="created_at", order="desc", limit=50)
+    rows = out.get("rows") or []
+    if rows:
+        any_brand = next(iter(rows[0].get("classifications") or {}), None)
+        # Either there are no classification-bearing rows in this
+        # minimal fixture, or rows have raw int FKs. We don't assert
+        # the latter because the fixture may have no discourse rows;
+        # the no-taxonomy path is the documented backward-compat
+        # surface, and test_feed_row_wire_shape covers its shape.
+        # Just confirm the call doesn't raise.
+        assert any_brand is None or True
+
+

@@ -131,6 +131,32 @@ def _group_posts_by_id(posts):
     return [by_id[twid] for twid in order]
 
 
+def _build_taxonomy_maps(store: Store) -> dict[str, Any]:
+    """Build the FK→label maps used by `_feed_row_to_wire` to translate
+    discourse / nationalism ints on the wire to their string labels.
+
+    The denormalized post dict carries INTEGER FKs (post-migration 020);
+    the UI / external consumers want readable string keys. Both maps are
+    tiny (discourse=10, nationalism=6 rows) so we build them on every
+    feed render — the cost is negligible compared to the SQL fan-out
+    the route already does.
+    """
+    return {
+        "discourse_id_to_key": {
+            r["id"]: r["key"]
+            for r in store._conn.execute(
+                "SELECT id, key FROM discourse_keys"
+            ).fetchall()
+        },
+        "nationalism_id_to_key": {
+            r["id"]: r["key"]
+            for r in store._conn.execute(
+                "SELECT id, key FROM nationalism_keys"
+            ).fetchall()
+        },
+    }
+
+
 def _denormalize_posts(
     store: Store,
     brand_id: str,
@@ -347,6 +373,7 @@ def render_home_multi(
             filters=_parse_filters_from_request(),
             limit=50,
             locale=locale,
+            taxonomy=_build_taxonomy_maps(store),
         )
     finally:
         store.close()
@@ -419,6 +446,7 @@ def render_home_brand(
             limit=50,
             brand_scope=brand,
             locale=locale,
+            taxonomy=_build_taxonomy_maps(store),
         )
     finally:
         store.close()
@@ -567,6 +595,7 @@ def build_home_feed_payload(
             cursor=cursor,
             limit=limit,
             locale=locale,
+            taxonomy=_build_taxonomy_maps(store),
         )
     finally:
         store.close()

@@ -1445,15 +1445,48 @@ def _feed_decode_cursor(cursor: str) -> tuple[str, str] | None:
     return iso, tweet_id
 
 
-def _feed_row_to_wire(post: dict[str, Any], locale: str) -> dict[str, Any]:
-    """Convert one denormalized post dict to the JSON wire shape (R10)."""
+def _feed_row_to_wire(
+    post: dict[str, Any],
+    locale: str,
+    taxonomy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Convert one denormalized post dict to the JSON wire shape (R10).
+
+    Args:
+        post: denormalized post dict from `_denormalize_posts`.
+        locale: locale for `text_translated`.
+        taxonomy: optional dict with two keys for FK→label translation:
+            - "discourse_id_to_key": dict[int, str]
+            - "nationalism_id_to_key": dict[int, str]
+          When provided, `discourse` (list of int FKs), `cn_nationalism`
+          and `us_nationalism` are translated to their string labels
+          before going on the wire. None → raw int FKs (legacy
+          behavior; existing unit tests rely on this).
+    """
     text_translated, is_translated = _pick_text(post, locale)
     text_original = post.get("text")
     classifications: dict[str, Any] = {}
     brand_nicknames = post.get("brand_nicknames") or []
     by_brand = post.get("classifications_by_brand") or {}
     for nick in brand_nicknames:
-        classifications[nick] = by_brand.get(nick, {})
+        per_brand = dict(by_brand.get(nick, {}))
+        if taxonomy is not None and per_brand:
+            discourse_map = taxonomy.get("discourse_id_to_key") or {}
+            nat_map = taxonomy.get("nationalism_id_to_key") or {}
+            if "discourse" in per_brand:
+                per_brand["discourse"] = [
+                    discourse_map.get(d) if d is not None else None
+                    for d in (per_brand.get("discourse") or [])
+                ]
+            if "cn_nationalism" in per_brand:
+                per_brand["cn_nationalism"] = nat_map.get(
+                    per_brand["cn_nationalism"]
+                )
+            if "us_nationalism" in per_brand:
+                per_brand["us_nationalism"] = nat_map.get(
+                    per_brand["us_nationalism"]
+                )
+        classifications[nick] = per_brand
     return {
         "tweet_id": post.get("tweet_id"),
         "created_at": post.get("created_at"),
@@ -1483,6 +1516,7 @@ def serialize_feed_page(
     brand_scope: str | None = None,
     locale: str = "en",
     seen_cursor_keys: set[tuple[str, str]] | None = None,
+    taxonomy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return one page of the Pushin' Weight home feed (R9, R10, R11, U4).
 
@@ -1602,7 +1636,7 @@ def serialize_feed_page(
         key = _post_eligible(p)
         if key is None:
             continue
-        rows.append(_feed_row_to_wire(p, locale))
+        rows.append(_feed_row_to_wire(p, locale, taxonomy=taxonomy))
 
     # next_cursor: None if this is the last page, OR the caller has
     # already returned the hard cap, OR the cursor token was malformed.
