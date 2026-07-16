@@ -354,23 +354,32 @@ def render_home_multi(
     store = Store(db_path)
     try:
         latest_run = _load_latest_run(runs_dir)
+        filters = _parse_filters_from_request()
+        # Brand narrowing: when filters["brands"] is a concrete list
+        # (control panel state), skip the SQL fan-out for filtered-out
+        # brands. "__all__" / absent → iterate all enabled models.
+        brands_filter = filters.get("brands")
+        if brands_filter is not None and brands_filter != "__all__":
+            active_models = [b for b in config.enabled_models if b in brands_filter]
+        else:
+            active_models = list(config.enabled_models)
         posts_by_brand: dict[str, list[dict[str, Any]]] = {}
-        for b in config.enabled_models:
+        for b in active_models:
             try:
                 posts_by_brand[b] = _denormalize_posts(store, b, window_days)
             except Exception as exc:
                 log.warning("denormalize_posts(%s) failed: %s", b, exc)
                 posts_by_brand[b] = []
         chart = serialize_home_chart(
-            config.enabled_models,
+            active_models,
             posts_by_brand,
             window_days=window_days,
             latest_run=latest_run,
-            filters=_parse_filters_from_request(),
+            filters=filters,
         )
         feed = serialize_feed_page(
             [p for plist in posts_by_brand.values() for p in plist],
-            filters=_parse_filters_from_request(),
+            filters=filters,
             limit=50,
             locale=locale,
             taxonomy=_build_taxonomy_maps(store),

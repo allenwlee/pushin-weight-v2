@@ -1167,14 +1167,25 @@ def serialize_home_chart(
         for i in range(window_days - 1, -1, -1)
     ]
 
-    series: dict[str, list[int]] = {b: [0] * window_days for b in enabled_models}
+    # Brand narrowing: when filters["brands"] is a concrete list (the
+    # control panel's multi-brand checkbox state), intersect it with
+    # enabled_models. "__all__" sentinel and absent key disable this.
+    # An empty result means the user unchecked every brand — emit an
+    # empty payload rather than iterating all models.
+    brands_filter = filters.get("brands")
+    if brands_filter is not None and brands_filter != "__all__":
+        visible_models = [b for b in enabled_models if b in brands_filter]
+    else:
+        visible_models = list(enabled_models)
+
+    series: dict[str, list[int]] = {b: [0] * window_days for b in visible_models}
     stacked: dict[str, dict[str, list[int]]] = {
         b: {dk: [0] * window_days for dk in _DASHBOARD_DISCOURSE_KEYS}
-        for b in enabled_models
+        for b in visible_models
     }
-    totals: dict[str, int] = {b: 0 for b in enabled_models}
+    totals: dict[str, int] = {b: 0 for b in visible_models}
 
-    for brand in enabled_models:
+    for brand in visible_models:
         for p in posts_by_brand.get(brand, []):
             if not _post_matches_filter(p, filters):
                 continue
@@ -1205,7 +1216,7 @@ def serialize_home_chart(
                         stacked[brand].setdefault("__none__", [0] * window_days)
                         stacked[brand]["__none__"][idx] += 1
 
-    colors = {b: MODEL_ACCENT_COLORS.get(b, "#9ca3af") for b in enabled_models}
+    colors = {b: MODEL_ACCENT_COLORS.get(b, "#9ca3af") for b in visible_models}
 
     return {
         "days": days,

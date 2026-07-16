@@ -571,3 +571,57 @@ def test_feed_wire_exposes_string_labels_not_fk_ints(dashboard_client):
     assert cls["us_nationalism"] == "constructive_critical"
     assert cls["discourse"] == ["dunk_yingyang"]
 
+
+
+# ---------------------------------------------------------------------------
+# Brand filter narrowing on the multi-brand chart (U2)
+# ---------------------------------------------------------------------------
+
+
+def test_api_home_chart_json_with_brand_filter_narrows_series(dashboard_client):
+    """filters.brands=[\"qwen\"] → only qwen appears in series/colors/totals."""
+    client, _, _ = dashboard_client
+    resp = client.get('/api/v1/home.chart.json?filters={"brands":["qwen"]}')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert set(body["series"].keys()) == {"qwen"}
+    assert set(body["colors"].keys()) == {"qwen"}
+    assert set(body["totals"].keys()) == {"qwen"}
+    # Echoes the filter back
+    assert body["applied_filters"]["brands"] == ["qwen"]
+
+
+def test_api_home_chart_json_with_empty_brand_filter_returns_empty(dashboard_client):
+    """filters.brands=[] → all chart series/colors/totals dicts are empty."""
+    client, _, _ = dashboard_client
+    resp = client.get('/api/v1/home.chart.json?filters={"brands":[]}')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["series"] == {}
+    assert body["colors"] == {}
+    assert body["totals"] == {}
+    # Days axis is still rendered (so the chart canvas has structure)
+    assert len(body["days"]) == 7
+
+
+def test_api_home_chart_json_with_all_sentinel_returns_all_brands(dashboard_client):
+    """filters.brands=\"__all__\" → no narrowing."""
+    client, _, _ = dashboard_client
+    resp = client.get('/api/v1/home.chart.json?filters={"brands":"__all__"}')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    # All configured brands present (the fixture has a non-trivial set)
+    assert len(body["series"]) >= 2
+    assert body["applied_filters"]["brands"] == "__all__"
+
+
+def test_api_home_feed_json_with_brand_filter_narrows_rows(dashboard_client):
+    """filters.brands=[\"qwen\"] → every returned row's brand_nicknames contains qwen."""
+    client, _, _ = dashboard_client
+    resp = client.get('/api/v1/home.feed.json?limit=50&filters={"brands":["qwen"]}')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    for row in body["rows"]:
+        assert "qwen" in row["brand_nicknames"], (
+            f"row {row['tweet_id']} leaked through brands filter"
+        )
