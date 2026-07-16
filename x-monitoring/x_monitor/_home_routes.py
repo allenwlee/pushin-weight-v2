@@ -78,6 +78,59 @@ def _parse_filters_from_request() -> dict[str, Any]:
     return out
 
 
+def _group_posts_by_id(posts):
+    """U2: Group per-brand denormalized posts by `tweet_id`, so the
+    home feed renders one row per post regardless of how many brands
+    mention it. Merges `brand_nicknames`, `brands`, and
+    `classifications_by_brand` across occurrences. Other top-level
+    fields (text, created_at, account, etc.) come from the first
+    occurrence. Caller is responsible for sorting.
+    """
+    by_id = {}
+    order = []
+    for p in posts:
+        twid = p.get("tweet_id")
+        if not twid:
+            continue
+        if twid not in by_id:
+            by_id[twid] = dict(p)
+            by_id[twid]["brand_nicknames"] = list(p.get("brand_nicknames") or [])
+            by_id[twid]["brands"] = list(p.get("brands") or [])
+            by_id[twid]["classifications_by_brand"] = dict(
+                p.get("classifications_by_brand") or {}
+            )
+            order.append(twid)
+            continue
+        out = by_id[twid]
+        for n in (p.get("brand_nicknames") or []):
+            if n not in out["brand_nicknames"]:
+                out["brand_nicknames"].append(n)
+        seen_nicks = {b.get("nickname") for b in out["brands"] if b.get("nickname")}
+        for b in (p.get("brands") or []):
+            if b.get("nickname") not in seen_nicks:
+                out["brands"].append(b)
+                seen_nicks.add(b.get("nickname"))
+        cb = p.get("classifications_by_brand") or {}
+        for nick, cls in cb.items():
+            if nick not in out["classifications_by_brand"]:
+                out["classifications_by_brand"][nick] = cls
+            else:
+                existing = out["classifications_by_brand"][nick]
+                for subkey in ("discourse", "post_types", "sentiments"):
+                    extra = cls.get(subkey) or []
+                    have = existing.get(subkey) or []
+                    seen = set(have)
+                    for v in extra:
+                        if v not in seen:
+                            have.append(v)
+                            seen.add(v)
+                    existing[subkey] = have
+                for subkey in ("cn_nationalism", "us_nationalism"):
+                    if existing.get(subkey) is None and cls.get(subkey) is not None:
+                        existing[subkey] = cls[subkey]
+    return [by_id[twid] for twid in order]
+
+
 def _denormalize_posts(
     store: Store,
     brand_id: str,
@@ -209,7 +262,9 @@ def _denormalize_posts(
         """,
         (brand_id, *tweet_ids),
     ).fetchall()
-    role_by_tweet = {r["tweet_id"]: r["role_key"] for r in role_rows if r["role_key"]}
+    # Keep None values so the caller can distinguish 'row exists
+    # but role_id is null' from 'no brands_accounts row at all'.
+    role_by_tweet = {r["tweet_id"]: r["role_key"] for r in role_rows}
 
     for p in base:
         twid = p.get("tweet_id")
@@ -219,7 +274,13 @@ def _denormalize_posts(
         nat = nat_by_tweet.get(twid, {})
         p["cn_nationalism"] = nat.get("cn_nationalism")
         p["us_nationalism"] = nat.get("us_nationalism")
-        p["role_key"] = role_by_tweet.get(twid, "community")
+        # U3: was  — fabricated a
+        # default when brands_accounts had no row. The _lenient SQL LEFT
+        # JOIN below preserves that signal as None, not a literal
+        # string. account.role mirrors this so the wire shape does
+        # not leak a made-up role.
+        rk = role_by_tweet.get(twid)  # None when no row, str when present
+        p["role_key"] = rk
         p["unsanctioned"] = twid in flagged_tweets
         p["brand_nicknames"] = [brand_id]
         p["brands"] = [
@@ -492,8 +553,13 @@ def build_home_feed_payload(
                 all_posts.extend(_denormalize_posts(store, b, window_days))
             except Exception as exc:
                 log.warning("denormalize_posts(%s) failed: %s", b, exc)
+        # U2: a single post surfaced under multiple brands appears N
+        # times in  (once per brand). Group by tweet_id so
+        # the feed renders one row per post with all brand_nicknames
+        # and classifications inside.
+        merged_posts = _group_posts_by_id(all_posts)
         return serialize_feed_page(
-            all_posts,
+            merged_posts,
             filters=_parse_filters_from_request(),
             sort=sort,
             order=order,

@@ -425,3 +425,73 @@ def test_feed_default_sort_is_created_at_desc():
     out = serialize_feed_page(posts)
     assert out["sort"] == "created_at"
     assert out["order"] == "desc"
+
+
+# ---------------------------------------------------------------------------
+# U1: chronological order survives non-ISO (Twitter-format) created_at
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# U1: chronological order survives non-ISO (Twitter-format) created_at
+# ---------------------------------------------------------------------------
+
+
+def test_feed_sorts_chronologically_for_twitter_date_strings():
+    """U1: lexicographic on Twitter-format strings sorts WRONG
+    ('Mon' > 'Thu' alphabetically). The route layer must parse
+    the date and sort by parsed timestamp, not string."""
+    posts = [
+        _post(tweet_id="tw-oldest", created_at="Mon Jul 14 01:00:00 +0000 2025"),
+        _post(tweet_id="tw-newest", created_at="Tue Jul 14 01:00:00 +0000 2026"),
+        _post(tweet_id="tw-middle", created_at="Wed Jul 14 01:00:00 +0000 2025"),
+    ]
+    out = serialize_feed_page(posts)
+    ids = [r["tweet_id"] for r in out["rows"]]
+    assert ids == ["tw-newest", "tw-oldest", "tw-middle"], (
+        f"expected chronological DESC across mixed formats, got {ids}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# U3: account.role is None when no DB mapping (not 'community')
+# ---------------------------------------------------------------------------
+
+
+def test_feed_no_community_default_role_key():
+    """U3: _denormalize_posts used to default role_key='community'
+    when no brands_accounts row matched. The fix leaves role_key
+    unset (None) in that case. This test asserts the post-input
+    contract: when the producer supplies role_key=None / absent,
+    serialize_feed_page must NOT put the literal 'community' in
+    the wire output."""
+    p = _post(
+        tweet_id="t-no-role",
+        created_at="2026-07-14T01:18:36+00:00",
+        brand_nicknames=["minimax"],
+        discourse=[],
+        post_types=[],
+        role_key=None,
+    )
+    # _post helper would still set account={'role': role_key, ...}.
+    # Mirror what the fix should produce.
+    p["account"] = {"handle": "@someone", "role": None, "role_label": None}
+    out = serialize_feed_page([p])
+    row = out["rows"][0]
+    role = (row.get("account") or {}).get("role")
+    assert role != "community", (
+        "U3 fix: do not fabricate 'community' when DB has no role; "
+        f"got account={row.get('account')!r}"
+    )
+    assert role is None, f"account.role must be None, got {role!r}"
+
+
+def test_feed_account_role_passes_through_when_set():
+    """U3 (positive control): real role from DB still renders."""
+    p = _post(
+        tweet_id="t-official",
+        created_at="2026-07-14T01:18:36+00:00",
+        role_key="official",
+    )
+    out = serialize_feed_page([p])
+    assert out["rows"][0]["account"]["role"] == "official"

@@ -1546,12 +1546,16 @@ def serialize_feed_page(
     # window or a path that joins in Python).
     sort_key = _FEED_SORT_COLUMNS[sort]
     if sort_key == "created_at":
-        # Lexicographic on ISO-8601 strings is chronological for
-        # properly-formatted ISO timestamps (matches cursor narrowing).
-        sorted_posts = sorted(
-            posts, key=lambda p: (p.get("created_at") or "", p.get("tweet_id") or ""),
-            reverse=(order == "desc"),
-        )
+        # Parse every created_at string into an aware UTC datetime before
+        # sorting. Lexicographic only works for ISO-formatted strings; the
+        # Twitter legacy format ("Mon Jul 14 01:18:36 +0000 2026") sorts
+        # by weekday letter ("Wed" > "Mon") — wrong.
+        from x_monitor.store import _parse_post_created_at
+        epoch_min = datetime.min.replace(tzinfo=timezone.utc)
+        def _sort_key(p):
+            dt = _parse_post_created_at(p.get("created_at")) or epoch_min
+            return (dt, p.get("tweet_id") or "")
+        sorted_posts = sorted(posts, key=_sort_key, reverse=(order == "desc"))
     else:  # like_count
         sorted_posts = sorted(
             posts, key=lambda p: p.get("like_count") or 0,
