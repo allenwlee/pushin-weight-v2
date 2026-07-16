@@ -566,3 +566,48 @@ body {
 /* Brand h1 in the topbar (single-brand page) */
 .brand-title { font-size: 16px; font-weight: 600; }
 .brand-title small { color: var(--muted); font-weight: 400; }
+
+/* U2/U3/U4 (feat/feed-pretty-dates-and-links, 2026-07-16):
+   - feed-date-link / feed-handle-link: anchors in the feed row, no
+     default underline, color follows the muted-cell text.
+   - .cls-block / .cls-brand / .cls-label: per-brand grouped
+     classifications column (U4). */
+.feed .feed-date-link,
+.feed .feed-handle-link {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+.feed .feed-date-link:hover,
+.feed .feed-handle-link:hover {
+  color: var(--link);
+  border-bottom-color: var(--link);
+}
+.feed .cls-block {
+  display: block;
+  margin-bottom: 6px;
+  padding: 4px 6px;
+  border-left: 2px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.feed .cls-brand {
+  display: block;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.feed .cls-row {
+  display: block;
+  margin-top: 2px;
+}
+.feed .cls-label {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: lowercase;
+  margin-right: 4px;
+  min-width: 64px;
+}

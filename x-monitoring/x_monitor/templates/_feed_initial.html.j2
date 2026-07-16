@@ -2,10 +2,29 @@
 {# First-batch Jinja render of the Pushin' Weight feed rows.
    The `rows` and `next_cursor` are populated by serialize_feed_page
    on the parent page render. Subsequent batches are appended by
-   pw-feed.js via IntersectionObserver + fetch. #}
+   pw-feed.js via IntersectionObserver + fetch.
+
+   U2/U3/U4 (feat/feed-pretty-dates-and-links, 2026-07-16):
+   - U2: pretty relative time on the date cell, with a hover tooltip
+     showing the user's local absolute time.
+   - U3: date and handle cells are anchors to x.com; new-tab safe.
+   - U4: classifications column renders one .cls-block per brand
+     (post_types / discourses / sentiments / cn / us) instead of a
+     flat pill stream.
+   The JS-side renderRow() mirrors this template so paginated rows
+   look identical to the server-rendered batch. #}
 {% for row in feed.rows %}
-  <tr data-pw-feed-row data-tweet-id="{{ row.tweet_id }}">
-    <td class="muted-cell">{{ row.created_at }}</td>
+  {% set _iso = row.get('created_at_iso') %}
+  {% set _now_jinja = now if now is defined else none %}
+  <tr data-pw-feed-row data-tweet-id="{{ row.tweet_id }}" data-created-at-iso="{{ _iso or '' }}">
+    <td class="muted-cell">
+      <a class="feed-date-link"
+         href="https://x.com/i/status/{{ row.tweet_id }}"
+         target="_blank" rel="noopener noreferrer"
+         title="{{ row.created_at }}">
+        {{ row.created_at }}
+      </a>
+    </td>
     <td>
       {% for b in row.brands %}
         <span class="pill">{{ b.display_name_zh_cn if active_locale == 'zh_cn' else (b.display_name_en or b.nickname) }}</span>
@@ -22,20 +41,37 @@
       <div class="cell-truncated" data-pw-cell-truncated>{{ row.text or '' }}</div>
     </td>
     <td>
-      {% for nick, cls in row.classifications.items() %}
-        {% for d in cls.get('discourse') or [] %}
-          <span class="pill">{{ d }}</span>
+      {% set _nicknames = row.brand_nicknames or [] %}
+      {% set _bybrand = row.classifications or {} %}
+      {% for nick in _nicknames %}
+        {% set cls = _bybrand.get(nick) or {} %}
+        {% set _meta = {} %}
+        {% for b in row.brands or [] %}
+          {% if b.nickname == nick %}{% set _meta = b %}{% endif %}
         {% endfor %}
-        {% for pt in cls.get('post_types') or [] %}
-          <span class="pill">{{ pt }}</span>
-        {% endfor %}
-        {% if cls.get('cn_nationalism') %}<span class="pill muted">cn:{{ cls.cn_nationalism }}</span>{% endif %}
-        {% if cls.get('us_nationalism') %}<span class="pill muted">us:{{ cls.us_nationalism }}</span>{% endif %}
+        <div class="cls-block">
+          <span class="cls-brand">{{ _meta.display_name_zh_cn if active_locale == 'zh_cn' else (_meta.display_name_en or _meta.nickname or nick) }}</span>
+          {% if cls.get('post_types') %}<span class="cls-row"><span class="cls-label">types:</span> {% for v in cls.get('post_types') or [] %}<span class="pill">{{ v }}</span>{% endfor %}</span>{% endif %}
+          {% if cls.get('discourse') %}<span class="cls-row"><span class="cls-label">discourses:</span> {% for v in cls.get('discourse') or [] %}<span class="pill">{{ v if v is not none else '—' }}</span>{% endfor %}</span>{% endif %}
+          {% if cls.get('sentiments') %}<span class="cls-row"><span class="cls-label">sentiments:</span> {% for v in cls.get('sentiments') or [] %}<span class="pill">{{ v }}</span>{% endfor %}</span>{% endif %}
+          {% if cls.get('cn_nationalism') %}<span class="cls-row"><span class="cls-label">cn:</span> <span class="pill muted">{{ cls.get('cn_nationalism') }}</span></span>{% endif %}
+          {% if cls.get('us_nationalism') %}<span class="cls-row"><span class="cls-label">us:</span> <span class="pill muted">{{ cls.get('us_nationalism') }}</span></span>{% endif %}
+        </div>
       {% endfor %}
       {% if row.unsanctioned %}<span class="pill flagged">unsanctioned</span>{% endif %}
     </td>
     <td>
-      <div>{{ row.account.handle }} · <span class="pill role-{{ row.account.role }}">{{ row.account.role_label }}</span></div>
+      {% set _handle = row.account.handle or '' %}
+      {% if _handle %}
+        <a class="feed-handle-link"
+           href="https://x.com/{{ _handle.lstrip('@') }}"
+           target="_blank" rel="noopener noreferrer">
+          {{ _handle }}
+        </a>
+      {% else %}
+        @unknown
+      {% endif %}
+      · <span class="pill role-{{ row.account.role or '' }}">{{ row.account.role_label or '' }}</span>
     </td>
   </tr>
 {% else %}

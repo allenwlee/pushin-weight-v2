@@ -1,7 +1,8 @@
 // {{AGENT_ATTRIBUTION}}
 // x_monitor/static/pw-feed.js
 // Pushin' Weight (走个量) bottomless-scroll feed (U7 of
-// feat/pushin-weight-home-pages, 2026-07-06).
+// feat/pushin-weight-home-pages, 2026-07-06, U2/U3/U4/U5 of
+// feat/feed-pretty-dates-and-links, 2026-07-16).
 //
 // - Wires IntersectionObserver on a `.feed-sentinel` element.
 // - When sentinel enters viewport, fetch
@@ -12,12 +13,14 @@
 //   `pw:locale-change` (re-renders the existing rows with localized
 //   labels — does NOT re-fetch).
 // - Sort header buttons cycle through `desc / asc / default` per click.
+// - Auto-refreshes the first page every 60s (U5).
 
 (function () {
   'use strict';
 
   var HARD_CAP = 500;     // mirror _FEED_HARD_CAP from the data layer
   var BATCH = 50;
+  var REFRESH_MS = 60_000;
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) {
@@ -47,10 +50,78 @@
     return root.getAttribute('data-pw-brand-scope') || null;
   }
 
+  // ---------------------------------------------------------------------
+  // U2: pretty relative-time formatter
+  // ---------------------------------------------------------------------
+
+  // Thresholds in seconds. <60s: "just now"; <60min: "Nm ago"; <24h:
+  // "Nh ago"; <7d: weekday short (e.g. "Mon"); same year: "Mon DD";
+  // older: "Mon DD YYYY".
+  function formatRelative(isoOrDate, now) {
+    if (!isoOrDate) return '';
+    var d = (isoOrDate instanceof Date) ? isoOrDate : new Date(isoOrDate);
+    if (isNaN(d.getTime())) return '';
+    var n = now || new Date();
+    var deltaSec = Math.max(0, Math.floor((n.getTime() - d.getTime()) / 1000));
+    if (deltaSec < 60) return 'just now';
+    if (deltaSec < 60 * 60) return Math.floor(deltaSec / 60) + 'm ago';
+    if (deltaSec < 60 * 60 * 24) return Math.floor(deltaSec / 3600) + 'h ago';
+    // 24h - 7d: weekday
+    if (deltaSec < 60 * 60 * 24 * 7) {
+      return d.toLocaleDateString(undefined, { weekday: 'short' });
+    }
+    // Same year: "Mon DD"; older: "Mon DD YYYY"
+    if (d.getFullYear() === n.getFullYear()) {
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+    return d.toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  }
+
+  // U2: absolute timestamp in the user's local timezone, for the
+  // hover tooltip. Falls back to the raw ISO string if Intl is missing.
+  function formatLocalTooltip(isoOrDate) {
+    if (!isoOrDate) return '';
+    var d = (isoOrDate instanceof Date) ? isoOrDate : new Date(isoOrDate);
+    if (isNaN(d.getTime())) return '';
+    try {
+      return d.toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch (e) {
+      return d.toISOString();
+    }
+  }
+
+  // U2: re-render visible timestamps in place. Used on init() and
+  // every auto-refresh tick so the relative-time chips stay current
+  // even when the page doesn't reload.
+  function formatVisibleTimestamps() {
+    var now = new Date();
+    $$('[data-pw-feed-row]').forEach(function (tr) {
+      var iso = tr.getAttribute('data-created-at-iso');
+      if (!iso) return;
+      var a = tr.querySelector('a.feed-date-link');
+      if (a) {
+        a.textContent = formatRelative(iso, now);
+        a.setAttribute('title', formatLocalTooltip(iso));
+      }
+    });
+  }
+
+  // Exposed for unit tests (Node).
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { formatRelative: formatRelative, formatLocalTooltip: formatLocalTooltip };
+    return;
+  }
+
   function renderRow(row) {
     var tr = document.createElement('tr');
     tr.setAttribute('data-pw-feed-row', '');
     tr.setAttribute('data-tweet-id', row.tweet_id || '');
+    tr.setAttribute('data-created-at-iso', row.created_at_iso || '');
     tr.innerHTML = renderRowHtml(row);
     return tr;
   }
@@ -64,7 +135,20 @@
       .replace(/"/g, '&quot;');
   }
 
+  // U3 helper: strip a leading "@" if present.
+  function cleanHandle(h) {
+    if (!h) return '';
+    return h.replace(/^@+/, '');
+  }
+
   function renderRowHtml(row) {
+    var now = new Date();
+    var relTime = formatRelative(row.created_at_iso || row.created_at, now);
+    var tooltip = formatLocalTooltip(row.created_at_iso || row.created_at);
+    var dateCell = '<a class="feed-date-link" ' +
+      'href="https://x.com/i/status/' + escapeHtml(row.tweet_id || '') + '" ' +
+      'target="_blank" rel="noopener noreferrer" ' +
+      'title="' + escapeHtml(tooltip) + '">' + escapeHtml(relTime) + '</a>';
     var langSub = row.lang_detected
       ? '<div class="lang-sub">translated from: [' + escapeHtml(row.lang_detected) + ']</div>'
       : '';
@@ -72,29 +156,80 @@
       var label = b.display_name_zh_cn || b.display_name_en || b.nickname || '';
       return '<span class="pill">' + escapeHtml(label) + '</span>';
     }).join('');
-    var classPills = [];
-    var classifications = row.classifications || {};
-    Object.keys(classifications).forEach(function (nick) {
-      var cls = classifications[nick] || {};
-      (cls.discourse || []).forEach(function (d) { classPills.push('<span class="pill">' + escapeHtml(d) + '</span>'); });
-      (cls.post_types || []).forEach(function (pt) { classPills.push('<span class="pill">' + escapeHtml(pt) + '</span>'); });
-      if (cls.cn_nationalism) classPills.push('<span class="pill muted">cn:' + escapeHtml(cls.cn_nationalism) + '</span>');
-      if (cls.us_nationalism) classPills.push('<span class="pill muted">us:' + escapeHtml(cls.us_nationalism) + '</span>');
+    // U4: per-brand grouped classifications.
+    var classBlocks = [];
+    var nicknames = row.brand_nicknames || [];
+    var byBrand = row.classifications || {};
+    var brandMeta = {};
+    (row.brands || []).forEach(function (b) {
+      if (b && b.nickname) brandMeta[b.nickname] = b;
     });
-    if (row.unsanctioned) classPills.push('<span class="pill flagged">unsanctioned</span>');
-    var handle = (row.account && row.account.handle) || '';
+    nicknames.forEach(function (nick) {
+      var cls = byBrand[nick] || {};
+      var meta = brandMeta[nick] || {};
+      var headerLabel = meta.display_name_zh_cn || meta.display_name_en || meta.nickname || nick;
+      var lines = [];
+      var pts = cls.post_types || [];
+      var disc = cls.discourse || [];
+      var sents = cls.sentiments || [];
+      if (pts.length) {
+        lines.push(
+          '<span class="cls-label">types:</span> ' +
+          pts.map(function (v) { return '<span class="pill">' + escapeHtml(v) + '</span>'; }).join('')
+        );
+      }
+      if (disc.length) {
+        lines.push(
+          '<span class="cls-label">discourses:</span> ' +
+          disc.map(function (v) {
+            return v == null
+              ? '<span class="pill muted">—</span>'
+              : '<span class="pill">' + escapeHtml(v) + '</span>';
+          }).join('')
+        );
+      }
+      if (sents.length) {
+        lines.push(
+          '<span class="cls-label">sentiments:</span> ' +
+          sents.map(function (v) { return '<span class="pill">' + escapeHtml(v) + '</span>'; }).join('')
+        );
+      }
+      if (cls.cn_nationalism) {
+        lines.push('<span class="cls-label">cn:</span> <span class="pill muted">' + escapeHtml(cls.cn_nationalism) + '</span>');
+      }
+      if (cls.us_nationalism) {
+        lines.push('<span class="cls-label">us:</span> <span class="pill muted">' + escapeHtml(cls.us_nationalism) + '</span>');
+      }
+      classBlocks.push(
+        '<div class="cls-block">' +
+          '<span class="cls-brand">' + escapeHtml(headerLabel) + '</span>' +
+          (lines.length ? lines.join('<br>') : '') +
+        '</div>'
+      );
+    });
+    if (row.unsanctioned) {
+      classBlocks.push('<div class="cls-block"><span class="pill flagged">unsanctioned</span></div>');
+    }
+    var handleRaw = (row.account && row.account.handle) || '';
+    var handleLabel = handleRaw || '@unknown';
+    var handleCell = handleRaw
+      ? '<a class="feed-handle-link" ' +
+          'href="https://x.com/' + escapeHtml(cleanHandle(handleRaw)) + '" ' +
+          'target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(handleLabel) + '</a>'
+      : escapeHtml(handleLabel);
     var role = (row.account && row.account.role) || '';
     var roleLabel = (row.account && row.account.role_label) || role;
     return (
-      '<td class="muted-cell">' + escapeHtml(row.created_at || '') + '</td>' +
+      '<td class="muted-cell">' + dateCell + '</td>' +
       '<td>' + brandPills + '</td>' +
       '<td>' + langSub +
         '<div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text_translated || '') + '</div>' +
         '<div class="muted-cell">★ ' + (row.like_count || 0) + '</div>' +
       '</td>' +
       '<td><div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text || '') + '</div></td>' +
-      '<td>' + classPills.join('') + '</td>' +
-      '<td>' + escapeHtml(handle) + ' · <span class="pill role-' + escapeHtml(role) + '">' + escapeHtml(roleLabel) + '</span></td>'
+      '<td>' + classBlocks.join('') + '</td>' +
+      '<td>' + handleCell + ' · <span class="pill role-' + escapeHtml(role) + '">' + escapeHtml(roleLabel) + '</span></td>'
     );
   }
 
@@ -130,11 +265,9 @@
     if (rows.length === 0) return null;
     var last = rows[rows.length - 1];
     var twid = last.getAttribute('data-tweet-id');
-    // created_at is in the first cell
-    var firstCell = last.querySelector('td');
-    var createdAt = firstCell ? firstCell.textContent : '';
-    if (!createdAt || !twid) return null;
-    return createdAt + '|' + twid;
+    var iso = last.getAttribute('data-created-at-iso');
+    if (!iso || !twid) return null;
+    return iso + '|' + twid;
   }
 
   function fetchBatch(filters) {
@@ -227,6 +360,7 @@
             tbody.appendChild(renderRow(row));
           });
           attachCellClickHandlers(tbody);
+          formatVisibleTimestamps();
           state.cursor = payload.next_cursor;
           state.total += payload.rows.length;
           state.fetching = false;
@@ -276,10 +410,54 @@
     });
   }
 
+  // U5: auto-refresh the first page every REFRESH_MS so newly-arrived
+  // posts surface and relative timestamps stay current. Pause when the
+  // tab is hidden.
+  var refreshTimer = null;
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    refreshTimer = setInterval(function () {
+      if (document.hidden) return;
+      var root = getFeedRoot();
+      if (!root) return;
+      var tbody = $('[data-pw-feed-body]', root);
+      if (!tbody) return;
+      // Refetch the first page and replace the body.
+      state.cursor = null;
+      fetchBatch().then(function (payload) {
+        if (!payload || !payload.rows) return;
+        tbody.innerHTML = '';
+        payload.rows.forEach(function (row) {
+          tbody.appendChild(renderRow(row));
+        });
+        attachCellClickHandlers(tbody);
+        formatVisibleTimestamps();
+        state.cursor = payload.next_cursor;
+        state.total = payload.rows.length;
+        if (!state.cursor) {
+          state.exhausted = true;
+          showEnd();
+        } else {
+          state.exhausted = false;
+          hideEnd();
+        }
+      });
+    }, REFRESH_MS);
+  }
+  function stopAutoRefresh() {
+    if (refreshTimer != null) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+  }
+
   function init() {
     if (!getFeedRoot()) return;
     var tbody = $('[data-pw-feed-body]');
     if (tbody) attachCellClickHandlers(tbody);
+    // Format the server-rendered timestamps immediately so the
+    // user never sees the raw Twitter-format string.
+    formatVisibleTimestamps();
     // Click anywhere outside the expanded cell collapses it.
     document.addEventListener('click', function (e) {
       if (!e.target.closest('[data-pw-cell-truncated]')) {
@@ -289,6 +467,7 @@
     wireSentinel();
     wireSortHeaders();
     wireFilterChange();
+    startAutoRefresh();
   }
 
   if (document.readyState === 'loading') {
