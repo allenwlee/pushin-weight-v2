@@ -1,6 +1,8 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
 # TwitterAPI.io live queries — v1.7.x (20 brands, A + B1/B2/B3 + C1)
 
+Last updated: 2026-07-16-14:21:40
+
 **Regenerated:** 2026-07-09 (JST) — live-query inventory re-verified against `feat/filter-yield-ramp-probe` (the active branch). The live cycle still emits the same 5-call plan (A + B1 + B2 + B3 + C1), but the inventory-count and Call B2 sections are corrected from prior passes. Drift from the previous (2026-07-08) regeneration:
 
 - **Call B2 length corrected: 468 chars (not 474).** The per-brand token list for `mimo` is 8 tokens (not 9); the parser at `x_monitor/query_plan.py:171-216` reads the first paren group of Q2 (which omits bare `小米`) — the Q5 form `(MiMo OR 小米 OR …)` that *does* include bare `小米` is never selected for Call B. The 8-token Q2-derived string is `MiMo, Xiaomi MiMo, 小米 MiMo, "MiMo-V2.5-Pro", "MiMo-V2.5", "MiMo Code", "MiMo-7B", "MiMo-VL"`. Q5 in `mimo.yaml` adds bare `小米` but drops `Xiaomi MiMo`/`小米 MiMo` — the parser picks Q2 first and breaks.

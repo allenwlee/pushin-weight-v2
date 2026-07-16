@@ -1,6 +1,8 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
 # TwitterAPI.io call inventory
 
+Last updated: 2026-07-16-14:21:40
+
 **Repo:** `x-monitoring` (Flask + htmx dashboard for X.com / Twitter monitoring of AI models — `minimax`, `qwen`, `deepseek`, `glm`, `xiaomi_mimo`, `moonshot_kimi`, `inclusionai`, `mistral`, `sakana`, `stepfun`, `ernie`, `hunyuan`, `llama`, `nvidia_nemo`, `doubao`, `yi`, `sensechat`, `exaone`, `kuaishou`, `upstage`)
 **Migration origin:** 2026-06-08 — replaced `automation-lab/twitter-scraper` (Apify) with TwitterAPI.io. Cookie-free, ~95% cheaper ($0.15/1k tweets vs $3/1k on Apify).
 **Source of truth:** `x-monitoring/x_monitor/apify.py` (`TwitterApiClient` class) and its callers.

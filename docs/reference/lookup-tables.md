@@ -1,5 +1,7 @@
 # Lookup Tables
 
+Last updated: 2026-07-16-14:21:40
+
 Small, finite, name-only tables that constrain what the classifier (LLM-side)
 and the parser (post-process) are allowed to emit. Their rows are referenced
 via foreign key from the per-post signal/discourse tables.
