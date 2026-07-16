@@ -1052,10 +1052,23 @@ def _post_matches_filter(
                         "off"  → posts with `unsanctioned=True` are EXCLUDED.
                         "only" → posts with `unsanctioned=False` are EXCLUDED.
                         "any"  → no filter.
+        - brands:       list[str] | "__all__" | None
+                        A post matches if any of its `brand_nicknames`
+                        intersects the list. Empty list narrows to zero
+                        posts (intentional). `"__all__"` or absent key
+                        disables this filter (default "all on").
 
     Used by both `serialize_home_chart` (U2) and `serialize_feed_page`
     (U4) so the chart and feed share one filter-narrowing predicate.
     """
+    # Brands: any overlap with the active set wins. Sentinel "__all__"
+    # or absent key means "no narrowing". Empty list narrows to zero.
+    brands = filters.get("brands")
+    if brands is not None and brands != "__all__":
+        post_brands = post.get("brand_nicknames") or []
+        if not any(b in brands for b in post_brands):
+            return False
+
     # Discourse: any overlap with the active set wins
     discourse = filters.get("discourse") or []
     if discourse:

@@ -557,3 +557,71 @@ def test_feed_account_role_passes_through_when_set():
     )
     out = serialize_feed_page([p])
     assert out["rows"][0]["account"]["role"] == "official"
+
+
+# ---------------------------------------------------------------------------
+# Brand filter narrowing (control panel multi-brand checkbox)
+# ---------------------------------------------------------------------------
+
+
+def test_feed_filter_brands_overlap_includes_post():
+    """brands=["qwen","glm"] + post with brand_nicknames=["qwen"] → row included."""
+    now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(
+            tweet_id=f"t-{i:03d}",
+            created_at=(now - timedelta(hours=i)).isoformat(),
+            brand_nicknames=["qwen"] if i < 5 else ["deepseek"],
+        )
+        for i in range(10)
+    ]
+    out = serialize_feed_page(posts, filters={"brands": ["qwen", "glm"]}, limit=50)
+    assert len(out["rows"]) == 5
+    for r in out["rows"]:
+        assert "qwen" in r["brand_nicknames"]
+
+
+def test_feed_filter_brands_empty_returns_no_rows():
+    """brands=[] → zero rows (intentional narrowing)."""
+    now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(
+            tweet_id=f"t-{i:03d}",
+            created_at=(now - timedelta(hours=i)).isoformat(),
+            brand_nicknames=["qwen"],
+        )
+        for i in range(5)
+    ]
+    out = serialize_feed_page(posts, filters={"brands": []}, limit=50)
+    assert out["rows"] == []
+    assert out["next_cursor"] is None
+
+
+def test_feed_filter_brands_all_sentinel_disables_filter():
+    """brands=\"__all__\" → no narrowing (all rows pass)."""
+    now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(
+            tweet_id=f"t-{i:03d}",
+            created_at=(now - timedelta(hours=i)).isoformat(),
+            brand_nicknames=["qwen"] if i % 2 == 0 else ["deepseek"],
+        )
+        for i in range(10)
+    ]
+    out = serialize_feed_page(posts, filters={"brands": "__all__"}, limit=50)
+    assert len(out["rows"]) == 10
+
+
+def test_feed_filter_brands_absent_disables_filter():
+    """absent brands key → no narrowing (back-compat with un-filtered callers)."""
+    now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(
+            tweet_id=f"t-{i:03d}",
+            created_at=(now - timedelta(hours=i)).isoformat(),
+            brand_nicknames=["qwen"],
+        )
+        for i in range(5)
+    ]
+    out = serialize_feed_page(posts, filters={}, limit=50)
+    assert len(out["rows"]) == 5
