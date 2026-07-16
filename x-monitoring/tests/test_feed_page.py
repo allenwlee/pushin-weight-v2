@@ -401,6 +401,68 @@ def test_feed_locale_original_returns_source_text():
     assert row["is_translated"] is False
 
 
+# ---------------------------------------------------------------------------
+# U1: created_at_iso (additive ISO-8601 sibling of `created_at`)
+# ---------------------------------------------------------------------------
+
+
+def test_feed_wire_includes_created_at_iso_iso_input():
+    """U1: ISO `created_at` input round-trips into a parseable
+    `created_at_iso` field. The client uses this for relative time +
+    the local-time tooltip; the existing `created_at` field is
+    unchanged for backward compat."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    p = _post(tweet_id="t-iso", created_at=now.isoformat())
+    out = serialize_feed_page([p])
+    row = out["rows"][0]
+    assert row["created_at"] == now.isoformat(), "created_at must be unchanged"
+    assert row["created_at_iso"] == now.isoformat(), (
+        f"created_at_iso should round-trip the ISO input; got "
+        f"{row['created_at_iso']!r}"
+    )
+    # Round-trip parses back to the same aware UTC instant.
+    parsed = datetime.fromisoformat(row["created_at_iso"])
+    assert parsed == now
+    assert parsed.tzinfo is not None
+
+
+def test_feed_wire_includes_created_at_iso_twitter_input():
+    """U1: Twitter-format `created_at` (legacy wire shape) parses
+    into a valid `created_at_iso`. Some older posts still carry the
+    legacy format and the client must handle both."""
+    p = _post(
+        tweet_id="t-tw",
+        created_at="Wed Jul 15 21:00:00 +0000 2026",
+    )
+    out = serialize_feed_page([p])
+    row = out["rows"][0]
+    assert row["created_at"] == "Wed Jul 15 21:00:00 +0000 2026"
+    parsed = datetime.fromisoformat(row["created_at_iso"])
+    assert parsed == datetime(2026, 7, 15, 21, 0, 0, tzinfo=timezone.utc)
+
+
+def test_feed_wire_created_at_iso_none_for_unparseable():
+    """U1: garbage created_at yields created_at_iso=None — client
+    renders the date as raw text fallback. Must NOT raise."""
+    p = _post(tweet_id="t-garbage", created_at="not a date")
+    out = serialize_feed_page([p])
+    row = out["rows"][0]
+    assert row["created_at"] == "not a date"
+    assert row["created_at_iso"] is None
+
+
+def test_feed_wire_created_at_iso_none_when_missing():
+    """U1: when _post's created_at is missing, the wire emits
+    created_at_iso=None without raising. (The default `_post` helper
+    always sets created_at; this test verifies the None-safe path by
+    calling _feed_row_to_wire directly.)"""
+    from x_monitor.dashboard import _feed_row_to_wire
+    p = {"tweet_id": "t-direct", "brand_nicknames": []}
+    row = _feed_row_to_wire(p, locale="en")
+    assert row["created_at"] is None
+    assert row["created_at_iso"] is None
+
+
 def test_feed_default_limit_is_50():
     """R9: page size is 50 by default."""
     out = serialize_feed_page([])

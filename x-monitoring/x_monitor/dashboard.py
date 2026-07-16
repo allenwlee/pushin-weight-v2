@@ -1462,6 +1462,11 @@ def _feed_row_to_wire(
           and `us_nationalism` are translated to their string labels
           before going on the wire. None → raw int FKs (legacy
           behavior; existing unit tests rely on this).
+
+    Wire shape is additive; `created_at` keeps its existing format
+    (Twitter legacy or ISO) for backward compat. `created_at_iso`
+    is the canonical ISO-8601 UTC string the client uses to render
+    relative timestamps and the local-time tooltip (U1).
     """
     text_translated, is_translated = _pick_text(post, locale)
     text_original = post.get("text")
@@ -1487,9 +1492,17 @@ def _feed_row_to_wire(
                     per_brand["us_nationalism"]
                 )
         classifications[nick] = per_brand
+    created_at_raw = post.get("created_at")
+    created_at_iso: str | None = None
+    if created_at_raw:
+        from x_monitor.store import _parse_post_created_at
+        parsed = _parse_post_created_at(created_at_raw)
+        if parsed is not None:
+            created_at_iso = parsed.isoformat()
     return {
         "tweet_id": post.get("tweet_id"),
-        "created_at": post.get("created_at"),
+        "created_at": created_at_raw,
+        "created_at_iso": created_at_iso,
         "lang_detected": post.get("lang_detected"),
         "text": text_original,
         "text_translated": text_translated,
