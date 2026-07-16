@@ -6,9 +6,9 @@
 // Architecture (mirrors combined-chart.js):
 // - One Chart.js instance per .home-chart canvas.
 // - One total line per enabled brand, in the brand's accent color.
-// - On `pw:filter-change` (KTD3), re-aggregates the per-brand series
-//   locally when the in-memory payload allows; otherwise re-fetches
-//   /api/v1/home.chart.json and replaces the chart.
+// - On `pw:filter-change` (U3, 2026-07-16), re-fetches
+//   /api/v1/home.chart.html with the new filters in the query, swaps
+//   the chart region innerHTML, and re-renders the new canvas.
 // - On htmx:afterSwap of the chart region, destroys any prior instance
 //   and re-binds to the new canvas.
 
@@ -194,4 +194,28 @@
       }
     }
   });
+
+  // U3 (2026-07-16): react to control-panel filter changes. Re-fetch
+  // the chart fragment with the active filters in the query, swap the
+  // region innerHTML, and re-render the canvas. Simple and correct;
+  // htmx's `every Ns` poll carries the same filter via `hx-vals` so
+  // both paths converge on the same payload.
+  function refetchChartWithFilters() {
+    var region = document.getElementById('home-chart') || document.getElementById('brand-chart');
+    if (!region) return;
+    var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
+    var url = '/api/v1/home.chart.html?filters=' + encodeURIComponent(JSON.stringify(filters));
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        region.innerHTML = html;
+        var canvas = region.querySelector('canvas');
+        if (canvas) {
+          try { renderOne(canvas); }
+          catch (e) { console.warn('pw-chart: post-filter render failed', e); }
+        }
+      })
+      .catch(function (e) { console.warn('pw-chart: filter refetch failed', e); });
+  }
+  document.addEventListener('pw:filter-change', refetchChartWithFilters);
 })();

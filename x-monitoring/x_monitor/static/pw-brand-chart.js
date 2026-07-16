@@ -168,4 +168,27 @@
       }
     }
   });
+
+  // U3 (2026-07-16): react to control-panel filter changes on the
+  // single-brand page too. Brand checkbox is locked, but the other 6
+  // filter groups still apply — re-fetch the chart fragment with the
+  // current filters, swap the region, re-render.
+  function refetchBrandChartWithFilters() {
+    var region = document.getElementById('brand-chart');
+    if (!region) return;
+    var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
+    var url = '/api/v1/home.brand.chart.html?filters=' + encodeURIComponent(JSON.stringify(filters));
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        region.innerHTML = html;
+        var canvas = region.querySelector('canvas.home-brand-chart');
+        if (canvas) {
+          try { renderOne(canvas); }
+          catch (e) { console.warn('pw-brand-chart: post-filter render failed', e); }
+        }
+      })
+      .catch(function (e) { console.warn('pw-brand-chart: filter refetch failed', e); });
+  }
+  document.addEventListener('pw:filter-change', refetchBrandChartWithFilters);
 })();
