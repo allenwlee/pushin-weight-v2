@@ -210,7 +210,8 @@ def _denormalize_posts(
         disc_rows = store._conn.execute(
             f"""
             SELECT p.tweet_id, pbd.discourse_key,
-                   pbd.china_nationalism, pbd.us_nationalism
+                   pbd.china_nationalism AS cn_nationalism,
+                   pbd.us_nationalism AS us_nationalism
             FROM posts p
             JOIN posts_brands_discourse pbd ON pbd.post_id = p.id
             WHERE p.tweet_id IN ({placeholders})

@@ -313,3 +313,108 @@ def test_home_locale_original_supported(dashboard_client):
     resp2 = client.get("/")
     body = resp2.get_data(as_text=True)
     assert "original" in body
+
+
+# ---------------------------------------------------------------------------
+# Regression: feed must include posts whose posts_brands_discourse row
+# carries `china_nationalism` / `us_nationalism`. Earlier `_denormalize_posts`
+# did `r["cn_nationalism"]` while the SELECT aliased `pbd.china_nationalism`,
+# so any brand with at least one discourse row raised IndexError and the
+# brand dropped out of the feed entirely. Symptom: feed returned ~7 rows
+# even when the DB had thousands of recent posts. The SQL now aliases the
+# column to `cn_nationalism` so the dict key matches.
+# ---------------------------------------------------------------------------
+
+
+def test_feed_includes_posts_with_nationalism_classifications(dashboard_client):
+    """Regression: `_denormalize_posts` raised `IndexError: No item with
+    that key` for any brand with a `posts_brands_discourse` row because
+    the SQL aliased `pbd.china_nationalism` while the access used the
+    short form `r["cn_nationalism"]`. The route's per-brand try/except
+    silently skipped those brands, dropping 16/20 enabled brands from
+    the feed and leaving ~7 rows from the 4 unaffected ones.
+
+    This test seeds a single discourse row with `china_nationalism`/
+    `us_nationalism` set, then asserts that `_denormalize_posts` runs
+    to completion (no IndexError) and surfaces the nationalism pair in
+    the output. Coverage shape: a unit-level probe of the SQL dict-key
+    contract — no need to spin up the full 20-brand loop.
+    """
+    client, app, data = dashboard_client
+    db_path = data / "x.db"
+
+    # Resolve FK targets that migration 026 already seeded.
+    import sqlite3
+    con = sqlite3.connect(str(db_path))
+    try:
+        post_id = con.execute(
+            "SELECT id FROM posts ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+        disc_id = con.execute(
+            "SELECT id FROM discourse_keys WHERE key='dunk_yingyang'"
+        ).fetchone()[0]
+        cn_id = con.execute(
+            "SELECT id FROM nationalism_keys WHERE key='anti'"
+        ).fetchone()[0]
+        us_id = con.execute(
+            "SELECT id FROM nationalism_keys WHERE key='constructive_critical'"
+        ).fetchone()[0]
+        # The dashboard_client fixture doesn't seed the `brands` table;
+        # `posts_brands_discourse.brand_id` FKs to brands.id, so
+        # register a sentinel brand on the fly.
+        con.execute(
+            "INSERT OR IGNORE INTO brands(nickname, display_name) "
+            "VALUES('minimax', 'TestMiniMax')"
+        )
+        brand_int = con.execute(
+            "SELECT id FROM brands WHERE nickname='minimax'"
+        ).fetchone()[0]
+        # Wire the post to the brand so `_denormalize_posts` actually
+        # processes it.
+        con.execute(
+            "INSERT OR IGNORE INTO posts_brands(brand_id, post_id, weight) "
+            "VALUES(?, ?, 1.0)",
+            (brand_int, post_id),
+        )
+        con.execute(
+            """
+            INSERT INTO posts_brands_discourse(
+                post_id, brand_id, discourse_key, act_id,
+                china_nationalism, us_nationalism
+            ) VALUES (?, ?, ?, 1, ?, ?)
+            """,
+            (post_id, brand_int, disc_id, cn_id, us_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    # The actual assertion: call `_denormalize_posts` directly and
+    # verify it returns a list (no IndexError). We exercise the same
+    # SQL that the live feed uses.
+    from x_monitor.store import Store
+    from x_monitor._home_routes import _denormalize_posts
+    store = Store(db_path)
+    try:
+        # This is what raised IndexError before the fix.
+        posts = _denormalize_posts(store, "minimax", 7)
+    finally:
+        store.close()
+
+    # Must not raise (would have been IndexError). Must include the
+    # post we attached the discourse row to.
+    matching = [p for p in posts if p.get("id") == post_id]
+    assert matching, (
+        f"post {post_id} not in _denormalize_posts output; "
+        f"got {len(posts)} posts"
+    )
+    row = matching[0]
+    assert row.get("cn_nationalism") == cn_id, (
+        f"cn_nationalism should be {cn_id} ('anti'), got "
+        f"{row.get('cn_nationalism')!r}"
+    )
+    assert row.get("us_nationalism") == us_id, (
+        f"us_nationalism should be {us_id} ('constructive_critical'), "
+        f"got {row.get('us_nationalism')!r}"
+    )
+
