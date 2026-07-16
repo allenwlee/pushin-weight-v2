@@ -1257,9 +1257,9 @@ class Store:
             self._conn.execute(
                 """
                 INSERT INTO brands_accounts(
-                    brand_id, author_id, role_id, added_at
+                    brand_id, accounts_id, role_id, added_at
                 ) VALUES (?,?,?,?)
-                ON CONFLICT(brand_id, author_id) DO UPDATE SET
+                ON CONFLICT(brand_id, accounts_id) DO UPDATE SET
                     role_id = excluded.role_id
                 """,
                 (brand_id_int, author_id_int, role_id_int, now),
@@ -1284,7 +1284,7 @@ class Store:
             """
             SELECT a.*, ba.role_id, r.key AS role_key
             FROM accounts a
-            JOIN brands_accounts ba ON ba.author_id = a.id
+            JOIN brands_accounts ba ON ba.accounts_id = a.id
             LEFT JOIN roles r ON r.id = ba.role_id
             WHERE ba.brand_id = ? AND a.handle = ?
             """,
@@ -1306,7 +1306,7 @@ class Store:
             """
             SELECT a.*, ba.role_id, r.key AS role_key
             FROM accounts a
-            JOIN brands_accounts ba ON ba.author_id = a.id
+            JOIN brands_accounts ba ON ba.accounts_id = a.id
             LEFT JOIN roles r ON r.id = ba.role_id
             WHERE ba.brand_id = ?
             """,
@@ -2475,7 +2475,7 @@ class Store:
             """
             SELECT a.author_id, b.nickname AS brand_id
             FROM brands_accounts ba
-            JOIN accounts a ON a.id = ba.author_id
+            JOIN accounts a ON a.id = ba.accounts_id
             JOIN brands b   ON b.id = ba.brand_id
             """
         ).fetchall()

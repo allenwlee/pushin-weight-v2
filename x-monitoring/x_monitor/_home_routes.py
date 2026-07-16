@@ -190,7 +190,7 @@ def _denormalize_posts(
         FROM posts p
         LEFT JOIN brands_accounts ba ON ba.brand_id = (
             SELECT id FROM brands WHERE nickname = ?
-        ) AND ba.author_id = p.author_id
+        ) AND ba.accounts_id = p.author_id
         LEFT JOIN roles r ON r.id = ba.role_id
         WHERE p.tweet_id IN ({placeholders})
         """,
