@@ -625,3 +625,40 @@ def test_feed_filter_brands_absent_disables_filter():
     ]
     out = serialize_feed_page(posts, filters={}, limit=50)
     assert len(out["rows"]) == 5
+
+
+# ---------------------------------------------------------------------------
+# M1 (2026-07-16): __all__ sentinel and empty-list narrowing for all axes.
+# Pre-existing bug: non-brand axes did substring-match against the string
+# "__all__" instead of treating it as "no narrowing". This diff fixes it.
+# ---------------------------------------------------------------------------
+
+
+def test_feed_filter_all_sentinel_disables_discourse_narrowing():
+    """discourse=\"__all__\" → no narrowing (no substring-match bug)."""
+    now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(
+            tweet_id=f"t-{i:03d}",
+            created_at=(now - timedelta(hours=i)).isoformat(),
+            discourse=["genuine_hype"] if i % 2 == 0 else ["sarcasm"],
+        )
+        for i in range(10)
+    ]
+    out = serialize_feed_page(posts, filters={"discourse": "__all__"}, limit=50)
+    assert len(out["rows"]) == 10
+
+
+def test_feed_filter_empty_discourse_returns_no_rows():
+    """discourse=[] → zero rows (intentional narrowing)."""
+    now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(
+            tweet_id=f"t-{i:03d}",
+            created_at=(now - timedelta(hours=i)).isoformat(),
+            discourse=["genuine_hype"],
+        )
+        for i in range(5)
+    ]
+    out = serialize_feed_page(posts, filters={"discourse": []}, limit=50)
+    assert out["rows"] == []

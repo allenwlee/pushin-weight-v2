@@ -173,11 +173,18 @@
   // single-brand page too. Brand checkbox is locked, but the other 6
   // filter groups still apply — re-fetch the chart fragment with the
   // current filters, swap the region, re-render.
+  //
+  // The brand-chart route requires `?brand=<id>` (no path segment).
+  // Read it from the body's `data-pw-brand` attribute (set by
+  // `brand_home.html.j2`).
   function refetchBrandChartWithFilters() {
     var region = document.getElementById('brand-chart');
     if (!region) return;
+    var brandId = document.body && document.body.getAttribute('data-pw-brand');
+    if (!brandId) return;
     var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
-    var url = '/api/v1/home.brand.chart.html?filters=' + encodeURIComponent(JSON.stringify(filters));
+    var url = '/api/v1/home.brand.chart.html?brand=' + encodeURIComponent(brandId) +
+      '&filters=' + encodeURIComponent(JSON.stringify(filters));
     fetch(url, { credentials: 'same-origin' })
       .then(function (r) { return r.text(); })
       .then(function (html) {

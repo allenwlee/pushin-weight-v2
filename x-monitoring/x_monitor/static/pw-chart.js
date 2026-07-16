@@ -200,8 +200,13 @@
   // region innerHTML, and re-render the canvas. Simple and correct;
   // htmx's `every Ns` poll carries the same filter via `hx-vals` so
   // both paths converge on the same payload.
+  //
+  // Scoped to the multi-brand page: this module owns `#home-chart`
+  // only. The single-brand page (`/brand_home.html.j2`) loads
+  // pw-brand-chart.js for `#brand-chart` and does not include
+  // `#home-chart`, so we no-op there.
   function refetchChartWithFilters() {
-    var region = document.getElementById('home-chart') || document.getElementById('brand-chart');
+    var region = document.getElementById('home-chart');
     if (!region) return;
     var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
     var url = '/api/v1/home.chart.html?filters=' + encodeURIComponent(JSON.stringify(filters));

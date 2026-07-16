@@ -1069,31 +1069,40 @@ def _post_matches_filter(
         if not any(b in brands for b in post_brands):
             return False
 
-    # Discourse: any overlap with the active set wins
-    discourse = filters.get("discourse") or []
-    if discourse:
+    # Discourse: any overlap with the active set wins. "__all__" sentinel
+    # means "all on" (no narrowing); empty list narrows to zero.
+    discourse = filters.get("discourse")
+    if discourse is not None and discourse != "__all__":
+        if not discourse:
+            return False  # empty list narrows to zero
         post_disc = post.get("discourse") or []
         if not any(d in discourse for d in post_disc):
             return False
 
-    # Post types: any overlap
-    post_types = filters.get("post_types") or []
-    if post_types:
+    # Post types: any overlap. Same "__all__" semantics.
+    post_types = filters.get("post_types")
+    if post_types is not None and post_types != "__all__":
+        if not post_types:
+            return False
         post_pts = post.get("post_types") or []
         if not any(p in post_types for p in post_pts):
             return False
 
-    # account.role: post's role_key must be in the set
-    role = filters.get("role") or []
-    if role:
+    # account.role: post's role_key must be in the set. Same semantics.
+    role = filters.get("role")
+    if role is not None and role != "__all__":
+        if not role:
+            return False
         post_role = post.get("role_key")
         if post_role not in role:
             return False
 
-    # Nationalism axes
+    # Nationalism axes. Same "__all__" semantics.
     for axis in ("cn_nationalism", "us_nationalism"):
-        active = filters.get(axis) or []
-        if active:
+        active = filters.get(axis)
+        if active is not None and active != "__all__":
+            if not active:
+                return False
             post_key = post.get(axis)
             if post_key not in active:
                 return False
