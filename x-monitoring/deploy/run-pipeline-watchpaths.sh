@@ -1,6 +1,8 @@
 #!/bin/zsh
 # {{AGENT_ATTRIBUTION}}
 # Run the x-monitor pipeline from the WatchPaths LaunchAgent.
+# Invoked by: com.fuchitalee.x-monitor.config-reload
+# (pair: com.fuchitalee.x-monitor.harvest for the 15-min cadence).
 #
 # Triggered by config.yaml edits (PR merge of an x_query_specs change,
 # daily_ceiling tweak, etc.). Fires often (every config edit) so this

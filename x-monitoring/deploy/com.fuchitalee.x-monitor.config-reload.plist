@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- {{AGENT_ATTRIBUTION}} -->
+<!-- {{AGENT_ATTRIBUTION}}
+     LaunchAgent label: com.fuchitalee.x-monitor.config-reload
+     Role: event-driven; fires when config.yaml changes (WatchPaths).
+     Pair with com.fuchitalee.x-monitor.harvest (15-min scheduled cadence).
+     ThrottleInterval 300s prevents a flurry of edits from queueing runs. -->
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.fuchitalee.x-monitor</string>
+    <string>com.fuchitalee.x-monitor.config-reload</string>
 
     <key>ProgramArguments</key>
     <array>

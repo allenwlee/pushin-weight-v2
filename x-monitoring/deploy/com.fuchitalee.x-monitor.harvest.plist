@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- {{AGENT_ATTRIBUTION}} -->
+<!-- {{AGENT_ATTRIBUTION}}
+     LaunchAgent label: com.fuchitalee.x-monitor.harvest
+     Role: 15-minute cadence; fires at minute 0,15,30,45 of every hour.
+     Pair with com.fuchitalee.x-monitor.config-reload (WatchPaths).
+     The wrapper script pops a macOS notification on failure or on a
+     signal-drop spike (LLM/brand drift indicator). -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.fuchitalee.x-monitor.scheduled</string>
+    <string>com.fuchitalee.x-monitor.harvest</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -37,9 +42,9 @@
     </array>
 
     <key>StandardOutPath</key>
-    <string>/Users/fuchitalee/Library/Logs/x-monitor/scheduled-stdout.log</string>
+    <string>/Users/fuchitalee/Library/Logs/x-monitor/harvest-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/fuchitalee/Library/Logs/x-monitor/scheduled-stderr.log</string>
+    <string>/Users/fuchitalee/Library/Logs/x-monitor/harvest-stderr.log</string>
 
     <key>RunAtLoad</key>
     <false/>
