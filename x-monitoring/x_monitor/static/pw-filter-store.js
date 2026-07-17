@@ -76,14 +76,32 @@
     } else {
       state['unsanctioned'] = 'off';
     }
-    // Map all other groups: if at least one checked, send the array;
-    // if NONE checked, send an empty array (filter narrows to nothing).
+    // Count total checkboxes per group so we can collapse a fully-checked
+    // group back to the "__all__" sentinel. The server's _post_matches_filter
+    // documents "__all__" as "all on" (no narrowing); emitting the full
+    // checkbox array instead causes the nationality/role axes (whose
+    // top-level fields are not denormalized on every post) to fail the
+    // `post.cn_nationalism not in active` check and collapse totals to 0.
+    var totalByGroup = {};
+    panel.querySelectorAll('[data-pw-filter-group]').forEach(function (input) {
+      var g = input.getAttribute('data-pw-filter-group');
+      if (!g || g === 'unsanctioned') return;
+      totalByGroup[g] = (totalByGroup[g] || 0) + 1;
+    });
+
+    // Map all other groups:
+    //   - all checked  → "__all__" (no narrowing)
+    //   - some checked → array of values
+    //   - none checked → [] (narrows to zero)
     ['brands', 'discourse', 'post_types', 'role',
      'cn_nationalism', 'us_nationalism'].forEach(function (k) {
-      if (seen[k] && seen[k].length > 0) {
-        state[k] = seen[k];
-      } else if (seen[k]) {
+      if (!seen[k]) return;
+      if (seen[k].length === 0) {
         state[k] = [];
+      } else if (seen[k].length === (totalByGroup[k] || 0)) {
+        state[k] = '__all__';
+      } else {
+        state[k] = seen[k];
       }
     });
     return state;

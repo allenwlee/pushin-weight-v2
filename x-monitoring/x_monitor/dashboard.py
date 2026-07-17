@@ -1070,41 +1070,46 @@ def _post_matches_filter(
             return False
 
     # Discourse: any overlap with the active set wins. "__all__" sentinel
-    # means "all on" (no narrowing); empty list narrows to zero.
+    # means "all on" (no narrowing); empty FILTER list narrows to zero
+    # (user explicitly unchecked every option). A post with empty
+    # `discourse` array has no classification — treat as "no opinion",
+    # which passes any non-empty filter.
     discourse = filters.get("discourse")
     if discourse is not None and discourse != "__all__":
         if not discourse:
-            return False  # empty list narrows to zero
+            return False  # empty filter list narrows to zero
         post_disc = post.get("discourse") or []
-        if not any(d in discourse for d in post_disc):
+        if post_disc and not any(d in discourse for d in post_disc):
             return False
 
-    # Post types: any overlap. Same "__all__" semantics.
+    # Post types: any overlap. Same "__all__" + "no-opinion" semantics.
     post_types = filters.get("post_types")
     if post_types is not None and post_types != "__all__":
         if not post_types:
             return False
         post_pts = post.get("post_types") or []
-        if not any(p in post_types for p in post_pts):
+        if post_pts and not any(p in post_types for p in post_pts):
             return False
 
-    # account.role: post's role_key must be in the set. Same semantics.
+    # account.role: post's role_key must be in the set (when present).
+    # A post with role_key=None has no role — passes any non-empty filter.
     role = filters.get("role")
     if role is not None and role != "__all__":
         if not role:
             return False
         post_role = post.get("role_key")
-        if post_role not in role:
+        if post_role is not None and post_role not in role:
             return False
 
-    # Nationalism axes. Same "__all__" semantics.
+    # Nationalism axes. A post with axis=None has no opinion — passes
+    # any non-empty filter.
     for axis in ("cn_nationalism", "us_nationalism"):
         active = filters.get(axis)
         if active is not None and active != "__all__":
             if not active:
                 return False
             post_key = post.get(axis)
-            if post_key not in active:
+            if post_key is not None and post_key not in active:
                 return False
 
     # unsanctioned
