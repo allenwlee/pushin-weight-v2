@@ -118,6 +118,42 @@ def test_filter_role_matches():
     assert _post_matches_filter(p, {"role": ["community"]}) is False
 
 
+# ---------------------------------------------------------------------------
+# account.role other synthetic bucket (feat/role-filter-other)
+# ---------------------------------------------------------------------------
+
+
+def test_filter_role_other_matches_null_role():
+    # role_key=None passes when other is in the active set.
+    p = _post(created_at="2026-07-06T12:00:00+00:00", role_key=None)
+    assert _post_matches_filter(p, {"role": ["other"]}) is True
+    assert _post_matches_filter(p, {"role": ["official", "staff", "community", "other"]}) is True
+
+
+def test_filter_role_other_matches_unknown_role_key():
+    # role_key not in the 3 known taxonomy keys matches other.
+    p = _post(created_at="2026-07-06T12:00:00+00:00", role_key="marketing_bot")
+    assert _post_matches_filter(p, {"role": ["other"]}) is True
+
+
+def test_filter_role_other_unchecked_blocks_null():
+    # When other is unchecked, null-role posts are filtered out.
+    p = _post(created_at="2026-07-06T12:00:00+00:00", role_key=None)
+    assert _post_matches_filter(p, {"role": ["official", "staff", "community"]}) is False
+
+
+def test_filter_role_other_unchecked_blocks_unknown():
+    # When other is unchecked, unknown role_keys are filtered out.
+    p = _post(created_at="2026-07-06T12:00:00+00:00", role_key="marketing_bot")
+    assert _post_matches_filter(p, {"role": ["official", "staff", "community"]}) is False
+
+
+def test_filter_role_empty_list_blocks_all():
+    # Empty active role list blocks everything (no-opinion rule reversed for role).
+    p = _post(created_at="2026-07-06T12:00:00+00:00", role_key="official")
+    assert _post_matches_filter(p, {"role": []}) is False
+
+
 def test_filter_cn_nationalism_matches():
     p = _post(created_at="2026-07-06T12:00:00+00:00", cn_nationalism="pro")
     assert _post_matches_filter(p, {"cn_nationalism": ["pro"]}) is True

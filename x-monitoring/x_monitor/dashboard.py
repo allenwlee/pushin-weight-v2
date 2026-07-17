@@ -222,6 +222,15 @@ _DASHBOARD_ROLE_KEYS: tuple[str, ...] = (
     "official", "staff", "community",
 )
 
+# Filter-only role_keys (control panel + `_post_matches_filter` role
+# branch). Adds the synthetic "other" bucket, which matches posts whose
+# `role_key` is `None` (no brands_accounts row) OR any role_key not in
+# `_DASHBOARD_ROLE_KEYS`. NOT used by the chart's `account_roles` tab -
+# that tab only renders bars for the 3 DB-defined roles.
+_DASHBOARD_ROLE_FILTER_KEYS: tuple[str, ...] = (
+    "official", "staff", "community", "other",
+)
+
 # 6-step nationalism scale (R7, migration 026). One tuple is used for
 # both cn_nationalism and us_nationalism axes; the axis is the dict
 # key on the filter shape.
@@ -1091,15 +1100,36 @@ def _post_matches_filter(
         if post_pts and not any(p in post_types for p in post_pts):
             return False
 
-    # account.role: post's role_key must be in the set (when present).
-    # A post with role_key=None has no role — passes any non-empty filter.
+    # account.role: post's role_key must be in the active set, OR the
+    # active set contains the synthetic "other" bucket. "other" matches
+    # role_key=None (no brands_accounts row) and any role_key not in
+    # the 3 known taxonomy keys.
+    #
+    # Asymmetric with the other axes: when "other" is in the active set,
+    # null-role posts pass (same as discourse / post_types / nationalism).
+    # When "other" is NOT in the active set, null-role posts are filtered
+    # out — because the user is explicitly saying "only the 3 known roles".
+    #
+    # Examples:
+    #   active = {official, staff, community, other} (default) -> all pass
+    #   active = {official, staff, community} (other unchecked) -> only
+    #     posts with role_key in that set; null/unknown filtered out
+    #   active = {other} -> only null or unknown role_key passes
+    #   active = {official} -> only official; null-role filtered out
+    #   active = {} -> all filtered out
     role = filters.get("role")
     if role is not None and role != "__all__":
         if not role:
             return False
         post_role = post.get("role_key")
-        if post_role is not None and post_role not in role:
-            return False
+        if post_role is None or post_role not in _DASHBOARD_ROLE_KEYS:
+            # Synthetic "other" bucket: passes only when "other" is active.
+            if "other" not in role:
+                return False
+        else:
+            # Known role_key: passes only when explicitly in active.
+            if post_role not in role:
+                return False
 
     # Nationalism axes. A post with axis=None has no opinion — passes
     # any non-empty filter.
