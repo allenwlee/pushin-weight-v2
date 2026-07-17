@@ -59,14 +59,19 @@
     TABS.forEach(function (tab) {
       var tabCats = tabDatasets[tab] || {};
       Object.keys(tabCats).forEach(function (cat) {
+        var brandData = granularity === 'minute'
+          ? tabCats[cat].map(function(v) { return v === 0 ? NaN : v; })
+          : tabCats[cat];
         datasets.push({
           label: tab + ': ' + cat,
-          data: tabCats[cat],
+          data: brandData,
           type: 'line',
           borderColor: 'transparent',
           backgroundColor: colorForCategory(tab, cat),
           borderWidth: 0,
-          pointRadius: 0,
+          pointRadius: granularity === 'minute' ? 1.5 : 0,
+          tension: granularity === 'minute' ? 0.3 : 0.0,
+          spanGaps: granularity === 'minute',
           fill: datasets.length === 0 ? 'origin' : '-1',
           hidden: tab !== activeTab,
           _tab: tab,
@@ -128,7 +133,7 @@
             stacked: true,
             title: {
               display: true,
-              text: granularity === 'minute' ? 'posts / min' : 'posts / day',
+              text: granularity === 'minute' ? 'posts / 5min' : 'posts / day',
             },
             ticks: { precision: 0 },
           },

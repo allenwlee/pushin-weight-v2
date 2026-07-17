@@ -394,7 +394,7 @@ def test_home_chart_latest_run_anchors_now():
 
 
 def test_home_chart_window_one_uses_minute_buckets():
-    """window_days=1 must produce 1440 per-minute buckets with granularity='minute'."""
+    """window_days=1 must produce 288 five-minute buckets with granularity='minute'."""
     now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
     posts_by_brand = {
         "minimax": [
@@ -406,12 +406,12 @@ def test_home_chart_window_one_uses_minute_buckets():
         ["minimax"], posts_by_brand, window_days=1, now=now
     )
     assert out["granularity"] == "minute"
-    assert len(out["days"]) == 1440
-    assert len(out["series"]["minimax"]) == 1440
-    # 11:30 is 30 min ago -> idx = 1440 - 1 - 30 = 1409
-    # 12:00 is now -> idx = 1440 - 1 - 0 = 1439
-    assert out["series"]["minimax"][1409] == 1
-    assert out["series"]["minimax"][1439] == 1
+    assert len(out["days"]) == 288
+    assert len(out["series"]["minimax"]) == 288
+    # 11:30 is 30 min ago -> idx = 288 - 1 - (30 // 5) = 281
+    # 12:00 is now -> idx = 288 - 1 - (0 // 5) = 287
+    assert out["series"]["minimax"][281] == 1
+    assert out["series"]["minimax"][287] == 1
     assert out["totals"]["minimax"] == 2
 
 

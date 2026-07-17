@@ -324,7 +324,7 @@ def test_single_brand_chart_unknown_brand_uses_fallbacks():
 
 
 def test_single_brand_chart_window_one_uses_minute_buckets():
-    """window_days=1 must produce 1440 per-minute buckets."""
+    """window_days=1 must produce 288 five-minute buckets."""
     now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
     posts = [
         _post(created_at="2026-07-06T11:30:00+00:00"),
@@ -334,10 +334,10 @@ def test_single_brand_chart_window_one_uses_minute_buckets():
         "minimax", posts, window_days=1, now=now
     )
     assert out["granularity"] == "minute"
-    assert len(out["days"]) == 1440
+    assert len(out["days"]) == 288
     for tab_key in out["tab_datasets"]:
         for cat in out["tab_datasets"][tab_key]:
-            assert len(out["tab_datasets"][tab_key][cat]) == 1440
+            assert len(out["tab_datasets"][tab_key][cat]) == 288
 
 
 def test_single_brand_chart_window_seven_unchanged_by_minute_branch():

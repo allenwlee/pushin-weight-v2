@@ -1206,7 +1206,7 @@ def serialize_home_chart(
     if filters is None:
         filters = {}
 
-    # window_days == 1 -> per-minute bucketing (1440 buckets) for a true
+    # window_days == 1 -> per-minute bucketing (288 five-minute buckets) for a true
     # 24-hour line graph. window_days >= 7 -> per-day bucketing (existing).
     # granularity field on the wire lets the frontend format x-axis ticks
     # correctly ("HH:00" / "now" vs "YYYY-MM-DD").
@@ -1214,10 +1214,10 @@ def serialize_home_chart(
     bucket_count: int
     if window_days == 1:
         granularity = "minute"
-        bucket_count = 1440
+        bucket_count = 288  # 5-minute buckets
         minute_zero = (now - timedelta(hours=24)).replace(second=0, microsecond=0)
         days: list[str] = [
-            (minute_zero + timedelta(minutes=i)).isoformat()
+            (minute_zero + timedelta(minutes=i*5)).isoformat()
             for i in range(bucket_count)
         ]
     else:
@@ -1257,7 +1257,7 @@ def serialize_home_chart(
                 minutes_ago = int((now - dt).total_seconds() // 60)
                 if minutes_ago < 0 or minutes_ago >= 1440:
                     continue
-                idx = 1440 - 1 - minutes_ago
+                idx = 288 - 1 - (minutes_ago // 5)
             else:
                 days_ago = (now.date() - dt.date()).days
                 if days_ago < 0 or days_ago >= window_days:
@@ -1417,16 +1417,16 @@ def serialize_single_brand_chart(
     if tab not in _SINGLE_BRAND_TABS:
         tab = "post_type"
 
-    # window_days == 1 -> per-minute bucketing (1440 buckets). See
+    # window_days == 1 -> per-minute bucketing (288 five-minute buckets). See
     # serialize_home_chart for the full rationale.
     granularity: str
     bucket_count: int
     if window_days == 1:
         granularity = "minute"
-        bucket_count = 1440
+        bucket_count = 288  # 5-minute buckets
         minute_zero = (now - timedelta(hours=24)).replace(second=0, microsecond=0)
         days: list[str] = [
-            (minute_zero + timedelta(minutes=i)).isoformat()
+            (minute_zero + timedelta(minutes=i*5)).isoformat()
             for i in range(bucket_count)
         ]
     else:
@@ -1461,7 +1461,7 @@ def serialize_single_brand_chart(
             minutes_ago = int((now - dt).total_seconds() // 60)
             if minutes_ago < 0 or minutes_ago >= 1440:
                 continue
-            idx = 1440 - 1 - minutes_ago
+            idx = 288 - 1 - (minutes_ago // 5)
         else:
             days_ago = (now.date() - dt.date()).days
             if days_ago < 0 or days_ago >= window_days:

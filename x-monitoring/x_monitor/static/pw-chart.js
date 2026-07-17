@@ -46,15 +46,22 @@
     var datasets = [];
     brandList.forEach(function (brand) {
       var stroke = colors[brand] || '#9ca3af';
+      // For minute granularity, convert 0→NaN so spanGaps skips the
+      // baseline — the line connects non-zero dots directly without
+      // dropping to zero between events.
+      var totalData = granularity === 'minute'
+        ? series[brand].map(function(v) { return v === 0 ? NaN : v; })
+        : series[brand];
       datasets.push({
         label: brand + ' (total)',
-        data: series[brand],
+        data: totalData,
         type: 'line',
         borderColor: stroke,
         backgroundColor: stroke,
         borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.0,
+        pointRadius: granularity === 'minute' ? 1.5 : 0,
+        tension: granularity === 'minute' ? 0.3 : 0.0,
+          spanGaps: granularity === 'minute',
         fill: false,
         _brandIndex: brandList.indexOf(brand),
         _isTotalLine: true,
@@ -63,14 +70,19 @@
       // pattern). All hidden by default; hover reveals them.
       var brandStacked = stacked[brand] || {};
       Object.keys(brandStacked).forEach(function (dk) {
+        var stackedData = granularity === 'minute'
+          ? brandStacked[dk].map(function(v) { return v === 0 ? NaN : v; })
+          : brandStacked[dk];
         datasets.push({
           label: brand + ' ' + dk,
-          data: brandStacked[dk],
+          data: stackedData,
           type: 'line',
           borderColor: 'transparent',
           backgroundColor: colorVarFor(dk),
           borderWidth: 0,
-          pointRadius: 0,
+          pointRadius: granularity === 'minute' ? 1.5 : 0,
+          tension: granularity === 'minute' ? 0.3 : 0.0,
+          spanGaps: granularity === 'minute',
           fill: datasets.length === 0 ? 'origin' : '-1',
           hidden: true,
           _isTotalLine: false,
@@ -134,7 +146,7 @@
             beginAtZero: true,
             title: {
               display: true,
-              text: granularity === 'minute' ? 'posts / min' : 'posts / day',
+              text: granularity === 'minute' ? 'posts / 5min' : 'posts / day',
             },
             ticks: { precision: 0 },
           },
