@@ -54,3 +54,25 @@ The pattern matters because operators triaging failures want to grep a stable pr
 
 - "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the v1.7 short-code call ids (`A`, `B1`..`C2`). The v1.7 call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
+
+## x-monitor deployment
+
+Vocabulary scoped to the launchd-based deployment story — the two LaunchAgents, the pause sentinel, and the in-process lockfile that prevents overlapping cycles.
+
+### LaunchAgent
+
+A macOS launchd unit file (`.plist`) registered in `~/Library/LaunchAgents/` that launchd runs on a trigger. The x-monitor service uses two agents whose names describe what they fire on: `com.fuchitalee.x-monitor.harvest` (quarter-hour `StartCalendarInterval`) and `com.fuchitalee.x-monitor.config-reload` (`WatchPaths` on `config.yaml`).
+
+The agent's name is the operator's first point of orientation — it determines which log file to read, which plist to unload, and which wrapper script's behavior to inspect. Agents are renamed by editing the plist's `Label` key and the install scripts that `cp` it into `~/Library/LaunchAgents/`; the operator must `launchctl unload` the old Label before the new one can take effect.
+
+### Pipeline lock
+
+A `fcntl.flock` advisory lock held on `data/runs/LOCK` for the duration of one `python -m x_monitor run` cycle. A second concurrent cycle sees the lock held and exits 0 with `degraded:already_running: true` in its run JSON rather than double-spending the daily TwitterAPI.io budget.
+
+The lock file is opened as FD 3 by the running process; `lsof data/runs/LOCK` shows the owner. If a cycle hangs (e.g. on the TwitterAPI.io SSL read), the lock is held until the process is killed. SIGTERM releases the FD cleanly; SIGKILL also works but skips Python's atexit cleanup.
+
+### Pause sentinel
+
+A zero-byte file at `/tmp/x-monitor-paused` whose presence gates all pipeline runs. Both wrapper scripts (`deploy/run-pipeline-watchpaths.sh`, `deploy/run-pipeline-with-notify.sh`) check for it as the first action and `exit 0` without touching TwitterAPI.io if present.
+
+The sentinel is invisible from `launchctl list` output — a paused pipeline looks like a quiet one to launchd. `touch /tmp/x-monitor-paused` halts both agents cleanly without unloading them; `rm /tmp/x-monitor-paused` resumes. `/tmp` is persistent across reboots on macOS unless explicitly purged, so the sentinel survives restarts.

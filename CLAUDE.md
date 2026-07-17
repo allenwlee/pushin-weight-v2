@@ -22,3 +22,14 @@ The `.dot` source is the single source of truth — edit the `.dot`, never
 edit the PNG directly. The PNG must always be regenerated from the
 committed `.dot` and committed in the same commit, so `scripts/build_schema_image.sh --check`
 exits 0 on a clean tree.
+
+## Documented solutions and shared vocabulary
+
+`docs/solutions/` — documented solutions to past problems (bugs, best
+practices, workflow patterns), organized by category with YAML
+frontmatter (`module`, `tags`, `problem_type`). Relevant when
+implementing or debugging in documented areas.
+
+`CONCEPTS.md` — shared domain vocabulary (entities, named processes,
+status concepts). Relevant when orienting to the codebase or
+discussing domain concepts.
