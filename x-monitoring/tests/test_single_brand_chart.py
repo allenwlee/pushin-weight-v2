@@ -315,3 +315,38 @@ def test_single_brand_chart_unknown_brand_uses_fallbacks():
     )
     assert out["display_name"] == "nonexistent_brand"
     assert out["accent_color"] == "#9ca3af"
+
+
+
+# ---------------------------------------------------------------------------
+# window_days=1 -> per-minute bucketing for single-brand chart
+# ---------------------------------------------------------------------------
+
+
+def test_single_brand_chart_window_one_uses_minute_buckets():
+    """window_days=1 must produce 1440 per-minute buckets."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    posts = [
+        _post(created_at="2026-07-06T11:30:00+00:00"),
+        _post(created_at="2026-07-06T12:00:00+00:00"),
+    ]
+    out = serialize_single_brand_chart(
+        "minimax", posts, window_days=1, now=now
+    )
+    assert out["granularity"] == "minute"
+    assert len(out["days"]) == 1440
+    for tab_key in out["tab_datasets"]:
+        for cat in out["tab_datasets"][tab_key]:
+            assert len(out["tab_datasets"][tab_key][cat]) == 1440
+
+
+def test_single_brand_chart_window_seven_unchanged_by_minute_branch():
+    """Regression guard: window_days=7 stays per-day with granularity='day'."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    out = serialize_single_brand_chart(
+        "minimax", [], window_days=7, now=now
+    )
+    assert out["granularity"] == "day"
+    assert len(out["days"]) == 7
+    for d in out["days"]:
+        assert "T" not in d

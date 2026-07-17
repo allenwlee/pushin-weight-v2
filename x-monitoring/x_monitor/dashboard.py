@@ -1206,10 +1206,27 @@ def serialize_home_chart(
     if filters is None:
         filters = {}
 
-    days: list[str] = [
-        (now.date() - timedelta(days=i)).isoformat()
-        for i in range(window_days - 1, -1, -1)
-    ]
+    # window_days == 1 -> per-minute bucketing (1440 buckets) for a true
+    # 24-hour line graph. window_days >= 7 -> per-day bucketing (existing).
+    # granularity field on the wire lets the frontend format x-axis ticks
+    # correctly ("HH:00" / "now" vs "YYYY-MM-DD").
+    granularity: str
+    bucket_count: int
+    if window_days == 1:
+        granularity = "minute"
+        bucket_count = 1440
+        minute_zero = (now - timedelta(hours=24)).replace(second=0, microsecond=0)
+        days: list[str] = [
+            (minute_zero + timedelta(minutes=i)).isoformat()
+            for i in range(bucket_count)
+        ]
+    else:
+        granularity = "day"
+        bucket_count = window_days
+        days: list[str] = [
+            (now.date() - timedelta(days=i)).isoformat()
+            for i in range(window_days - 1, -1, -1)
+        ]
 
     # Brand narrowing: when filters["brands"] is a concrete list (the
     # control panel's multi-brand checkbox state), intersect it with
@@ -1222,9 +1239,9 @@ def serialize_home_chart(
     else:
         visible_models = list(enabled_models)
 
-    series: dict[str, list[int]] = {b: [0] * window_days for b in visible_models}
+    series: dict[str, list[int]] = {b: [0] * bucket_count for b in visible_models}
     stacked: dict[str, dict[str, list[int]]] = {
-        b: {dk: [0] * window_days for dk in _DASHBOARD_DISCOURSE_KEYS}
+        b: {dk: [0] * bucket_count for dk in _DASHBOARD_DISCOURSE_KEYS}
         for b in visible_models
     }
     totals: dict[str, int] = {b: 0 for b in visible_models}
@@ -1236,10 +1253,16 @@ def serialize_home_chart(
             dt = _parse_post_timestamp(p.get("created_at"))
             if dt is None:
                 continue
-            days_ago = (now.date() - dt.date()).days
-            if days_ago < 0 or days_ago >= window_days:
-                continue
-            idx = window_days - 1 - days_ago
+            if granularity == "minute":
+                minutes_ago = int((now - dt).total_seconds() // 60)
+                if minutes_ago < 0 or minutes_ago >= 1440:
+                    continue
+                idx = 1440 - 1 - minutes_ago
+            else:
+                days_ago = (now.date() - dt.date()).days
+                if days_ago < 0 or days_ago >= window_days:
+                    continue
+                idx = window_days - 1 - days_ago
             series[brand][idx] += 1
             totals[brand] += 1
             # Per-discourse breakdown for hover overlay (combined chart's
@@ -1248,7 +1271,7 @@ def serialize_home_chart(
             # many posts were uncategorized.
             post_disc = p.get("discourse") or []
             if not post_disc:
-                stacked[brand].setdefault("__none__", [0] * window_days)
+                stacked[brand].setdefault("__none__", [0] * bucket_count)
                 stacked[brand]["__none__"][idx] += 1
             else:
                 for dk in post_disc:
@@ -1257,7 +1280,7 @@ def serialize_home_chart(
                     else:
                         # Unknown discourse key — bucket it so we don't
                         # drop the count silently.
-                        stacked[brand].setdefault("__none__", [0] * window_days)
+                        stacked[brand].setdefault("__none__", [0] * bucket_count)
                         stacked[brand]["__none__"][idx] += 1
 
     colors = {b: MODEL_ACCENT_COLORS.get(b, "#9ca3af") for b in visible_models}
@@ -1270,6 +1293,7 @@ def serialize_home_chart(
         "totals": totals,
         "applied_filters": dict(filters),
         "window_days": window_days,
+        "granularity": granularity,
         "fetched_at": now.isoformat(),
     }
 
@@ -1393,15 +1417,30 @@ def serialize_single_brand_chart(
     if tab not in _SINGLE_BRAND_TABS:
         tab = "post_type"
 
-    days: list[str] = [
-        (now.date() - timedelta(days=i)).isoformat()
-        for i in range(window_days - 1, -1, -1)
-    ]
+    # window_days == 1 -> per-minute bucketing (1440 buckets). See
+    # serialize_home_chart for the full rationale.
+    granularity: str
+    bucket_count: int
+    if window_days == 1:
+        granularity = "minute"
+        bucket_count = 1440
+        minute_zero = (now - timedelta(hours=24)).replace(second=0, microsecond=0)
+        days: list[str] = [
+            (minute_zero + timedelta(minutes=i)).isoformat()
+            for i in range(bucket_count)
+        ]
+    else:
+        granularity = "day"
+        bucket_count = window_days
+        days: list[str] = [
+            (now.date() - timedelta(days=i)).isoformat()
+            for i in range(window_days - 1, -1, -1)
+        ]
 
     tab_datasets: dict[str, dict[str, list[int]]] = {}
     for tab_key, spec in _SINGLE_BRAND_TAB_SPECS.items():
         tab_datasets[tab_key] = {
-            cat: [0] * window_days for cat in spec["categories"]
+            cat: [0] * bucket_count for cat in spec["categories"]
         }
 
     for p in posts:
@@ -1418,10 +1457,16 @@ def serialize_single_brand_chart(
         dt = _parse_post_timestamp(p.get("created_at"))
         if dt is None:
             continue
-        days_ago = (now.date() - dt.date()).days
-        if days_ago < 0 or days_ago >= window_days:
-            continue
-        idx = window_days - 1 - days_ago
+        if granularity == "minute":
+            minutes_ago = int((now - dt).total_seconds() // 60)
+            if minutes_ago < 0 or minutes_ago >= 1440:
+                continue
+            idx = 1440 - 1 - minutes_ago
+        else:
+            days_ago = (now.date() - dt.date()).days
+            if days_ago < 0 or days_ago >= window_days:
+                continue
+            idx = window_days - 1 - days_ago
 
         for tab_key, spec in _SINGLE_BRAND_TAB_SPECS.items():
             field = spec["field"]
@@ -1473,6 +1518,7 @@ def serialize_single_brand_chart(
         "color_vars": color_vars,
         "applied_filters": dict(filters),
         "window_days": window_days,
+        "granularity": granularity,
         "fetched_at": now.isoformat(),
     }
 

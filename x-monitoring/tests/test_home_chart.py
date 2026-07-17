@@ -385,3 +385,64 @@ def test_home_chart_latest_run_anchors_now():
     # Window is anchored to 2026-07-01
     assert out["days"][-1] == "2026-07-01"
     assert out["days"][0] == "2026-06-25"
+
+
+
+# ---------------------------------------------------------------------------
+# window_days=1 -> per-minute bucketing (feat/window-1min-bucketing)
+# ---------------------------------------------------------------------------
+
+
+def test_home_chart_window_one_uses_minute_buckets():
+    """window_days=1 must produce 1440 per-minute buckets with granularity='minute'."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    posts_by_brand = {
+        "minimax": [
+            _post(created_at="2026-07-06T11:30:00+00:00", brand="minimax"),
+            _post(created_at="2026-07-06T12:00:00+00:00", brand="minimax"),
+        ]
+    }
+    out = serialize_home_chart(
+        ["minimax"], posts_by_brand, window_days=1, now=now
+    )
+    assert out["granularity"] == "minute"
+    assert len(out["days"]) == 1440
+    assert len(out["series"]["minimax"]) == 1440
+    # 11:30 is 30 min ago -> idx = 1440 - 1 - 30 = 1409
+    # 12:00 is now -> idx = 1440 - 1 - 0 = 1439
+    assert out["series"]["minimax"][1409] == 1
+    assert out["series"]["minimax"][1439] == 1
+    assert out["totals"]["minimax"] == 2
+
+
+def test_home_chart_window_one_granularity_field():
+    """Payload exposes granularity field for frontend tick formatting."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    out = serialize_home_chart(["minimax"], {}, window_days=1, now=now)
+    assert out["granularity"] == "minute"
+
+
+def test_home_chart_window_one_excludes_older_than_24h():
+    """A post from 25h ago is excluded from window_days=1."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    posts_by_brand = {
+        "minimax": [
+            _post(created_at="2026-07-05T11:00:00+00:00", brand="minimax"),
+        ]
+    }
+    out = serialize_home_chart(
+        ["minimax"], posts_by_brand, window_days=1, now=now
+    )
+    assert out["totals"]["minimax"] == 0
+    assert sum(out["series"]["minimax"]) == 0
+
+
+def test_home_chart_window_seven_unchanged_by_minute_branch():
+    """Regression guard: window_days=7 stays per-day with granularity='day'."""
+    now = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)
+    out = serialize_home_chart(["minimax"], {}, window_days=7, now=now)
+    assert out["granularity"] == "day"
+    assert len(out["days"]) == 7
+    # Each label is a date string (YYYY-MM-DD).
+    for d in out["days"]:
+        assert "T" not in d

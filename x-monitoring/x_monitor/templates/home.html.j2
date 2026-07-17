@@ -23,7 +23,7 @@
       data-pw-page="multi">
   <header class="topbar">
     <h1>{{ app_name_zh }} <small>{{ app_name_en }}</small></h1>
-    <span class="muted">{{ brands|length }} models · {{ home_window_days }}d window</span>
+    <span class="muted">{{ brands|length }} models · {% if home_window_days == 1 %}24h window{% else %}{{ home_window_days }}d window{% endif %}</span>
 
     <nav class="window-toggle" aria-label="Time-period selector">
       <span class="window-toggle-label">window:</span>

@@ -24,7 +24,7 @@
       data-pw-brand="{{ brand_id }}">
   <header class="topbar">
     <h1>{{ app_name_zh }} <small>{{ app_name_en }}</small></h1>
-    <span class="brand-title">{{ brand_display_names.get(brand_id, brand_id) }} <small>· {{ home_window_days }}d window</small></span>
+    <span class="brand-title">{{ brand_display_names.get(brand_id, brand_id) }} <small>· {% if home_window_days == 1 %}24h window{% else %}{{ home_window_days }}d window{% endif %}</small></span>
     <a class="muted" href="/">← multi-brand</a>
 
     <nav class="window-toggle" aria-label="Time-period selector">

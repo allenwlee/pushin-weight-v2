@@ -48,6 +48,7 @@
     var payload = readPayload(canvas);
     if (!payload) return;
     var days = payload.days || [];
+    var granularity = payload.granularity || 'day';
     var tabDatasets = payload.tab_datasets || {};
     var activeTab = payload.tab || 'post_type';
 
@@ -100,13 +101,35 @@
           x: {
             type: 'category',
             labels: days,
-            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+            ticks: granularity === 'minute' ? {
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 7,
+              callback: function (value, index) {
+                var label = this.getLabelForValue(value);
+                var d = new Date(label);
+                if (isNaN(d.getTime())) return label;
+                if (index === this.chart.data.labels.length - 1) return 'now';
+                if (d.getMinutes() === 0) {
+                  var h = String(d.getHours());
+                  return h.length < 2 ? '0' + h + ':00' : h + ':00';
+                }
+                return '';
+              },
+            } : {
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 6,
+            },
             grid: { display: false },
           },
           y: {
             beginAtZero: true,
             stacked: true,
-            title: { display: true, text: 'posts / day' },
+            title: {
+              display: true,
+              text: granularity === 'minute' ? 'posts / min' : 'posts / day',
+            },
             ticks: { precision: 0 },
           },
         },
