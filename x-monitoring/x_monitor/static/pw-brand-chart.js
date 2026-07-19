@@ -71,7 +71,6 @@
           borderWidth: 0,
           pointRadius: granularity === 'minute' ? 1.5 : 0,
           tension: granularity === 'minute' ? 0.3 : 0.0,
-          spanGaps: granularity === 'minute',
           fill: datasets.length === 0 ? 'origin' : '-1',
           hidden: tab !== activeTab,
           _tab: tab,
