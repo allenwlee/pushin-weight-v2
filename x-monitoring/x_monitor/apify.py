@@ -325,7 +325,13 @@ class TwitterApiClient:
         _walk_search).
         """
         effective_query = query
-        if since and "since:" not in query:
+        # Only inject `since:` when `since_time` is NOT provided.
+        # When both are present, TwitterAPI.io's parser silently drops
+        # results (522 chars → over cap; the two time operators
+        # conflict). `since_time:` already gives sub-day precision;
+        # `since:` is a weaker date-only floor that adds nothing when
+        # `since_time:` is active.
+        if since and "since:" not in query and since_time is None:
             effective_query = f"{query} since:{since}"
         if since_time is not None:
             # Inline operator — the only form TwitterAPI.io honors.
