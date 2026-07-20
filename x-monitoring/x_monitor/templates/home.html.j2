@@ -59,9 +59,16 @@
     <aside class="control-panel" id="control-panel">
       <h2>Filters</h2>
       <div class="control-group">
-        <div class="control-group-title">Brands</div>
+        <div class="control-group-title">
+          Brands
+          <span class="brand-col-headers">
+            <span class="col-only">only</span>
+            <span class="col-include">all</span>
+          </span>
+        </div>
         {% for brand in brands %}
-          <label class="control-row" style="--swatch: {{ brand_accent_colors.get(brand, '#9ca3af') }};">
+          <label class="control-row brand-row" style="--swatch: {{ brand_accent_colors.get(brand, '#9ca3af') }};">
+            <input type="checkbox" data-pw-filter-only="brands" value="{{ brand }}" class="only-cb">
             <input type="checkbox" data-pw-filter-group="brands" value="{{ brand }}" checked>
             <span class="swatch" style="background: {{ brand_accent_colors.get(brand, '#9ca3af') }};"></span>
             {{ brand_display_names.get(brand, brand) }}

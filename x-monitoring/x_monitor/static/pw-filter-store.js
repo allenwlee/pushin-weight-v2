@@ -129,6 +129,50 @@
         emit('pw:filter-change', { key: group, filters: state });
       });
     });
+
+    // --- "only" checkboxes (brands-only for now) ---
+    // When an "only" checkbox is checked, all include checkboxes for
+    // that group are cleared and only the "only"-selected brands are
+    // included. Multiple "only" checkboxes can be active (union).
+    // When the last "only" is unchecked, all includes are restored.
+    panel.querySelectorAll('[data-pw-filter-only]').forEach(function (onlyCb) {
+      onlyCb.addEventListener('change', function () {
+        var group = onlyCb.getAttribute('data-pw-filter-only');
+        var value = onlyCb.value;
+        var allOnlyCbs = panel.querySelectorAll('[data-pw-filter-only="' + group + '"]');
+        var allIncludeCbs = panel.querySelectorAll('[data-pw-filter-group="' + group + '"]');
+
+        if (onlyCb.checked) {
+          // This brand is now "only" — rebuild the include set from all
+          // active "only" checkboxes.
+          allIncludeCbs.forEach(function (icb) { icb.checked = false; });
+          allOnlyCbs.forEach(function (ocb) {
+            if (ocb.checked) {
+              var icb = panel.querySelector(
+                '[data-pw-filter-group="' + group + '"][value="' + ocb.value + '"]'
+              );
+              if (icb) icb.checked = true;
+            }
+          });
+        } else {
+          // Unchecked this "only". If no "only" checkboxes remain active,
+          // restore all includes. Otherwise just remove this brand.
+          var anyOnly = false;
+          allOnlyCbs.forEach(function (ocb) { if (ocb.checked) anyOnly = true; });
+          if (!anyOnly) {
+            allIncludeCbs.forEach(function (icb) { icb.checked = true; });
+          } else {
+            var icb = panel.querySelector(
+              '[data-pw-filter-group="' + group + '"][value="' + value + '"]'
+            );
+            if (icb) icb.checked = false;
+          }
+        }
+
+        state = hydrateFromControlPanel(state);
+        emit('pw:filter-change', { key: group, filters: state });
+      });
+    });
   }
 
   // Public API

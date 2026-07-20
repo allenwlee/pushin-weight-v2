@@ -379,6 +379,27 @@ body {
   letter-spacing: 0.05em;
   color: var(--muted);
 }
+
+
+/* --- brand "only" column --- */
+.brand-col-headers {
+  font-weight: 400;
+  font-size: 9px;
+  color: var(--muted);
+  margin-left: auto;
+  display: flex;
+  gap: 0.6rem;
+}
+.col-only,
+.col-include {
+  display: inline-block;
+  width: 28px;
+  text-align: center;
+}
+.only-cb {
+  margin-right: 0.3rem;
+}
+
 .control-group { display: flex; flex-direction: column; gap: 0.15rem; }
 .control-group-title {
   font-size: 11px;
