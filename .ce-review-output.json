@@ -1,0 +1,92 @@
+{
+  "reviewer": "internal-consistency",
+  "findings": [
+    {
+      "title": "Test count mismatch: Verification tables and DoD say ~13; U1 verification says 8",
+      "severity": "P1",
+      "section": "U1 Verification + Verification Contract + Definition of Done",
+      "why_it_matters": "The plan's verification rows and Definition of Done both promise '~13 tests pass', and the body lists 17 distinct test_scenario bullets (8 in U1 + 5 in U2 + 4 in U3). U1's own verification line says 'passes all 8 tests', but those 8 are only U1's scenarios. An implementer running the suite in U1 will see 8 pass and may not realize U2/U3 test scenarios are missing, leading to a partial PR being merged as 'green'.",
+      "finding_type": "error",
+      "autofix_class": "safe_auto",
+      "suggested_fix": "Update U1 verification line from 'passes all 8 tests' to 'passes the 8 U1 tests (full U2/U3 suite is verified at U2/U3 completion)' OR change the Verification Contract / DoD counts to match the per-unit bullets: U1=8, U2=5, U3=4, total=17.",
+      "confidence": 100,
+      "evidence": [
+        "Line 169: `**Verification:** \\`python -m pytest tests/test_probe_classify_batch_limits.py -v\\` passes all 8 tests.`",
+        "Line 225: `| Unit tests | ... | All ~13 tests pass. |`",
+        "Line 233: `- All ~13 tests in \\`tests/test_probe_classify_batch_limits.py\\` pass.`",
+        "Lines 161-168: 8 test_scenario bullets in U1",
+        "Lines 185-189: 5 test_scenario bullets in U2",
+        "Lines 210-213: 4 test_scenario bullets in U3",
+        "Total: 17 test scenarios"
+      ]
+    },
+    {
+      "title": "A4 (RPM) axis has no test scenario in U2 test list",
+      "severity": "P2",
+      "section": "U2 Test scenarios",
+      "why_it_matters": "U2 declares 5 sweeps (sweep_batch_size, sweep_max_tokens, sweep_input_tokens, sweep_rpm, sweep_cache_state) and only 5 test scenarios — but sweep_rpm has no test_scenario bullet. If the rpm sweep regresses, the suite stays green. This is an omission derivable from the document: KTD2/R3/A4 promise an rpm axis, U2 lists 5 sweep functions, only 4 of them have a test.",
+      "finding_type": "omission",
+      "autofix_class": "gated_auto",
+      "suggested_fix": "Add a `test_sweep_rpm_emits_one_row_per_target` bullet mirroring the batch_size test (3 rows, one per target_rpm value) — or confirm with the author that rpm is intentionally tested only via the live verification command on lines 191-197 and drop the function from U2's declared test scope.",
+      "confidence": 100,
+      "evidence": [
+        "Line 181: `\\`sweep_rpm(client, base_kwargs)\\`: iterates target_rpm ∈ [60, 120, 240]...`",
+        "Lines 185-189: U2 test_scenario bullets cover batch_size, max_tokens, input_tokens, verdict_line, cache_state — rpm is missing",
+        "Line 171: `**Goal:** Implement the 5 axis sweeps (A1-A5 from R3)`"
+      ]
+    },
+    {
+      "title": "KTD2 promises a compound sweep; no unit owns it",
+      "severity": "P2",
+      "section": "KTD2 / U2 Approach / U2 Verification",
+      "why_it_matters": "KTD2 explicitly states 'the final row is a compound sweep at the smallest-axis-value-that-failed for every other axis at its current production value', but no Implementation Unit (U1, U2, or U3) contains a step, function name, or test scenario that implements it. An implementer following the unit structure will ship the five independent sweeps and miss the compound sweep, even though the body of the plan treats it as required scope.",
+      "finding_type": "omission",
+      "autofix_class": "gated_auto",
+      "suggested_fix": "Either (a) add a `sweep_compound(client, base_kwargs, failing_axis, failing_value)` function and a `test_sweep_compound_uses_min_values` scenario to U2, or (b) downgrade KTD2 to 'each axis gets its own sweep' and remove the compound-sweep sentence from the Key Technical Decision.",
+      "confidence": 75,
+      "evidence": [
+        "Line 102: `**KTD2. One-axis-at-a-time + one compound sweep.** ... the final row is a compound sweep at the smallest-axis-value-that-failed...`",
+        "Lines 178-182: U2 Approach lists exactly 5 sweeps, none called compound",
+        "Lines 185-189: U2 Test scenarios list 5 bullets, none covering a compound sweep",
+        "Line 196: U2 Verification only mentions 'two ASCII tables and a verdict line' (no compound sweep mentioned)"
+      ]
+    },
+    {
+      "title": "F1 calls `axes=batch_size`, F2 calls `axes=max_tokens`, F3 says 'verify prompt-cache' but never invokes the cache subset name",
+      "severity": "P3",
+      "section": "Key Flows F1/F2/F3",
+      "why_it_matters": "F3 is titled 'Cache-state isolation' and references the cache_state sweep, but its Steps text says 'fires 3 consecutive calls at fixed batch_size=1' — it never names the CLI flag the operator should use. F1 uses `--axes=batch_size` and F2 uses `--axes=max_tokens`. An operator following F3 in isolation has to read U3 to discover the flag is `--axes=cache_state`. This is a minor internal-consistency gap between the prose and the operational story.",
+      "finding_type": "omission",
+      "autofix_class": "safe_auto",
+      "suggested_fix": "Update F3 Trigger/Steps to read: 'Operator runs `python -m scripts.probe_classify_batch_limits --axes=cache_state`' to match the convention used in F1 and F2.",
+      "confidence": 75,
+      "evidence": [
+        "Line 62: F1 Trigger: `runs \\`python -m scripts.probe_classify_batch_limits --axes=batch_size\\``",
+        "Line 67: F2 Trigger: `runs \\`python -m scripts.probe_classify_batch_limits --axes=max_tokens\\``",
+        "Line 70-73: F3 describes the cache sweep but never names the `--axes=cache_state` flag",
+        "Line 218: `python -m scripts.probe_classify_batch_limits --axes=cache_state --no-dry-run` confirms the flag name exists"
+      ]
+    },
+    {
+      "title": "R12 mentioned in U1 Goals/Requirements but logically belongs to U3",
+      "severity": "P3",
+      "section": "U1 Requirements vs U3 Goals",
+      "why_it_matters": "R12 ('--dry-run that builds every prompt and reports len(prompt) / estimated token counts') is listed in U1's Requirements list and again in U3's. U1's Approach never references --dry-run wiring (it only says 'FakeClaudeClient' short-circuits), while U3 explicitly owns '--dry-run integration'. The duplication is harmless but signals that the unit boundaries were assigned without re-reading R12's scope — an implementer may either over-build U1 or under-build U2/U3 expecting R12 to land in U1.",
+      "finding_type": "error",
+      "autofix_class": "gated_auto",
+      "suggested_fix": "Remove R12 from U1's Requirements list (keep R1, R2, R7, R8, R9) since U1's Approach doesn't deliver it. U3 already declares R6, R10, R11, R12 — add R12 cleanly to U3 only.",
+      "confidence": 50,
+      "evidence": [
+        "Line 150: `**Requirements:** R1, R2, R7, R8, R9, R12.` (U1)",
+        "Lines 156-158: U1 Approach never wires `--dry-run` (only mentions FakeClaudeClient short-circuit for testability)",
+        "Line 202: `**Requirements:** R6, R10, R11, R12.` (U3)",
+        "Line 207: `--dry-run\\` makes every sweep skip \\`_fire_one_batch\\`...` (U3 actually delivers R12)"
+      ]
+    }
+  ],
+  "residual_risks": [
+    "The '8 tests' vs '~13 tests' vs '17 test_scenario bullets' triple mismatch could silently pass through code review if the implementer only runs U1 in isolation and never re-checks the Verification Contract table.",
+    "The compound sweep from KTD2 has no owner; if a downstream reviewer skips KTD2, the ship will be missing the compound run that KTD2 explicitly promises."
+  ],
+  "deferred_questions": []
+}
