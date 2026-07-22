@@ -107,6 +107,16 @@
       </div>
 
       <div class="control-group">
+        <div class="control-group-title">lang</div>
+        {% for key in lang_keys %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="lang" value="{{ key }}" checked>
+            {{ lang_display_names.get(key, key) }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
         <div class="control-group-title">us_nationalism</div>
         {% for key in nationalism_keys %}
           <label class="control-row">
