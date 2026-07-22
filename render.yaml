@@ -95,7 +95,7 @@ databases:
   # Managed PostgreSQL
   # --------------------------------------------------------------------------
   - name: xmonitor-db
-    plan: starter
+    plan: free
     databaseName: xmonitor
     user: xmonitor
 
@@ -103,7 +103,7 @@ databases:
   # Managed Redis (for Celery)
   # --------------------------------------------------------------------------
   - name: xmonitor-redis
-    plan: starter
+    plan: free
     ipAllowList: []
 
 # --------------------------------------------------------------------------
