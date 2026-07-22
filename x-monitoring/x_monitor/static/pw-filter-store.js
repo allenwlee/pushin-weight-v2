@@ -29,6 +29,7 @@
       cn_nationalism: '__all__',
       us_nationalism: '__all__',
       unsanctioned: 'off',    // 'off' | 'only'
+      lang: '__all__',         // added 2026-07-22
     };
   }
 
@@ -93,7 +94,7 @@
     //   - all checked  → "__all__" (no narrowing)
     //   - some checked → array of values
     //   - none checked → [] (narrows to zero)
-    ['brands', 'discourse', 'post_types', 'role',
+    ['brands', 'discourse', 'post_types', 'role', 'lang',
      'cn_nationalism', 'us_nationalism'].forEach(function (k) {
       if (!seen[k]) return;
       if (seen[k].length === 0) {

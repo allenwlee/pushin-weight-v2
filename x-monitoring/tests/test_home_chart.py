@@ -37,6 +37,7 @@ def _post(
     cn_nationalism: str | None = None,
     us_nationalism: str | None = None,
     unsanctioned: bool = False,
+    lang_detected: str | None = None,
 ) -> dict:
     """Build a denormalized post dict for serialize_home_chart input."""
     return {
@@ -50,6 +51,7 @@ def _post(
         "cn_nationalism": cn_nationalism,
         "us_nationalism": us_nationalism,
         "unsanctioned": unsanctioned,
+        "lang_detected": lang_detected,
     }
 
 
@@ -446,3 +448,103 @@ def test_home_chart_window_seven_unchanged_by_minute_branch():
     # Each label is a date string (YYYY-MM-DD).
     for d in out["days"]:
         assert "T" not in d
+
+
+# ---------------------------------------------------------------------------
+# lang_detected filter (2026-07-22)
+# ---------------------------------------------------------------------------
+
+
+def test_filter_lang_en_only_passes_en_post():
+    """Post with lang_detected='en' passes when only 'en' is active."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00", lang_detected="en")]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": ["en"]},
+    )
+    assert out["totals"]["minimax"] == 1
+
+
+def test_filter_lang_en_only_blocks_ja_post():
+    """Post with lang_detected='ja' blocked when only 'en' is active."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00", lang_detected="ja")]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": ["en"]},
+    )
+    assert out["totals"]["minimax"] == 0
+
+
+def test_filter_lang_null_blocked_when_undetected_off():
+    """Null lang_detected blocked when 'undetected' not in active set."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00")]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": ["en"]},
+    )
+    assert out["totals"]["minimax"] == 0
+
+
+def test_filter_lang_null_passes_when_undetected_on():
+    """Null lang_detected passes when 'undetected' is in the active set."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00")]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": ["undetected"]},
+    )
+    assert out["totals"]["minimax"] == 1
+
+
+def test_filter_lang_tail_passes_via_other():
+    """Post with lang below cutoff (th=6 posts) passes via 'other'."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00", lang_detected="th")]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": ["other"]},
+    )
+    assert out["totals"]["minimax"] == 1
+
+
+def test_filter_lang_tail_blocked_when_other_off():
+    """Post with lang below cutoff blocked when 'other' not active."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00", lang_detected="th")]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": ["en"]},
+    )
+    assert out["totals"]["minimax"] == 0
+
+
+def test_filter_lang_all_default_passes_everything():
+    """__all__ sentinel passes all posts regardless of lang_detected."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [
+        _post(created_at="2026-07-21T12:00:00+00:00", lang_detected="en"),
+        _post(created_at="2026-07-21T12:01:00+00:00", lang_detected="ja"),
+        _post(created_at="2026-07-21T12:02:00+00:00"),  # null
+    ]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": "__all__"},
+    )
+    assert out["totals"]["minimax"] == 3
+
+
+def test_filter_lang_empty_list_blocks_all():
+    """Empty lang filter list blocks everything."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [
+        _post(created_at="2026-07-21T12:00:00+00:00", lang_detected="en"),
+        _post(created_at="2026-07-21T12:01:00+00:00", lang_detected="ja"),
+    ]}
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": []},
+    )
+    assert out["totals"]["minimax"] == 0

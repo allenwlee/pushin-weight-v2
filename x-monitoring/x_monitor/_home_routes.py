@@ -69,7 +69,7 @@ def _parse_filters_from_request() -> dict[str, Any]:
             log.warning("malformed filters JSON; ignoring")
     # Fall back to per-key params (smoke-test friendly)
     out: dict[str, Any] = {}
-    for key in ("discourse", "post_types", "role", "cn_nationalism", "us_nationalism"):
+    for key in ("discourse", "post_types", "role", "lang", "cn_nationalism", "us_nationalism"):
         v = request.args.get(key)
         if v:
             out[key] = [s for s in v.split(",") if s]

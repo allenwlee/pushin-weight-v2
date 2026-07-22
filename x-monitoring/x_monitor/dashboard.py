@@ -1171,6 +1171,30 @@ def _post_matches_filter(
             if post_key is not None and post_key not in active:
                 return False
 
+    # lang_detected filter (asymmetric: null posts treated as "undetected"
+    # bucket, mirroring role's "other" bucket). Null lang_detected is ~78%
+    # of posts — without asymmetric semantics, checking only "en" would
+    # pass ~19K posts (3.7K en + 15.6K null), defeating the filter.
+    # Known-language posts below the >=20 cutoff route through "other".
+    lang = filters.get("lang")
+    if lang is not None and lang != "__all__":
+        if not lang:
+            return False
+        post_lang = post.get("lang_detected")
+        if post_lang is None:
+            # Null posts: pass only when "undetected" is in the active set.
+            if "undetected" not in lang:
+                return False
+        elif post_lang in _DASHBOARD_LANG_FILTER_KEYS:
+            # Known language in the filter taxonomy: passes when explicitly
+            # in the active set, OR when "other" is active as a catch-all.
+            if post_lang not in lang and "other" not in lang:
+                return False
+        else:
+            # Unknown language (tail below cutoff): passes only via "other".
+            if "other" not in lang:
+                return False
+
     # unsanctioned
     mode = filters.get("unsanctioned") or "off"
     is_flagged = bool(post.get("unsanctioned"))
