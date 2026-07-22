@@ -44,7 +44,7 @@ if env_file.exists():
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-change-in-production-xmonitor-v2")
 DEBUG = env("DEBUG")
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", ".onrender.com"])
 
 USE_TZ = True
 TIME_ZONE = "UTC"
@@ -93,6 +93,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     # LocaleMiddleware must be after SessionMiddleware and before
     # CommonMiddleware so it can parse the language from the session
@@ -218,6 +219,22 @@ CELERY_BEAT_SCHEDULE = {
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# ============================================================================
+# Production / Render deployment
+# ============================================================================
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+# Render terminates TLS at its load balancer and forwards to Gunicorn over HTTP.
+# Tell Django to trust the X-Forwarded-Proto header so request.is_secure() works.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Security hardening (off in local DEBUG mode, on in production)
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 # ============================================================================
 # Logging

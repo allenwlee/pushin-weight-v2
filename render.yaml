@@ -1,0 +1,129 @@
+# Render Blueprint — x-monitor v2
+# https://render.com/docs/blueprint-spec
+# Automatically applied on `git push` to the Render-connected repo.
+
+services:
+  # --------------------------------------------------------------------------
+  # Django web service
+  # --------------------------------------------------------------------------
+  - type: web
+    name: xmonitor-web
+    runtime: python
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: gunicorn project.wsgi:application --log-file -
+    healthCheckPath: /accounts/login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: xmonitor-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromDatabase:
+          name: xmonitor-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromDatabase:
+          name: xmonitor-redis
+          property: connectionString
+      - fromGroup: xmonitor-secrets
+
+  # --------------------------------------------------------------------------
+  # Celery worker (harvest cycles)
+  # --------------------------------------------------------------------------
+  - type: worker
+    name: xmonitor-worker
+    runtime: python
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: celery -A project worker -l INFO --concurrency=1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: xmonitor-web
+          type: web
+          property: env.DJANGO_SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: xmonitor-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromDatabase:
+          name: xmonitor-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromDatabase:
+          name: xmonitor-redis
+          property: connectionString
+      - fromGroup: xmonitor-secrets
+
+  # --------------------------------------------------------------------------
+  # Celery Beat scheduler
+  # --------------------------------------------------------------------------
+  - type: worker
+    name: xmonitor-beat
+    runtime: python
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: celery -A project beat -l INFO
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: xmonitor-web
+          type: web
+          property: env.DJANGO_SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: xmonitor-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromDatabase:
+          name: xmonitor-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromDatabase:
+          name: xmonitor-redis
+          property: connectionString
+      - fromGroup: xmonitor-secrets
+
+databases:
+  # --------------------------------------------------------------------------
+  # Managed PostgreSQL
+  # --------------------------------------------------------------------------
+  - name: xmonitor-db
+    plan: starter
+    databaseName: xmonitor
+    user: xmonitor
+
+  # --------------------------------------------------------------------------
+  # Managed Redis (for Celery)
+  # --------------------------------------------------------------------------
+  - name: xmonitor-redis
+    plan: starter
+    ipAllowList: []
+
+# --------------------------------------------------------------------------
+# Environment variable group (secrets — set once in Render Dashboard)
+# --------------------------------------------------------------------------
+# Create this group manually in Render Dashboard before first deploy:
+#   GOOGLE_CLIENT_ID
+#   GOOGLE_CLIENT_SECRET
+#   TWITTERAPI_IO_API_KEY
+#   ANTHROPIC_API_KEY
+#   ANTHROPIC_BASE_URL
