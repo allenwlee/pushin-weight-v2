@@ -1,20 +1,176 @@
 # x-monitor
 
-Last updated: 2026-07-22-13:37:00
+Last updated: 2026-07-22-17:00:00
 
 > A Flask dashboard + macOS background pipeline that watches X for posts
 > about 20 AI model brands, classifies each post by discourse / sentiment /
 > nationalism / role, and surfaces the conversation in two home pages.
+>
+> **v2 (in progress):** Django + PostgreSQL on Render with Google OAuth,
+> Celery-based harvest, and full i18n. See [Production (Django/Render)](#production-djangorender)
+> below for the new architecture. The legacy Flask/SQLite/launchd stack
+> is still running in production — do NOT touch it during migration.
 
-x-monitor runs every 15 minutes on macOS. Each tick, it fetches posts via
-[TwitterAPI.io](https://twitterapi.io), filters by per-brand relevance,
-runs each kept post through an LLM to extract per-brand signals
-(discourse, sentiment, nationalism flags), and persists everything to a
-local SQLite DB. The dashboard reads that DB and renders two pages: a
-multi-brand home and a single-brand drill-down (collectively the
-**Pushin' Weight** home pages).
+## Architecture at a glance
 
-Open `http://127.0.0.1:5000/` after `x-monitor dashboard start`.
+This repo contains **two stacks** running side-by-side during the v1-to-v2
+migration, sharing the same `config.yaml` and `.env.secrets` but targeting
+separate databases:
+
+| Stack | Web | DB | Harvest | Auth | Status |
+|---|---|---|---|---|---|
+| v1 (Flask) | Flask + Jinja2 on :5000 | SQLite (`data/x_monitoring.db`) | 2 launchd agents | None (local) | **Live prod** |
+| v2 (Django) | Django + WhiteNoise on Render | PostgreSQL (Render managed) | Celery beat + worker | Google OAuth | **In migration** |
+
+**Do not touch the v1 launchd agents until the cutover is complete.**
+See [Transitioning from legacy Flask](#transitioning-from-legacy-flask).
+
+---
+
+## Production (Django/Render) -- v2
+
+The v2 stack runs on Render as three services (web, worker, beat) backed
+by managed PostgreSQL and Redis. The web service serves the dashboard
+behind Google OAuth; the worker + beat pair replaces the macOS launchd
+agents, running the harvest cycle on the same 15-minute cadence.
+
+```
+Render (cloud)                              macOS (local -- legacy v1)
+┌──────────────────────┐                    ┌───────────────────────┐
+│ xmonitor-web         │                    │ launchd harvest       │
+│ (gunicorn + Django)  │                    │ (every 15 min)        │
+│                       │                    │                       │
+│ xmonitor-worker       │    ┌─────────┐     │ launchd config-reload │
+│ (Celery worker)      │────│  Redis  │     │ (on config.yaml edit) │
+│                       │    └─────────┘     │                       │
+│ xmonitor-beat         │                    │ SQLite                │
+│ (Celery scheduler)    │────── PostgreSQL   │ data/x_monitoring.db │
+└──────────────────────┘                    └───────────────────────┘
+```
+
+**Key differences from v1:**
+- **Database:** PostgreSQL with Django ORM migrations instead of raw SQL
+  files in `x_monitor/migrations/`. Migrations live in `core/migrations/`
+  and are auto-generated from `core/models.py`.
+- **Auth:** Google OAuth via django-allauth on all dashboard routes --
+  no open-to-LAN Flask server.
+- **Harvest:** Celery beat (15-min interval) replaces launchd heartbeat.
+  The cycle runner (`monitor/cycle.py`) is the same logic ported to
+  Django ORM.
+- **Deployment:** `render.yaml` Blueprint auto-provisions the full
+  service topology on first push.
+
+### Django project layout
+
+```
+project/          Django project (settings, urls, wsgi/asgi, Celery app)
+core/             App #1: models + migrations (source of truth for schema)
+monitor/          App #2: dashboard views + harvest management commands
+manage.py         Django CLI entry point
+render.yaml       Render Blueprint (infrastructure-as-code)
+Procfile          Render start command
+build.sh          Render build script
+.env.example      Env var template for local dev
+```
+
+### Quickstart (local Django dev)
+
+```bash
+cd /Users/fuchitalee/development/pushin-weight-v2
+
+# 1. Python env
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# 2. PostgreSQL (local)
+createdb xmonitor -U xmonitor
+# or via Docker: docker run -d --name xmonitor-pg -e POSTGRES_USER=xmonitor \
+#   -e POSTGRES_PASSWORD=xmonitor -e POSTGRES_DB=xmonitor -p 5432:5432 postgres:16
+
+# 3. Real secrets -- copy from .env.example and fill in values
+cp .env.example .env
+# Edit .env with your API keys (TWITTERAPI_IO_API_KEY, ANTHROPIC_API_KEY,
+# GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+
+# 4. Apply migrations
+python manage.py migrate
+
+# 5. Seed the curated base layer (brands, companies, roles, known accounts)
+python manage.py load_seed
+python manage.py seed_i18n_labels
+
+# 6. Smoke-test the harvest cycle
+python manage.py run_cycle --dry-run --limit-per-call 20
+
+# 7. Run the dev server
+python manage.py runserver 0.0.0.0:8000
+# Open http://localhost:8000/accounts/login/ (Google OAuth)
+```
+
+### Management commands
+
+All commands are invoked via `python manage.py <command>` (or `manage.py`
+directly if executable).
+
+| Command | Purpose |
+|---|---|
+| `run_cycle` | Run one harvest cycle (fetch + filter + attribute + classify + persist). Supports `--dry-run`, `--async` (Celery), `--json`, `--brands`, `--limit-per-call`, `--skip-fetch`, `--max-pages-per-call`. |
+| `load_seed` | Seed the curated base layer: 20 brands, companies, roles, known accounts. Idempotent (get_or_create). Supports `--dry-run`, `--brands a,b,c`, `--no-accounts`. |
+| `seed_i18n_labels` | Seed the i18n label tables (post_type_labels, sentiment_labels, discourse_labels, nationalism_labels, role_labels) with known taxonomy values in en + zh-cn. Supports `--dry-run`. |
+| `validate_cycle` | Compare a legacy run summary against PG state or another run summary. Exits 0 only when all metrics are within `--tolerance-pct` (default 5%). Used during the battle-test protocol. |
+| `migrate` | Apply pending Django migrations (standard Django built-in). |
+| `createsuperuser` | Create a Django admin user (for `/admin/` and local testing). |
+
+### Bridge / port scripts
+
+During the migration window, these scripts keep the v1 (SQLite) and v2
+(PostgreSQL) data in sync:
+
+| Script | Purpose |
+|---|---|
+| `scripts/bridge_sqlite_to_pg.py` | Incremental copy: reads the latest v1 run JSON from `data/runs/LATEST.json` and inserts matching rows into PostgreSQL via the Django ORM. Run after each successful legacy cycle. |
+| `scripts/port_sqlite_to_django.py` | Historical bulk port: copies all rows from the legacy SQLite DB into PostgreSQL using the Django ORM. One-time operation before cutover. |
+
+### Render deploy quick reference
+
+```bash
+# Infrastructure is defined in render.yaml -- Blueprint auto-provisions
+# on first push to the Render-connected branch.
+
+# Manual deploy steps (if not using Blueprint):
+# 1. Create managed PostgreSQL (xmonitor-db)  in Render Dashboard
+# 2. Create managed Redis (xmonitor-redis)    in Render Dashboard
+# 3. Create web service from this repo with build.sh / Procfile
+# 4. Create worker + beat services (Celery)
+# 5. Set the xmonitor-secrets env group in Render Dashboard
+
+# Full runbook: docs/deploy/render.md
+```
+
+### Transitioning from legacy Flask
+
+**Do not touch launchd during migration.** The v1 pipeline must continue
+harvesting to SQLite without interruption. The v2 stack (Django + PG +
+Render) runs in parallel, consuming the same API keys but writing to its
+own database.
+
+When the battle-test protocol (see `docs/production-runbook.md`) confirms
+v2 equivalence, the cutover proceeds in this order:
+
+1. Operator approves v2 after 1-2 days of parallel running
+2. `scripts/bridge_sqlite_to_pg.py` does the final incremental sync
+3. Render cron job for harvest is verified active
+4. launchd agents are unloaded (NOT deleted -- keep for rollback):
+   ```bash
+   launchctl unload ~/Library/LaunchAgents/com.fuchitalee.x-monitor.harvest.plist
+   launchctl unload ~/Library/LaunchAgents/com.fuchitalee.x-monitor.config-reload.plist
+   ```
+5. Operator confirms the Render dashboard is serving live data
+
+Rollback: re-load the launchd plists, point the dashboard back at the
+SQLite DB. See `docs/production-runbook.md` for the full procedure.
+
+---
 
 ## What this is
 
@@ -33,6 +189,18 @@ Two surfaces to know about:
    classifies, and persists posts every 15 min.
 2. **The dashboard** (`x_monitor.dashboard.DashboardApp`) — a Flask app that
    serves the two Pushin' Weight home pages.
+
+---
+
+## Legacy (v1) — Flask + SQLite + launchd
+
+> The sections below describe the **currently live production v1 stack**.
+> This stack continues to run unchanged during the Django migration. All
+> new development targets the v2 stack (see [Production (Django/Render)](#production-djangorender)).
+> 
+> The v1 pipeline, dashboard, deployment, and ops docs are preserved here
+> for reference during the migration window. After cutover, these sections
+> will be archived and replaced with v2 equivalents.
 
 ---
 
@@ -251,7 +419,7 @@ Full install/uninstall reference: `deploy/README.md`.
 
 ---
 
-## Setup (local MVP)
+## Setup (local MVP — v1 Flask)
 
 ```bash
 cd /Users/fuchitalee/development/pushin-weight-v2
@@ -307,13 +475,39 @@ rm /tmp/x-monitor-paused
 ## Layout
 
 ```
-x_monitor/
-├── README.md                  (this file)
+x-monitor/                    (repo root — pushin-weight-v2)
+├── README.md                 (this file)
 ├── pyproject.toml             (deps, pytest config)
 ├── config.yaml                (operator-editable: enabled_models,
 │                               daily_ceiling, x_query_specs, dashboard,
 │                               query_rot_streak_threshold, etc.)
-├── x_monitor/                 (Python package)
+├── manage.py                  (Django CLI — v2)
+├── render.yaml                (Render Blueprint — v2)
+├── Procfile                   (Render start command — v2)
+├── build.sh                   (Render build script — v2)
+├── .env.example               (Env var template — v2)
+├── project/                   (Django project -- v2)
+│   ├── settings.py            (env-driven config, all 3 apps, Celery)
+│   ├── urls.py                (auth + dashboard routing)
+│   ├── wsgi.py / asgi.py     (deployment entry points)
+│   └── celery.py              (Celery app bootstrap)
+├── core/                      (App #1: models + migrations -- v2)
+│   ├── models.py              (Single source of truth for DB schema)
+│   ├── migrations/            (Auto-generated from models.py)
+│   ├── context_processors.py  (i18n template context)
+│   └── management/commands/
+│       └── seed_i18n_labels.py
+├── monitor/                   (App #2: dashboard + harvest -- v2)
+│   ├── views.py               (Dashboard view handlers, ~1,100 LOC)
+│   ├── cycle.py               (CycleRunner -- harvest orchestrator)
+│   ├── urls.py                (Dashboard URL patterns)
+│   ├── tasks.py               (Celery task definitions)
+│   ├── templates/             (Jinja2 templates)
+│   └── management/commands/
+│       ├── run_cycle.py       (Harvest cycle CLI)
+│       ├── load_seed.py       (Curated base-layer seed)
+│       └── validate_cycle.py  (v1-v2 equivalence validator)
+├── x_monitor/                 (Legacy v1 — Flask Python package)
 │   ├── __main__.py            (the entire CLI — no cli/ subpackage)
 │   ├── run.py                 (RunPipeline — daily harvest orchestrator)
 │   ├── dashboard.py           (DashboardApp + Flask routes — 2,700 LOC)
@@ -337,13 +531,16 @@ x_monitor/
 │   ├── intent_classifier.py   (DEPRECATION SHIM — do not import)
 │   ├── templates/             (home.html.j2 + brand_home.html.j2 + 4 partials)
 │   ├── static/                (dashboard.css + 5 pw-*.js modules)
-│   ├── migrations/            (001–038 forward-only SQL)
+│   ├── migrations/            (001–039 forward-only SQL)
 │   ├── data/
 │   │   └── few_shot_pragmatics.jsonl   (LLM few-shot examples)
 │   └── CHANGELOG.md
 ├── tests/                     (pytest — 122+ test files)
-├── scripts/                   (one-off backfill / seed / probe scripts)
-├── deploy/                    (2 launchd plists + install + wrapper scripts)
+├── scripts/                   (one-off backfill / seed / probe / bridge scripts)
+│   ├── bridge_sqlite_to_pg.py  (v1 run JSON → PG incremental sync)
+│   ├── port_sqlite_to_django.py (v1 SQLite → PG bulk port)
+│   └── ...
+├── deploy/                    (2 launchd plists + install + wrapper scripts — v1)
 ├── data/                      (runtime — gitignored)
 │   ├── x_monitoring.db            (live SQLite DB, ~85 MB)
 │   ├── runs/                      (per-cycle JSONs + LATEST.json symlink)
@@ -354,7 +551,11 @@ x_monitor/
 │   ├── plans/                      (in-progress + completed plans)
 │   ├── notes/                      (operator notes)
 │   ├── analysis/                   (probe + classification snapshots)
+│   ├── deploy/                     (Render runbook — v2)
+│   │   └── render.md
+│   ├── production-runbook.md       (Cutover checklist — v2)
 │   └── reference/                  (short reference docs)
+├── locale/                    (Django i18n .po/.mo files — v2)
 └── .venv/                     (local Python venv — gitignored)
 ```
 
@@ -408,6 +609,8 @@ Otherwise check the harvest agent is loaded: `launchctl list | grep harvest`.
 
 ## Where to look next
 
+- **Render deploy runbook**: `docs/deploy/render.md`
+- **Cutover checklist + battle-test protocol**: `docs/production-runbook.md`
 - **UI deep-dive**: `../docs/reference/home-pages-ui-guide.md`
 - **DB schema**: `../docs/reference/db-schema.md`
 - **LLM prompts**: `../docs/reference/classifier-prompts.md`
