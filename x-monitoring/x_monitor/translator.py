@@ -166,10 +166,17 @@ def _call_with_retry(
     catches and marks the batch as failed.
     """
     last_exc: Exception | None = None
+    # Resolve the model name from the operator's proxy config
+    # (ANTHROPIC_BASE_URL / ANTHROPIC_MODEL). The translator routes
+    # through the process-wide default, not the classifier override
+    # (X_MONITOR_CLASSIFIER_BASE_URL). Imported lazily to keep
+    # `translator` importable in test envs without attribution deps.
+    from .attribution import _resolve_translator_model as _resolve_model
+    model = _resolve_model()
     for attempt in range(_MAX_RETRIES):
         try:
             return client.messages_create(
-                model="claude-haiku-4-5",
+                model=model,
                 max_tokens=4096,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -632,9 +639,13 @@ def translate_batch_pragmatics(
             # is "the locale column is NULL when the source is
             # already in that locale").
             #
-            # text_en: NULL when lang is in the English family
-            #   (en, en-US, en-GB, ...). The source `text` is
-            #   already the English version.
+            # text_en: NULL only when lang is in the English family
+            #   (en, en-US, en-GB, ...) — the source `text` is
+            #   already the English version. For ALL other languages
+            #   (including Chinese), the LLM's English translation
+            #   is preserved. Echo detection (below) catches the
+            #   rare case where the LLM echoes the source text into
+            #   text_en instead of translating.
             #
             # text_zh_cn: populated for ALL non-zh-Hans sources.
             #   The LLM's output is treated as a best-interpretation
@@ -649,17 +660,25 @@ def translate_batch_pragmatics(
             # are NOT trusted for column population.
             lang = (judged.get("lang_detected") or "").lower()
             is_already_zh = _is_simplified_chinese_family(lang)
-            # U5: text_en NULL when lang is EITHER the English family
-            # (source already is English — serving source is redundant)
-            # OR the Simplified Chinese family (source is Chinese, the
-            # LLM sometimes echoes the Chinese into text_en instead of
-            # translating — see the v10 smoketest Post 4 bug). The
-            # Chinese→English translation path remains the default for
-            # all other source languages.
+            is_already_en = _is_english_family(lang)
+            # text_en: NULL only for English source (already English).
+            # Chinese and all other non-English languages get the LLM's
+            # English translation. Echo guard: if the LLM echoed the
+            # source text verbatim into text_en (the v10 smoketest
+            # Post 4 bug), nullify it — a non-English source echoed
+            # into the English column is not a translation.
+            _raw_en = judged.get("text_en")
+            _source_text = (t.get("text") or "").strip()
+            _en_is_echo = (
+                _raw_en is not None
+                and isinstance(_raw_en, str)
+                and _raw_en.strip() == _source_text
+                and not is_already_en
+            )
             text_en = (
                 None
-                if _is_english_family(lang) or is_already_zh
-                else judged.get("text_en")
+                if is_already_en or _en_is_echo
+                else _raw_en
             )
             literal_zh_raw = (
                 None if is_already_zh
