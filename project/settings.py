@@ -135,7 +135,7 @@ ASGI_APPLICATION = "project.asgi.application"
 DATABASES = {
     "default": env.db(
         "DATABASE_URL",
-        default="postgres://xmonitor:xmonitor@localhost:5432/xmonitor",
+        default="postgres://pushinweight:pushinweight@localhost:5432/pushinweight",
     ),
 }
 DATABASES["default"]["ATOMIC_REQUESTS"] = False  # harvest wants explicit tx control
