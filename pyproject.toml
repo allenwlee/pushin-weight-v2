@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "x-monitor"
-version = "0.1.0"
-description = "Daily multi-language X monitoring for the 9 v1 Chinese AI models"
+version = "0.2.0"
+description = "Daily multi-language X monitoring for 20 AI model brands — Django + PostgreSQL on Render"
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",
@@ -16,19 +16,32 @@ dependencies = [
     "jinja2>=3",
     "flask>=3",
     "squarify>=0.4,<1.0",
+    # v2 Django stack
+    "Django>=5.2,<5.3",
+    "psycopg[binary]>=3.2",
+    "django-environ>=0.11",
+    "gunicorn>=23",
+    "whitenoise>=6",
+    "celery[redis]>=5.4",
+    "redis>=5.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "pytest-django>=4.8",
+    "pytest-celery>=1.0",
+    "ruff>=0.6",
 ]
 
 [project.scripts]
 x-monitor = "x_monitor.__main__:main"
+xmonitor = "project.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["x_monitor*"]
+include = ["x_monitor*", "project", "core", "monitor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+DJANGO_SETTINGS_MODULE = "project.settings"
