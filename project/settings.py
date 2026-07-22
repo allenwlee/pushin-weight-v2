@@ -50,6 +50,21 @@ USE_TZ = True
 TIME_ZONE = "UTC"
 
 # ============================================================================
+# i18n / l10n
+# ============================================================================
+
+USE_I18N = True
+USE_L10N = True
+
+LANGUAGE_CODE = "en"
+LANGUAGES = [
+    ("en", "English"),
+    ("zh-cn", "简体中文"),
+]
+
+LOCALE_PATHS = [BASE_DIR / "locale"]
+
+# ============================================================================
 # Apps
 # ============================================================================
 # v2 baseline: auth/sessions/contenttypes for the User table and OAuth.
@@ -79,6 +94,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # LocaleMiddleware must be after SessionMiddleware and before
+    # CommonMiddleware so it can parse the language from the session
+    # or URL before the request is processed.
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -99,6 +118,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "core.context_processors.i18n_context",
             ],
         },
     },
