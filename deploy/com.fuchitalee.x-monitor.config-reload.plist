@@ -14,11 +14,11 @@
     <array>
         <string>/bin/zsh</string>
         <string>-c</string>
-        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/deploy/run-pipeline-watchpaths.sh</string>
+        <string>/Users/fuchitalee/development/pushin-weight-v2/deploy/run-pipeline-watchpaths.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring</string>
+    <string>/Users/fuchitalee/development/pushin-weight-v2</string>
 
     <key>WatchPaths</key>
     <array>
@@ -30,7 +30,7 @@
              trigger is config.yaml (x_query_specs:, daily_ceiling, etc.).
              DB-touching migrations run via x-monitor migrate, not via
              WatchPaths. -->
-        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/config.yaml</string>
+        <string>/Users/fuchitalee/development/pushin-weight-v2/config.yaml</string>
     </array>
 
     <key>StandardOutPath</key>

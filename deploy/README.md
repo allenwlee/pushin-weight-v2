@@ -24,7 +24,7 @@ cadence).
 ## Install
 
 ```bash
-cd /Users/fuchitalee/development/minimax-marketing/x-monitoring
+cd /Users/fuchitalee/development/pushin-weight-v2
 
 bash deploy/install.sh             # config-reload (WatchPaths)
 bash deploy/install-scheduled.sh   # harvest (15-min cadence)
@@ -42,7 +42,7 @@ do an unload/load cycle so re-running them is idempotent.
   `export TWITTERAPI_IO_API_KEY="..."` (from https://twitterapi.io) and
   `export ANTHROPIC_API_KEY="..."` (LLM classification).
 - The x-monitoring repo is on a stable path (the plists hardcode
-  `/Users/fuchitalee/development/minimax-marketing/x-monitoring`).
+  `/Users/fuchitalee/development/pushin-weight-v2`).
 - `python3 -m x_monitor migrate` has been run at least once on the
   target machine.
 
@@ -64,7 +64,7 @@ The `-k` flag kills any in-flight run and starts a fresh one.
 
 Pipeline execution log (always, regardless of agent): `/tmp/x-monitor-pipeline.log`
 
-Run JSONs: `/Users/fuchitalee/development/minimax-marketing/x-monitoring/data/runs/<run_id>.json`
+Run JSONs: `/Users/fuchitalee/development/pushin-weight-v2/data/runs/<run_id>.json`
 
 Durable alert surface: `data/runs/LATEST.json` (the rolling symlink the
 dashboard reads for staleness + http_log spend summary).

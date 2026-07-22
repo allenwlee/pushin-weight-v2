@@ -24,7 +24,7 @@ if [[ -f /tmp/x-monitor-paused ]]; then
   exit 0
 fi
 
-cd /Users/fuchitalee/development/minimax-marketing/x-monitoring
+cd /Users/fuchitalee/development/pushin-weight-v2
 source ~/.env.secrets
 
 LOG=/tmp/x-monitor-pipeline.log

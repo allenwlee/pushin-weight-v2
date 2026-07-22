@@ -15,11 +15,11 @@
     <array>
         <string>/bin/zsh</string>
         <string>-c</string>
-        <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring/deploy/run-pipeline-with-notify.sh</string>
+        <string>/Users/fuchitalee/development/pushin-weight-v2/deploy/run-pipeline-with-notify.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/fuchitalee/development/minimax-marketing/x-monitoring</string>
+    <string>/Users/fuchitalee/development/pushin-weight-v2</string>
 
     <key>StartCalendarInterval</key>
     <array>

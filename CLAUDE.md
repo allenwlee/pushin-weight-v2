@@ -9,7 +9,7 @@ The x-monitor schema image at
 `docs/reference/images/xmonitor-schema-post-batch.png` is generated from
 `docs/reference/schema.dot` via `scripts/build_schema_image.sh`.
 
-**Trigger:** when any file in `x-monitoring/x_monitor/migrations/*.sql`
+**Trigger:** when any file in `x_monitor/migrations/*.sql`
 changes, regenerate the image and co-commit it with the schema changes:
 
 ```bash

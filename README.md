@@ -232,7 +232,7 @@ labels** so they're never confused for each other:
 ### Install
 
 ```bash
-cd /Users/fuchitalee/development/minimax-marketing/x-monitoring
+cd /Users/fuchitalee/development/pushin-weight-v2
 bash deploy/install.sh             # config-reload (WatchPaths)
 bash deploy/install-scheduled.sh   # harvest (15-min cadence)
 launchctl list | grep com.fuchitalee.x-monitor
@@ -254,7 +254,7 @@ Full install/uninstall reference: `deploy/README.md`.
 ## Setup (local MVP)
 
 ```bash
-cd /Users/fuchitalee/development/minimax-marketing/x-monitoring
+cd /Users/fuchitalee/development/pushin-weight-v2
 
 # 1. Python env
 python3 -m venv .venv && source .venv/bin/activate
@@ -307,7 +307,7 @@ rm /tmp/x-monitor-paused
 ## Layout
 
 ```
-x-monitoring/
+x_monitor/
 ├── README.md                  (this file)
 ├── pyproject.toml             (deps, pytest config)
 ├── config.yaml                (operator-editable: enabled_models,
