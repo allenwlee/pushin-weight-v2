@@ -585,6 +585,25 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "author_verified": bool(
             author.get("isBlueVerified") or author.get("verified")
         ),
+        # --- Inline author metadata (migration 039) ---
+        # Engagement counters — defensive default 0 for missing/null fields.
+        "author_following_count": int(author.get("following") or 0),
+        "author_favourites_count": int(author.get("favouritesCount") or 0),
+        "author_statuses_count": int(author.get("statusesCount") or 0),
+        "author_media_count": int(author.get("mediaCount") or 0),
+        "author_fast_followers_count": int(author.get("fastFollowersCount") or 0),
+        # Verification detail (KTD3): isBlueVerified specifically —
+        # author_verified above already carries the union for backward compat.
+        "author_is_blue_verified": bool(author.get("isBlueVerified")),
+        "author_verified_type": author.get("verifiedType") or "",
+        # Profile metadata (KTD5/KTD6).
+        "author_profile_picture": author.get("profilePicture") or "",
+        "author_location": author.get("location") or "",
+        "author_description": author.get("description") or "",
+        # profile_bio is a nested object in TwitterAPI.io's response shape.
+        "author_profile_bio_text": (
+            (author.get("profile_bio") or {}).get("description") or ""
+        ),
         # The store ignores unknown keys, so we leave the raw object too.
         "raw": item,
     }

@@ -667,6 +667,39 @@ class Store:
                     # Only write attribution rows for newly-inserted
                     # posts; re-inserts must not duplicate
                     # (posts_brands PK is (post_id, brand_id)).
+                    #
+                    # U2 (migration 039): upsert the author's account
+                    # with inline metadata from the tweet response.
+                    # _normalize_tweet surfaces author_followers_count,
+                    # author_is_blue_verified, etc. on every tweet;
+                    # persist them so the accounts table accumulates
+                    # engagement data at zero extra API cost.
+                    _brand_for_upsert = (
+                        valid_brands[0]
+                        if valid_brands and valid_brands[0] != "_unattributed"
+                        else "minimax"
+                    )
+                    self.upsert_account(
+                        brand_id=_brand_for_upsert,
+                        handle=p.get("author_handle") or "",
+                        role="unknown",
+                        author_id=p.get("author_id") or "",
+                        source_query_ids=[],
+                        display_name=p.get("author_name") or "",
+                        verified=p.get("author_verified", False),
+                        followers_count=int(p.get("author_followers_count") or 0),
+                        following_count=int(p.get("author_following_count") or 0),
+                        favourites_count=int(p.get("author_favourites_count") or 0),
+                        statuses_count=int(p.get("author_statuses_count") or 0),
+                        media_count=int(p.get("author_media_count") or 0),
+                        fast_followers_count=int(p.get("author_fast_followers_count") or 0),
+                        is_blue_verified=bool(p.get("author_is_blue_verified")),
+                        verified_type=str(p.get("author_verified_type") or ""),
+                        profile_picture=str(p.get("author_profile_picture") or ""),
+                        location=str(p.get("author_location") or ""),
+                        description=str(p.get("author_description") or ""),
+                        profile_bio_text=str(p.get("author_profile_bio_text") or ""),
+                    )
                     for b in valid_brands:
                         brand_id_int = self._brand_int_id(b)
                         if brand_id_int is None:
@@ -1338,6 +1371,19 @@ class Store:
         bio_contains_brand: bool = False,
         multi_brand_voice: bool = False,
         notes: str | None = None,
+        # --- Inline author metadata (migration 039) ---
+        followers_count: int = 0,
+        following_count: int = 0,
+        favourites_count: int = 0,
+        statuses_count: int = 0,
+        media_count: int = 0,
+        fast_followers_count: int = 0,
+        is_blue_verified: bool = False,
+        verified_type: str = "",
+        profile_picture: str = "",
+        location: str = "",
+        description: str = "",
+        profile_bio_text: str = "",
     ) -> None:
         """Upsert a per-brand account edge.
 
@@ -1387,8 +1433,13 @@ class Store:
             INSERT INTO accounts(
                 author_id, handle, display_name, verified,
                 bio_contains_brand,
-                first_seen_at, last_seen_at, source_query_ids, notes
-            ) VALUES (?,?,?,?,?,?,?,?,?)
+                first_seen_at, last_seen_at, source_query_ids, notes,
+                followers_count, following_count, favourites_count,
+                statuses_count, media_count, fast_followers_count,
+                is_blue_verified, verified_type, profile_picture,
+                location, description, profile_bio_text,
+                followers_fetched_at
+            ) VALUES (?,?,?,?,?,  ?,?,?,?,  ?,?,?,  ?,?,?,  ?,?,?,  ?,?,?,  ?)
             ON CONFLICT(author_id) DO UPDATE SET
                 handle = COALESCE(excluded.handle, accounts.handle),
                 display_name = COALESCE(excluded.display_name, accounts.display_name),
@@ -1396,7 +1447,20 @@ class Store:
                 bio_contains_brand = MAX(accounts.bio_contains_brand, excluded.bio_contains_brand),
                 last_seen_at = excluded.last_seen_at,
                 source_query_ids = excluded.source_query_ids,
-                notes = COALESCE(excluded.notes, accounts.notes)
+                notes = COALESCE(excluded.notes, accounts.notes),
+                followers_count = excluded.followers_count,
+                following_count = excluded.following_count,
+                favourites_count = excluded.favourites_count,
+                statuses_count = excluded.statuses_count,
+                media_count = excluded.media_count,
+                fast_followers_count = excluded.fast_followers_count,
+                is_blue_verified = excluded.is_blue_verified,
+                verified_type = excluded.verified_type,
+                profile_picture = COALESCE(NULLIF(excluded.profile_picture, ''), accounts.profile_picture),
+                location = COALESCE(NULLIF(excluded.location, ''), accounts.location),
+                description = COALESCE(NULLIF(excluded.description, ''), accounts.description),
+                profile_bio_text = COALESCE(NULLIF(excluded.profile_bio_text, ''), accounts.profile_bio_text),
+                followers_fetched_at = excluded.followers_fetched_at
             """,
             (
                 resolved_author_id,
@@ -1408,6 +1472,19 @@ class Store:
                 now,
                 json.dumps(source_query_ids or []),
                 notes,
+                followers_count,
+                following_count,
+                favourites_count,
+                statuses_count,
+                media_count,
+                fast_followers_count,
+                int(is_blue_verified),
+                verified_type,
+                profile_picture,
+                location,
+                description,
+                profile_bio_text,
+                now,
             ),
         )
         # Upsert the per-brand edge in brands_accounts (the per-brand role).
