@@ -304,3 +304,32 @@ KNOWN_MODELS: frozenset[str] = frozenset(
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 TWITTERAPI_IO_API_KEY = env("TWITTERAPI_IO_API_KEY", default="")
 TWITTERAPI_BASE_URL = env("TWITTERAPI_BASE_URL", default="https://api.twitterapi.io")
+
+# ============================================================================
+# SQLite local-dev: register case_insensitive collation
+# ============================================================================
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    import sqlite3 as _sqlite3
+
+    _orig_connect = _sqlite3.connect
+
+    def _patched_connect(*args, **kwargs):
+        conn = _orig_connect(*args, **kwargs)
+        conn.create_collation(
+            "case_insensitive",
+            lambda a, b: (
+                -1
+                if (a or "").lower() < (b or "").lower()
+                else 1
+                if (a or "").lower() > (b or "").lower()
+                else 0
+            ),
+        )
+        return conn
+
+    _sqlite3.connect = _patched_connect
+
+    # Django's SQLite backend does `from sqlite3 import dbapi2 as Database`.
+    # Patch that too so connections created via dbapi2 also get the collation.
+    import sqlite3.dbapi2 as _dbapi2
+    _dbapi2.connect = _patched_connect
