@@ -121,6 +121,19 @@ digraph xmonitor_schema {
 <TR><TD PORT="notes" BGCOLOR="#FFFFFF" ALIGN="LEFT">notes</TD><TD PORT="notes_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="bio_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_en</TD><TD PORT="bio_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="bio_zh_cn" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_zh_cn</TD><TD PORT="bio_zh_cn_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+	<TR><TD PORT="followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">followers_count</TD><TD PORT="followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="following_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">following_count</TD><TD PORT="following_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="favourites_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">favourites_count</TD><TD PORT="favourites_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="statuses_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">statuses_count</TD><TD PORT="statuses_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="media_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">media_count</TD><TD PORT="media_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="fast_followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">fast_followers_count</TD><TD PORT="fast_followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="is_blue_verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_blue_verified</TD><TD PORT="is_blue_verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+	<TR><TD PORT="verified_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">verified_type</TD><TD PORT="verified_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+	<TR><TD PORT="profile_picture" BGCOLOR="#FFFFFF" ALIGN="LEFT">profile_picture</TD><TD PORT="profile_picture_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+	<TR><TD PORT="location" BGCOLOR="#FFFFFF" ALIGN="LEFT">location</TD><TD PORT="location_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+	<TR><TD PORT="description" BGCOLOR="#FFFFFF" ALIGN="LEFT">description</TD><TD PORT="description_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+	<TR><TD PORT="profile_bio_text" BGCOLOR="#FFFFFF" ALIGN="LEFT">profile_bio_text</TD><TD PORT="profile_bio_text_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+	<TR><TD PORT="followers_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">followers_fetched_at</TD><TD PORT="followers_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 </TABLE>>];
     brands [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
