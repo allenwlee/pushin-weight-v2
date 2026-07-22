@@ -62,6 +62,19 @@ Last updated: 2026-07-16-15:00:00
 | notes | TEXT | |
 | bio_en | TEXT | |
 | bio_zh_cn | TEXT | |
+| followers_count | INTEGER | Inline from tweet author object (migration 039) |
+| following_count | INTEGER | Inline from tweet author object (migration 039) |
+| favourites_count | INTEGER | Inline from tweet author object (migration 039) |
+| statuses_count | INTEGER | Inline from tweet author object (migration 039) |
+| media_count | INTEGER | Inline from tweet author object (migration 039) |
+| fast_followers_count | INTEGER | Inline from tweet author object (migration 039) |
+| is_blue_verified | INTEGER | X Premium / paid checkmark specifically |
+| verified_type | TEXT | e.g. "Business", "Government" |
+| profile_picture | TEXT | URL to profile image |
+| location | TEXT | Profile location string |
+| description | TEXT | Top-level author.description |
+| profile_bio_text | TEXT | Raw author.profile_bio.description (separate from bio) |
+| followers_fetched_at | TEXT | Last-write timestamp for engagement+profile bundle |
 
 Indexes: `idx_accounts_author_id (author_id)`, `idx_accounts_handle (handle)`
 
