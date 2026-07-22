@@ -1,54 +1,88 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
-# TwitterAPI.io live queries — v1.7.x (20 brands, A + B1/B2/B3 + C1)
+# TwitterAPI.io live queries — v2 (20 brands, A + B1/B2/B3 + C1/C2)
 
-Last updated: 2026-07-16-14:21:40
+Last updated: 2026-07-22-12:35:35
 
-**Regenerated:** 2026-07-09 (JST) — live-query inventory re-verified against `feat/filter-yield-ramp-probe` (the active branch). The live cycle still emits the same 5-call plan (A + B1 + B2 + B3 + C1), but the inventory-count and Call B2 sections are corrected from prior passes. Drift from the previous (2026-07-08) regeneration:
+**v2 architecture (plan 2026-07-11-001 + 2026-07-11-002).** The v1.7-era
+`data/queries/<brand>.yaml` (Q1–Q6), `data/accounts/<brand>.yaml`, and
+`data/filters/<brand>.yaml` files are **all retired**. The live cycle
+now sources:
+- **Call A**: the curated public X-list (`x_monitor_list_id` in `config.yaml`)
+- **Call C specs (C1, C2)**: co-occurrence-constrained per-brand queries
+  with tokens inline in `config.yaml::x_query_specs[].brands`
+- **Call B specs (B1, B2, B3)**: wide-net per-brand queries with tokens
+  loaded from the `brand_keywords` DB table (`is_primary=1` rows) and
+  AND-filtered through the same 22-term co-occurrence list as C1/C2
+- **Official handles**: loaded from `brands_accounts` + `accounts` DB
+  tables (join on `roles.key = 'official'`), NOT from YAML files
 
-- **Call B2 length corrected: 468 chars (not 474).** The per-brand token list for `mimo` is 8 tokens (not 9); the parser at `x_monitor/query_plan.py:171-216` reads the first paren group of Q2 (which omits bare `小米`) — the Q5 form `(MiMo OR 小米 OR …)` that *does* include bare `小米` is never selected for Call B. The 8-token Q2-derived string is `MiMo, Xiaomi MiMo, 小米 MiMo, "MiMo-V2.5-Pro", "MiMo-V2.5", "MiMo Code", "MiMo-7B", "MiMo-VL"`. Q5 in `mimo.yaml` adds bare `小米` but drops `Xiaomi MiMo`/`小米 MiMo` — the parser picks Q2 first and breaks.
-- **Brand-id slugs are post-U5-rename** — `xiaomi_mimo` → `mimo`, `nvidia_nemo` → `nemo_megatron`, `sakana` → `sakana_ai`. Three ghost yaml files remain on disk in `data/queries/` (`xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`) plus a fourth in `data/filters/` (`xiaomi_mimo.yaml`) — all carry identical query/filter content to their canonical replacements and are *not* read by the live cycle. The 3 ghost yamls in `data/accounts/` (`xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`) are **staged for delete** (plan 005, commit pending) — once committed the on-disk accounts count drops from 16 to 13.
-- **Call B2 now contains `mimo`** (not `xiaomi_mimo`); Call B3 now contains `nemo_megatron` and `sakana_ai` (not `nvidia_nemo` and `sakana`). B1 is unchanged.
-- **Migration 032 (frontier seed)** added 4 companies + 5 brands + 16 accounts to the DB (OpenAI, Anthropic, Google, xAI; brands gpt/claude/gemini/gemma/grok). This does **not** affect the TwitterAPI.io query path — frontier vendors are not in `enabled_models` and have no yaml — but the doc notes the seed in §"Things that change the inventory" for completeness.
-- **LaunchAgent schedule corrected.** The doc previously described the cycle as "every 15 minutes via LaunchAgent (StartInterval=900)"; the actual plist at `deploy/com.fuchitalee.x-monitor.plist` uses **ThrottleInterval=300** with watchpath-driven activation (no `StartInterval` and no `StartCalendarInterval`). The cycle runs whenever `fswatch` reports a `data/queries/` or `data/accounts/` change, throttled so it can't fire more than once per 300 seconds after the previous run exits. See §"How it all fits together" for the corrected description.
-- **Inventory counts corrected.** 20 enabled_models × 6 queries = 120 query entries (not the previously stated 138 = 23×6 — that conflated ghost yamls with active ones). 16 accounts yamls (the 4 query-only brands lack one). 8 filter yamls (7 v1-era brands + 1 ghost `xiaomi_mimo.yaml`). 90 deduped brand tokens across the 20 enabled brands.
+One uniform renderer (`_build_query` in `query_plan.py`) handles every
+spec — Call A (list-based degenerate), Call C-body
+(`<tokens> (<co_occurrence>) min_faves:N`), and wide-net B-call (same
+shape, tokens from DB). KTD1 forbids additional renderers per call kind.
 
-**Source of truth:** code on `main` of `/Users/fuchitalee/development/minimax-marketing/x-monitoring/`
-- `config.yaml::enabled_models` (20 brands), `config.yaml::call_b_groups` (3 groups), `config.yaml::call_c_specs` (1 spec)
-- `data/queries/<brand>.yaml` — 6 queries (Q1–Q6) per brand. **23 files on disk** (20 enabled × 1 yaml + 3 ghost yamls from the U5 rename: `xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`); the live cycle reads 20 (one per `enabled_models` brand).
-- `data/accounts/<brand>.yaml` — official handle + empty `staff:` list. **16 files on disk** — 20 enabled_models minus the 4 query-only brands (`mistral`, `stepfun`, `ernie`, `hunyuan`) which have no accounts yaml. 3 ghost `data/accounts/*.{xiaomi_mimo,nvidia_nemo,sakana}.yaml` are **staged for delete** (plan 005); once the delete commits the on-disk count drops to 13.
-- `data/filters/<brand>.yaml` — per-brand `min_faves` + `must_have_*` overrides. **8 files** (the 7 v1-era brands plus the new `mimo.yaml` mirror of `xiaomi_mimo.yaml`).
-- `x_monitor/config.py::KNOWN_MODELS` (frozenset of 20)
-- `x_monitor/query_plan.py::plan_calls(...)` — call planner
-- `x_monitor/apify.py::TwitterApiClient.run_search(query, max_results, since)` — the live HTTP path to `https://api.twitterapi.io/twitter/tweet/advanced_search`
-- `x_monitor/run.py:980-985` — cycle orchestrator (watchpath-driven via LaunchAgent `ThrottleInterval=300`; see §"How it all fits together")
+**Q1–Q6 status.** `VALID_QUERY_IDS` still exists as a constant in
+`config.py:48` but the live cycle never reads it — the per-cycle call
+set is `(A, B1, B2, B3, C1, C2)`. The legacy `_planned_call_to_query()`
+in `run.py` returns `"Q5"` as a hardcoded placeholder for backward compat
+with the `call_state` cursor schema; the value is meaningless and never
+reaches the DB path for new calls.
 
-> **Pipeline:** the cycle resolves the `enabled_models` list, builds a 1 + N + M call plan
-> (Call A list-based + one Call B per `call_b_groups` group + one Call C per `call_c_specs` entry),
-> and fires each `PlannedCall.query_string` against TwitterAPI.io's `advanced_search` endpoint.
-> `assert_under_length_cap(query_string, 512)` guards every emitted call so an over-length query
-> short-circuits to `status: "length_cap_exceeded"` and no credits are burned.
+**Source of truth:** code on `main` of
+`/Users/fuchitalee/development/minimax-marketing/x-monitoring/`
+- `config.yaml::enabled_models` (20 brands), `config.yaml::x_query_specs` (5 specs: C1, C2, B1, B2, B3), `config.yaml::call_b_groups` (3 groups, for validation)
+- `x_monitor/config.py::KNOWN_MODELS` (frozenset of 20), `VALID_CALL_IDS` (A, B1, B2, B3, C1, C2)
+- `x_monitor/query_plan.py::plan_calls(...)` — v2 call planner with uniform `_build_query` renderer
+- `x_monitor/store.py::Store.read_primary_brand_keywords()` — loads `brand_keywords WHERE is_primary=1`
+- `x_monitor/apify.py::TwitterApiClient.run_search(query, max_results, since_time, until_time)` — the live HTTP path
+- `x_monitor/run.py` — cycle orchestrator (watchpath-driven via LaunchAgent)
+
+> **Pipeline:** the cycle resolves the `enabled_models` list, builds a
+> **6-call plan** (1 Call A + 5 `x_query_specs` entries: C1 + C2 + B1 + B2 + B3),
+> and fires each `PlannedCall.query_string` against TwitterAPI.io's
+> `advanced_search` endpoint. `assert_under_length_cap(query_string, 512)`
+> guards every emitted call.
 
 ## How it all fits together
 
-A macOS LaunchAgent (`deploy/com.fuchitalee.x-monitor.plist`) invokes `run-pipeline-watchpaths.sh` whenever `config.yaml` changes. The plist uses `ThrottleInterval=300` — meaning consecutive runs cannot start within 300 seconds (5 minutes) of each other — and no `StartInterval`/`StartCalendarInterval`. The end-to-end cadence is therefore **watchpath-driven** (a fresh config.yaml triggers re-plan + re-fire) with a 5-minute minimum gap, not a fixed 15-minute tick. The pre-plan 2026-07-11-001 `data/queries/` WatchPaths entry was retargeted to `config.yaml` in U3; the pre-plan 2026-07-11-002 `data/accounts/` WatchPaths entry was dropped in U4.
+A macOS LaunchAgent (`deploy/com.fuchitalee.x-monitor.plist`) invokes
+the pipeline on a `config.yaml` WatchPaths trigger with
+`ThrottleInterval=300` (minimum 5-minute gap between consecutive runs).
 
 Each invocation:
 
-1. **Ask X for posts.** Read `config.yaml::x_query_specs` and `x_monitor_list_id`, build per-cycle query strings via the uniform renderer in `x_monitor.query_plan._build_query`, send each to TwitterAPI.io's `advanced_search` endpoint. Get up to 50 tweets back per call (controlled by `config.yaml::search.max_results: 50`; 5 pages × 20 tweets = 100 ceiling per call).
+1. **Plan calls.** Load `config.yaml::x_query_specs`, resolve primary
+   brand keywords from the DB (`Store.read_primary_brand_keywords`),
+   build per-cycle query strings via `query_plan.plan_calls()`. Emit
+   6 calls: Call A (curated X-list), C1/C2 (co-occurrence-constrained),
+   B1/B2/B3 (wide-net with co-occurrence AND-filter).
 
-2. **For each tweet, decide which brand(s) it's about.** Read the tweet's body, hashtags, @-mentions, and the search query that fetched it. Match against `brand_hashtags`, `brand_keywords`, `brand_search_terms` — the per-brand detection rules in the DB. Each match is one row in `posts_brands_mentions`; the unique brand list is one row per brand in `posts_brands` (with a fractional weight — 1/N if N brands matched, 1.0 if just one).
+2. **Fetch posts.** Fire each query against TwitterAPI.io's
+   `advanced_search` endpoint. Max 50 tweets per call (configurable via
+   `config.yaml::search`), paginated 20 per page, up to 5 pages.
 
-3. **For each (tweet, brand) pair, decide the signal.** One row per pair in `posts_brands_signals`. The legacy column `signal_id` (FK → `signals.key`, still present) classifies into the 6-bucket taxonomy `release | community_question | criticism | commenter_capture | praise | other`. As of migration 019, two ADDITIVE columns coexist with `signal_id`: `post_type` (FK → `post_type_keys.key`, values `buzz_releases | hands_on_usage | performance_comparisons | feedback_questions`) and `sentiment` (FK → `sentiment_keys.key`, values `positive | negative | neutral | mixed`). Migration 022 removed the legacy 6-bucket `expected_signal` field from PlannedCall/CallCBrandSpec — the live query no longer encodes signal intent, and per-tweet classification (post_type × sentiment) happens post-fetch in `attribution.classify_post`. The new columns are backfilled heuristically from `signal_id`; classifier pipeline upgrade is follow-up work. Classification source: heuristic by default (inferred from which query fetched the post), Claude LLM when `--with-llm` is passed.
+3. **Attribute brands.** For each tweet, match against `brand_keywords`,
+   `brand_hashtags`, and `brand_search_terms` in the DB. Each match is one
+   row in `posts_brands_mentions`; the unique brand list is one row per
+   brand in `posts_brands` (with a fractional weight — 1/N if N brands
+   matched, 1.0 if just one).
 
-**Worked example.** TwitterAPI.io returns:
+4. **Classify.** For each (tweet, brand) pair, the post-fetch pipeline
+   (`attribution.classify_pragmatics_full`) writes `post_type`,
+   `sentiment`, `discourse_role`, `china_nationalism`, and
+   `us_nationalism` into `posts_brands_signals`.
 
-```
-@claude_code: Just shipped our new build with #minimax + 海螺 integration, the latency is amazing.
-```
+5. **Translate.** Non-English posts get `text_en` (English translation)
+   via LLM; English posts get `text_zh_cn` (Simplified Chinese
+   translation).
 
-The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海螺` in `brand_keywords`, and the tweet was fetched by a minimax search. Three rows in `posts_brands_mentions` (one per source: `hashtag`, `body_keyword`, `search_term`); one row in `posts_brands` with `weight=1.0` because only minimax matched. The signal step then classifies the (tweet, minimax) pair — likely `signal_id = 'release'` (or `'praise'`), with the new `post_type = 'buzz_releases'` and `sentiment = 'positive'` columns backfilled from that legacy value by migration 019's heuristic.
-
-**What the yaml decides vs what the DB decides.** The yaml decides what we ask X for (the search string). The DB tables decide what we found (which brands are mentioned in each returned tweet, and how). The yaml has a 512-char cap on the search string, so it carries the high-signal tokens only. The DB has no such cap, so the detection registries can be exhaustive. The two registries are kept in sync by hand: a token added to `brand_keywords` won't be in the live query unless the operator also adds it to the yaml.
+**What the config decides vs what the DB decides.** The config
+(`x_query_specs` + `brand_keywords.is_primary=1`) decides what we ask X
+for (the search strings). The DB tables (`brand_keywords`,
+`brand_hashtags`, `brand_search_terms`) decide what we found (which
+brands are mentioned in each returned tweet, and how). The two registries
+are kept in sync by hand: a token added to `brand_keywords` won't be in
+the live query unless it also has `is_primary=1`.
 
 ---
 
@@ -57,586 +91,525 @@ The reattribute step finds three matches: `#minimax` in `brand_hashtags`, `海�
 | Stat | Value |
 |---|---|
 | Enabled brands (`config.yaml::enabled_models`) | **20** |
-| `KNOWN_MODELS` (frozenset in `x_monitor/config.py`) | **20** (post-U5-rename: `mimo`, `nemo_megatron`, `sakana_ai`) |
-| Brand query yaml files (`data/queries/<brand>.yaml`) | **23 on disk** — 20 enabled × 1 yaml + 3 ghost yamls from the U5 rename (`xiaomi_mimo.yaml`, `nvidia_nemo.yaml`, `sakana.yaml`). The live cycle reads 20 (one per `enabled_models` brand); the 3 ghosts are unused. |
-| Queries per brand (Q1–Q6) | **6** uniformly (all 20 active yamls) |
-| Total query entries across all yaml | **120** (20 × 6) |
-| Account yaml files (`data/accounts/<brand>.yaml`) | **16 on disk** — 20 enabled_models minus the 4 query-only (`mistral`, `stepfun`, `ernie`, `hunyuan`). 3 ghost `*.{xiaomi_mimo,nvidia_nemo,sakana}.yaml` are staged for delete (plan 005). |
-| Filter yaml files (`data/filters/<brand>.yaml`) | **8** (the 7 v1-era brands + ghost `xiaomi_mimo.yaml`) |
-| Call A length | 38 chars |
-| Call B groups (config) | 3 (B1, B2, B3) |
-| Call C specs (config) | 1 (`call_id: C1`, multi-brand) |
-| Plan size per cycle (live) | **1 Call A + 3 Call B + 1 Call C = 5 calls** (live) |
-| Live call-string lengths | **A 38 / C1 505 / C2 247 / B1 473 / B2 470 / B3 375** (all under 512-char cap) |
-| Deduped brand tokens (in `brand_keywords` SQL table) | **207** — 20 enabled brands + legacy `xiaomi_mimo` covered; sourced from migration 034 + 035 + 036 (the last adds `is_primary=1` on a 2-4-token curated subset per brand) + the 2026-07-10 backfill |
+| `KNOWN_MODELS` (frozenset in `config.py`) | **20** |
+| `brand_keywords` rows (total) | **207** |
+| `brand_keywords` rows (`is_primary=1`) | **55** across 20 brands |
+| Primary tokens per brand | **2–4** (curated subset: the high-signal tokens that fit under the 512-char cap) |
+| `x_query_specs` entries | **5** (C1, C2, B1, B2, B3) |
+| Plan size per cycle (live) | **6 calls** (1 Call A + 5 specs) |
+| Call A length | **38 chars** |
+| Live call-string lengths | **A 38 / C1 461 / C2 295 / B1 414 / B2 377 / B3 353** (all under 512-char cap) |
+| `degraded_skip_order` | B3 → B2 → B1 → C2 → C1 → A |
+| Co-occurrence terms (C1/C2/B1/B2/B3) | **22 terms** (C1/B1/B2/B3); **20 terms** (C2 — drops `xiaomi`/`小米`, adds `baidu`/`文心`) |
 
-> **✅ `plan_calls` signature is now `(x_monitor_list_id, x_query_specs, *, primary_keywords=None)`.**
-> Plan 2026-07-11-001 (U2) collapsed the pre-2026-07-11-001
-> signature to two positional args; plan 2026-07-11-002 (U2) added
-> the `primary_keywords` kwarg so wide-net B-specs (B1/B2/B3) can
-> pull per-brand tokens from `brand_keywords.is_primary=1` rows.
-> The live cycle now emits **6 calls per cycle** — Call A (38 chars)
-> + Call C1 (505 chars) + Call C2 (247 chars) + Call B1 (473 chars)
-> + Call B2 (470 chars) + Call B3 (375 chars) — all under the
-> 512-char cap.
+> **✅ `plan_calls` signature:** `plan_calls(x_monitor_list_id, x_query_specs, *, primary_keywords=None)`.
+> The wide-net B-specs (B1/B2/B3) have `is_wide_net: true` and read
+> per-brand tokens from `primary_keywords` (pre-loaded from
+> `brand_keywords WHERE is_primary=1`). Non-wide-net specs (C1/C2)
+> read tokens inline from `spec.brands`.
 
 ---
 
 ## Call A — curated public x.com list (1 call/cycle)
 
-**This list represents all the official and staff accounts of the open weight models.**
+**Shape:** `(list:2067062923525275922) min_faves:0`
+**Length:** 38 characters.
+**Source of truth:** `config.yaml::x_monitor_list_id = 2067062923525275922` (operator-managed public x.com list; every enabled brand's official handle from `brands_accounts` + `accounts` DB tables should be on the list).
 
-**Shape:** `(list:2067062923525275922) min_faves:1`
-**Length:** 38 characters. The 19-digit Snowflake list ID contributes 19 chars; `(list:` is 5 chars, `) ` is 2 chars, `min_faves:1` is 10 chars, and the leading-or-trailing whitespace resolves to 2 (one space before `min_faves`). Total: 5 + 19 + 2 + 10 = 36 + 2 = **38**.
-**Source of truth:** `config.yaml::x_monitor_list_id = 2067062923525275922` (operator-managed public x.com list; every enabled brand with a `data/accounts/<brand>.yaml::accounts[].handle` contributes that handle to the list).
+The list is the only place the operator maintains handle membership. Adding an account to the DB does NOT auto-add to the x.com list — that is a manual operator step.
 
-The list is the only place the operator maintains handle membership. Adding a `staff:` entry to `data/accounts/<brand>.yaml` does NOT auto-add to the x.com list — that is a manual operator step (see "List-drift detection" in the v1.7 plan).
+**Official handles today** (from `brands_accounts` JOIN `accounts` JOIN `roles` WHERE `roles.key = 'official'`):
 
-**List-membership today (computed from `data/accounts/*.yaml::accounts[0].handle`):**
+| # | brand_id | Official handle | Verified |
+|---|---|---|---|
+| 1 | `minimax` | `MiniMax_AI` | false |
+| 2 | `qwen` | `Alibaba_Qwen` | false |
+| 3 | `deepseek` | `deepseek_ai` | false |
+| 4 | `glm` | `Zai_org` | false |
+| 5 | `mimo` | `XiaomiMiMo` | false |
+| 6 | `moonshot_kimi` | `Kimi_Moonshot` | false |
+| 7 | `inclusionai` | `TheInclusionAI` | false |
+| 8 | `llama` | `AIatMeta` | false |
+| 9 | `nemo_megatron` | `NVIDIAAIDev` | false |
+| 10 | `doubao` | `DoubaoAI` | false |
+| 11 | `yi` | `01AI_Yi` | false |
+| 12 | `sensechat` | `SenseTime_AI` | false |
+| 13 | `exaone` | `LG_AI_Research` | false |
+| 14 | `kuaishou` | `Kling_ai` | false |
+| 15 | `sakana_ai` | `SakanaAILabs` | false |
+| 16 | `upstage` | `upstageai` | false |
+| 17 | `mistral` | `MistralAI` | false |
+| 18 | `stepfun` | `StepFun_ai` | false |
+| 19 | `ernie` | `ErnieforDevs` | false |
+| 20 | `hunyuan` | `TencentHunyuan` | false |
 
-| # | brand_id | Official handle | Verified | accounts yaml |
-|---|---|---|---|---|
-| 1 | `minimax` | `MiniMaxAI` | true | ✓ |
-| 2 | `qwen` | `QwenLM` | true | ✓ |
-| 3 | `deepseek` | `deepseek_ai` | true | ✓ |
-| 4 | `glm` | `Zhipuai_org` | true | ✓ |
-| 5 | `mimo` | `XiaomiMiMo` | true | ✓ (`mimo.yaml`; ghost `xiaomi_mimo.yaml` has the same content) |
-| 6 | `moonshot_kimi` | `MoonshotAI` | true | ✓ |
-| 7 | `inclusionai` | `inclusionAI` | true | ✓ |
-| 8 | `llama` | `Llama` | **false** (placeholder) | ✓ |
-| 9 | `nemo_megatron` | `NVIDIAAIDev` | **false** (placeholder) | ✓ (`nemo_megatron.yaml`; ghost `nvidia_nemo.yaml` has the same content) |
-| 10 | `doubao` | `doubaoAi` | **false** (placeholder) | ✓ |
-| 11 | `yi` | `01AI_Yi` | **false** (placeholder) | ✓ |
-| 12 | `sensechat` | `SenseTimeAI` | **false** (placeholder) | ✓ |
-| 13 | `exaone` | `LGAIResearch` | **false** (placeholder) | ✓ |
-| 14 | `kuaishou` | `KwaiYii` | **false** (placeholder) | ✓ |
-| 15 | `sakana_ai` | `SakanaAILabs` | **false** (placeholder) | ✓ (`sakana_ai.yaml`; ghost `sakana.yaml` has the same content) |
-| 16 | `upstage` | `upstageAI` | **false** (placeholder) | ✓ |
+All 20 enabled brands have at least one official account row. Several
+brands also have secondary official handles (e.g., `minimax` also has
+`MiniMaxAgent` and `hailuo_ai`; `doubao` also has `BytePlusGlobal`,
+`bytedanceoss`, `doubaoai`). The Call A list ID covers all handles the
+operator has added to the public X-list.
 
-For the 4 query-only brands (`mistral`, `stepfun`, `ernie`, `hunyuan`), there is no `data/accounts/<brand>.yaml` — they have **no list membership** and contribute **0 handles to the x.com list**. Their Call A coverage is therefore zero; their visibility comes entirely from Call B (or Call C where applicable).
-
-**`staff:` list** is empty (`[]`) on every `data/accounts/<brand>.yaml` — no per-brand staff handles are currently curated.
+**`staff:` role accounts** also exist in `brands_accounts` for most
+brands (not listed here for brevity). The list-membership step is manual
+— the operator must add staff handles to the X-list separately.
 
 ---
 
-## Call B groups (config split — B1 / B2 / B3)
+## Call C specs — co-occurrence-constrained brand-wide
 
-Configured in `config.yaml::call_b_groups` (a list of brand-id lists; v1.7.x field, validated in `x_monitor/config.py::Config._validate_call_b_groups`). When set, `plan_calls` emits one Call B per inner list in the order given; the call_id is `B1`, `B2`, `B3`, ….
+Configured in `config.yaml::x_query_specs` — entries where
+`is_wide_net` is absent or `false`. Two specs are live:
 
-### B1 — top-presence / global brands (8 brands, 320 chars)
+### C1 — mimo + moonshot_kimi + yi + llama (4 brands, 22 co-occurrence terms)
 
-**Order (from `config.yaml`):** `llama, minimax, qwen, deepseek, mistral, stepfun, ernie, hunyuan`
+**`call_id: C1`**, **4 brands, 22 co-occurrence terms.**
 
-**Shape (verbatim from `_build_brand_wide_query`):**
-```
-((Llama OR "Llama 3" OR "Llama 4" OR "Meta Llama" OR "Code Llama" OR "Muse Spark" OR "Llama 3.1") OR (MiniMax OR 海螺 OR Hailuo) OR (Qwen OR 通义千问 OR 通义 OR Qwen3) OR (DeepSeek OR 深度求索 OR "DeepSeek V4") OR ("Mistral" OR "Mixtral") OR ("StepFun" OR "阶跃星辰") OR ("ERNIE" OR "文心一言") OR ("Hunyuan" OR "混元" OR "腾讯混元")) min_faves:0
-```
-**Length:** 320 characters. Headroom: 192 chars (37% of the 512-char cap).
-
-| # | brand_id | Deduped brand tokens (Q2/Q3/Q5/Q6 first paren, source of truth for Call B) | Token count |
-|---|---|---|---|
-| 1 | `llama` | `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"`, `"Llama 3.1"` | 7 |
-| 2 | `minimax` | `MiniMax`, `海螺`, `Hailuo` | 3 |
-| 3 | `qwen` | `Qwen`, `通义千问`, `通义`, `Qwen3` | 4 |
-| 4 | `deepseek` | `DeepSeek`, `深度求索`, `"DeepSeek V4"` | 3 |
-| 5 | `mistral` | `"Mistral"`, `"Mixtral"` (quoted) | 2 |
-| 6 | `stepfun` | `"StepFun"`, `"阶跃星辰"` (quoted) | 2 |
-| 7 | `ernie` | `"ERNIE"`, `"文心一言"` (quoted) | 2 |
-| 8 | `hunyuan` | `"Hunyuan"`, `"混元"`, `"腾讯混元"` (quoted) | 3 |
-
-### B2 — Chinese-language brands (7 brands, 468 chars)
-
-**Order (from `config.yaml`):** `doubao, glm, moonshot_kimi, mimo, sensechat, yi, inclusionai`
-
-**Shape (verbatim):**
-```
-((Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR "Seed-VL" OR "Seed-1.5" OR "豆包大模型") OR (GLM OR 智谱 OR ChatGLM OR Zhipuai OR "GLM-5.2") OR (Kimi OR 月之暗面 OR MoonshotAI OR "Kimi K2") OR (MiMo OR Xiaomi MiMo OR 小米 MiMo OR "MiMo-V2.5-Pro" OR "MiMo-V2.5" OR "MiMo Code" OR "MiMo-7B" OR "MiMo-VL") OR (SenseChat OR SenseNova OR SenseTime OR 商汤 OR 日日新) OR (Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder OR "Yi-Large") OR (InclusionAI OR Ling OR Ring OR Ming)) min_faves:0
-```
-**Length:** 468 characters. Headroom: 44 chars (9% of the cap).
-
-| # | brand_id | Deduped brand tokens | Token count |
-|---|---|---|---|
-| 1 | `doubao` | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` | 8 |
-| 2 | `glm` | `GLM`, `智谱`, `ChatGLM`, `Zhipuai`, `"GLM-5.2"` | 5 |
-| 3 | `moonshot_kimi` | `Kimi`, `月之暗面`, `MoonshotAI`, `"Kimi K2"` | 4 |
-| 4 | `mimo` | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` | 8 |
-| 5 | `sensechat` | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` | 5 |
-| 6 | `yi` | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` | 7 |
-| 7 | `inclusionai` | `InclusionAI`, `Ling`, `Ring`, `Ming` | 4 |
-
-**Why `mimo` is 8 tokens, not 9.** The parser at `x_monitor/query_plan.py:171-216` reads the *first* paren group from Q2/Q3/Q5/Q6 entries, in yaml order, and breaks after the first match. `mimo.yaml::Q2` is `(MiMo OR Xiaomi MiMo OR 小米 MiMo OR "MiMo-V2.5-Pro" OR "MiMo-V2.5" OR "MiMo Code" OR "MiMo-7B" OR "MiMo-VL")` — eight tokens, no bare `小米`. `mimo.yaml::Q5` is `(MiMo OR 小米 OR "MiMo-V2.5-Pro" OR ...)` — adds bare `小米` but drops `Xiaomi MiMo`/`小米 MiMo`. Because Q2 is encountered first and the parser `break`s per entry, Q5 is never consulted for Call B. Bare `小米` therefore does NOT enter Call B2 (only the Call C1 spec at `config.yaml:113-129` can list explicit tokens, which it does not — it uses `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`).
-
-### B3 — specialized / smaller brands (5 brands, 310 chars)
-
-**Order (from `config.yaml`):** `nemo_megatron, exaone, sakana_ai, kuaishou, upstage`
-
-**Shape (verbatim):**
-```
-((NeMo OR Megatron OR "NVIDIA NeMo" OR "Megatron-LM") OR (EXAONE OR "LG AI" OR "LG EXAONE") OR (Sakana OR "Sakana AI" OR "Sakana Labs" OR "サカナAI") OR (KwaiYii OR 快意 OR "KwaiYii LLM" OR Kuaishou) OR (Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open")) min_faves:0
-```
-**Length:** 310 characters. Headroom: 202 chars (39% of the cap).
-
-| # | brand_id | Deduped brand tokens | Token count |
-|---|---|---|---|
-| 1 | `nemo_megatron` | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` | 4 |
-| 2 | `exaone` | `EXAONE`, `"LG AI"`, `"LG EXAONE"` | 3 |
-| 3 | `sakana_ai` | `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` | 4 |
-| 4 | `kuaishou` | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` | 4 |
-| 5 | `upstage` | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` | 7 |
-
-### Brand tokens not in Call A
-
-The four brands `mistral`, `stepfun`, `ernie`, `hunyuan` have **no `data/accounts/<brand>.yaml`** — they appear in Call B (group B1) but contribute **0 to Call A's list membership**. The other 16 brands have an accounts yaml and contribute to both Call A and Call B. This 16/20 split is intentional (operator has not yet confirmed the official handles for those 4) — see the per-brand sections below.
-
-### What happens if `call_b_groups` is `None` (historical / fallback only)
-
-`plan_calls` (`x_monitor/query_plan.py:315-316`) falls back to `b_groups = [list(enabled_models)]` and emits **one** Call B spanning all 20 enabled brands. Computed: **867 characters** — over the 512-char cap. The cycle's `assert_under_length_cap` check raises and the call short-circuits. This is the **fallback** path; the live path passes `call_b_groups=self.config.call_b_groups` from `run.py:983` and never hits it.
-
----
-
-## Call C — co-occurrence-constrained brand-wide (1 spec → 1 call)
-
-Configured in `config.yaml::call_c_specs` (list of `CallCBrandSpec` from `x_monitor/query_plan.py:99-137`). Default empty → no Call C emitted. v1.7.x ships with one operator-curated spec.
-
-### C1 — mimo + moonshot_kimi + yi + upstage + llama (multi-brand co-occurrence)
-
-**`call_id: C1`**, **5 brands in the primary group, 22 co-occurrence terms.**
-
-**Primary group tokens (verbatim from `config.yaml`):**
+**Primary group tokens (inline in `config.yaml`):**
 - `mimo`: `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`
 - `moonshot_kimi`: `[Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]`
 - `yi`: `[Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]`
-- `upstage`: `[Upstage, Solar, "Solar Pro", "업스테이지"]`
 - `llama`: `[Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]`
 
 **Co-occurrence group:** `[api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]`
 
-**Min-faves floor:** 0. **Expected signal:** `other` (Call C targets the long tail; the post-fetch `classify_post` upgrades to a `post_type` × `sentiment` per migration 019/022).
-
-**Shape (verbatim from `_build_call_c_query`):**
+**Shape (live, from `_build_query`):**
 ```
-((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Upstage OR Solar OR Solar Pro OR 업스테이지) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama OR Muse Spark)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama OR Muse Spark)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
 ```
-**Length:** 505 characters. Headroom: 7 chars (1% of the cap — tight; future additions require a C2 spec).
+**Length:** 461 characters. Headroom: 51 chars (10% of the cap).
 
-**Why this exists:** these 5 brands' bare tokens collide with unrelated common nouns:
-- `MiMo` → Mimo Studio (kids' video app), `xiaomi` alone → phone posts.
-- `Kimi` → Turkish interrogative ("who?") and Japanese second-person pronoun (きみ); bare `moonshot` → Moonshot crypto exchange.
+**Why this exists:** these 4 brands' bare tokens collide with unrelated common nouns:
+- `MiMo` → Mimo Studio (kids' video app); `xiaomi` alone → phone posts.
+- `Kimi` → Turkish interrogative ("who?") and Japanese second-person pronoun (きみ); bare `moonshot` → Moonshot crypto exchange (intentionally absent from the brand group).
 - `Yi` → common Chinese surname and dynasty name.
-- `Upstage` → theater term.
 - `Llama` → the animal.
 
-Co-occurrence terms exclude non-AI false positives. The `must_have_none` keys in `data/filters/moonshot_kimi.yaml` (F1, antonelli, mercedes, …) further soften F1-driver Kimi Antonelli hijacks.
+Co-occurrence terms exclude non-AI false positives. The `must_have_none`
+filter in `brand_keywords` (via is_primary=0 patterns) further softens
+F1-driver Kimi Antonelli hijacks for `moonshot_kimi`.
+
+**2026-07-11:** `upstage` was moved from C1 to C2 to fix a substring
+leak — bare `Solar` in C1's Upstage OR-group matched "solar winds" in
+the co-occurrence AND-filter, producing false positives for everyday
+"solar" English text.
+
+### C2 — ernie + upstage (2 brands, 20 co-occurrence terms)
+
+**`call_id: C2`**, **2 brands, 20 co-occurrence terms.**
+
+**Primary group tokens (inline in `config.yaml`):**
+- `ernie`: `[ERNIE, 文心一言]`
+- `upstage`: `[Upstage, "Solar Pro", "Solar LLM", 업스테이지]`
+
+**Co-occurrence group:** Same 22-term list as C1 with 2 swaps:
+- **Dropped:** `xiaomi`, `小米` (ERNIE-irrelevant)
+- **Added:** `baidu`, `文心` (Baidu/ERNIE disambiguators)
+
+**Shape (live, from `_build_query`):**
+```
+((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (api OR llm OR model OR baidu OR 文心 OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+```
+**Length:** 295 characters. Headroom: 217 chars (42% of the cap).
+
+**Why this exists:**
+- `ERNIE` collides with the Sesame Street character and the Bert variant. C1 had only 7 chars of headroom — adding ERNIE's paren group would have exceeded the cap, so it got its own spec (C2).
+- `Upstage` was moved here from C1 (2026-07-11). Bare `Solar` is intentionally DROPPED from the Upstage OR-group — it matched substring "solar" in everyday English ("solar wind", "solar panel", "solar energy"). The three product-name tokens (`"Solar Pro"`, `"Solar LLM"`, `업스테이지`) keep precision-recall intact for actual Upstage coverage.
+
+---
+
+## Call B specs — wide-net with co-occurrence AND-filter
+
+Three `x_query_specs` entries with `is_wide_net: true`. Each renders a
+`(<per-brand paren groups>) (<co-occurrence>) min_faves:0` query where
+per-brand tokens come from `brand_keywords.is_primary=1` rows (loaded
+once per cycle via `Store.read_primary_brand_keywords()`).
+
+The co-occurrence filter is the same 22-term list as C1. This means
+the B-specs are **AND-filtered** — a tweet must mention both a brand
+token AND a co-occurrence term. This is a change from the v1.7 B-calls
+which had no co-occurrence filter (bare OR-chains).
+
+### B1 — top-presence / global brands (6 brands, 414 chars)
+
+**`wide_net_brands`:** `[minimax, qwen, deepseek, mistral, stepfun, hunyuan]`
+
+**Shape (live, from `_build_query`):**
+```
+((Hailuo OR MiniMax OR m2.5 OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (DeepSeek OR deepseek-r1 OR 深度求索) OR (Mistral OR Mixtral) OR (StepFun OR 阶跃星辰) OR (Hunyuan OR 混元 OR 腾讯混元)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+```
+**Length:** 414 characters. Headroom: 98 chars (19% of the cap).
+
+| # | brand_id | Primary tokens (from DB) | Count |
+|---|---|---|---|
+| 1 | `minimax` | `Hailuo`, `MiniMax`, `m2.5`, `海螺` | 4 |
+| 2 | `qwen` | `Qwen`, `Qwen3`, `通义千问` | 3 |
+| 3 | `deepseek` | `DeepSeek`, `deepseek-r1`, `深度求索` | 3 |
+| 4 | `mistral` | `Mistral`, `Mixtral` | 2 |
+| 5 | `stepfun` | `StepFun`, `阶跃星辰` | 2 |
+| 6 | `hunyuan` | `Hunyuan`, `混元`, `腾讯混元` | 3 |
+
+**Dedup note:** The original v1.7 B1 included `llama` and `ernie` (8
+brands). Per the 2026-07-13-002 U4 dedup, those brands are covered
+exclusively by C1 and C2 respectively (co-occurrence-constrained) to
+avoid duplicate TwitterAPI credit spend on the wide-net path.
+
+### B2 — Chinese-language brands (4 brands, 377 chars)
+
+**`wide_net_brands`:** `[doubao, glm, sensechat, inclusionai]`
+
+**Shape (live, from `_build_query`):**
+```
+((ByteDance OR Doubao OR 豆包) OR (ChatGLM OR GLM OR Zhipuai OR 智谱) OR (SenseChat OR SenseTime OR 日日新) OR (InclusionAI OR Ling OR Ring)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+```
+**Length:** 377 characters. Headroom: 135 chars (26% of the cap).
+
+| # | brand_id | Primary tokens (from DB) | Count |
+|---|---|---|---|
+| 1 | `doubao` | `ByteDance`, `Doubao`, `豆包` | 3 |
+| 2 | `glm` | `ChatGLM`, `GLM`, `Zhipuai`, `智谱` | 4 |
+| 3 | `sensechat` | `SenseChat`, `SenseTime`, `日日新` | 3 |
+| 4 | `inclusionai` | `InclusionAI`, `Ling`, `Ring` | 3 |
+
+**Dedup note:** The original v1.7 B2 included `moonshot_kimi`, `mimo`,
+and `yi` (7 brands). Per the 2026-07-13-002 U4 dedup, those brands are
+covered exclusively by C1.
+
+### B3 — specialized / smaller brands (4 brands, 353 chars)
+
+**`wide_net_brands`:** `[nemo_megatron, exaone, sakana_ai, kuaishou]`
+
+**Shape (live, from `_build_query`):**
+```
+((Megatron-LM OR NVIDIA NeMo) OR (EXAONE OR LG AI) OR (Sakana OR Sakana AI OR サカナAI) OR (Kuaishou OR KwaiYii)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+```
+**Length:** 353 characters. Headroom: 159 chars (31% of the cap).
+
+| # | brand_id | Primary tokens (from DB) | Count |
+|---|---|---|---|
+| 1 | `nemo_megatron` | `Megatron-LM`, `NVIDIA NeMo` | 2 |
+| 2 | `exaone` | `EXAONE`, `LG AI` | 2 |
+| 3 | `sakana_ai` | `Sakana`, `Sakana AI`, `サカナAI` | 3 |
+| 4 | `kuaishou` | `Kuaishou`, `KwaiYii` | 2 |
+
+**Dedup note:** The original v1.7 B3 included `upstage` (5 brands). Per
+the 2026-07-13-002 U4 dedup, `upstage` is covered exclusively by C2.
+
+### What happens if `call_b_groups` is `None` (historical / fallback only)
+
+`plan_calls` (`query_plan.py`) does NOT use `call_b_groups` for query
+construction — the `x_query_specs` entries with `is_wide_net: true` are
+the canonical source for B1/B2/B3. `call_b_groups` is validated by
+`Config._warn_on_call_b_call_c_duplicates` (emits a warning if a brand
+appears in both `call_b_groups` and any C-spec) but has no effect on
+the emitted query plan.
 
 ---
 
 ## Per-brand breakdown (20 brands)
 
-Every brand listed in `config.yaml::enabled_models` is documented below. The "yaml" column points at the curated query file; "accounts" points at the per-brand staff/official file; "filter" points at the per-brand `min_faves` / `must_have_*` file (only 8 brands have one — the v1-era brands plus the new `mimo.yaml` mirror of `xiaomi_mimo.yaml`).
+Every brand listed in `config.yaml::enabled_models` is documented below.
+All data comes from the DB — primary tokens from `brand_keywords`
+(`is_primary=1`), official handles from `brands_accounts` JOIN
+`accounts` JOIN `roles` (`roles.key = 'official'`).
 
-Query IDs Q1–Q6 are present in every yaml with the same shape:
-- **Q1 (release):** `from:<official_handle> [context OR exclusions] min_faves:N` (or brand-name fallback for unconfirmed-handle brands)
-- **Q2 (community_question):** `(<brand tokens>) (how OR 怎么 OR 教程 OR tutorial OR guide OR …) min_faves:2`
-- **Q3 (criticism):** `(<brand tokens>) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行 OR …) min_faves:1`
-- **Q4 (commenter_capture):** `to:<official_handle> min_faves:5` (or brand-name fallback)
-- **Q5 (other / technical):** `(<brand tokens>) (benchmark OR eval OR paper OR github OR code OR 开源 OR …) min_faves:3`
-- **Q6 (praise):** `(<brand tokens>) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了 OR …) min_faves:5`
+There are no per-brand YAML files. The Q1–Q6 query taxonomy
+(release/community_question/criticism/commenter_capture/other/praise) is
+retired — the v2 architecture uses a single query shape per call kind:
+`<tokens> (<co_occurrence>) min_faves:N`.
 
-`min_faves` is the **call-level** floor in the `min_faves:` operator suffix; the per-brand filter in `data/filters/<brand>.yaml` is the **post-fetch** floor applied after attribution.
+### 1. `minimax` (MiniMax / Hailuo)
 
----
+- **Official handle:** `@MiniMax_AI` (also: `@MiniMaxAgent`, `@hailuo_ai`)
+- **Primary tokens (4):** `Hailuo`, `MiniMax`, `m2.5`, `海螺`
+- **Call group:** B1
+- **Covered by:** Call A (X-list) + B1 (wide-net with co-occurrence)
 
-### 1. `minimax` (MiniMax / Hailuo) — 6 queries
+### 2. `qwen` (Alibaba Qwen / 通义千问)
 
-- **yaml:** `data/queries/minimax.yaml`
-- **accounts:** `data/accounts/minimax.yaml` (official `MiniMaxAI`, verified=true, staff=[])
-- **filter:** `data/filters/minimax.yaml` (canonical handles: `MiniMaxAI`, `MiniMaxM3`, `MiniMax_Hailuo`; must_have_any: `minimax`, `m3`, `m2.7`, `m2.5`, `minimax-agent`, `minimax-coding`, `minimax-work`; must_have_none: `hailuo-2.3`, `hailuo ai prompt`)
+- **Official handle:** `@Alibaba_Qwen` (also: `@Ali_TongyiLab`)
+- **Primary tokens (3):** `Qwen`, `Qwen3`, `通义千问`
+- **Call group:** B1
+- **Covered by:** Call A + B1
+
+### 3. `deepseek` (DeepSeek / 深度求索)
+
+- **Official handle:** `@deepseek_ai`
+- **Primary tokens (3):** `DeepSeek`, `deepseek-r1`, `深度求索`
+- **Call group:** B1
+- **Covered by:** Call A + B1
+
+### 4. `glm` (Zhipu AI / 智谱)
+
+- **Official handle:** `@Zai_org` (also: `@ZhihuFrontier`)
+- **Primary tokens (4):** `ChatGLM`, `GLM`, `Zhipuai`, `智谱`
 - **Call group:** B2
-- **Brand tokens:** `MiniMax`, `海螺`, `Hailuo` (3)
-- **Q1:** `from:MiniMaxAI min_faves:5`
-- **Q2:** `(MiniMax OR 海螺 OR Hailuo) (how OR 怎么 OR 如何 OR 教程 OR tutorial) min_faves:2`
-- **Q3:** `(MiniMax OR 海螺 OR Hailuo) (broken OR fails OR bad OR 翻车 OR 不行 OR 垃圾) min_faves:1`
-- **Q4:** `to:MiniMaxAI min_faves:5`
-- **Q5:** `(MiniMax OR Hailuo) (benchmark OR eval OR paper OR github OR code) min_faves:3`
-- **Q6:** `(MiniMax OR 海螺 OR Hailuo) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** `must_have_none` filters celebrity-Hailuo noise (Kylie, Kim K, Purnell); `Q2` uses `如何` (additional how-token not present in most other brands); `Q5` does not include `开源` (other brands include it).
+- **Covered by:** Call A + B2
 
-### 2. `qwen` (Alibaba) — 6 queries
+### 5. `mimo` (Xiaomi MiMo)
 
-- **yaml:** `data/queries/qwen.yaml`
-- **accounts:** `data/accounts/qwen.yaml` (official `QwenLM`, verified=true, staff=[])
-- **filter:** `data/filters/qwen.yaml` (canonical handles: `Alibaba_Qwen`, `QwenLM`, `alibaba`; must_have_any: `qwen`, `qwen2`, `qwen2.5`, `qwen3`, `qwen-max`, `qwen-plus`, `qwen-vl`, `qwen-coder`, `qwen-long`, `qwen-7b`, `qwen-72b`, `qwen3-max`, `qwen3-vl`, `alibaba qwen`, `qwen lm`)
-- **Call group:** B1
-- **Brand tokens:** `Qwen`, `通义千问`, `通义`, `Qwen3` (4)
-- **Q1:** `from:QwenLM min_faves:5`
-- **Q2:** `(Qwen OR 通义千问 OR 通义 OR Qwen3) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(Qwen OR 通义) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
-- **Q4:** `to:QwenLM min_faves:5`
-- **Q5:** `(Qwen OR 通义) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(Qwen OR 通义千问 OR 通义 OR Qwen3) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** Q3/Q5 use the shorter `(Qwen OR 通义)` token subset (omits `通义千问`); Q2/Q6 use the full `(Qwen OR 通义千问 OR 通义 OR Qwen3)` triple.
+- **Official handle:** `@XiaomiMiMo` (also: `@XiaomiMiMoDevs`)
+- **Primary tokens (3):** `MiMo`, `Xiaomi MiMo`, `小米 MiMo`
+- **Call group:** C1 (co-occurrence-constrained)
+- **Covered by:** Call A + C1
+- **Not in B2** (dedup: C1 already covers via co-occurrence AND-filter)
 
-### 3. `deepseek` (深度求索) — 6 queries
+### 6. `moonshot_kimi` (Kimi / 月之暗面)
 
-- **yaml:** `data/queries/deepseek.yaml`
-- **accounts:** `data/accounts/deepseek.yaml` (official `deepseek_ai`, verified=true, staff=[])
-- **filter:** `data/filters/deepseek.yaml` (canonical handles: `deepseek_ai`, `deepseek`; must_have_any: `deepseek`, `v3`, `v3.2`, `v4`, `deepseek v`, `deepseek-r1`, `deepseek-coder`, `deepseek-vl`, `deepseek-pro`, `deepseekmoe`)
-- **Call group:** B1
-- **Brand tokens:** `DeepSeek`, `深度求索`, `"DeepSeek V4"` (3)
-- **Q1:** `from:deepseek_ai min_faves:5`
-- **Q2:** `(DeepSeek OR 深度求索 OR "DeepSeek V4") (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(DeepSeek OR 深度求索 OR "DeepSeek V4") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
-- **Q4:** `to:deepseek_ai min_faves:5`
-- **Q5:** `(DeepSeek OR 深度求索 OR "DeepSeek V4") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(DeepSeek OR 深度求索 OR "DeepSeek V4") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Official handle:** `@Kimi_Moonshot`
+- **Primary tokens (3):** `Kimi`, `MoonshotAI`, `月之暗面`
+- **Call group:** C1 (co-occurrence-constrained)
+- **Covered by:** Call A + C1
+- **Not in B2** (dedup: C1 already covers; F1 driver Antonelli noise is
+  mitigated by the co-occurrence AND-filter + `must_have_none`-style
+  patterns in `brand_keywords`)
+- **Bare `moonshot`** is intentionally absent from primary tokens
+  (matches Moonshot crypto exchange spam, not Moonshot AI)
 
-### 4. `glm` (Zhipu AI / 智谱) — 6 queries
+### 7. `inclusionai` (InclusionAI / Ling / Ring)
 
-- **yaml:** `data/queries/glm.yaml`
-- **accounts:** `data/accounts/glm.yaml` (official `Zhipuai_org`, verified=true, staff=[])
-- **filter:** `data/filters/glm.yaml` (canonical handles: `ZhipuAI`, `THUDM`, `zhipuai`, `zhipu_org`; must_have_any: `glm`, `glm-4`, `glm-5`, `glm4.5`, `glm5`, `chatglm`, `zhipu`, `zhipu ai`, `cogvideox`, `cogview`)
+- **Official handle:** `@TheInclusionAI` (also: `@AntLingAGI`, `@robbyant_brain`)
+- **Primary tokens (3):** `InclusionAI`, `Ling`, `Ring`
 - **Call group:** B2
-- **Brand tokens:** `GLM`, `智谱`, `ChatGLM`, `Zhipuai`, `"GLM-5.2"` (5 — `Zhipuai` is the org name; every Q uses all 5 tokens)
-- **Q1:** `from:Zhipuai_org min_faves:5`
-- **Q2:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
-- **Q4:** `to:Zhipuai_org min_faves:5`
-- **Q5:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(GLM OR 智谱 OR ChatGLM OR Zhipuai) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** 5-token brand group (notable vs. most brands' 2-3); every query uses the full set; no `Q5` notes line.
+- **Covered by:** Call A + B2
+- **Token notes:** `Ming` is in the full `brand_keywords` table but not
+  in the `is_primary=1` subset (the 3-token curated set fits under cap)
 
-### 5. `mimo` (小米 MiMo) — 6 queries (post-U5-rename)
+### 8. `mistral` (Mistral AI / Mixtral)
 
-- **yaml:** `data/queries/mimo.yaml` (canonical). A ghost `data/queries/xiaomi_mimo.yaml` exists on disk with identical content from before the U5 rename; it is not referenced by `enabled_models` and is not read by the live cycle.
-- **accounts:** `data/accounts/mimo.yaml` (official `XiaomiMiMo`, verified=true, staff=[]). A ghost `data/accounts/xiaomi_mimo.yaml` exists with identical content.
-- **filter:** `data/filters/mimo.yaml` (canonical, identical content to `xiaomi_mimo.yaml`).
-- **Call group:** B2
-- **Brand tokens:** `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` (9 — broader than other brands' brand tokens)
-- **Q1:** `from:XiaomiMiMo min_faves:3` (lowered from 5 — low-volume brand)
-- **Q2:** `(MiMo OR Xiaomi MiMo OR 小米 MiMo) (how OR 怎么 OR 教程 OR tutorial) min_faves:2`
-- **Q3:** `(MiMo OR 小米 MiMo) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `to:XiaomiMiMo min_faves:3` (lowered)
-- **Q5:** `(MiMo OR 小米) (benchmark OR eval OR paper OR github OR 开源) min_faves:2` (no `code` token)
-- **Q6:** `(MiMo OR Xiaomi MiMo OR 小米 MiMo) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** Q1/Q4 use `min_faves:3` instead of the default 5 (volume tuning); rot threshold 5 (vs default 3) per `config.yaml::query_rot_streak_threshold_per_model: mimo: 5`; bare `小米` is part of brand tokens but excluded from Q2/Q3/Q6 paren groups.
-
-### 6. `moonshot_kimi` (Kimi / 月之暗面) — 6 queries
-
-- **yaml:** `data/queries/moonshot_kimi.yaml`
-- **accounts:** `data/accounts/moonshot_kimi.yaml` (official `MoonshotAI`, verified=true, staff=[])
-- **filter:** `data/filters/moonshot_kimi.yaml` (canonical handles: `Kimi_Moonshot`, `MoonshotAI`, `dotey`; must_have_any: `kimi`, `k2`, `k2.5`, `kimi k`, `kimi work`, `kimi code`, `kimi thinker`, `kimi k2`, `kimi-researcher`, `moonshot ai`; must_have_none: 14 F1 tokens including F1, antonelli, verstappen, hamilton, pirelli, "pole position", "formula 1", formula1, mclaren, mercedes, red bull, qualifying, sprint race, race result — F1 hijack mitigation)
-- **Call group:** B2
-- **Brand tokens:** `Kimi`, `月之暗面`, `MoonshotAI`, `"Kimi K2"` (4)
-- **Q1:** `from:MoonshotAI min_faves:5`
-- **Q2:** `(Kimi OR 月之暗面 OR MoonshotAI) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(Kimi OR 月之暗面 OR MoonshotAI) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `to:MoonshotAI min_faves:5`
-- **Q5:** `(Kimi OR 月之暗面 OR MoonshotAI) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(Kimi OR 月之暗面 OR MoonshotAI) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** filter `must_have_none` is the largest in the project (14 tokens) — F1 driver Antonelli hijack is the dominant noise source. The brand tokens deliberately exclude bare `moonshot` to avoid Moonshot crypto exchange spam.
-
-### 7. `inclusionai` (InclusionAI / Ling / Ring / Ming) — 6 queries
-
-- **yaml:** `data/queries/inclusionai.yaml`
-- **accounts:** `data/accounts/inclusionai.yaml` (official `inclusionAI`, verified=true, staff=[])
-- **filter:** `data/filters/inclusionai.yaml` (canonical handles: `InclusionAI`, `inclusionai_lab`, `inclusion_ai`; must_have_any: `inclusion`, `inclusionai`, `inclusion ai`, `inclusion-ai`, `ring-1`, `ring-1t`, `ling-mini`, `ling-flash`, `ming-lite`; must_have_none: 11 Tolkien/WWE tokens)
-- **Call group:** B2
-- **Brand tokens:** `InclusionAI`, `Ling`, `Ring`, `Ming` (4)
-- **Q1:** `from:inclusionAI min_faves:3` (lowered from 5 — low volume)
-- **Q2:** `(InclusionAI OR Ling OR Ring OR Ming) (how OR 怎么 OR 教程 OR tutorial) min_faves:2`
-- **Q3:** `(InclusionAI OR Ling OR Ring OR Ming) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `to:inclusionAI min_faves:3` (lowered)
-- **Q5:** `(InclusionAI OR Ling OR Ring OR Ming) (benchmark OR eval OR paper OR github OR 开源) min_faves:2` (no `code` token)
-- **Q6:** `(InclusionAI OR Ling OR Ring OR Ming) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** tokens consolidated from prior `inclusionai_ling/ring/ming` (commit consolidating 3 product variants into one brand-level entry, since Ling/Ring/Ming are versions of the same InclusionAI product line); Q1/Q4 use `min_faves:3`; filter `must_have_none` is the second-largest (11 tokens) — Tolkien fanfic, WWE wrestling, and Brat fanfic are the dominant noise.
-
-### 8. `mistral` (Mistral AI / Mixtral) — 6 queries, **no accounts yaml, no filter yaml**
-
-- **yaml:** `data/queries/mistral.yaml`
-- **accounts:** **none** (no `data/accounts/mistral.yaml` — brand is query-only)
-- **filter:** **none**
+- **Official handle:** `@MistralAI`
+- **Primary tokens (2):** `Mistral`, `Mixtral`
 - **Call group:** B1
-- **Brand tokens:** `"Mistral"`, `"Mixtral"` (2, both quoted)
-- **Q1:** `("Mistral" OR "Mixtral") (AI OR model OR LLM OR 7B OR 8x7B) -weather -meteorology min_faves:5`
-- **Q2:** `("Mistral" OR "Mixtral") (how OR tutorial OR guide OR 教程) min_faves:2`
-- **Q3:** `("Mistral" OR "Mixtral") (broken OR fails OR bad OR "not working") min_faves:1`
-- **Q4:** `to:MistralAI min_faves:5` (note: `to:` form, not brand-name — placeholder pending official handle confirmation; expected to return 0 until confirmed)
-- **Q5:** `("Mistral" OR "Mixtral") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `("Mistral" OR "Mixtral") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯) min_faves:5` (no 卧槽/太强了)
-- **Per-brand quirks:** all tokens are quoted (case-sensitive matching); Q1 has explicit negative operators (`-weather -meteorology`) to exclude the Mistral weather brand; Q4 uses a `to:`-shape (not the brand-name fallback) with a note that it "may be 0 results until the official handle is confirmed." No Call A coverage; Call C coverage is 0 (C1 spec doesn't include Mistral).
+- **Covered by:** Call A + B1
 
-### 9. `stepfun` (StepFun / 阶跃星辰) — 6 queries, **no accounts yaml, no filter yaml**
+### 9. `stepfun` (StepFun / 阶跃星辰)
 
-- **yaml:** `data/queries/stepfun.yaml`
-- **accounts:** **none**
-- **filter:** **none**
+- **Official handle:** `@StepFun_ai` (also: `@stepfunai`)
+- **Primary tokens (2):** `StepFun`, `阶跃星辰`
 - **Call group:** B1
-- **Brand tokens:** `"StepFun"`, `"阶跃星辰"` (2, both quoted; Q1 also has `"StepFun AI"`)
-- **Q1:** `("StepFun" OR "阶跃星辰" OR "StepFun AI") (LLM OR model OR "step" OR 阶跃) -dance -choreography min_faves:5`
-- **Q2:** `("StepFun" OR "阶跃星辰") (how OR tutorial OR guide OR 教程) min_faves:2`
-- **Q3:** `("StepFun" OR "阶跃星辰") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
-- **Q4:** `to:StepFunAI min_faves:5` (placeholder, 0 results expected)
-- **Q5:** `("StepFun" OR "阶跃星辰") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `("StepFun" OR "阶跃星辰") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** Q1 includes `"StepFun AI"` (3rd token) plus `(LLM OR model OR "step" OR 阶跃)` context disambiguator; `-dance -choreography` exclusion; Q4 is `to:`-placeholder.
+- **Covered by:** Call A + B1
 
-### 10. `ernie` (Baidu ERNIE / 文心一言) — 6 queries, **no accounts yaml, no filter yaml**
+### 10. `ernie` (Baidu ERNIE / 文心一言)
 
-- **yaml:** `data/queries/ernie.yaml`
-- **accounts:** **none**
-- **filter:** **none**
+- **Official handle:** `@ErnieforDevs` (also: `@Paddlepaddle`, `@PaddlePaddle`)
+- **Primary tokens (2):** `ERNIE`, `文心一言`
+- **Call group:** C2 (co-occurrence-constrained)
+- **Covered by:** Call A + C2
+- **Not in B1** (dedup: C2 already covers; ERNIE = Sesame Street
+  character + Bert variant — co-occurrence disambiguation is essential)
+
+### 11. `hunyuan` (Tencent Hunyuan / 混元)
+
+- **Official handle:** `@TencentHunyuan`
+- **Primary tokens (3):** `Hunyuan`, `混元`, `腾讯混元`
 - **Call group:** B1
-- **Brand tokens:** `"ERNIE"`, `"文心一言"` (2, both quoted)
-- **Q1:** `("ERNIE" OR "文心一言") (LLM OR model OR Baidu OR 文心) -"Sesame Street" -Bert min_faves:5`
-- **Q2:** `("ERNIE" OR "文心一言") (how OR tutorial OR guide OR 教程 OR 怎么) min_faves:2`
-- **Q3:** `("ERNIE" OR "文心一言") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
-- **Q4:** `to:Baidu_ERNIE min_faves:5` (placeholder)
-- **Q5:** `("ERNIE" OR "文心一言") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `("ERNIE" OR "文心一言") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** Q1 includes Sesame Street and Bert as exclusions (ERNIE = Bert variant + Sesame Street character; the disambiguator is `(LLM OR model OR Baidu OR 文心)`).
+- **Covered by:** Call A + B1
 
-### 11. `hunyuan` (Tencent Hunyuan / 混元 / 腾讯混元) — 6 queries, **no accounts yaml, no filter yaml**
+### 12. `llama` (Meta Llama)
 
-- **yaml:** `data/queries/hunyuan.yaml`
-- **accounts:** **none**
-- **filter:** **none**
-- **Call group:** B1
-- **Brand tokens:** `"Hunyuan"`, `"混元"`, `"腾讯混元"` (3, all quoted)
-- **Q1:** `("Hunyuan" OR "混元" OR "腾讯混元") (LLM OR model OR Tencent OR 混元 OR 腾讯) min_faves:5`
-- **Q2:** `("Hunyuan" OR "混元" OR "腾讯混元") (how OR tutorial OR guide OR 教程 OR 怎么) min_faves:2`
-- **Q3:** `("Hunyuan" OR "混元" OR "腾讯混元") (broken OR fails OR bad OR 翻车 OR 不好 OR 不行) min_faves:1`
-- **Q4:** `to:HunyuanAI min_faves:5` (placeholder)
-- **Q5:** `("Hunyuan" OR "混元" OR "腾讯混元") (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `("Hunyuan" OR "混元" OR "腾讯混元") (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** Q1's disambiguator includes `混元` and `腾讯` tokens (Hunyuan is a Chinese philosophical term — bare usage is non-AI).
+- **Official handle:** `@AIatMeta`
+- **Primary tokens (3):** `"Llama 3"`, `"Meta Llama"`, `Llama`
+- **Call group:** C1 (co-occurrence-constrained)
+- **Covered by:** Call A + C1
+- **Not in B1** (dedup: C1 already covers; bare `Llama` = the animal)
 
-### 12. `llama` (Meta Llama / Code Llama / Muse Spark) — 6 queries
+### 13. `nemo_megatron` (NVIDIA NeMo / Megatron)
 
-- **yaml:** `data/queries/llama.yaml`
-- **accounts:** `data/accounts/llama.yaml` (official `Llama`, **verified=false** — placeholder, operator must confirm Meta's official handle; note: bare `Llama` is the animal)
-- **filter:** **none**
-- **Call group:** B1 (also in Call C spec C1)
-- **Brand tokens:** `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"`, `"Llama 3.1"` (7 — largest in the project)
-- **Q1:** `(Llama OR "Llama 3" OR "Llama 4" OR "Meta Llama" OR "Code Llama" OR "Muse Spark" OR "Llama 3.1") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name Q4 fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** no `from:`/`to:`-shape on Q1/Q4 (no confirmed handle); all 7 brand tokens repeat in every query; accounts yaml says `verified: false` with `Llama` as the placeholder handle (note: `Llama` is also the animal and the broader family of Meta's open models); included in Call C1.
-
-### 13. `nemo_megatron` (NVIDIA NeMo / Megatron) — 6 queries (post-U5-rename)
-
-- **yaml:** `data/queries/nemo_megatron.yaml` (canonical). A ghost `data/queries/nvidia_nemo.yaml` exists on disk with identical content from before the U5 rename; it is not referenced by `enabled_models` and is not read by the live cycle.
-- **accounts:** `data/accounts/nemo_megatron.yaml` (official `NVIDIAAIDev`, **verified=false**). A ghost `data/accounts/nvidia_nemo.yaml` exists with identical content.
-- **filter:** **none**
+- **Official handle:** `@NVIDIAAIDev` (also: `@NVIDIAAI`)
+- **Primary tokens (2):** `Megatron-LM`, `NVIDIA NeMo`
 - **Call group:** B3
-- **Brand tokens:** `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` (4 — both the NeMo framework and the Megatron training stack)
-- **Q1:** `(NeMo OR Megatron OR "NVIDIA NeMo" OR "Megatron-LM") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** all 4 brand tokens repeat; verified=false; not in Call C.
+- **Covered by:** Call A + B3
 
-### 14. `doubao` (ByteDance / 豆包 / Seed) — 6 queries
+### 14. `doubao` (ByteDance Doubao / 豆包)
 
-- **yaml:** `data/queries/doubao.yaml`
-- **accounts:** `data/accounts/doubao.yaml` (official `doubaoAi`, **verified=false**; note: `豆包` is a literal Chinese snack word)
-- **filter:** **none**
+- **Official handle:** `@DoubaoAI` (also: `@BytePlusGlobal`, `@bytedanceoss`, `@doubaoai`)
+- **Primary tokens (3):** `ByteDance`, `Doubao`, `豆包`
 - **Call group:** B2
-- **Brand tokens:** `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` (8 — the largest brand-token set in the project, by a wide margin)
-- **Q1:** `(Doubao OR 豆包 OR Seed OR 字节 OR ByteDance OR "Seed-VL" OR "Seed-1.5" OR "豆包大模型") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** 8 brand tokens (incl. parent-company and product-line names); not in Call C; `豆包`/`Seed`/`字节` collide with the consumer Doubao snack app and ByteDance the company — co-occurrence is the practical noise control.
+- **Covered by:** Call A + B2
 
-### 15. `yi` (01.AI Yi) — 6 queries
+### 15. `yi` (01.AI Yi / 零一万物)
 
-- **yaml:** `data/queries/yi.yaml`
-- **accounts:** `data/accounts/yi.yaml` (official `01AI_Yi`, **verified=false**; note: `Yi` is a common Chinese surname and dynasty name)
-- **filter:** **none**
-- **Call group:** B2 (also in Call C spec C1)
-- **Brand tokens:** `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` (7)
-- **Q1:** `(Yi OR "01.AI" OR 零一万物 OR "Yi LLM" OR Yi-VL OR Yi-Coder OR "Yi-Large") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** 6 brand tokens (incl. company + product-line); included in Call C1 (the multi-brand co-occurrence spec).
+- **Official handle:** `@01AI_Yi`
+- **Primary tokens (3):** `01.AI`, `Yi`, `零一万物`
+- **Call group:** C1 (co-occurrence-constrained)
+- **Covered by:** Call A + C1
+- **Not in B2** (dedup: C1 already covers; `Yi` = common Chinese surname)
 
-### 16. `sensechat` (SenseTime / 商汤 / 日日新) — 6 queries
+### 16. `sensechat` (SenseTime SenseChat / 商汤)
 
-- **yaml:** `data/queries/sensechat.yaml`
-- **accounts:** `data/accounts/sensechat.yaml` (official `SenseTimeAI`, **verified=false**; note: `Nova` is generic)
-- **filter:** **none**
+- **Official handle:** `@SenseTime_AI`
+- **Primary tokens (3):** `SenseChat`, `SenseTime`, `日日新`
 - **Call group:** B2
-- **Brand tokens:** `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` (5)
-- **Q1:** `(SenseChat OR SenseNova OR SenseTime OR 商汤 OR 日日新) min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Covered by:** Call A + B2
 
-### 17. `exaone` (LG AI Research / EXAONE) — 6 queries
+### 17. `exaone` (LG AI Research / EXAONE)
 
-- **yaml:** `data/queries/exaone.yaml`
-- **accounts:** `data/accounts/exaone.yaml` (official `LGAIResearch`, **verified=false**)
-- **filter:** **none**
+- **Official handle:** `@LG_AI_Research`
+- **Primary tokens (2):** `EXAONE`, `LG AI`
 - **Call group:** B3
-- **Brand tokens:** `EXAONE`, `"LG AI"`, `"LG EXAONE"` (3)
-- **Q1:** `(EXAONE OR "LG AI" OR "LG EXAONE") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Covered by:** Call A + B3
 
-### 18. `kuaishou` (Kuaishou / KwaiYii) — 6 queries
+### 18. `kuaishou` (Kuaishou KwaiYii / 快意)
 
-- **yaml:** `data/queries/kuaishou.yaml`
-- **accounts:** `data/accounts/kuaishou.yaml` (official `KwaiYii`, **verified=false**; note: bare `Kuaishou` is the video-app brand — non-AI posts dominate)
-- **filter:** **none**
+- **Official handle:** `@Kling_ai`
+- **Primary tokens (2):** `Kuaishou`, `KwaiYii`
 - **Call group:** B3
-- **Brand tokens:** `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` (4)
-- **Q1:** `(KwaiYii OR 快意 OR "KwaiYii LLM" OR Kuaishou) min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
+- **Covered by:** Call A + B3
 
-### 19. `sakana_ai` (Sakana AI) — 6 queries (replaces `sakana`; post-U5-rename)
+### 19. `sakana_ai` (Sakana AI)
 
-- **yaml:** `data/queries/sakana_ai.yaml` (canonical). A ghost `data/queries/sakana.yaml` exists on disk with identical content from before the U5 rename; it is not referenced by `enabled_models` and is not read by the live cycle.
-- **accounts:** `data/accounts/sakana_ai.yaml` (official `SakanaAILabs`, **verified=false**; note: `Sakana` is Japanese for `fish` — collides with food/restaurant/fishing posts). A ghost `data/accounts/sakana.yaml` exists with identical content.
-- **filter:** **none**
+- **Official handle:** `@SakanaAILabs`
+- **Primary tokens (3):** `Sakana`, `Sakana AI`, `サカナAI`
 - **Call group:** B3
-- **Brand tokens:** `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` (4)
-- **Q1:** `(Sakana OR "Sakana AI" OR "Sakana Labs" OR "サカナAI") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** `sakana_ai` (slug) replaced `sakana` in commit `887f50e` (2026-06-23), then was renamed again in the U5 commit `c7b877f` (2026-07-07) from `sakana` → `sakana_ai` to match the `KNOWN_MODELS` registry. Karakuri was an earlier speculative Japanese brand that collided heavily with anime/dining/figure posts; Sakana AI (Evolutionary Model Merge) is the replacement. The `Sakana` (fish) collision risk is the same as `Karakuri`'s anime/dining risk; no `must_have_none` filter currently exists for sakana_ai (unlike moonshot_kimi/inclusionai).
+- **Covered by:** Call A + B3
+- **Note:** `Sakana` = Japanese for "fish" — collides with food/sushi posts.
+  The co-occurrence AND-filter + 3-token curated set (incl. the Japanese
+  katakana `サカナAI`) keeps precision intact.
 
-### 20. `upstage` (Upstage / Solar / Solar Pro / Solar Mini) — 6 queries
+### 20. `upstage` (Upstage / Solar)
 
-- **yaml:** `data/queries/upstage.yaml`
-- **accounts:** `data/accounts/upstage.yaml` (official `upstageAI`, **verified=false**; note: `Upstage` is a theater term but rare in AI contexts)
-- **filter:** **none**
-- **Call group:** B3 (also in Call C spec C1)
-- **Brand tokens:** `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` (7)
-- **Q1:** `(Upstage OR Solar OR "Solar Pro" OR "Solar Mini" OR "Solar Pro 3" OR "Solar Pro 2" OR "Solar Open") min_faves:5`
-- **Q2:** `(…) (how OR 怎么 OR 教程 OR tutorial OR guide) min_faves:2`
-- **Q3:** `(…) (broken OR fails OR bad OR 翻车 OR 不好) min_faves:1`
-- **Q4:** `(…) min_faves:5` (brand-name fallback)
-- **Q5:** `(…) (benchmark OR eval OR paper OR github OR code OR 开源) min_faves:3`
-- **Q6:** `(…) (amazing OR incredible OR "love it" OR best OR "mind blowing" OR 🤯 OR 卧槽 OR 太强了) min_faves:5`
-- **Per-brand quirks:** `Solar` is generic (matches the star, the battery, etc.) — co-occurrence gate in Call C1 helps. Included in Call C1.
+- **Official handle:** `@upstageai`
+- **Primary tokens (2):** `Solar`, `Upstage`
+- **Call group:** C2 (co-occurrence-constrained)
+- **Covered by:** Call A + C2
+- **Not in B3** (dedup: C2 already covers; `Upstage` = theater term,
+  `Solar` = the star — co-occurrence disambiguation is essential)
+- **Bare `Solar` dropped from C2's brand group** (substring leak:
+  "solar winds" + generic `model` co-occurrence produced false positives)
 
 ---
 
 ## Brand alias / handle index (consolidated)
 
-| brand_id | Official handle | Verified | Tokens in Call B (deduped) |
+| brand_id | Official handle | Primary tokens (DB, is_primary=1) | Call group |
 |---|---|---|---|
-| `minimax` | `MiniMaxAI` | true | `MiniMax`, `海螺`, `Hailuo` |
-| `qwen` | `QwenLM` | true | `Qwen`, `通义千问`, `通义`, `Qwen3` |
-| `deepseek` | `deepseek_ai` | true | `DeepSeek`, `深度求索`, `"DeepSeek V4"` |
-| `glm` | `Zhipuai_org` | true | `GLM`, `智谱`, `ChatGLM`, `Zhipuai`, `"GLM-5.2"` |
-| `mimo` | `XiaomiMiMo` | true | `MiMo`, `Xiaomi MiMo`, `小米 MiMo`, `小米`, `"MiMo-V2.5-Pro"`, `"MiMo-V2.5"`, `"MiMo Code"`, `"MiMo-7B"`, `"MiMo-VL"` |
-| `moonshot_kimi` | `MoonshotAI` | true | `Kimi`, `月之暗面`, `MoonshotAI`, `"Kimi K2"` |
-| `inclusionai` | `inclusionAI` | true | `InclusionAI`, `Ling`, `Ring`, `Ming` |
-| `mistral` | (no accounts yaml) | n/a | `"Mistral"`, `"Mixtral"` |
-| `stepfun` | (no accounts yaml) | n/a | `"StepFun"`, `"阶跃星辰"` |
-| `ernie` | (no accounts yaml) | n/a | `"ERNIE"`, `"文心一言"` |
-| `hunyuan` | (no accounts yaml) | n/a | `"Hunyuan"`, `"混元"`, `"腾讯混元"` |
-| `llama` | `Llama` (placeholder) | **false** | `Llama`, `"Llama 3"`, `"Llama 4"`, `"Meta Llama"`, `"Code Llama"`, `"Muse Spark"`, `"Llama 3.1"` |
-| `nemo_megatron` | `NVIDIAAIDev` (placeholder) | **false** | `NeMo`, `Megatron`, `"NVIDIA NeMo"`, `"Megatron-LM"` |
-| `doubao` | `doubaoAi` (placeholder) | **false** | `Doubao`, `豆包`, `Seed`, `字节`, `ByteDance`, `"Seed-VL"`, `"Seed-1.5"`, `"豆包大模型"` |
-| `yi` | `01AI_Yi` (placeholder) | **false** | `Yi`, `"01.AI"`, `零一万物`, `"Yi LLM"`, `Yi-VL`, `Yi-Coder`, `"Yi-Large"` |
-| `sensechat` | `SenseTimeAI` (placeholder) | **false** | `SenseChat`, `SenseNova`, `SenseTime`, `商汤`, `日日新` |
-| `exaone` | `LGAIResearch` (placeholder) | **false** | `EXAONE`, `"LG AI"`, `"LG EXAONE"` |
-| `kuaishou` | `KwaiYii` (placeholder) | **false** | `KwaiYii`, `快意`, `"KwaiYii LLM"`, `Kuaishou` |
-| `sakana_ai` | `SakanaAILabs` (placeholder) | **false** | `Sakana`, `"Sakana AI"`, `"Sakana Labs"`, `"サカナAI"` |
-| `upstage` | `upstageAI` (placeholder) | **false** | `Upstage`, `Solar`, `"Solar Pro"`, `"Solar Mini"`, `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"` |
+| `minimax` | `MiniMax_AI` | `Hailuo`, `MiniMax`, `m2.5`, `海螺` | B1 |
+| `qwen` | `Alibaba_Qwen` | `Qwen`, `Qwen3`, `通义千问` | B1 |
+| `deepseek` | `deepseek_ai` | `DeepSeek`, `deepseek-r1`, `深度求索` | B1 |
+| `glm` | `Zai_org` | `ChatGLM`, `GLM`, `Zhipuai`, `智谱` | B2 |
+| `mimo` | `XiaomiMiMo` | `MiMo`, `Xiaomi MiMo`, `小米 MiMo` | C1 |
+| `moonshot_kimi` | `Kimi_Moonshot` | `Kimi`, `MoonshotAI`, `月之暗面` | C1 |
+| `inclusionai` | `TheInclusionAI` | `InclusionAI`, `Ling`, `Ring` | B2 |
+| `mistral` | `MistralAI` | `Mistral`, `Mixtral` | B1 |
+| `stepfun` | `StepFun_ai` | `StepFun`, `阶跃星辰` | B1 |
+| `ernie` | `ErnieforDevs` | `ERNIE`, `文心一言` | C2 |
+| `hunyuan` | `TencentHunyuan` | `Hunyuan`, `混元`, `腾讯混元` | B1 |
+| `llama` | `AIatMeta` | `"Llama 3"`, `"Meta Llama"`, `Llama` | C1 |
+| `nemo_megatron` | `NVIDIAAIDev` | `Megatron-LM`, `NVIDIA NeMo` | B3 |
+| `doubao` | `DoubaoAI` | `ByteDance`, `Doubao`, `豆包` | B2 |
+| `yi` | `01AI_Yi` | `01.AI`, `Yi`, `零一万物` | C1 |
+| `sensechat` | `SenseTime_AI` | `SenseChat`, `SenseTime`, `日日新` | B2 |
+| `exaone` | `LG_AI_Research` | `EXAONE`, `LG AI` | B3 |
+| `kuaishou` | `Kling_ai` | `Kuaishou`, `KwaiYii` | B3 |
+| `sakana_ai` | `SakanaAILabs` | `Sakana`, `Sakana AI`, `サカナAI` | B3 |
+| `upstage` | `upstageai` | `Solar`, `Upstage` | C2 |
 
 ---
 
-## Per-brand quota / language / recency overrides
+## Per-brand primary token counts
 
-| brand_id | `min_faves` floor (query) | `query_rot_streak_threshold` | `data/filters/<brand>.yaml` | Special notes |
-|---|---|---|---|---|
-| `minimax` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 (default) | ✓ | must_have_none: hailuo-2.3 noise |
-| `qwen` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | canonical_handles: Alibaba_Qwen, QwenLM, alibaba |
-| `deepseek` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_any: 10 v3/v4/coder/vl/pro tokens |
-| `glm` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_any: glm-4/5, chatglm, zhipu, cogvideox |
-| `mimo` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | **5** (override in `query_rot_streak_threshold_per_model`) | ✓ | Low-volume tuning; ghost `xiaomi_mimo.yaml` filter mirror exists |
-| `moonshot_kimi` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | ✓ | must_have_none: 14 F1 tokens |
-| `inclusionai` | Q1=3, Q2=2, Q3=1, Q4=3, Q5=2, Q6=5 | 3 | ✓ | must_have_none: 11 Tolkien/WWE tokens |
-| `mistral` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Tokens quoted; Q1 has `-weather -meteorology` |
-| `stepfun` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 has `-dance -choreography` |
-| `ernie` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 has `-"Sesame Street" -Bert` |
-| `hunyuan` | Q1=5, Q2=2, Q3=1, Q4=5, Q5=3, Q6=5 | 3 | **✗** | Q1 disambiguator includes `混元`, `腾讯` |
-| `llama` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 7 tokens; placeholder handle |
-| `nemo_megatron` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens (incl. Megatron); placeholder; ghost `nvidia_nemo.yaml` exists |
-| `doubao` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 8 tokens (largest); placeholder |
-| `yi` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 7 tokens; in Call C1 |
-| `sensechat` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 5 tokens; placeholder |
-| `exaone` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 3 tokens (incl. "LG AI", "LG EXAONE") |
-| `kuaishou` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; `Kuaishou` is the video app |
-| `sakana_ai` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 4 tokens; replaces `karakuri` (2026-06-23, commit `887f50e`) then `sakana` (U5, 2026-07-07, commit `c7b877f`); `Sakana` = fish; ghost `sakana.yaml` exists |
-| `upstage` | all min_faves:5 (Q2=2, Q3=1, Q5=3) | 3 | **✗** | 7 tokens; in Call C1 |
+| brand_id | Primary tokens | Call group |
+|---|---|---|
+| `minimax` | 4 | B1 |
+| `qwen` | 3 | B1 |
+| `deepseek` | 3 | B1 |
+| `glm` | 4 | B2 |
+| `mimo` | 3 | C1 |
+| `moonshot_kimi` | 3 | C1 |
+| `inclusionai` | 3 | B2 |
+| `mistral` | 2 | B1 |
+| `stepfun` | 2 | B1 |
+| `ernie` | 2 | C2 |
+| `hunyuan` | 3 | B1 |
+| `llama` | 3 | C1 |
+| `nemo_megatron` | 2 | B3 |
+| `doubao` | 3 | B2 |
+| `yi` | 3 | C1 |
+| `sensechat` | 3 | B2 |
+| `exaone` | 2 | B3 |
+| `kuaishou` | 2 | B3 |
+| `sakana_ai` | 3 | B3 |
+| `upstage` | 2 | C2 |
 
-**`LANG_ALLOWLIST` is empty** in `x_monitor/queries.py:54` — the default is "all-languages" (no `lang:` operator in any query). The `since:`/`until:` operators are unused in the curated queries (recency is implicit in the TwitterAPI.io 7-day recent-search default for self-serve).
+**Total:** 55 primary tokens across 20 brands (2–4 per brand).
 
-**Recency:** TwitterAPI.io's recent-search cap is 7 days for self-serve (`X_LENGTH_CAP=512` for the length cap; the same 7-day recency cap is enforced by the underlying X API). No brand in the curated library overrides this.
+**`LANG_ALLOWLIST` is empty** in `x_monitor/queries.py` — the default is
+"all-languages" (no `lang:` operator in any query). The `since_time:`/
+`until_time:` epoch-precision operators are used at the cursor level by
+`run_search()`.
+
+**Recency:** TwitterAPI.io's recent-search cap is 7 days for self-serve.
+No brand overrides this. The `since_time:` operator (epoch-precision) is
+injected by `run_search()` for per-call cursor management; the redundant
+`since:` (date-only) operator is suppressed when `since_time` is active
+(commit `a691092`).
 
 ---
 
 ## How to verify the live inventory
 
 ```bash
-# Print the per-call plan
-ssh fuchitalee 'cd ~/development/minimax-marketing/x-monitoring && \
+# Print the per-cycle call plan (6 calls)
+cd /Users/fuchitalee/development/minimax-marketing/x-monitoring && \
   source ~/.env.secrets && \
-  PYTHONPATH=. .venv/bin/python -c "from pathlib import Path; \
-  from x_monitor.config import load_config; \
-  from x_monitor.query_plan import plan_calls; \
-  cfg = load_config(Path(\"config.yaml\")); \
-  plan = plan_calls(Path(\"data\"), cfg.enabled_models, \
-                    x_monitor_list_id=cfg.x_monitor_list_id, \
-                    call_b_groups=cfg.call_b_groups, \
-                    call_c_specs=cfg.call_c_specs); \
-  [print(c.call_id, c.call_kind, c.brand_id, c.query_length, c.query_string) for c in plan]"'
+  PYTHONPATH=. .venv/bin/python -c "
+from pathlib import Path
+from x_monitor.config import load_config
+from x_monitor.query_plan import plan_calls
+from x_monitor.store import Store
+
+cfg = load_config(Path('config.yaml'))
+store = Store(Path('data/x_monitoring.db'))
+primary_keywords = store.read_primary_brand_keywords()
+
+plan = plan_calls(
+    cfg.x_monitor_list_id,
+    cfg.x_query_specs,
+    primary_keywords=primary_keywords,
+)
+for c in plan:
+    print(f'{c.call_id:4s} | {c.call_kind:12s} | {c.brand_id:16s} | len={c.query_length:3d} | {c.query_string}')
+"
 ```
 
-**Expected (live, as of 2026-07-09):** 5 entries — Call A (38 chars), Call B1 (320 chars), **Call B2 (468 chars)**, Call B3 (310 chars), Call C1 (505 chars — multi-brand co-occurrence). All under the 512-char cap. Note that Call B2 and B3 reference the new slugs (`mimo`, `nemo_megatron`, `sakana_ai`) at runtime, not the ghost yamls.
-
-**Currently emitted (verified 2026-07-09):** 5 entries — Call A (38 chars), Call B1 (320 chars), **Call B2 (468 chars)**, Call B3 (310 chars), Call C1 (505 chars). All under the 512-char cap. (`call_b_groups` is plumbed in `run.py:980-985`; the 867-char single-B over-cap fallback no longer applies.)
+**Expected (live, as of 2026-07-22):** 6 entries — Call A (38 chars),
+C1 (461 chars), C2 (295 chars), B1 (414 chars), B2 (377 chars),
+B3 (353 chars). All under the 512-char cap.
 
 ```bash
-# In dry-run mode, the cycle still plans the calls but doesn't fire them
+# Dry-run mode: plan calls without firing them
 python -m x_monitor dry-run
 ```
 
-**Test evidence 2026-06-25 (plan `2026-06-25-001`):** Lengths verified live against TwitterAPI.io before widening:
-- B1: 279 → **320** chars (+41, new tokens: `"Llama 3.1"`, `Qwen3`, `"DeepSeek V4"`)
-- B2: 359 → **468** chars (+109, new tokens: 8 MiMo variants in Q2's first paren, `"Yi-Large"`, `"Kimi K2"`, `"GLM-5.2"` — `mimo` contributes 8 tokens, not 9; bare `小米` does not enter the brand-token list because the parser reads Q2's first paren and breaks)
-- B3: 249 → **310** chars (+61, new tokens: `"Solar Pro 3"`, `"Solar Pro 2"`, `"Solar Open"`, `"サカナAI"`)
-- C1: 471 → **505** chars (+34, added 12 co-occurrence terms + 1 Korean brand alias)
+**Length history:**
+- A: **38 chars** (unchanged — the list ID is static)
+- C1: 505 → **461 chars** (−44: `upstage` moved to C2 on 2026-07-11)
+- C2: **295 chars** (new — ernie + upstage on 2026-07-11; was ~247 when solo-upstage)
+- B1: **414 chars** (v1.7 was 320 chars with 8 brands + bare OR-chain; now 6 brands + 22-term co-occurrence AND-filter)
+- B2: **377 chars** (v1.7 was 468 chars with 7 brands + bare OR-chain; now 4 brands + co-occurrence)
+- B3: **353 chars** (v1.7 was 310 chars with 5 brands + bare OR-chain; now 4 brands + co-occurrence)
 
-C1 has only **7 chars of headroom** under the cap. Any further co-occurrence or brand additions require either dropping terms, splitting into C1/C2, or moving to `live/archived` query shape. The 12 added co-occurrence terms (`code`, `coding`, `agent`, `agentic`, `benchmark`, `reasoning`, `release`, `"open source"`, `huggingface`, `inference`, `moe`, `"tool calling"`) were each validated against live `x_keyword_search` returns to surface relevant posts the original 10-term list missed.
+The B-spec lengths are shorter than v1.7 despite the added co-occurrence
+filter because (a) the `is_primary=1` subset is leaner (2–4 tokens per
+brand vs. the old Q2 first-paren group which had 4–9 tokens), and (b) 6
+polysemous brands were moved to C1/C2 exclusively (dedup from commit
+`3915675`).
 
-**The U5 rename (2026-07-07, commit `c7b877f`) did not change any of the Call B/C1 lengths** — the rename is a slug-only change (`xiaomi_mimo` → `mimo`, `nvidia_nemo` → `nemo_megatron`, `sakana` → `sakana_ai`). The brand tokens and query strings emitted by the planner are identical to the 2026-07-02 numbers above; only the brand_id labels in the resulting `PlannedCall.brand_id` field changed.
+**The Q1–Q6 retirement (plans 2026-07-11-001, 2026-07-13-001):**
+- `data/queries/<brand>.yaml` files: **deleted** (directory no longer exists)
+- `data/accounts/<brand>.yaml` files: **deleted** (directory no longer exists)
+- `data/filters/<brand>.yaml` files: **deleted** (directory no longer exists)
+- `VALID_QUERY_IDS` in `config.py:48`: still present as a constant but
+  **never read by the live cycle** — `plan_calls()` uses `call_id` from
+  `VALID_CALL_IDS` (`A`, `B1`, `B2`, `B3`, `C1`, `C2`)
+- `_planned_call_to_query()` in `run.py:171-177`: returns `"Q5"` as a
+  hardcoded placeholder for backward compat with the `call_state` cursor
+  schema; the value is meaningless for new calls
+- `degraded_skip_order`: uses call IDs (B3 → B2 → B1 → C2 → C1 → A),
+  not Q-IDs
+- Post-fetch classification: `attribution.classify_pragmatics_full`
+  writes `post_type` × `sentiment` × `discourse_role` ×
+  `china_nationalism` × `us_nationalism` — the v1.6 Q1–Q6 signal-intent
+  buckets are gone (removed in migration 022)
 
 ---
 
@@ -644,50 +617,105 @@ C1 has only **7 chars of headroom** under the cap. Any further co-occurrence or 
 
 | Change | Effect |
 |---|---|
-| Add a brand to `enabled_models` (and drop `data/queries/<brand>.yaml` + optionally `data/accounts/<brand>.yaml`) | One more paren group appended to the assigned Call B group (B1/B2/B3) in `call_b_groups`. The operator must also add the new brand to one of B1/B2/B3 (every `enabled_models` brand must appear in exactly one group, enforced by `Config._validate_call_b_groups`), and the group's resulting call must still fit under the 512-char cap. If `call_b_groups` were `None`, the fallback would emit one Call B spanning all enabled brands — currently 867 chars and over-cap. |
-| Switch a brand from `verified: false` placeholder to `verified: true` (operator confirms the official handle) | Update `data/accounts/<brand>.yaml::verified: true` and optionally switch Q1 from `(<brand tokens>)` to `from:<handle>` and Q4 from `(<brand tokens>)` to `to:<handle>`. The yaml `notes` fields flag this for every placeholder brand. |
-| Add a staff handle to `data/accounts/<brand>.yaml::staff` | Two-step: (1) add the handle to the yaml, (2) operator adds the handle to the public x.com list (`x_monitor_list_id`). The list-drift detection soft-warns if step (2) is missed. |
-| Edit a brand's tokens in `data/queries/<brand>.yaml::Q2` (or any of Q2/Q3/Q5/Q6) | The Call B paren group's tokens change — re-measure `len(query_string)` and re-verify under 512 chars. `_load_brand_tokens_per_model` reads the first `(...)` group of Q2/Q3/Q5/Q6 in iteration order. |
-| Add a `CallCBrandSpec` to `config.yaml::call_c_specs` | One extra Call C per cycle. The spec is read in order, gets a `C1`/`C2`/… label. |
-| Disable a brand in `enabled_models` | The brand's paren group drops from its Call B; the `data/accounts/<brand>.yaml` handle stays on the x.com list (operator must remove it manually). |
-| Per-brand `min_faves` in `data/filters/<brand>.yaml` | Filters out low-engagement posts after Call A/B returns and after brand attribution. Default no filter (file absent). |
-| Swap one brand for another (e.g. `karakuri` → `sakana` → `sakana_ai`, commits `887f50e` + `c7b877f`) | Edit `data/queries/<brand>.yaml` and `data/accounts/<brand>.yaml`, swap the brand_id in `enabled_models` and in `call_b_groups`. The old yaml files can be removed (a follow-up cleanup is pending for the U5 ghost yamls: `xiaomi_mimo.yaml`/`nvidia_nemo.yaml`/`sakana.yaml` in both `data/queries/` and `data/accounts/`). |
-| **Rename a brand slug (e.g. `xiaomi_mimo` → `mimo`, commit `c7b877f`)** | Update `enabled_models`, `call_b_groups`, `call_c_specs.brands`, `data/queries/<slug>.yaml`, `data/accounts/<slug>.yaml`, `data/filters/<slug>.yaml` (if present), and any `qwen_rot_streak_threshold_per_model` entries. KNOWN_MODELS in `x_monitor/config.py` is the canonical registry. The old slug's yaml files can stay on disk as ghosts (current state) or be removed; the live cycle only reads the slug referenced by `enabled_models`. |
-| **DB-side frontier seed (migration 032, 2026-07-08)** | Adds frontier companies/brands/accounts (OpenAI/Anthropic/Google/xAI; gpt/claude/gemini/gemma/grok) to the DB. Does **not** add anything to the TwitterAPI.io query path — frontier vendors are not in `enabled_models` and have no yaml. The seed is for downstream brand-attribution: when a Chinese-model post mentions "GPT" / "Claude" / "Gemini" / "Grok", the attribution layer now has a real brand row to route to. |
+| Add a brand to `enabled_models` + `KNOWN_MODELS` | Add `brand_keywords` rows (`is_primary=1` for the curated subset). Assign to an existing B group or a new C spec. Add official handles to `brands_accounts` + `accounts` + `roles`. Add the handle to the public X-list. |
+| Toggle `is_primary` on a `brand_keywords` row | The token appears / disappears from the B-spec query. Re-measure length. |
+| Edit `x_query_specs[].brands` tokens (C1/C2) | The C-spec query changes. Re-measure `len(query_string)` under 512 chars. |
+| Edit `x_query_specs[].co_occurrence` | All specs sharing that list change. The current 22-term list is shared across C1/B1/B2/B3; C2 has a 20-term variant. Re-measure all affected lengths. |
+| Add a new `XQuerySpec` to `x_query_specs` | One extra API call per cycle. Must conform to the uniform `(<tokens>) (<co_occurrence>) min_faves:N` shape (KTD1). |
+| Disable a brand in `enabled_models` | The brand's primary tokens drop from its B-spec paren group; the brand still appears in any C-spec it's part of. Remove the handle from the X-list manually. |
+| Add/change an official handle in the DB | Update `accounts` table + `brands_accounts` join row. Then manually add the handle to the public X-list (Call A). |
+| Change `x_monitor_list_id` | Call A query changes (different list). Re-verify the list contains all official handles. |
+| Rename a brand slug | Update `enabled_models`, `KNOWN_MODELS`, `brands.nickname` in DB, `brand_keywords.brand_id`, `brands_accounts` + `accounts` references, `x_query_specs[].brands` keys, `x_query_specs[].wide_net_brands` entries, and `call_b_groups` entries. |
 
 ---
 
-## Schema references (post schema-modernization batch)
+## Schema references
 
-This doc is about the live TwitterAPI.io query path, not direct SQL against the DB. The pipeline's downstream tables (`posts_brands`, `posts_brands_mentions`, `posts_brands_signals`, `signals`, `roles`, …) are touched only as sinks — the query string is built purely from yaml. For convenience, the DB-side names referenced in step 2 / step 3 above reflect the state after the 9-unit schema modernization batch landed on `feat/schema-modernization-batch` at commit `4cd62d2` (migrations 011–019), plus the post-batch migrations 020–032:
+This doc covers the live TwitterAPI.io query path. The pipeline's
+downstream tables are touched only as sinks — query strings are built
+purely from `config.yaml` + `brand_keywords.is_primary=1` (DB). For
+convenience, the DB-side names reflect the post-batch state after
+migrations 011–034:
 
-| Old name (pre-batch) | New name (post-batch) | Migration | Query-shape impact |
-|---|---|---|---|
-| `signal_keys` (table) | `signals` | 014 | FK source for `posts_brands_signals.signal_id` |
-| (column) `signal` | `signal_id` | 014 | FK column on `posts_brands_signals` |
-| `role_keys` (table) | `roles` | 015 | FK from `brands_accounts` / `companies_accounts` |
-| (column) `role` | `role_id` | 015 | FK column on those M:N tables |
-| `post_mentions` (table) | `posts_brands_mentions` | 013 | Source table for per-match attribution rows |
-| (column) `locale` on `signal_labels` / `role_labels` | `lang` | 011 | i18n label lookup column (not on `posts.*` directly) |
-| `engagement_tier_keys` + `engagement_tier_labels` (tables) | **dropped** | 012 | Dead code — never read by production. The `accounts.engagement_tier` column is also dropped. |
-| (column) `accounts.engagement_tier` | **dropped** | 012 | The 3-tier classification moves to a control-layer query (follow-up plan). |
-| (n/a) | `post_type_keys` + `post_type_labels` | 019 | New enum — values `buzz_releases`, `hands_on_usage`, `performance_comparisons`, `feedback_questions`. |
-| (n/a) | `sentiment_keys` + `sentiment_labels` | 019 | New enum — values `positive`, `negative`, `neutral`, `mixed`. |
-| (n/a) | `posts_brands_signals.post_type` (column) | 019 | Additive nullable TEXT FK → `post_type_keys.key`. Coexists with `signal_id`. |
-| (n/a) | `posts_brands_signals.sentiment` (column) | 019 | Additive nullable TEXT FK → `sentiment_keys.key`. Coexists with `signal_id`. |
-| Roles seeded in 008: `{official, community, researcher, press, vendor}` | Trimmed to `{official, staff, community}` | 016 | `researcher` / `press` / `vendor` keys (and their label rows) deleted; any FK rows pointing at them backfilled to `'community'`. `staff` added. |
-| `signals` / `roles` PK was TEXT (the key string) | PK is now INTEGER AUTOINCREMENT; `key` column stays TEXT UNIQUE | 018 | FK columns (`signal_id`, `role_id`) still store the TEXT key — no consumer rewrite required. |
-| All tables: TEXT primary keys (e.g. `brands.nickname` as PK) | PK is INTEGER AUTOINCREMENT; `nickname` (or equivalent) becomes UNIQUE | 020 | Cross-table rename; the live query path is unaffected (yaml is the source of truth, not PK ids). |
-| `brands.id` / `companies.id` (old INTEGER autoincrement) | `brands.nickname` / `companies.nickname` (TEXT, the natural key) | 023 | Brand-name resolution now goes by nickname; the live query path emits brand slugs (`mimo`, `nemo_megatron`, `sakana_ai`) that match `brands.nickname` directly. |
-| `posts_brands_signals.signal_id` (column) | **dropped** | 022 | The 6-bucket legacy `signals` taxonomy is gone; `expected_signal` was removed from `PlannedCall` / `CallCBrandSpec` in the same unit. The live query no longer encodes signal intent — post-fetch `attribution.classify_post` writes the new `post_type` × `sentiment` pair directly. |
-| `brands_accounts.author_id` (column) | `brands_accounts.accounts_id` (column, INTEGER FK → `accounts.id`) | 031 | Schema-level column rename. Live query path is unaffected. The `accounts.author_id` column (X/Twitter user id) is unchanged — `author_id` still appears on `accounts`, but the M:N join column on `brands_accounts` is now `accounts_id`. |
-| (n/a) | Migration 030 — brand rename in `brands` table | 030 | The 3 brand slugs `xiaomi_mimo` → `mimo`, `nvidia_nemo` → `nemo_megatron`, `sakana` → `sakana_ai` were first applied at the DB level (m30). The U5 commit `c7b877f` propagated the same rename to `config.yaml`, `call_b_groups`, `call_c_specs.brands`, and the yaml filenames. |
-| (n/a) | Migration 032 — frontier seed | 032 | Adds 4 companies (openai/anthropic/google/xai), 5 brands (gpt/claude/gemini/gemma/grok), 16 accounts, and the cross-product in `brands_accounts` (5 brands × 16 accounts = up to 80 rows). Live query path is unaffected. |
+| Concern | Detail |
+|---|---|
+| Brand attribution sources | `brand_keywords` (body text patterns), `brand_hashtags` (hashtag → brand mapping), `brand_search_terms` (query-string → brand mapping) |
+| Per-mention rows | `posts_brands_mentions` (one row per match source: `hashtag`, `body_keyword`, `search_term`) |
+| Per-brand rows | `posts_brands` (one row per unique brand, weight = 1/N if N brands matched) |
+| Classification | `posts_brands_signals` — columns `post_type` (FK → `post_type_keys`), `sentiment` (FK → `sentiment_keys`), `discourse_role` (FK → `discourse_keys` via `posts_brands_discourse`), `china_nationalism` / `us_nationalism` (FK → `nationalism_keys`) |
+| Translation | `posts.text_en`, `posts.text_zh_cn`, `posts.lang_detected` |
+| Cursor tracking | `call_state` table — keyed by `call_id` (A, B1, B2, B3, C1, C2) |
+| Account resolution | `brands_accounts` (M:N join with `role_id` FK → `roles`), `accounts` (handle, author_id, verified, bio) |
+| Frontier brands (migration 032) | OpenAI/Anthropic/Google/xAI (companies), gpt/claude/gemini/gemma/grok (brands) — DB-only seed for downstream attribution. Not in `enabled_models`, not in any TwitterAPI query. |
 
-**Why this section is here.** The live query string (Calls A/B/C) is unaffected by these schema changes — yaml is the source of truth for query construction. But the *pipeline outputs* that the live path writes into (`posts_brands_mentions`, `posts_brands_signals.signal_id` / `post_type` / `sentiment`, `brands_accounts.role_id` / `accounts_id`, etc.) are all renamed. If you are debugging "the live call returned a row but it isn't classified correctly," the DB-side name you read from is the new name, not the legacy name.
+---
 
-**Out of scope for this doc** (covered by other reference docs):
-- The `_pick_enum_label` and label-table read path (see migration 011 / 008 comments for the i18n detail).
-- The TEMP TABLE backup pattern used to preserve label rows across DROP TABLE CASCADE FK in migration 018.
-- The full classifier pipeline rewrite that consumes the new `post_type` / `sentiment` columns (U9 follow-up — see plan `docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md`).
-- Migration 032's frontier seed (DB-only; no TwitterAPI.io yaml side). See `docs/plans/2026-07-08-001-feat-frontier-brands-companies-seed-plan.md`.
+## Last reviewed: 2026-07-22 (HEAD `33a98d4`)
+
+### (a) Substantive corrections in this pass
+
+- **Retired the Q1–Q6 architecture throughout.** Removed all per-brand
+  Q1–Q6 query breakdowns, the "120 query entries (20 × 6)" stat, and
+  references to `data/queries/<brand>.yaml`, `data/accounts/<brand>.yaml`,
+  and `data/filters/<brand>.yaml`. None of these directories exist on disk;
+  tokens now come from `brand_keywords.is_primary=1` (DB), handles from
+  `brands_accounts` + `accounts` (DB).
+- **Fixed call count: 5 → 6.** The doc previously claimed 5 calls/cycle
+  in some sections and 6 in others. Live code emits 6: A + C1 + C2 + B1 +
+  B2 + B3.
+- **C1: removed upstage (5 → 4 brands, 505 → 461 chars).** Upstage was
+  moved to C2 on 2026-07-11 to fix a bare-`Solar` substring leak.
+- **Added C2 section.** ernie + upstage with 20 co-occurrence terms (295
+  chars). Previously undocumented.
+- **Updated all B1/B2/B3 brand lists.** B1: 8 → 6 brands (no llama, no
+  ernie). B2: 7 → 4 brands (no moonshot_kimi, mimo, yi). B3: 5 → 4
+  brands (no upstage). All per the 2026-07-13-002 U4 dedup.
+- **Documented `is_wide_net: true` and the co-occurrence AND-filter on
+  B-specs.** The v1.7 document described bare OR-chains with no
+  co-occurrence. B1/B2/B3 now render as
+  `<tokens> (<22-term co-occurrence>) min_faves:0` — same shape as C1.
+- **Updated all call-string lengths** from live `_build_query` output at
+  HEAD: A 38, C1 461, C2 295, B1 414, B2 377, B3 353.
+- **Updated all official handles** from live DB (`brands_accounts` JOIN
+  `accounts` JOIN `roles`). All `verified` flags are now `false` (were
+  mixed true/false).
+- **Updated primary token lists** from live `brand_keywords WHERE
+  is_primary=1` (55 tokens across 20 brands, 2–4 per brand).
+- **Removed the `call_b_groups`-as-canonical framing.** `call_b_groups` is
+  a validation-only field; `x_query_specs` entries with `is_wide_net: true`
+  are the canonical source for B1/B2/B3.
+- **Removed `data/queries/`, `data/accounts/`, `data/filters/` from the
+  source-of-truth list.** All three directories are deleted; per-brand
+  data lives in the DB.
+
+### (b) Claims not independently verified
+
+- **X-list membership.** The document states the operator must manually
+  add handles to the public X-list (`x_monitor_list_id =
+  2067062923525275922`). Whether the list actually contains all 20
+  official handles cannot be verified from the codebase — it requires
+  checking the live X list via the Twitter/X UI or API.
+- **LaunchAgent schedule.** The WatchPaths + ThrottleInterval=300 claim
+  is carried forward from the previous doc version; the plist at
+  `deploy/com.fuchitalee.x-monitor.plist` was not re-read in this pass.
+  The memory [[2026-07-16-launchagents-two-cadences]] notes two agents;
+  cross-check was not done.
+
+### (c) Drift noticed but not fixed
+
+- **`VALID_QUERY_IDS` still in `config.py:48`.** The tuple `("Q1", "Q2",
+  "Q3", "Q4", "Q5", "Q6")` is dead code — never read by the live cycle.
+  `queries.py:29,67` has a parallel `QUERY_IDS` tuple + `SynthQuery.id`
+  Literal type. Removing them would be a cleanup commit, not a doc change.
+- **`_planned_call_to_query()` returns `"Q5"` as hardcoded placeholder**
+  in `run.py:177`. The value is meaningless for new calls; kept for
+  backward compat with the `call_state` cursor schema. A cursor-schema
+  migration could retire it.
+- **Dashboard Q1→Q6 mapping** (`dashboard.py:485-498`) is still wired for
+  backward compat with old DB rows that have Q-IDs in `source_query_ids`.
+  New rows use call IDs (A, B1, B2, B3, C1, C2) but old rows persist.
+- **The other 6 reference docs were not reviewed in this pass.** The skill
+  prescribes a staged 7-file review; this was a single-file update on
+  operator request. `db-schema.md`, `lookup-tables.md`,
+  `classifier-prompts.md`, `twitterapi-io-calls.md`, `schema.dot`, and
+  `x-monitoring/README.md` may have similar drift.

@@ -1,6 +1,6 @@
 # Classifier Prompts — Literal Reference
 
-Last updated: 2026-07-16-14:21:40
+Last updated: 2026-07-22-13:37:00
 
 The `x_monitor.classify_pragmatics_full` (per-post) and
 `x_monitor.classify_batch_pragmatics_full` (batched, ~20 posts per call)
@@ -66,7 +66,7 @@ The prompts themselves enumerate the taxonomy; the parsers use the
 | `classify_pragmatics_full` (per-post) | `attribution.py:1647` | builds prompt via `build_pragmatics_full_prompt`, returns `{by_brand, unsanctioned_flags}` |
 | `classify_batch_pragmatics_full` (batched) | `attribution.py:1888` | builds prompt via `build_batch_pragmatics_full_prompt` (line 1419), 20 posts/batch, returns a list index-aligned with input tweets |
 
-**Model resolution** (`attribution.py:794-821`, `_resolve_signal_model`):
+**Model resolution** (`attribution.py:775-821`, `_resolve_signal_model`):
 
 | Source | Resolved model |
 |---|---|
@@ -686,7 +686,7 @@ checklist in its "How to add a new value" section.
 
 | What | Where |
 |---|---|---|
-| `_resolve_signal_model` (env-driven model routing) | `x-monitoring/x_monitor/attribution.py:794-821` |
+| `_resolve_signal_model` (env-driven model routing) | `x-monitoring/x_monitor/attribution.py:775-821` |
 | `_resolve_thinking_default` (DS V4 thinking=disabled) | `attribution.py:824-844` |
 | `build_signal_prompt` (legacy) | `attribution.py:852-901` |
 | `_parse_signal_response` (legacy parser) | `attribution.py:904-955` |
@@ -704,3 +704,33 @@ checklist in its "How to add a new value" section.
 | `_validate_deepseek_response_shape` (wire-format validator) | `attribution.py:1806-1885` |
 | `classify_batch_pragmatics_full` (batched caller) | `attribution.py:1888-2060` |
 | Companion doc (SQL taxonomy, operator-visible summary) | `docs/reference/lookup-tables.md` |
+
+---
+
+## Last reviewed: 2026-07-22 (HEAD 6589175)
+
+### (a) Substantive corrections in this pass
+
+- Fixed line number for `_resolve_signal_model`: was documented at
+  `attribution.py:794-821`; actual function definition starts at line 775
+  (19-line drift). Corrected in both Section 1 (model resolution table)
+  and Section 7 (file paths table).
+
+### (b) Claims not independently verified
+
+- The `lang_detected` cross-reference rule (rule 3 in the Cross-reference
+  block) is described as a translator artifact — the classifier does not
+  emit `lang_detected`/`text_en`/`text_zh_cn`; the translator does. This
+  claim is already caveated in the doc's "Caveat for operators" block.
+  The translator code was not reviewed in this pass.
+- The companion doc `docs/reference/lookup-tables.md` was reviewed in the
+  same pass but changes there were not cross-checked against this doc.
+
+### (c) Drift noticed but not fixed (and why)
+
+None. Aside from the line-number correction above, the documentation is
+in full alignment with the live code at HEAD 6589175. The prompt text is
+byte-identical to `_PRAGMATICS_FULL_SYSTEM_PROMPT`, all 5 prongs and their
+controlled vocabularies are current, the JSON output shape matches what
+`_validate_deepseek_response_shape` enforces, and the model routing logic
+is accurately described.

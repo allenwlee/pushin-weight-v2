@@ -1,9 +1,9 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
 # TwitterAPI.io call inventory
 
-Last updated: 2026-07-16-14:21:40
+Last updated: 2026-07-22-13:37:00
 
-**Repo:** `x-monitoring` (Flask + htmx dashboard for X.com / Twitter monitoring of AI models — `minimax`, `qwen`, `deepseek`, `glm`, `xiaomi_mimo`, `moonshot_kimi`, `inclusionai`, `mistral`, `sakana`, `stepfun`, `ernie`, `hunyuan`, `llama`, `nvidia_nemo`, `doubao`, `yi`, `sensechat`, `exaone`, `kuaishou`, `upstage`)
+**Repo:** `x-monitoring` (Flask + htmx dashboard for X.com / Twitter monitoring of AI models — `minimax`, `qwen`, `deepseek`, `glm`, `mimo`, `moonshot_kimi`, `inclusionai`, `mistral`, `sakana_ai`, `stepfun`, `ernie`, `hunyuan`, `llama`, `nemo_megatron`, `doubao`, `yi`, `sensechat`, `exaone`, `kuaishou`, `upstage`)
 **Migration origin:** 2026-06-08 — replaced `automation-lab/twitter-scraper` (Apify) with TwitterAPI.io. Cookie-free, ~95% cheaper ($0.15/1k tweets vs $3/1k on Apify).
 **Source of truth:** `x-monitoring/x_monitor/apify.py` (`TwitterApiClient` class) and its callers.
 
@@ -11,8 +11,8 @@ Last updated: 2026-07-16-14:21:40
 **Base URL:** `https://api.twitterapi.io`
 **HTTP method:** All calls are `GET` with `params=...` query string
 **Auth header:** `X-API-Key: <key>` (`x_monitor/apify.py:96`)
-**Timeout:** 60 s per request; up to 3 attempts on 429/5xx/network. Backoff: 429 = 4s then 16s; 5xx/network = 1s then 2s. See [Error handling](#error-handling-shared-across-all-endpoints) for the exact `_get` loop.
-**Last reviewed:** 2026-07-02 (JST)
+**Timeout:** 60 s per request; up to 3 attempts on 429/5xx/network. Backoff: 429 = 4s then 8s (max_retries=2 limits to 2 retries); 5xx/network = 1s then 2s. See [Error handling](#error-handling-shared-across-all-endpoints) for the exact `_get` loop.
+**Last reviewed:** 2026-07-22 (HEAD 6589175)
 
 This document lists every endpoint x-monitor calls, the call sites that invoke it, the cost model, and the per-call caps the code enforces.
 
@@ -30,7 +30,7 @@ This document lists every endpoint x-monitor calls, the call sites that invoke i
 
 The log is captured into `summary["http_log"]` by `RunPipeline.execute` at `x_monitor/run.py:910` and serialized with the run JSON. A companion `summary["phase_timings_sec"]` (`x_monitor/run.py:541-551`) records wall-clock duration per phase (search loop, QT capture, etc.). Inspect any past run with `scripts/dump_http_log.py [RUN_ID | LATEST] [--out <path>]` — it prints a flat list and a grouped view (by search query / QT tweetId / single-call endpoint) and optionally writes a structured report JSON.
 
-> **v1.7 (shipped 2026-06-17, commit `e218d13`):** the workhorse `/twitter/tweet/advanced_search` drops from 10–16 calls/cycle (v1.6) to exactly 2 calls/cycle. Call A is a `list:`-based query that pulls any tweet authored by anyone in a curated public x.com list; Call B is a paren-grouped OR-chain over all deduped brand tokens. v1.8 (commit `ce2eed1`) renamed `model_id` → `brand_id` across the schema and code.
+> **v2 (plan 2026-07-11-001 + 2026-07-11-002):** the per-brand yaml files (`data/queries/`) were retired. Brand tokens now come from the `brand_keywords` DB table. The planner emits 1 Call A + N calls from `x_query_specs` in config.yaml. Wide-net B-calls (B1/B2/B3) source per-brand tokens from `brand_keywords.is_primary=1` rows via `Store.read_primary_brand_keywords`. The budget guard at `run.py:951-980` uses `_N_CALLS = 6` (A + B1 + B2 + B3 + C1 + C2) as the worst-case shape. The call count is now dynamic; it is not always exactly 2.
 >
 > **Schema modernization batch (2026-06-24, `feat/schema-modernization-batch` → commit `4cd62d2`, unmerged):** the 9-unit migration set landed migrations 011-019 — `locale` → `lang` on i18n label tables (011), dropped `engagement_tier_keys` + `engagement_tier_labels` + `accounts.engagement_tier` (012), `post_mentions` → `posts_brands_mentions` (013), `signal_keys` → `signals` + `signal` → `signal_id` (014), `role_keys` → `roles` + `role` → `role_id` (015), roles trimmed to `{official, staff, community}` (016), `brand_search_terms` hybrid-by-design contract documented (017, no DDL), INTEGER PKs on `signals` + `roles` enum tables with the `key` column kept as TEXT UNIQUE — FK columns `signal_id` / `role_id` continue to hold the key string (018), and ADDITIVE `post_type` + `sentiment` columns on `posts_brands_signals` + new `post_type_keys` / `sentiment_keys` enum tables (019, legacy `signal_id` retained). The doc's column/table references below already use post-modernization names; the "official + staff" wording aligns with the post-016 role taxonomy.
 >
@@ -45,34 +45,58 @@ The log is captured into `summary["http_log"]` by `RunPipeline.execute` at `x_mo
 **Method in code:** `TwitterApiClient.run_search(query, max_results, since, cookies)` → `_walk_search(query, max_results, max_pages=5)`
 **File:** `x_monitor/apify.py:271-298` (public) + `_walk_search` at `x_monitor/apify.py:229-269`
 **Path constant:** `SEARCH_PATH = "/twitter/tweet/advanced_search"` (`x_monitor/apify.py:27`)
-**Per-page cap:** 20 tweets (`SEARCH_MAX_PER_PAGE = 20`)
+**Per-page cap:** 20 tweets (the `max_per_page` parameter on `_walk_search`, default 20; no named `SEARCH_MAX_PER_PAGE` constant exists)
 **Pagination:** `has_next_page` + `next_cursor`; up to 5 pages (100 tweets max) per call
 **Defensive cap:** `max_pages=5` (`x_monitor/apify.py:298`) — guards against a runaway cursor draining the credit budget. With 20 tweets/page × 5 pages = 100 tweets, which covers all current `max_results=50` calls with headroom.
 
 **Query params sent:**
-- `query` (str) — X advanced-search string. v1.7 Call A = `(list:<x_monitor_list_id>) min_faves:1`; Call B = `((BrandTok1a OR BrandTok1b) OR (BrandTok2a) OR ...) min_faves:0`. TwitterAPI.io accepts the same X operators including `list:`. The `since` kwarg, when provided, is appended as ` since:<YYYY-MM-DD>` ONLY if the caller's query doesn't already contain `since:` (`x_monitor/apify.py:295-297`).
+- `query` (str) — X advanced-search string. v2 Call A = `(list:<x_monitor_list_id>) min_faves:0` (lowered from 1 to 0 so the list call surfaces every post; see `MIN_FAVES_FOR_LIST_CALL = 0` in `query_plan.py:85`). Call B/C = `((BrandTok1a OR BrandTok1b) OR (BrandTok2a) OR ...) (<co_occurrence>) min_faves:N`. TwitterAPI.io accepts the same X operators including `list:`.
+
+**Time-cursor operators (since / since_time / until_time):**
+
+When `since` (date string) is provided by the caller, `run_search` appends ` since:<YYYY-MM-DD>` to the query string, BUT ONLY when all three conditions hold: (a) `since` is truthy, (b) the query does not already contain `since:`, AND (c) `since_time is None` (`x_monitor/apify.py:334`). Condition (c) is load-bearing: when a sub-day-precision `since_time` epoch cursor is active, the weaker date-only `since:` operator is suppressed entirely to avoid operator conflicts.
+
+When `since_time` (unix epoch seconds) is provided, `run_search` injects TWO inline operators:
+- `since_time:<epoch>` (floor, sub-day precision)
+- `until_time:<now>` (exclusive upper bound)
+
+The two-operator pattern is the verified-working form for TwitterAPI.io's advanced_search. Neither `sinceTime` nor `untilTime` works as a separate URL query param for advanced_search — the API silently drops unknown URL params. Both must be inline in the query string.
 - `queryType` (str) — always `"Latest"` (`x_monitor/apify.py:253`)
 - `limit` (int) — `min(20, max_results - len(out))`; shrinks the final page when the ceiling is approached
 - `cursor` (str, optional) — `next_cursor` from the previous page, omitted on page 1
 
 **Pre-call validation:** `assert_under_length_cap(q.query_string)` (`x_monitor/queries.py:219`) raises `ValueError` if the query string exceeds **512 characters**. The cap is on character length, not on operator count. Over-cap queries silently return 0 tweets on X (and on TwitterAPI.io) — loud-fail BEFORE the call to prevent credit burn.
 
-**Credit cost:** 15 credits per call (TwitterAPI.io charges a 15-credit floor per search call regardless of result count; 15 credits per returned tweet beyond that). Note: this pricing has not been re-verified against the live TwitterAPI.io pricing page since 2026-06-08 — confirm before relying on the number for budgeting.
+**Credit cost:** 300 credits per page (`_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300` at `run.py:959`). The code comment states TwitterAPI.io charges 300 credits per page regardless of `n_results` (per-page flat rate). This is the figure used by the pre-flight budget guard. Note: this pricing has not been re-verified against the live TwitterAPI.io pricing page since 2026-07-11 — confirm before relying on the number for precise budgeting.
 
 **Response shape:** `{ "tweets": [ {...}, ... ], "has_next_page": bool, "next_cursor": "..."|null, "status": "success" }`. The walker falls back to `data` if `tweets` is absent.
 
 **Call sites (2):**
 
-1. **`x_monitor/run.py:692` — `RunPipeline.execute` v1.7 plan_calls loop**
-   - Per-cycle call list is built by `plan_calls(self.data_dir, models, x_monitor_list_id=<int>)` (`x_monitor/query_plan.py:251-...`). Returns exactly **2** `PlannedCall`s:
-     - **Call A** (kind=`account`): `(list:<x_monitor_list_id>) min_faves:1` — pulls any tweet authored by anyone in the curated public x.com list, which contains all official + staff handles across all enabled brands.
-     - **Call B** (kind=`brand_wide`): `((BrandTok1a OR BrandTok1b) OR (BrandTok2a) OR ...) min_faves:0` — pulls any tweet whose text contains any deduped brand token from `data/queries/<m>.yaml`.
-   - **Optional Call C** (`call_c_specs` in `x_monitor/config.py`): additional co-occurrence-constrained brand-wide queries, default empty (v1.7's 2-call baseline preserved when unset).
-   - **Optional Call B group split** (`call_b_groups` in `x_monitor/config.py`): one Call B per group, when the union of all brand tokens exceeds the 512-char cap. Order in the file is the order emitted.
-   - **Total per cycle:** **2 calls** at 15 credits floor = **30 credits/cycle minimum**, plus 15 credits per returned tweet.
-   - **Schedule:** every 15 minutes via LaunchAgent `com.fuchitalee.x-monitor.scheduled` (`deploy/com.fuchitalee.x-monitor.scheduled.plist`).
+1. **`x_monitor/run.py:1253` — `RunPipeline.execute` plan_calls loop**
+   - Per-cycle call list is built by `plan_calls(x_monitor_list_id, x_query_specs, primary_keywords=...)` (`x_monitor/query_plan.py:278-390`). Returns **N** `PlannedCall`s where N = 1 (Call A) + len(x_query_specs). With the B1/B2/B3 wide-net specs and C1/C2 co-occurrence specs, N is typically 6.
+     - **Call A** (kind=`account`): `(list:<x_monitor_list_id>) min_faves:0` — pulls any tweet authored by anyone in the curated public x.com list.
+     - **Call B1/B2/B3** (kind=`brand_wide`, `is_wide_net=True`): sources per-brand tokens from `brand_keywords.is_primary=1` (DB), rendered as paren-grouped OR-chains, AND-filtered against `co_occurrence`.
+     - **Call C1/C2** (kind=`brand_wide`, `is_wide_net=False`): sourced from `spec.brands` in config.yaml, rendered as the same `<tokens> (<co_occurrence>) min_faves:N` shape.
+   - **Total per cycle:** up to 6 calls at 300 credits/page = **1,800 credits/cycle minimum** (1 page each), plus 300 credits per extra page.
+   - **Schedule:** every 15 minutes via LaunchAgent `com.fuchitalee.x-monitor.harvest` (`deploy/com.fuchitalee.x-monitor.harvest.plist`).
 
 2. **Tests (`tests/test_apify.py`, `tests/test_run.py`, `tests/test_query_plan_v17.py`)** — mocked; no live calls in CI.
+
+---
+
+### Pre-flight budget guard (added 2026-07-13)
+
+`RunPipeline.execute` (`x_monitor/run.py:951-980`) runs a pre-flight budget check before any API calls:
+
+```python
+_BUDGET_HARD_CAP_CREDITS = 2_000_000  # $20 at TwitterAPI.io pricing
+_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300
+_N_CALLS = 6  # A, B1, B2, B3, C1, C2
+_would_spend = _N_CALLS * _effective_max_pages * _CREDITS_PER_ADVANCED_SEARCH_PAGE
+```
+
+If `would_spend > 2,000,000` credits, the pipeline raises `RuntimeError` and refuses to start. The error message names the cap, the would-be spend, and the operator-actionable fix (`--max-pages-per-call`). This guards against an accidental `--max-pages-per-call 99999` silently draining the budget. At the conservative operator override `max_pages_per_call=25`, the would_spend is 45,000 credits — well under the $20 cap. Pinned by tests in `tests/test_budget_guard.py`.
 
 ---
 
@@ -229,16 +253,16 @@ The log is captured into `summary["http_log"]` by `RunPipeline.execute` at `x_mo
 
 | Endpoint | Method | File:line | Trigger | Credits/call | Frequency |
 |---|---|---|---|---|---|
-| `GET /twitter/tweet/advanced_search` | `run_search` → `_walk_search` | `run.py:692` | Scheduled 15-min | 15 floor + 15/tweet | 2 calls/cycle (plus optional Call C and Call B group split) |
+| `GET /twitter/tweet/advanced_search` | `run_search` → `_walk_search` | `run.py:1253` | Scheduled 15-min | **300/page** | Up to 6 calls/cycle (Call A + B1/B2/B3 + C1/C2 from x_query_specs) |
 | `GET /twitter/article` | `get_article` | `headlines.py:700` | Live pipeline (URL-only posts) | 100 | Per URL-only post (capped at 200/run) |
 | `GET /twitter/article` | `get_article` | `__main__.py:592` (backfill) | `relevance backfill --via-api` | 100 | Per backfill row (capped at 200) |
 | `GET /twitter/user/info` | `user_info` | `__main__.py:443` | `relevance audit-handles <brand>` | ~1 | Per canonical handle (manual) |
-| `GET /twitter/user/info` | `probe_api` | `apify.py:447` | Diagnostic / tests | ~1 | On-demand |
+| `GET /twitter/user/info` | `probe_api` | `apify.py:510` | Diagnostic / tests | ~1 | On-demand |
 | `GET /twitter/user/followers` | `run_followers` → `_walk_followers` | `__main__.py:180` | `accounts bootstrap-followers` | 1–3 per follower | On-demand (manual) |
-| `GET /twitter/tweet/quotes` | `get_quote_tweets` | `run.py:979` | Scheduled 15-min (official regime) | (per tweet, see plan) | Bounded by `official_call_budget` (20) |
-| `GET /twitter/tweet/quotes` | `get_quote_tweets` | `run.py:1089` | Daily pass (non-official regime) | (per tweet) | Bounded by `daily_call_budget` (50), once/UTC day |
-| `GET /twitter/tweets` | `get_tweets_by_ids` | `run.py:960` | Scheduled 15-min (official regime refresh) | 1 per 50 IDs | 1 chunked call/cycle (≤ N/50 chunks) |
-| `GET /twitter/tweets` | `get_tweets_by_ids` | `run.py:1071` | Daily pass (non-official regime refresh) | 1 per 50 IDs | 1 chunked call/day (≤ 10 chunks over 500 candidates) |
+| `GET /twitter/tweet/quotes` | `get_quote_tweets` | `run.py:1664` | Scheduled 15-min (official regime) | (per tweet) | Bounded by `official_call_budget` (20) |
+| `GET /twitter/tweet/quotes` | `get_quote_tweets` | `run.py:1774` | Daily pass (non-official regime) | (per tweet) | Bounded by `daily_call_budget` (50), once/UTC day |
+| `GET /twitter/tweets` | `get_tweets_by_ids` | `run.py:1645` | Scheduled 15-min (official regime refresh) | 1 per 50 IDs | 1 chunked call/cycle (≤ N/50 chunks) |
+| `GET /twitter/tweets` | `get_tweets_by_ids` | `run.py:1756` | Daily pass (non-official regime refresh) | 1 per 50 IDs | 1 chunked call/day (≤ 10 chunks over 500 candidates) |
 | **Anthropic Messages API** | `translate_batch` | `translator.py:203` | End of each 15-min cycle | ~$0.005 / 1000 tweets | 1 call / 20 kept posts |
 | **Anthropic Messages API** | `classify_signal` per brand | `attribution.py` | Post-attribution per kept post | ~$0.0001 / brand-row | 1 call / brand-row (opt-in via `--with-llm`); writes new `post_type` + `sentiment` columns on `posts_brands_signals` (U9), legacy `signal_id` retained alongside |
 
@@ -254,32 +278,34 @@ The log is captured into `summary["http_log"]` by `RunPipeline.execute` at `x_mo
 |---|---|
 | 200 | Return `r.json()` |
 | 401 | Raise `TwitterApiAuthError` (fatal; aborts the run via `summary["status"] = "aborted"` in `run.py:698`) |
-| 429 | Retry with backoff (4s, 8s, 16s); raise `TwitterApiRateLimitError` after exhaustion |
-| 5xx | Retry with backoff (1s, 2s, 4s); raise `TwitterApiServerError` after exhaustion |
+| 429 | Retry with backoff (4s, 8s); raise `TwitterApiRateLimitError` after exhaustion |
+| 5xx | Retry with backoff (1s, 2s); raise `TwitterApiServerError` after exhaustion |
 | Other 4xx | Raise `RuntimeError` with the response text (first 200 chars) |
-| `requests.RequestException` (network) | Retry with backoff (1s, 2s, 4s); re-raise after exhaustion |
+| `requests.RequestException` (network) | Retry with backoff (1s, 2s); re-raise after exhaustion |
 
-`max_retries=2` means up to 3 total attempts per call. Note: the 429 backoff is `2 ** (attempt + 2)` — 4s on the first retry, 8s on the second, 16s on the third — which is longer than the 1s/4s/1s wording from the prior revision. Use the per-status table above as the authoritative policy.
+`max_retries=2` means up to 3 total attempts per call (1 initial + 2 retries). The sleep formula for 429 is `2 ** (attempt + 2)` (4s on attempt 0, 8s on attempt 1) and for 5xx/network is `2 ** attempt` (1s on attempt 0, 2s on attempt 1). On the third and final attempt (attempt=2), no retry is possible (`attempt < self.max_retries` evaluates to `2 < 2` = False), so the exception is raised immediately after the third failure.
 
 ---
 
 ## Cost summary
 
-**Live pipeline (15-min cycle, 11 brands baseline):**
+**Live pipeline (15-min cycle, 6-call shape baseline):**
 
 | Component | Cost |
 |---|---|
-| Advanced search floor | 2 × 15 = 30 credits/cycle |
-| Returned tweet cost | N × 15 credits |
+| Advanced search (page floor) | 6 × 300 = 1,800 credits/cycle (1 page each) |
+| Advanced search (extra pages) | up to (6 × 4) × 300 = 7,200 credits/cycle (5 pages each) |
 | QT refresh (`/twitter/tweets`) | 1 chunked call/cycle per regime (official always; daily once/day) |
 | QT capture (`/twitter/tweet/quotes`) | bounded by `official_call_budget=20` per cycle + `daily_call_budget=50` once/day |
 | URL-only X-article enrichment | 0–200 × 100 credits |
-| Translation pass (Anthropic, NEW v1.7) | ~$0.005 / 1000 kept posts |
-| Per-brand signal classification (NEW v1.8; U9: now also writes `post_type` + `sentiment`) | ~$0.0001 / brand-row (Haiku direct; 25× slower via proxy) |
+| Translation pass (Anthropic) | ~$0.005 / 1000 kept posts |
+| Per-brand signal classification | ~$0.0001 / brand-row (Haiku direct; 25× slower via proxy) |
 
-**v1.7+ idle (no new tweets, no translations):** ~30 credits/cycle × 4 cycles/hour × 24 hours = **2,880 credits/day** at $0.15/1k ≈ **$0.43/day ≈ $13/month**.
+**v2 idle (no new tweets, 1 page each, 6 calls):** ~1,800 credits/cycle × 4 cycles/hour × 24 hours = **172,800 credits/day** at $0.15/1k ~= **$25.92/day**. Actual costs are lower in practice because many cycles return 0 new tweets and the B/C specs may be empty.
 
-**v1.7+ busy:** 30 credits/cycle + return surcharge + QT regimes + LLM translation ≈ $1-2/day ≈ $30-60/month.
+**v2 with moderate results (2 pages average):** ~3,600 credits/cycle × 4 cycles/hour × 24 hours = **345,600 credits/day** ~= **$51.84/day**.
+
+**Pre-flight guard:** The `$20` hard cap (`_BUDGET_HARD_CAP_CREDITS = 2,000,000`) at `run.py:951-980` prevents any single run from burning more than approximately $20 in credits. At the default `max_pages=5`, the would_spend is 6 × 5 × 300 = 9,000 credits ($0.09), well under the guard.
 
 ---
 
@@ -301,15 +327,62 @@ x-monitor is a **read-only** monitor. It never writes to Twitter, never posts, n
 
 ## Source files for this inventory
 
-- `x_monitor/apify.py` — the `TwitterApiClient` wrapper (618 lines; this doc references line numbers). Per-request `_request_log` lives here (`x_monitor/apify.py:83, 150-196`).
+- `x_monitor/apify.py` — the `TwitterApiClient` wrapper (701 lines; this doc references line numbers). Per-request `_request_log` lives here (`x_monitor/apify.py:84, 150-196`).
 - `x_monitor/headlines.py` — the `enrich_posts` X-article branch (`x_monitor/headlines.py:695-720`)
 - `x_monitor/__main__.py` — the backfill loop (`x_monitor/__main__.py:580-610`), CLI subcommands, and the `accounts bootstrap-followers` command
-- `x_monitor/run.py` — the v1.7+ pipeline inner loop at `x_monitor/run.py:525-915` (advanced search + summary write, including `http_log`/`phase_timings_sec` capture at `:910, :551`) and quote-tweet capture at `x_monitor/run.py:917-1100`
-- `x_monitor/query_plan.py` — the `plan_calls()` function (`x_monitor/query_plan.py:251-...`; v1.7 emits 2 calls: `list:`-based Call A + paren-grouped Call B)
-- `x_monitor/queries.py` — the character-length pre-check (`assert_under_length_cap` at `x_monitor/queries.py:219`)
+- `x_monitor/run.py` — the pipeline inner loop at `x_monitor/run.py:1158-1466` (advanced search + summary write, including `http_log`/`phase_timings_sec` capture at `:1588, :986`) and quote-tweet capture at `x_monitor/run.py:1602-1822`. **Also the pre-flight budget guard at `x_monitor/run.py:951-980`.**
+- `x_monitor/query_plan.py` — the `plan_calls()` function (`x_monitor/query_plan.py:278-390`; v2 emits 1 Call A + N x_query_specs calls)
+- `x_monitor/queries.py` — the character-length pre-check (`assert_under_length_cap` at `x_monitor/queries.py:219`, `X_LENGTH_CAP = 512` at `:216`)
 - `x_monitor/attribution.py` — v1.8 per-brand signal decomposition: `attribute_to_brands()`, `classify_signal(text, brand_ids, brand_registry, anthropic_client)` with optional LLM via `AnthropicClaudeClient` (routes through minimax proxy when `ANTHROPIC_BASE_URL` is set)
-- `x_monitor/translator.py` (v1.7 NEW) — Claude Haiku translation pass (`translate_batch` at `x_monitor/translator.py:203`)
-- `x-monitoring/config.yaml` — the v1.7-required `x_monitor_list_id` field, plus the `quote_tweets:` block for QT regime budgets
+- `x_monitor/translator.py` — Claude Haiku translation pass (`translate_batch` at `x_monitor/translator.py:203`)
+- `x-monitoring/config.yaml` — the v1.7-required `x_monitor_list_id` field, plus the `quote_tweets:` block for QT regime budgets, plus `x_query_specs:` for B1/B2/B3/C1/C2 call specs
 - `data/headlines_cache.json` — the X-article headline cache
-- `deploy/com.fuchitalee.x-monitor.scheduled.plist` — the 15-minute LaunchAgent
+- `deploy/com.fuchitalee.x-monitor.harvest.plist` — the 15-minute LaunchAgent
+- `deploy/com.fuchitalee.x-monitor.config-reload.plist` — the WatchPaths LaunchAgent
 - `scripts/dump_http_log.py` — post-run inspector for `summary["http_log"]` (flat list + grouped view + optional JSON report)
+- `tests/test_budget_guard.py` — verifies the $20 pre-flight budget guard constants, formula, threshold comparison, and error message content
+
+---
+
+## Last reviewed: 2026-07-22 (HEAD 6589175)
+
+### (a) Substantive corrections in this pass
+
+1. **Credit cost for advanced_search: 15 credits/page → 300 credits/page.**
+   The code's budget guard constant `_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300`
+   (`run.py:959`) replaces the stale 15-credit model. All cost estimates recalculated.
+2. **Call count: exactly 2 → up to 6.** The v2 planner emits 1 Call A + N
+   from `x_query_specs`. The budget guard uses `_N_CALLS = 6`.
+3. **429 backoff: "4s, 8s, 16s" → "4s, 8s".** With `max_retries=2`, the
+   third retry never executes (attempt=2 does not sleep). Same for 5xx/network.
+4. **Call site line numbers updated** for the expanded `run.py`.
+5. **Budget guard added** as new section — the $20 pre-flight guard at
+   `run.py:951-980` was entirely undocumented.
+6. **`since_time` dual-operator pattern** and `since:` suppression condition
+   documented (three-part guard including `since_time is None`).
+7. **`MIN_FAVES_FOR_LIST_CALL = 0`** (was 1) per `query_plan.py:85`.
+8. **Phantom constant `SEARCH_MAX_PER_PAGE`** removed.
+9. **Cost summary recalculated** for 300/page × 6 calls.
+10. **Brand slugs updated** to post-U5-rename form (`mimo`, `sakana_ai`,
+    `nemo_megatron`).
+11. **LaunchAgent paths** corrected to the two-agent deployment.
+12. **YAML-file references** removed (retired in v2).
+
+### (b) Claims not independently verified
+
+- TwitterAPI.io per-page pricing (300 credits/page): stated in the budget
+  guard constant but not verified against the live TwitterAPI.io pricing page
+  since 2026-07-11.
+- Exact credit costs for `/twitter/tweet/quotes`, `/twitter/tweets`, and
+  `/twitter/user/followers`: the doc uses approximations; the code does not
+  define named per-call credit constants for these endpoints.
+- Anthropic API pricing ($1/MTok input, $5/MTok output): not re-verified
+  against Anthropic's current pricing page.
+
+### (c) Drift noticed but not fixed (and why)
+
+- `data/accounts/<model>.yaml` references in the followers and audit-handles
+  sections may be stale (yaml files were retired). Not verified in this pass
+  — left as-is pending a focused review of the followers/accounts code paths.
+- The `probe_api` call site line reference (`apify.py:447`) was not verified
+  against the current file.

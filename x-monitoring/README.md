@@ -1,5 +1,7 @@
 # x-monitor
 
+Last updated: 2026-07-22-13:37:00
+
 > A Flask dashboard + macOS background pipeline that watches X for posts
 > about 20 AI model brands, classifies each post by discourse / sentiment /
 > nationalism / role, and surfaces the conversation in two home pages.
@@ -69,15 +71,15 @@ Lifecycle of a cycle:
    hashtag, body_keyword, search_term). One tweet naming two brands
    produces one row per detected brand in `posts_brands*`. Replaces
    v1.7's first-match-wins single-brand classifier.
-6. **Classify** — `x_monitor/translator.py:classify_pragmatics_full` calls
+6. **Classify** — `x_monitor/attribution.py:classify_pragmatics_full` calls
    the configured LLM (DeepSeek V4 Pro via the direct Anthropic-compat
-   endpoint by default) per post with the few-shot prompt loaded from
-   `x_monitor/data/few_shot_pragmatics.jsonl`. Emits per-brand discourse
-   (10 keys), sentiment (4), nationalism (6), post_type (8), and an
+   endpoint by default) per post with the inline system prompt
+   `_PRAGMATICS_FULL_SYSTEM_PROMPT`. Emits per-brand discourse
+   (10 keys), sentiment (4), nationalism (6), post_type (6), and an
    `unsanctioned` flag.
 7. **Persist** — `x_monitor/store.py` writes everything in one transaction
    per post. Schema is migrated forward-only by `x_monitor/migrations/*.sql`
-   (currently 001–038).
+   (currently 001–039).
 8. **Emit run JSON** — `data/runs/<run_id>.json` plus the rolling
    `data/runs/LATEST.json` symlink. The dashboard reads `LATEST.json`
    for staleness indicator + http_log spend summary.
@@ -316,8 +318,8 @@ x-monitoring/
 │   ├── run.py                 (RunPipeline — daily harvest orchestrator)
 │   ├── dashboard.py           (DashboardApp + Flask routes — 2,700 LOC)
 │   ├── _home_routes.py        (Pushin' Weight route handlers — 670 LOC)
-│   ├── store.py               (SQLite Store — 3,143 LOC, every schema query)
-│   ├── attribution.py          (v1.8 multi-brand per-post extraction — 2,144 LOC)
+│   ├── store.py               (SQLite Store — 3,220 LOC, every schema query)
+│   ├── attribution.py          (v1.8 multi-brand per-post extraction — 2,215 LOC)
 │   ├── apify.py               (TwitterAPI.io HTTP client — cookie-free)
 │   ├── translator.py          (LLM translation + pragmatics classification)
 │   ├── queries.py             (Query spec model + cost estimation)
@@ -384,7 +386,7 @@ once `launchctl` re-spawns the wrapper).
 That call has returned zero results for `query_rot_streak_threshold`
 consecutive days (default 3). Edit `config.yaml::enabled_models` (or
 `x_query_specs::` for C-specs) to either drop the brand / spec or update
-the YAML token list at `data/filters/<brand>.yaml`.
+the primary tokens in the `brand_keywords` DB table (`is_primary=1` rows).
 
 **LLM classification failing / 401 from the LLM.**
 Check `~/.env.secrets` — `ANTHROPIC_API_KEY` must be valid. Note: the
@@ -409,6 +411,8 @@ Otherwise check the harvest agent is loaded: `launchctl list | grep harvest`.
 - **UI deep-dive**: `../docs/reference/home-pages-ui-guide.md`
 - **DB schema**: `../docs/reference/db-schema.md`
 - **LLM prompts**: `../docs/reference/classifier-prompts.md`
+- **Taxonomy tables + brand registry**: `../docs/reference/lookup-tables.md`
+- **TwitterAPI.io endpoint inventory**: `../docs/reference/twitterapi-io-calls.md`
 - **Polarity math**: `../docs/reference/polarity-calculation-explained.md`
 - **TwitterAPI.io query surface**: `../docs/reference/twitterapi-live-queries-by-model.md`
 - **Active plans**: `../docs/plans/`
@@ -421,14 +425,20 @@ Otherwise check the harvest agent is loaded: `launchctl list | grep harvest`.
 These paths existed in earlier versions. Don't add new content here —
 they're noted so newcomers don't waste time:
 
-- **`data/queries/<brand>.yaml`** (retired 2026-07-11) — brand search
-  terms now live in the `brand_keywords` DB table (migration 034 +
-  `is_primary` column via migration 036). Edit via SQL migration.
+- **Q1–Q6 query taxonomy + `data/queries/<brand>.yaml`** (retired
+  2026-07-11) — the per-brand YAML files encoded six query intents
+  (release, community_question, criticism, commenter_capture, other,
+  praise). The v2 architecture uses a single uniform `(<tokens>)
+  (<co_occurrence>) min_faves:N` shape. Brand tokens now live in the
+  `brand_keywords` DB table (`is_primary=1` rows). `VALID_QUERY_IDS`
+  still exists as a constant in `config.py` but the live cycle never
+  reads it.
 - **`data/accounts/<brand>.yaml`** (retired 2026-07-11) — official / staff
   handles now live in the `brands_accounts` DB table. Edit via SQL
   migration.
-- **`data/filters/<brand>.yaml`** — kept. `RelevanceConfig` is still
-  YAML-driven.
+- **`data/filters/<brand>.yaml`** (retired 2026-07-11) — relevance
+  filtering now lives in the `brand_keywords` DB table and
+  `RelevanceConfig` (code-side). Edit via SQL migration.
 - **Apify cookies (`~/.config/x-monitor/cookies.json`)** (retired
   2026-06-08) — pipeline moved to TwitterAPI.io, which is cookie-free.
 - **`data/staging.db`** (retired 2026-07-07) — archived to
@@ -438,3 +448,43 @@ they're noted so newcomers don't waste time:
   not import; will be deleted in a future cleanup.
 - **`x_monitor/apify.py` filename** — kept for git-blame continuity;
   the class inside is `TwitterApiClient` (TwitterAPI.io), not Apify.
+
+---
+
+## Last reviewed: 2026-07-22 (HEAD 6589175)
+
+### (a) Substantive corrections in this pass
+
+1. **Step 6 (Classify) module path**: `translator.py` → `attribution.py`.
+   `classify_pragmatics_full` lives in `attribution.py:1670`, not translator.py.
+2. **Step 6 prompt source**: `few_shot_pragmatics.jsonl` → inline constant
+   `_PRAGMATICS_FULL_SYSTEM_PROMPT`. The JSONL file is used by the translator
+   pass only.
+3. **post_type count**: 8 → 6 (matches `_VALID_POST_TYPES` in attribution.py).
+4. **Migration range**: 001-038 → 001-039.
+5. **`data/filters/<brand>.yaml`**: moved from "kept" to retired. The directory
+   no longer exists on disk. Tokens and filters live in the DB.
+6. **Q1-Q6 taxonomy retirement**: added to "Retired / removed" section.
+7. **Troubleshooting**: `data/filters/<brand>.yaml` token update path replaced
+   with `brand_keywords.is_primary=1` DB update path.
+8. **"Where to look next"**: added `lookup-tables.md` and
+   `twitterapi-io-calls.md`.
+9. **LOC counts**: `store.py` 3,143→3,220, `attribution.py` 2,144→2,215.
+
+### (b) Claims not independently verified
+
+- X-list membership (whether all 20 official handles are on the public list)
+- Wrapper scripts sourcing `~/.env.secrets`
+- macOS notification behavior on non-zero exit
+- `x-monitor migrate` CLI subcommand existence
+- Anthropic API pricing ($0.005/1000 tweets)
+
+### (c) Drift noticed but not fixed (and why)
+
+- `GET /api/v1/home.feed.json?brand=<nick>`: the server-side handler does not
+  read a `brand` query param — brand scoping happens client-side. Not fixed
+  because the README describes the URL pattern surface, and a proper fix
+  requires understanding how the client uses this parameter.
+- Code docstrings in `relevance.py`, `apify.py`, `__main__.py`, `run.py` still
+  reference `data/filters/<brand>.yaml` as if current. Code comments are out
+  of scope for a README-only edit.

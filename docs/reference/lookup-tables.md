@@ -1,6 +1,6 @@
 # Lookup Tables
 
-Last updated: 2026-07-16-14:21:40
+Last updated: 2026-07-22-13:37:00
 
 Small, finite, name-only tables that constrain what the classifier (LLM-side)
 and the parser (post-process) are allowed to emit. Their rows are referenced
@@ -137,7 +137,7 @@ post-`attribute_to_brands` regex routes.
 
 | # | brand_id (`nickname`) | display name (EN / ZH) | parent company | hq | accent color | brand_keywords | spec coverage |
 |---:|---|---|---|---|---|---:|---|
-| 1  | `minimax`        | MiniMax AI / 海螺 AI          | MiniMax              | CN  | `#3b82f6` | 4  | C1 |
+| 1  | `minimax`        | MiniMax AI / 海螺 AI          | MiniMax              | CN  | `#3b82f6` | 4  | — |
 | 2  | `qwen`           | Qwen / 通义千问                | Alibaba              | CN  | `#f97316` | 4  | — |
 | 3  | `deepseek`       | DeepSeek / 深度求索             | DeepSeek             | CN  | `#10b981` | 4  | — |
 | 4  | `glm`            | Zhipu GLM / 智谱 GLM          | Zhipu AI             | CN  | `#a855f7` | 5  | — |
@@ -156,9 +156,9 @@ post-`attribute_to_brands` regex routes.
 | 17 | `exaone`         | LG EXAONE / LG AI Research     | **LG AI (unlinked)** | KR  | `#a50034` | 4  | — |
 | 18 | `kuaishou`       | Kuaishou KwaiYii / 快意         | Kuaishou Technology  | CN  | `#ff4906` | 5  | — |
 | 19 | `sakana_ai`      | Sakana AI / サカナAI           | Sakana AI            | JP  | `#1e40af` | 7  | — |
-| 20 | `upstage`        | Upstage Solar / 업스테이지      | Upstage              | KR  | `#22c55e` | 12 | C1 |
+| 20 | `upstage`        | Upstage Solar / 업스테이지      | Upstage              | KR  | `#22c55e` | 12 | C2 |
 
-**Country breakdown** (from `companies.hq_country`): **15 CN · 2 US · 2 KR · 1 FR · 1 JP.**
+**Country breakdown** (from `companies.hq_country`): **14 CN · 2 US · 2 KR · 1 FR · 1 JP.**
 
 **Per-cycle calls** (plan 2026-07-11-002, post-B-revival):
 - **Call A — list-based wide net** (`(list:<x_monitor_list_id>) min_faves:1`).
@@ -166,25 +166,27 @@ post-`attribute_to_brands` regex routes.
   Fans in everything from list members regardless of brand.
 - **Call C1 / C2 (co-occurrence-constrained brand-wide, from
   `config.yaml.x_query_specs`):** C1 covers `mimo, moonshot_kimi,
-  yi, upstage, llama` (5 brands; co-occurrence list stands at
-  23 OR-terms; emits one extra API call per cycle). C2 covers `ernie`
-  (single brand, disambiguated from Sesame Street via the
-  co-occurrence AND-filter). C-specs read tokens from `spec.brands`
+  yi, llama` (4 brands; co-occurrence list stands at
+  22 OR-terms; emits one extra API call per cycle). C2 covers `ernie,
+  upstage` (2 brands; upstage was moved from C1 on 2026-07-11 to close
+  a bare-`Solar` substring leak). C-specs read tokens from `spec.brands`
   (operator-curated, config-side).
 - **Call B1 / B2 / B3 (wide-net brand-fan-in, plan 2026-07-11-002
-  U3):** B1 covers 8 top-presence brands (`llama, minimax, qwen,
-  deepseek, mistral, stepfun, ernie, hunyuan`); B2 covers 7
-  Chinese-language brands (`doubao, glm, moonshot_kimi, mimo,
-  sensechat, yi, inclusionai`); B3 covers 5 specialized brands
-  (`nemo_megatron, exaone, sakana_ai, kuaishou, upstage`). Each
+  U3, post-U4-dedup):** B1 covers 6 top-presence brands (`minimax, qwen,
+  deepseek, mistral, stepfun, hunyuan`); B2 covers 4
+  Chinese-language brands (`doubao, glm, sensechat, inclusionai`);
+  B3 covers 4 specialized brands
+  (`nemo_megatron, exaone, sakana_ai, kuaishou`). Each
   B-spec is `is_wide_net: true` with an empty `brands:` map; the
   renderer reads per-brand tokens from `brand_keywords.is_primary=1`
   rows via the `primary_keywords` kwarg. Co-occurrence lists are
-  shared with C1's 22-term set as a first cut. B1=473 chars,
-  B2=470, B3=375 — all under the 512-char cap. Note: `mimo`,
-  `moonshot_kimi`, `upstage`, `ernie`, and `llama` are in both
-  B-groups AND C1/C2 — they get TWO calls per cycle; the operator
-  can prune the duplicates if signal density drops.
+  shared with C1's 22-term set as a first cut. B1=414 chars,
+  B2=377, B3=353 — all under the 512-char cap.
+  **U4 dedup (plan 2026-07-13-002):** 6 polysemous brands (`llama`,
+  `ernie`, `moonshot_kimi`, `mimo`, `yi`, `upstage`) were removed from
+  B groups because C1/C2 already cover them via the co-occurrence
+  AND-filter. This halves duplicate TwitterAPI credit spend on the
+  wide-net path with no recall loss.
 
 The legacy `call_c_specs:` config key remains an alias for
 `x_query_specs:` (auto-normalized at load) for v1.7.x compat.
@@ -337,3 +339,42 @@ went wrong upstream.
    `~/.claude/skills/custom-claude-skills/pushin_weight_smoketest/SKILL.md`.
 
 Steps 1, 2, 3, 5 should land in a single commit so they don't drift.
+
+---
+
+## Last reviewed: 2026-07-22 (HEAD 6589175)
+
+### (a) Substantive corrections in this pass
+
+1. **upstage spec coverage**: C1 → C2 (moved on 2026-07-11 to close
+   bare-`Solar` substring leak).
+2. **minimax spec coverage**: removed C1 (minimax is not in any C-spec).
+3. **C1 brand list**: 5→4 brands (removed upstage), 23→22 OR-terms.
+4. **C2 brand list**: ernie only → ernie + upstage (2 brands).
+5. **B1 composition**: 8→6 brands (removed llama, ernie per U4 dedup).
+6. **B2 composition**: 7→4 brands (removed moonshot_kimi, mimo, yi per U4 dedup).
+7. **B3 composition**: 5→4 brands (removed upstage per U4 dedup).
+8. **Removed "brands in both B and C" claim**: post-dedup, the 6 polysemous
+   brands are exclusively in C-specs, not duplicated across B and C paths.
+9. **Country breakdown**: 15 CN → 14 CN.
+10. **B-spec lengths**: updated to live values (B1=414, B2=377, B3=353 chars).
+
+### (b) Claims not independently verified
+
+- Brand keyword counts in the registry table (column "brand_keywords"):
+  source is `brand_keywords` SQL table. Counts were carried forward from
+  prior version; not re-verified against live DB.
+- Parent company assignments (hq column): source is `companies.hq_country`.
+  Not re-verified against live DB.
+- "Other rows in brands" IDs (22-33): not re-verified against live DB.
+- Frontier seed company IDs (openai=21, anthropic=22, google=23, xai=24):
+  not re-verified against live DB.
+
+### (c) Drift noticed but not fixed (and why)
+
+- `_VALID_POST_TYPES` and `_VALID_SENTIMENTS` are plain `set`, not
+  `frozenset` as the doc's "frozensets" language implies. Cosmetic — the
+  semantic contract (immutable collection of allowed values) is the same.
+- Line reference `attribution.py:1018` for `_VALID_UNSANCTIONED_FLAGS` has
+  drifted to line 1112. Line references in docs naturally rot; this is
+  low-impact and not worth a dedicated edit.
