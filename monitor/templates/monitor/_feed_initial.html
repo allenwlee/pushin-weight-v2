@@ -1,0 +1,89 @@
+{% load monitor_filters %}
+{# First-batch Django template render of Pushin' Weight feed rows.
+   Adapted from x_monitor/templates/_feed_initial.html.j2.
+   The `rows` are populated by the parent view; subsequent batches
+   are appended by pw-feed.js via IntersectionObserver + fetch. #}
+{% for row in feed.rows %}
+  <tr data-pw-feed-row data-tweet-id="{{ row.tweet_id }}" data-created-at-iso="{{ row.created_at_iso|default:'' }}">
+    <td class="muted-cell">
+      <a class="feed-date-link"
+         href="https://x.com/i/status/{{ row.tweet_id }}"
+         target="_blank" rel="noopener noreferrer"
+         title="{{ row.created_at }}">
+        {{ row.created_at }}
+      </a>
+    </td>
+    <td>
+      {% for b in row.brands %}
+        <span class="pill">
+          {% if active_locale == 'zh_cn' %}
+            {{ b.display_name_zh_cn|default:b.nickname }}
+          {% else %}
+            {{ b.display_name_en|default:b.nickname }}
+          {% endif %}
+        </span>
+      {% empty %}
+        <span class="pill muted">—</span>
+      {% endfor %}
+    </td>
+    <td>
+      {% if row.lang_detected %}
+        <div class="lang-sub">translated from: [{{ row.lang_detected }}]</div>
+      {% endif %}
+      <div class="cell-truncated" data-pw-cell-truncated>{{ row.text_translated|default:'' }}</div>
+      <div class="muted-cell">&#9733; {{ row.like_count }}</div>
+    </td>
+    <td>
+      <div class="cell-truncated" data-pw-cell-truncated>{{ row.text|default:'' }}</div>
+    </td>
+    <td>
+      {% for nick in row.brand_nicknames %}
+        <div class="cls-block">
+          <span class="cls-brand">
+            {% for b in row.brands %}
+              {% if b.nickname == nick %}
+                {% if active_locale == 'zh_cn' %}
+                  {{ b.display_name_zh_cn|default:nick }}
+                {% else %}
+                  {{ b.display_name_en|default:nick }}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </span>
+          {% with cls=row.classifications|get_item:nick %}
+            {% if cls.post_types %}
+              <span class="cls-row"><span class="cls-label">types:</span>
+              {% for v in cls.post_types %}<span class="pill">{{ v }}</span>{% endfor %}</span>
+            {% endif %}
+            {% if cls.discourse %}
+              <span class="cls-row"><span class="cls-label">discourses:</span>
+              {% for v in cls.discourse %}<span class="pill">{{ v }}</span>{% endfor %}</span>
+            {% endif %}
+            {% if cls.sentiments %}
+              <span class="cls-row"><span class="cls-label">sentiments:</span>
+              {% for v in cls.sentiments %}<span class="pill">{{ v }}</span>{% endfor %}</span>
+            {% endif %}
+          {% endwith %}
+        </div>
+      {% endfor %}
+      {% if row.unsanctioned %}<span class="pill flagged">unsanctioned</span>{% endif %}
+    </td>
+    <td>
+      {% with handle=row.account.handle|default:'' %}
+        {% if handle %}
+          <a class="feed-handle-link"
+             href="https://x.com/{{ handle|cut:'@' }}"
+             target="_blank" rel="noopener noreferrer">
+            {{ handle }}
+          </a>
+        {% else %}
+          @unknown
+        {% endif %}
+      {% endwith %}
+      {% if row.account.followers_count %} · {{ row.account.followers_count }}{% endif %}
+      · <span class="pill role-{{ row.account.role|default:'' }}">{{ row.account.role|default:'' }}</span>
+    </td>
+  </tr>
+{% empty %}
+  <tr><td colspan="6" class="muted-cell">no posts in window</td></tr>
+{% endfor %}

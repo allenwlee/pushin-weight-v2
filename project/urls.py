@@ -9,5 +9,6 @@ from django.urls import include, path
 urlpatterns = [
     # django-allauth (Google OAuth login/logout)
     path("accounts/", include("allauth.urls")),
-    # U7 will add:  path("", include("monitor.urls")),
+    # Pushin' Weight dashboard (U7)
+    path("", include("monitor.urls")),
 ]
