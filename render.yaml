@@ -18,8 +18,6 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
-      - key: DJANGO_SECRET_KEY
-        generateValue: true
       - key: ALLOWED_HOSTS
         value: .onrender.com
       - key: DATABASE_URL
@@ -50,11 +48,7 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
-      - key: DJANGO_SECRET_KEY
-        fromService:
-          name: xmonitor-web
-          type: web
-          property: env.DJANGO_SECRET_KEY
+      - fromGroup: xmonitor-secrets
       - key: DATABASE_URL
         fromDatabase:
           name: xmonitor-db
@@ -67,7 +61,6 @@ services:
         fromDatabase:
           name: xmonitor-redis
           property: connectionString
-      - fromGroup: xmonitor-secrets
 
   # --------------------------------------------------------------------------
   # Celery Beat scheduler
@@ -83,11 +76,7 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
-      - key: DJANGO_SECRET_KEY
-        fromService:
-          name: xmonitor-web
-          type: web
-          property: env.DJANGO_SECRET_KEY
+      - fromGroup: xmonitor-secrets
       - key: DATABASE_URL
         fromDatabase:
           name: xmonitor-db
@@ -100,7 +89,6 @@ services:
         fromDatabase:
           name: xmonitor-redis
           property: connectionString
-      - fromGroup: xmonitor-secrets
 
 databases:
   # --------------------------------------------------------------------------
@@ -122,6 +110,7 @@ databases:
 # Environment variable group (secrets — set once in Render Dashboard)
 # --------------------------------------------------------------------------
 # Create this group manually in Render Dashboard before first deploy:
+#   DJANGO_SECRET_KEY      (generate: python -c "import secrets; print(secrets.token_urlsafe(50))")
 #   GOOGLE_CLIENT_ID
 #   GOOGLE_CLIENT_SECRET
 #   TWITTERAPI_IO_API_KEY
