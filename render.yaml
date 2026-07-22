@@ -1,15 +1,6 @@
 # Render Blueprint — x-monitor v2
 # https://render.com/docs/blueprint-spec
 
-# Environment group shared by all services.
-# DJANGO_SECRET_KEY is auto-generated; other secrets prompt in the Render
-# Dashboard on first deploy (sync: false at the service level).
-envVarGroups:
-  - name: xmonitor-secrets
-    envVars:
-      - key: DJANGO_SECRET_KEY
-        generateValue: true
-
 services:
   # --------------------------------------------------------------------------
   # Django web service
@@ -30,16 +21,6 @@ services:
         value: localhost,127.0.0.1,.onrender.com,pushinweight.ai,www.pushinweight.ai
       - key: CSRF_TRUSTED_ORIGINS
         value: https://pushinweight.ai,https://www.pushinweight.ai
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: TWITTERAPI_IO_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_BASE_URL
-        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: xmonitor-db
@@ -52,7 +33,7 @@ services:
         fromDatabase:
           name: xmonitor-redis
           property: connectionString
-      - fromGroup: xmonitor-secrets
+      - fromGroup: pushinweight-secrets
 
   # --------------------------------------------------------------------------
   # Celery worker (harvest cycles)
@@ -68,16 +49,6 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: TWITTERAPI_IO_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_BASE_URL
-        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: xmonitor-db
@@ -90,7 +61,7 @@ services:
         fromDatabase:
           name: xmonitor-redis
           property: connectionString
-      - fromGroup: xmonitor-secrets
+      - fromGroup: pushinweight-secrets
 
   # --------------------------------------------------------------------------
   # Celery Beat scheduler
@@ -118,7 +89,7 @@ services:
         fromDatabase:
           name: xmonitor-redis
           property: connectionString
-      - fromGroup: xmonitor-secrets
+      - fromGroup: pushinweight-secrets
 
 databases:
   # --------------------------------------------------------------------------
