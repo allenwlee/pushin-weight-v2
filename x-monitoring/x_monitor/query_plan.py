@@ -262,8 +262,10 @@ def _build_query(
         primary = "(empty)"
     else:
         primary = f"({' OR '.join(parts)})"
-    secondary = f"({' OR '.join(spec.co_occurrence)})"
-    return f"{primary} {secondary} min_faves:{spec.min_faves}"
+    if spec.co_occurrence:
+        secondary = f"({' OR '.join(spec.co_occurrence)})"
+        return f"{primary} {secondary} min_faves:{spec.min_faves}"
+    return f"{primary} min_faves:{spec.min_faves}"
 
 
 # Retired v1.7-era helpers — removed in plan 2026-07-11-001 (U2).
