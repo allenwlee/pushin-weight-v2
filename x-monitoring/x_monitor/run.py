@@ -58,12 +58,13 @@ def _now_iso() -> str:
 
 
 # U2: hours subtracted from `last_completed_at` before emitting
-# TwitterAPI.io's `since:` operator. The 1-hour overlap absorbs near-
+# TwitterAPI.io's `since_time:` operator. The overlap absorbs near-
 # boundary posts (a post whose created_at is a few seconds AFTER the
 # previous cursor but appears in the API's index a few seconds before
-# the new cursor would naturally include it). 1 hour is enough for
-# typical ingestion latency without re-fetching a full prior day.
-CURSOR_OVERLAP_HOURS: int = 1
+# the new cursor would naturally include it). 1 minute covers clock
+# skew between Twitter's servers and ours without refetching the
+# prior cycle's posts.
+CURSOR_OVERLAP_HOURS: float = 1.0 / 60.0  # 1 minute
 
 
 def _iso_to_epoch(value: str | None) -> int | None:
@@ -194,14 +195,17 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
     `expected_signal` (the 6-signal taxonomy was killed). The filter
     only reads .id, .min_faves, .query_string. Account calls use
     MIN_FAVES_FOR_LIST_CALL (currently 0); brand_wide calls use 0.
+
+    Plan 2026-07-15-003 U1 (2026-07-22): qid now emits the planner's
+    A/B/C call_id instead of the legacy Q1/Q5 strings. call_state
+    cursor rows with query_id="Q5" become orphans; the next cycle
+    creates fresh rows keyed by call_id with a null cursor (wider
+    initial fetch, dedup handles duplicates).
     """
     from .query_plan import PlannedCall  # local to avoid circular at import
-    if call.call_kind == "account":
-        qid, min_faves = "Q1", MIN_FAVES_FOR_LIST_CALL
-    else:
-        qid, min_faves = "Q5", 0
+    min_faves = MIN_FAVES_FOR_LIST_CALL if call.call_kind == "account" else 0
     return Query(
-        id=qid,  # type: ignore[arg-type]
+        id=call.call_id,  # type: ignore[arg-type]
         query_string=call.query_string,
         max_results=50,
         enabled=True,
@@ -500,6 +504,7 @@ def _run_post_fetch(
     anthropic_client: Any,
     brand_registry_rows: list[Any],
     brand_tokens: dict[str, list[str]] | None = None,
+    translator_client: Any = None,
 ) -> dict[str, int]:
     """U5: stream-aligned post-fetch transformer runner.
 
@@ -550,7 +555,13 @@ def _run_post_fetch(
         "n_nationalism": 0,
         "n_failed_translate": 0,
     }
-    if not kept_posts or anthropic_client is None:
+    if not kept_posts:
+        return counters
+    # Use the translator-specific client when provided; fall back to the
+    # shared anthropic_client for backward compatibility (single-client
+    # mode when X_MONITOR_CLASSIFIER_BASE_URL is not set).
+    _translator = translator_client or anthropic_client
+    if _translator is None:
         return counters
 
     # Lazy imports to avoid pulling translator / classification
@@ -579,7 +590,7 @@ def _run_post_fetch(
         translation_rows = translate_batch_pragmatics(
             kept_posts,
             ["en", "zh_cn"],
-            anthropic_client,
+            _translator,
             brand_names=brand_names or None,
         )
     except Exception as e:
@@ -823,7 +834,7 @@ def load_brand_queries_or_stub(
     queries_per_model: dict[str, list[Query]] = {
         m: [
             Query(
-                id="Q5",  # legacy Q-id; never reaches the DB
+                id="B3",  # first in degraded_skip_order; most expendable
                 query_string="(placeholder)",
                 enabled=True,
             )
@@ -840,7 +851,7 @@ def load_brand_queries_or_stub(
     queries_per_model: dict[str, list[Query]] = {
         m: [
             Query(
-                id="Q5",  # legacy Q-id; never reaches the DB
+                id="B3",  # first in degraded_skip_order; most expendable
                 query_string="(placeholder)",
                 enabled=True,
             )
@@ -1028,7 +1039,7 @@ class RunPipeline:
             queries_per_model: dict[str, list[Query]] = {
                 m: [
                     Query(
-                        id="Q5",  # legacy Q-id; never reaches the DB
+                        id="B3",  # first in degraded_skip_order; most expendable
                         query_string="(placeholder)",
                         enabled=True,
                     )
@@ -1478,14 +1489,17 @@ class RunPipeline:
                         # the operator's proxy / DeepSeek override.
                         from x_monitor.reattribute import (
                             build_anthropic_client_from_env,
+                            build_translator_client_from_env,
                         )
                         anthropic_client = build_anthropic_client_from_env()
+                        translator_client = build_translator_client_from_env()
                         # brand_registry_rows from the open Store;
                         # brand_tokens from the cycle's per-model map.
                         pf_counters = _run_post_fetch(
                             cycle_kept,
                             store=store,
                             anthropic_client=anthropic_client,
+                            translator_client=translator_client,
                             brand_registry_rows=store.read_brands(),
                             brand_tokens=getattr(
                                 self.config, "brand_tokens_map", None
