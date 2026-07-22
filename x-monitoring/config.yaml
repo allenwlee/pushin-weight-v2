@@ -77,9 +77,9 @@ clustering:
 #   max_pages     pagination safety cap (default 5)
 # Credit math at defaults: 5 pages × 20 tweets = 100 tweets = ~$0.015.
 search:
-  max_results: 200
+  max_results: 50
   max_per_page: 20
-  max_pages: 10
+  max_pages: 5
 
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.
@@ -204,7 +204,7 @@ x_query_specs:
   - brands:
       ernie:   [ERNIE, 文心一言]
       upstage: [Upstage, "Solar Pro", "Solar LLM", 업스테이지]
-    co_occurrence: [api, llm, model, baidu, 文心, chatbot, weights, gguf, ollama, code, coding, agentic, benchmark, reasoning, "open source", huggingface, inference, moe, "tool calling"]
+    co_occurrence: [api, llm, model, baidu, 文心, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
     min_faves: 0
     call_id: C2
     notes: |
@@ -224,20 +224,6 @@ x_query_specs:
       Co-occurrence terms mirror C1's 22-term list with these swaps:
       - dropped "xiaomi" + "小米" (ERNIE-irrelevant)
       - added "baidu" + "文心" (Baidu/ERNIE disambiguators)
-
-      2026-07-17 (operator directive): dropped "release" and "agent"
-      from C2's co_occurrence list (20 terms now). "release" was the
-      leak source for Upstage-verb false positives (e.g., "He doesn't
-      want to upstage him" → matched `release` from "release his
-      healthcare plan"). "agent" was the leak source for Ernie-Clement
-      baseball false positives (e.g., "as a free agent"). The remaining
-      20 tokens cover all 7 legitimate Upstage hits (model/llm/api/
-      chatbot/huggingface/inference/reasoning) and all 4 non-spam
-      legitimate ERNIE hits (baidu/gguf) observed in the post-2026-07-11
-      window. The `$ERNIE` crypto-spam posts (8 hits) lose `agent`
-      coverage but those posts are promotional noise rather than ERNIE-
-      the-model coverage. Note: `agent` and `release` remain in C1's
-      and B-call co_occurrence lists where they still serve legit hits.
 
       2026-07-11 (operator directive): Upstage moved here from C1.
       C2's Upstage brand OR-group is `[Upstage, "Solar Pro", "Solar LLM",
@@ -301,7 +287,7 @@ x_query_specs:
   - is_wide_net: true
     wide_net_brands: [nemo_megatron, exaone, sakana_ai, kuaishou]
     brands: {}
-    co_occurrence: []
+    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
     min_faves: 0
     call_id: B3
     notes: |
@@ -310,12 +296,3 @@ x_query_specs:
       (co-occurrence-constrained). Per the dedup decision (operator
       directive 2026-07-11), upstage is covered exclusively by C1 to
       avoid duplicate TwitterAPI credit spend on the wide-net path.
-
-      Co-occurrence removed 2026-07-22: B3 brands are niche enough
-      (~0.4 tweets/hour with the 22-term AND filter) that the 15-min
-      cycle window almost never catches a match. The 4 brands' primary
-      tokens ("Sakana AI" / "サカナAI" / "Megatron-LM" / "NVIDIA NeMo" /
-      "EXAONE" / "LG AI" / "Kuaishou" / "KwaiYii") are specific enough
-      to not need co-occurrence filtering — bare "Sakana" (fish in
-      Japanese) was removed from is_primary to prevent the fish-tweet
-      flood.
