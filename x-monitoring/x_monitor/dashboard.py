@@ -1186,9 +1186,11 @@ def _post_matches_filter(
             if "undetected" not in lang:
                 return False
         elif post_lang in _DASHBOARD_LANG_FILTER_KEYS:
-            # Known language in the filter taxonomy: passes when explicitly
-            # in the active set, OR when "other" is active as a catch-all.
-            if post_lang not in lang and "other" not in lang:
+            # Known language in the filter taxonomy: passes only when
+            # explicitly in the active set. The "other" catch-all does
+            # NOT apply to the 11 individual language keys — it only
+            # gates the tail languages (else branch below).
+            if post_lang not in lang:
                 return False
         else:
             # Unknown language (tail below cutoff): passes only via "other".

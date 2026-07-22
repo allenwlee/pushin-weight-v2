@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 from x_monitor.dashboard import (
     _DASHBOARD_DISCOURSE_KEYS,
+    _DASHBOARD_LANG_FILTER_KEYS,
     _DASHBOARD_POST_TYPE_KEYS,
     _DASHBOARD_ROLE_KEYS,
     _DASHBOARD_NATIONALISM_KEYS,
@@ -534,6 +535,20 @@ def test_filter_lang_all_default_passes_everything():
         filters={"lang": "__all__"},
     )
     assert out["totals"]["minimax"] == 3
+
+
+def test_filter_lang_other_does_not_catch_known_language():
+    """Regression: unchecking "en" while "other" is checked should still
+    block en posts. "other" only catches tail languages below the cutoff."""
+    now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
+    posts = {"minimax": [_post(created_at="2026-07-21T12:00:00+00:00", lang_detected="en")]}
+    # All languages EXCEPT "en" are active, including "other" and "undetected".
+    active = [k for k in _DASHBOARD_LANG_FILTER_KEYS if k != "en"]
+    out = serialize_home_chart(
+        ["minimax"], posts, window_days=7, now=now,
+        filters={"lang": active},
+    )
+    assert out["totals"]["minimax"] == 0
 
 
 def test_filter_lang_empty_list_blocks_all():
