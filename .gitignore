@@ -8,5 +8,58 @@
 # and run logs that have no value in git history.
 /.context/
 
-# Legacy runtime data not covered by x-monitoring/.gitignore
+# Legacy runtime data
 data/monitor.db
+
+# Runtime data (not committed)
+data/runs/raw/
+data/runs/[0-9]*.json
+data/runs/2026-*/
+data/runs/probe_*.json
+data/runs/LATEST.json
+data/runs/LATEST.running.json
+data/runs/LOCK
+data/x_monitoring.db
+data/x_monitoring.db-*
+# staging.db was retired 2026-07-07 (see data/staging_archive/RETIRED.md).
+# The archive dir + the file patterns below prevent accidental re-introduction
+# of a stale staging.db that diverges from production x_monitoring.db.
+data/staging.db
+data/staging.db-*
+data/staging_archive/
+data/dashboard.pid
+data/dashboard.log
+data/dashboard-worktree.pid
+data/dashboard-worktree.log
+data/_review_queue.json
+data/_review_queue.json.lock
+data/headlines_cache.json
+data/headlines_cache.json.lock
+data/_qt_daily_marker
+
+# Worktree-only runtime files (NOT committed, NOT shared with main)
+run_dashboard*.py
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv
+.venv/
+venv
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Cookies (defense in depth — never commit)
+config.local.yaml
+safe-backups/
+
+# Pre-migration DB snapshots and dryrun DBs (large binaries; not for git)
+data/*.bak
+data/*.bak-shm
+data/*.bak-wal
+data/*.db.dryrun-*
+data/*.db.dryrun-*-shm
+data/*.db.dryrun-*-wal
+data/*.test*

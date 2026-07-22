@@ -1,0 +1,39 @@
+{
+  "ts_utc": "20260715T071331Z",
+  "model": "deepseek-v4-pro",
+  "endpoint": "https://api.deepseek.com/anthropic",
+  "thinking": "disabled",
+  "rows": {
+    "batch_size": [
+      {
+        "value": "20",
+        "status": "success",
+        "wall_clock_s": 18.31,
+        "response_chars": 7158,
+        "output_tokens": 1975,
+        "input_tokens": 1423,
+        "results_count": 20
+      },
+      {
+        "value": "40",
+        "status": "unterminated_json",
+        "wall_clock_s": 35.14,
+        "response_chars": 15147,
+        "output_tokens": 4096,
+        "input_tokens": 2818,
+        "results_count": 0
+      }
+    ],
+    "8192_cap_probe": [
+      {
+        "value": "40@8192",
+        "status": "success",
+        "wall_clock_s": 36.55,
+        "response_chars": 15826,
+        "output_tokens": 4310,
+        "input_tokens": 2,
+        "results_count": 40
+      }
+    ]
+  }
+}

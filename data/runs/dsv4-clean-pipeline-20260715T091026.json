@@ -1,0 +1,284 @@
+{
+  "run_id": "20260715T091026_0000-2ad50d2d",
+  "started_at": "2026-07-15T09:10:26+00:00",
+  "finished_at": "2026-07-15T09:15:24+00:00",
+  "status": "completed",
+  "degraded": {},
+  "queries": [
+    {
+      "brand_id": "*",
+      "call_kind": "account",
+      "bucket": null,
+      "query_id": "A",
+      "query_length": 38,
+      "status": "completed",
+      "n_results": 3,
+      "n_kept": 3,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 2,
+      "raw_path": "runs/raw/20260715T091026_0000-2ad50d2d/*_account_acct.json"
+    },
+    {
+      "brand_id": "mimo",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "C1",
+      "query_length": 461,
+      "status": "completed",
+      "n_results": 0,
+      "n_kept": 0,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 0,
+      "raw_path": "runs/raw/20260715T091026_0000-2ad50d2d/mimo_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "ernie",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "C2",
+      "query_length": 295,
+      "status": "completed",
+      "n_results": 1,
+      "n_kept": 1,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 0,
+      "raw_path": "runs/raw/20260715T091026_0000-2ad50d2d/ernie_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "minimax",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "B1",
+      "query_length": 414,
+      "status": "completed",
+      "n_results": 15,
+      "n_kept": 15,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 10,
+      "raw_path": "runs/raw/20260715T091026_0000-2ad50d2d/minimax_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "doubao",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "B2",
+      "query_length": 377,
+      "status": "completed",
+      "n_results": 15,
+      "n_kept": 15,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 5,
+      "raw_path": "runs/raw/20260715T091026_0000-2ad50d2d/doubao_brand_wide_acct.json"
+    },
+    {
+      "brand_id": "nemo_megatron",
+      "call_kind": "brand_wide",
+      "bucket": null,
+      "query_id": "B3",
+      "query_length": 353,
+      "status": "completed",
+      "n_results": 1,
+      "n_kept": 1,
+      "n_filtered": 0,
+      "filter_reasons": {},
+      "n_review_added": 0,
+      "n_inserted": 0,
+      "raw_path": "runs/raw/20260715T091026_0000-2ad50d2d/nemo_megatron_brand_wide_acct.json"
+    }
+  ],
+  "phase_timings_sec": {
+    "plan": 0.0,
+    "call.*.account.acct.fetch": 2.066,
+    "call.*.account.acct.attribute": 0.003,
+    "call.*.account.acct.filter+store": 0.013,
+    "call.mimo.brand_wide.acct.fetch": 7.141,
+    "call.mimo.brand_wide.acct.attribute": 0.0,
+    "call.mimo.brand_wide.acct.filter+store": 0.0,
+    "call.ernie.brand_wide.acct.fetch": 4.472,
+    "call.ernie.brand_wide.acct.attribute": 0.004,
+    "call.ernie.brand_wide.acct.filter+store": 0.002,
+    "call.minimax.brand_wide.acct.fetch": 2.306,
+    "call.minimax.brand_wide.acct.attribute": 0.003,
+    "call.minimax.brand_wide.acct.filter+store": 0.003,
+    "call.doubao.brand_wide.acct.fetch": 2.099,
+    "call.doubao.brand_wide.acct.attribute": 0.008,
+    "call.doubao.brand_wide.acct.filter+store": 0.006,
+    "call.nemo_megatron.brand_wide.acct.fetch": 2.432,
+    "call.nemo_megatron.brand_wide.acct.attribute": 0.002,
+    "call.nemo_megatron.brand_wide.acct.filter+store": 0.002,
+    "calls_loop_total": 20.565,
+    "post_fetch": 272.798,
+    "qt_official": 3.491,
+    "qt_daily": 0.0,
+    "account_graph": 0.623,
+    "total": 297.48
+  },
+  "totals": {
+    "n_queries_run": 6,
+    "n_results": 35,
+    "n_inserted": 17,
+    "n_classifications_written": 45,
+    "n_classifications_dropped": 0,
+    "n_headlines_fetched": 0,
+    "n_headlines_cached": 0
+  },
+  "post_fetch": {
+    "n_translated": 29,
+    "n_discourse": 22,
+    "n_nationalism": 8,
+    "n_failed_translate": 20,
+    "n_unsanctioned": 5,
+    "t_unsanctioned_ms": 0,
+    "wall_clock_sec": 272.79750366695225
+  },
+  "quote_tweets": {
+    "official_n_tracked": 22,
+    "official_n_calls": 0,
+    "official_n_qts_fetched": 0,
+    "official_n_ingested": 0,
+    "daily_ran": false
+  },
+  "http_log": [
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "(list:2067062923525275922) min_faves:0 since:2026-07-15 since_time:1784102405 until_time:1784106626",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 3,
+      "duration_ms": 1141,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "(list:2067062923525275922) min_faves:0 since:2026-07-15 since_time:1784102405 until_time:1784106626",
+        "queryType": "Latest",
+        "limit": "17",
+        "cursor": "DAADDAABCgABHNQfCnUboK4KAAIc1BlOJNuBlAAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUc1B9rlMAnEAoABhzUH2uUv9jwAAA"
+      },
+      "status": 200,
+      "n_results": 0,
+      "duration_ms": 916,
+      "attempts": 1,
+      "has_next_page": false
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 0,
+      "duration_ms": 7140,
+      "attempts": 1,
+      "has_next_page": false
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (api OR llm OR model OR baidu OR 文心 OR chatbot OR weig…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 19,
+      "duration_ms": 1915,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (api OR llm OR model OR baidu OR 文心 OR chatbot OR weig…",
+        "queryType": "Latest",
+        "limit": "1",
+        "cursor": "DAADDAABCgABHNQfX2rboJcKAAIc1BlwhdqwiAAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUc1B90tUAnEAoABhzUH3S1P9jwAAA"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 2536,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Hailuo OR MiniMax OR m2.5 OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (DeepSeek OR deepseek-r1 OR 深度求索) OR (Mistral OR Mixtra…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 2303,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((ByteDance OR Doubao OR 豆包) OR (ChatGLM OR GLM OR Zhipuai OR 智谱) OR (SenseChat OR SenseTime OR 日日新) OR (InclusionAI OR …",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 20,
+      "duration_ms": 2088,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Megatron-LM OR NVIDIA NeMo) OR (EXAONE OR LG AI) OR (Sakana OR Sakana AI OR サカナAI) OR (Kuaishou OR KwaiYii)) (api OR l…",
+        "queryType": "Latest",
+        "limit": "20"
+      },
+      "status": 200,
+      "n_results": 3,
+      "duration_ms": 1078,
+      "attempts": 1,
+      "has_next_page": true
+    },
+    {
+      "path": "/twitter/tweet/advanced_search",
+      "params": {
+        "query": "((Megatron-LM OR NVIDIA NeMo) OR (EXAONE OR LG AI) OR (Sakana OR Sakana AI OR サカナAI) OR (Kuaishou OR KwaiYii)) (api OR l…",
+        "queryType": "Latest",
+        "limit": "17",
+        "cursor": "DAADDAABCgABHNQbUBLaYcQKAAIc1BnHSJsQFQAIAAIAAAACCAADAAAAAAgABAAAAAAKAAUc1B99NoAnEAoABhzUH302f9jwAAA"
+      },
+      "status": 200,
+      "n_results": 0,
+      "duration_ms": 1345,
+      "attempts": 1,
+      "has_next_page": false
+    },
+    {
+      "path": "/twitter/tweets",
+      "params": {
+        "tweet_ids": "2072349453361557898,2072351658487451890,2072356035965386794,2072385041838281059,2072485478746784053,2072495173955956810,…"
+      },
+      "status": 200,
+      "n_results": 22,
+      "duration_ms": 3469,
+      "attempts": 1,
+      "has_next_page": false
+    }
+  ]
+}
