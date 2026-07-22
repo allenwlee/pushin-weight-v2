@@ -231,6 +231,35 @@ _DASHBOARD_ROLE_FILTER_KEYS: tuple[str, ...] = (
     "official", "staff", "community", "other",
 )
 
+# Filter keys for the lang_detected control-panel group (2026-07-22).
+# Cutoff: >=20 posts in the x_monitoring DB at planning time.
+# 11 individual languages ordered by descending post frequency,
+# then "undetected" for null lang_detected (78% of posts — asymmetric
+# semantics: null posts pass only when "undetected" is explicitly
+# checked, mirroring role's "other" bucket), then "other" for the
+# 21-language tail below the cutoff.
+# Re-evaluate the >=20 cutoff if the post distribution shifts significantly.
+_DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
+    "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl",
+    "undetected", "other",
+)
+
+_DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
+    "en": "English",
+    "zh-hans": "简体中文",
+    "ja": "日本語",
+    "es": "Español",
+    "tr": "Türkçe",
+    "fr": "Français",
+    "pt": "Português",
+    "ko": "한국어",
+    "id": "Bahasa Indonesia",
+    "ar": "العربية",
+    "pl": "Polski",
+    "undetected": "undetected",
+    "other": "other",
+}
+
 # 6-step nationalism scale (R7, migration 026). One tuple is used for
 # both cn_nationalism and us_nationalism axes; the axis is the dict
 # key on the filter shape.
