@@ -2,13 +2,13 @@
 
 This directory contains verbatim and near-verbatim copies of the legal documents relevant to x-monitor's operation. These are retained as canonical legal references with effective dates.
 
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-22
 
 ## Why This Exists
 
 x-monitor consumes public X/Twitter data via **TwitterAPI.io** (an independent third-party data reseller). We are also evaluating **Grok Build 4.5 with X Search** (xAI API) as a potential alternative or complement. Understanding the full legal stack — from X's user-facing terms down through the developer agreement, our direct provider's terms, and xAI's API terms — is necessary to assess compliance exposure.
 
-See `x-developer-policies-index.md` for the X developer document map, and `xai-x-search-terms.md` for the X Search vs. TwitterAPI.io comparison.
+See `x-developer-policies-index.md` for the X developer document map, `xai-x-search-terms.md` for the X Search vs. TwitterAPI.io comparison, and `analysis-display-methods.md` for the legal analysis of hyperlink vs. embed vs. custom rendering approaches.
 
 ## Document Inventory
 
@@ -39,6 +39,12 @@ See `x-developer-policies-index.md` for the X developer document map, and `xai-x
 | `xai-consumer-terms-of-service.md` | February 14, 2025 (verbatim); June 26, 2026 (current) | Governs individual Grok use. Does NOT apply to API users. |
 | `xai-acceptable-use-policy.md` | June 26, 2026 | Applies to ALL xAI users (consumer + enterprise). Incorporated into both ToS. |
 | `xai-x-search-terms.md` | (analysis document) | X Search tool docs + usage restrictions + comparison with TwitterAPI.io |
+
+### Analysis & Guidance
+
+| File | Date | Description |
+|------|------|-------------|
+| `analysis-display-methods.md` | 2026-07-22 | Legal analysis: hyperlink (Method A) vs. official embed (Method B) vs. custom JS/proxy (Method C) for surfacing X post content in x-monitor dashboard |
 
 ### TwitterAPI.io Documents (direct provider — directly binding on x-monitor)
 
