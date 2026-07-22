@@ -160,6 +160,32 @@ def _build_taxonomy_maps(store: Store) -> dict[str, Any]:
     }
 
 
+
+def _pretty_followers(n: int | None) -> str:
+    """Format follower count in human-readable short form.
+
+    Examples: 155, 1.5k, 15k, 151k, 1.5m, 11m
+    """
+    if n is None or n == 0:
+        return ""
+    if n < 1000:
+        return str(n)
+    if n < 10_000:
+        val = n / 1000
+        s = f"{val:.1f}"
+        if s.endswith(".0"):
+            s = s[:-2]
+        return f"{s}k"
+    if n < 1_000_000:
+        return f"{n // 1000}k"
+    if n < 10_000_000:
+        val = n / 1_000_000
+        s = f"{val:.1f}"
+        if s.endswith(".0"):
+            s = s[:-2]
+        return f"{s}m"
+    return f"{n // 1_000_000}m"
+
 def _denormalize_posts(
     store: Store,
     brand_id: str,
@@ -296,6 +322,39 @@ def _denormalize_posts(
     # but role_id is null' from 'no brands_accounts row at all'.
     role_by_tweet = {r["tweet_id"]: r["role_key"] for r in role_rows}
 
+    # Fetch followers_count from accounts. Try author_id (INTEGER FK)
+    # first; for older posts where author_id is NULL, fall back to
+    # handle-based lookup.
+    author_ids = [p["author_id"] for p in base if p.get("author_id")]
+    followers_by_author: dict[int, int] = {}
+    if author_ids:
+        id_rows = store._conn.execute(
+            "SELECT a.id, a.followers_count FROM accounts a WHERE a.id IN ("
+            + ",".join("?" for _ in author_ids)
+            + ")",
+            author_ids,
+        ).fetchall()
+        followers_by_author = {
+            r["id"]: r["followers_count"] or 0 for r in id_rows
+        }
+    # Fallback: handle-based lookup for posts missing author_id
+    handles = list({
+        p.get("author_handle") for p in base
+        if not p.get("author_id") and p.get("author_handle")
+    })
+    if handles:
+        handle_rows = store._conn.execute(
+            "SELECT a.handle, a.followers_count FROM accounts a WHERE a.handle IN ("
+            + ",".join("?" for _ in handles)
+            + ")",
+            handles,
+        ).fetchall()
+        followers_by_handle = {
+            r["handle"]: r["followers_count"] or 0 for r in handle_rows
+        }
+    else:
+        followers_by_handle = {}
+
     for p in base:
         twid = p.get("tweet_id")
         p["discourse"] = disc_by_tweet.get(twid, [])
@@ -334,6 +393,15 @@ def _denormalize_posts(
             "handle": p.get("author_handle") or "@unknown",
             "role": p["role_key"],
             "role_label": p["role_key"],
+            "followers_count": (
+                followers_by_author.get(p.get("author_id"))
+                or followers_by_handle.get(p.get("author_handle"))
+                or 0
+            ),
+            "followers_pretty": _pretty_followers(
+                followers_by_author.get(p.get("author_id"))
+                or followers_by_handle.get(p.get("author_handle"))
+            ),
         }
     return base
 

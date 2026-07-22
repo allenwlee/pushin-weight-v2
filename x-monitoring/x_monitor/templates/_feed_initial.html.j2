@@ -71,6 +71,8 @@
       {% else %}
         @unknown
       {% endif %}
+      {% set _fp = row.account.followers_pretty or '' %}
+      {% if _fp %} · {{ _fp }}{% endif %}
       · <span class="pill role-{{ row.account.role or '' }}">{{ row.account.role_label or '' }}</span>
     </td>
   </tr>

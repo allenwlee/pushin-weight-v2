@@ -167,6 +167,7 @@ class Store:
         self._brand_id_map: dict[str, int] | None = None
         self._company_id_map: dict[str, int] | None = None
         self._account_id_map: dict[str, int] | None = None
+        self._handle_id_map: dict[str, int] | None = None
         self._hf_org_id_map: dict[str, int] | None = None
         self._role_id_map: dict[str, int] | None = None
         self._post_type_id_map: dict[str, int] | None = None
@@ -591,14 +592,17 @@ class Store:
                 # TEXT author_id). Resolve via the accounts
                 # lookup. Callers still pass the TEXT author_id
                 # (X user id) on the post dict; we look it up here.
-                p_author_id_text = (
-                    p.get("author_id") or p.get("author_handle") or ""
-                )
+                # Resolve posts.author_id (INTEGER FK to accounts.id).
+                # Try the X user-id string first; when the scraper
+                # didn't provide one, fall back to handle lookup.
                 p_author_id_int: int | None = None
+                p_author_id_text = p.get("author_id") or ""
                 if p_author_id_text:
-                    p_author_id_int = self._account_int_id(
-                        p_author_id_text
-                    )
+                    p_author_id_int = self._account_int_id(p_author_id_text)
+                if p_author_id_int is None:
+                    p_handle = p.get("author_handle") or ""
+                    if p_handle:
+                        p_author_id_int = self._account_int_id_by_handle(p_handle)
                 cur = conn.execute(
                     """
                     INSERT OR IGNORE INTO posts(
@@ -2491,6 +2495,17 @@ class Store:
                 ).fetchall()
             }
         return self._account_id_map.get(author_id)
+
+    def _account_int_id_by_handle(self, handle: str) -> int | None:
+        """Map `accounts.handle` to `accounts.id` (INTEGER)."""
+        if self._handle_id_map is None:
+            self._handle_id_map = {
+                r["handle"]: r["id"]
+                for r in self._conn.execute(
+                    "SELECT id, handle FROM accounts WHERE handle IS NOT NULL"
+                ).fetchall()
+            }
+        return self._handle_id_map.get(handle)
 
     def _hf_org_int_id(self, namespace: str) -> int | None:
         """Map `hf_orgs.namespace` (TEXT) to `hf_orgs.id` (INTEGER).
