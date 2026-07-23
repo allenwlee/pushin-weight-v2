@@ -1078,7 +1078,7 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
             idx = window_days - 1 - days_ago
         series[idx] += 1
 
-    return JsonResponse({
+    payload = {
         "brand_id": brand_nickname,
         "display_name": MODEL_DISPLAY_NAMES.get(brand_nickname, brand_nickname),
         "accent_color": MODEL_ACCENT_COLORS.get(brand_nickname, "#9ca3af"),
@@ -1090,4 +1090,10 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
         "applied_filters": filters,
         "window_days": window_days,
         "fetched_at": now.isoformat(),
-    })
+    }
+    import json as _json
+    return render(
+        request,
+        "monitor/_home_chart.html",
+        {"payload": _json.dumps(payload)},
+    )
