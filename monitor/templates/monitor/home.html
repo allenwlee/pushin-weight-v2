@@ -49,7 +49,7 @@
   <main class="home-pane">
     <section class="home-chart-wrap" id="home-chart"
              hx-get="/api/v1/home.chart.json"
-             hx-trigger="every 60s"
+             hx-trigger="load every 60s"
              hx-swap="innerHTML">
       <div class="chart-placeholder" style="padding: 2rem; text-align: center; color: #6b7280;">
         Chart area — data loaded via htmx. Check /api/v1/home.chart.json
