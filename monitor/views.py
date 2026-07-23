@@ -1007,7 +1007,14 @@ def home_chart_json(request: HttpRequest) -> JsonResponse:
     )
     payload["applied_filters"] = filters
 
-    return JsonResponse(payload)
+    # Render as HTML partial so htmx can swap the canvas element.
+    # The pw-chart.js reads data-home attribute to draw the chart.
+    import json as _json
+    return render(
+        request,
+        "monitor/_home_chart.html",
+        {"payload": _json.dumps(payload)},
+    )
 
 
 @login_required
