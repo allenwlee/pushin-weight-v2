@@ -1,4 +1,4 @@
-# Render Blueprint — pushinweight.ai (x-monitor v2)
+# Render Blueprint — pushinweight.ai
 # https://render.com/docs/blueprint-spec
 
 services:
@@ -25,85 +25,7 @@ services:
         fromDatabase:
           name: pushinweight-db
           property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
-          name: pushinweight-redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
-          name: pushinweight-redis
-          property: connectionString
       - fromGroup: pushinweight-secrets
-
-  # --------------------------------------------------------------------------
-  # Celery worker (harvest cycles)
-  # --------------------------------------------------------------------------
-  - type: worker
-    name: pushinweight-worker
-    runtime: python
-    plan: starter
-    buildCommand: ./build.sh
-    startCommand: celery -A project worker -l INFO --concurrency=1
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.0
-      - key: DEBUG
-        value: "False"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: pushinweight-db
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
-          name: pushinweight-redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
-          name: pushinweight-redis
-          property: connectionString
-      - fromGroup: pushinweight-secrets
-
-  # --------------------------------------------------------------------------
-  # Celery Beat scheduler
-  # --------------------------------------------------------------------------
-  - type: worker
-    name: pushinweight-beat
-    runtime: python
-    plan: starter
-    buildCommand: ./build.sh
-    startCommand: celery -A project beat -l INFO
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.0
-      - key: DEBUG
-        value: "False"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: pushinweight-db
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
-          name: pushinweight-redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
-          name: pushinweight-redis
-          property: connectionString
-      - fromGroup: pushinweight-secrets
-
-  # --------------------------------------------------------------------------
-  # Redis (Celery broker + result backend)
-  # --------------------------------------------------------------------------
-  - type: keyvalue
-    name: pushinweight-redis
-    plan: free
-    ipAllowList: []
 
 databases:
   # --------------------------------------------------------------------------
