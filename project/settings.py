@@ -272,6 +272,10 @@ else:
 XMONITOR_DRY_RUN = env("XMONITOR_DRY_RUN")
 XMONITOR_DATA_DIR = Path(env("XMONITOR_DATA_DIR", default=str(BASE_DIR / "data")))
 
+# x-monitor harvest pipeline — loaded from environment so Render can
+# configure these without code changes.
+X_MONITOR_LIST_ID = env.int("X_MONITOR_LIST_ID", default=None)
+
 # Canonical brand registry (20 brands, post-U5-rename).
 # TODO(U2): derive from `core.models.Brand.objects.values_list('nickname', flat=True)`
 # once the ORM is wired; remove this placeholder then.

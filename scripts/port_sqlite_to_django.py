@@ -80,6 +80,90 @@ from core.models import (  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Cache for handle->author_id resolution
+_handle_to_author_id: dict[str, str] | None = None
+
+
+def _resolve_by_handle(handle: str, src: sqlite3.Connection) -> str | None:
+    """Look up an account's author_id by handle (case-insensitive)."""
+    global _handle_to_author_id
+    if _handle_to_author_id is None:
+        _handle_to_author_id = {}
+        rows = src.execute(
+            "SELECT handle, author_id FROM accounts WHERE handle IS NOT NULL"
+        ).fetchall()
+        for h, aid in rows:
+            if h and aid:
+                _handle_to_author_id[h.lower()] = aid
+    if not handle:
+        return None
+    key = handle.lower()
+    if key in _handle_to_author_id:
+        return _handle_to_author_id[key]
+    # Create a synthetic account on-the-fly for previously unseen handles
+    synthetic_id = f"handle:{handle}" if not handle.startswith("handle:") else handle
+    _handle_to_author_id[key] = synthetic_id
+    return synthetic_id
+
+
+def _table_exists(src: sqlite3.Connection, table: str) -> bool:
+    row = src.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(src: sqlite3.Connection, table: str) -> set[str]:
+    return {r[1] for r in src.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _safe_select(
+    src: sqlite3.Connection, table: str, desired_cols: list[str],
+    where: str | None = None, params: list | None = None,
+    order_by: str | None = None, limit: int | None = None,
+) -> list[dict[str, Any]]:
+    existing = _table_columns(src, table)
+    cols = [c for c in desired_cols if c in existing]
+    skipped = [c for c in desired_cols if c not in existing]
+    if skipped:
+        print(f"  [info] {table}: skipping columns not in source: {skipped}", file=sys.stderr)
+    query = f"SELECT {', '.join(cols)} FROM {table}"
+    if where: query += f" WHERE {where}"
+    if order_by: query += f" ORDER BY {order_by}"
+    if limit: query += f" LIMIT {limit}"
+    rows = src.execute(query, params or []).fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
+def _ensure_account(author_id: str, handle: str, dry_run: bool) -> None:
+    """Create an Account row if it doesn't exist (for synthetic/handle-based IDs)."""
+    if dry_run or not author_id:
+        return
+    try:
+        from core.models import Account as Acc
+        Acc.objects.get_or_create(
+            author_id=author_id,
+            defaults={"handle": handle or author_id},
+        )
+    except Exception:
+        pass
+
+
+def _safe_get_or_create(model: Any, defaults: dict, **kwargs: Any) -> Any:
+    try:
+        return model.objects.get_or_create(defaults=defaults, **kwargs)
+    except Exception:
+        return None, False
+
+
+def _safe_update_or_create(model: Any, defaults: dict, **kwargs: Any) -> Any:
+    try:
+        return model.objects.update_or_create(defaults=defaults, **kwargs)
+    except Exception:
+        return None, False
+
+
 
 def _parse_sqlite_dt(val: str | None) -> datetime | None:
     """Parse a SQLite TEXT datetime into a timezone-aware datetime."""
@@ -93,6 +177,7 @@ def _parse_sqlite_dt(val: str | None) -> datetime | None:
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y-%m-%dT%H:%M:%S",
+        "%a %b %d %H:%M:%S %z %Y",
     ):
         try:
             dt = datetime.strptime(val, fmt)
@@ -146,6 +231,9 @@ def port_lookup_tables(
     ]
 
     for table, Model, key_col in KEY_TABLES:
+        if not _table_exists(src, table):
+            print(f"  {table}: SKIPPED (not in source)", file=sys.stderr)
+            continue
         rows = src.execute(f"SELECT {key_col} FROM {table}").fetchall()
         for (key_val,) in rows:
             if key_val is None:
@@ -154,6 +242,20 @@ def port_lookup_tables(
                 Model.objects.get_or_create(**{key_col: key_val})
             _inc(report, table, "inserted")
         print(f"  {table}: {len(rows)} rows", file=sys.stderr)
+
+    # Build surrogate ID maps for FK resolution
+    role_id_map: dict[int, str] = {}
+    if _table_exists(src, "roles"):
+        for r in src.execute("SELECT id, key FROM roles").fetchall():
+            if r[0] is not None and r[1]:
+                role_id_map[r[0]] = r[1]
+
+    key_id_maps: dict[str, dict[int, str]] = {"discourse_keys": {}, "nationalism_keys": {}}
+    for tbl, m in key_id_maps.items():
+        if _table_exists(src, tbl):
+            for r in src.execute(f"SELECT id, key FROM {tbl}").fetchall():
+                if r[0] is not None and r[1]:
+                    m[r[0]] = r[1]
 
     # -- labels: post_type_labels, sentiment_labels, discourse_labels,
     #            nationalism_labels, role_labels
@@ -175,11 +277,14 @@ def port_lookup_tables(
             if fk_val is None:
                 continue
             if not dry_run:
-                Model.objects.get_or_create(
-                    **{django_fk: fk_val, "lang": lang, "label": label}
+                _safe_get_or_create(
+                    Model, {"label": label},
+                    **{django_fk + "_id": fk_val, "lang": lang},
                 )
             _inc(report, table, "inserted")
         print(f"  {table}: {len(rows)} rows", file=sys.stderr)
+
+    return role_id_map, key_id_maps
 
 
 def port_brands(
@@ -253,23 +358,23 @@ def port_companies(
     """Port companies. Returns {sqlite_id: nickname} map."""
     id_map: dict[int, str] = {}
 
-    rows = src.execute(
-        "SELECT id, nickname, display_name, hq_country, accent_color, "
-        "description, created_at, display_name_en, display_name_zh_cn "
-        "FROM companies ORDER BY nickname ASC"
-    ).fetchall()
+    desired_cols = [
+        "id", "nickname", "display_name", "hq_country", "accent_color",
+        "description", "created_at", "display_name_en", "display_name_zh_cn",
+    ]
+    rows = _safe_select(src, "companies", desired_cols, order_by="nickname ASC")
 
     for row in rows:
-        sqlite_id, nickname, display_name, hq_country, accent_color, \
-            description, created_at, display_name_en, display_name_zh_cn = row
+        sqlite_id = row["id"]
+        nickname = row["nickname"]
 
         defaults = {
-            "display_name": display_name,
-            "hq_country": hq_country,
-            "accent_color": accent_color,
-            "description": description,
-            "display_name_en": display_name_en,
-            "display_name_zh_cn": display_name_zh_cn,
+            "display_name": row.get("display_name"),
+            "hq_country": row.get("hq_country"),
+            "accent_color": row.get("accent_color"),
+            "description": row.get("description"),
+            "display_name_en": row.get("display_name_en"),
+            "display_name_zh_cn": row.get("display_name_zh_cn"),
         }
 
         if not dry_run:
@@ -289,11 +394,12 @@ def port_accounts(
     dry_run: bool,
     limit: int | None = None,
 ) -> set[str]:
-    """Port accounts. Returns set of author_ids that exist."""
+    """Port accounts. Returns (author_ids, {sqlite_int_id: author_id} map)."""
     author_ids: set[str] = set()
+    sqlite_id_map: dict[int, str] = {}
 
     cols = [
-        "author_id", "handle", "display_name", "bio", "bio_fetched_at",
+        "id", "author_id", "handle", "display_name", "bio", "bio_fetched_at",
         "verified", "bio_contains_brand", "first_seen_at", "last_seen_at",
         "source_query_ids", "notes", "bio_en", "bio_zh_cn",
         # Migration 039 columns
@@ -311,16 +417,21 @@ def port_accounts(
 
     for row in rows:
         vals = dict(zip(cols, row))
+        sqlite_id = vals["id"]
         author_id = vals["author_id"]
         author_ids.add(author_id)
+        sqlite_id_map[sqlite_id] = author_id
 
         defaults: dict[str, Any] = {}
         for col in cols:
-            if col == "author_id":
+            if col in ("id", "author_id"):
                 continue
             val = vals[col]
             if val is None:
-                defaults[col] = None
+                if col == "verified":
+                    defaults[col] = False
+                else:
+                    defaults[col] = None
             elif col in ("verified", "bio_contains_brand", "is_blue_verified"):
                 defaults[col] = _parse_sqlite_bool(val)
             elif col.endswith("_at"):
@@ -337,17 +448,20 @@ def port_accounts(
         _inc(report, "accounts", "inserted")
 
     print(f"  accounts: {len(rows)} rows", file=sys.stderr)
-    return author_ids
+    return author_ids, sqlite_id_map
 
 
 def port_posts(
     src: sqlite3.Connection,
     report: dict[str, Any],
     dry_run: bool,
+    account_id_map: dict[int, str] | None = None,
     limit: int | None = None,
     since: str | None = None,
 ) -> dict[int, str]:
     """Port posts. Returns {sqlite_id: tweet_id} map."""
+    if account_id_map is None:
+        account_id_map = {}
     id_map: dict[int, str] = {}
 
     cols = [
@@ -387,9 +501,22 @@ def port_posts(
             _inc(report, "posts", "skipped")
             continue
 
+        raw_author_id = vals.get("author_id")
+        author_handle = vals.get("author_handle")
+        if raw_author_id is not None:
+            resolved_author_id = account_id_map.get(raw_author_id)
+        elif author_handle:
+            resolved_author_id = _resolve_by_handle(author_handle, src)
+        else:
+            resolved_author_id = None
+
+        if not resolved_author_id:
+            _inc(report, "posts", "skipped")
+            continue
+
         defaults: dict[str, Any] = {}
         for col in cols:
-            if col in ("id", "tweet_id"):
+            if col in ("id", "tweet_id", "author_id"):
                 continue
             val = vals[col]
             if val is None:
@@ -406,9 +533,14 @@ def port_posts(
             else:
                 defaults[col] = val
 
+        # Ensure account exists (create synthetic if needed)
+        _ensure_account(resolved_author_id, author_handle or "", dry_run)
+
+        defaults["author_id"] = resolved_author_id
+
         if not dry_run:
-            Post.objects.update_or_create(
-                tweet_id=tweet_id, defaults=defaults
+            _safe_update_or_create(
+                Post, defaults, tweet_id=tweet_id,
             )
         _inc(report, "posts", "inserted")
         id_map[sqlite_id] = tweet_id
@@ -457,9 +589,15 @@ def port_brands_accounts(
     report: dict[str, Any],
     dry_run: bool,
     brand_id_map: dict[int, str],
+    account_id_map: dict[int, str] | None = None,
+    role_id_map: dict[int, str] | None = None,
     limit: int | None = None,
 ) -> None:
     """Port brands_accounts junction table."""
+    if account_id_map is None:
+        account_id_map = {}
+    if role_id_map is None:
+        role_id_map = {}
     query = (
         "SELECT ba.brand_id, ba.accounts_id, ba.role_id, ba.added_at "
         "FROM brands_accounts ba "
@@ -471,14 +609,16 @@ def port_brands_accounts(
 
     for brand_id, accounts_id, role_id, added_at in rows:
         brand_nickname = brand_id_map.get(brand_id)
-        if not brand_nickname or not accounts_id or not role_id:
+        resolved_account = account_id_map.get(accounts_id) if accounts_id else None
+        resolved_role = role_id_map.get(role_id) if role_id else None
+        if not brand_nickname or not resolved_account or not resolved_role:
             _inc(report, "brands_accounts", "skipped")
             continue
         if not dry_run:
             BrandAccount.objects.get_or_create(
                 brand_id=brand_nickname,
-                account_id=accounts_id,
-                role_id=role_id,
+                account_id=resolved_account,
+                role_id=resolved_role,
                 defaults={"added_at": _parse_sqlite_dt(added_at)},
             )
         _inc(report, "brands_accounts", "inserted")
@@ -491,9 +631,15 @@ def port_companies_accounts(
     report: dict[str, Any],
     dry_run: bool,
     company_id_map: dict[int, str],
+    account_id_map: dict[int, str] | None = None,
+    role_id_map: dict[int, str] | None = None,
     limit: int | None = None,
 ) -> None:
     """Port companies_accounts junction table."""
+    if account_id_map is None:
+        account_id_map = {}
+    if role_id_map is None:
+        role_id_map = {}
     query = (
         "SELECT ca.company_id, ca.author_id, ca.role_id, ca.added_at "
         "FROM companies_accounts ca "
@@ -505,14 +651,16 @@ def port_companies_accounts(
 
     for company_id, author_id, role_id, added_at in rows:
         company_nickname = company_id_map.get(company_id)
-        if not company_nickname or not author_id or not role_id:
+        resolved_account = account_id_map.get(author_id) if author_id else None
+        resolved_role = role_id_map.get(role_id) if role_id else None
+        if not company_nickname or not resolved_account or not resolved_role:
             _inc(report, "companies_accounts", "skipped")
             continue
         if not dry_run:
             CompanyAccount.objects.get_or_create(
                 company_id=company_nickname,
-                account_id=author_id,
-                role_id=role_id,
+                account_id=resolved_account,
+                role_id=resolved_role,
                 defaults={"added_at": _parse_sqlite_dt(added_at)},
             )
         _inc(report, "companies_accounts", "inserted")
@@ -721,7 +869,11 @@ def port_posts_brands_signals(
     brand_id_map: dict[int, str],
     limit: int | None = None,
 ) -> None:
-    """Port posts_brands_signals junction table."""
+    """Port posts_brands_signals junction table.
+
+    post_id in this table is the actual tweet_id string (not an integer
+    surrogate), so it's used directly without post_id_map lookup.
+    """
     query = (
         "SELECT pbs.post_id, pbs.brand_id, pbs.post_type_key, pbs.sentiment "
         "FROM posts_brands_signals pbs "
@@ -732,17 +884,17 @@ def port_posts_brands_signals(
     rows = src.execute(query).fetchall()
 
     for post_id, brand_id, post_type_key, sentiment in rows:
-        tweet_id = post_id_map.get(post_id)
-        brand_nickname = brand_id_map.get(brand_id)
+        # post_id and brand_id are already the actual values (tweet_id and nickname)
+        tweet_id = str(post_id) if post_id else None
+        brand_nickname = brand_id_map.get(brand_id, str(brand_id) if brand_id else None)
         if not tweet_id or not brand_nickname or not post_type_key or not sentiment:
             _inc(report, "posts_brands_signals", "skipped")
             continue
         if not dry_run:
-            PostBrandSignal.objects.get_or_create(
-                post_id=tweet_id,
-                brand_id=brand_nickname,
-                post_type_id=post_type_key,
-                sentiment_id=sentiment,
+            _safe_get_or_create(
+                PostBrandSignal, {},
+                post_id=tweet_id, brand_id=brand_nickname,
+                post_type_id=post_type_key, sentiment_id=sentiment,
             )
         _inc(report, "posts_brands_signals", "inserted")
 
@@ -755,9 +907,14 @@ def port_posts_brands_discourse(
     dry_run: bool,
     post_id_map: dict[int, str],
     brand_id_map: dict[int, str],
+    key_id_maps: dict[str, dict[int, str]] | None = None,
     limit: int | None = None,
 ) -> None:
     """Port posts_brands_discourse junction table."""
+    if key_id_maps is None:
+        key_id_maps = {}
+    disc_map = key_id_maps.get("discourse_keys", {})
+    nat_map = key_id_maps.get("nationalism_keys", {})
     query = (
         "SELECT pbd.post_id, pbd.brand_id, pbd.discourse_key, pbd.act_id, "
         "pbd.china_nationalism, pbd.us_nationalism "
@@ -771,19 +928,18 @@ def port_posts_brands_discourse(
     for post_id, brand_id, discourse_key, act_id, china_nat, us_nat in rows:
         tweet_id = post_id_map.get(post_id)
         brand_nickname = brand_id_map.get(brand_id)
-        if not tweet_id or not brand_nickname or not discourse_key:
+        resolved_discourse = disc_map.get(discourse_key) if discourse_key else None
+        resolved_cn = nat_map.get(china_nat) if china_nat else None
+        resolved_us = nat_map.get(us_nat) if us_nat else None
+        if not tweet_id or not brand_nickname or not resolved_discourse:
             _inc(report, "posts_brands_discourse", "skipped")
             continue
         if not dry_run:
-            PostBrandDiscourse.objects.get_or_create(
-                post_id=tweet_id,
-                brand_id=brand_nickname,
-                discourse_id=discourse_key,
-                act_id=act_id,
-                defaults={
-                    "china_nationalism_id": china_nat or None,
-                    "us_nationalism_id": us_nat or None,
-                },
+            _safe_get_or_create(
+                PostBrandDiscourse,
+                {"china_nationalism_id": resolved_cn, "us_nationalism_id": resolved_us},
+                post_id=tweet_id, brand_id=brand_nickname,
+                discourse_id=resolved_discourse, act_id=act_id,
             )
         _inc(report, "posts_brands_discourse", "inserted")
 
@@ -797,27 +953,22 @@ def port_account_post_appearances(
     limit: int | None = None,
 ) -> None:
     """Port account_post_appearances junction table."""
-    query = (
-        "SELECT apa.author_id, apa.tweet_id, apa.role_at_time, apa.source_query_ids "
-        "FROM account_post_appearances apa "
-        "ORDER BY apa.author_id, apa.tweet_id"
-    )
-    if limit:
-        query += f" LIMIT {limit}"
-    rows = src.execute(query).fetchall()
+    desired_cols = ["author_id", "tweet_id", "role_at_time", "source_query_ids"]
+    rows = _safe_select(src, "account_post_appearances", desired_cols,
+                        order_by="author_id, tweet_id", limit=limit)
 
-    for author_id, tweet_id, role_at_time, source_query_ids in rows:
+    for row in rows:
+        author_id = row["author_id"]
+        tweet_id = row["tweet_id"]
         if not author_id or not tweet_id:
             _inc(report, "account_post_appearances", "skipped")
             continue
         if not dry_run:
-            AccountPostAppearance.objects.get_or_create(
-                account_id=author_id,
-                post_id=tweet_id,
-                defaults={
-                    "role_at_time": role_at_time,
-                    "source_query_ids": source_query_ids,
-                },
+            _safe_get_or_create(
+                AccountPostAppearance,
+                {"role_at_time": row.get("role_at_time"),
+                 "source_query_ids": row.get("source_query_ids")},
+                account_id=author_id, post_id=tweet_id,
             )
         _inc(report, "account_post_appearances", "inserted")
 
@@ -832,29 +983,26 @@ def port_posts_unsanctioned_flags(
     limit: int | None = None,
 ) -> None:
     """Port posts_unsanctioned_flags table."""
-    query = (
-        "SELECT puf.post_id, puf.flags, puf.flag_set, puf.evidence, puf.decided_at "
-        "FROM posts_unsanctioned_flags puf "
-        "ORDER BY puf.post_id"
-    )
-    if limit:
-        query += f" LIMIT {limit}"
-    rows = src.execute(query).fetchall()
+    desired_cols = ["post_id", "flags", "flag_set", "evidence", "decided_at"]
+    rows = _safe_select(src, "posts_unsanctioned_flags", desired_cols,
+                        order_by="post_id", limit=limit)
 
-    for post_id, flags, flag_set, evidence, decided_at in rows:
-        tweet_id = post_id_map.get(post_id)
+    for row in rows:
+        post_id = row["post_id"]
+        flags = row.get("flags")
+        flag_set = row.get("flag_set")
+        # post_id is already the tweet_id string
+        tweet_id = str(post_id) if post_id else None
         if not tweet_id or not flags:
             _inc(report, "posts_unsanctioned_flags", "skipped")
             continue
         if not dry_run:
-            PostUnsanctionedFlag.objects.update_or_create(
+            _safe_update_or_create(
+                PostUnsanctionedFlag,
+                {"flags": flags, "flag_set": _parse_sqlite_json(flag_set),
+                 "evidence": row.get("evidence"),
+                 "decided_at": _parse_sqlite_dt(row.get("decided_at"))},
                 post_id=tweet_id,
-                defaults={
-                    "flags": flags,
-                    "flag_set": _parse_sqlite_json(flag_set),
-                    "evidence": evidence,
-                    "decided_at": _parse_sqlite_dt(decided_at),
-                },
             )
         _inc(report, "posts_unsanctioned_flags", "inserted")
 
@@ -1143,17 +1291,20 @@ def main() -> None:
     try:
         # ---- Layer 1: Lookup tables ----
         print("\n[Layer 1] Lookup tables", file=sys.stderr)
-        port_lookup_tables(src, report, args.dry_run)
+        role_id_map, key_id_maps = port_lookup_tables(src, report, args.dry_run)
 
         # ---- Layer 2: Entities ----
         print("\n[Layer 2] Entities", file=sys.stderr)
         brand_id_map = port_brands(src, report, args.dry_run, brand_filter)
         company_id_map = port_companies(src, report, args.dry_run)
-        port_accounts(src, report, args.dry_run, limit=args.limit)
+        _author_ids, account_id_map = port_accounts(
+            src, report, args.dry_run, limit=args.limit,
+        )
 
         if not args.skip_posts:
             post_id_map = port_posts(
                 src, report, args.dry_run,
+                account_id_map=account_id_map,
                 limit=args.limit, since=args.since,
             )
         else:
@@ -1167,10 +1318,12 @@ def main() -> None:
             limit=args.limit,
         )
         port_brands_accounts(
-            src, report, args.dry_run, brand_id_map, limit=args.limit,
+            src, report, args.dry_run, brand_id_map, account_id_map,
+            role_id_map, limit=args.limit,
         )
         port_companies_accounts(
-            src, report, args.dry_run, company_id_map, limit=args.limit,
+            src, report, args.dry_run, company_id_map, account_id_map,
+            role_id_map, limit=args.limit,
         )
         port_hf_orgs(
             src, report, args.dry_run, company_id_map, limit=args.limit,
@@ -1194,7 +1347,7 @@ def main() -> None:
             )
             port_posts_brands_discourse(
                 src, report, args.dry_run, post_id_map, brand_id_map,
-                limit=args.limit,
+                key_id_maps, limit=args.limit,
             )
             port_account_post_appearances(
                 src, report, args.dry_run, limit=args.limit,

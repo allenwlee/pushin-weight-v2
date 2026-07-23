@@ -21,6 +21,8 @@ services:
         value: localhost,127.0.0.1,.onrender.com,pushinweight.ai,www.pushinweight.ai
       - key: CSRF_TRUSTED_ORIGINS
         value: https://pushinweight.ai,https://www.pushinweight.ai
+      - key: X_MONITOR_LIST_ID
+        value: "2067062923525275922"
       - key: DATABASE_URL
         fromDatabase:
           name: pushinweight-db
