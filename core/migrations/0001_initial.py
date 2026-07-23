@@ -12,6 +12,16 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Create the case_insensitive collation before any model that uses it.
+        # PostgreSQL needs this via CREATE COLLATION; SQLite registers it
+        # at connection time (see core/apps.py and manage.py).
+        migrations.RunSQL(
+            sql=(
+                "CREATE COLLATION IF NOT EXISTS case_insensitive "
+                "(provider = icu, locale = 'und-u-ks-level2', deterministic = false)"
+            ),
+            reverse_sql="DROP COLLATION IF EXISTS case_insensitive",
+        ),
         migrations.CreateModel(
             name='AppliedConfigSnapshot',
             fields=[
