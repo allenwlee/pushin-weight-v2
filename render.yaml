@@ -29,11 +29,11 @@ services:
           property: connectionString
       - fromGroup: pushinweight-secrets
 
+cronJobs:
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
   # --------------------------------------------------------------------------
-  - type: cron
-    name: pushinweight-harvest
+  - name: pushinweight-harvest
     runtime: python
     plan: starter
     schedule: "*/15 * * * *"
