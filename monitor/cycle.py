@@ -242,6 +242,21 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
     return acc
 
 
+def _make_json_safe(obj: Any) -> Any:
+    """Recursively convert dataclass/NamedTuple instances to plain dicts for JSON."""
+    from dataclasses import asdict, is_dataclass
+
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_make_json_safe(v) for v in obj]
+    if is_dataclass(obj):
+        return _make_json_safe(asdict(obj))
+    if hasattr(obj, "_asdict"):  # NamedTuple
+        return _make_json_safe(obj._asdict())
+    return obj
+
+
 def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | None:
     """Create or update a Post row from a normalized tweet dict.
 
@@ -251,7 +266,7 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
     tweet_id = str(raw.get("id") or raw.get("tweet_id") or "")
     if not tweet_id:
         return None
-    defaults: dict[str, Any] = {"raw": raw}
+    defaults: dict[str, Any] = {"raw": _make_json_safe(raw)}
     if account is not None:
         defaults["author"] = account
     handle = raw.get("author_handle") or raw.get("authorHandle") or ""
@@ -265,12 +280,27 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
         defaults["lang"] = lang
     created_at_str = raw.get("created_at") or raw.get("createdAt") or ""
     if created_at_str:
-        try:
-            defaults["created_at"] = datetime.fromisoformat(
-                created_at_str.replace("Z", "+00:00")
-            )
-        except (ValueError, TypeError):
-            pass
+        parsed = None
+        for fmt in (
+            "%a %b %d %H:%M:%S %z %Y",   # Twitter API: "Wed Jul 22 03:40:35 +0000 2026"
+            "%Y-%m-%dT%H:%M:%S.%fZ",
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%dT%H:%M:%S%z",
+        ):
+            try:
+                parsed = datetime.strptime(created_at_str, fmt).replace(tzinfo=timezone.utc)
+                break
+            except (ValueError, TypeError):
+                continue
+        if parsed is None:
+            try:
+                parsed = datetime.fromisoformat(
+                    created_at_str.replace("Z", "+00:00")
+                )
+            except (ValueError, TypeError):
+                pass
+        if parsed:
+            defaults["created_at"] = parsed
     like_count = raw.get("like_count") or raw.get("likeCount")
     if like_count is not None:
         defaults["like_count"] = int(like_count)
@@ -330,7 +360,7 @@ def _persist_attribution(
         PostBrand.objects.get_or_create(
             post=post,
             brand_id=bid,
-            defaults={"weight": mention.weight},
+            defaults={"weight": 1.0},
         )
         # PostBrandMention (one per source per brand)
         source_key = (bid, mention.source or "body_keyword")

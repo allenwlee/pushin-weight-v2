@@ -29,6 +29,31 @@ services:
           property: connectionString
       - fromGroup: pushinweight-secrets
 
+  # --------------------------------------------------------------------------
+  # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
+  # --------------------------------------------------------------------------
+  - type: cron
+    name: pushinweight-harvest
+    runtime: python
+    plan: starter
+    schedule: "*/15 * * * *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py run_cycle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: localhost,127.0.0.1,.onrender.com
+      - key: X_MONITOR_LIST_ID
+        value: "2067062923525275922"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db
+          property: connectionString
+      - fromGroup: pushinweight-secrets
+
 databases:
   # --------------------------------------------------------------------------
   # Managed PostgreSQL
