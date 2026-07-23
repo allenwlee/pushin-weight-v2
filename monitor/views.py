@@ -1001,22 +1001,58 @@ def home_chart_json(request: HttpRequest) -> JsonResponse:
     if brands_filter is not None and brands_filter != "__all__":
         brand_nicknames = [b for b in brand_nicknames if b in brands_filter]
 
-    # Get posts per brand and enrich
-    posts_by_brand: dict[str, list[dict[str, Any]]] = {}
-    for brand in brand_nicknames:
-        posts = _get_feed_posts(
-            window_days=window_days,
-            brand_nickname=brand,
-            limit=FEED_HARD_CAP,
-        )
-        enriched = _enrich_posts_with_classifications(posts, brand_nickname=brand)
-        posts_by_brand[brand] = [p for p in enriched if _post_matches_filter(p, filters)]
+    # Single aggregation query instead of per-brand loop.
+    # PostBrand JOIN gives us per-brand post counts grouped by day.
+    cutoff = django_timezone.now() - timedelta(days=window_days)
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
 
-    payload = _serialize_home_chart_simple(
-        brand_nicknames,
-        posts_by_brand,
-        window_days=window_days,
+    agg_rows = (
+        PostBrand.objects
+        .filter(
+            brand__nickname__in=brand_nicknames,
+            post__created_at__gte=cutoff,
+        )
+        .annotate(day=TruncDate("post__created_at"))
+        .values("brand__nickname", "day")
+        .annotate(count=Count("id"))
+        .order_by("day")
     )
+
+    # Build the same payload shape the serializer expects
+    now = django_timezone.now()
+    days: list[str] = [
+        (now.date() - timedelta(days=i)).isoformat()
+        for i in range(window_days - 1, -1, -1)
+    ]
+    day_index: dict[str, int] = {d: i for i, d in enumerate(days)}
+
+    series: dict[str, list[int]] = {
+        brand: [0] * window_days for brand in brand_nicknames
+    }
+    colors: dict[str, str] = {
+        brand: MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
+        for brand in brand_nicknames
+    }
+    totals: dict[str, int] = {brand: 0 for brand in brand_nicknames}
+
+    for row in agg_rows:
+        brand = row["brand__nickname"]
+        day_str = row["day"].isoformat() if row["day"] else None
+        count = row["count"]
+        if brand in series and day_str in day_index:
+            idx = day_index[day_str]
+            series[brand][idx] += count
+            totals[brand] += count
+
+    payload = {
+        "days": days,
+        "series": series,
+        "colors": colors,
+        "totals": totals,
+        "window_days": window_days,
+        "fetched_at": now.isoformat(),
+    }
     payload["applied_filters"] = filters
 
     # Render as HTML partial so htmx can swap the canvas element.
