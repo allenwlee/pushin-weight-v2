@@ -1,4 +1,4 @@
-# Render Blueprint — x-monitor v2
+# Render Blueprint — pushinweight.ai (x-monitor v2)
 # https://render.com/docs/blueprint-spec
 
 services:
@@ -26,11 +26,13 @@ services:
           name: pushinweight-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: pushinweight-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: pushinweight-redis
           property: connectionString
       - fromGroup: pushinweight-secrets
@@ -54,11 +56,13 @@ services:
           name: pushinweight-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: pushinweight-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: pushinweight-redis
           property: connectionString
       - fromGroup: pushinweight-secrets
@@ -82,14 +86,24 @@ services:
           name: pushinweight-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: pushinweight-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: pushinweight-redis
           property: connectionString
       - fromGroup: pushinweight-secrets
+
+  # --------------------------------------------------------------------------
+  # Redis (Celery broker + result backend)
+  # --------------------------------------------------------------------------
+  - type: keyvalue
+    name: pushinweight-redis
+    plan: free
+    ipAllowList: []
 
 databases:
   # --------------------------------------------------------------------------
@@ -99,10 +113,3 @@ databases:
     plan: free
     databaseName: pushinweight
     user: pushinweight
-
-  # --------------------------------------------------------------------------
-  # Managed Redis (for Celery)
-  # --------------------------------------------------------------------------
-  - name: pushinweight-redis
-    plan: free
-    ipAllowList: []
