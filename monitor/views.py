@@ -207,7 +207,19 @@ def _resolve_locale(request: HttpRequest) -> str:
 
 
 def _resolve_home_window(request: HttpRequest) -> int:
-    """Read the home window from cookie, validate, fall back to default."""
+    """Read the home window from filter state, cookie, or default."""
+    # Check filters JSON first (JS-driven updates)
+    filters_raw = request.GET.get("filters")
+    if filters_raw:
+        try:
+            filters = json.loads(filters_raw)
+            if isinstance(filters, dict) and "window" in filters:
+                n = int(filters["window"])
+                if n in ALLOWED_HOME_WINDOWS:
+                    return n
+        except (ValueError, TypeError):
+            pass
+    # Fall back to cookie
     raw = request.COOKIES.get(HOME_WINDOW_COOKIE)
     if raw is None:
         return HOME_WINDOW_DEFAULT

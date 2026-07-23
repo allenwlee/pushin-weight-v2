@@ -14,6 +14,7 @@ urlpatterns = [
 
     # JSON APIs — feed
     path("api/v1/home.feed.json", views.home_feed_json, name="home_feed_json"),
+    path("api/v1/home.feed.html", views.home_feed_json, name="home_feed_html"),
     path(
         "api/v1/brand.feed.json",
         views.brand_feed_json,
@@ -28,6 +29,7 @@ urlpatterns = [
 
     # JSON APIs — charts
     path("api/v1/home.chart.json", views.home_chart_json, name="home_chart_json"),
+    path("api/v1/home.chart.html", views.home_chart_json, name="home_chart_html"),
     path(
         "api/v1/brand.chart.json",
         views.brand_chart_json,

@@ -174,6 +174,20 @@
         emit('pw:filter-change', { key: group, filters: state });
       });
     });
+
+    // --- window buttons (1d / 7d / 30d) — these live in .topbar, not #control-panel ---
+    document.querySelectorAll('[data-pw-window-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var days = parseInt(btn.getAttribute('data-pw-window-btn'), 10);
+        // Update active state on all window buttons
+        document.querySelectorAll('[data-pw-window-btn]').forEach(function (b) {
+          b.classList.toggle('is-active', b === btn);
+        });
+        // Store window in filter state
+        state.window = days;
+        emit('pw:filter-change', { key: 'window', filters: state });
+      });
+    });
   }
 
   // Public API
