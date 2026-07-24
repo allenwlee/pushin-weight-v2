@@ -494,6 +494,7 @@ class CycleRunner:
         """
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
         max_pages = getattr(settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", None)
+        since_time = getattr(settings, "X_MONITOR_CYCLE_SINCE_TIME", None)
         max_results_cap = int(limit_per_call) if limit_per_call is not None else 50
         max_pages_cap = int(max_pages) if max_pages is not None else 5
 
@@ -503,6 +504,7 @@ class CycleRunner:
                 max_results=max_results_cap,
                 max_pages=max_pages_cap,
                 max_per_page=20,
+                since_time=int(since_time) if since_time else None,
             )
         except TwitterApiAuthError as exc:
             logger.error("_fetch_tweets: auth failure on %s: %s", call.call_id, exc)
