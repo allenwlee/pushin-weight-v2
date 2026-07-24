@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <!doctype html>
 <html lang="{{ active_locale|slice:":2"|default:"en" }}">
 <head>
@@ -23,10 +24,10 @@
       data-pw-page="multi">
   <header class="topbar">
     <h1>{{ app_name_zh }} <small>{{ app_name_en }}</small></h1>
-    <span class="muted">{{ brand_count }} models · {% if home_window_days == 1 %}24h window{% else %}{{ home_window_days }}d window{% endif %}</span>
+    <span class="muted">{{ brand_count }} models · {% if home_window_days == 1 %}{% trans "24h window" %}{% else %}{% blocktrans with days=home_window_days %}{{ days }}d window{% endblocktrans %}{% endif %}</span>
 
     <nav class="window-toggle" aria-label="Time-period selector">
-      <span class="window-toggle-label">window:</span>
+      <span class="window-toggle-label">{% trans "window:" %}</span>
       {% for n in allowed_home_windows %}
         <button class="window-btn{% if home_window_days == n %} is-active{% endif %}"
                 data-pw-window-btn="{{ n }}">{{ n }}d</button>
@@ -34,7 +35,7 @@
     </nav>
 
     <nav class="locale-toggle" aria-label="Display language">
-      <span class="locale-toggle-label">lang:</span>
+      <span class="locale-toggle-label">{% trans "lang:" %}</span>
       <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
               data-pw-locale-btn="zh_cn">中文</button>
       <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
@@ -54,14 +55,14 @@
     </section>
 
     <aside class="control-panel" id="control-panel">
-      <h2>Filters</h2>
+      <h2>{% trans "Filters" %}</h2>
 
       <div class="control-group">
         <div class="control-group-title">
-          Brands
+          {% trans "Brands" %}
           <span class="brand-col-headers">
-            <span class="col-only">only</span>
-            <span class="col-include">all</span>
+            <span class="col-only">{% trans "only" %}</span>
+            <span class="col-include">{% trans "all" %}</span>
           </span>
         </div>
         {% for brand in brands %}
@@ -75,7 +76,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">Discourse</div>
+        <div class="control-group-title">{% trans "Discourse" %}</div>
         {% for key in discourse_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked>
@@ -85,7 +86,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">post_type</div>
+        <div class="control-group-title">{% trans "post_type" %}</div>
         {% for key in post_type_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="post_types" value="{{ key }}" checked>
@@ -95,7 +96,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">account.role</div>
+        <div class="control-group-title">{% trans "account.role" %}</div>
         {% for key in role_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked>
@@ -105,7 +106,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">lang</div>
+        <div class="control-group-title">{% trans "lang" %}</div>
         {% for entry in lang_entries %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="lang" value="{{ entry.key }}" checked>
@@ -115,7 +116,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">us_nationalism</div>
+        <div class="control-group-title">{% trans "us_nationalism" %}</div>
         {% for key in nationalism_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ key }}" checked>
@@ -125,7 +126,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">cn_nationalism</div>
+        <div class="control-group-title">{% trans "cn_nationalism" %}</div>
         {% for key in nationalism_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ key }}" checked>
@@ -135,10 +136,10 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">unsanctioned</div>
+        <div class="control-group-title">{% trans "unsanctioned" %}</div>
         <label class="control-row">
           <input type="checkbox" data-pw-filter-group="unsanctioned" value="only">
-          show only flagged posts
+          {% trans "show only flagged posts" %}
         </label>
       </div>
     </aside>
@@ -150,20 +151,20 @@
     <table>
       <thead>
         <tr>
-          <th><button data-pw-sort="created_at" data-pw-order="desc">datetime</button></th>
-          <th>brand</th>
-          <th>translated</th>
-          <th>original</th>
-          <th>classifications</th>
-          <th>handle</th>
+          <th><button data-pw-sort="created_at" data-pw-order="desc">{% trans "datetime" %}</button></th>
+          <th>{% trans "brand" %}</th>
+          <th>{% trans "translated" %}</th>
+          <th>{% trans "original" %}</th>
+          <th>{% trans "classifications" %}</th>
+          <th>{% trans "handle" %}</th>
         </tr>
       </thead>
       <tbody data-pw-feed-body>
         {% include "monitor/_feed_initial.html" %}
       </tbody>
     </table>
-    <div class="feed-sentinel" data-pw-feed-sentinel>loading more…</div>
-    <div class="feed-end" data-pw-feed-end hidden>end of feed</div>
+    <div class="feed-sentinel" data-pw-feed-sentinel>{% trans "loading more…" %}</div>
+    <div class="feed-end" data-pw-feed-end hidden>{% trans "end of feed" %}</div>
   </section>
 
   <aside id="api-spend" class="spend-panel-wrap"
@@ -171,7 +172,7 @@
          hx-trigger="load every 60s"
          hx-swap="innerHTML">
     <div class="spend-panel" style="padding: 1rem; color: #6b7280;">
-      Spend panel — stubbed for U7. API endpoint not yet available.
+      {% trans "Spend panel — stubbed for U7." %} API endpoint not yet available.
     </div>
   </aside>
 </body>

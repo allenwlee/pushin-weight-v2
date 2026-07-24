@@ -63,3 +63,6 @@ data/*.db.dryrun-*
 data/*.db.dryrun-*-shm
 data/*.db.dryrun-*-wal
 data/*.test*
+
+# Compiled i18n messages (build artifacts)
+*.mo
