@@ -287,6 +287,7 @@ class TwitterApiClient:
         max_pages: int = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
+        until_time: int | None = None,
     ) -> list[dict[str, Any]]:
         """Run an X advanced-search query via TwitterAPI.io.
 
@@ -345,7 +346,8 @@ class TwitterApiClient:
             # The `until_time:` operator is exclusive; that's the desired
             # semantics here (don't include posts at second N+1).
             if "until_time:" not in effective_query:
-                effective_query = f"{effective_query} until_time:{int(time.time())}"
+                upper = int(until_time) if until_time is not None else int(time.time())
+                effective_query = f"{effective_query} until_time:{upper}"
         return self._walk_search(
             effective_query,
             max_results,
