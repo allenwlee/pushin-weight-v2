@@ -784,7 +784,14 @@ class CycleRunner:
                     )
                     counters["n_discourse"] += 1
 
-                discourse_keys = cls.get("discourse_role") or []
+                discourse_raw = cls.get("discourse_role")
+                # discourse_role may be a string or a list — normalize
+                if isinstance(discourse_raw, str):
+                    discourse_keys = [discourse_raw] if discourse_raw else []
+                elif isinstance(discourse_raw, list):
+                    discourse_keys = discourse_raw
+                else:
+                    discourse_keys = []
                 cn_nat = cls.get("china_nationalism")
                 us_nat = cls.get("us_nationalism")
 
