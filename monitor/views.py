@@ -93,7 +93,7 @@ APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
 
-SUPPORTED_LOCALES: tuple[str, ...] = ("zh_cn", "zh-CN", "en", "original")
+SUPPORTED_LOCALES: tuple[str, ...] = ("zh_cn", "zh-CN", "zh_hans", "en", "original")
 
 _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
@@ -1420,8 +1420,8 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     normalized = _normalize_locale(locale)
     from django.utils import translation
     django_code = {
-        "zh_cn": "zh-cn",
-        "zh-CN": "zh-cn",
+        "zh_cn": "zh-hans",
+        "zh-CN": "zh-hans",
         "en": "en",
         "original": "en",
     }.get(normalized, "en")

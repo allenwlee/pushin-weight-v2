@@ -56,10 +56,10 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_L10N = True
 
-LANGUAGE_CODE = "zh-cn"
+LANGUAGE_CODE = "zh-hans"
 LANGUAGES = [
     ("en", "English"),
-    ("zh-cn", "简体中文"),
+    ("zh-hans", "简体中文"),
 ]
 
 LOCALE_PATHS = [BASE_DIR / "locale"]
