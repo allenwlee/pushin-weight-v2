@@ -1,107 +1,145 @@
-"""Backfill: run a harvest cycle with date-bounded search window.
+"""Backfill: run harvest cycles with date-bounded search window.
+
+Designed for gradual, resumable execution that coexists with the regular
+15-min harvest cron. Each invocation processes a small batch of calls,
+writes progress to a state file, and exits. Run it repeatedly (e.g. via a
+Render cron or manual invocations) until all calls complete.
 
 Usage:
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
-    python manage.py backfill --since 2026-07-22                    # YYYY-MM-DD = 00:00 UTC
-    python manage.py backfill --since 2026-07-22 --dry-run          # plan only
+    # Dry-run to see what would happen
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --dry-run
 
-max_results and max_pages are computed from the time window using an
-estimated daily post rate (~2,350/day). Override with --max-results
-and --max-pages.
+    # Run one batch (default: 3 calls per batch)
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
+
+    # Run with larger batch size
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --batch-size 6
+
+    # Resume from previous state automatically (state file keyed on since/until)
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
+
+    # Reset and start over
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --reset
+
+State file: data/backfill/<since_epoch>-<until_epoch>.json
 """
 
 from __future__ import annotations
 
 import json
+import time as _time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-# Estimated daily post volume across all brands — derived from Jul 21 baseline.
+# Estimated daily post volume across all brands — from Jul 21 baseline.
 _EST_DAILY_POSTS = 2_350
-# Typical number of calls per cycle (Call A + B/C specs).
+# Typical number of calls per cycle.
 _EST_CALLS_PER_CYCLE = 6
-# TwitterAPI.io hard cap per page.
+# TwitterAPI.io page cap.
 _TWEETS_PER_PAGE = 20
-# Safety ceiling so we never request absurd page counts.
-_MAX_PAGES_CEILING = 50
+# Safety ceilings.
+_MAX_PAGES_CEILING = 100
 _MAX_RESULTS_CEILING = 1_000
+# Multiplier on computed params for headroom.
+_SAFETY_MARGIN = 2.0
+# Where state files live.
+_STATE_DIR = Path("data/backfill")
 
 
 def _parse_iso(ts: str) -> int:
-    """Parse an ISO-ish timestamp to epoch seconds.
-
-    Accepts YYYY-MM-DD (→ 00:00 UTC) and YYYY-MM-DDTHH:MM:SS.
-    """
+    """Parse YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS to epoch seconds (UTC)."""
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
         try:
             dt = datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc)
             return int(dt.timestamp())
         except ValueError:
             continue
-    raise CommandError(f"Invalid timestamp '{ts}'. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS.")
-
-
-def _compute_params(since_epoch: int, until_epoch: int) -> tuple[int, int, int]:
-    """Return (max_results, max_pages, est_total_posts) for a time window."""
-    gap_seconds = until_epoch - since_epoch
-    gap_hours = max(gap_seconds / 3600.0, 1.0)
-
-    # Expected total posts in this window
-    est_total = int(_EST_DAILY_POSTS * (gap_hours / 24))
-
-    # Expected per-call — each call covers a slice of the brand set
-    est_per_call = max(est_total // _EST_CALLS_PER_CYCLE, 50)
-
-    # max_results: fetch enough to capture the expected volume per call
-    max_results = min(max(est_per_call, 100), _MAX_RESULTS_CEILING)
-    # max_pages: enough pages at _TWEETS_PER_PAGE to deliver max_results
-    max_pages = min(
-        max((max_results // _TWEETS_PER_PAGE) + 1, 5),
-        _MAX_PAGES_CEILING,
+    raise CommandError(
+        f"Invalid timestamp '{ts}'. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS."
     )
 
+
+def _state_path(since_epoch: int, until_epoch: int) -> Path:
+    _STATE_DIR.mkdir(parents=True, exist_ok=True)
+    return _STATE_DIR / f"{since_epoch}-{until_epoch}.json"
+
+
+def _load_state(state_file: Path) -> dict | None:
+    if not state_file.exists():
+        return None
+    return json.loads(state_file.read_text())
+
+
+def _save_state(state_file: Path, state: dict) -> None:
+    state_file.write_text(json.dumps(state, indent=2, default=str))
+
+
+def _compute_params(
+    since_epoch: int, until_epoch: int, safety_margin: float
+) -> tuple[int, int, int]:
+    """Return (max_results, max_pages, est_total) with safety margin applied."""
+    gap_hours = max((until_epoch - since_epoch) / 3600.0, 1.0)
+    est_total = int(_EST_DAILY_POSTS * (gap_hours / 24))
+    est_per_call = max(est_total // _EST_CALLS_PER_CYCLE, 50)
+
+    max_results = int(min(est_per_call * safety_margin, _MAX_RESULTS_CEILING))
+    max_results = max(max_results, 100)
+    max_pages = min(
+        max(int((max_results / _TWEETS_PER_PAGE) * safety_margin) + 1, 5),
+        _MAX_PAGES_CEILING,
+    )
     return max_results, max_pages, est_total
 
 
 class Command(BaseCommand):
-    help = "Run a harvest cycle with date-bounded search window."
+    help = "Run harvest cycles with date-bounded search window (batchable, resumable)."
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(
-            "--since",
-            type=str,
-            required=True,
+            "--since", type=str, required=True,
             help="Lower bound (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS, UTC).",
         )
         parser.add_argument(
-            "--until",
-            type=str,
-            default=None,
+            "--until", type=str, default=None,
             help="Upper bound (same format). Default: now.",
         )
         parser.add_argument(
-            "--dry-run",
-            action="store_true",
+            "--dry-run", action="store_true",
             help="Plan calls only; don't fetch or write.",
         )
         parser.add_argument(
-            "--brands",
-            type=str,
-            default=None,
+            "--brands", type=str, default=None,
             help="Comma-separated brand nicknames to filter.",
         )
         parser.add_argument(
-            "--max-results",
-            type=int,
-            default=None,
+            "--batch-size", type=int, default=3,
+            help="Max calls to execute per invocation (default: 3).",
+        )
+        parser.add_argument(
+            "--safety-margin", type=float, default=_SAFETY_MARGIN,
+            help=f"Multiplier on computed max_results/pages (default: {_SAFETY_MARGIN}).",
+        )
+        parser.add_argument(
+            "--pause", type=int, default=5,
+            help="Seconds to pause between calls within a batch (default: 5).",
+        )
+        parser.add_argument(
+            "--reset", action="store_true",
+            help="Discard prior state and start from the beginning.",
+        )
+        parser.add_argument(
+            "--status", action="store_true",
+            help="Print current progress and exit (no work done).",
+        )
+        parser.add_argument(
+            "--max-results", type=int, default=None,
             help="Override computed per-call result cap.",
         )
         parser.add_argument(
-            "--max-pages",
-            type=int,
-            default=None,
+            "--max-pages", type=int, default=None,
             help="Override computed per-call page cap.",
         )
 
@@ -112,8 +150,39 @@ class Command(BaseCommand):
             if options["until"]
             else int(datetime.now(timezone.utc).timestamp())
         )
+        state_file = _state_path(since_epoch, until_epoch)
 
-        max_results, max_pages, est_total = _compute_params(since_epoch, until_epoch)
+        # --- status-only ---
+        if options["status"]:
+            state = _load_state(state_file)
+            if state is None:
+                self.stdout.write("No state file — backfill not started yet.")
+            else:
+                done = state.get("calls_completed", 0)
+                total = state.get("calls_total", "?")
+                inserted = sum(
+                    r.get("n_inserted", 0) for r in state.get("runs", [])
+                )
+                self.stdout.write(
+                    f"Backfill {options['since']} → {options['until'] or 'now'}:  "
+                    f"{done}/{total} calls done, {inserted} posts inserted so far."
+                )
+                if state.get("finished"):
+                    self.stdout.write("State: finished ✓")
+                elif state.get("calls_remaining"):
+                    self.stdout.write(
+                        f"Next: {state['calls_remaining'][0] if state['calls_remaining'] else 'none'}"
+                    )
+            return
+
+        # --- state management ---
+        if options["reset"]:
+            state_file.unlink(missing_ok=True)
+            self.stdout.write("State reset.")
+
+        max_results, max_pages, est_total = _compute_params(
+            since_epoch, until_epoch, options["safety_margin"]
+        )
         if options["max_results"] is not None:
             max_results = options["max_results"]
         if options["max_pages"] is not None:
@@ -121,6 +190,7 @@ class Command(BaseCommand):
 
         gap_hours = (until_epoch - since_epoch) / 3600.0
 
+        # --- plan calls ---
         settings.X_MONITOR_CYCLE_SINCE_TIME = since_epoch
         settings.X_MONITOR_CYCLE_UNTIL_TIME = until_epoch
         settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = max_results
@@ -131,39 +201,155 @@ class Command(BaseCommand):
         since_label = options["since"]
         until_label = options["until"] or "now"
 
+        from monitor.cycle import CycleRunner
+
+        # Plan without running so we can batch
+        calls = _plan_calls_direct()
+        call_ids = [c.call_id for c in calls]
+
+        # --- load or init state ---
+        state = _load_state(state_file) or {}
+        completed = set(state.get("calls_completed_ids", []))
+        pending = [cid for cid in call_ids if cid not in completed]
+
+        if not state:
+            state = {
+                "since_epoch": since_epoch,
+                "until_epoch": until_epoch,
+                "since_label": since_label,
+                "until_label": until_label,
+                "gap_hours": round(gap_hours, 1),
+                "est_total_posts": est_total,
+                "max_results": max_results,
+                "max_pages": max_pages,
+                "calls_total": len(call_ids),
+                "calls_completed_ids": [],
+                "calls_completed": 0,
+                "total_inserted": 0,
+                "runs": [],
+                "finished": False,
+            }
+            _save_state(state_file, state)
+
+        if not pending:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"All {len(call_ids)} calls already completed — backfill finished."
+                )
+            )
+            state["finished"] = True
+            _save_state(state_file, state)
+            return
+
+        batch = pending[: options["batch_size"]]
+        remaining = pending[options["batch_size"] :]
+
         self.stdout.write(
             f"Backfill {since_label} → {until_label}  "
-            f"({gap_hours:.1f}h window, ~{est_total} posts expected, "
-            f"max_results={max_results}, max_pages={max_pages})"
+            f"({gap_hours:.1f}h, ~{est_total} posts expected, "
+            f"max_results={max_results}, max_pages={max_pages}, "
+            f"safety_margin={options['safety_margin']}x)  "
+            f"Batch: {len(batch)}/{len(pending)} remaining"
             + ("  [DRY RUN]" if options["dry_run"] else "")
         )
 
+        if options["dry_run"]:
+            self.stdout.write(f"  Would execute calls: {batch}")
+            return
+
+        # --- execute batch ---
         from monitor.cycle import CycleRunner
 
-        runner = CycleRunner(
-            dry_run=options["dry_run"],
-            cycle_kind="manual",
-        )
-        stats = runner.run()
+        for i, call_id in enumerate(batch):
+            if i > 0 and options["pause"] > 0:
+                self.stdout.write(f"  Pausing {options['pause']}s…")
+                _time.sleep(options["pause"])
 
-        self.stdout.write(
-            json.dumps(
-                {
+            self.stdout.write(f"  Executing call {call_id} ({i+1}/{len(batch)})…")
+            try:
+                runner = CycleRunner(
+                    dry_run=False,
+                    cycle_kind="manual",
+                    _backfill_call_ids=[call_id],
+                )
+                stats = runner.run()
+
+                inserted = stats["totals"].get("n_inserted", 0)
+                state["calls_completed_ids"].append(call_id)
+                state["calls_completed"] = len(state["calls_completed_ids"])
+                state["total_inserted"] = state.get("total_inserted", 0) + inserted
+                state["runs"].append({
+                    "call_id": call_id,
                     "run_id": stats["run_id"],
                     "status": stats["status"],
-                    "since": since_label,
-                    "until": until_label,
-                    "gap_hours": round(gap_hours, 1),
-                    "est_total_posts": est_total,
-                    "max_results": max_results,
-                    "max_pages": max_pages,
-                    "dry_run": options["dry_run"],
-                    "n_calls_planned": stats["totals"].get("n_calls_planned", 0),
+                    "n_inserted": inserted,
                     "n_calls_run": stats["totals"].get("n_calls_run", 0),
-                    "n_inserted": stats["totals"].get("n_inserted", 0),
                     "errors": stats.get("errors", []),
-                },
-                indent=2,
-                default=str,
+                })
+                _save_state(state_file, state)
+
+                self.stdout.write(
+                    f"    {call_id}: {inserted} inserted  "
+                    f"(total so far: {state['total_inserted']})"
+                )
+            except Exception as exc:
+                self.stderr.write(f"    {call_id}: FAILED — {exc}")
+                state["runs"].append({
+                    "call_id": call_id,
+                    "status": "failed",
+                    "error": str(exc),
+                })
+                _save_state(state_file, state)
+                # Don't mark as completed — will retry next invocation
+                continue
+
+        # --- final state ---
+        remaining_after = [cid for cid in call_ids if cid not in set(state["calls_completed_ids"])]
+        if not remaining_after:
+            state["finished"] = True
+        state["calls_remaining"] = remaining_after
+        _save_state(state_file, state)
+
+        if state["finished"]:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Backfill complete: {state['total_inserted']} posts inserted "
+                    f"across {state['calls_completed']} calls."
+                )
             )
-        )
+        else:
+            self.stdout.write(
+                f"Batch done. {len(remaining_after)} calls remaining. "
+                f"Run again to continue. State: {state_file}"
+            )
+
+
+def _plan_calls_direct():
+    """Plan calls without instantiating a full CycleRunner.
+
+    Mirrors CycleRunner._plan_calls using the same config sources.
+    """
+    from monitor.cycle import _load_primary_keywords, _load_x_monitor_list_id, _load_x_query_specs
+    from x_monitor.query_plan import plan_calls
+
+    list_id = _load_x_monitor_list_id()
+    if list_id is None:
+        return []
+
+    primary_keywords = _load_primary_keywords()
+    x_query_specs = _load_x_query_specs() or []
+
+    brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
+    if brand_filter_raw and isinstance(brand_filter_raw, str):
+        brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
+        if brand_filter:
+            primary_keywords = {
+                k: v for k, v in primary_keywords.items() if k in brand_filter
+            }
+
+    return plan_calls(
+        list_id=list_id,
+        primary_keywords=primary_keywords,
+        x_query_specs=x_query_specs,
+        limit_per_call=getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50),
+    )

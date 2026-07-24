@@ -413,9 +413,13 @@ class CycleRunner:
         *,
         dry_run: bool = False,
         cycle_kind: str = "manual",
+        _backfill_call_ids: list[str] | None = None,
     ) -> None:
         self.dry_run = dry_run
         self.cycle_kind = cycle_kind  # 'scheduled' or 'manual'
+        # If set, only execute these call IDs (all must be in the plan).
+        # Used by the backfill command for batched, resumable execution.
+        self._backfill_call_ids = _backfill_call_ids
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
         self._posts_inserted: int = 0
@@ -699,6 +703,20 @@ class CycleRunner:
             return summary
 
         summary["totals"]["n_calls_planned"] = len(calls)
+
+        # Backfill batching: narrow to the requested call IDs.
+        if self._backfill_call_ids:
+            requested = set(self._backfill_call_ids)
+            calls = [c for c in calls if c.call_id in requested]
+            if not calls:
+                summary["status"] = "completed"
+                summary["degraded"]["backfill"] = (
+                    "No matching calls in requested batch — may already be done."
+                )
+                summary["finished_at"] = _now_iso()
+                summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
+                summary["errors"] = self._errors
+                return summary
 
         if not calls:
             summary["status"] = "degraded"
