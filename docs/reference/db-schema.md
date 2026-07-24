@@ -1,449 +1,527 @@
-# x-monitoring DB schema
-
-Last updated: 2026-07-22-13:37:00
-
-`x-monitoring/data/x_monitoring.db` (SQLite 3; live, generated via `sqlite3 .schema`)
-
-> **Reviewer note:** This doc was re-verified on 2026-07-22 against migrations
-> 001-039 (live DB at v39). All 31 tables, 29 user indexes, column types,
-> constraints, and FK relationships were checked against `sqlite3 .schema` and
-> found to be accurate. The only schema change since the 2026-07-16 review
-> is migration 039 (13 inline author-metadata columns on `accounts`), which was
-> already pre-documented. Schema image and dot were regenerated at
-> post-migration-039 in this pass.
-
-![x-monitor schema (post-migration-039)](images/xmonitor-schema-post-batch.png)
-
-*This image is generated from [`docs/reference/schema.dot`](schema.dot) via [`scripts/build_schema_image.sh`](../../scripts/build_schema_image.sh) — regenerate after any migration change.*
-
-## Tables
-
-### `_applied_config_snapshot`
-
-| Column | Type | Notes |
-|---|---|---|
-| artifact | TEXT | PRIMARY KEY |
-| content_hash | TEXT | NOT NULL |
-| written_at | TEXT | NOT NULL |
-
-### `_migrations`
-
-| Column | Type | Notes |
-|---|---|---|
-| version | INTEGER | PRIMARY KEY |
-| applied_at | TEXT | NOT NULL |
-
-### `account_post_appearances`
-
-| Column | Type | Notes |
-|---|---|---|
-| author_id | TEXT | NOT NULL; PK[1] |
-| tweet_id | TEXT | NOT NULL; PK[2]; FK → posts(tweet_id) ON DELETE CASCADE |
-| role_at_time | TEXT | |
-
-### `accounts`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| author_id | TEXT | NOT NULL UNIQUE |
-| handle | TEXT | |
-| display_name | TEXT | |
-| bio | TEXT | |
-| bio_fetched_at | TEXT | |
-| verified | INTEGER | |
-| bio_contains_brand | INTEGER | |
-| first_seen_at | TEXT | |
-| last_seen_at | TEXT | |
-| source_query_ids | TEXT | |
-| notes | TEXT | |
-| bio_en | TEXT | |
-| bio_zh_cn | TEXT | |
-| followers_count | INTEGER | Inline from tweet author object (migration 039) |
-| following_count | INTEGER | Inline from tweet author object (migration 039) |
-| favourites_count | INTEGER | Inline from tweet author object (migration 039) |
-| statuses_count | INTEGER | Inline from tweet author object (migration 039) |
-| media_count | INTEGER | Inline from tweet author object (migration 039) |
-| fast_followers_count | INTEGER | Inline from tweet author object (migration 039) |
-| is_blue_verified | INTEGER | X Premium / paid checkmark specifically |
-| verified_type | TEXT | e.g. "Business", "Government" |
-| profile_picture | TEXT | URL to profile image |
-| location | TEXT | Profile location string |
-| description | TEXT | Top-level author.description |
-| profile_bio_text | TEXT | Raw author.profile_bio.description (separate from bio) |
-| followers_fetched_at | TEXT | Last-write timestamp for engagement+profile bundle |
-
-Indexes: `idx_accounts_author_id (author_id)`, `idx_accounts_handle (handle)`
-
-### `brand_hashtags`
-
-| Column | Type | Notes |
-|---|---|---|
-| brand_id | TEXT | NOT NULL; PK[1]; FK → brands(nickname) ON DELETE CASCADE |
-| tag | TEXT | NOT NULL; PK[2] |
-| added_at | TEXT | NOT NULL |
-
-### `brand_keywords`
-
-| Column | Type | Notes |
-|---|---|---|
-| brand_id | TEXT | NOT NULL; PK[1]; FK → brands(nickname) ON DELETE CASCADE |
-| pattern | TEXT | NOT NULL; PK[2] |
-| is_regex | INTEGER | NOT NULL DEFAULT 0 |
-| added_at | TEXT | NOT NULL |
-| is_primary | INTEGER | NOT NULL DEFAULT 0; B-spec renderer reads only the primary subset per brand (migration 036) |
-
-### `brand_search_terms`
-
-| Column | Type | Notes |
-|---|---|---|
-| brand_id | INTEGER | NOT NULL; PK[1]; FK → brands(id) ON DELETE CASCADE |
-| term | TEXT | NOT NULL; PK[2] |
-| added_at | TEXT | |
-
-### `brands`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| nickname | TEXT | NOT NULL UNIQUE |
-| display_name | TEXT | |
-| accent_color | TEXT | |
-| is_sentinel | INTEGER | |
-| created_at | TEXT | |
-| display_name_en | TEXT | |
-| display_name_zh_cn | TEXT | |
-
-Indexes: `idx_brands_nickname (nickname)`
-
-### `brands_accounts`
-
-| Column | Type | Notes |
-|---|---|---|
-| brand_id | INTEGER | NOT NULL; PK[1]; FK → brands(id) ON DELETE CASCADE |
-| accounts_id | INTEGER | NOT NULL; PK[2]; FK → accounts(id) ON DELETE CASCADE |
-| role_id | INTEGER | NOT NULL; FK → roles(id) ON DELETE RESTRICT |
-| added_at | TEXT | |
-
-Indexes: `idx_brands_accounts_role_id (role_id)`
-
-### `brands_companies`
-
-| Column | Type | Notes |
-|---|---|---|
-| brand_id | INTEGER | NOT NULL; PK[1]; FK → brands(id) ON DELETE CASCADE |
-| company_id | INTEGER | NOT NULL; PK[2]; FK → companies(id) ON DELETE CASCADE |
-| ownership_pct | REAL | |
-
-### `call_state`
-
-| Column | Type | Notes |
-|---|---|---|
-| brand_id | TEXT | NOT NULL; PK[1] (uses nickname slug, e.g. "deepseek" or "*" for fan-in) |
-| call_id | TEXT | NOT NULL; PK[2] (e.g. "A", "B", "C1") |
-| call_kind | TEXT | NOT NULL; PK[3] ("account" \| "brand_wide") |
-| bucket | TEXT | PK[4] (nullable; v1.7 leaves NULL) |
-| query_id | TEXT | NOT NULL; PK[5] |
-| last_completed_at | TEXT | ISO-8601 timestamp; pipeline subtracts CURSOR_OVERLAP_HOURS before emitting as `since=` |
-| updated_at | TEXT | NOT NULL |
-
-Indexes: `idx_call_state_completed_at (last_completed_at)`
-
-### `companies`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| nickname | TEXT | NOT NULL UNIQUE |
-| display_name | TEXT | |
-| hq_country | TEXT | |
-| created_at | TEXT | |
-| display_name_en | TEXT | |
-| display_name_zh_cn | TEXT | |
-
-Indexes: `idx_companies_nickname (nickname)`
-
-### `companies_accounts`
-
-| Column | Type | Notes |
-|---|---|---|
-| company_id | INTEGER | NOT NULL; PK[1]; FK → companies(id) ON DELETE CASCADE |
-| author_id | INTEGER | NOT NULL; PK[2]; FK → accounts(id) ON DELETE CASCADE |
-| role_id | INTEGER | NOT NULL; FK → roles(id) ON DELETE RESTRICT |
-| added_at | TEXT | |
-
-Indexes: `idx_companies_accounts_role_id (role_id)`
-
-### `discourse_keys`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| key | TEXT | NOT NULL UNIQUE |
-| created_at | TEXT | NOT NULL |
-
-### `discourse_labels`
-
-| Column | Type | Notes |
-|---|---|---|
-| key | TEXT | NOT NULL; PK[1]; FK → discourse_keys(key) ON DELETE CASCADE |
-| lang | TEXT | NOT NULL; PK[2] |
-| label | TEXT | NOT NULL |
-
-### `hf_orgs`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| namespace | TEXT | NOT NULL UNIQUE |
-| company_id | INTEGER | NOT NULL; FK → companies(id) ON DELETE CASCADE |
-| confirmed | INTEGER | NOT NULL DEFAULT 0 |
-| discovered_via | TEXT | NOT NULL DEFAULT 'curated' |
-| added_at | TEXT | NOT NULL |
-
-Indexes: `idx_hf_orgs_namespace (namespace)`, `idx_hf_orgs_company (company_id)`
-
-### `nationalism_keys`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| key | TEXT | NOT NULL UNIQUE |
-| created_at | TEXT | NOT NULL |
-
-### `nationalism_labels`
-
-| Column | Type | Notes |
-|---|---|---|
-| key | TEXT | NOT NULL; PK[1]; FK → nationalism_keys(key) ON DELETE CASCADE |
-| lang | TEXT | NOT NULL; PK[2] |
-| label | TEXT | NOT NULL |
-
-### `post_type_keys`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| key | TEXT | NOT NULL UNIQUE |
-| created_at | TEXT | NOT NULL |
-
-### `post_type_labels`
-
-| Column | Type | Notes |
-|---|---|---|
-| key | TEXT | NOT NULL; PK[1]; FK → post_type_keys(key) ON DELETE CASCADE |
-| lang | TEXT | NOT NULL; PK[2] |
-| label | TEXT | NOT NULL |
-
-### `posts`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| tweet_id | TEXT | NOT NULL UNIQUE |
-| author_handle | TEXT | |
-| author_id | INTEGER | FK → accounts(id) ON DELETE SET NULL |
-| text | TEXT | |
-| lang | TEXT | |
-| created_at | TEXT | |
-| fetched_at | TEXT | |
-| like_count | INTEGER | |
-| retweet_count | INTEGER | |
-| reply_count | INTEGER | |
-| quote_count | INTEGER | |
-| in_reply_to_user_id | TEXT | |
-| quoted_status_id | TEXT | |
-| conversation_id | TEXT | |
-| entities | TEXT | |
-| source_query_id | TEXT | |
-| raw | TEXT | |
-| headline | TEXT | |
-| headline_source | TEXT | |
-| text_en | TEXT | |
-| text_zh_cn | TEXT | |
-| lang_detected | TEXT | |
-| quoted_text | TEXT | |
-| last_quote_count_seen | INTEGER | |
-| last_quote_fetched_at | TEXT | |
-| created_at_epoch | INTEGER | |
-
-Indexes: `idx_posts_tweet_id (tweet_id)`, `idx_posts_author_id (author_id)`, `idx_posts_headline_null_urlonly (id) WHERE headline IS NULL AND text GLOB 'https*'`, `idx_posts_text_en_null (id) WHERE text_en IS NULL`, `idx_posts_text_zh_cn_null (id) WHERE text_zh_cn IS NULL`, `idx_posts_lang_detected (lang_detected)`, `idx_posts_source_query_id (source_query_id)`, `idx_posts_created_at_epoch (created_at_epoch)`
-
-### `posts_brands`
-
-| Column | Type | Notes |
-|---|---|---|
-| post_id | INTEGER | NOT NULL; PK[1]; FK → posts(id) ON DELETE CASCADE |
-| brand_id | INTEGER | NOT NULL; PK[2]; FK → brands(id) ON DELETE SET NULL |
-| weight | REAL | |
-
-Indexes: `idx_posts_brands_brand_id (brand_id)`
-
-### `posts_brands_discourse`
-
-| Column | Type | Notes |
-|---|---|---|
-| post_id | INTEGER | NOT NULL; PK[1]; FK → posts(id) ON DELETE CASCADE |
-| brand_id | INTEGER | NOT NULL; PK[2]; FK → brands(id) ON DELETE SET NULL |
-| discourse_key | INTEGER | PK[3]; FK → discourse_keys(id) ON DELETE RESTRICT; nullable since migration 038 for KTD5 partial-row dead-letter rows |
-| act_id | INTEGER | NOT NULL; PK[4]; CHECK (act_id BETWEEN 0 AND 99) (0 = KTD5 partial-row sentinel; legitimate rows use 1..99) |
-| china_nationalism | INTEGER | FK → nationalism_keys(id) ON DELETE RESTRICT |
-| us_nationalism | INTEGER | FK → nationalism_keys(id) ON DELETE RESTRICT |
-
-Indexes: `idx_post_brand_dis_b_dr (brand_id, discourse_key)`, `idx_post_brand_dis_b_cn_nat (brand_id, china_nationalism)`, `idx_post_brand_dis_b_us_nat (brand_id, us_nationalism)`
-
-### `posts_brands_mentions`
-
-| Column | Type | Notes |
-|---|---|---|
-| post_id | INTEGER | NOT NULL; PK[1]; FK → posts(id) ON DELETE CASCADE |
-| brand_id | INTEGER | PK[2]; FK → brands(id) ON DELETE SET NULL |
-| source | TEXT | NOT NULL; PK[3] |
-| raw_token | TEXT | |
-| mentioned_at | TEXT | |
-
-### `posts_brands_signals`
-
-| Column | Type | Notes |
-|---|---|---|
-| post_id | TEXT | NOT NULL; PK[1]; FK → posts(tweet_id) ON DELETE CASCADE |
-| brand_id | TEXT | NOT NULL; PK[2]; FK → brands(nickname) ON DELETE SET NULL; CHECK (brand_id <> '_unattributed') |
-| post_type_key | TEXT | NOT NULL; PK[3]; FK → post_type_keys(key) ON DELETE RESTRICT |
-| sentiment | TEXT | FK → sentiment_keys(key) ON DELETE RESTRICT |
-
-Indexes: `idx_posts_brands_signals_brand_id_post_type_key (brand_id, post_type_key)`, `idx_posts_brands_signals_brand_id_sentiment (brand_id, sentiment)`
-
-### `posts_unsanctioned_flags`
-
-| Column | Type | Notes |
-|---|---|---|
-| post_id | TEXT | NOT NULL; PRIMARY KEY; FK → posts(tweet_id) ON DELETE CASCADE |
-| flags | TEXT | NOT NULL |
-| flag_set | TEXT | GENERATED ALWAYS AS (json_extract(flags, '$')) STORED |
-| evidence | TEXT | |
-| decided_at | TEXT | NOT NULL |
-
-Indexes: `idx_unsanctioned_flag_set (flag_set)`
-
-### `products`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| repo_id | TEXT | NOT NULL UNIQUE |
-| brand_id | INTEGER | FK → brands(id) ON DELETE SET NULL |
-| hf_org_id | INTEGER | FK → hf_orgs(id) ON DELETE SET NULL |
-| hf_type | TEXT | NOT NULL DEFAULT 'model'; CHECK (hf_type IN ('model','dataset','space')) |
-| display_name | TEXT | |
-| author | TEXT | |
-| sha | TEXT | |
-| private | INTEGER | |
-| gated | TEXT | |
-| disabled | INTEGER | |
-| pipeline_tag | TEXT | |
-| library_name | TEXT | |
-| downloads | INTEGER | |
-| downloads_all_time | INTEGER | |
-| download_velocity | REAL | |
-| likes | INTEGER | |
-| trending_score | REAL | |
-| paperswithcode_id | TEXT | |
-| created_at | TEXT | |
-| last_modified | TEXT | |
-| tags_json | TEXT | |
-| siblings_json | TEXT | |
-| card_data_json | TEXT | |
-| config_json | TEXT | |
-| spaces_json | TEXT | |
-| raw_json | TEXT | |
-| collected_at | TEXT | NOT NULL |
-| updated_at | TEXT | NOT NULL |
-
-Indexes: `idx_products_repo_id (repo_id)`, `idx_products_brand (brand_id)`, `idx_products_hf_org_id (hf_org_id)`
-
-### `role_labels`
-
-| Column | Type | Notes |
-|---|---|---|
-| key | TEXT | NOT NULL; PK[1]; FK → roles(key) ON DELETE CASCADE |
-| lang | TEXT | NOT NULL; PK[2] |
-| label | TEXT | NOT NULL |
-
-### `roles`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| key | TEXT | NOT NULL UNIQUE |
-| created_at | TEXT | NOT NULL |
-
-### `search_queries`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| query_id | TEXT | NOT NULL UNIQUE |
-| brand_id | INTEGER | FK → brands(id) ON DELETE SET NULL |
-| keywords_json | TEXT | |
-| plan_calls_run_id | TEXT | |
-| created_at | TEXT | |
-
-Indexes: `idx_search_queries_query_id (query_id)`, `idx_search_queries_brand_id (brand_id)`
-
-### `sentiment_keys`
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INTEGER | PK AUTOINCREMENT |
-| key | TEXT | NOT NULL UNIQUE |
-| created_at | TEXT | NOT NULL |
-
-### `sentiment_labels`
-
-| Column | Type | Notes |
-|---|---|---|
-| key | TEXT | NOT NULL; PK[1]; FK → sentiment_keys(key) ON DELETE CASCADE |
-| lang | TEXT | NOT NULL; PK[2] |
-| label | TEXT | NOT NULL |
+# x-monitor DB schema -- v2 Django ORM
+
+Last updated: 2026-07-24-11:36:23
+
+Source of truth: [`core/models.py`](../../core/models.py). Migrations: `core/migrations/`.
+
+Last updated: 2026-07-24
+
+![x-monitor schema -- v2 Django ORM (core/models.py)](images/xmonitor-schema-post-batch.png)
+
+> **Note:** The schema image is currently still generated from the legacy
+> `schema.dot`. After the Django cutover is complete, regenerate it from the
+> Django model graph instead.
+
+## Conventions
+
+- **Natural keys as PK.** Entity and lookup tables use their natural key as the
+  primary key (`nickname`, `author_id`, `tweet_id`, `key`, etc.). No synthetic
+  `id` column on these tables.
+- **CompositePrimaryKey.** Junction and i18n-label tables use
+  `django.db.models.CompositePrimaryKey`. No surrogate `id` column.
+- **BigAutoField synthetic PK** only on `products` and `search_queries`, which
+  are control-plane tables populated by external scrapers/internal schedulers.
+- **case_insensitive collation.** All `CharField` natural keys (nicknames,
+  handles, namespaces, lookup keys) use `db_collation="case_insensitive"`
+  (PostgreSQL: `CREATE COLLATION case_insensitive (provider = icu, locale =
+  'und-u-ks-level2', deterministic = false)`).
+- **JSONField** for structured data (tweet entities, raw payloads, product
+  metadata, keyword lists, flag sets).
+- **DateTimeField** with `USE_TZ=True` (stores as `TIMESTAMPTZ` in PostgreSQL).
+  `auto_now_add` for creation timestamps, `auto_now` for last-modified.
+- **No soft-delete columns.**
+- **on_delete=PROTECT** on lookup-table FKs.
+  **on_delete=CASCADE** for junction tables. **on_delete=SET_NULL** for
+  optional relationships.
 
 ---
 
-## Last reviewed: 2026-07-22 (HEAD 6589175)
+## 1. Entities
 
-**Source-of-truth verified against:**
-- Live `x-monitoring/data/x_monitoring.db` `sqlite_master` schema dump (DB at v39)
-- `x-monitoring/x_monitor/migrations/001_initial.sql` through `039_accounts_inline_metadata.sql`
-- `docs/reference/schema.dot` (regenerated at post-migration-039 in this pass)
+### Brand (`brands`)
 
-### (a) Substantive corrections in this pass
+| Field | Type | Notes |
+|---|---|---|
+| nickname | `CharField(max_length=64, pk)` | case_insensitive |
+| display_name | `TextField` | nullable |
+| accent_color | `TextField` | nullable |
+| is_sentinel | `BooleanField(default=False)` | |
+| created_at | `DateTimeField(auto_now_add)` | |
+| display_name_en | `TextField` | nullable |
+| display_name_zh_cn | `TextField` | nullable |
 
-None. Every table, column, type, constraint, FK, and index in the doc was
-cross-referenced against the live `sqlite3 .schema` dump and found to be
-accurate. The only schema change since the 2026-07-16 review (migration 039,
-which adds 13 inline author-metadata columns to `accounts`) was already
-pre-documented in the prior version of this file.
+### Company (`companies`)
 
-Metadata updates applied:
-1. Header date advanced from 2026-07-16 to 2026-07-22.
-2. Migration range references updated from 001-038/v38 to 001-039/v39.
-3. Image caption updated to `post-migration-039` to match the regenerated PNG.
-4. Reviewer note rewritten to reflect the current verification pass.
+| Field | Type | Notes |
+|---|---|---|
+| nickname | `CharField(max_length=64, pk)` | case_insensitive |
+| display_name | `TextField` | nullable |
+| hq_country | `TextField` | nullable |
+| accent_color | `TextField` | nullable |
+| description | `TextField` | nullable |
+| created_at | `DateTimeField(auto_now_add)` | |
+| display_name_en | `TextField` | nullable |
+| display_name_zh_cn | `TextField` | nullable |
 
-### (b) Claims not independently verified
+### Account (`accounts`)
 
-The following claims describe application-level behavior, not schema
-structure. They cannot be verified from `sqlite3 .schema` alone:
+| Field | Type | Notes |
+|---|---|---|
+| author_id | `TextField(pk)` | X/Twitter user ID string |
+| handle | `CharField(max_length=64)` | case_insensitive; nullable |
+| display_name | `TextField` | nullable |
+| bio | `TextField` | nullable |
+| bio_fetched_at | `DateTimeField` | nullable |
+| verified | `BooleanField(default=False)` | legacy checkmark |
+| bio_contains_brand | `BooleanField` | nullable |
+| first_seen_at | `DateTimeField(auto_now_add)` | |
+| last_seen_at | `DateTimeField(auto_now)` | |
+| source_query_ids | `TextField` | nullable |
+| notes | `TextField` | nullable |
+| bio_en | `TextField` | nullable |
+| bio_zh_cn | `TextField` | nullable |
+| followers_count | `IntegerField` | nullable; inline from tweet author payload |
+| following_count | `IntegerField` | nullable |
+| favourites_count | `IntegerField` | nullable |
+| statuses_count | `IntegerField` | nullable |
+| media_count | `IntegerField` | nullable |
+| fast_followers_count | `IntegerField` | nullable |
+| is_blue_verified | `BooleanField` | nullable; X Premium checkmark |
+| verified_type | `TextField` | nullable; e.g. "Business", "Government" |
+| profile_picture | `TextField` | nullable; URL |
+| location | `TextField` | nullable |
+| description | `TextField` | nullable; author.description from tweet payload |
+| profile_bio_text | `TextField` | nullable; author.profile_bio.description |
+| followers_fetched_at | `DateTimeField` | nullable; last-write timestamp for engagement+profile bundle |
 
-- `call_state.last_completed_at`: "pipeline subtracts CURSOR_OVERLAP_HOURS
-  before emitting as `since=`"
-- `brand_keywords.is_primary`: "B-spec renderer reads only the primary subset"
-- `posts_brands_discourse.act_id`: "act_id=0 is the KTD5 partial-row sentinel"
-- `accounts` migration-039 columns: "Inline from tweet author object"
+Indexes: `idx_accounts_handle (handle)`, `idx_accounts_last_seen_at (last_seen_at)`
 
-These claims are preserved as-is; they appear plausible against the migration
-history and plan documents but are not schema-verifiable.
+> **Sparse data note:** The inline author metadata fields (`followers_count`
+> through `followers_fetched_at`) were added later in the migration history and
+> are only populated for tweets fetched after that point. Accounts that were
+> last seen before the metadata harvesting was added will have NULLs in these
+> columns.
 
-### (c) Drift noticed but not fixed (and why)
+### Post (`posts`)
 
-None. The schema.dot and derived PNG were regenerated in this pass
-(post-migration-039), closing all drift items noted in the 2026-07-16 review.
+| Field | Type | Notes |
+|---|---|---|
+| tweet_id | `TextField(pk)` | X/Twitter status ID string |
+| author_handle | `CharField(max_length=64)` | case_insensitive; nullable; denormalized for fast display |
+| author | FK -> `Account` | `on_delete=SET_NULL`; db_column=`author_id`; to_field=`author_id` |
+| text | `TextField` | nullable |
+| lang | `TextField` | nullable; declared language |
+| created_at | `DateTimeField` | nullable |
+| fetched_at | `DateTimeField(auto_now_add)` | |
+| like_count | `IntegerField` | nullable |
+| retweet_count | `IntegerField` | nullable |
+| reply_count | `IntegerField` | nullable |
+| quote_count | `IntegerField` | nullable |
+| in_reply_to_user_id | `TextField` | nullable |
+| quoted_status_id | `TextField` | nullable |
+| conversation_id | `TextField` | nullable |
+| entities | `JSONField` | nullable; tweet entities payload |
+| source_query_id | `TextField` | nullable |
+| raw | `JSONField` | nullable; full tweet JSON |
+| headline | `TextField` | nullable; extracted headline |
+| headline_source | `TextField` | nullable |
+| text_en | `TextField` | nullable; English translation |
+| text_zh_cn | `TextField` | nullable; Chinese translation |
+| lang_detected | `TextField` | nullable; auto-detected language |
+| quoted_text | `TextField` | nullable |
+| last_quote_count_seen | `IntegerField` | nullable |
+| last_quote_fetched_at | `DateTimeField` | nullable |
+| created_at_epoch | `BigIntegerField` | nullable; epoch seconds for range queries |
+
+Indexes: `idx_posts_author_id (author_id)`, `idx_posts_created_at (created_at)`,
+`idx_posts_lang (lang)`, `idx_posts_lang_detected (lang_detected)`,
+`idx_posts_source_query_id (source_query_id)`, `idx_posts_created_at_epoch (created_at_epoch)`
+
+### HFOrg (`hf_orgs`)
+
+| Field | Type | Notes |
+|---|---|---|
+| namespace | `CharField(max_length=64, pk)` | case_insensitive; HuggingFace org/user slug |
+| company | FK -> `Company` | `on_delete=CASCADE`; db_column=`company_id`; to_field=`nickname` |
+| confirmed | `BooleanField(default=False)` | |
+| discovered_via | `TextField(default='curated')` | |
+| added_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_hf_orgs_company (company_id)`
+
+### Product (`products`)
+
+| Field | Type | Notes |
+|---|---|---|
+| id | `BigAutoField(pk)` | synthetic PK |
+| repo_id | `CharField(max_length=256, unique=True)` | case_insensitive; HF repo slug |
+| brand | FK -> `Brand` | `on_delete=SET_NULL`; nullable; db_column=`brand_id`; to_field=`nickname` |
+| hf_org | FK -> `HFOrg` | `on_delete=SET_NULL`; nullable; db_column=`hf_org_id`; to_field=`namespace` |
+| hf_type | `TextField(default='model')` | "model", "dataset", or "space" |
+| display_name | `TextField` | nullable |
+| author | `TextField` | nullable |
+| sha | `TextField` | nullable |
+| private | `BooleanField` | nullable |
+| gated | `TextField` | nullable |
+| disabled | `BooleanField` | nullable |
+| pipeline_tag | `TextField` | nullable |
+| library_name | `TextField` | nullable |
+| downloads | `IntegerField` | nullable; recent download count |
+| downloads_all_time | `IntegerField` | nullable |
+| download_velocity | `FloatField` | nullable |
+| likes | `IntegerField` | nullable |
+| trending_score | `FloatField` | nullable |
+| paperswithcode_id | `TextField` | nullable |
+| created_at | `DateTimeField` | nullable; repo creation |
+| last_modified | `DateTimeField` | nullable; repo last-modified |
+| tags | `JSONField(db_column='tags_json')` | nullable |
+| siblings | `JSONField(db_column='siblings_json')` | nullable |
+| card_data | `JSONField(db_column='card_data_json')` | nullable |
+| config | `JSONField(db_column='config_json')` | nullable |
+| spaces | `JSONField(db_column='spaces_json')` | nullable |
+| raw | `JSONField(db_column='raw_json')` | nullable |
+| collected_at | `DateTimeField(auto_now_add)` | |
+| updated_at | `DateTimeField(auto_now)` | |
+
+Indexes: `idx_products_brand (brand_id)`, `idx_products_hf_org_id (hf_org_id)`,
+`idx_products_collected_at (collected_at)`
+
+---
+
+## 2. Junctions
+
+### PostBrand (`posts_brands`)
+
+Composite PK: `(post, brand)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| post | FK -> `Post` | `on_delete=CASCADE`; db_column=`post_id`; to_field=`tweet_id` |
+| brand | FK -> `Brand` | `on_delete=CASCADE`; db_column=`brand_id`; to_field=`nickname` |
+| weight | `FloatField(default=1.0)` | attribution relevance score |
+
+Indexes: `idx_posts_brands_brand_id (brand_id)`
+
+### PostBrandMention (`posts_brands_mentions`)
+
+Composite PK: `(post, brand, source)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| post | FK -> `Post` | `on_delete=CASCADE`; db_column=`post_id`; to_field=`tweet_id` |
+| brand | FK -> `Brand` | `on_delete=PROTECT`; db_column=`brand_id`; to_field=`nickname` |
+| source | `TextField` | match origin (e.g. "keyword", "hashtag", "handle") |
+| raw_token | `TextField` | nullable; the raw matched token |
+| mentioned_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_post_brand_mention_brand (brand_id)`
+
+### PostBrandSignal (`posts_brands_signals`)
+
+Composite PK: `(post, brand, post_type)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| post | FK -> `Post` | `on_delete=CASCADE`; db_column=`post_id`; to_field=`tweet_id` |
+| brand | FK -> `Brand` | `on_delete=PROTECT`; db_column=`brand_id`; to_field=`nickname` |
+| post_type | FK -> `PostTypeKey` | `on_delete=PROTECT`; db_column=`post_type_key`; to_field=`key` |
+| sentiment | FK -> `SentimentKey` | `on_delete=PROTECT`; db_column=`sentiment`; to_field=`key` |
+
+Indexes: `idx_pb_sig_b_p_type (brand_id, post_type_key)`,
+`idx_pb_sig_b_sent (brand_id, sentiment)`
+
+### PostBrandDiscourse (`posts_brands_discourse`)
+
+Per-act pragmatics. Composite PK: `(post, brand, discourse, act_id)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| post | FK -> `Post` | `on_delete=CASCADE`; db_column=`post_id`; to_field=`tweet_id` |
+| brand | FK -> `Brand` | `on_delete=PROTECT`; db_column=`brand_id`; to_field=`nickname` |
+| discourse | FK -> `DiscourseKey` | `on_delete=PROTECT`; db_column=`discourse_key`; to_field=`key` |
+| act_id | `PositiveSmallIntegerField` | distinguishes multiple speech-acts toward same brand (1..N) |
+| china_nationalism | FK -> `NationalismKey` | `on_delete=PROTECT`; nullable; db_column=`china_nationalism`; to_field=`key` |
+| us_nationalism | FK -> `NationalismKey` | `on_delete=PROTECT`; nullable; db_column=`us_nationalism`; to_field=`key` |
+
+Indexes: `idx_post_brand_dis_b_dr (brand_id, discourse_key)`,
+`idx_post_brand_dis_b_cn_nat (brand_id, china_nationalism)`,
+`idx_post_brand_dis_b_us_nat (brand_id, us_nationalism)`
+
+> **Sparse data note:** `china_nationalism` and `us_nationalism` are nullable;
+> rows from the initial backfill window may have NULL values here.
+
+### BrandCompany (`brands_companies`)
+
+Composite PK: `(brand, company)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| brand | FK -> `Brand` | `on_delete=CASCADE`; db_column=`brand_id`; to_field=`nickname` |
+| company | FK -> `Company` | `on_delete=CASCADE`; db_column=`company_id`; to_field=`nickname` |
+| ownership_pct | `FloatField(default=1.0)` | |
+
+### BrandAccount (`brands_accounts`)
+
+Composite PK: `(brand, account)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| brand | FK -> `Brand` | `on_delete=CASCADE`; db_column=`brand_id`; to_field=`nickname` |
+| account | FK -> `Account` | `on_delete=CASCADE`; db_column=`accounts_id`; to_field=`author_id` |
+| role | FK -> `Role` | `on_delete=PROTECT`; db_column=`role_id`; to_field=`key` |
+| added_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_brands_accounts_role_id (role_id)`
+
+### CompanyAccount (`companies_accounts`)
+
+Composite PK: `(company, account)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| company | FK -> `Company` | `on_delete=CASCADE`; db_column=`company_id`; to_field=`nickname` |
+| account | FK -> `Account` | `on_delete=CASCADE`; db_column=`author_id`; to_field=`author_id` |
+| role | FK -> `Role` | `on_delete=PROTECT`; db_column=`role_id`; to_field=`key` |
+| added_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_companies_accounts_role_id (role_id)`
+
+### BrandKeyword (`brand_keywords`)
+
+Composite PK: `(brand, pattern)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| brand | FK -> `Brand` | `on_delete=CASCADE`; db_column=`brand_id`; to_field=`nickname` |
+| pattern | `TextField` | keyword or regex pattern |
+| is_regex | `BooleanField(default=False)` | |
+| added_at | `DateTimeField(auto_now_add)` | |
+| is_primary | `BooleanField(default=False)` | used by B-spec renderer to select primary subset per brand |
+
+Indexes: `idx_brand_keywords_brand_id (brand_id)`
+
+### BrandSearchTerm (`brand_search_terms`)
+
+Composite PK: `(brand, term)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| brand | FK -> `Brand` | `on_delete=CASCADE`; db_column=`brand_id`; to_field=`nickname` |
+| term | `TextField` | |
+| added_at | `DateTimeField(auto_now_add)` | |
+
+### BrandHashtag (`brand_hashtags`)
+
+Composite PK: `(brand, hashtag)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| brand | FK -> `Brand` | `on_delete=CASCADE`; db_column=`brand_id`; to_field=`nickname` |
+| hashtag | `TextField(db_column='tag')` | the tag string (without #) |
+| added_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_brand_hashtags_brand_id (brand_id)`
+
+### AccountPostAppearance (`account_post_appearances`)
+
+Composite PK: `(account, post)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| account | FK -> `Account` | `on_delete=CASCADE`; db_column=`author_id`; to_field=`author_id` |
+| post | FK -> `Post` | `on_delete=CASCADE`; db_column=`tweet_id`; to_field=`tweet_id` |
+| role_at_time | `TextField` | nullable |
+| source_query_ids | `TextField` | nullable |
+
+Indexes: `idx_acct_post_app_post_id (tweet_id)`
+
+---
+
+## 3. Lookup tables
+
+### Role (`roles`)
+
+| Field | Type | Notes |
+|---|---|---|
+| key | `CharField(max_length=64, pk)` | case_insensitive; e.g. "official", "researcher", "executive" |
+| created_at | `DateTimeField(auto_now_add)` | |
+
+### RoleLabel (`role_labels`)
+
+Composite PK: `(role, lang)`. FK role -> `Role`.
+
+| Field | Type | Notes |
+|---|---|---|
+| role | FK -> `Role` | `on_delete=CASCADE`; db_column=`key`; to_field=`key` |
+| lang | `TextField` | |
+| label | `TextField` | |
+
+### PostTypeKey (`post_type_keys`)
+
+| Field | Type | Notes |
+|---|---|---|
+| key | `CharField(max_length=64, pk)` | case_insensitive; e.g. "release", "update", "review" |
+| created_at | `DateTimeField(auto_now_add)` | |
+
+### PostTypeLabel (`post_type_labels`)
+
+Composite PK: `(post_type, lang)`. FK post_type -> `PostTypeKey`.
+
+| Field | Type | Notes |
+|---|---|---|
+| post_type | FK -> `PostTypeKey` | `on_delete=CASCADE`; db_column=`key`; to_field=`key` |
+| lang | `TextField` | |
+| label | `TextField` | |
+
+### SentimentKey (`sentiment_keys`)
+
+| Field | Type | Notes |
+|---|---|---|
+| key | `CharField(max_length=64, pk)` | case_insensitive; e.g. "positive", "negative", "mixed", "neutral" |
+| created_at | `DateTimeField(auto_now_add)` | |
+
+### SentimentLabel (`sentiment_labels`)
+
+Composite PK: `(sentiment, lang)`. FK sentiment -> `SentimentKey`.
+
+| Field | Type | Notes |
+|---|---|---|
+| sentiment | FK -> `SentimentKey` | `on_delete=CASCADE`; db_column=`key`; to_field=`key` |
+| lang | `TextField` | |
+| label | `TextField` | |
+
+### DiscourseKey (`discourse_keys`)
+
+9-way pragmatic-register vocabulary.
+
+| Field | Type | Notes |
+|---|---|---|
+| key | `CharField(max_length=64, pk)` | case_insensitive; e.g. "genuine_hype", "sarcasm", "dunk" |
+| created_at | `DateTimeField(auto_now_add)` | |
+
+### DiscourseLabel (`discourse_labels`)
+
+Composite PK: `(discourse, lang)`. FK discourse -> `DiscourseKey`.
+
+| Field | Type | Notes |
+|---|---|---|
+| discourse | FK -> `DiscourseKey` | `on_delete=CASCADE`; db_column=`key`; to_field=`key` |
+| lang | `TextField` | |
+| label | `TextField` | |
+
+### NationalismKey (`nationalism_keys`)
+
+6-step nationalism scale shared across both axes (china / us).
+
+| Field | Type | Notes |
+|---|---|---|
+| key | `CharField(max_length=64, pk)` | case_insensitive; e.g. "none", "mild_pro", "pro", "constructive_critical", "anti", "mixed" |
+| created_at | `DateTimeField(auto_now_add)` | |
+
+### NationalismLabel (`nationalism_labels`)
+
+Composite PK: `(nationalism, lang)`. FK nationalism -> `NationalismKey`.
+
+| Field | Type | Notes |
+|---|---|---|
+| nationalism | FK -> `NationalismKey` | `on_delete=CASCADE`; db_column=`key`; to_field=`key` |
+| lang | `TextField` | |
+| label | `TextField` | |
+
+### UnsanctionedFlagKey (`unsanctioned_flag_keys`)
+
+Flag vocabulary lookup. No label table.
+
+| Field | Type | Notes |
+|---|---|---|
+| key | `CharField(max_length=64, pk)` | case_insensitive |
+
+---
+
+## 4. Control plane
+
+### CallState (`call_state`)
+
+Cursor tracker for per-call brand harvest cycles. Composite PK:
+`(brand_id, call_id, call_kind, bucket, query_id)`.
+
+`brand_id` uses nickname slugs (e.g. `"deepseek"`) or `"*"` for fan-in. Not an
+FK because call_state records may reference brands that were later removed.
+
+| Field | Type | Notes |
+|---|---|---|
+| brand_id | `TextField` | nickname slug or `"*"` |
+| call_id | `TextField` | e.g. "A", "B", "C1" |
+| call_kind | `TextField` | "account" or "brand_wide" |
+| bucket | `TextField(default='')` | nullable in legacy rows |
+| query_id | `TextField` | |
+| last_completed_at | `DateTimeField` | nullable; pipeline offsets by CURSOR_OVERLAP_HOURS before emitting `since=` |
+| updated_at | `DateTimeField(auto_now)` | |
+
+Indexes: `idx_call_state_completed_at (last_completed_at)`
+
+### AppliedConfigSnapshot (`_applied_config_snapshot`)
+
+| Field | Type | Notes |
+|---|---|---|
+| artifact | `TextField(pk)` | |
+| content_hash | `TextField` | |
+| written_at | `DateTimeField(auto_now_add)` | |
+
+### SearchQuery (`search_queries`)
+
+| Field | Type | Notes |
+|---|---|---|
+| id | `BigAutoField(pk)` | synthetic PK |
+| query_id | `TextField(unique=True)` | |
+| brand | FK -> `Brand` | `on_delete=SET_NULL`; nullable; db_column=`brand_id`; to_field=`nickname` |
+| keywords | `JSONField(db_column='keywords_json')` | nullable |
+| plan_calls_run_id | `TextField` | nullable |
+| created_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_search_queries_brand_id (brand_id)`
+
+---
+
+## 5. Flags
+
+### PostUnsanctionedFlag (`posts_unsanctioned_flags`)
+
+| Field | Type | Notes |
+|---|---|---|
+| post | `OneToOneField(pk) -> Post` | `on_delete=CASCADE`; db_column=`post_id`; to_field=`tweet_id` |
+| flags | `TextField` | JSON array of flag keys |
+| flag_set | `JSONField` | nullable; extracted from flags |
+| evidence | `TextField` | nullable |
+| decided_at | `DateTimeField(auto_now_add)` | |
+
+Indexes: `idx_unsanctioned_flag_set (flag_set)`
+
+> **Sparse data note:** `flag_set` is nullable; it is populated by application
+> code and may be NULL in rows that existed before the application-level
+> backfill ran.
+
+---
+
+## Last reviewed: 2026-07-24
+
+**Source-of-truth:** `core/models.py` (Django 5.2 ORM), migration `core/migrations/0001_initial.py`.
+All 28 models, their fields, types, FKs, indexes, and constraints were
+cross-referenced against the model source and migration file and found to be
+accurate.
+
+**Key architectural decisions reflected in this schema:**
+
+1. **Natural keys as PK** on Brand, Company, Account, Post, HFOrg, and all
+   lookup tables -- no synthetic `id` columns.
+2. **CompositePrimaryKey** on all junction and i18n-label tables -- no
+   surrogate `id`.
+3. **BigAutoField synthetic PK** retained only on `products` and
+   `search_queries`.
+4. **case_insensitive collation** on all `CharField` natural keys for
+   case-insensitive equality at the database level.
+5. **JSONField** replaces TEXT for structured payloads (`entities`, `raw`,
+   `tags`, `siblings`, `card_data`, `config`, `spaces`, `keywords`,
+   `flag_set`).
+6. **on_delete semantics:** PROTECT on lookup FKs,
+   CASCADE on owned junctions, SET_NULL on optional relationships.

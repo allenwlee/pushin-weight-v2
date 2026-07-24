@@ -1,16 +1,18 @@
-/* Auto-generated from x-monitoring/x_monitor/migrations/*.sql (1-20, 22-39) on 2026-07-22. */
-/* Last regenerated: post-migration-039 */
+/* Auto-generated from Django ORM models in core/models.py. */
+/* Last regenerated: v2 Django ORM — core/models.py, 2026-07-24 */
 /* Do not edit by hand. Regenerate via scripts/build_schema_image.sh */
-/* (See U1 in docs/plans/2026-06-26-002-feat-schema-image-build-pipeline-plan.md.) */
 
 digraph xmonitor_schema {
   rankdir=TB;
   fontname="Helvetica";
   labelloc="t";
-  label=<<FONT POINT-SIZE="20"><B>x-monitor schema (post-migration-039)</B></FONT><BR/><FONT POINT-SIZE="11" COLOR="#7F8C8D">brands.nickname + companies.nickname &#183; INTEGER PKs &#183; discourse/nationalism/unsanctioned axes</FONT>>;
+  label=<<FONT POINT-SIZE="20"><B>x-monitor schema (v2 Django ORM)</B></FONT><BR/><FONT POINT-SIZE="11" COLOR="#7F8C8D">Natural-key TEXT PKs &#183; Composite PKs on junctions &#183; PostgreSQL on Render</FONT>>;
   node [shape=none, margin=0, fontname="Helvetica"];
   edge [color="#7F8C8D", arrowsize=0.7, fontname="Helvetica", fontsize=9];
 
+  /* =========================================================================
+     Lookup — enum-family vocabulary tables (keys + i18n labels)
+     ========================================================================= */
   subgraph cluster_lookup {
     label="lookup";
     style=filled; fillcolor="#FAFAFA";
@@ -18,48 +20,14 @@ digraph xmonitor_schema {
     fontsize=12;
     fontcolor="#2C3E50";
     margin=12;
-    _applied_config_snapshot [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>_applied_config_snapshot</B></FONT></TD></TR>
-<TR><TD PORT="artifact" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>artifact <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="artifact_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="content_hash" BGCOLOR="#FFFFFF" ALIGN="LEFT">content_hash</TD><TD PORT="content_hash_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="written_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">written_at</TD><TD PORT="written_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    discourse_keys [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>discourse_keys</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FFFFFF" ALIGN="LEFT">key</TD><TD PORT="key_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    discourse_labels [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>discourse_labels</B></FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    nationalism_keys [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>nationalism_keys</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FFFFFF" ALIGN="LEFT">key</TD><TD PORT="key_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    nationalism_labels [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>nationalism_labels</B></FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
+
     post_type_keys [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>post_type_keys</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FFFFFF" ALIGN="LEFT">key</TD><TD PORT="key_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
+
     post_type_labels [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>post_type_labels</B></FONT></TD></TR>
@@ -67,27 +35,14 @@ digraph xmonitor_schema {
 <TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 </TABLE>>];
-    role_labels [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>role_labels</B></FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    roles [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>roles</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FFFFFF" ALIGN="LEFT">key</TD><TD PORT="key_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
+
     sentiment_keys [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>sentiment_keys</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="key" BGCOLOR="#FFFFFF" ALIGN="LEFT">key</TD><TD PORT="key_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
+
     sentiment_labels [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>sentiment_labels</B></FONT></TD></TR>
@@ -95,8 +50,70 @@ digraph xmonitor_schema {
 <TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 </TABLE>>];
+
+    discourse_keys [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>discourse_keys</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
+
+    discourse_labels [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>discourse_labels</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
+    nationalism_keys [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>nationalism_keys</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
+
+    nationalism_labels [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>nationalism_labels</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
+    roles [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>roles</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
+
+    role_labels [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>role_labels</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="lang" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>lang <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="lang_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="label" BGCOLOR="#FFFFFF" ALIGN="LEFT">label</TD><TD PORT="label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
+    unsanctioned_flag_keys [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>unsanctioned_flag_keys</B></FONT></TD></TR>
+<TR><TD PORT="key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>key <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
+    _applied_config_snapshot [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>_applied_config_snapshot</B></FONT></TD></TR>
+<TR><TD PORT="artifact" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>artifact <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="artifact_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="content_hash" BGCOLOR="#FFFFFF" ALIGN="LEFT">content_hash</TD><TD PORT="content_hash_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="written_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">written_at</TD><TD PORT="written_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
   }
 
+  /* =========================================================================
+     Entity — core domain objects
+     ========================================================================= */
   subgraph cluster_entity {
     label="entity";
     style=filled; fillcolor="#EAF2F8";
@@ -104,104 +121,115 @@ digraph xmonitor_schema {
     fontsize=12;
     fontcolor="#2C3E50";
     margin=12;
+
+    brands [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brands</B></FONT></TD></TR>
+<TR><TD PORT="nickname" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>nickname <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="nickname_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="display_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name</TD><TD PORT="display_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="accent_color" BGCOLOR="#FFFFFF" ALIGN="LEFT">accent_color</TD><TD PORT="accent_color_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="is_sentinel" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_sentinel</TD><TD PORT="is_sentinel_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="display_name_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_en</TD><TD PORT="display_name_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="display_name_zh_cn" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_zh_cn</TD><TD PORT="display_name_zh_cn_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
+    companies [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>companies</B></FONT></TD></TR>
+<TR><TD PORT="nickname" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>nickname <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="nickname_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="display_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name</TD><TD PORT="display_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="hq_country" BGCOLOR="#FFFFFF" ALIGN="LEFT">hq_country</TD><TD PORT="hq_country_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="accent_color" BGCOLOR="#FFFFFF" ALIGN="LEFT">accent_color</TD><TD PORT="accent_color_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="description" BGCOLOR="#FFFFFF" ALIGN="LEFT">description</TD><TD PORT="description_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="display_name_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_en</TD><TD PORT="display_name_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="display_name_zh_cn" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_zh_cn</TD><TD PORT="display_name_zh_cn_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
     accounts [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>accounts</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="author_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_id</TD><TD PORT="author_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>author_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="author_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="handle" BGCOLOR="#FFFFFF" ALIGN="LEFT">handle</TD><TD PORT="handle_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="display_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name</TD><TD PORT="display_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="bio" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio</TD><TD PORT="bio_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="bio_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_fetched_at</TD><TD PORT="bio_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">verified</TD><TD PORT="verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="bio_contains_brand" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_contains_brand</TD><TD PORT="bio_contains_brand_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="first_seen_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">first_seen_at</TD><TD PORT="first_seen_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="last_seen_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_seen_at</TD><TD PORT="last_seen_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="bio_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_fetched_at</TD><TD PORT="bio_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">verified</TD><TD PORT="verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="bio_contains_brand" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_contains_brand</TD><TD PORT="bio_contains_brand_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="first_seen_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">first_seen_at</TD><TD PORT="first_seen_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="last_seen_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_seen_at</TD><TD PORT="last_seen_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 <TR><TD PORT="source_query_ids" BGCOLOR="#FFFFFF" ALIGN="LEFT">source_query_ids</TD><TD PORT="source_query_ids_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="notes" BGCOLOR="#FFFFFF" ALIGN="LEFT">notes</TD><TD PORT="notes_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="bio_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_en</TD><TD PORT="bio_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="bio_zh_cn" BGCOLOR="#FFFFFF" ALIGN="LEFT">bio_zh_cn</TD><TD PORT="bio_zh_cn_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-	<TR><TD PORT="followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">followers_count</TD><TD PORT="followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="following_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">following_count</TD><TD PORT="following_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="favourites_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">favourites_count</TD><TD PORT="favourites_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="statuses_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">statuses_count</TD><TD PORT="statuses_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="media_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">media_count</TD><TD PORT="media_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="fast_followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">fast_followers_count</TD><TD PORT="fast_followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="is_blue_verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_blue_verified</TD><TD PORT="is_blue_verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-	<TR><TD PORT="verified_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">verified_type</TD><TD PORT="verified_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-	<TR><TD PORT="profile_picture" BGCOLOR="#FFFFFF" ALIGN="LEFT">profile_picture</TD><TD PORT="profile_picture_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-	<TR><TD PORT="location" BGCOLOR="#FFFFFF" ALIGN="LEFT">location</TD><TD PORT="location_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-	<TR><TD PORT="description" BGCOLOR="#FFFFFF" ALIGN="LEFT">description</TD><TD PORT="description_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-	<TR><TD PORT="profile_bio_text" BGCOLOR="#FFFFFF" ALIGN="LEFT">profile_bio_text</TD><TD PORT="profile_bio_text_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-	<TR><TD PORT="followers_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">followers_fetched_at</TD><TD PORT="followers_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">followers_count</TD><TD PORT="followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="following_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">following_count</TD><TD PORT="following_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="favourites_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">favourites_count</TD><TD PORT="favourites_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="statuses_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">statuses_count</TD><TD PORT="statuses_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="media_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">media_count</TD><TD PORT="media_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="fast_followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">fast_followers_count</TD><TD PORT="fast_followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="is_blue_verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_blue_verified</TD><TD PORT="is_blue_verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="verified_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">verified_type</TD><TD PORT="verified_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="profile_picture" BGCOLOR="#FFFFFF" ALIGN="LEFT">profile_picture</TD><TD PORT="profile_picture_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="location" BGCOLOR="#FFFFFF" ALIGN="LEFT">location</TD><TD PORT="location_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="description" BGCOLOR="#FFFFFF" ALIGN="LEFT">description</TD><TD PORT="description_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="profile_bio_text" BGCOLOR="#FFFFFF" ALIGN="LEFT">profile_bio_text</TD><TD PORT="profile_bio_text_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="followers_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">followers_fetched_at</TD><TD PORT="followers_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
-    brands [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brands</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="nickname" BGCOLOR="#FFFFFF" ALIGN="LEFT">nickname</TD><TD PORT="nickname_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="display_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name</TD><TD PORT="display_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="accent_color" BGCOLOR="#FFFFFF" ALIGN="LEFT">accent_color</TD><TD PORT="accent_color_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="is_sentinel" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_sentinel</TD><TD PORT="is_sentinel_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="display_name_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_en</TD><TD PORT="display_name_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="display_name_zh_cn" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_zh_cn</TD><TD PORT="display_name_zh_cn_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    companies [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>companies</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="nickname" BGCOLOR="#FFFFFF" ALIGN="LEFT">nickname</TD><TD PORT="nickname_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="display_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name</TD><TD PORT="display_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="hq_country" BGCOLOR="#FFFFFF" ALIGN="LEFT">hq_country</TD><TD PORT="hq_country_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="display_name_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_en</TD><TD PORT="display_name_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="display_name_zh_cn" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name_zh_cn</TD><TD PORT="display_name_zh_cn_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
+
     hf_orgs [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>hf_orgs</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="namespace" BGCOLOR="#FFFFFF" ALIGN="LEFT">namespace</TD><TD PORT="namespace_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="company_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">company_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="company_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="confirmed" BGCOLOR="#FFFFFF" ALIGN="LEFT">confirmed</TD><TD PORT="confirmed_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="namespace" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>namespace <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="namespace_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="company_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">company_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="company_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="confirmed" BGCOLOR="#FFFFFF" ALIGN="LEFT">confirmed</TD><TD PORT="confirmed_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
 <TR><TD PORT="discovered_via" BGCOLOR="#FFFFFF" ALIGN="LEFT">discovered_via</TD><TD PORT="discovered_via_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
   }
 
-  subgraph cluster_join {
-    label="join";
+  /* =========================================================================
+     Junction — many-to-many links between entities
+     ========================================================================= */
+  subgraph cluster_junction {
+    label="junction";
     style=filled; fillcolor="#FEF9E7";
     fontname="Helvetica";
     fontsize=12;
     fontcolor="#2C3E50";
     margin=12;
-    brands_accounts [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brands_accounts</B></FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="accounts_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>accounts_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="accounts_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="role_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">role_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="role_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
+
     brands_companies [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brands_companies</B></FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="company_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>company_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="company_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="company_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>company_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="company_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="ownership_pct" BGCOLOR="#FFFFFF" ALIGN="LEFT">ownership_pct</TD><TD PORT="ownership_pct_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">REAL</FONT></TD></TR>
 </TABLE>>];
+
+    brands_accounts [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brands_accounts</B></FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="accounts_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>accounts_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="accounts_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="role_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">role_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="role_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
+
     companies_accounts [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>companies_accounts</B></FONT></TD></TR>
-<TR><TD PORT="company_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>company_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="company_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="author_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>author_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="author_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="role_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">role_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="role_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="company_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>company_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="company_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>author_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="author_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="role_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">role_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="role_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
   }
 
+  /* =========================================================================
+     Content — post data and post-brand analysis
+     ========================================================================= */
   subgraph cluster_content {
     label="content";
     style=filled; fillcolor="#FDEDEC";
@@ -209,34 +237,25 @@ digraph xmonitor_schema {
     fontsize=12;
     fontcolor="#2C3E50";
     margin=12;
-    account_post_appearances [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>account_post_appearances</B></FONT></TD></TR>
-<TR><TD PORT="author_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>author_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="author_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="tweet_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>tweet_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="tweet_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="role_at_time" BGCOLOR="#FFFFFF" ALIGN="LEFT">role_at_time</TD><TD PORT="role_at_time_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
+
     posts [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="tweet_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">tweet_id</TD><TD PORT="tweet_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="tweet_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>tweet_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="tweet_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="author_handle" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_handle</TD><TD PORT="author_handle_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="author_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">author_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="author_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">author_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="author_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="text" BGCOLOR="#FFFFFF" ALIGN="LEFT">text</TD><TD PORT="text_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="lang" BGCOLOR="#FFFFFF" ALIGN="LEFT">lang</TD><TD PORT="lang_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">fetched_at</TD><TD PORT="fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">fetched_at</TD><TD PORT="fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 <TR><TD PORT="like_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">like_count</TD><TD PORT="like_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="retweet_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">retweet_count</TD><TD PORT="retweet_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="reply_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">reply_count</TD><TD PORT="reply_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="quote_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">quote_count</TD><TD PORT="quote_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="in_reply_to_user_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">in_reply_to_user_id</TD><TD PORT="in_reply_to_user_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="quoted_status_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">quoted_status_id</TD><TD PORT="quoted_status_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="conversation_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">conversation_id</TD><TD PORT="conversation_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="entities" BGCOLOR="#FFFFFF" ALIGN="LEFT">entities</TD><TD PORT="entities_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="entities" BGCOLOR="#FFFFFF" ALIGN="LEFT">entities</TD><TD PORT="entities_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
 <TR><TD PORT="source_query_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">source_query_id</TD><TD PORT="source_query_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="raw" BGCOLOR="#FFFFFF" ALIGN="LEFT">raw</TD><TD PORT="raw_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="raw" BGCOLOR="#FFFFFF" ALIGN="LEFT">raw</TD><TD PORT="raw_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
 <TR><TD PORT="headline" BGCOLOR="#FFFFFF" ALIGN="LEFT">headline</TD><TD PORT="headline_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="headline_source" BGCOLOR="#FFFFFF" ALIGN="LEFT">headline_source</TD><TD PORT="headline_source_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="text_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">text_en</TD><TD PORT="text_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
@@ -244,35 +263,28 @@ digraph xmonitor_schema {
 <TR><TD PORT="lang_detected" BGCOLOR="#FFFFFF" ALIGN="LEFT">lang_detected</TD><TD PORT="lang_detected_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="quoted_text" BGCOLOR="#FFFFFF" ALIGN="LEFT">quoted_text</TD><TD PORT="quoted_text_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="last_quote_count_seen" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_quote_count_seen</TD><TD PORT="last_quote_count_seen_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="last_quote_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_quote_fetched_at</TD><TD PORT="last_quote_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at_epoch" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at_epoch</TD><TD PORT="created_at_epoch_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="last_quote_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_quote_fetched_at</TD><TD PORT="last_quote_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="created_at_epoch" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at_epoch</TD><TD PORT="created_at_epoch_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BIGINT</FONT></TD></TR>
 </TABLE>>];
+
     posts_brands [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts_brands</B></FONT></TD></TR>
-<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="weight" BGCOLOR="#FFFFFF" ALIGN="LEFT">weight</TD><TD PORT="weight_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">REAL</FONT></TD></TR>
 </TABLE>>];
-    posts_brands_discourse [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts_brands_discourse</B></FONT></TD></TR>
-<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="discourse_key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>discourse_key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="discourse_key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="act_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>act_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="act_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="china_nationalism" BGCOLOR="#D6EAF8" ALIGN="LEFT">china_nationalism <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="china_nationalism_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="us_nationalism" BGCOLOR="#D6EAF8" ALIGN="LEFT">us_nationalism <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="us_nationalism_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-</TABLE>>];
+
     posts_brands_mentions [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts_brands_mentions</B></FONT></TD></TR>
-<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="source" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>source <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="source_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="raw_token" BGCOLOR="#FFFFFF" ALIGN="LEFT">raw_token</TD><TD PORT="raw_token_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="mentioned_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">mentioned_at</TD><TD PORT="mentioned_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="mentioned_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">mentioned_at</TD><TD PORT="mentioned_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
+
     posts_brands_signals [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts_brands_signals</B></FONT></TD></TR>
@@ -281,28 +293,51 @@ digraph xmonitor_schema {
 <TR><TD PORT="post_type_key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_type_key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_type_key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="sentiment" BGCOLOR="#D6EAF8" ALIGN="LEFT">sentiment <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="sentiment_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 </TABLE>>];
+
+    posts_brands_discourse [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts_brands_discourse</B></FONT></TD></TR>
+<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="discourse_key" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>discourse_key <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="discourse_key_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="act_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>act_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="act_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">SMALLINT</FONT></TD></TR>
+<TR><TD PORT="china_nationalism" BGCOLOR="#D6EAF8" ALIGN="LEFT">china_nationalism <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="china_nationalism_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="us_nationalism" BGCOLOR="#D6EAF8" ALIGN="LEFT">us_nationalism <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="us_nationalism_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
     posts_unsanctioned_flags [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>posts_unsanctioned_flags</B></FONT></TD></TR>
-<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="post_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>post_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT><FONT COLOR="#2874A6" POINT-SIZE="9"> FK</FONT></B></TD><TD PORT="post_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="flags" BGCOLOR="#FFFFFF" ALIGN="LEFT">flags</TD><TD PORT="flags_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="flag_set" BGCOLOR="#FFFFFF" ALIGN="LEFT">flag_set</TD><TD PORT="flag_set_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
 <TR><TD PORT="evidence" BGCOLOR="#FFFFFF" ALIGN="LEFT">evidence</TD><TD PORT="evidence_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="decided_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">decided_at</TD><TD PORT="decided_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="decided_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">decided_at</TD><TD PORT="decided_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
+
+    account_post_appearances [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>account_post_appearances</B></FONT></TD></TR>
+<TR><TD PORT="author_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>author_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="author_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="tweet_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>tweet_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="tweet_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="role_at_time" BGCOLOR="#FFFFFF" ALIGN="LEFT">role_at_time</TD><TD PORT="role_at_time_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="source_query_ids" BGCOLOR="#FFFFFF" ALIGN="LEFT">source_query_ids</TD><TD PORT="source_query_ids_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+</TABLE>>];
+
     products [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>products</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="repo_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">repo_id</TD><TD PORT="repo_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="brand_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="hf_org_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">hf_org_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="hf_org_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BIGINT</FONT></TD></TR>
+<TR><TD PORT="repo_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">repo_id <FONT COLOR="#C0392B" POINT-SIZE="8">U</FONT></TD><TD PORT="repo_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="brand_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="hf_org_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">hf_org_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="hf_org_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="hf_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">hf_type</TD><TD PORT="hf_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="display_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_name</TD><TD PORT="display_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="author" BGCOLOR="#FFFFFF" ALIGN="LEFT">author</TD><TD PORT="author_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="sha" BGCOLOR="#FFFFFF" ALIGN="LEFT">sha</TD><TD PORT="sha_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="private" BGCOLOR="#FFFFFF" ALIGN="LEFT">private</TD><TD PORT="private_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="private" BGCOLOR="#FFFFFF" ALIGN="LEFT">private</TD><TD PORT="private_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
 <TR><TD PORT="gated" BGCOLOR="#FFFFFF" ALIGN="LEFT">gated</TD><TD PORT="gated_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="disabled" BGCOLOR="#FFFFFF" ALIGN="LEFT">disabled</TD><TD PORT="disabled_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="disabled" BGCOLOR="#FFFFFF" ALIGN="LEFT">disabled</TD><TD PORT="disabled_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
 <TR><TD PORT="pipeline_tag" BGCOLOR="#FFFFFF" ALIGN="LEFT">pipeline_tag</TD><TD PORT="pipeline_tag_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="library_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">library_name</TD><TD PORT="library_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="downloads" BGCOLOR="#FFFFFF" ALIGN="LEFT">downloads</TD><TD PORT="downloads_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
@@ -311,49 +346,79 @@ digraph xmonitor_schema {
 <TR><TD PORT="likes" BGCOLOR="#FFFFFF" ALIGN="LEFT">likes</TD><TD PORT="likes_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="trending_score" BGCOLOR="#FFFFFF" ALIGN="LEFT">trending_score</TD><TD PORT="trending_score_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">REAL</FONT></TD></TR>
 <TR><TD PORT="paperswithcode_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">paperswithcode_id</TD><TD PORT="paperswithcode_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="last_modified" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_modified</TD><TD PORT="last_modified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="tags_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">tags_json</TD><TD PORT="tags_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="siblings_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">siblings_json</TD><TD PORT="siblings_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="card_data_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">card_data_json</TD><TD PORT="card_data_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="config_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">config_json</TD><TD PORT="config_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="spaces_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">spaces_json</TD><TD PORT="spaces_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="raw_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">raw_json</TD><TD PORT="raw_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="collected_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">collected_at</TD><TD PORT="collected_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="updated_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">updated_at</TD><TD PORT="updated_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="last_modified" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_modified</TD><TD PORT="last_modified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="tags_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">tags_json</TD><TD PORT="tags_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="siblings_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">siblings_json</TD><TD PORT="siblings_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="card_data_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">card_data_json</TD><TD PORT="card_data_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="config_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">config_json</TD><TD PORT="config_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="spaces_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">spaces_json</TD><TD PORT="spaces_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="raw_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">raw_json</TD><TD PORT="raw_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="collected_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">collected_at</TD><TD PORT="collected_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="updated_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">updated_at</TD><TD PORT="updated_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
   }
 
-  subgraph cluster_ops {
-    label="ops";
+  /* =========================================================================
+     Attribution — brand search/mention configuration
+     ========================================================================= */
+  subgraph cluster_attribution {
+    label="attribution";
     style=filled; fillcolor="#E8F8F5";
     fontname="Helvetica";
     fontsize=12;
     fontcolor="#2C3E50";
     margin=12;
-    brand_hashtags [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brand_hashtags</B></FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="tag" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>tag <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="tag_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
+
     brand_keywords [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brand_keywords</B></FONT></TD></TR>
 <TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="pattern" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>pattern <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="pattern_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="is_regex" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_regex</TD><TD PORT="is_regex_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="is_primary" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_primary</TD><TD PORT="is_primary_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="is_regex" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_regex</TD><TD PORT="is_regex_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="is_primary" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_primary</TD><TD PORT="is_primary_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
+
     brand_search_terms [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brand_search_terms</B></FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="term" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>term <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="term_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
+
+    brand_hashtags [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>brand_hashtags</B></FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></B></TD><TD PORT="brand_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="tag" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>tag <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="tag_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="added_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">added_at</TD><TD PORT="added_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
+  }
+
+  /* =========================================================================
+     Control — cycle tracking and search queries
+     ========================================================================= */
+  subgraph cluster_control {
+    label="control";
+    style=filled; fillcolor="#F4ECF7";
+    fontname="Helvetica";
+    fontsize=12;
+    fontcolor="#2C3E50";
+    margin=12;
+
+    search_queries [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>search_queries</B></FONT></TD></TR>
+<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BIGINT</FONT></TD></TR>
+<TR><TD PORT="query_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">query_id <FONT COLOR="#C0392B" POINT-SIZE="8">U</FONT></TD><TD PORT="query_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="brand_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="brand_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="keywords_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">keywords_json</TD><TD PORT="keywords_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="plan_calls_run_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">plan_calls_run_id</TD><TD PORT="plan_calls_run_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+</TABLE>>];
+
     call_state [label=<
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
 <TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>call_state</B></FONT></TD></TR>
@@ -362,56 +427,63 @@ digraph xmonitor_schema {
 <TR><TD PORT="call_kind" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>call_kind <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="call_kind_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="bucket" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>bucket <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="bucket_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="query_id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>query_id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="query_id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="last_completed_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_completed_at</TD><TD PORT="last_completed_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="updated_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">updated_at</TD><TD PORT="updated_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-</TABLE>>];
-    search_queries [label=<
-<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
-<TR><TD COLSPAN="2" BGCOLOR="#34495E"><FONT COLOR="white" POINT-SIZE="12"><B>search_queries</B></FONT></TD></TR>
-<TR><TD PORT="id" BGCOLOR="#FADBD8" ALIGN="LEFT"><B>id <FONT COLOR="#C0392B" POINT-SIZE="9">PK</FONT></B></TD><TD PORT="id_t" BGCOLOR="#FADBD8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="query_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">query_id</TD><TD PORT="query_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="brand_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">brand_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="brand_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
-<TR><TD PORT="keywords_json" BGCOLOR="#FFFFFF" ALIGN="LEFT">keywords_json</TD><TD PORT="keywords_json_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="plan_calls_run_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">plan_calls_run_id</TD><TD PORT="plan_calls_run_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="created_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at</TD><TD PORT="created_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="last_completed_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_completed_at</TD><TD PORT="last_completed_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
+<TR><TD PORT="updated_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">updated_at</TD><TD PORT="updated_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 </TABLE>>];
   }
 
-  /* Foreign-key edges (from -> table.to) */
-  account_post_appearances:tweet_id_t -> posts:tweet_id_t [color="#C0392B"];
-  brand_hashtags:brand_id_t -> brands:nickname_t [color="#C0392B"];
-  brand_keywords:brand_id_t -> brands:nickname_t [color="#C0392B"];
-  brand_search_terms:brand_id_t -> brands:id_t [color="#C0392B"];
-  brands_accounts:role_id_t -> roles:id_t [color="#7F8C8D"];
-  brands_accounts:accounts_id_t -> accounts:id_t [color="#C0392B"];
-  brands_accounts:brand_id_t -> brands:id_t [color="#C0392B"];
-  brands_companies:company_id_t -> companies:id_t [color="#C0392B"];
-  brands_companies:brand_id_t -> brands:id_t [color="#C0392B"];
-  companies_accounts:role_id_t -> roles:id_t [color="#7F8C8D"];
-  companies_accounts:author_id_t -> accounts:id_t [color="#C0392B"];
-  companies_accounts:company_id_t -> companies:id_t [color="#C0392B"];
-  discourse_labels:key_t -> discourse_keys:key_t [color="#C0392B"];
-  hf_orgs:company_id_t -> companies:id_t [color="#C0392B"];
-  nationalism_labels:key_t -> nationalism_keys:key_t [color="#C0392B"];
-  post_type_labels:key_t -> post_type_keys:key_t [color="#C0392B"];
-  posts:author_id_t -> accounts:id_t [color="#7D6608"];
-  posts_brands:brand_id_t -> brands:id_t [color="#7D6608"];
-  posts_brands:post_id_t -> posts:id_t [color="#C0392B"];
-  posts_brands_discourse:us_nationalism_t -> nationalism_keys:id_t [color="#7F8C8D"];
-  posts_brands_discourse:china_nationalism_t -> nationalism_keys:id_t [color="#7F8C8D"];
-  posts_brands_discourse:discourse_key_t -> discourse_keys:id_t [color="#7F8C8D"];
-  posts_brands_discourse:brand_id_t -> brands:id_t [color="#7D6608"];
-  posts_brands_discourse:post_id_t -> posts:id_t [color="#C0392B"];
-  posts_brands_mentions:brand_id_t -> brands:id_t [color="#7D6608"];
-  posts_brands_mentions:post_id_t -> posts:id_t [color="#C0392B"];
-  posts_brands_signals:sentiment_t -> sentiment_keys:key_t [color="#7F8C8D"];
-  posts_brands_signals:post_type_key_t -> post_type_keys:key_t [color="#7F8C8D"];
-  posts_brands_signals:brand_id_t -> brands:nickname_t [color="#7D6608"];
+  /* =========================================================================
+     Foreign-key edges
+     ========================================================================= */
+
+  /* --- Label → Key lookup edges --- */
+  post_type_labels:key_t -> post_type_keys:key_t [color="#7F8C8D"];
+  sentiment_labels:key_t -> sentiment_keys:key_t [color="#7F8C8D"];
+  discourse_labels:key_t -> discourse_keys:key_t [color="#7F8C8D"];
+  nationalism_labels:key_t -> nationalism_keys:key_t [color="#7F8C8D"];
+  role_labels:key_t -> roles:key_t [color="#7F8C8D"];
+
+  /* --- Entity FK edges --- */
+  hf_orgs:company_id_t -> companies:nickname_t [color="#C0392B"];
+  posts:author_id_t -> accounts:author_id_t [color="#7D6608"];
+
+  /* --- Junction FK edges --- */
+  brands_companies:brand_id_t -> brands:nickname_t [color="#C0392B"];
+  brands_companies:company_id_t -> companies:nickname_t [color="#C0392B"];
+  brands_accounts:brand_id_t -> brands:nickname_t [color="#C0392B"];
+  brands_accounts:accounts_id_t -> accounts:author_id_t [color="#C0392B"];
+  brands_accounts:role_id_t -> roles:key_t [color="#7F8C8D"];
+  companies_accounts:company_id_t -> companies:nickname_t [color="#C0392B"];
+  companies_accounts:author_id_t -> accounts:author_id_t [color="#C0392B"];
+  companies_accounts:role_id_t -> roles:key_t [color="#7F8C8D"];
+
+  /* --- Content FK edges (post → brand/account) --- */
+  posts_brands:post_id_t -> posts:tweet_id_t [color="#C0392B"];
+  posts_brands:brand_id_t -> brands:nickname_t [color="#7D6608"];
+  posts_brands_mentions:post_id_t -> posts:tweet_id_t [color="#C0392B"];
+  posts_brands_mentions:brand_id_t -> brands:nickname_t [color="#7D6608"];
   posts_brands_signals:post_id_t -> posts:tweet_id_t [color="#C0392B"];
+  posts_brands_signals:brand_id_t -> brands:nickname_t [color="#7D6608"];
+  posts_brands_signals:post_type_key_t -> post_type_keys:key_t [color="#7F8C8D"];
+  posts_brands_signals:sentiment_t -> sentiment_keys:key_t [color="#7F8C8D"];
+  posts_brands_discourse:post_id_t -> posts:tweet_id_t [color="#C0392B"];
+  posts_brands_discourse:brand_id_t -> brands:nickname_t [color="#7D6608"];
+  posts_brands_discourse:discourse_key_t -> discourse_keys:key_t [color="#7F8C8D"];
+  posts_brands_discourse:china_nationalism_t -> nationalism_keys:key_t [color="#7F8C8D"];
+  posts_brands_discourse:us_nationalism_t -> nationalism_keys:key_t [color="#7F8C8D"];
   posts_unsanctioned_flags:post_id_t -> posts:tweet_id_t [color="#C0392B"];
-  products:hf_org_id_t -> hf_orgs:id_t [color="#7D6608"];
-  products:brand_id_t -> brands:id_t [color="#7D6608"];
-  role_labels:key_t -> roles:key_t [color="#C0392B"];
-  search_queries:brand_id_t -> brands:id_t [color="#7D6608"];
-  sentiment_labels:key_t -> sentiment_keys:key_t [color="#C0392B"];
+  account_post_appearances:author_id_t -> accounts:author_id_t [color="#C0392B"];
+  account_post_appearances:tweet_id_t -> posts:tweet_id_t [color="#C0392B"];
+
+  /* --- Product FK edges --- */
+  products:brand_id_t -> brands:nickname_t [color="#7D6608"];
+  products:hf_org_id_t -> hf_orgs:namespace_t [color="#7D6608"];
+
+  /* --- Attribution FK edges --- */
+  brand_keywords:brand_id_t -> brands:nickname_t [color="#C0392B"];
+  brand_search_terms:brand_id_t -> brands:nickname_t [color="#C0392B"];
+  brand_hashtags:brand_id_t -> brands:nickname_t [color="#C0392B"];
+
+  /* --- Control FK edges --- */
+  search_queries:brand_id_t -> brands:nickname_t [color="#7D6608"];
 }
