@@ -171,6 +171,23 @@ def _normalize_locale(locale: str | None) -> str:
     return "en"
 
 
+def _pretty_followers(count: int | None) -> str:
+    """Format follower count with k/m suffix (e.g. 15234 -> '15.2k')."""
+    if count is None:
+        return ""
+    if count >= 1_000_000:
+        v = count / 1_000_000
+        return f"{v:.1f}m" if v < 10 else f"{int(v)}m"
+    if count >= 1_000:
+        v = count / 1_000
+        if v >= 100:
+            return f"{int(v)}k"
+        if v >= 10:
+            return f"{v:.1f}k"
+        return f"{v:.2f}k"
+    return str(count)
+
+
 def _pick_text(post: Any, locale: str) -> tuple[str | None, bool]:
     """Return (display_text, is_translated) for a post in the given locale.
 
@@ -299,7 +316,7 @@ def _get_feed_posts(
 # ============================================================================
 
 
-def _post_to_wire(post: Post, locale: str) -> dict[str, Any]:
+def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = None) -> dict[str, Any]:
     """Serialize a Post ORM instance to the JSON wire shape for the feed.
 
     Mirrors x_monitor/dashboard.py:_feed_row_to_wire.
@@ -321,26 +338,45 @@ def _post_to_wire(post: Post, locale: str) -> dict[str, Any]:
             "display_name_zh_cn": pb.brand.display_name_zh_cn or pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick),
         })
 
-        # Per-brand classifications (stub — full enrichment in later units)
+        # Per-brand classifications — from enrichment when available
+        cls_by_brand = enriched.get("classifications_by_brand", {}) if enriched else {}
+        cls = cls_by_brand.get(nick, {})
         classifications[nick] = {
-            "discourse": [],
-            "post_types": [],
-            "sentiments": [],
-            "cn_nationalism": None,
-            "us_nationalism": None,
+            "discourse": cls.get("discourse", []),
+            "post_types": cls.get("post_types", []),
+            "sentiments": cls.get("sentiments", []),
+            "cn_nationalism": cls.get("cn_nationalism"),
+            "us_nationalism": cls.get("us_nationalism"),
+            "role_label": cls.get("role_label"),
         }
 
-    # Account data
-    account_wire: dict[str, Any] = {"handle": "@unknown", "role": None, "followers_count": 0}
-    if post.author:
+    # Account data — from enrichment when available
+    if enriched and enriched.get("account"):
+        acc = enriched["account"]
+        account_wire = {
+            "handle": acc.get("handle") or "@unknown",
+            "role": acc.get("role_key"),
+            "role_label": acc.get("role_label") or "",
+            "followers_count": acc.get("followers_count") or 0,
+            "followers_pretty": acc.get("followers_pretty") or "",
+        }
+    elif post.author:
         account_wire = {
             "handle": post.author.handle or "@unknown",
             "role": None,
+            "role_label": "",
             "followers_count": post.author.followers_count or 0,
+            "followers_pretty": _pretty_followers(post.author.followers_count),
+        }
+    else:
+        account_wire = {
+            "handle": "@unknown", "role": None, "role_label": "",
+            "followers_count": 0, "followers_pretty": "",
         }
 
     created_at_raw = post.created_at.isoformat() if post.created_at else None
     created_at_iso = created_at_raw
+    unsanctioned = enriched.get("unsanctioned", False) if enriched else False
 
     return {
         "tweet_id": post.tweet_id,
@@ -356,7 +392,7 @@ def _post_to_wire(post: Post, locale: str) -> dict[str, Any]:
         "brands": brands_wire,
         "brand_nicknames": brand_nicknames,
         "classifications": classifications,
-        "unsanctioned": False,  # stub — full enrichment later
+        "unsanctioned": unsanctioned,
         "account": account_wire,
     }
 
@@ -474,7 +510,10 @@ def _enrich_posts_with_classifications(
             "account": {
                 "handle": post.author.handle if post.author else (post.author_handle or "@unknown"),
                 "role": role_map.get(post.author_id) if post.author_id else None,
+                "role_key": role_map.get(post.author_id) if post.author_id else None,
+                "role_label": role_map.get(post.author_id) or "",
                 "followers_count": post.author.followers_count if post.author else 0,
+                "followers_pretty": _pretty_followers(post.author.followers_count if post.author else 0),
             },
         }
 
@@ -792,8 +831,10 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Get recent posts with brand associations for feed
     feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
+    enriched = _enrich_posts_with_classifications(feed_posts)
+    enriched_map = {e["tweet_id"]: e for e in enriched}
     feed_rows = [
-        _post_to_wire(p, locale)
+        _post_to_wire(p, locale, enriched_map.get(p.tweet_id))
         for p in feed_posts
     ]
 
@@ -847,7 +888,9 @@ def brand_home(
         brand_nickname=brand,
         limit=FEED_DEFAULT_LIMIT,
     )
-    feed_rows = [_post_to_wire(p, locale) for p in feed_posts]
+    enriched = _enrich_posts_with_classifications(feed_posts, brand_nickname=brand)
+    enriched_map = {e["tweet_id"]: e for e in enriched}
+    feed_rows = [_post_to_wire(p, locale, enriched_map.get(p.tweet_id)) for p in feed_posts]
 
     display_name = brand_obj.display_name or MODEL_DISPLAY_NAMES.get(brand, brand)
     accent_color = brand_obj.accent_color or MODEL_ACCENT_COLORS.get(brand, "#9ca3af")

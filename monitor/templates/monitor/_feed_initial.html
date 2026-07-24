@@ -63,6 +63,14 @@
               <span class="cls-row"><span class="cls-label">sentiments:</span>
               {% for v in cls.sentiments %}<span class="pill">{{ v }}</span>{% endfor %}</span>
             {% endif %}
+            {% if cls.cn_nationalism %}
+              <span class="cls-row"><span class="cls-label">cn:</span>
+              <span class="pill muted">{{ cls.cn_nationalism }}</span></span>
+            {% endif %}
+            {% if cls.us_nationalism %}
+              <span class="cls-row"><span class="cls-label">us:</span>
+              <span class="pill muted">{{ cls.us_nationalism }}</span></span>
+            {% endif %}
           {% endwith %}
         </div>
       {% endfor %}
@@ -80,8 +88,8 @@
           @unknown
         {% endif %}
       {% endwith %}
-      {% if row.account.followers_count %} · {{ row.account.followers_count }}{% endif %}
-      · <span class="pill role-{{ row.account.role|default:'' }}">{{ row.account.role|default:'' }}</span>
+      {% if row.account.followers_pretty %} · {{ row.account.followers_pretty }}{% endif %}
+      {% if row.account.role_label %} · <span class="pill role-{{ row.account.role_label }}">{{ row.account.role_label }}</span>{% endif %}
     </td>
   </tr>
 {% empty %}

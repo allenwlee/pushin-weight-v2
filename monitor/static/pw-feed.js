@@ -220,6 +220,7 @@
       : escapeHtml(handleLabel);
     var role = (row.account && row.account.role) || '';
     var roleLabel = (row.account && row.account.role_label) || role;
+    var followersPretty = (row.account && row.account.followers_pretty) || '';
     return (
       '<td class="muted-cell">' + dateCell + '</td>' +
       '<td>' + brandPills + '</td>' +
@@ -229,7 +230,7 @@
       '</td>' +
       '<td><div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text || '') + '</div></td>' +
       '<td>' + classBlocks.join('') + '</td>' +
-      '<td>' + handleCell + ' · <span class="pill role-' + escapeHtml(role) + '">' + escapeHtml(roleLabel) + '</span></td>'
+      '<td>' + handleCell + (followersPretty ? ' · ' + escapeHtml(followersPretty) : '') + (roleLabel ? ' · <span class="pill role-' + escapeHtml(role) + '">' + escapeHtml(roleLabel) + '</span>' : '') + '</td>'
     );
   }
 
