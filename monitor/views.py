@@ -767,7 +767,7 @@ def _build_home_chart_payload(
             )
             .annotate(day=TruncDate("post__created_at"))
             .values("brand__nickname", "day")
-            .annotate(count=Count("id"))
+            .annotate(count=Count("pk"))
             .order_by("day")
         )
 
