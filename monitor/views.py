@@ -846,6 +846,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "brands": brands_data,
         "brand_count": len(brands_data),
         "brand_nicknames_json": json.dumps(brand_nicknames),
+        "applied_filters_json": json.dumps({}),
         "feed": {"rows": feed_rows, "next_cursor": None},
         "active_locale": locale,
         "home_window_days": window_days,
@@ -900,6 +901,7 @@ def brand_home(
     initial_brand_chart_payload["applied_filters"] = {}
 
     context = {
+        "applied_filters_json": json.dumps({}),
         "brand_obj": {
             "nickname": brand,
             "display_name": display_name,
