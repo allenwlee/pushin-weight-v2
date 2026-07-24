@@ -434,13 +434,10 @@ def plan_calls_for_cycle() -> list[PlannedCall]:
             }
             logger.info("plan_calls_for_cycle: brand filter active — %s", brand_filter)
 
-    limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50)
-
     return plan_calls(
         list_id,
         x_query_specs,
         primary_keywords=primary_keywords,
-        limit_per_call=limit_per_call,
     )
 
 
