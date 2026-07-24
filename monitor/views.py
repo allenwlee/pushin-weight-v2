@@ -89,8 +89,9 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
     "upstage": "#dc2626",
 }
 
-APP_DISPLAY_NAME_ZH = "走个量Pushin'Weight"  # 走个量
+APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
+APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
 
 SUPPORTED_LOCALES: tuple[str, ...] = ("en", "zh-CN", "zh_cn")
 
@@ -865,6 +866,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
+        "app_title_zh": APP_TITLE_ZH,
         "discourse_keys": _DASHBOARD_DISCOURSE_KEYS,
         "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
@@ -926,6 +928,7 @@ def brand_home(
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
+        "app_title_zh": APP_TITLE_ZH,
         "discourse_keys": _DASHBOARD_DISCOURSE_KEYS,
         "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,

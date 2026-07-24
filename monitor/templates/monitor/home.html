@@ -3,7 +3,7 @@
 <html lang="{{ active_locale|slice:":2"|default:"en" }}">
 <head>
   <meta charset="utf-8">
-  <title>{{ app_name_zh }} · multi-brand</title>
+  <title>{{ app_title_zh }} · multi-brand</title>
   {# CSS — served from x_monitor/static/ via Flask dev server for now; U8 moves to WhiteNoise. #}
   <link rel="stylesheet" href="{% static 'dashboard.css' %}">
   {# JS — CDN for htmx + Chart.js; custom scripts loaded from static (will 404 until U8). #}
