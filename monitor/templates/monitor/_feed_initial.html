@@ -1,8 +1,4 @@
 {% load monitor_filters %}
-{# First-batch Django template render of Pushin' Weight feed rows.
-   Adapted from x_monitor/templates/_feed_initial.html.j2.
-   The `rows` are populated by the parent view; subsequent batches
-   are appended by pw-feed.js via IntersectionObserver + fetch. #}
 {% for row in feed.rows %}
   <tr data-pw-feed-row data-tweet-id="{{ row.tweet_id }}" data-created-at-iso="{{ row.created_at_iso|default:'' }}">
     <td class="muted-cell">

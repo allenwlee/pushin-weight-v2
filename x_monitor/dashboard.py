@@ -111,7 +111,7 @@ _LOCALE_TO_COLUMN: dict[str, str] = {
 # internal `x_monitor` package name is preserved per plan R17; this
 # affects only the chrome (topbar <h1> + <title>) and the per-page
 # greeting text.
-APP_DISPLAY_NAME_ZH = "走个量"
+APP_DISPLAY_NAME_ZH = "走个量Pushin'Weight"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 
 

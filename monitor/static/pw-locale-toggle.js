@@ -1,7 +1,6 @@
 // {{AGENT_ATTRIBUTION}}
 // x_monitor/static/pw-locale-toggle.js
 // Pushin' Weight (走个量) topbar locale + window toggle hooks
-// (U7 of feat/pushin-weight-home-pages, 2026-07-06).
 //
 // - Locale buttons (data-pw-locale-btn) POST to
 //   /locale/<locale>, then reload (cheap; the route
@@ -14,11 +13,32 @@
 (function () {
   'use strict';
 
+  // Read Django CSRF token from cookie (set by CsrfViewMiddleware).
+  function getCSRFToken() {
+    var name = 'csrftoken=';
+    var cookies = document.cookie.split(';');
+    for (var i = 0; i < cookies.length; i++) {
+      var c = cookies[i].trim();
+      if (c.indexOf(name) === 0) {
+        return decodeURIComponent(c.substring(name.length));
+      }
+    }
+    return '';
+  }
+
   function postAndReload(url) {
     var form = document.createElement('form');
     form.method = 'POST';
     form.action = url;
     form.style.display = 'none';
+
+    // Inject CSRF token so Django accepts the POST.
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrfmiddlewaretoken';
+    csrf.value = getCSRFToken();
+    form.appendChild(csrf);
+
     document.body.appendChild(form);
     form.submit();
   }

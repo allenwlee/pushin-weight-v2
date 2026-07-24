@@ -89,7 +89,7 @@ MODEL_ACCENT_COLORS: dict[str, str] = {
     "upstage": "#dc2626",
 }
 
-APP_DISPLAY_NAME_ZH = "走个量"  # 走个量
+APP_DISPLAY_NAME_ZH = "走个量Pushin'Weight"  # 走个量
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 
 SUPPORTED_LOCALES: tuple[str, ...] = ("en", "zh-CN", "zh_cn")
