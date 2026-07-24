@@ -802,9 +802,19 @@ def _build_brands_context() -> list[dict[str, Any]]:
 
     Each dict has nickname, display_name, accent_color — so templates
     can iterate without needing dict-lookup filters.
+
+    Brands are ordered by post volume (descending) for the top 15,
+    then alphabetically for any remaining brands.
     """
-    brand_qs = Brand.objects.filter(is_sentinel=False).order_by("nickname")
-    return [
+    _BRAND_ORDER = [
+        "deepseek", "qwen", "glm", "minimax", "llama", "mistral",
+        "mimo", "doubao", "yi", "hunyuan", "stepfun", "ernie",
+        "kuaishou", "upstage", "inclusionai",
+    ]
+    _order_map = {nick: i for i, nick in enumerate(_BRAND_ORDER)}
+
+    brand_qs = Brand.objects.filter(is_sentinel=False)
+    brands = [
         {
             "nickname": b.nickname,
             "display_name": b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
@@ -814,6 +824,8 @@ def _build_brands_context() -> list[dict[str, Any]]:
         }
         for b in brand_qs
     ]
+    brands.sort(key=lambda b: (_order_map.get(b["nickname"], 999), b["nickname"]))
+    return brands
 
 
 @login_required
