@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
 
 from core.models import (
@@ -644,52 +644,110 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
 # ============================================================================
 
 
-def _serialize_home_chart_simple(
-    brand_nicknames: list[str],
-    posts_by_brand: dict[str, list[dict[str, Any]]],
-    window_days: int = 7,
+def _build_home_chart_payload(
+    window_days: int,
+    filters: dict[str, Any],
 ) -> dict[str, Any]:
-    """Simplified multi-brand chart payload.
+    """Build multi-brand chart payload dict — shared by chart_json and chart_html.
 
-    Returns per-day, per-brand total post counts. Full sentiment/discourse
-    breakdown will be added in a later unit (mirrors serialize_home_chart).
+    Uses PostBrand aggregation for day-level windows, and per-post bucketing
+    for the 1d minute window. Returns the full payload dict (not rendered HTML).
     """
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+
     now = django_timezone.now()
-    days: list[str] = [
-        (now.date() - timedelta(days=i)).isoformat()
-        for i in range(window_days - 1, -1, -1)
-    ]
 
-    series: dict[str, list[int]] = {}
-    colors: dict[str, str] = {}
-    totals: dict[str, int] = {}
+    # Get enabled brands
+    brand_nicknames = list(
+        Brand.objects.filter(is_sentinel=False)
+        .order_by("nickname")
+        .values_list("nickname", flat=True)
+    )
 
-    for brand in brand_nicknames:
-        series[brand] = [0] * window_days
-        colors[brand] = MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
-        totals[brand] = 0
+    # Brand narrowing from filter
+    brands_filter = filters.get("brands")
+    if brands_filter is not None and brands_filter != "__all__":
+        brand_nicknames = [b for b in brand_nicknames if b in brands_filter]
 
-    for brand in brand_nicknames:
-        for p in posts_by_brand.get(brand, []):
-            created_at = p.get("created_at")
-            if not created_at:
-                continue
-            try:
-                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            days_ago = (now.date() - dt.date()).days
-            if days_ago < 0 or days_ago >= window_days:
-                continue
-            idx = window_days - 1 - days_ago
-            series[brand][idx] += 1
-            totals[brand] += 1
+    colors: dict[str, str] = {
+        brand: MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
+        for brand in brand_nicknames
+    }
+    totals: dict[str, int] = {brand: 0 for brand in brand_nicknames}
+    stacked: dict[str, dict[str, list[int]]] = {
+        brand: {} for brand in brand_nicknames
+    }
+
+    if window_days == 1:
+        # Minute granularity: 288 5-minute buckets, oldest-first labels
+        granularity = "minute"
+        bucket_count = 288
+        days: list[str] = [
+            (now - timedelta(minutes=i)).isoformat()
+            for i in range(bucket_count - 1, -1, -1)
+        ]
+        series: dict[str, list[int]] = {
+            brand: [0] * bucket_count for brand in brand_nicknames
+        }
+
+        cutoff = now - timedelta(days=1)
+        for brand in brand_nicknames:
+            posts = _get_feed_posts(
+                window_days=1,
+                brand_nickname=brand,
+                limit=FEED_HARD_CAP,
+            )
+            for p in posts:
+                if not p.created_at:
+                    continue
+                minutes_ago = int((now - p.created_at).total_seconds() // 60)
+                if minutes_ago < 0 or minutes_ago >= 1440:
+                    continue
+                idx = bucket_count - 1 - (minutes_ago // 5)
+                series[brand][idx] += 1
+                totals[brand] += 1
+    else:
+        # Day granularity (oldest-first labels)
+        granularity = "day"
+        days = [
+            (now.date() - timedelta(days=i)).isoformat()
+            for i in range(window_days - 1, -1, -1)
+        ]
+        day_index: dict[str, int] = {d: i for i, d in enumerate(days)}
+        series = {
+            brand: [0] * window_days for brand in brand_nicknames
+        }
+
+        cutoff = now - timedelta(days=window_days)
+        agg_rows = (
+            PostBrand.objects
+            .filter(
+                brand__nickname__in=brand_nicknames,
+                post__created_at__gte=cutoff,
+            )
+            .annotate(day=TruncDate("post__created_at"))
+            .values("brand__nickname", "day")
+            .annotate(count=Count("id"))
+            .order_by("day")
+        )
+
+        for row in agg_rows:
+            brand = row["brand__nickname"]
+            day_str = row["day"].isoformat() if row["day"] else None
+            count = row["count"]
+            if brand in series and day_str in day_index:
+                idx = day_index[day_str]
+                series[brand][idx] += count
+                totals[brand] += count
 
     return {
         "days": days,
         "series": series,
         "colors": colors,
         "totals": totals,
+        "granularity": granularity,
+        "stacked": stacked,
         "window_days": window_days,
         "fetched_at": now.isoformat(),
     }
@@ -739,6 +797,10 @@ def home(request: HttpRequest) -> HttpResponse:
         for p in feed_posts
     ]
 
+    # Initial chart payload so the canvas renders on first load (no placeholder flash)
+    initial_chart_payload = _build_home_chart_payload(window_days, {})
+    initial_chart_payload["applied_filters"] = {}
+
     context = {
         "brands": brands_data,
         "brand_count": len(brands_data),
@@ -754,7 +816,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
         "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
         "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
-        "chart_json": json.dumps({"days": [], "series": {}, "colors": {}, "totals": {}}),
+        "payload": json.dumps(initial_chart_payload),
     }
     return render(request, "monitor/home.html", context)
 
@@ -767,13 +829,9 @@ def home(request: HttpRequest) -> HttpResponse:
 @login_required
 def brand_home(
     request: HttpRequest,
-    company: str,
     brand: str,
 ) -> HttpResponse:
-    """GET /<company>/<brand>/ — single-brand drill-down page.
-
-    company="_" matches brands with no company parent.
-    """
+    """GET /brands/<brand>/ — single-brand drill-down page."""
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)
 
@@ -782,19 +840,6 @@ def brand_home(
         brand_obj = Brand.objects.get(nickname=brand, is_sentinel=False)
     except Brand.DoesNotExist:
         raise Http404("Brand not found")
-
-    # Validate company ownership
-    company_is_underscore = (company == "_")
-    if company_is_underscore:
-        if BrandCompany.objects.filter(brand_id=brand).exists():
-            raise Http404("Brand has a company parent; use /<company>/<brand>/")
-    else:
-        try:
-            Company.objects.get(nickname=company)
-        except Company.DoesNotExist:
-            raise Http404("Company not found")
-        if not BrandCompany.objects.filter(brand_id=brand, company_id=company).exists():
-            raise Http404("Brand not owned by this company")
 
     # Get posts for this brand
     feed_posts = _get_feed_posts(
@@ -807,6 +852,10 @@ def brand_home(
     display_name = brand_obj.display_name or MODEL_DISPLAY_NAMES.get(brand, brand)
     accent_color = brand_obj.accent_color or MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
 
+    # Initial chart payload so the canvas renders on first load (no placeholder flash)
+    initial_brand_chart_payload = _build_brand_chart_payload(brand, window_days, {}, "post_type")
+    initial_brand_chart_payload["applied_filters"] = {}
+
     context = {
         "brand_obj": {
             "nickname": brand,
@@ -814,8 +863,6 @@ def brand_home(
             "accent_color": accent_color,
         },
         "brand_id": brand,
-        "company": company,
-        "company_underscore": company_is_underscore,
         "feed": {"rows": feed_rows, "next_cursor": None},
         "active_locale": locale,
         "home_window_days": window_days,
@@ -827,7 +874,7 @@ def brand_home(
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
         "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
         "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
-        "chart_json": json.dumps({"days": [], "tab_datasets": {}, "tab": "post_type"}),
+        "payload": json.dumps(initial_brand_chart_payload),
     }
     return render(request, "monitor/brand_home.html", context)
 
@@ -1148,110 +1195,48 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
 
 
 @login_required
-def home_chart_json(request: HttpRequest) -> JsonResponse:
-    """GET /api/v1/home.chart.json — multi-brand chart data.
+def chart_json(request: HttpRequest) -> JsonResponse:
+    """GET /chart/ — multi-brand chart data (JSON).
 
-    Returns per-day, per-brand post counts for the active window.
+    Returns per-day (or per-5min for 1d window) per-brand post counts.
     Query params: window, filters.
-
-    Stub implementation — returns simplified totals. Full sentiment/
-    discourse breakdown will be added progressively.
     """
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
-
-    # Get enabled brands
-    brand_nicknames = list(
-        Brand.objects.filter(is_sentinel=False)
-        .order_by("nickname")
-        .values_list("nickname", flat=True)
-    )
-
-    # Brand narrowing from filter
-    brands_filter = filters.get("brands")
-    if brands_filter is not None and brands_filter != "__all__":
-        brand_nicknames = [b for b in brand_nicknames if b in brands_filter]
-
-    # Single aggregation query instead of per-brand loop.
-    # PostBrand JOIN gives us per-brand post counts grouped by day.
-    cutoff = django_timezone.now() - timedelta(days=window_days)
-    from django.db.models import Count
-    from django.db.models.functions import TruncDate
-
-    agg_rows = (
-        PostBrand.objects
-        .filter(
-            brand__nickname__in=brand_nicknames,
-            post__created_at__gte=cutoff,
-        )
-        .annotate(day=TruncDate("post__created_at"))
-        .values("brand__nickname", "day")
-        .annotate(count=Count("id"))
-        .order_by("day")
-    )
-
-    # Build the same payload shape the serializer expects
-    now = django_timezone.now()
-    days: list[str] = [
-        (now.date() - timedelta(days=i)).isoformat()
-        for i in range(window_days - 1, -1, -1)
-    ]
-    day_index: dict[str, int] = {d: i for i, d in enumerate(days)}
-
-    series: dict[str, list[int]] = {
-        brand: [0] * window_days for brand in brand_nicknames
-    }
-    colors: dict[str, str] = {
-        brand: MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
-        for brand in brand_nicknames
-    }
-    totals: dict[str, int] = {brand: 0 for brand in brand_nicknames}
-
-    for row in agg_rows:
-        brand = row["brand__nickname"]
-        day_str = row["day"].isoformat() if row["day"] else None
-        count = row["count"]
-        if brand in series and day_str in day_index:
-            idx = day_index[day_str]
-            series[brand][idx] += count
-            totals[brand] += count
-
-    payload = {
-        "days": days,
-        "series": series,
-        "colors": colors,
-        "totals": totals,
-        "window_days": window_days,
-        "fetched_at": now.isoformat(),
-    }
+    payload = _build_home_chart_payload(window_days, filters)
     payload["applied_filters"] = filters
-
-    # Render as HTML partial so htmx can swap the canvas element.
-    # The pw-chart.js reads data-home attribute to draw the chart.
-    import json as _json
-    return render(
-        request,
-        "monitor/_home_chart.html",
-        {"payload": _json.dumps(payload)},
-    )
+    return JsonResponse(payload)
 
 
 @login_required
-def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
-    """GET /api/v1/brand.chart.json — single-brand chart data.
+def chart_html(request: HttpRequest) -> HttpResponse:
+    """GET /chart.html — multi-brand chart HTML partial for htmx swap.
 
-    URL params: /api/v1/brand.chart.json?brand=<nickname>
-    Query params: window, filters, tab.
-
-    Stub implementation — returns simplified totals.
+    Renders _home_chart.html with the data-home JSON payload so
+    pw-chart.js can read it from the canvas attribute.
     """
-    brand_nickname = brand or request.GET.get("brand")
-    if not brand_nickname:
-        return JsonResponse({"error": "missing brand"}, status=400)
-
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
-    tab = request.GET.get("tab", "post_type")
+    payload = _build_home_chart_payload(window_days, filters)
+    payload["applied_filters"] = filters
+    return render(
+        request,
+        "monitor/_home_chart.html",
+        {"payload": json.dumps(payload)},
+    )
+
+
+def _build_brand_chart_payload(
+    brand_nickname: str,
+    window_days: int,
+    filters: dict[str, Any],
+    tab: str = "post_type",
+) -> dict[str, Any]:
+    """Build single-brand chart payload dict — shared by brand_chart_json and brand_chart_html.
+
+    Returns the full payload dict (not rendered HTML).
+    """
+    now = django_timezone.now()
 
     posts = _get_feed_posts(
         window_days=window_days,
@@ -1261,15 +1246,16 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
     enriched = _enrich_posts_with_classifications(posts, brand_nickname=brand_nickname)
     filtered = [p for p in enriched if _post_matches_filter(p, filters)]
 
-    # Build simplified chart
-    now = django_timezone.now()
     if window_days == 1:
+        granularity = "minute"
         bucket_count = 288
-        days = [
+        # Oldest-first labels
+        days: list[str] = [
             (now - timedelta(minutes=i)).isoformat()
-            for i in range(bucket_count)
+            for i in range(bucket_count - 1, -1, -1)
         ]
     else:
+        granularity = "day"
         bucket_count = window_days
         days = [
             (now.date() - timedelta(days=i)).isoformat()
@@ -1289,6 +1275,7 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
             minutes_ago = int((now - dt.replace(tzinfo=timezone.utc)).total_seconds() // 60)
             if minutes_ago < 0 or minutes_ago >= 1440:
                 continue
+            # With oldest-first days array, idx maps directly
             idx = bucket_count - 1 - (minutes_ago // 5)
         else:
             days_ago = (now.date() - dt.date()).days
@@ -1297,22 +1284,87 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
             idx = window_days - 1 - days_ago
         series[idx] += 1
 
-    payload = {
+    return {
         "brand_id": brand_nickname,
         "display_name": MODEL_DISPLAY_NAMES.get(brand_nickname, brand_nickname),
         "accent_color": MODEL_ACCENT_COLORS.get(brand_nickname, "#9ca3af"),
         "days": days,
+        "granularity": granularity,
         "tab": tab,
         "tab_datasets": {
             "post_type": {"total": series},
         },
-        "applied_filters": filters,
         "window_days": window_days,
         "fetched_at": now.isoformat(),
     }
-    import json as _json
+
+
+@login_required
+def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
+    """GET /brand-chart/<brand>/ — single-brand chart data (JSON).
+
+    Query params: window, filters, tab.
+    """
+    brand_nickname = brand or request.GET.get("brand")
+    if not brand_nickname:
+        return JsonResponse({"error": "missing brand"}, status=400)
+
+    window_days = _resolve_home_window(request)
+    filters = _parse_filters_from_request(request)
+    tab = request.GET.get("tab", "post_type")
+    payload = _build_brand_chart_payload(brand_nickname, window_days, filters, tab)
+    payload["applied_filters"] = filters
+    return JsonResponse(payload)
+
+
+@login_required
+def brand_chart_html(request: HttpRequest, brand: str) -> HttpResponse:
+    """GET /brand-chart/<brand>.html — single-brand chart HTML partial for htmx swap.
+
+    Renders _brand_chart.html with the data-brand-chart JSON payload so
+    pw-brand-chart.js can read it from the canvas attribute.
+    """
+    brand_nickname = brand or request.GET.get("brand")
+    if not brand_nickname:
+        raise Http404("Brand not found")
+
+    window_days = _resolve_home_window(request)
+    filters = _parse_filters_from_request(request)
+    tab = request.GET.get("tab", "post_type")
+    payload = _build_brand_chart_payload(brand_nickname, window_days, filters, tab)
+    payload["applied_filters"] = filters
     return render(
         request,
-        "monitor/_home_chart.html",
-        {"payload": _json.dumps(payload)},
+        "monitor/_brand_chart.html",
+        {"payload": json.dumps(payload)},
     )
+
+
+# ============================================================================
+# Stub views
+# ============================================================================
+
+
+@login_required
+def spend_stub(request: HttpRequest) -> HttpResponse:
+    """GET /spend.html — spend panel stub."""
+    return render(
+        request,
+        "monitor/_spend.html",
+        {},
+    )
+
+
+def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
+    """POST /locale/<locale>/ — set locale cookie and redirect back."""
+    normalized = _normalize_locale(locale)
+    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
+    return response
+
+
+def set_window(request: HttpRequest, days: int) -> HttpResponse:
+    """POST /window/<days>/ — set window cookie and redirect back."""
+    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response.set_cookie("home_window", str(days), max_age=365 * 24 * 3600)
+    return response

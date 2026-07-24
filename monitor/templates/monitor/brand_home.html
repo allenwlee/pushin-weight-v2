@@ -59,10 +59,9 @@
       <div class="home-chart-wrap" id="brand-chart"
            hx-get="/brand-chart/{{ brand_id }}.html"
            hx-trigger="load every 60s"
+           hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
            hx-swap="innerHTML">
-        <div class="chart-placeholder" style="padding: 2rem; text-align: center; color: #6b7280;">
-          Brand chart area — data loaded via htmx
-        </div>
+        {% include "monitor/_brand_chart.html" %}
       </div>
     </section>
 

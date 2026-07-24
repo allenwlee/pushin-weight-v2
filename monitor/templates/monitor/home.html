@@ -48,10 +48,9 @@
     <section class="home-chart-wrap" id="home-chart"
              hx-get="/chart.html"
              hx-trigger="load every 60s"
+             hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
              hx-swap="innerHTML">
-      <div class="chart-placeholder" style="padding: 2rem; text-align: center; color: #6b7280;">
-        Chart area — data loaded via htmx. Check /api/v1/home.chart.json
-      </div>
+      {% include "monitor/_home_chart.html" %}
     </section>
 
     <aside class="control-panel" id="control-panel">

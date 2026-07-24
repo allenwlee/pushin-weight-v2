@@ -7,7 +7,7 @@
 // - One Chart.js instance per .home-chart canvas.
 // - One total line per enabled brand, in the brand's accent color.
 // - On `pw:filter-change` (U3, 2026-07-16), re-fetches
-//   /chart.html with the new filters in the query, swaps
+//   /api/v1/home.chart.html with the new filters in the query, swaps
 //   the chart region innerHTML, and re-renders the new canvas.
 // - On htmx:afterSwap of the chart region, destroys any prior instance
 //   and re-binds to the new canvas.
