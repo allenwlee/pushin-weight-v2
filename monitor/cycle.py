@@ -776,13 +776,19 @@ class CycleRunner:
                 post_type = cls.get("post_type")
                 sentiment = cls.get("sentiment")
                 if post_type:
-                    PBSignal.objects.update_or_create(
-                        post_id=tid,
-                        brand_id=brand_id,
-                        post_type_id=post_type,
-                        defaults={"sentiment_id": sentiment or ""},
-                    )
-                    counters["n_discourse"] += 1
+                    try:
+                        PBSignal.objects.update_or_create(
+                            post_id=tid,
+                            brand_id=brand_id,
+                            post_type_id=post_type,
+                            defaults={"sentiment_id": sentiment or ""},
+                        )
+                        counters["n_discourse"] += 1
+                    except Exception:
+                        logger.debug(
+                            "_run_post_fetch: signal FK violation for %s/%s — skipping",
+                            tid, post_type,
+                        )
 
                 discourse_raw = cls.get("discourse_role")
                 # discourse_role may be a string or a list — normalize
@@ -797,16 +803,24 @@ class CycleRunner:
 
                 if discourse_keys:
                     for act_idx, dk in enumerate(discourse_keys):
-                        PBDiscourse.objects.update_or_create(
-                            post_id=tid,
-                            brand_id=brand_id,
-                            discourse_id=dk,
-                            act_id=act_idx,
-                            defaults={
-                                "china_nationalism_id": cn_nat or None,
-                                "us_nationalism_id": us_nat or None,
-                            },
-                        )
+                        if not dk:
+                            continue
+                        try:
+                            PBDiscourse.objects.update_or_create(
+                                post_id=tid,
+                                brand_id=brand_id,
+                                discourse_id=dk,
+                                act_id=act_idx,
+                                defaults={
+                                    "china_nationalism_id": cn_nat or None,
+                                    "us_nationalism_id": us_nat or None,
+                                },
+                            )
+                        except Exception:
+                            logger.debug(
+                                "_run_post_fetch: discourse key %r not in FK table — skipping",
+                                dk,
+                            )
                     counters["n_nationalism"] += 1
                 elif cn_nat or us_nat:
                     # Nationalism flags present without explicit discourse role —
