@@ -702,7 +702,17 @@ class CycleRunner:
         # Build brand_registry from Brand model
         from core.models import Brand as BrandModel
 
-        brand_registry = list(BrandModel.objects.filter(is_sentinel=False))
+        # Convert Django Brand models to v1 BrandRow shape expected by classifier
+        from x_monitor.attribution import BrandRow as _BrandRow
+        brand_registry = [
+            _BrandRow(
+                brand_id=b.nickname,
+                display_name=b.display_name or b.nickname,
+                accent_color=b.accent_color or "#9ca3af",
+                is_sentinel=b.is_sentinel,
+            )
+            for b in BrandModel.objects.filter(is_sentinel=False)
+        ]
 
         # ---- Stage 1: translate ----
         from x_monitor.translator import translate_batch_pragmatics
