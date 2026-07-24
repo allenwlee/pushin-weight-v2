@@ -375,7 +375,11 @@ def _enrich_posts_with_classifications(
 
     When brand_nickname is provided, classifications are scoped to that brand.
     """
-    tweet_ids = list(posts.values_list("tweet_id", flat=True))
+    # Accept both QuerySets and plain lists
+    if hasattr(posts, "values_list"):
+        tweet_ids = list(posts.values_list("tweet_id", flat=True))
+    else:
+        tweet_ids = [p.tweet_id if hasattr(p, "tweet_id") else p.get("tweet_id") for p in posts]
     if not tweet_ids:
         return []
 
@@ -565,59 +569,64 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     # Discourse
     discourse = filters.get("discourse")
     if discourse is not None and discourse != "__all__":
-        if not discourse:
-            return False
-        post_disc = post.get("discourse") or []
-        if post_disc and not any(d in discourse for d in post_disc):
-            return False
+        if not discourse:  # empty list means no filter active
+            pass
+        else:
+            post_disc = post.get("discourse") or []
+            if post_disc and not any(d in discourse for d in post_disc):
+                return False
 
     # Post types
     post_types = filters.get("post_types")
     if post_types is not None and post_types != "__all__":
         if not post_types:
-            return False
-        post_pts = post.get("post_types") or []
-        if post_pts and not any(p in post_types for p in post_pts):
-            return False
+            pass
+        else:
+            post_pts = post.get("post_types") or []
+            if post_pts and not any(p in post_types for p in post_pts):
+                return False
 
     # Role
     role = filters.get("role")
     if role is not None and role != "__all__":
         if not role:
-            return False
-        post_role = post.get("role_key")
-        if post_role is None or post_role not in _DASHBOARD_ROLE_FILTER_KEYS[:3]:
-            if "other" not in role:
-                return False
+            pass
         else:
-            if post_role not in role:
-                return False
+            post_role = post.get("role_key")
+            if post_role is None or post_role not in _DASHBOARD_ROLE_FILTER_KEYS[:3]:
+                if "other" not in role:
+                    return False
+            else:
+                if post_role not in role:
+                    return False
 
     # Nationalism axes
     for axis in ("cn_nationalism", "us_nationalism"):
         active = filters.get(axis)
         if active is not None and active != "__all__":
             if not active:
-                return False
-            post_key = post.get(axis)
-            if post_key is not None and post_key not in active:
-                return False
+                pass
+            else:
+                post_key = post.get(axis)
+                if post_key is not None and post_key not in active:
+                    return False
 
     # Lang
     lang = filters.get("lang")
     if lang is not None and lang != "__all__":
         if not lang:
-            return False
-        post_lang = post.get("lang_detected")
-        if post_lang is None:
-            if "undetected" not in lang:
-                return False
-        elif post_lang in _DASHBOARD_LANG_FILTER_KEYS:
-            if post_lang not in lang:
-                return False
+            pass
         else:
-            if "other" not in lang:
-                return False
+            post_lang = post.get("lang_detected")
+            if post_lang is None:
+                if "undetected" not in lang:
+                    return False
+            elif post_lang in _DASHBOARD_LANG_FILTER_KEYS:
+                if post_lang not in lang:
+                    return False
+            else:
+                if "other" not in lang:
+                    return False
 
     # Unsanctioned
     mode = filters.get("unsanctioned") or "off"
