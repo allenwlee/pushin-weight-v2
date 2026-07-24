@@ -201,10 +201,10 @@ class Command(BaseCommand):
         since_label = options["since"]
         until_label = options["until"] or "now"
 
-        from monitor.cycle import CycleRunner
+        from monitor.cycle import CycleRunner, plan_calls_for_cycle
 
-        # Plan without running so we can batch
-        calls = _plan_calls_direct()
+        # Plan calls using the shared function — same as regular harvest
+        calls = plan_calls_for_cycle()
         call_ids = [c.call_id for c in calls]
 
         # --- load or init state ---
@@ -322,34 +322,3 @@ class Command(BaseCommand):
                 f"Batch done. {len(remaining_after)} calls remaining. "
                 f"Run again to continue. State: {state_file}"
             )
-
-
-def _plan_calls_direct():
-    """Plan calls without instantiating a full CycleRunner.
-
-    Mirrors CycleRunner._plan_calls using the same config sources.
-    """
-    from monitor.cycle import _load_primary_keywords, _load_x_monitor_list_id, _load_x_query_specs
-    from x_monitor.query_plan import plan_calls
-
-    list_id = _load_x_monitor_list_id()
-    if list_id is None:
-        return []
-
-    primary_keywords = _load_primary_keywords()
-    x_query_specs = _load_x_query_specs() or []
-
-    brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
-    if brand_filter_raw and isinstance(brand_filter_raw, str):
-        brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
-        if brand_filter:
-            primary_keywords = {
-                k: v for k, v in primary_keywords.items() if k in brand_filter
-            }
-
-    return plan_calls(
-        list_id=list_id,
-        primary_keywords=primary_keywords,
-        x_query_specs=x_query_specs,
-        limit_per_call=getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50),
-    )

@@ -400,6 +400,43 @@ def _persist_attribution(
 # ============================================================================
 
 
+def plan_calls_for_cycle() -> list[PlannedCall]:
+    """Plan harvest calls from settings — shared by CycleRunner and backfill.
+
+    Reads X_MONITOR_LIST_ID, brand filter, primary keywords, and
+    x_query_specs from Django settings. Returns empty list when the
+    list ID is not configured.
+    """
+    list_id = _load_x_monitor_list_id()
+    if list_id is None:
+        logger.warning(
+            "plan_calls_for_cycle: X_MONITOR_LIST_ID not set — "
+            "Call A is list-based; without it no calls are planned."
+        )
+        return []
+
+    primary_keywords = _load_primary_keywords()
+    x_query_specs = _load_x_query_specs() or []
+
+    brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
+    if brand_filter_raw and isinstance(brand_filter_raw, str):
+        brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
+        if brand_filter:
+            primary_keywords = {
+                k: v for k, v in primary_keywords.items() if k in brand_filter
+            }
+            logger.info("plan_calls_for_cycle: brand filter active — %s", brand_filter)
+
+    limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50)
+
+    return plan_calls(
+        list_id,
+        x_query_specs,
+        primary_keywords=primary_keywords,
+        limit_per_call=limit_per_call,
+    )
+
+
 class CycleRunner:
     """Orchestrates one full harvest cycle.
 
@@ -432,55 +469,17 @@ class CycleRunner:
     # ------------------------------------------------------------------
 
     def _plan_calls(self) -> list[PlannedCall]:
-        """Build the per-cycle call list via x_monitor.query_plan.plan_calls().
-
-        Returns empty list when x_monitor_list_id is not configured
-        (operator hasn't set up the X list yet).
-        """
-        list_id = _load_x_monitor_list_id()
-        if list_id is None:
-            logger.warning(
-                "CycleRunner._plan_calls: X_MONITOR_LIST_ID not set — "
-                "Call A is list-based; without it no calls are planned."
-            )
-            return []
-
-        # Load primary keywords for wide-net B-specs
-        primary_keywords = _load_primary_keywords()
-
-        # Load x_query_specs from settings (default: empty list = Call A only)
-        x_query_specs = _load_x_query_specs() or []
-
-        # Filter brands if operator specified a brand filter
-        brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
-        if brand_filter_raw and isinstance(brand_filter_raw, str):
-            brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
-            # For now, brand filter only affects primary_keywords (limits
-            # which brands' tokens are used in B-specs). Call A always
-            # fires — its list spans all brands.
-            if brand_filter:
-                primary_keywords = {
-                    k: v for k, v in primary_keywords.items() if k in brand_filter
-                }
-                logger.info(
-                    "CycleRunner._plan_calls: brand filter active — %s",
-                    brand_filter,
-                )
-
+        """Build the per-cycle call list via plan_calls_for_cycle()."""
         try:
-            calls = plan_calls(
-                list_id,
-                x_query_specs,
-                primary_keywords=primary_keywords,
-            )
+            calls = plan_calls_for_cycle()
         except (TypeError, ValueError) as exc:
             logger.warning("CycleRunner._plan_calls: plan_calls failed: %s", exc)
             self._errors.append(f"plan: {exc}")
             return []
 
         logger.info(
-            "CycleRunner._plan_calls: %d calls planned (x_monitor_list_id=%s)",
-            len(calls), list_id,
+            "CycleRunner._plan_calls: %d calls planned",
+            len(calls),
         )
         return calls
 
