@@ -203,7 +203,11 @@ def _load_x_query_specs() -> list[XQuerySpec] | None:
             if isinstance(item, XQuerySpec):
                 specs.append(item)
             elif isinstance(item, dict):
-                specs.append(XQuerySpec(**item))
+                # Filter to only fields the dataclass accepts
+                import dataclasses as _dc
+                valid_fields = {f.name for f in _dc.fields(XQuerySpec)}
+                filtered = {k: v for k, v in item.items() if k in valid_fields}
+                specs.append(XQuerySpec(**filtered))
         return specs if specs else None
     return None
 

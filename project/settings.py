@@ -276,6 +276,21 @@ XMONITOR_DATA_DIR = Path(env("XMONITOR_DATA_DIR", default=str(BASE_DIR / "data")
 # configure these without code changes.
 X_MONITOR_LIST_ID = env.int("X_MONITOR_LIST_ID", default=None)
 
+# Load x_query_specs from config.yaml for Call B (wide-net keyword search)
+# and Call C (co-occurrence-constrained) queries. These are the same specs
+# the v1 pipeline uses to produce ~200 posts per 15-min cycle.
+_x_query_specs: list[dict] = []
+_config_path = BASE_DIR / "config.yaml"
+if _config_path.exists():
+    try:
+        import yaml as _yaml
+        with open(_config_path) as _fh:
+            _config = _yaml.safe_load(_fh)
+        _x_query_specs = _config.get("x_query_specs") or []
+    except Exception:
+        pass
+X_MONITOR_X_QUERY_SPECS = _x_query_specs
+
 # Canonical brand registry (20 brands, post-U5-rename).
 # TODO(U2): derive from `core.models.Brand.objects.values_list('nickname', flat=True)`
 # once the ORM is wired; remove this placeholder then.
