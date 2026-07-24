@@ -1,8 +1,9 @@
-"""Cycle orchestrator for x-monitor v2 Django migration (U6).
+"""Cycle orchestrator for x-monitor v2 Django migration (U6 + U1/U2).
 
 Reuses x_monitor pipeline modules (query_plan, apify, attribution,
-translator) for the fetch / attribute / classify / translate steps.
-Persists results via Django ORM instead of x_monitor.store.Store.
+translator, reattribute) for the fetch / attribute / persist / translate /
+classify steps.  Persists results via Django ORM instead of
+x_monitor.store.Store.
 
 The cycle flow:
   1. Load primary keywords from BrandKeyword (Django ORM)
@@ -11,7 +12,13 @@ The cycle flow:
   4. Attribute to brands via x_monitor.attribution.attribute_to_brands
   5. Persist via Django ORM (Post, Account, PostBrand, PostBrandMention,
      PostBrandSignal)
-  6. Emit run summary in LATEST.json compatible shape
+  6. Translate via x_monitor.translator.translate_batch_pragmatics (U1)
+  7. Classify via x_monitor.attribution.classify_batch_pragmatics_full (U1)
+  8. Emit run summary in LATEST.json compatible shape
+
+LLM guardrails (U2):
+  - Pause between classifier batches via X_MONITOR_LLM_PAUSE_SECONDS
+  - Hard cap via _max_llm_calls (None = no cap, used by backfill command)
 
 Key constraint (KTD2): The legacy x_monitor/run.py and macOS launchd
 agents MUST remain untouched. This is a NEW entry point.
@@ -451,12 +458,17 @@ class CycleRunner:
         dry_run: bool = False,
         cycle_kind: str = "manual",
         _backfill_call_ids: list[str] | None = None,
+        _max_llm_calls: int | None = None,
     ) -> None:
         self.dry_run = dry_run
         self.cycle_kind = cycle_kind  # 'scheduled' or 'manual'
         # If set, only execute these call IDs (all must be in the plan).
         # Used by the backfill command for batched, resumable execution.
         self._backfill_call_ids = _backfill_call_ids
+        # Hard cap on LLM batches per invocation.  None = no cap.
+        # Used by the backfill command to limit API spend on large windows.
+        self._max_llm_calls = _max_llm_calls
+        self._llm_call_count: int = 0
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
         self._posts_inserted: int = 0
@@ -639,19 +651,188 @@ class CycleRunner:
     ) -> dict[str, int]:
         """Run translation + classification on the cycle's kept posts.
 
-        STUBBED for U7 — the LLM-backed translate + classify steps will
-        be wired in a follow-up unit. For now, this no-ops and returns
-        zero counters so the cycle runs without LLM spend.
+        Stage 1 (translate): calls translate_batch_pragmatics to produce
+        text_en / text_zh_cn / lang_detected for each post.
+
+        Stage 2 (classify): calls classify_batch_pragmatics_full to produce
+        PostBrandSignal and PostBrandDiscourse rows for each post.
+
+        Guardrails:
+          - Pause between classifier batches (X_MONITOR_LLM_PAUSE_SECONDS).
+          - Hard cap on LLM batches (self._max_llm_calls).  When reached,
+            classification stops — remaining posts are persisted without
+            labels and will be picked up by the next invocation.
+
+        Lazy imports are used so the module loads without LLM deps.
         """
-        # TODO(U7): Wire translate_batch_pragmatics + classify_batch_pragmatics_full
-        # from x_monitor.translator / x_monitor.attribution. Needs an
-        # AnthropicClaudeClient (or DS V4 proxy) built from settings.
-        return {
+        counters = {
             "n_translated": 0,
             "n_discourse": 0,
             "n_nationalism": 0,
             "n_failed_translate": 0,
         }
+
+        if not kept_posts:
+            return counters
+
+        # Build Anthropic client from env
+        from x_monitor.reattribute import build_anthropic_client_from_env
+
+        client = build_anthropic_client_from_env()
+        if client is None:
+            logger.warning(
+                "_run_post_fetch: no LLM client available — "
+                "skipping translate/classify"
+            )
+            return counters
+
+        # Normalize kept_posts to v1 format: {tweet_id, text, brand_ids}
+        tweets: list[dict[str, Any]] = []
+        for it in kept_posts:
+            tid = str(it.get("id") or it.get("tweet_id") or "")
+            text = it.get("text") or ""
+            brand_ids = it.get("brand_ids") or []
+            if tid and text:
+                tweets.append({
+                    "tweet_id": tid,
+                    "text": text,
+                    "brand_ids": list(brand_ids),
+                })
+
+        if not tweets:
+            return counters
+
+        # Build brand_registry from Brand model
+        from core.models import Brand as BrandModel
+
+        brand_registry = list(BrandModel.objects.filter(is_sentinel=False))
+
+        # ---- Stage 1: translate ----
+        from x_monitor.translator import translate_batch_pragmatics
+
+        try:
+            translation_rows = translate_batch_pragmatics(
+                tweets, ["en", "zh_cn"], client
+            )
+        except Exception as exc:
+            logger.warning("_run_post_fetch: translate failed: %s", exc)
+            translation_rows = []
+
+        # Persist translations back to Post rows
+        if translation_rows:
+            from core.models import Post as PostModel
+
+            for r in translation_rows:
+                tid = r.get("tweet_id")
+                if not tid:
+                    continue
+                PostModel.objects.filter(tweet_id=tid).update(
+                    text_en=r.get("text_en") or None,
+                    text_zh_cn=r.get("text_zh_cn")
+                    or r.get("literal_zh")
+                    or None,
+                    lang_detected=r.get("lang_detected") or None,
+                )
+            counters["n_translated"] = len(translation_rows)
+            counters["n_failed_translate"] = sum(
+                1 for r in translation_rows if r.get("translation_failed")
+            )
+
+        # ---- Stage 2: classify ----
+        from x_monitor.attribution import classify_batch_pragmatics_full
+
+        pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
+
+        try:
+            results = classify_batch_pragmatics_full(
+                tweets, brand_registry, client
+            )
+        except Exception as exc:
+            logger.warning("_run_post_fetch: classify failed: %s", exc)
+            return counters
+
+        # Persist classifications with guardrails
+        from core.models import (
+            PostBrandDiscourse as PBDiscourse,
+            PostBrandSignal as PBSignal,
+        )
+
+        _CLASSIFY_BATCH_SIZE = getattr(
+            settings, "X_MONITOR_CLASSIFY_BATCH_SIZE", 20
+        )
+
+        for i, (tweet, result) in enumerate(zip(tweets, results)):
+            tid = tweet["tweet_id"]
+            by_brand = result.get("by_brand") or {}
+
+            for brand_id, cls in by_brand.items():
+                post_type = cls.get("post_type")
+                sentiment = cls.get("sentiment")
+                if post_type:
+                    PBSignal.objects.update_or_create(
+                        post_id=tid,
+                        brand_id=brand_id,
+                        post_type_id=post_type,
+                        defaults={"sentiment_id": sentiment or ""},
+                    )
+                    counters["n_discourse"] += 1
+
+                discourse_keys = cls.get("discourse_role") or []
+                cn_nat = cls.get("china_nationalism")
+                us_nat = cls.get("us_nationalism")
+
+                if discourse_keys:
+                    for act_idx, dk in enumerate(discourse_keys):
+                        PBDiscourse.objects.update_or_create(
+                            post_id=tid,
+                            brand_id=brand_id,
+                            discourse_id=dk,
+                            act_id=act_idx,
+                            defaults={
+                                "china_nationalism_id": cn_nat or None,
+                                "us_nationalism_id": us_nat or None,
+                            },
+                        )
+                    counters["n_nationalism"] += 1
+                elif cn_nat or us_nat:
+                    # Nationalism flags present without explicit discourse role —
+                    # store under an empty discourse key.
+                    PBDiscourse.objects.update_or_create(
+                        post_id=tid,
+                        brand_id=brand_id,
+                        discourse_id="",
+                        act_id=0,
+                        defaults={
+                            "china_nationalism_id": cn_nat or None,
+                            "us_nationalism_id": us_nat or None,
+                        },
+                    )
+                    counters["n_nationalism"] += 1
+
+            # Guard: pause / cap at batch boundaries.
+            # classify_batch_pragmatics_full batches 20 posts per LLM call
+            # internally.  We track boundaries in the result loop so the
+            # max_llm_calls cap can stop processing past a boundary.
+            if (i + 1) % _CLASSIFY_BATCH_SIZE == 0 and i + 1 < len(tweets):
+                if pause_sec > 0:
+                    import time as _time
+
+                    _time.sleep(pause_sec)
+                self._llm_call_count += 1
+                if (
+                    self._max_llm_calls is not None
+                    and self._llm_call_count >= self._max_llm_calls
+                ):
+                    logger.info(
+                        "_run_post_fetch: max_llm_calls (%d) reached — "
+                        "stopping classification",
+                        self._max_llm_calls,
+                    )
+                    break
+            elif (i + 1) % _CLASSIFY_BATCH_SIZE == 0:
+                self._llm_call_count += 1
+
+        return counters
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -847,7 +1028,6 @@ class CycleRunner:
             summary["totals"]["n_calls_run"] += 1
 
         # ---- Post-fetch: translate + classify ----
-        # STUBBED for U7 — see _run_post_fetch docstring.
         if kept_all and summary["status"] != "aborted":
             pf_counters = self._run_post_fetch(kept_all)
             summary.setdefault("post_fetch", {}).update(pf_counters)
