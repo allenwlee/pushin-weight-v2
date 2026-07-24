@@ -17,7 +17,8 @@
   <script src="{% static 'pw-locale-toggle.js' %}" defer></script>
   <script src="{% static 'dashboard.js' %}" defer></script>
 </head>
-<body data-pw-filters='{{ applied_filters_json|safe }}'
+<body data-pw-filters
+  {% csrf_token %}='{{ applied_filters_json|safe }}'
       data-pw-brands='{{ brand_nicknames_json|safe }}'
       data-pw-locale="{{ active_locale }}"
       data-pw-window="{{ home_window_days }}"
