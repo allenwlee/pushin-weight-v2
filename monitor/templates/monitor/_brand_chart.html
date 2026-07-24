@@ -1,3 +1,4 @@
+{% load i18n %}
 <canvas class="home-brand-chart"
-        aria-label="Single-brand stacked-area chart"
+        aria-label="{% trans "Single-brand stacked-area chart" %}"
         data-brand-chart='{{ payload|safe }}'></canvas>

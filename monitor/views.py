@@ -93,7 +93,7 @@ APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
 
-SUPPORTED_LOCALES: tuple[str, ...] = ("en", "zh-CN", "zh_cn")
+SUPPORTED_LOCALES: tuple[str, ...] = ("zh_cn", "zh-CN", "en", "original")
 
 _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
@@ -162,7 +162,7 @@ FEED_DEFAULT_LIMIT: int = 50
 def _normalize_locale(locale: str | None) -> str:
     """Return a supported locale or 'en' (with a warning log) for unsupported."""
     if not locale:
-        return "en"
+        return "zh_cn"
     if locale.casefold() == "original":
         return "original"
     for sup in SUPPORTED_LOCALES:
@@ -1418,8 +1418,17 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     """POST /locale/<locale>/ — set locale cookie and redirect back."""
     normalized = _normalize_locale(locale)
+    from django.utils import translation
+    django_code = {
+        "zh_cn": "zh-cn",
+        "zh-CN": "zh-cn",
+        "en": "en",
+        "original": "en",
+    }.get(normalized, "en")
+    translation.activate(django_code)
     response = redirect(request.META.get("HTTP_REFERER", "/"))
     response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
+    request.session["_language"] = django_code
     return response
 
 

@@ -63,3 +63,5 @@ data/*.db.dryrun-*
 data/*.db.dryrun-*-shm
 data/*.db.dryrun-*-wal
 data/*.test*
+
+*.mo

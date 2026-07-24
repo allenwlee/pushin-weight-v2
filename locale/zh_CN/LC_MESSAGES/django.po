@@ -1,0 +1,126 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pushin-weight\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-24 11:33+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <zh_CN@example.com>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Single-brand stacked-area chart"
+msgstr "单品牌堆叠面积图"
+
+msgid "translated from:"
+msgstr "翻译自:"
+
+msgid "types:"
+msgstr "类型:"
+
+msgid "discourses:"
+msgstr "话语:"
+
+msgid "sentiments:"
+msgstr "情感:"
+
+msgid "cn:"
+msgstr "中:"
+
+msgid "us:"
+msgstr "美:"
+
+msgid "unsanctioned"
+msgstr "未批准"
+
+msgid "no posts in window"
+msgstr "窗口内无帖子"
+
+msgid "Daily total posts per brand"
+msgstr "每日各品牌帖子总数"
+
+msgid "24h window"
+msgstr "24小时窗口"
+
+msgid "← multi-brand"
+msgstr "← 多品牌"
+
+msgid "window:"
+msgstr "窗口:"
+
+msgid "lang:"
+msgstr "语言:"
+
+msgid "Filters"
+msgstr "筛选"
+
+msgid "(locked)"
+msgstr "（已锁定）"
+
+msgid "Discourse"
+msgstr "话语"
+
+msgid "post_type"
+msgstr "文章类型"
+
+msgid "account.role"
+msgstr "账户角色"
+
+msgid "lang"
+msgstr "语言"
+
+msgid "us_nationalism"
+msgstr "美国民族主义"
+
+msgid "cn_nationalism"
+msgstr "中国民族主义"
+
+msgid "show only flagged posts"
+msgstr "仅显示标记帖子"
+
+msgid "datetime"
+msgstr "日期时间"
+
+msgid "brand"
+msgstr "品牌"
+
+msgid "translated"
+msgstr "翻译"
+
+msgid "original"
+msgstr "原文"
+
+msgid "classifications"
+msgstr "分类"
+
+msgid "handle"
+msgstr "账号"
+
+msgid "loading more…"
+msgstr "加载更多…"
+
+msgid "end of feed"
+msgstr "信息流结束"
+
+msgid "Spend panel — stubbed for U7."
+msgstr "消费面板 — U7待实现"
+
+#, python-format
+msgid "%(days)sd window"
+msgstr ""
+
+msgid "Brands"
+msgstr "品牌"
+
+msgid "only"
+msgstr "仅"
+
+msgid "all"
+msgstr "全部"
