@@ -142,6 +142,10 @@ class Command(BaseCommand):
             "--max-pages", type=int, default=None,
             help="Override computed per-call page cap.",
         )
+        parser.add_argument(
+            "--max-llm-calls", type=int, default=None,
+            help="Hard cap on LLM classify batches per invocation (default: no cap).",
+        )
 
     def handle(self, *args, **options) -> None:
         since_epoch = _parse_iso(options["since"])
@@ -271,6 +275,7 @@ class Command(BaseCommand):
                     dry_run=False,
                     cycle_kind="manual",
                     _backfill_call_ids=[call_id],
+                    _max_llm_calls=options.get("max_llm_calls"),
                 )
                 stats = runner.run()
 
