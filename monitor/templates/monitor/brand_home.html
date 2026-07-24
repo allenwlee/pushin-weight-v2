@@ -1,7 +1,6 @@
 {# Pushin' Weight single-brand home page — Django port (U7).
    Adapted from x_monitor/templates/brand_home.html.j2. #}
 {% load static %}
-{% load i18n %}
 <!doctype html>
 <html lang="{{ active_locale|slice:":2"|default:"en" }}">
 <head>
@@ -25,11 +24,11 @@
       data-pw-brand="{{ brand_id }}">
   <header class="topbar">
     <h1>{{ app_name_zh }} <small>{{ app_name_en }}</small></h1>
-    <span class="brand-title">{{ brand_obj.display_name }} <small>· {% if home_window_days == 1 %}{% trans "24h window" %}{% else %}{{ home_window_days }}d window{% endif %}</small></span>
-    <a class="muted" href="/">{% trans "← multi-brand" %}</a>
+    <span class="brand-title">{{ brand_obj.display_name }} <small>· {% if home_window_days == 1 %}24h window{% else %}{{ home_window_days }}d window{% endif %}</small></span>
+    <a class="muted" href="/">← multi-brand</a>
 
     <nav class="window-toggle" aria-label="Time-period selector">
-      <span class="window-toggle-label">{% trans "window:" %}</span>
+      <span class="window-toggle-label">window:</span>
       {% for n in allowed_home_windows %}
         <button class="window-btn{% if home_window_days == n %} is-active{% endif %}"
                 data-pw-window-btn="{{ n }}">{{ n }}d</button>
@@ -37,7 +36,7 @@
     </nav>
 
     <nav class="locale-toggle" aria-label="Display language">
-      <span class="locale-toggle-label">{% trans "lang:" %}</span>
+      <span class="locale-toggle-label">lang:</span>
       <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
               data-pw-locale-btn="zh_cn">中文</button>
       <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
@@ -67,18 +66,18 @@
     </section>
 
     <aside class="control-panel" id="control-panel">
-      <h2>{% trans "Filters" %}</h2>
+      <h2>Filters</h2>
       <div class="control-group">
         <div class="control-group-title">Brands</div>
         <label class="control-row is-locked" style="--swatch: {{ brand_obj.accent_color }};">
           <input type="checkbox" data-pw-filter-group="brands" value="{{ brand_id }}" checked disabled>
           <span class="swatch" style="background: {{ brand_obj.accent_color }};"></span>
-          {{ brand_obj.display_name }} {% trans "(locked)" %}
+          {{ brand_obj.display_name }} (locked)
         </label>
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "Discourse" %}</div>
+        <div class="control-group-title">Discourse</div>
         {% for key in discourse_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked>
@@ -88,7 +87,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "post_type" %}</div>
+        <div class="control-group-title">post_type</div>
         {% for key in post_type_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="post_types" value="{{ key }}" checked>
@@ -98,7 +97,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "account.role" %}</div>
+        <div class="control-group-title">account.role</div>
         {% for key in role_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked>
@@ -108,7 +107,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "lang" %}</div>
+        <div class="control-group-title">lang</div>
         {% for entry in lang_entries %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="lang" value="{{ entry.key }}" checked>
@@ -118,7 +117,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "us_nationalism" %}</div>
+        <div class="control-group-title">us_nationalism</div>
         {% for key in nationalism_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ key }}" checked>
@@ -128,7 +127,7 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "cn_nationalism" %}</div>
+        <div class="control-group-title">cn_nationalism</div>
         {% for key in nationalism_keys %}
           <label class="control-row">
             <input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ key }}" checked>
@@ -138,10 +137,10 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "unsanctioned" %}</div>
+        <div class="control-group-title">unsanctioned</div>
         <label class="control-row">
           <input type="checkbox" data-pw-filter-group="unsanctioned" value="only">
-          {% trans "show only flagged posts" %}
+          show only flagged posts
         </label>
       </div>
     </aside>
@@ -154,20 +153,20 @@
     <table>
       <thead>
         <tr>
-          <th><button data-pw-sort="created_at" data-pw-order="desc">{% trans "datetime" %}</button></th>
-          <th>{% trans "brand" %}</th>
-          <th>{% trans "translated" %}</th>
-          <th>{% trans "original" %}</th>
-          <th>{% trans "classifications" %}</th>
-          <th>{% trans "handle" %}</th>
+          <th><button data-pw-sort="created_at" data-pw-order="desc">datetime</button></th>
+          <th>brand</th>
+          <th>translated</th>
+          <th>original</th>
+          <th>classifications</th>
+          <th>handle</th>
         </tr>
       </thead>
       <tbody data-pw-feed-body>
         {% include "monitor/_feed_initial.html" %}
       </tbody>
     </table>
-    <div class="feed-sentinel" data-pw-feed-sentinel>{% trans "loading more…" %}</div>
-    <div class="feed-end" data-pw-feed-end hidden>{% trans "end of feed" %}</div>
+    <div class="feed-sentinel" data-pw-feed-sentinel>loading more…</div>
+    <div class="feed-end" data-pw-feed-end hidden>end of feed</div>
   </section>
 
   <aside id="api-spend" class="spend-panel-wrap"
@@ -175,7 +174,7 @@
          hx-trigger="load every 60s"
          hx-swap="innerHTML">
     <div class="spend-panel" style="padding: 1rem; color: #6b7280;">
-      {% trans "Spend panel — stubbed for U7." %}
+      Spend panel — stubbed for U7.
     </div>
   </aside>
 </body>

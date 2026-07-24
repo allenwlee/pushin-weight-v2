@@ -20,7 +20,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
 
@@ -93,7 +93,7 @@ APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
 
-SUPPORTED_LOCALES: tuple[str, ...] = ("zh_cn", "zh-CN", "en", "original")
+SUPPORTED_LOCALES: tuple[str, ...] = ("en", "zh-CN", "zh_cn")
 
 _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
@@ -162,7 +162,7 @@ FEED_DEFAULT_LIMIT: int = 50
 def _normalize_locale(locale: str | None) -> str:
     """Return a supported locale or 'en' (with a warning log) for unsupported."""
     if not locale:
-        return "zh_cn"
+        return "en"
     if locale.casefold() == "original":
         return "original"
     for sup in SUPPORTED_LOCALES:
@@ -211,33 +211,17 @@ def _pick_text(post: Any, locale: str) -> tuple[str | None, bool]:
 def _resolve_locale(request: HttpRequest) -> str:
     """Read display locale from cookie or Django's active language.
 
-    Priority: ?locale= query param > locale cookie > Django language > 'zh_cn'.
-    Also activates Django's translation engine so {% trans %} tags resolve
-    correctly for the current request.
+    Priority: ?locale= query param > locale cookie > Django language > 'en'.
     """
-    from django.utils import translation
-
     locale = request.GET.get("locale") or request.COOKIES.get("locale")
     if locale:
-        normalized = _normalize_locale(locale)
-    else:
-        # Fall back to Django's detected language
-        lang = translation.get_language()
-        if lang and lang != "en":
-            normalized = _normalize_locale(lang)
-        else:
-            normalized = "zh_cn"
-    # Activate Django translation for {% trans %} resolution.
-    django_code = {
-        "zh_cn": "zh-cn",
-        "zh-CN": "zh-cn",
-        "en": "en",
-        "original": "en",
-    }.get(normalized, "en")
-    translation.activate(django_code)
-    if hasattr(request, "session"):
-        request.session["_language"] = django_code  # Django LANGUAGE_SESSION_KEY
-    return normalized
+        return _normalize_locale(locale)
+    # Fall back to Django's detected language
+    from django.utils import translation
+    lang = translation.get_language()
+    if lang and lang != "en":
+        return _normalize_locale(lang)
+    return "en"
 
 
 def _resolve_home_window(request: HttpRequest) -> int:
@@ -1434,20 +1418,8 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     """POST /locale/<locale>/ — set locale cookie and redirect back."""
     normalized = _normalize_locale(locale)
-    # Map internal locale to Django BCP 47 code for translation.activate().
-    # zh_cn (underscore) and zh-CN (hyphen) both map to "zh-cn".
-    # "original" maps to "en" (R4: English chrome in original mode).
-    django_code = {
-        "zh_cn": "zh-cn",
-        "zh-CN": "zh-cn",
-        "en": "en",
-        "original": "en",
-    }.get(normalized, "en")
-    from django.utils import translation
-    translation.activate(django_code)
     response = redirect(request.META.get("HTTP_REFERER", "/"))
     response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
-    request.session["_language"] = django_code  # Django LANGUAGE_SESSION_KEY
     return response
 
 
