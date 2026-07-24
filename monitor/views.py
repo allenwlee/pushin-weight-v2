@@ -833,76 +833,234 @@ def brand_home(
 
 
 # ============================================================================
+# Cursor pagination helpers (U2 — cursor-based feed pagination)
+# ============================================================================
+
+# Supported sort columns (mirrors _FEED_SORT_COLUMNS in x_monitor/dashboard.py)
+_FEED_SORT_COLUMNS: dict[str, str] = {
+    "created_at": "created_at",
+    "like_count": "like_count",
+}
+_FEED_DEFAULT_SORT = "created_at"
+_FEED_DEFAULT_ORDER = "desc"
+
+
+def _decode_cursor(cursor: str | None) -> tuple[str, str] | None:
+    """Decode a cursor token. Returns (created_at_iso, tweet_id) or None.
+
+    Format: "<iso>|<tweet_id>". Uses pipe as separator because pipe is
+    not legal in ISO 8601 timestamps or Twitter tweet IDs.
+    """
+    if not cursor or "|" not in cursor:
+        return None
+    iso, _, tweet_id = cursor.partition("|")
+    if not iso or not tweet_id:
+        return None
+    return iso.strip(), tweet_id.strip()
+
+
+def _encode_cursor(created_at: str, tweet_id: str) -> str:
+    """Encode a (created_at, tweet_id) pair as a cursor string."""
+    return f"{created_at}|{tweet_id}"
+
+
+def _post_passes_cursor(
+    post: dict[str, Any],
+    cursor_pair: tuple[str, str],
+    order: str,
+) -> bool:
+    """Check whether a post dict should be included given the cursor.
+
+    For desc: return posts with (created_at, tweet_id) < cursor.
+    For asc:  return posts with (created_at, tweet_id) > cursor.
+    """
+    p_iso = post.get("created_at") or ""
+    p_tweet = post.get("tweet_id") or ""
+    if not p_iso or not p_tweet:
+        return False
+    cur_iso, cur_tweet = cursor_pair
+    if order == "desc":
+        return (p_iso, p_tweet) < (cur_iso, cur_tweet)
+    else:
+        return (p_iso, p_tweet) > (cur_iso, cur_tweet)
+
+
+def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
+    """Serialize one enriched post dict to the feed wire shape.
+
+    The enriched dict comes from _enrich_posts_with_classifications and
+    already carries classifications_by_brand, brands, brand_nicknames,
+    account, etc.
+    """
+    text_translated, is_translated = _pick_text(post, locale)
+    return {
+        "tweet_id": post["tweet_id"],
+        "created_at": post.get("created_at"),
+        "created_at_iso": post.get("created_at"),
+        "lang_detected": post.get("lang_detected"),
+        "text": post.get("text"),
+        "text_translated": text_translated,
+        "is_translated": is_translated,
+        "text_en": post.get("text_en"),
+        "text_zh_cn": post.get("text_zh_cn"),
+        "like_count": post.get("like_count", 0),
+        "brands": post.get("brands", []),
+        "brand_nicknames": post.get("brand_nicknames", []),
+        "classifications": post.get("classifications_by_brand", {}),
+        "unsanctioned": post.get("unsanctioned", False),
+        "account": post.get("account", {}),
+    }
+
+
+# ============================================================================
 # JSON API — Feed
 # ============================================================================
 
 
+def _paginate_feed(
+    posts: list[dict[str, Any]],
+    *,
+    cursor: str | None = None,
+    sort: str = _FEED_DEFAULT_SORT,
+    order: str = _FEED_DEFAULT_ORDER,
+    limit: int = FEED_DEFAULT_LIMIT,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """Paginate a list of enriched+filtered post dicts.
+
+    Returns (page, next_cursor, has_more).
+
+    Cursor-based pagination is used for sort=created_at (the default).
+    For sort=like_count, falls back to offset-based pagination because
+    the DOM cursor is always built from created_at|tweet_id.
+
+    Args:
+        posts: list of enriched post dicts, already sorted and filtered.
+        cursor: raw cursor string from query param (may be None/malformed).
+        sort: "created_at" or "like_count".
+        order: "asc" or "desc".
+        limit: page size.
+        offset: fallback offset for like_count sort.
+    """
+    cursor_pair = _decode_cursor(cursor) if cursor else None
+
+    if sort == "like_count" or cursor_pair is None:
+        # Offset-based fallback
+        page = posts[offset:offset + limit]
+        has_more = (offset + limit) < len(posts)
+        next_cursor: str | None = None
+        if page and has_more:
+            # Even in offset mode, provide a cursor so pw-feed.js can
+            # read it from the last DOM row on the next scroll event.
+            last = page[-1]
+            if last.get("created_at") and last.get("tweet_id"):
+                next_cursor = _encode_cursor(last["created_at"], last["tweet_id"])
+        return page, next_cursor, has_more
+
+    # Cursor-based pagination for created_at sort
+    rows: list[dict[str, Any]] = []
+    had_more_after = False
+
+    for p in posts:
+        if len(rows) >= limit:
+            # Page is full; scan one more eligible post to determine has_more.
+            if _post_passes_cursor(p, cursor_pair, order):
+                had_more_after = True
+                break
+            continue
+
+        if not _post_passes_cursor(p, cursor_pair, order):
+            continue
+
+        rows.append(p)
+
+    # has_more: true only when we scanned past a full page and found at
+    # least one more eligible post.  When the loop exits naturally with
+    # had_more_after=False, we either never filled the page (ran out of
+    # data) or filled it on the last post (no more to scan).
+    has_more = had_more_after
+
+    next_cursor: str | None = None
+    if rows and has_more:
+        last = rows[-1]
+        if last.get("created_at") and last.get("tweet_id"):
+            next_cursor = _encode_cursor(last["created_at"], last["tweet_id"])
+
+    return rows, next_cursor, has_more
+
+
 @login_required
 def home_feed_json(request: HttpRequest) -> JsonResponse:
-    """GET /api/v1/home.feed.json — paginated feed for multi-brand home.
+    """GET /feed/ — cursor-paginated feed for multi-brand home.
 
-    Query params: locale, sort, order, offset, limit, filters.
+    Query params: cursor, sort, order, limit, filters, brand, offset.
     """
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
 
-    try:
-        offset = int(request.GET.get("offset", 0))
-    except ValueError:
-        offset = 0
+    # Parse pagination params
+    cursor = request.GET.get("cursor") or None
+    sort = request.GET.get("sort", _FEED_DEFAULT_SORT)
+    order = request.GET.get("order", _FEED_DEFAULT_ORDER)
+    brand_nickname = request.GET.get("brand") or None
+
     try:
         limit = int(request.GET.get("limit", FEED_DEFAULT_LIMIT))
     except ValueError:
         limit = FEED_DEFAULT_LIMIT
     limit = min(limit, FEED_HARD_CAP)
 
+    try:
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        offset = 0
+
+    # Validate sort / order
+    if sort not in _FEED_SORT_COLUMNS:
+        sort = _FEED_DEFAULT_SORT
+    if order not in ("asc", "desc"):
+        order = _FEED_DEFAULT_ORDER
+
     # Get all posts in the window
     all_posts = _get_feed_posts(
         window_days=window_days,
-        brand_nickname=None,
+        brand_nickname=brand_nickname,
         limit=FEED_HARD_CAP,
     )
 
     # Enrich with classifications for filtering
-    enriched = _enrich_posts_with_classifications(all_posts)
+    enriched = _enrich_posts_with_classifications(
+        all_posts, brand_nickname=brand_nickname,
+    )
 
     # Apply filters
     filtered = [p for p in enriched if _post_matches_filter(p, filters)]
 
-    # Paginate
-    total = len(filtered)
-    page = filtered[offset : offset + limit]
-    next_offset = offset + limit if offset + limit < total else None
+    # Sort in memory (DB already returns -created_at for default)
+    if sort == "like_count":
+        filtered.sort(key=lambda p: p.get("like_count", 0), reverse=(order == "desc"))
+    else:
+        # created_at: DB already returns desc; reverse to asc if needed
+        if order == "asc":
+            filtered.reverse()
 
-    rows = []
-    for p in page:
-        text_translated, is_translated = _pick_text(p, locale)
-        rows.append({
-            "tweet_id": p["tweet_id"],
-            "created_at": p["created_at"],
-            "created_at_iso": p["created_at"],
-            "lang_detected": p.get("lang_detected"),
-            "text": p.get("text"),
-            "text_translated": text_translated,
-            "is_translated": is_translated,
-            "text_en": p.get("text_en"),
-            "text_zh_cn": p.get("text_zh_cn"),
-            "like_count": p.get("like_count", 0),
-            "brands": p.get("brands", []),
-            "brand_nicknames": p.get("brand_nicknames", []),
-            "classifications": p.get("classifications_by_brand", {}),
-            "unsanctioned": p.get("unsanctioned", False),
-            "account": p.get("account", {}),
-        })
+    # Paginate
+    page, next_cursor, has_more = _paginate_feed(
+        filtered,
+        cursor=cursor,
+        sort=sort,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+
+    rows = [_serialize_feed_row(p, locale) for p in page]
 
     return JsonResponse({
         "rows": rows,
-        "next_offset": next_offset,
-        "has_more": next_offset is not None,
-        "total": total,
-        "offset": offset,
-        "limit": limit,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
         "applied_filters": filters,
         "locale": locale,
     })
@@ -910,71 +1068,75 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
-    """GET /api/v1/brand.feed.json — paginated feed for single-brand page.
+    """GET /feed/?brand=<nickname> — cursor-paginated feed for single-brand page.
 
-    URL params: /api/v1/brand.feed.json?brand=<nickname>
-    Query params: locale, sort, order, offset, limit, filters.
+    Query params: cursor, sort, order, limit, filters, brand, offset.
     """
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
 
-    # brand from URL param or query param
+    # Brand from URL kwarg or query param
     brand_nickname = brand or request.GET.get("brand")
     if not brand_nickname:
         return JsonResponse({"error": "missing brand"}, status=400)
 
-    try:
-        offset = int(request.GET.get("offset", 0))
-    except ValueError:
-        offset = 0
+    # Parse pagination params
+    cursor = request.GET.get("cursor") or None
+    sort = request.GET.get("sort", _FEED_DEFAULT_SORT)
+    order = request.GET.get("order", _FEED_DEFAULT_ORDER)
+
     try:
         limit = int(request.GET.get("limit", FEED_DEFAULT_LIMIT))
     except ValueError:
         limit = FEED_DEFAULT_LIMIT
     limit = min(limit, FEED_HARD_CAP)
 
+    try:
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        offset = 0
+
+    # Validate sort / order
+    if sort not in _FEED_SORT_COLUMNS:
+        sort = _FEED_DEFAULT_SORT
+    if order not in ("asc", "desc"):
+        order = _FEED_DEFAULT_ORDER
+
     all_posts = _get_feed_posts(
         window_days=window_days,
         brand_nickname=brand_nickname,
         limit=FEED_HARD_CAP,
     )
-    enriched = _enrich_posts_with_classifications(all_posts, brand_nickname=brand_nickname)
+    enriched = _enrich_posts_with_classifications(
+        all_posts, brand_nickname=brand_nickname,
+    )
 
     filtered = [p for p in enriched if _post_matches_filter(p, filters)]
 
-    total = len(filtered)
-    page = filtered[offset : offset + limit]
-    next_offset = offset + limit if offset + limit < total else None
+    # Sort in memory
+    if sort == "like_count":
+        filtered.sort(key=lambda p: p.get("like_count", 0), reverse=(order == "desc"))
+    else:
+        if order == "asc":
+            filtered.reverse()
 
-    rows = []
-    for p in page:
-        text_translated, is_translated = _pick_text(p, locale)
-        rows.append({
-            "tweet_id": p["tweet_id"],
-            "created_at": p["created_at"],
-            "created_at_iso": p["created_at"],
-            "lang_detected": p.get("lang_detected"),
-            "text": p.get("text"),
-            "text_translated": text_translated,
-            "is_translated": is_translated,
-            "text_en": p.get("text_en"),
-            "text_zh_cn": p.get("text_zh_cn"),
-            "like_count": p.get("like_count", 0),
-            "brands": p.get("brands", []),
-            "brand_nicknames": p.get("brand_nicknames", []),
-            "classifications": p.get("classifications_by_brand", {}),
-            "unsanctioned": p.get("unsanctioned", False),
-            "account": p.get("account", {}),
-        })
+    # Paginate
+    page, next_cursor, has_more = _paginate_feed(
+        filtered,
+        cursor=cursor,
+        sort=sort,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+
+    rows = [_serialize_feed_row(p, locale) for p in page]
 
     return JsonResponse({
         "rows": rows,
-        "next_offset": next_offset,
-        "has_more": next_offset is not None,
-        "total": total,
-        "offset": offset,
-        "limit": limit,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
         "applied_filters": filters,
         "locale": locale,
     })
@@ -1154,33 +1316,3 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
         "monitor/_home_chart.html",
         {"payload": _json.dumps(payload)},
     )
-
-
-# ============================================================================
-# Stub views — U1 scaffold (beefed up in U2–U5)
-# ============================================================================
-
-
-@login_required
-def spend_stub(request: HttpRequest) -> HttpResponse:
-    """GET /spend.html — spend panel stub (U5 fleshes this out)."""
-    return render(
-        request,
-        "monitor/_spend.html",
-        {},
-    )
-
-
-def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
-    """POST /locale/<locale>/ — set locale cookie and redirect back."""
-    normalized = _normalize_locale(locale)
-    response = redirect(request.META.get("HTTP_REFERER", "/"))
-    response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
-    return response
-
-
-def set_window(request: HttpRequest, days: int) -> HttpResponse:
-    """POST /window/<days>/ — set window cookie and redirect back."""
-    response = redirect(request.META.get("HTTP_REFERER", "/"))
-    response.set_cookie("home_window", str(days), max_age=365 * 24 * 3600)
-    return response
