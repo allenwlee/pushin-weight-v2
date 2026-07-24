@@ -6,7 +6,7 @@
 //
 // - Wires IntersectionObserver on a `.feed-sentinel` element.
 // - When sentinel enters viewport, fetch
-//   `/api/v1/home.feed.json?cursor=<last>&filters=<encoded>&limit=50`
+//   `/feed/?cursor=<last>&filters=<encoded>&limit=50`
 //   and appends rows.
 // - Subscribes to `pw:filter-change` (clears the feed and re-fetches
 //   from row 1); `pw:sort-change` (re-fetches with new sort / order);
@@ -271,7 +271,7 @@
   }
 
   function fetchBatch(filters) {
-    var url = '/api/v1/home.feed.json?' + buildQuery(filters || {}, {
+    var url = '/feed/?' + buildQuery(filters || {}, {
       cursor: state.cursor,
       sort: state.sort,
       order: state.order,

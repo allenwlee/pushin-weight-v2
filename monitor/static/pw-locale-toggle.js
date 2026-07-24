@@ -4,10 +4,10 @@
 // (U7 of feat/pushin-weight-home-pages, 2026-07-06).
 //
 // - Locale buttons (data-pw-locale-btn) POST to
-//   /api/v1/home.locale/<locale>, then reload (cheap; the route
+//   /locale/<locale>, then reload (cheap; the route
 //   redirects back with 303).
 // - Window buttons (data-pw-window-btn) POST to
-//   /api/v1/home.window/<n>, same reload pattern.
+//   /window/<n>, same reload pattern.
 // - Emits `pw:locale-change` and `pw:window-change` for the chart
 //   module to react (KTD10).
 
@@ -32,7 +32,7 @@
         document.dispatchEvent(new CustomEvent('pw:locale-change', {
           detail: { locale: locale },
         }));
-        postAndReload('/api/v1/home.locale/' + encodeURIComponent(locale));
+        postAndReload('/locale/' + encodeURIComponent(locale) + '/');
       });
     });
   }
@@ -46,7 +46,7 @@
         document.dispatchEvent(new CustomEvent('pw:window-change', {
           detail: { window: parseInt(n, 10) },
         }));
-        postAndReload('/api/v1/home.window/' + encodeURIComponent(n));
+        postAndReload('/window/' + encodeURIComponent(n) + '/');
       });
     });
   }

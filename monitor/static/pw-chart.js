@@ -7,7 +7,7 @@
 // - One Chart.js instance per .home-chart canvas.
 // - One total line per enabled brand, in the brand's accent color.
 // - On `pw:filter-change` (U3, 2026-07-16), re-fetches
-//   /api/v1/home.chart.html with the new filters in the query, swaps
+//   /chart.html with the new filters in the query, swaps
 //   the chart region innerHTML, and re-renders the new canvas.
 // - On htmx:afterSwap of the chart region, destroys any prior instance
 //   and re-binds to the new canvas.
@@ -242,7 +242,7 @@
     var region = document.getElementById('home-chart');
     if (!region) return;
     var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
-    var url = '/api/v1/home.chart.html?filters=' + encodeURIComponent(JSON.stringify(filters));
+    var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters));
     fetch(url, { credentials: 'same-origin' })
       .then(function (r) { return r.text(); })
       .then(function (html) {

@@ -1154,3 +1154,33 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
         "monitor/_home_chart.html",
         {"payload": _json.dumps(payload)},
     )
+
+
+# ============================================================================
+# Stub views — U1 scaffold (beefed up in U2–U5)
+# ============================================================================
+
+
+@login_required
+def spend_stub(request: HttpRequest) -> HttpResponse:
+    """GET /spend.html — spend panel stub (U5 fleshes this out)."""
+    return render(
+        request,
+        "monitor/_spend.html",
+        {},
+    )
+
+
+def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
+    """POST /locale/<locale>/ — set locale cookie and redirect back."""
+    normalized = _normalize_locale(locale)
+    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
+    return response
+
+
+def set_window(request: HttpRequest, days: int) -> HttpResponse:
+    """POST /window/<days>/ — set window cookie and redirect back."""
+    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response.set_cookie("home_window", str(days), max_age=365 * 24 * 3600)
+    return response

@@ -57,11 +57,11 @@
         <button class="pw-tab" data-pw-tab="unsanctioned">unsanctioned</button>
       </nav>
       <div class="home-chart-wrap" id="brand-chart"
-           hx-get="/api/v1/brand.chart.json?brand={{ brand_id }}"
+           hx-get="/brand-chart/{{ brand_id }}.html"
            hx-trigger="load every 60s"
            hx-swap="innerHTML">
         <div class="chart-placeholder" style="padding: 2rem; text-align: center; color: #6b7280;">
-          Brand chart area — data loaded via htmx. Check /api/v1/brand.chart.json?brand={{ brand_id }}
+          Brand chart area — data loaded via htmx
         </div>
       </div>
     </section>
@@ -171,7 +171,7 @@
   </section>
 
   <aside id="api-spend" class="spend-panel-wrap"
-         hx-get="/api/spend.html"
+         hx-get="/spend.html"
          hx-trigger="load every 60s"
          hx-swap="innerHTML">
     <div class="spend-panel" style="padding: 1rem; color: #6b7280;">

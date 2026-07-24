@@ -46,7 +46,7 @@
 
   <main class="home-pane">
     <section class="home-chart-wrap" id="home-chart"
-             hx-get="/api/v1/home.chart.json"
+             hx-get="/chart.html"
              hx-trigger="load every 60s"
              hx-swap="innerHTML">
       <div class="chart-placeholder" style="padding: 2rem; text-align: center; color: #6b7280;">
@@ -168,8 +168,8 @@
   </section>
 
   <aside id="api-spend" class="spend-panel-wrap"
-         hx-get="/api/spend.html"
-         hx-trigger="every 60s"
+         hx-get="/spend.html"
+         hx-trigger="load every 60s"
          hx-swap="innerHTML">
     <div class="spend-panel" style="padding: 1rem; color: #6b7280;">
       Spend panel — stubbed for U7. API endpoint not yet available.

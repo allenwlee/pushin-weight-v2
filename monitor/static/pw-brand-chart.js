@@ -210,8 +210,7 @@
     var brandId = document.body && document.body.getAttribute('data-pw-brand');
     if (!brandId) return;
     var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
-    var url = '/api/v1/home.brand.chart.html?brand=' + encodeURIComponent(brandId) +
-      '&filters=' + encodeURIComponent(JSON.stringify(filters));
+    var url = '/brand-chart/' + encodeURIComponent(brandId) + '.html?filters=' + encodeURIComponent(JSON.stringify(filters));
     fetch(url, { credentials: 'same-origin' })
       .then(function (r) { return r.text(); })
       .then(function (html) {
