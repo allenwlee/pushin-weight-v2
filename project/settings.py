@@ -98,11 +98,11 @@ MIDDLEWARE = [
     # LocaleMiddleware must be after SessionMiddleware and before
     # CommonMiddleware so it can parse the language from the session
     # or URL before the request is processed.
-    "project.locale_cookie.CustomLocaleMiddleware",
     "django.middleware.locale.LocaleMiddleware",
+    "project.locale_cookie.CustomLocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware"
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     # django-allauth
     "allauth.account.middleware.AccountMiddleware",
