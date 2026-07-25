@@ -43,7 +43,7 @@ if env_file.exists():
 # ============================================================================
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-change-in-production-xmonitor-v2")
-DEBUG = env("DEBUG")
+DEBUG = True  # TEMP for Playwright testing
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", ".onrender.com"])
 
 USE_TZ = True
