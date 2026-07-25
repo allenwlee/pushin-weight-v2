@@ -15,19 +15,20 @@ class CustomLocaleMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        import sys
-        print(f"[LOCALE_MW] cookie={request.COOKIES.get('locale')} session[_language]={request.session.get('_language') if hasattr(request, 'session') else None}", file=sys.stderr)
-        # Only act if there's a session and our cookie is set
-        if hasattr(request, "session") and not request.session.get("_language"):
-            cookie_locale = request.COOKIES.get("locale")
-            if cookie_locale:
-                # Map our flat strings to Django BCP 47 codes
-                django_code = {
-                    "zh_cn": "zh-hans",
-                    "zh-CN": "zh-hans",
-                    "zh_hans": "zh-hans",
-                    "en": "en",
-                    "original": "en",
-                }.get(cookie_locale, "zh-hans")
-                request.session["_language"] = django_code
+        from django.utils import translation
+
+        # 1. Read our `locale` cookie
+        cookie_locale = request.COOKIES.get("locale")
+        if cookie_locale:
+            # 2. Map to Django BCP 47 code
+            django_code = {
+                "zh_cn": "zh-hans",
+                "zh-CN": "zh-hans",
+                "zh_hans": "zh-hans",
+                "en": "en",
+                "original": "en",
+            }.get(cookie_locale, "zh-hans")
+            # 3. Activate translation for {% trans %} resolution
+            translation.activate(django_code)
+
         return self.get_response(request)
