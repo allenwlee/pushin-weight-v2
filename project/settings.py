@@ -98,6 +98,7 @@ MIDDLEWARE = [
     # LocaleMiddleware must be after SessionMiddleware and before
     # CommonMiddleware so it can parse the language from the session
     # or URL before the request is processed.
+    "project.locale_cookie.CustomLocaleMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
