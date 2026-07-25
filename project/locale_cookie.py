@@ -1,8 +1,9 @@
 """
-CustomLocaleMiddleware — reads our `locale` cookie (zh_cn/zh-CN/en/original)
-and converts it to Django's session _language key BEFORE LocaleMiddleware runs.
-This is the only way to override LocaleMiddleware's Accept-Language default
-when the user has explicitly selected a locale via our toggle.
+CustomLocaleMiddleware — reads our `locale` cookie and overrides Django's
+LocaleMiddleware activation. LocaleMiddleware always activates LANGUAGE_CODE
+(our case: zh-hans). This middleware runs AFTER it and re-activates with the
+user's explicit choice. Required because the i18n_patterns URL prefix is
+not used in this project, so session[_language] alone does nothing.
 """
 
 from django.utils import translation
@@ -16,7 +17,6 @@ class CustomLocaleMiddleware:
 
     def __call__(self, request):
         from django.utils import translation
-
         # 1. Read our `locale` cookie
         cookie_locale = request.COOKIES.get("locale")
         if cookie_locale:
