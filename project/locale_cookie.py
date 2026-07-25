@@ -15,6 +15,8 @@ class CustomLocaleMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        import sys
+        print(f"[LOCALE_MW] cookie={request.COOKIES.get('locale')} session[_language]={request.session.get('_language') if hasattr(request, 'session') else None}", file=sys.stderr)
         # Only act if there's a session and our cookie is set
         if hasattr(request, "session") and not request.session.get("_language"):
             cookie_locale = request.COOKIES.get("locale")
