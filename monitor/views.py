@@ -18,7 +18,6 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -212,17 +211,32 @@ def _pick_text(post: Any, locale: str) -> tuple[str | None, bool]:
 def _resolve_locale(request: HttpRequest) -> str:
     """Read display locale from cookie or Django's active language.
 
-    Priority: ?locale= query param > locale cookie > Django language > 'en'.
+    Priority: ?locale= query param > locale cookie > Django language > 'zh_cn'.
+    Also activates Django's translation engine so {% trans %} tags resolve
+    correctly for the current request.
     """
+    from django.utils import translation
+
     locale = request.GET.get("locale") or request.COOKIES.get("locale")
     if locale:
-        return _normalize_locale(locale)
-    # Fall back to Django's detected language
-    from django.utils import translation
-    lang = translation.get_language()
-    if lang and lang != "en":
-        return _normalize_locale(lang)
-    return "en"
+        normalized = _normalize_locale(locale)
+    else:
+        lang = translation.get_language()
+        if lang and lang != "en":
+            normalized = _normalize_locale(lang)
+        else:
+            normalized = "zh_cn"
+    django_code = {
+        "zh_cn": "zh-hans",
+        "zh-CN": "zh-hans",
+        "zh_hans": "zh-hans",
+        "en": "en",
+        "original": "en",
+    }.get(normalized, "en")
+    translation.activate(django_code)
+    if hasattr(request, "session"):
+        request.session["_language"] = django_code
+    return normalized
 
 
 def _resolve_home_window(request: HttpRequest) -> int:
@@ -1415,28 +1429,6 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
         {},
     )
 
-
-@csrf_exempt
-def debug_i18n(request):
-    from django.utils import translation
-    from django.utils.translation import gettext as _
-    from django.conf import settings
-    from django.http import JsonResponse
-    import os
-    locale_dir = settings.BASE_DIR / "locale"
-    mo_path = locale_dir / "zh_Hans" / "LC_MESSAGES" / "django.mo"
-    translation.activate("zh-hans")
-    return JsonResponse({
-        "language_code": settings.LANGUAGE_CODE,
-        "get_language": translation.get_language(),
-        "mo_exists": os.path.exists(str(mo_path)),
-        "mo_size": os.path.getsize(str(mo_path)) if os.path.exists(str(mo_path)) else 0,
-        "Filters": _("Filters"),
-        "datetime": _("datetime"),
-        "brand": _("brand"),
-        "translated": _("translated"),
-        "Password": _("Password"),
-    })
 
 
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:

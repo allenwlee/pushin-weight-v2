@@ -43,7 +43,7 @@ if env_file.exists():
 # ============================================================================
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-change-in-production-xmonitor-v2")
-DEBUG = True  # TEMP
+DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", ".onrender.com"])
 
 USE_TZ = True
@@ -101,8 +101,7 @@ MIDDLEWARE = [
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "project.dev_auth.DevAutoLoginMiddleware",  # TEMP
+    "django.contrib.auth.middleware.AuthenticationMiddleware"
     "django.contrib.messages.middleware.MessageMiddleware",
     # django-allauth
     "allauth.account.middleware.AccountMiddleware",

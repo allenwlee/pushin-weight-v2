@@ -801,13 +801,14 @@ def _resolve_signal_model() -> str:
     does not consume the entire output budget on internal deliberation.
 
     Resolution order:
-      1. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
-      2. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
-      3. "deepseek-v4-pro" if classifier base URL routes through api.deepseek.com
+      1. X_MONITOR_CLASSIFIER_MODEL env var (classifier-specific override)
+      2. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
+      3. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
+      4. "deepseek-v4-pro" if classifier base URL routes through api.deepseek.com
       4. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
-    explicit = os.environ.get("ANTHROPIC_MODEL")
+    explicit = os.environ.get("X_MONITOR_CLASSIFIER_MODEL") or os.environ.get("ANTHROPIC_MODEL")
     if explicit:
         return explicit
     base_url = os.environ.get(
@@ -844,6 +845,28 @@ def _resolve_thinking_default() -> "dict | None":
     return None
 
 
+def _resolve_translator_model() -> str:
+    """Return the model name for the translator, based on ANTHROPIC_BASE_URL.
+
+    The translator routes through `ANTHROPIC_BASE_URL` (NOT
+    `X_MONITOR_CLASSIFIER_BASE_URL`), so it needs its own model
+    resolution independent of the classifier. When the env-based
+    `ANTHROPIC_MODEL` override is set, honor it; otherwise pick
+    the sensible default for the detected provider.
+    """
+    import os
+    explicit = os.environ.get("ANTHROPIC_MODEL")
+    if explicit:
+        return explicit
+    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+    if "minimax.io" in base_url:
+        return "MiniMax-M3.0"
+    if "deepseek.com" in base_url:
+        return "deepseek-v4-pro"
+    return "claude-haiku-4-5"
+
+
+_TRANSLATOR_MODEL = _resolve_translator_model()
 _SIGNAL_MODEL = _resolve_signal_model()
 _MAX_RETRIES = 3
 _BACKOFF_BASE_SECONDS = 1.0
@@ -2064,11 +2087,17 @@ def classify_batch_pragmatics_full(
 
 
 class AnthropicClaudeClient:
-    """Production Claude client using the Anthropic SDK.
+    """Production Claude client using `requests` directly.
 
-    Mirrors `x_monitor.translator.AnthropicClaudeClient`. Imports
-    `anthropic` lazily so test envs without the SDK can still import
-    this module.
+    Avoids the Anthropic SDK (which uses httpx → httpcore) because
+    Python 3.14.5 on macOS 26.3.1 has an intermittent SSL read hang
+    with httpx/httpcore's connection pool that `requests` (urllib3)
+    does not trigger. The Anthropic Messages API is a simple REST
+    endpoint — POST /v1/messages with JSON body and x-api-key header.
+
+    Callers pass standard Anthropic API kwargs (model, max_tokens,
+    messages, temperature, thinking, system, etc.) to
+    ``messages_create(**kwargs)`` and receive a parsed JSON dict back.
     """
 
     def __init__(
@@ -2076,29 +2105,71 @@ class AnthropicClaudeClient:
         api_key: str | None = None,
         base_url: str | None = None,
     ) -> None:
-        try:
-            import anthropic  # type: ignore
-        except ImportError as e:
-            raise ImportError(
-                "AnthropicClaudeClient requires the 'anthropic' package. "
-                "Install with `pip install anthropic`. Tests can use "
-                "FakeClaudeClient instead."
-            ) from e
-        kwargs: dict[str, Any] = {}
-        if api_key:
-            kwargs["api_key"] = api_key
-        if base_url:
-            kwargs["base_url"] = base_url
-        self._client = anthropic.Anthropic(**kwargs)
+        self._api_key = api_key
+        self._base_url = (base_url or "https://api.anthropic.com").rstrip("/")
 
     def messages_create(self, **kwargs: Any) -> dict[str, Any]:
         """Send a messages.create request and return the parsed JSON."""
         import json as _json
-        msg = self._client.messages.create(**kwargs)
+
+        # Resolve the thinking default when not explicitly passed by the
+        # caller. DeepSeek V4 Pro is a reasoning model that emits
+        # ThinkingBlocks (no .text) unless thinking={"type": "disabled"}
+        # is set; the blocks are then invisible to the loops below, the
+        # response body is empty, and json.loads("") raises. Inject the
+        # thinking kwarg from the operator's proxy config so the response
+        # always carries at least one TextBlock. MiniMax / direct
+        # Anthropic paths return None (no-op).
+        if "thinking" not in kwargs:
+            thinking = _resolve_thinking_default()
+            if thinking is not None:
+                kwargs["thinking"] = thinking
+
+        url = f"{self._base_url}/v1/messages"
+        headers = {
+            "x-api-key": self._api_key or "",
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        # Pull out the body fields that go to the Anthropic API.
+        # The kwargs dict is a flat bag of model, max_tokens, messages,
+        # temperature, thinking, system, etc. — pass everything through.
+        #
+        # Use http.client directly instead of requests/urllib3.
+        # Python 3.14.5 on macOS 26.3.1 has an intermittent SSL read hang
+        # with urllib3's connection pool after the process has made prior
+        # HTTPS requests to different hosts (TwitterAPI.io). A fresh
+        # http.client connection per call avoids the pooled-connection
+        # path entirely.
+        import json as _json_module
+        import http.client
+        import urllib.parse
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        body_bytes = _json_module.dumps(kwargs).encode("utf-8")
+        timeout = kwargs.pop("timeout", 60)
+        conn = http.client.HTTPSConnection(
+            parsed.hostname,
+            parsed.port or 443,
+            timeout=timeout,
+        )
+        try:
+            conn.request("POST", parsed.path, body=body_bytes, headers=headers)
+            r = conn.getresponse()
+            raw_body = r.read()
+        finally:
+            conn.close()
+        if not (200 <= r.status < 300):
+            raise RuntimeError(
+                f"LLM API returned {r.status}: {raw_body[:500]!r}"
+            )
+        body = _json_module.loads(raw_body)
+        # Extract text from content blocks (Anthropic response format).
+        # Skip ThinkingBlocks (DeepSeek without thinking=disabled).
         text_parts: list[str] = []
-        for block in msg.content:
-            if hasattr(block, "text"):
-                text_parts.append(block.text)
+        for block in body.get("content") or []:
+            if block.get("type") == "text":
+                text_parts.append(block.get("text", ""))
         raw = "\n".join(text_parts).strip()
         if raw.startswith("```"):
             lines = raw.splitlines()

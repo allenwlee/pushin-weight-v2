@@ -363,44 +363,17 @@ __all__ = [
 ]
 
 
-def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
-    """Return an `AnthropicClaudeClient` honoring the operator's proxy config.
+def _build_client_for_base_url(
+    base_url: str | None,
+    caller_label: str,
+) -> AnthropicClaudeClient | None:
+    """Shared factory: create an AnthropicClaudeClient for a given base URL.
 
-    The classifier's effective base URL is `X_MONITOR_CLASSIFIER_BASE_URL`
-    when set, otherwise `ANTHROPIC_BASE_URL`. This lets M3 stay as the
-    process-wide default while the classifier routes to DS V4 — set
-    `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`
-    in the shell to override just the classifier without flipping
-    other LLM callers in the same process.
-
-    Resolution:
-      * If the classifier base URL contains "minimax.io", the operator is
-        routing through the minimax proxy. The proxy accepts only
-        MINIMAX_API_TOKEN (the `sk-cp-uh…` token from `~/.env.secrets`)
-        and the operator-registered model id (ANTHROPIC_MODEL, typically
-        "MiniMax-M2.7"). ANTHROPIC_API_KEY is silently rejected (401).
-      * If the classifier base URL contains "deepseek.com", the operator is
-        routing through DeepSeek V4 Pro's Anthropic-compatible endpoint.
-        The endpoint accepts DEEPSEEK_API_TOKEN (or DEEPSEEK_API_KEY) and
-        the model id ANTHROPIC_MODEL (default "deepseek-v4-pro" via
-        `_resolve_signal_model`). The Anthropic SDK call threads
-        `thinking={"type": "disabled"}` automatically (see
-        `_resolve_thinking_default`); the factory itself is identical
-        to the other branches.
-      * Otherwise, talk to api.anthropic.com directly using
-        ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
-
-    Used by the CLI subcommand. Returns None when no auth credential is
-    available so the reattribute falls back to non-LLM mode. The
-    Anthropic SDK import is deferred to the call site to keep
-    `x_monitor.reattribute` importable in environments without the
-    SDK (e.g. the test env, which has no anthropic installed).
+    Resolves the API key based on the provider in the URL (MiniMax proxy,
+    DeepSeek, or direct Anthropic). Returns None when no auth credential
+    is available so callers fall back to non-LLM mode.
     """
     import os
-    base_url = os.environ.get(
-        "X_MONITOR_CLASSIFIER_BASE_URL",
-        os.environ.get("ANTHROPIC_BASE_URL"),
-    )
     use_minimax_proxy = bool(base_url) and "minimax.io" in base_url
     use_deepseek = bool(base_url) and "deepseek.com" in base_url
 
@@ -408,9 +381,9 @@ def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
         api_key = os.environ.get("MINIMAX_API_TOKEN")
         if not api_key:
             logger.warning(
-                "reattribute: classifier base URL routes through the minimax "
-                "proxy but MINIMAX_API_TOKEN is not set; running without "
-                "signal classification"
+                "%s: base URL routes through the minimax proxy but "
+                "MINIMAX_API_TOKEN is not set; running without LLM",
+                caller_label,
             )
             return None
     elif use_deepseek:
@@ -420,9 +393,9 @@ def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
         )
         if not api_key:
             logger.warning(
-                "reattribute: classifier base URL routes through the deepseek "
-                "endpoint but DEEPSEEK_API_KEY is not set; running without "
-                "signal classification"
+                "%s: base URL routes through the deepseek endpoint but "
+                "DEEPSEEK_API_KEY is not set; running without LLM",
+                caller_label,
             )
             return None
     else:
@@ -436,14 +409,62 @@ def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
         return AnthropicClaudeClient(api_key=api_key, base_url=base_url)
     except ImportError:
         logger.warning(
-            "reattribute: anthropic SDK not installed; "
-            "running without signal classification"
+            "%s: anthropic SDK not installed; running without LLM",
+            caller_label,
         )
         return None
     except Exception as e:
         logger.warning(
-            "reattribute: failed to construct AnthropicClaudeClient: %s; "
-            "running without signal classification",
-            e,
+            "%s: failed to construct AnthropicClaudeClient: %s; "
+            "running without LLM",
+            caller_label, e,
         )
         return None
+
+
+def build_anthropic_client_from_env() -> AnthropicClaudeClient | None:
+    """Return an `AnthropicClaudeClient` for the classifier.
+
+    The classifier's effective base URL is `X_MONITOR_CLASSIFIER_BASE_URL`
+    when set, otherwise `ANTHROPIC_BASE_URL`. This lets M3 stay as the
+    process-wide default while the classifier routes to DS V4 — set
+    `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`
+    in the shell to override just the classifier without flipping
+    other LLM callers in the same process.
+
+    Resolution:
+      * If the classifier base URL contains "minimax.io", the operator is
+        routing through the minimax proxy. The proxy accepts only
+        MINIMAX_API_TOKEN (the `sk-cp-uh…` token from `~/.env.secrets`).
+      * If the classifier base URL contains "deepseek.com", the operator is
+        routing through DeepSeek V4 Pro's Anthropic-compatible endpoint.
+        The endpoint accepts DEEPSEEK_API_KEY.
+      * Otherwise, talk to api.anthropic.com directly using
+        ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
+
+    Used by the pipeline's classification stage. Returns None when no
+    auth credential is available so classification falls back to no-LLM.
+    """
+    import os
+    base_url = os.environ.get(
+        "X_MONITOR_CLASSIFIER_BASE_URL",
+        os.environ.get("ANTHROPIC_BASE_URL"),
+    )
+    return _build_client_for_base_url(base_url, caller_label="classifier")
+
+
+def build_translator_client_from_env() -> AnthropicClaudeClient | None:
+    """Return an `AnthropicClaudeClient` for the translation stage.
+
+    Reads `ANTHROPIC_BASE_URL` only (NOT `X_MONITOR_CLASSIFIER_BASE_URL`)
+    so the translator always uses the process-wide default endpoint
+    (typically the MiniMax proxy via `api.minimax.io/anthropic`).
+    The classifier can independently route to DeepSeek via
+    `X_MONITOR_CLASSIFIER_BASE_URL`.
+
+    Key resolution (same as build_anthropic_client_from_env but without
+    the X_MONITOR_CLASSIFIER_BASE_URL override).
+    """
+    import os
+    base_url = os.environ.get("ANTHROPIC_BASE_URL")
+    return _build_client_for_base_url(base_url, caller_label="translator")

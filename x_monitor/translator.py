@@ -907,6 +907,14 @@ class AnthropicClaudeClient:
             kwargs["api_key"] = api_key
         if base_url:
             kwargs["base_url"] = base_url
+        # 2026-07-22: explicit timeout + retry to fix the ~37% SSL read hang
+        # failure rate. The Anthropic SDK defaults to 600s timeout with no
+        # retries; a hung SSL connection ties up a batch for 10 minutes
+        # before failing. 60s is enough for the translation LLM (MiniMax
+        # M3.0 returns ~890 tokens in <10s; DS V4 in <5s). 2 retries with
+        # jitter gives the hung batch a fresh connection on retry.
+        kwargs.setdefault("timeout", 60.0)
+        kwargs.setdefault("max_retries", 2)
         self._client = anthropic.Anthropic(**kwargs)
 
     def messages_create(self, **kwargs) -> dict[str, Any]:

@@ -1,0 +1,16 @@
+{
+  "since_epoch": 1784678400,
+  "until_epoch": 1784874813,
+  "since_label": "2026-07-22",
+  "until_label": "now",
+  "gap_hours": 54.6,
+  "est_total_posts": 5342,
+  "max_results": 1000,
+  "max_pages": 100,
+  "calls_total": 0,
+  "calls_completed_ids": [],
+  "calls_completed": 0,
+  "total_inserted": 0,
+  "runs": [],
+  "finished": true
+}

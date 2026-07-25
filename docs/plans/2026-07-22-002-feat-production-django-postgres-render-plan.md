@@ -5,7 +5,7 @@
 **artifact_readiness:** implementation-ready  
 **product_contract_source:** ce-plan-bootstrap  
 **execution:** code  
-**Target repo:** pushin-weight-v2 (x-monitoring sub-system)
+**Target repo:** pushin-weight-v2
 
 ---
 
@@ -80,7 +80,7 @@ Success looks like: team can `https://x-monitor.onrender.com/` (or custom domain
 ### Scope Boundaries
 
 **In scope**
-- Django project layout inside `x-monitoring/` (project/, core/, monitor/ or crawler/ app) mirroring reference shape.
+- Django project layout at the project root (project/, core/, monitor/ apps) mirroring the pushin_weight reference shape (alongside the existing `x_monitor/` package).
 - Django models + migrations that can host the current live data shape (adapt reference natural-key style where safe; preserve compatibility for port).
 - Google OAuth via allauth (or Django social if simpler), login wall, basic user surface.
 - Full port of the two Pushin' Weight home surfaces (server-rendered + JS progressive enhancement or HTMX where it simplifies).
@@ -110,8 +110,8 @@ Success looks like: team can `https://x-monitor.onrender.com/` (or custom domain
 
 ### Key Technical Decisions (KTDs)
 
-**KTD1. Structure: Django project colocated inside x-monitoring/.**  
-`x-monitoring/project/settings.py`, `manage.py` (or shim), `core/` (models + migrations), `monitor/` (or keep/refactor as `crawler/` + `dashboard_app/`) apps. This keeps the harvest code, config, data dir, tests, and deploy scripts in one tree during transition. Mirrors the proven pushin_weight reference layout exactly as requested. The existing `x_monitor/` package becomes the "compat / legacy layer" that the launchd agents continue to invoke unchanged.
+**KTD1. Structure: Django project colocated at the project root.**  
+`project/settings.py`, `manage.py`, `core/` (models + migrations), `monitor/` (new Django app; or keep/refactor as needed) apps. This keeps the harvest code, config, data dir, tests, and deploy scripts in one tree during transition. Mirrors the proven pushin_weight reference layout exactly as requested. The existing `x_monitor/` package becomes the "compat / legacy layer" that the launchd agents continue to invoke unchanged. The root now directly contains `x_monitor/`, `config.yaml`, `pyproject.toml`, `deploy/`, `scripts/`, etc. (the former `x-monitoring/` wrapper directory was removed in housekeeping).
 
 **KTD2. Harvest continuity contract (non-negotiable).**  
 Old macOS launchd agents (`com.fuchitalee.x-monitor.harvest` etc.) + current `python -m x_monitor run` + SQLite remain the live production path until the operator explicitly validates 1–2 days of successful new cycles on Render (or local PG) and flips a kill switch / updates agents. During the window a bridge script or dual-persist helper (optional) can keep a PG copy in sync for the new dashboard to read. No cycle is ever "paused" for the migration work itself.
@@ -159,7 +159,7 @@ Keep `config.yaml` (or a Django settings overlay) for operator-editable items (e
 **Overall chronology (risk-ordered, harvest-first):**
 
 1. **Foundation (parallel, zero harvest impact)**
-   - Scaffold Django project inside `x-monitoring/` (project/, core/, monitor/).
+   - Scaffold Django project at the project root (project/, core/, monitor/).
    - Define core models that can accept the current schema data.
    - Add allauth + Google provider + basic login views / middleware.
    - Add i18n wiring + label tables + port existing locale strings.
@@ -227,7 +227,7 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 
 ## Implementation Units
 
-### U1. Scaffold Django project layout inside x-monitoring/ (reference-aligned)
+### U1. Scaffold Django project layout at the project root (reference-aligned)
 
 **Goal:** Create the standard Django layout (`manage.py`, `project/`, `core/`, `monitor/`) so that `python -m project` and `python manage.py` work, without touching the running harvest or Flask dashboard.
 
@@ -236,17 +236,17 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** none.
 
 **Files:**
-- x-monitoring/manage.py (new or minimal)
-- x-monitoring/project/__init__.py, settings.py, urls.py, wsgi.py, asgi.py, celery.py (new)
-- x-monitoring/core/__init__.py, apps.py (new)
-- x-monitoring/monitor/__init__.py, apps.py (new; or name it to allow future convergence with x_monitor)
-- x-monitoring/pyproject.toml (add Django, psycopg, django-allauth, gunicorn, whitenoise, django-environ, etc. under optional or new extras)
-- x-monitoring/.env.example (updated)
+- manage.py (new or minimal, at project root)
+- project/__init__.py, settings.py, urls.py, wsgi.py, asgi.py, celery.py (new, at project root)
+- core/__init__.py, apps.py (new, at project root)
+- monitor/__init__.py, apps.py (new; or name it to allow future convergence with x_monitor)
+- pyproject.toml (add Django, psycopg, django-allauth, gunicorn, whitenoise, django-environ, etc. under optional or new extras)
+- .env.example (updated)
 - tests/ additions for new layout (smoke import tests)
 
-**Approach:** Follow pushin_weight reference exactly for directory shape and settings skeleton. Use `django-admin startproject` inside a temp dir then move files under `x-monitoring/` to avoid polluting root. Make settings env-driven with `environ`. Add a `project/__main__.py` shim so `python -m project` behaves like the reference. Do not enable any web routes or models yet. Ensure `pip install -e ".[dev]"` still works and existing `x-monitor` entrypoint is untouched.
+**Approach:** Follow pushin_weight reference exactly for directory shape and settings skeleton. Use `django-admin startproject` inside a temp dir then move files to the project root (alongside the existing `x_monitor/` package, `config.yaml`, etc.). Make settings env-driven with `environ`. Add a `project/__main__.py` shim so `python -m project` behaves like the reference. Do not enable any web routes or models yet. Ensure `pip install -e ".[dev]"` still works and existing `python -m x_monitor run` and `x-monitor` entrypoint are untouched.
 
-**Patterns to follow:** pushin_weight/project/settings.py + pyproject.toml, x-monitoring/pyproject.toml current style.
+**Patterns to follow:** pushin_weight/project/settings.py + pyproject.toml, current root `pyproject.toml`.
 
 **Test scenarios:**
 - Happy: after `pip install -e`, `python -m project --help` or `python manage.py --help` shows Django commands.
@@ -265,12 +265,12 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U1.
 
 **Files:**
-- x-monitoring/core/models.py (new — the new source of truth)
-- x-monitoring/core/migrations/0001_initial.py (generated)
-- x-monitoring/core/migrations/0002_*.py (i18n label seeds or follow-ups)
+- core/models.py (new — the new source of truth, at project root)
+- core/migrations/0001_initial.py (generated)
+- core/migrations/0002_*.py (i18n label seeds or follow-ups)
 - Possibly a `schema/0001_end_state.sql` snapshot (like reference) for human review.
 - Update docs/reference/db-schema.md or add note that Django models are now authoritative after cutover.
-- x-monitoring/core/checks.py (natural key / composite PK invariants, adapted from reference)
+- core/checks.py (natural key / composite PK invariants, adapted from reference)
 
 **Approach:** Start from the pushin_weight reference models.py (natural keys for brands/companies/hf_orgs/accounts, composite PKs for labels and junctions, TIMESTAMPTZ, case_insensitive collation). Adapt column names/types to exactly match current live SQLite (e.g. keep `accounts.id` AUTOINCREMENT if present, or decide on natural `author_id` PK — document the choice). Include i18n label tables for post_types, stances/sentiments, roles, nationalism keys, discourse, etc. Use `CompositePrimaryKey` for junctions. Make Brand/Company have `display_name_en`, `display_name_zh_cn` etc. Run `makemigrations` and hand-review the SQL. Add system checks.
 
@@ -293,10 +293,10 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U1 (settings/urls skeleton).
 
 **Files:**
-- x-monitoring/project/settings.py (add allauth apps, middleware, AUTHENTICATION_BACKENDS, SOCIALACCOUNT_PROVIDERS for Google, ACCOUNT_* settings)
-- x-monitoring/project/urls.py (include allauth urls + dashboard urls under login_required)
+- project/settings.py (add allauth apps, middleware, AUTHENTICATION_BACKENDS, SOCIALACCOUNT_PROVIDERS for Google, ACCOUNT_* settings)
+- project/urls.py (include allauth urls + dashboard urls under login_required)
 - templates/ (account/login.html etc. — minimal or use allauth defaults + branding)
-- x-monitoring/monitor/ or a new accounts/ app if heavier customization needed (start minimal)
+- monitor/ or a new accounts/ app if heavier customization needed (start minimal)
 - docs/ or README update for creating the Google OAuth client + adding the Render + localhost redirect URIs.
 
 **Approach:** Install `django-allauth[socialaccount]`. Configure exactly one provider: Google. Use `django.contrib.auth` + allauth. Protect routes with `login_required` (or middleware). Set `LOGIN_URL`, `LOGIN_REDIRECT_URL = "/"`. For production on Render, set proper `CSRF_TRUSTED_ORIGINS`, `SECURE_*` settings behind env. No custom User model in U3 (can be added later). Support the usual "sign in with Google" button.
@@ -320,8 +320,8 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U2 (models with labels).
 
 **Files:**
-- x-monitoring/core/models.py (label models if not complete in U2)
-- x-monitoring/core/management/commands/seed_i18n_labels.py (or extend existing seeds)
+- core/models.py (label models if not complete in U2)
+- core/management/commands/seed_i18n_labels.py (or extend existing seeds)
 - Templates updated with `{% load i18n %}`, `{% trans %}`, `{% blocktrans %}`, `get_current_language`.
 - Python code using `gettext_lazy`.
 - Locale directories `locale/en/LC_MESSAGES/`, `locale/zh_CN/...` (or rely on model labels + a small number of UI strings).
@@ -349,9 +349,9 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U2.
 
 **Files:**
-- x-monitoring/scripts/port_sqlite_to_django.py (new, modeled on the 2026-07-06 pushin_weight migrate script)
-- x-monitoring/data/migration_logs/ (new reports written here)
-- x-monitoring/monitor/management/commands/load_seed.py or init_db (like reference)
+- scripts/port_sqlite_to_django.py (new, modeled on the 2026-07-06 pushin_weight migrate script)
+- data/migration_logs/ (new reports written here)
+- monitor/management/commands/load_seed.py or init_db (like reference)
 - Tests: test_port_sqlite_*.py
 - Possibly a `tools/db_diff.py` or reuse/extend reference's crawler_db_diff.
 
@@ -376,11 +376,11 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U1, U2, U5 (at least for seed), existing pipeline modules.
 
 **Files:**
-- x-monitoring/monitor/management/commands/run_cycle.py (modeled exactly on reference)
-- x-monitoring/monitor/tasks.py (Celery wrapper)
-- x-monitoring/monitor/cycle.py or adapters that call into (or copy/adapt) x_monitor/run.py, attribution, relevance, translator, store logic.
+- monitor/management/commands/run_cycle.py (modeled exactly on reference)
+- monitor/tasks.py (Celery wrapper)
+- monitor/cycle.py or adapters that call into (or copy/adapt) x_monitor/run.py, attribution, relevance, translator, store logic.
 - Updates to x_monitor/config.py or a thin bridge so the same YAML / enabled_models work.
-- x-monitoring/monitor/apps.py (register checks, ready hook)
+- monitor/apps.py (register checks, ready hook)
 - Tests: test_run_cycle_command.py, integration tests that compare outputs.
 
 **Approach (critical for harvest continuity):** The command must produce **bitwise or semantically identical** behavior to the current `x_monitor run`. Strategy: import the existing functions where possible and only swap the persistence layer (Store → Django ORM writes). Or do a faithful port inside the monitor app. Start with full --dry-run parity (no network spend). Only after that, enable writes. Support the same CLI flags by stashing them in `django.conf.settings` (exact pattern from reference). For the old launchd path to remain untouched, this command is a *new* entrypoint.
@@ -405,17 +405,17 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U3 (auth), U4 (i18n), U2 (models for queries), U6 (if live data needed).
 
 **Files:**
-- x-monitoring/monitor/views.py (or dashboard/views.py)
-- x-monitoring/monitor/urls.py (or included)
-- Templates: x-monitoring/monitor/templates/monitor/home.html, brand_home.html, partials, etc. (ported from x_monitor/templates/*.j2)
+- monitor/views.py (or dashboard/views.py)
+- monitor/urls.py (or included)
+- Templates: monitor/templates/monitor/home.html, brand_home.html, partials, etc. (ported from x_monitor/templates/*.j2)
 - Static assets moved or symlinked under static/ (or keep in x_monitor/static and collect)
 - JS updates only where server context (csrf, locale, user) changes.
-- x-monitoring/monitor/context_processors.py (brand list, accent colors, current run info)
+- monitor/context_processors.py (brand list, accent colors, current run info)
 - API views that return the same JSON shapes as /api/v1/...
 
 **Approach:** Re-implement the route handlers from `_home_routes.py` + dashboard.py as Django class-based or function views using the ORM. Use Django's template language + existing static JS (served by WhiteNoise). Preserve the exact DOM ids/classes the JS expects. Locale is driven by Django. All views decorated or protected. For charts, either server-render initial SVG/HTML or keep the client-side rendering fed by the same JSON contracts.
 
-**Patterns to follow:** x-monitoring/x_monitor/_home_routes.py + dashboard.py, templates/, static/pw-*.js, docs/reference/home-pages-ui-guide.md, existing tests/test_dashboard*.py and test_feed_page.py.
+**Patterns to follow:** x_monitor/_home_routes.py + dashboard.py, templates/, static/pw-*.js, docs/reference/home-pages-ui-guide.md, existing tests/test_dashboard*.py and test_feed_page.py.
 
 **Test scenarios:**
 - Authenticated GET / returns 200 with the multi-brand home shell + correct brand chips for current enabled_models.
@@ -436,13 +436,13 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U1–U7 (at least a minimal working slice).
 
 **Files:**
-- x-monitoring/render.yaml (or root render.yaml if preferred)
-- x-monitoring/build.sh (chmod +x; pip install, collectstatic, migrate)
-- x-monitoring/Procfile (optional: web: gunicorn ...)
-- x-monitoring/project/settings.py (production section: DEBUG=False, allowed hosts from env, CSRF trusted from env, WhiteNoise middleware, STATIC_ROOT, logging, etc.)
-- x-monitoring/.env.example (Render-specific keys: RENDER, DATABASE_URL examples)
+- render.yaml (or root render.yaml if preferred)
+- build.sh (chmod +x; pip install, collectstatic, migrate)
+- Procfile (optional: web: gunicorn ...)
+- project/settings.py (production section: DEBUG=False, allowed hosts from env, CSRF trusted from env, WhiteNoise middleware, STATIC_ROOT, logging, etc.)
+- .env.example (Render-specific keys: RENDER, DATABASE_URL examples)
 - docs/deploy/render.md (new runbook: create Postgres, web service, set env vars for SECRET_KEY, GOOGLE_CLIENT_ID/SECRET, TWITTERAPI_*, ANTHROPIC_*, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS)
-- Update x-monitoring/deploy/README.md or root README with cloud instructions.
+- deploy/README.md or root README with cloud instructions.
 
 **Approach (idiomatic Render Django):**
 - Use gunicorn (or uvicorn workers for ASGI if needed).
@@ -473,8 +473,8 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U6, U5.
 
 **Files:**
-- x-monitoring/scripts/bridge_sqlite_to_pg.py (or extend the port script to tail recent runs)
-- x-monitoring/monitor/management/commands/validate_cycle.py (compares two runs or DB snapshots)
+- scripts/bridge_sqlite_to_pg.py (or extend the port script to tail recent runs)
+- monitor/management/commands/validate_cycle.py (compares two runs or DB snapshots)
 - Updates to data/runs/ handling or a small writer adapter the legacy path can optionally call.
 - Docs in the plan or deploy notes describing the 1–2 day battle-test protocol.
 
@@ -498,8 +498,8 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 **Dependencies:** U1–U9.
 
 **Files:**
-- x-monitoring/README.md (major update: "Production (Django/Render)" section + "Transitioning from legacy Flask")
-- x-monitoring/deploy/README.md or new docs/deploy/
+- README.md (major update: "Production (Django/Render)" section + "Transitioning from legacy Flask")
+- deploy/README.md or new docs/deploy/
 - CLAUDE.md (add note about Django migrations instead of / in addition to raw SQL; how to run schema image if still relevant; Render commands)
 - .env.example (complete)
 - Possibly a `docs/production-runbook.md`
@@ -560,7 +560,7 @@ legacy (mac+SQLite) → (parallel validation) → dual (optional bridge) → new
 
 ## Sources & Research
 
-- Current implementation: `x-monitoring/x_monitor/{dashboard.py,_home_routes.py,run.py,store.py,attribution.py,...}`, `config.yaml`, `tests/`, `deploy/`, `docs/reference/db-schema.md`, `docs/reference/home-pages-ui-guide.md`.
+- Current implementation: `x_monitor/{dashboard.py,_home_routes.py,run.py,store.py,attribution.py,...}`, `config.yaml`, `tests/`, `deploy/`, `docs/reference/db-schema.md`, `docs/reference/home-pages-ui-guide.md`.
 - Reference architecture (use as shape + idioms only): `/Users/fuchitalee/development/pushin_weight/{project/settings.py,core/models.py,crawler/management/commands/run_cycle.py,README.md,pyproject.toml}` and its migrations + seed tools.
 - Prior alignment work: plans around natural keys, i18n columns (2026-06-23), pushin_weight record migration (2026-07-06 and 2026-07-07), schema modernization.
 - External (Render Django): official Render Django deploy docs, gunicorn + WhiteNoise + build.sh patterns, 2026 tutorials on Render + PG + Django.

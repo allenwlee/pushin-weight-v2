@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# bin/sql — sqlite3 wrapper for x-monitoring's data/x_monitoring.db
+#
+# What it does:
+#   - Resolves the DB path relative to the repo root (works from any cwd),
+#     or honors $X_MONITORING_DB if set to an absolute path.
+#   - Starts sqlite3 with default-friendly settings:
+#       .headers on
+#       .mode column  (override with -mode/separator args or pass them on)
+#   - Pre-loads a small `.sql` macro library from share/sql-macros.sql so
+#     hot joins are one `.read` away (see that file for the catalog).
+#   - Bails before sqlite3 starts if the DB file is missing — sqlite3's
+#     default is to silently create an empty one, which is the wrong move
+#     on prod data.
+#
+# Usage:
+#     bin/sql                      # interactive REPL
+#     bin/sql ".tables"            # one-shot query
+#     bin/sql -header -column      # any sqlite3 flags pass through
+#     echo "select 1;" | bin/sql   # piped SQL
+#     bin/sql < some.sql
+#     bin/sql tests/fixtures.sql   # open with a script pre-loaded
+#
+# Why a shell wrapper instead of a Python script:
+#   - sqlite3 ships everywhere; no venv activation needed for the operator.
+#   - All sqlite3 power is one arg away. We're not hiding anything.
+#   - The macro file is plain SQL — readable, diffable, repo-trackable.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DB="${X_MONITORING_DB:-$REPO_ROOT/data/x_monitoring.db}"
+MACROS="$REPO_ROOT/share/sql-macros.sql"
+
+if [[ ! -f "$DB" ]]; then
+  echo "x-monitor sql: DB not found at $DB" >&2
+  echo "  (override with X_MONITORING_DB=/abs/path/to/x_monitoring.db)" >&2
+  echo "  (run 'x-monitor migrate' first if this is a fresh checkout)" >&2
+  exit 1
+fi
+
+# Pre-load the macro library if it exists; otherwise continue silently.
+# (`.bail on` would be nice but it's a per-session setting, so we set it here
+# instead of relying on every operator to remember.)
+sqlite3 \
+  -bail \
+  -cmd ".headers on" \
+  -cmd ".mode column" \
+  -cmd ".timeout 5000" \
+  ${MACROS:+-cmd ".read $MACROS"} \
+  "$DB" \
+  "$@"
