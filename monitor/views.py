@@ -1422,6 +1422,7 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     django_code = {
         "zh_cn": "zh-hans",
         "zh-CN": "zh-hans",
+        "zh_hans": "zh-hans",
         "en": "en",
         "original": "en",
     }.get(normalized, "en")
