@@ -33,5 +33,6 @@ urlpatterns = [
 
     # Locale and window cookie setters
     path("locale/<str:locale>/", views.set_locale, name="set_locale"),
+    path("debug/i18n/", views.debug_i18n, name="debug_i18n"),
     path("window/<int:days>/", views.set_window, name="set_window"),
 ]

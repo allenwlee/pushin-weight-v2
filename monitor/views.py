@@ -18,6 +18,7 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -1413,6 +1414,29 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
         "monitor/_spend.html",
         {},
     )
+
+
+@csrf_exempt
+def debug_i18n(request):
+    from django.utils import translation
+    from django.utils.translation import gettext as _
+    from django.conf import settings
+    from django.http import JsonResponse
+    import os
+    locale_dir = settings.BASE_DIR / "locale"
+    mo_path = locale_dir / "zh_Hans" / "LC_MESSAGES" / "django.mo"
+    translation.activate("zh-hans")
+    return JsonResponse({
+        "language_code": settings.LANGUAGE_CODE,
+        "get_language": translation.get_language(),
+        "mo_exists": os.path.exists(str(mo_path)),
+        "mo_size": os.path.getsize(str(mo_path)) if os.path.exists(str(mo_path)) else 0,
+        "Filters": _("Filters"),
+        "datetime": _("datetime"),
+        "brand": _("brand"),
+        "translated": _("translated"),
+        "Password": _("Password"),
+    })
 
 
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
