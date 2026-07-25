@@ -4,6 +4,7 @@ date: 2026-07-24
 problem_type: architecture_pattern
 component: service_object
 severity: high
+last_updated: 2026-07-26
 applies_when:
   - "Building a batched, resumable date-range processing tool that reuses an existing pipeline"
   - "Wiring an LLM-based classifier into an existing data processing workflow with guardrails"
@@ -273,3 +274,7 @@ python manage.py backfill \
   --max-pages 10 \
   --batch-size 2
 ```
+
+## Related Docs
+
+- `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md` — full post-mortem of the zh_CN i18n feature; explains the locale middleware fix, the `zh-cn` vs `zh-hans` directory naming, and why fixes #1 and #2 above are now superseded.
