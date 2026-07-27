@@ -169,16 +169,21 @@ def _cursor_key(call: PlannedCall) -> dict[str, str]:
 def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
     """Resolve the `since_time` floor for one call, clamped to _MAX_LOOKBACK.
 
-    Returns an aware UTC datetime, always.  Three cases:
+    Returns an aware UTC datetime, always.  Four cases:
       * no cursor row (cold start)  -> now - _MAX_LOOKBACK
       * fresh cursor                -> cursor - _CURSOR_OVERLAP
       * stale cursor (or DB error)  -> now - _MAX_LOOKBACK (the clamp)
+      * future cursor (NTP rollback, a v1 legacy row whose TZ was
+        mis-parsed, a manual psql write) -> now - _CURSOR_OVERLAP
 
-    A DB read failure degrades to the clamped floor rather than raising: a
-    bounded re-fetch is always safer than skipping a cycle, and tweet_id
-    dedup absorbs the duplicates.
+    The future case is the subtle one: a prior AFTER now would otherwise
+    produce since > until, TwitterAPI.io returns [] with no error, and the
+    successful-empty-sweep advance rewinds the cursor to now -- permanently
+    losing the (now, prior) span. Clamping since to (now - overlap) bounds
+    the damage to a one-cycle re-fetch, which dedup absorbs.
     """
     floor = now - _MAX_LOOKBACK
+    ceiling = now - _CURSOR_OVERLAP
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
         if row is None or row.last_completed_at is None:
@@ -196,6 +201,22 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
                 call.call_id,
             )
             prior = prior.replace(tzinfo=timezone.utc)
+        # A prior in the FUTURE would invert the window (since > until),
+        # make TwitterAPI.io return [] with no error, and the empty-sweep
+        # advance would rewind the cursor to now -- permanently losing the
+        # (now, prior) span. Clamp the lower bound to (now - overlap) so the
+        # damage is bounded to a single re-fetch that dedup absorbs.
+        if prior > now:
+            logger.warning(
+                "_read_cursor_since: future last_completed_at for call_id=%s "
+                "(%s, ahead of now by %s); clamping to now - overlap. Likely "
+                "causes: NTP rollback, v1 import with TZ mis-parse, or a "
+                "manual DB write.",
+                call.call_id,
+                prior.isoformat(),
+                prior - now,
+            )
+            return ceiling
         return max(prior - _CURSOR_OVERLAP, floor)
     except Exception as exc:
         logger.warning(
@@ -207,11 +228,24 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
         return floor
 
 
-def _advance_cursor(call: PlannedCall, *, upper_bound: datetime) -> bool:
+def _advance_cursor(
+    call: PlannedCall, *, upper_bound: datetime, now: datetime | None = None
+) -> bool:
     """Record that this call swept through `upper_bound`. Returns success.
 
     `upper_bound` must be the exact instant passed to the API as
     `until_time`, so the next cycle's window begins where this one ended.
+
+    Refuses to persist a value in the future. A future stored cursor
+    would invert the next window (since > until), TwitterAPI.io would
+    return [] with no error, and the successful-empty-sweep advance would
+    rewind the cursor to now -- permanently losing the (now, prior) span.
+    Reachable on NTP rollback, a v1 legacy import with TZ mis-parse, or a
+    manual psql write. The in-tree writer is the only one we control, so
+    refuse here and let the read-side clamp handle anything external.
+
+    `now` is injectable so tests with a fixed `NOW` constant do not become
+    time-sensitive.
 
     A cursor-write failure must never abort the cycle -- the posts are
     already stored, and not advancing only costs a bounded re-fetch that
@@ -221,6 +255,12 @@ def _advance_cursor(call: PlannedCall, *, upper_bound: datetime) -> bool:
         raise ValueError(
             "_advance_cursor requires an aware datetime; got a naive one "
             "(CallState.last_completed_at is TIMESTAMPTZ under USE_TZ=True)"
+        )
+    if upper_bound > (now or datetime.now(timezone.utc)):
+        raise ValueError(
+            f"_advance_cursor refuses a future upper_bound ({upper_bound}); "
+            "would invert the next window and lose data. Investigate clock "
+            "or call site before allowing it."
         )
     try:
         CallState.objects.update_or_create(

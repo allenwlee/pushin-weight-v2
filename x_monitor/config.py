@@ -187,6 +187,40 @@ class Config(BaseModel):
     call_b_groups: list[list[str]] = Field(default_factory=list)
     dashboard: DashboardConfig = DashboardConfig()
 
+    @field_validator("x_query_specs")
+    @classmethod
+    def _validate_x_query_spec_call_ids(cls, v: list[XQuerySpec]) -> list[XQuerySpec]:
+        """Reject duplicate call_ids -- they would share a cursor row and
+        one call's advance would overwrite the other's, collapsing the
+        second call's next window to a 1-minute overlap.
+
+        For B/C specs the cursor key also includes the planner's brand
+        placeholder (first brand or first wide_net_brand), so two specs
+        with the same call_id but different first brands are technically
+        distinct. We only flag the truly-colliding case where the first
+        brand also matches (the empty-brands fallback to "*" is treated
+        as a match for that spec).
+        """
+        def _placeholder(spec: XQuerySpec) -> str:
+            if spec.is_wide_net and spec.wide_net_brands:
+                return spec.wide_net_brands[0]
+            return next(iter(spec.brands), "*") if spec.brands else "*"
+
+        seen: dict[tuple[str, str], int] = {}
+        for i, spec in enumerate(v):
+            key = (spec.call_id, _placeholder(spec))
+            if key in seen:
+                raise ValueError(
+                    f"duplicate call_id+brand_placeholder {key} in "
+                    f"x_query_specs (at indices {seen[key]} and {i}). Two "
+                    "specs sharing both will address the same call_state "
+                    "row, and one's advance will overwrite the other's, "
+                    "collapsing the second call's next window to a 1-minute "
+                    "overlap (peer finding, 2026-07-27)."
+                )
+            seen[key] = i
+        return v
+
     @field_validator("enabled_models")
     @classmethod
     def _validate_models(cls, v: list[str]) -> list[str]:

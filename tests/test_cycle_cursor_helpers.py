@@ -202,7 +202,7 @@ def test_advance_cursor_swallows_db_error(monkeypatch):
             raise RuntimeError("simulated write failure")
 
     monkeypatch.setattr(cycle_mod.CallState, "objects", _Boom(), raising=False)
-    assert _advance_cursor(_call(), upper_bound=NOW) is False
+    assert _advance_cursor(_call(), upper_bound=NOW, now=NOW) is False
 
 
 def test_advance_cursor_reports_success(monkeypatch):
@@ -214,7 +214,7 @@ def test_advance_cursor_reports_success(monkeypatch):
             return (object(), True)
 
     monkeypatch.setattr(cycle_mod.CallState, "objects", _Ok(), raising=False)
-    assert _advance_cursor(_call("C1"), upper_bound=NOW) is True
+    assert _advance_cursor(_call("C1"), upper_bound=NOW, now=NOW) is True
     assert calls["call_id"] == "C1"
     assert calls["defaults"]["last_completed_at"] == NOW
 
@@ -330,3 +330,78 @@ def test_operator_since_time_of_zero_is_honored(monkeypatch):
     assert since == 0, "epoch 0 was discarded instead of used as the floor"
     assert cursor_owned is False, "an operator window must not own the cursor"
     assert until == int(NOW.timestamp())
+
+
+def test_future_cursor_value_does_not_invert_the_window(fake_cursor):
+    """A prior > now must NOT produce since > until.
+
+    Reachable on NTP rollback, a v1 legacy row whose TZ was mis-parsed, or
+    any manual psql insert. An inverted window returns [] from TwitterAPI.io
+    with no error, and the empty-sweep advance rewinds the cursor to now --
+    permanently losing every post in the (now, prior) span.
+    """
+    future = NOW + timedelta(minutes=10)
+    fake_cursor(row=_FakeRow(future))
+    since = _read_cursor_since(_call(), now=NOW)
+    # Since must be in the past relative to now. NOT future, NOT in the
+    # future-leaning portion of overlap.
+    assert since <= NOW, (
+        f"_read_cursor_since returned {since.isoformat()}, which is AFTER "
+        f"now ({NOW.isoformat()}). The window would invert (since > until) "
+        "and the next cycle's empty-sweep advance would rewind the cursor."
+    )
+    # Specifically: clamped to (now - overlap), so the next sweep is bounded
+    # to a single re-fetch that dedup absorbs, rather than the 2h floor
+    # (which would silently drop the (now, prior) span).
+    assert since == NOW - _CURSOR_OVERLAP
+
+
+def test_cursor_advance_rejects_future_upper_bound():
+    """Belt-and-suspenders: an in-tree writer must not be able to persist a
+    future timestamp at all, even if some external path produces one."""
+    import datetime as _dt
+
+    future = NOW + _dt.timedelta(minutes=5)
+    with pytest.raises(ValueError, match="future"):
+        _advance_cursor(_call(), upper_bound=future, now=NOW)
+
+
+# --- defensive paths from a second peer review ---------------------------
+
+
+def test_x_query_specs_must_have_distinct_call_id_placeholders():
+    """Two specs sharing call_id AND first brand would address one cursor
+    row. Advance from one overwrites the other, collapsing the second
+    call's next window to a 1-minute overlap. Validation lives in
+    load_config; this asserts it fires.
+    """
+    from pathlib import Path
+    from x_monitor.config import load_config
+    import yaml as _yaml
+
+    bad = {
+        "search": {"max_results": 50, "max_pages": 5, "max_per_page": 20},
+        "x_monitor_list_id": 1,
+        "x_query_specs": [
+            {
+                "call_id": "DUP",
+                "brands": {"deepseek": ["deepseek"]},
+                "co_occurrence": ["api"],
+                "min_faves": 0,
+            },
+            {
+                "call_id": "DUP",
+                "brands": {"deepseek": ["deepseek-r1"]},
+                "co_occurrence": ["api"],
+                "min_faves": 0,
+            },
+        ],
+        "enabled_models": ["deepseek"],
+    }
+    path = Path("/tmp/_bad_dup_call_id.yaml")
+    path.write_text(_yaml.safe_dump(bad))
+    try:
+        with pytest.raises(ValueError, match="duplicate call_id"):
+            load_config(path)
+    finally:
+        path.unlink(missing_ok=True)
