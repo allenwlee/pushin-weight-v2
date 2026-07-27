@@ -1289,6 +1289,17 @@ class CycleRunner:
                     seen_ids.add(tid)
 
             call_entry["status"] = "completed"
+            # All steps for this call succeeded (fetch + attribute + persist),
+            # so record that we swept through the exact upper bound we
+            # queried. Doing this last means any exception above leaves the
+            # cursor unmoved and the window gets re-swept (R2).
+            if cursor_owned:
+                call_entry["cursor_advanced"] = _advance_cursor(
+                    call,
+                    upper_bound=datetime.fromtimestamp(
+                        until_epoch, tz=timezone.utc
+                    ),
+                )
             call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
             summary["calls"].append(call_entry)
             summary["totals"]["n_calls_run"] += 1
