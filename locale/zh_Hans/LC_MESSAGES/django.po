@@ -31,11 +31,11 @@ msgstr "话语:"
 msgid "sentiments:"
 msgstr "情感:"
 
-msgid "zh_cn:"
-msgstr "zh_cn:"
+msgid "中国民族主义:"
+msgstr "中国民族主义:"
 
-msgid "en:"
-msgstr "en:"
+msgid "美国民族主义:"
+msgstr "美国民族主义:"
 
 msgid "unsanctioned"
 msgstr "未批准"

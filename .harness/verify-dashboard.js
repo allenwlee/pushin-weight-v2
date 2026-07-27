@@ -69,18 +69,23 @@ const checks = {
       await page.goto(BASE_URL, { waitUntil: 'networkidle' });
       await page.waitForSelector('tr[data-pw-feed-row]', { timeout: 15000 });
 
-      // AE4 (axis labels are zh_cn:/en: in BOTH locales)
+      // AE4 (axis labels are 中国民族主义:/美国民族主义: in BOTH locales per U1 of
+      // plan 2026-07-27-003). Old labels (zh_cn:/en:) must NOT be present.
       const zhcnAxis = await page.evaluate(() => {
         const rows = document.querySelectorAll('tr[data-pw-feed-row]');
-        let zhcnSeen = false, enSeen = false;
+        let cnSeen = false, usSeen = false, oldZhcnSeen = false, oldEnSeen = false;
         rows.forEach(r => {
-          if (r.textContent.includes('zh_cn:')) zhcnSeen = true;
-          if (r.textContent.includes('en:')) enSeen = true;
+          if (r.textContent.includes('中国民族主义:')) cnSeen = true;
+          if (r.textContent.includes('美国民族主义:')) usSeen = true;
+          if (r.textContent.includes('zh_cn:')) oldZhcnSeen = true;
+          if (r.textContent.includes('en:')) oldEnSeen = true;
         });
-        return { zhcnSeen, enSeen, rowCount: rows.length };
+        return { cnSeen, usSeen, oldZhcnSeen, oldEnSeen, rowCount: rows.length };
       });
-      if (!zhcnAxis.zhcnSeen) failures.push('zh_cn: axis label not found in any row under zh_cn locale');
-      if (!zhcnAxis.enSeen) failures.push('en: axis label not found in any row under zh_cn locale');
+      if (!zhcnAxis.cnSeen) failures.push('中国民族主义: axis label not found in any row under zh_cn locale');
+      if (!zhcnAxis.usSeen) failures.push('美国民族主义: axis label not found in any row under zh_cn locale');
+      if (zhcnAxis.oldZhcnSeen) failures.push('OLD zh_cn: axis label still present under zh_cn locale');
+      if (zhcnAxis.oldEnSeen) failures.push('OLD en: axis label still present under zh_cn locale');
       if (zhcnAxis.rowCount === 0) failures.push('no feed rows rendered');
 
       // AE1 (zh_CN classification values are localized OR raw on miss).
@@ -95,7 +100,7 @@ const checks = {
             const labels = block.querySelectorAll('.cls-label');
             labels.forEach(l => {
               const text = l.textContent.trim();
-              if (text === 'zh_cn:' || text === 'cn:') {
+              if (text === '中国民族主义:' || text === 'cn:') {
                 // Find the sibling pill
                 const row = l.closest('.cls-row');
                 if (row) {
@@ -126,20 +131,19 @@ const checks = {
       await page.waitForSelector('tr[data-pw-feed-row]', { timeout: 15000 });
       const enAxis = await page.evaluate(() => {
         const rows = document.querySelectorAll('tr[data-pw-feed-row]');
-        let zhcnSeen = false, enSeen = false, cnOldSeen = false, usOldSeen = false;
+        let cnSeen = false, usSeen = false, oldZhcnSeen = false, oldEnSeen = false;
         rows.forEach(r => {
-          if (r.textContent.includes('zh_cn:')) zhcnSeen = true;
-          if (r.textContent.includes('en:')) enSeen = true;
-          // Make sure the OLD labels are gone
-          if (r.textContent.match(/\bzh_cn\s*:/) && r.textContent.includes('cn:') && !r.textContent.includes('zh_cn:')) cnOldSeen = true;
-          if (r.textContent.match(/\ben\s*:/) && r.textContent.includes('us:') && !r.textContent.includes('en:')) usOldSeen = true;
+          if (r.textContent.includes('中国民族主义:')) cnSeen = true;
+          if (r.textContent.includes('美国民族主义:')) usSeen = true;
+          if (r.textContent.includes('zh_cn:')) oldZhcnSeen = true;
+          if (r.textContent.includes('en:')) oldEnSeen = true;
         });
-        return { zhcnSeen, enSeen, cnOldSeen, usOldSeen };
+        return { cnSeen, usSeen, oldZhcnSeen, oldEnSeen };
       });
-      if (!enAxis.zhcnSeen) failures.push('zh_cn: axis label not found in any row under en locale');
-      if (!enAxis.enSeen) failures.push('en: axis label not found in any row under en locale');
-      if (enAxis.cnOldSeen) failures.push('OLD cn: axis label still present under en locale');
-      if (enAxis.usOldSeen) failures.push('OLD us: axis label still present under en locale');
+      if (!enAxis.cnSeen) failures.push('中国民族主义: axis label not found in any row under en locale');
+      if (!enAxis.usSeen) failures.push('美国民族主义: axis label not found in any row under en locale');
+      if (enAxis.oldZhcnSeen) failures.push('OLD zh_cn: axis label still present under en locale');
+      if (enAxis.oldEnSeen) failures.push('OLD en: axis label still present under en locale');
 
       // -------- original locale: 原文 column shows source text --------
       await page.context().addCookies([{

@@ -193,23 +193,27 @@ def _pretty_followers(count: int | None) -> str:
     return str(count)
 
 
-def _pick_text(post: Any, locale: str) -> tuple[str | None, bool]:
+def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
     """Return (display_text, is_translated) for a post in the given locale.
+
+    Returns (None, False) when no locale-appropriate translation exists.
+    NO fallback to the source `text` -- the caller renders literal "NULL"
+    for missing translations so data gaps are visible at a glance
+    (see plan 2026-07-27-003).
 
     Accepts either a Post ORM instance or a dict with text/text_en/text_zh_cn keys.
     """
     column = _LOCALE_TO_COLUMN.get(locale, "en")
     if column == "__source__":
+        # Under "original" the source IS the locale-appropriate translation;
+        # no separate fallback to suppress (KTD4 of plan 2026-07-27-003).
         text = getattr(post, "text", None) if hasattr(post, "text") else post.get("text")
-        return text, False
+        return (text, False) if text else (None, False)
     if column == "zh_cn":
         translated = getattr(post, "text_zh_cn", None) if hasattr(post, "text_zh_cn") else post.get("text_zh_cn")
     else:
         translated = getattr(post, "text_en", None) if hasattr(post, "text_en") else post.get("text_en")
-    if translated:
-        return translated, True
-    text = getattr(post, "text", None) if hasattr(post, "text") else post.get("text")
-    return text, False
+    return (translated, True) if translated else (None, False)
 
 
 # Family -> Django model class for label lookup.
@@ -425,7 +429,7 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
 
     Mirrors x_monitor/dashboard.py:_feed_row_to_wire.
     """
-    text_translated, is_translated = _pick_text(post, locale)
+    text_translated, is_translated = _pick_translation(post, locale)
     text_original = post.text
 
     # Brand data from PostBrand junction
@@ -1166,7 +1170,7 @@ def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
     already carries classifications_by_brand, brands, brand_nicknames,
     account, label_cache_by_locale, etc.
     '''
-    text_translated, is_translated = _pick_text(post, locale)
+    text_translated, is_translated = _pick_translation(post, locale)
     text_original = post.get("text")
     label_cache = post.get("label_cache_by_locale", {}).get(locale, {})
 

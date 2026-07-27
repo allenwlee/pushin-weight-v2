@@ -27,7 +27,9 @@
       {% if row.lang_detected %}
         <div class="lang-sub">{% trans "translated from:" %} [{{ row.lang_detected }}]</div>
       {% endif %}
-      <div class="cell-truncated" data-pw-cell-truncated>{{ row.text_translated|default:'' }}</div>
+      <div class="cell-truncated" data-pw-cell-truncated>
+        {% if row.text_translated %}{{ row.text_translated }}{% else %}NULL{% endif %}
+      </div>
       <div class="muted-cell">&#9733; {{ row.like_count }}</div>
     </td>
     <td>
@@ -61,11 +63,11 @@
               {% for v in cls.sentiments %}<span class="pill" data-key="{{ v.key }}">{{ v.label }}</span>{% endfor %}</span>
             {% endif %}
             {% if cls.cn_nationalism %}
-              <span class="cls-row"><span class="cls-label">{% trans "zh_cn:" %}</span>
+              <span class="cls-row"><span class="cls-label">{% trans "中国民族主义:" %}</span>
               <span class="pill muted" data-key="{{ cls.cn_nationalism.key }}">{{ cls.cn_nationalism.label }}</span></span>
             {% endif %}
             {% if cls.us_nationalism %}
-              <span class="cls-row"><span class="cls-label">{% trans "en:" %}</span>
+              <span class="cls-row"><span class="cls-label">{% trans "美国民族主义:" %}</span>
               <span class="pill muted" data-key="{{ cls.us_nationalism.key }}">{{ cls.us_nationalism.label }}</span></span>
             {% endif %}
           {% endwith %}

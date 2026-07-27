@@ -206,12 +206,12 @@
       if (cls.cn_nationalism) {
         var cnKey = (cls.cn_nationalism && cls.cn_nationalism.key) || cls.cn_nationalism;
         var cnLabel = (cls.cn_nationalism && cls.cn_nationalism.label) || cls.cn_nationalism;
-        lines.push('<span class="cls-label">zh_cn:</span> <span class="pill muted" data-key="' + escapeHtml(cnKey) + '">' + escapeHtml(cnLabel) + '</span>');
+        lines.push('<span class="cls-label">中国民族主义:</span> <span class="pill muted" data-key="' + escapeHtml(cnKey) + '">' + escapeHtml(cnLabel) + '</span>');
       }
       if (cls.us_nationalism) {
         var usKey = (cls.us_nationalism && cls.us_nationalism.key) || cls.us_nationalism;
         var usLabel = (cls.us_nationalism && cls.us_nationalism.label) || cls.us_nationalism;
-        lines.push('<span class="cls-label">en:</span> <span class="pill muted" data-key="' + escapeHtml(usKey) + '">' + escapeHtml(usLabel) + '</span>');
+        lines.push('<span class="cls-label">美国民族主义:</span> <span class="pill muted" data-key="' + escapeHtml(usKey) + '">' + escapeHtml(usLabel) + '</span>');
       }
       classBlocks.push(
         '<div class="cls-block">' +
@@ -238,7 +238,7 @@
       '<td class="muted-cell">' + dateCell + '</td>' +
       '<td>' + brandPills + '</td>' +
       '<td>' + langSub +
-        '<div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text_translated || '') + '</div>' +
+        '<div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text_translated || 'NULL') + '</div>' +
         '<div class="muted-cell">★ ' + (row.like_count || 0) + '</div>' +
       '</td>' +
       '<td><div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text_original || row.text || '') + '</div></td>' +

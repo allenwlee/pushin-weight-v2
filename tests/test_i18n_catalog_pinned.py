@@ -71,8 +71,9 @@ TOPBAR_PIN: dict[str, str] = {
 #   - zh_cn: / en: are NEW msgids (msgstr == msgid)
 #   - types: / discourses: / sentiments: msgstrs UNCHANGED
 CLASSIFICATION_LABELS_PIN: dict[str, str] = {
-    "zh_cn:": "zh_cn:",
-    "en:": "en:",
+    # Axis labels U1 of plan 2026-07-27-003 (was zh_cn:/en:).
+    "中国民族主义:": "中国民族主义:",
+    "美国民族主义:": "美国民族主义:",
     "types:": "类型:",
     "discourses:": "话语:",
     "sentiments:": "情感:",
@@ -124,17 +125,28 @@ class TestTopbarPin:
 
 
 class TestClassificationLabelsPin:
-    """U1/U2 intentionally change these 5 strings."""
+    """U1 of plan 2026-07-27-003 renamed these axis labels to match the
+    chrome filter panel (was zh_cn:/en:). The msgstr equals the msgid
+    because axis labels are field-name identifiers, not localized strings.
+    """
 
-    def test_zh_cn_axis_label_msgid_is_msgstr(self):
-        # KTD4: the msgid IS the displayed value for the new axis labels.
-        assert gettext("zh_cn:") == "zh_cn:"
+    def test_cn_nationalism_axis_label_msgid_is_msgstr(self):
+        # KTD1 of plan 2026-07-27-003: axis label msgid IS the displayed value.
+        assert gettext("中国民族主义:") == "中国民族主义:"
 
-    def test_en_axis_label_msgid_is_msgstr(self):
-        assert gettext("en:") == "en:"
+    def test_us_nationalism_axis_label_msgid_is_msgstr(self):
+        assert gettext("美国民族主义:") == "美国民族主义:"
+
+    def test_old_zh_cn_axis_label_removed(self):
+        """Old axis label gone from catalog; gettext returns the English msgid
+        (no zh_CN translation, so no fallback)."""
+        assert gettext("zh_cn:") != "zh_cn:"
+
+    def test_old_en_axis_label_removed(self):
+        assert gettext("en:") != "en:"
 
     def test_types_msgstr_unchanged(self):
-        # This msgid existed pre-U1; U1/U2 do NOT change its msgstr.
+        # This msgid existed pre-U1; U1 does NOT change its msgstr.
         assert gettext("types:") == "类型:"
 
     def test_discourses_msgstr_unchanged(self):
