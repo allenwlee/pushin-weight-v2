@@ -14,7 +14,8 @@ The cycle flow:
      PostBrandSignal)
   6. Translate via x_monitor.translator.translate_batch_pragmatics (U1)
   7. Classify via x_monitor.attribution.classify_batch_pragmatics_full (U1)
-  8. Emit run summary in LATEST.json compatible shape
+  8. Quote-tweet channel (official every cycle + non-official daily)
+  9. Emit run summary in LATEST.json compatible shape
 
 LLM guardrails (U2):
   - Pause between classifier batches via X_MONITOR_LLM_PAUSE_SECONDS
@@ -517,6 +518,9 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
     source_qid = raw.get("source_query_id") or raw.get("sourceQueryId") or ""
     if source_qid:
         defaults["source_query_id"] = source_qid
+    quoted_text = raw.get("quoted_text") or ""
+    if quoted_text:
+        defaults["quoted_text"] = quoted_text
     created_at_epoch = raw.get("created_at_epoch") or raw.get("createdAtEpoch")
     if created_at_epoch is not None:
         defaults["created_at_epoch"] = int(created_at_epoch)
@@ -1434,6 +1438,39 @@ class CycleRunner:
         if kept_all and summary["status"] != "aborted":
             pf_counters = self._run_post_fetch(kept_all)
             summary.setdefault("post_fetch", {}).update(pf_counters)
+
+        # ---- Quote-tweet channel (v1 parity; ~24% of v1 volume) ----
+        # Runs after the main harvest so newly-attributed parents are in
+        # the DB. Never aborts the cycle — QT failures are degraded stats.
+        if summary["status"] != "aborted":
+            try:
+                from monitor.quote_tweets import run_quote_tweet_channel
+
+                qt_out = run_quote_tweet_channel(
+                    self,
+                    api,
+                    index=index,
+                    brand_search_terms=search_terms,
+                    enabled_models=enabled_models,
+                )
+                summary.setdefault("quote_tweets", {}).update(qt_out)
+                # Count QT inserts toward cycle totals for dashboard parity
+                n_qt = int(qt_out.get("official_n_ingested") or 0) + int(
+                    qt_out.get("daily_n_ingested") or 0
+                )
+                if n_qt:
+                    self._posts_inserted += n_qt
+                    self._posts_attributed += n_qt
+                    logger.info(
+                        "CycleRunner.run: quote-tweet channel ingested %d "
+                        "(official=%s daily=%s)",
+                        n_qt,
+                        qt_out.get("official_n_ingested"),
+                        qt_out.get("daily_n_ingested"),
+                    )
+            except Exception as exc:
+                logger.warning("quote-tweet channel failed: %s", exc)
+                summary.setdefault("quote_tweets", {})["error"] = str(exc)
 
         # ---- Finalize ----
         summary["totals"]["n_results"] = self._posts_seen
