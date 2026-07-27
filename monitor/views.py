@@ -30,11 +30,15 @@ from core.models import (
     BrandAccount,
     BrandCompany,
     Company,
+    DiscourseLabel,
+    NationalismLabel,
     Post,
     PostBrand,
     PostBrandDiscourse,
     PostBrandSignal,
+    PostTypeLabel,
     PostUnsanctionedFlag,
+    SentimentLabel,
 )
 
 log = logging.getLogger(__name__)
@@ -208,6 +212,90 @@ def _pick_text(post: Any, locale: str) -> tuple[str | None, bool]:
     return text, False
 
 
+# Family -> Django model class for label lookup.
+_LABEL_MODEL_BY_FAMILY: dict[str, type] = {
+    "post_type": PostTypeLabel,
+    "discourse": DiscourseLabel,
+    "sentiment": SentimentLabel,
+    "nationalism": NationalismLabel,
+}
+
+# Lang-code lookup order. zh-cn (current seed) takes precedence over zh_cn
+# (legacy seed). See KTD9.
+_ZHCN_LANG_CODES: tuple[str, ...] = ("zh-cn", "zh_cn", "zh-hans")
+_EN_LANG_CODES: tuple[str, ...] = ("en",)
+
+
+def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
+    """Return the ordered tuple of lang codes to try for a display locale.
+
+    `zh_cn` falls through zh-cn -> zh_cn -> zh-hans; `en` and `original`
+    both fall through `en` (the source-text locale uses the original
+    English-language label rows).
+    """
+    if locale == "zh_cn":
+        return _ZHCN_LANG_CODES
+    return _EN_LANG_CODES
+
+
+def _localize_classification_value(
+    family: str,
+    key: str | None,
+    locale: str,
+    label_cache: "dict[tuple[str, str, str], str]",
+) -> "str | None":
+    """Look up a localized label for a classification key.
+
+    family: one of `post_type`, `discourse`, `sentiment`, `nationalism`.
+    key: the raw DB taxonomy key (e.g. `hands_on_usage`), or None/empty.
+    locale: the display locale (`zh_cn`, `en`, `original`).
+    label_cache: a `{(family, key, lang)} -> label` dict built by
+        `_build_label_cache`. Pre-fetched for the whole request so the
+        loop below stays O(1) per call.
+
+    Returns the resolved label, or the raw key on miss. Returns None
+    when `key` is None/empty so the caller can skip emission.
+    """
+    if not key:
+        return None
+    if family not in _LABEL_MODEL_BY_FAMILY:
+        raise ValueError(
+            f"Unknown classification family {family!r}; "
+            f"expected one of {sorted(_LABEL_MODEL_BY_FAMILY)}"
+        )
+    for lang in _locale_to_lang_codes(locale):
+        cached = label_cache.get((family, key, lang))
+        if cached:
+            return cached
+    return key
+
+
+def _build_label_cache(
+    keys_by_family: "dict[str, set[str]]",
+    locale: str,
+) -> "dict[tuple[str, str, str], str]":
+    """Bulk-load label rows for the given keys across lang codes for a locale.
+
+    One query per (family, lang) - at most 3 queries per family under zh_cn
+    (zh-cn, zh_cn, zh-hans) and 1 under en. Returns a dict keyed by
+    (family, key, lang) so the helper can iterate langs without re-querying.
+    """
+    cache: "dict[tuple[str, str, str], str]" = {}
+    lang_codes = _locale_to_lang_codes(locale)
+    for family, keys in keys_by_family.items():
+        if not keys:
+            continue
+        model = _LABEL_MODEL_BY_FAMILY[family]
+        for lang in lang_codes:
+            qs = model.objects.filter(
+                **{f"{family}_id__in": list(keys)},
+                lang=lang,
+            ).values(f"{family}_id", "label")
+            for row in qs:
+                cache[(family, row[f"{family}_id"], lang)] = row["label"]
+    return cache
+
+
 def _resolve_locale(request: HttpRequest) -> str:
     """Read display locale from cookie or Django's active language.
 
@@ -354,17 +442,47 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
             "display_name_zh_cn": pb.brand.display_name_zh_cn or pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick),
         })
 
-        # Per-brand classifications — from enrichment when available
+        # Per-brand classifications - from enrichment when available.
+        # Each value is reshaped into {key, label} so the JS / template
+        # can render the localized label while preserving the raw DB key
+        # for tooling / debug.
         cls_by_brand = enriched.get("classifications_by_brand", {}) if enriched else {}
         cls = cls_by_brand.get(nick, {})
+        label_cache = (
+            enriched.get("label_cache_by_locale", {}).get(locale, {})
+            if enriched else {}
+        )
+
+        def _labelize(family: str, key: str | None) -> dict[str, str] | None:
+            label = _localize_classification_value(family, key, locale, label_cache)
+            if not key:
+                return None
+            return {"key": key, "label": label if label is not None else key}
+
         classifications[nick] = {
-            "discourse": cls.get("discourse", []),
-            "post_types": cls.get("post_types", []),
-            "sentiments": cls.get("sentiments", []),
-            "cn_nationalism": cls.get("cn_nationalism"),
-            "us_nationalism": cls.get("us_nationalism"),
+            "discourse": [
+                v for v in (
+                    _labelize("discourse", k)
+                    for k in (cls.get("discourse") or [])
+                ) if v is not None
+            ],
+            "post_types": [
+                v for v in (
+                    _labelize("post_type", k)
+                    for k in (cls.get("post_types") or [])
+                ) if v is not None
+            ],
+            "sentiments": [
+                v for v in (
+                    _labelize("sentiment", k)
+                    for k in (cls.get("sentiments") or [])
+                ) if v is not None
+            ],
+            "cn_nationalism": _labelize("nationalism", cls.get("cn_nationalism")),
+            "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
             "role_label": cls.get("role_label"),
         }
+
 
     # Account data — from enrichment when available
     if enriched and enriched.get("account"):
@@ -400,6 +518,7 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
         "created_at_iso": created_at_iso,
         "lang_detected": post.lang_detected,
         "text": text_original,
+        "text_original": text_original,
         "text_translated": text_translated,
         "is_translated": is_translated,
         "text_en": post.text_en,
@@ -411,6 +530,7 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
         "unsanctioned": unsanctioned,
         "account": account_wire,
     }
+
 
 
 def _enrich_posts_with_classifications(
@@ -496,6 +616,36 @@ def _enrich_posts_with_classifications(
         if d["us_nationalism_id"]:
             discourse_by_tweet[tid][bid]["us_nationalism"] = d["us_nationalism_id"]
 
+    # Collect all classification keys present in this page so we can
+    # batch-load the label rows for zh_cn + en in one go per family.
+    keys_by_family: dict[str, set[str]] = {
+        "post_type": set(),
+        "discourse": set(),
+        "sentiment": set(),
+        "nationalism": set(),
+    }
+    for s in signals:
+        if s.get("post_type_id"):
+            keys_by_family["post_type"].add(s["post_type_id"])
+        if s.get("sentiment_id"):
+            keys_by_family["sentiment"].add(s["sentiment_id"])
+    for d in discourses:
+        if d.get("discourse_id"):
+            keys_by_family["discourse"].add(d["discourse_id"])
+        if d.get("china_nationalism_id"):
+            keys_by_family["nationalism"].add(d["china_nationalism_id"])
+        if d.get("us_nationalism_id"):
+            keys_by_family["nationalism"].add(d["us_nationalism_id"])
+
+    # Pre-fetch label caches for zh_cn and en up front (1 query per family
+    # per lang code = up to 12 queries, vs. N+1 for per-row lookup). The
+    # feed view only emits one locale per request, but callers occasionally
+    # read enriched rows under multiple locales.
+    label_cache_by_locale: dict[str, dict[tuple[str, str, str], str]] = {
+        "zh_cn": _build_label_cache(keys_by_family, "zh_cn"),
+        "en": _build_label_cache(keys_by_family, "en"),
+    }
+
     # Build enriched dicts
     result: list[dict[str, Any]] = []
     for post in posts:
@@ -578,9 +728,11 @@ def _enrich_posts_with_classifications(
 
             row["classifications_by_brand"][nick] = cls_data
 
+        row["label_cache_by_locale"] = label_cache_by_locale
         result.append(row)
 
     return result
+
 
 
 # ============================================================================
@@ -1008,19 +1160,55 @@ def _post_passes_cursor(
 
 
 def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
-    """Serialize one enriched post dict to the feed wire shape.
+    '''Serialize one enriched post dict to the feed wire shape.
 
     The enriched dict comes from _enrich_posts_with_classifications and
     already carries classifications_by_brand, brands, brand_nicknames,
-    account, etc.
-    """
+    account, label_cache_by_locale, etc.
+    '''
     text_translated, is_translated = _pick_text(post, locale)
+    text_original = post.get("text")
+    label_cache = post.get("label_cache_by_locale", {}).get(locale, {})
+
+    def _labelize(family: str, key: str | None) -> dict[str, str] | None:
+        label = _localize_classification_value(family, key, locale, label_cache)
+        if not key:
+            return None
+        return {"key": key, "label": label if label is not None else key}
+
+    classifications: dict[str, dict[str, Any]] = {}
+    for nick, cls in (post.get("classifications_by_brand") or {}).items():
+        classifications[nick] = {
+            "discourse": [
+                v for v in (
+                    _labelize("discourse", k)
+                    for k in (cls.get("discourse") or [])
+                ) if v is not None
+            ],
+            "post_types": [
+                v for v in (
+                    _labelize("post_type", k)
+                    for k in (cls.get("post_types") or [])
+                ) if v is not None
+            ],
+            "sentiments": [
+                v for v in (
+                    _labelize("sentiment", k)
+                    for k in (cls.get("sentiments") or [])
+                ) if v is not None
+            ],
+            "cn_nationalism": _labelize("nationalism", cls.get("cn_nationalism")),
+            "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
+            "role_label": cls.get("role_label"),
+        }
+
     return {
         "tweet_id": post["tweet_id"],
         "created_at": post.get("created_at"),
         "created_at_iso": post.get("created_at"),
         "lang_detected": post.get("lang_detected"),
-        "text": post.get("text"),
+        "text": text_original,
+        "text_original": text_original,
         "text_translated": text_translated,
         "is_translated": is_translated,
         "text_en": post.get("text_en"),
@@ -1028,7 +1216,7 @@ def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
         "like_count": post.get("like_count", 0),
         "brands": post.get("brands", []),
         "brand_nicknames": post.get("brand_nicknames", []),
-        "classifications": post.get("classifications_by_brand", {}),
+        "classifications": classifications,
         "unsanctioned": post.get("unsanctioned", False),
         "account": post.get("account", {}),
     }
