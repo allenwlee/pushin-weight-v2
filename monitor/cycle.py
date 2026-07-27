@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from django.conf import settings
@@ -40,6 +40,7 @@ from core.models import (
     Brand,
     BrandKeyword,
     BrandSearchTerm,
+    CallState,
     Post,
     PostBrand,
     PostBrandMention,
@@ -100,6 +101,130 @@ _BRAND_ALIASES: dict[str, str] = {
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# ============================================================================
+# Incremental harvest cursor (plan 2026-07-27-002, U1)
+# ============================================================================
+#
+# v1 (x_monitor/run.py) swept a time window per call: it read
+# call_state.last_completed_at, derived a `since_time` floor from it, fetched
+# everything in that window, then advanced the cursor.  v2 shipped without
+# this, so every 15-minute cycle re-requested the newest <=100 posts per query
+# with no time bounds -- cycles overlapped heavily and anything that scrolled
+# past that slice between cycles was lost.  That was ~half of daily volume.
+#
+# These helpers restore the cursor.  Two deliberate differences from v1:
+#   * the first window is CLAMPED (see _MAX_LOOKBACK) so a stale cursor cannot
+#     request a multi-day sweep that would silently truncate against the
+#     per-call page cap;
+#   * the value written is the same instant passed as `until_time`, so
+#     consecutive windows chain exactly (v1 never bounded the upper end and
+#     leaned on the overlap to absorb the difference).
+
+# Boundary overlap re-requested on each cycle so a post written in the same
+# second as the previous cursor cannot fall between two windows.  Mirrors v1's
+# CURSOR_OVERLAP_HOURS (x_monitor/run.py:67).  Duplicates are discarded by
+# tweet_id dedup, so overlap is cheap; a gap is not recoverable.
+_CURSOR_OVERLAP = timedelta(minutes=1)
+
+# Ceiling on how far back a single cycle will reach.  Sized to cover one
+# missed beat (15 min) plus restart/deploy slack with margin, while staying
+# far below what the per-call ceiling (max_pages * max_per_page = 100 tweets)
+# can actually drain.  This is what makes a cold start or a long-stale cursor
+# safe: prod's cursor sat frozen for ~5 days, and an unclamped sweep of that
+# span would silently truncate -- the exact failure class this plan fixes.
+_MAX_LOOKBACK = timedelta(hours=2)
+
+# CallState.bucket is TextField(blank=True, default=""), but every v2
+# PlannedCall carries bucket=None.  Normalize on both read and write so the
+# two never address different rows.  Mirrors v1's _NULL_BUCKET_SENTINEL
+# (x_monitor/store.py:455-459).
+_NULL_BUCKET_SENTINEL = ""
+
+
+def _cursor_key(call: PlannedCall) -> dict[str, str]:
+    """Build the call_state identity tuple for one planned call.
+
+    Note that `brand_id` here is the *planner's placeholder*, not a real
+    brand: "*" for the list-based Call A, and the first brand in iteration
+    order for the B/C specs (x_monitor/query_plan.py:351, 370-379).
+    Disambiguation between the six rows is owned by `call_id`.  Never
+    re-derive brand_id from post-attribution -- that would collapse several
+    B/C specs onto one cursor row.
+
+    `query_id` follows v1's convention of carrying the planner's call_id
+    (x_monitor/run.py:199-203).
+    """
+    return {
+        "brand_id": call.brand_id,
+        "call_id": call.call_id,
+        "call_kind": call.call_kind,
+        "bucket": call.bucket or _NULL_BUCKET_SENTINEL,
+        "query_id": call.call_id,
+    }
+
+
+def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
+    """Resolve the `since_time` floor for one call, clamped to _MAX_LOOKBACK.
+
+    Returns an aware UTC datetime, always.  Three cases:
+      * no cursor row (cold start)  -> now - _MAX_LOOKBACK
+      * fresh cursor                -> cursor - _CURSOR_OVERLAP
+      * stale cursor (or DB error)  -> now - _MAX_LOOKBACK (the clamp)
+
+    A DB read failure degrades to the clamped floor rather than raising: a
+    bounded re-fetch is always safer than skipping a cycle, and tweet_id
+    dedup absorbs the duplicates.
+    """
+    floor = now - _MAX_LOOKBACK
+    try:
+        row = CallState.objects.filter(**_cursor_key(call)).first()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "_read_cursor_since: cursor read failed for call_id=%s: %s; "
+            "falling back to clamped lookback",
+            call.call_id,
+            exc,
+        )
+        return floor
+
+    if row is None or row.last_completed_at is None:
+        return floor
+    return max(row.last_completed_at - _CURSOR_OVERLAP, floor)
+
+
+def _advance_cursor(call: PlannedCall, *, upper_bound: datetime) -> bool:
+    """Record that this call swept through `upper_bound`. Returns success.
+
+    `upper_bound` must be the exact instant passed to the API as
+    `until_time`, so the next cycle's window begins where this one ended.
+
+    A cursor-write failure must never abort the cycle -- the posts are
+    already stored, and not advancing only costs a bounded re-fetch that
+    dedup discards.  So this logs and reports False rather than raising.
+    """
+    if upper_bound.tzinfo is None:
+        raise ValueError(
+            "_advance_cursor requires an aware datetime; got a naive one "
+            "(CallState.last_completed_at is TIMESTAMPTZ under USE_TZ=True)"
+        )
+    try:
+        CallState.objects.update_or_create(
+            **_cursor_key(call),
+            defaults={"last_completed_at": upper_bound},
+        )
+        return True
+    except Exception as exc:
+        logger.warning(
+            "_advance_cursor: failed to advance call_state for call_id=%s "
+            "(kind=%s brand=%s): %s -- next cycle will re-sweep this window",
+            call.call_id,
+            call.call_kind,
+            call.brand_id,
+            exc,
+        )
+        return False
 
 
 def _load_primary_keywords() -> dict[str, list[str]]:
