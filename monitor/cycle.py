@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from django.conf import settings
@@ -40,6 +40,7 @@ from core.models import (
     Brand,
     BrandKeyword,
     BrandSearchTerm,
+    CallState,
     Post,
     PostBrand,
     PostBrandMention,
@@ -100,6 +101,130 @@ _BRAND_ALIASES: dict[str, str] = {
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# ============================================================================
+# Incremental harvest cursor (plan 2026-07-27-002, U1)
+# ============================================================================
+#
+# v1 (x_monitor/run.py) swept a time window per call: it read
+# call_state.last_completed_at, derived a `since_time` floor from it, fetched
+# everything in that window, then advanced the cursor.  v2 shipped without
+# this, so every 15-minute cycle re-requested the newest <=100 posts per query
+# with no time bounds -- cycles overlapped heavily and anything that scrolled
+# past that slice between cycles was lost.  That was ~half of daily volume.
+#
+# These helpers restore the cursor.  Two deliberate differences from v1:
+#   * the first window is CLAMPED (see _MAX_LOOKBACK) so a stale cursor cannot
+#     request a multi-day sweep that would silently truncate against the
+#     per-call page cap;
+#   * the value written is the same instant passed as `until_time`, so
+#     consecutive windows chain exactly (v1 never bounded the upper end and
+#     leaned on the overlap to absorb the difference).
+
+# Boundary overlap re-requested on each cycle so a post written in the same
+# second as the previous cursor cannot fall between two windows.  Mirrors v1's
+# CURSOR_OVERLAP_HOURS (x_monitor/run.py:67).  Duplicates are discarded by
+# tweet_id dedup, so overlap is cheap; a gap is not recoverable.
+_CURSOR_OVERLAP = timedelta(minutes=1)
+
+# Ceiling on how far back a single cycle will reach.  Sized to cover one
+# missed beat (15 min) plus restart/deploy slack with margin, while staying
+# far below what the per-call ceiling (max_pages * max_per_page = 100 tweets)
+# can actually drain.  This is what makes a cold start or a long-stale cursor
+# safe: prod's cursor sat frozen for ~5 days, and an unclamped sweep of that
+# span would silently truncate -- the exact failure class this plan fixes.
+_MAX_LOOKBACK = timedelta(hours=2)
+
+# CallState.bucket is TextField(blank=True, default=""), but every v2
+# PlannedCall carries bucket=None.  Normalize on both read and write so the
+# two never address different rows.  Mirrors v1's _NULL_BUCKET_SENTINEL
+# (x_monitor/store.py:455-459).
+_NULL_BUCKET_SENTINEL = ""
+
+
+def _cursor_key(call: PlannedCall) -> dict[str, str]:
+    """Build the call_state identity tuple for one planned call.
+
+    Note that `brand_id` here is the *planner's placeholder*, not a real
+    brand: "*" for the list-based Call A, and the first brand in iteration
+    order for the B/C specs (x_monitor/query_plan.py:351, 370-379).
+    Disambiguation between the six rows is owned by `call_id`.  Never
+    re-derive brand_id from post-attribution -- that would collapse several
+    B/C specs onto one cursor row.
+
+    `query_id` follows v1's convention of carrying the planner's call_id
+    (x_monitor/run.py:199-203).
+    """
+    return {
+        "brand_id": call.brand_id,
+        "call_id": call.call_id,
+        "call_kind": call.call_kind,
+        "bucket": call.bucket or _NULL_BUCKET_SENTINEL,
+        "query_id": call.call_id,
+    }
+
+
+def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
+    """Resolve the `since_time` floor for one call, clamped to _MAX_LOOKBACK.
+
+    Returns an aware UTC datetime, always.  Three cases:
+      * no cursor row (cold start)  -> now - _MAX_LOOKBACK
+      * fresh cursor                -> cursor - _CURSOR_OVERLAP
+      * stale cursor (or DB error)  -> now - _MAX_LOOKBACK (the clamp)
+
+    A DB read failure degrades to the clamped floor rather than raising: a
+    bounded re-fetch is always safer than skipping a cycle, and tweet_id
+    dedup absorbs the duplicates.
+    """
+    floor = now - _MAX_LOOKBACK
+    try:
+        row = CallState.objects.filter(**_cursor_key(call)).first()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "_read_cursor_since: cursor read failed for call_id=%s: %s; "
+            "falling back to clamped lookback",
+            call.call_id,
+            exc,
+        )
+        return floor
+
+    if row is None or row.last_completed_at is None:
+        return floor
+    return max(row.last_completed_at - _CURSOR_OVERLAP, floor)
+
+
+def _advance_cursor(call: PlannedCall, *, upper_bound: datetime) -> bool:
+    """Record that this call swept through `upper_bound`. Returns success.
+
+    `upper_bound` must be the exact instant passed to the API as
+    `until_time`, so the next cycle's window begins where this one ended.
+
+    A cursor-write failure must never abort the cycle -- the posts are
+    already stored, and not advancing only costs a bounded re-fetch that
+    dedup discards.  So this logs and reports False rather than raising.
+    """
+    if upper_bound.tzinfo is None:
+        raise ValueError(
+            "_advance_cursor requires an aware datetime; got a naive one "
+            "(CallState.last_completed_at is TIMESTAMPTZ under USE_TZ=True)"
+        )
+    try:
+        CallState.objects.update_or_create(
+            **_cursor_key(call),
+            defaults={"last_completed_at": upper_bound},
+        )
+        return True
+    except Exception as exc:
+        logger.warning(
+            "_advance_cursor: failed to advance call_state for call_id=%s "
+            "(kind=%s brand=%s): %s -- next cycle will re-sweep this window",
+            call.call_id,
+            call.call_kind,
+            call.brand_id,
+            exc,
+        )
+        return False
 
 
 def _load_primary_keywords() -> dict[str, list[str]]:
@@ -496,20 +621,52 @@ class CycleRunner:
     # Step 2: Fetch
     # ------------------------------------------------------------------
 
+    def _resolve_window(
+        self, call: PlannedCall, *, now: datetime
+    ) -> tuple[int, int, bool]:
+        """Resolve the (since_time, until_time) epoch window for one call.
+
+        Returns (since_epoch, until_epoch, cursor_owned).  `cursor_owned` is
+        False when the operator supplied an explicit window (the backfill
+        command sets X_MONITOR_CYCLE_SINCE_TIME / _UNTIL_TIME): those runs
+        sweep a historical span, so advancing the live cursor to their upper
+        bound would skip everything in between.  R6.
+        """
+        op_since = getattr(settings, "X_MONITOR_CYCLE_SINCE_TIME", None)
+        op_until = getattr(settings, "X_MONITOR_CYCLE_UNTIL_TIME", None)
+        if op_since:
+            return (
+                int(op_since),
+                int(op_until) if op_until else int(now.timestamp()),
+                False,
+            )
+
+        since_dt = _read_cursor_since(call, now=now)
+        return int(since_dt.timestamp()), int(now.timestamp()), True
+
     def _fetch_tweets(
-        self, call: PlannedCall, api: TwitterApiClient
-    ) -> list[dict[str, Any]]:
+        self, call: PlannedCall, api: TwitterApiClient, *, window: tuple[int, int]
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Fetch tweets for one PlannedCall via TwitterAPI.io.
 
-        Returns the normalized tweet list. Per-call errors (rate limit,
-        server error) are caught — one bad query doesn't kill the cycle.
+        Returns (items, ok).  `ok` distinguishes a genuinely empty window from
+        a failed call: both yield an empty list, but only the former is a
+        successful sweep whose cursor may advance (R2 / KTD5).  Per-call errors
+        are caught — one bad query doesn't kill the cycle.
         """
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
         max_pages = getattr(settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", None)
-        since_time = getattr(settings, "X_MONITOR_CYCLE_SINCE_TIME", None)
-        until_time = getattr(settings, "X_MONITOR_CYCLE_UNTIL_TIME", None)
         max_results_cap = int(limit_per_call) if limit_per_call is not None else 50
         max_pages_cap = int(max_pages) if max_pages is not None else 5
+        since_time, until_time = window
+
+        logger.info(
+            "_fetch_tweets: call_id=%s window=[%s, %s] (%.1f min)",
+            call.call_id,
+            since_time,
+            until_time,
+            (until_time - since_time) / 60.0,
+        )
 
         try:
             items = api.run_search(
@@ -517,26 +674,26 @@ class CycleRunner:
                 max_results=max_results_cap,
                 max_pages=max_pages_cap,
                 max_per_page=20,
-                since_time=int(since_time) if since_time else None,
-                until_time=int(until_time) if until_time else None,
+                since_time=since_time,
+                until_time=until_time,
             )
         except TwitterApiAuthError as exc:
             logger.error("_fetch_tweets: auth failure on %s: %s", call.call_id, exc)
             self._errors.append(f"fetch.{call.call_id}: auth: {exc}")
-            return []
+            return [], False
         except (TwitterApiRateLimitError, TwitterApiServerError) as exc:
             logger.warning(
                 "_fetch_tweets: rate/server error on %s: %s", call.call_id, exc
             )
             self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return []
+            return [], False
         except Exception as exc:
             logger.warning("_fetch_tweets: error on %s: %s", call.call_id, exc)
             self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return []
+            return [], False
 
         self._api_calls += 1
-        return items
+        return items, True
 
     # ------------------------------------------------------------------
     # Step 3: Attribute
@@ -672,11 +829,23 @@ class CycleRunner:
         if not kept_posts:
             return counters
 
-        # Build Anthropic client from env
-        from x_monitor.reattribute import build_anthropic_client_from_env
+        # Build separate translator + classifier clients.
+        # build_translator_client_from_env reads ANTHROPIC_BASE_URL only
+        # (typically the MiniMax proxy path); build_anthropic_client_from_env
+        # honors X_MONITOR_CLASSIFIER_BASE_URL (DeepSeek on prod). The two
+        # stages route to different endpoints, so they need different
+        # clients — a single shared client makes translation silently fail
+        # when the classifier routes through DeepSeek (recent posts had
+        # lang_detected IS NULL because translate failed against the
+        # DeepSeek base URL).
+        from x_monitor.reattribute import (
+            build_anthropic_client_from_env,
+            build_translator_client_from_env,
+        )
 
-        client = build_anthropic_client_from_env()
-        if client is None:
+        translator_client = build_translator_client_from_env()
+        classifier_client = build_anthropic_client_from_env()
+        if translator_client is None and classifier_client is None:
             logger.warning(
                 "_run_post_fetch: no LLM client available — "
                 "skipping translate/classify"
@@ -717,13 +886,21 @@ class CycleRunner:
         # ---- Stage 1: translate ----
         from x_monitor.translator import translate_batch_pragmatics
 
-        try:
-            translation_rows = translate_batch_pragmatics(
-                tweets, ["en", "zh_cn"], client
+        if translator_client is None:
+            logger.warning(
+                "_run_post_fetch: no translator client (ANTHROPIC_BASE_URL "
+                "+ MINIMAX_API_TOKEN not set) — skipping translate; "
+                "classifier stage will run if its client is available"
             )
-        except Exception as exc:
-            logger.warning("_run_post_fetch: translate failed: %s", exc)
             translation_rows = []
+        else:
+            try:
+                translation_rows = translate_batch_pragmatics(
+                    tweets, ["en", "zh_cn"], translator_client
+                )
+            except Exception as exc:
+                logger.warning("_run_post_fetch: translate failed: %s", exc)
+                translation_rows = []
 
         # Persist translations back to Post rows.
         # Invariant: if lang_detected is a Chinese variant (zh, zh-cn,
@@ -778,8 +955,13 @@ class CycleRunner:
         pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
 
         try:
+            if classifier_client is None:
+                logger.warning(
+                    "_run_post_fetch: no classifier client — skipping classify"
+                )
+                return counters
             results = classify_batch_pragmatics_full(
-                tweets, brand_registry, client
+                tweets, brand_registry, classifier_client
             )
         except Exception as exc:
             logger.warning("_run_post_fetch: classify failed: %s", exc)
@@ -1042,9 +1224,38 @@ class CycleRunner:
                 "n_inserted": 0,
             }
 
+            # Resolve this call's time window from its cursor (or the
+            # operator-supplied override) BEFORE fetching, so the value we
+            # later store is exactly the upper bound we queried.
+            call_now = datetime.now(timezone.utc)
+            since_epoch, until_epoch, cursor_owned = self._resolve_window(
+                call, now=call_now
+            )
+            call_entry["window_since"] = since_epoch
+            call_entry["window_until"] = until_epoch
+
             # Fetch
-            items = self._fetch_tweets(call, api)
+            items, fetch_ok = self._fetch_tweets(
+                call, api, window=(since_epoch, until_epoch)
+            )
+            if not fetch_ok:
+                # Failed call: leave the cursor untouched so the next cycle
+                # re-sweeps this window rather than skipping it (R2).
+                call_entry["status"] = "error"
+                summary["calls"].append(call_entry)
+                summary["totals"]["n_calls_run"] += 1
+                continue
+
             if not items:
+                # Empty but successful sweep: advance (KTD5), else a quiet
+                # brand would re-request the same window forever.
+                if cursor_owned:
+                    _advance_cursor(
+                        call,
+                        upper_bound=datetime.fromtimestamp(
+                            until_epoch, tz=timezone.utc
+                        ),
+                    )
                 call_entry["status"] = "no_results"
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
