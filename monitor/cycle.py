@@ -65,6 +65,7 @@ from x_monitor.attribution import (
     compile_keyword_index,
 )
 from x_monitor.config import KNOWN_MODELS
+from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 
 logger = logging.getLogger(__name__)
@@ -646,13 +647,21 @@ class CycleRunner:
 
     def _fetch_tweets(
         self, call: PlannedCall, api: TwitterApiClient, *, window: tuple[int, int]
-    ) -> tuple[list[dict[str, Any]], bool]:
+    ) -> tuple[list[dict[str, Any]], str]:
         """Fetch tweets for one PlannedCall via TwitterAPI.io.
 
-        Returns (items, ok).  `ok` distinguishes a genuinely empty window from
-        a failed call: both yield an empty list, but only the former is a
-        successful sweep whose cursor may advance (R2 / KTD5).  Per-call errors
-        are caught — one bad query doesn't kill the cycle.
+        Returns (items, outcome) where outcome is one of:
+          "ok"                  -- the call ran; items may still be empty,
+                                   which is a successful sweep of a quiet
+                                   window and may advance the cursor (KTD5).
+          "error"               -- the call failed (auth/rate/server/other).
+          "length_cap_exceeded" -- the query would exceed the 512-char cap
+                                   once the time operators are injected.
+
+        The distinction matters because an empty list alone cannot tell a
+        quiet window from a failure, and only the former may advance the
+        cursor (R2).  Per-call errors are caught -- one bad query doesn't kill
+        the cycle.
         """
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
         max_pages = getattr(settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", None)
@@ -668,6 +677,34 @@ class CycleRunner:
             (until_time - since_time) / 60.0,
         )
 
+        # Guard the post-injection length (R7 / KTD6). plan_calls already ran
+        # assert_under_length_cap, but on the PRE-injection query -- it cannot
+        # see the ~44 chars the two time operators add. An over-cap query is
+        # the worst failure mode here: TwitterAPI.io returns zero results with
+        # NO error, so the call looks like a quiet window and the cursor would
+        # advance straight past a span that was never searched. Reporting it as
+        # a distinct failure keeps the cursor pinned so the window is retried.
+        effective_query = (
+            f"{call.query_string} since_time:{since_time} until_time:{until_time}"
+        )
+        try:
+            assert_under_length_cap(effective_query)
+        except ValueError as exc:
+            logger.error(
+                "_fetch_tweets: %s would be %d chars after injecting the time "
+                "operators (cap %d); skipping the call rather than letting "
+                "TwitterAPI.io return a silent zero. %s",
+                call.call_id,
+                len(effective_query),
+                X_LENGTH_CAP,
+                exc,
+            )
+            self._errors.append(
+                f"fetch.{call.call_id}: query length {len(effective_query)} "
+                f"exceeds {X_LENGTH_CAP} after time operators"
+            )
+            return [], "length_cap_exceeded"
+
         try:
             items = api.run_search(
                 call.query_string,
@@ -680,20 +717,20 @@ class CycleRunner:
         except TwitterApiAuthError as exc:
             logger.error("_fetch_tweets: auth failure on %s: %s", call.call_id, exc)
             self._errors.append(f"fetch.{call.call_id}: auth: {exc}")
-            return [], False
+            return [], "error"
         except (TwitterApiRateLimitError, TwitterApiServerError) as exc:
             logger.warning(
                 "_fetch_tweets: rate/server error on %s: %s", call.call_id, exc
             )
             self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return [], False
+            return [], "error"
         except Exception as exc:
             logger.warning("_fetch_tweets: error on %s: %s", call.call_id, exc)
             self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return [], False
+            return [], "error"
 
         self._api_calls += 1
-        return items, True
+        return items, "ok"
 
     # ------------------------------------------------------------------
     # Step 3: Attribute
@@ -1235,13 +1272,16 @@ class CycleRunner:
             call_entry["window_until"] = until_epoch
 
             # Fetch
-            items, fetch_ok = self._fetch_tweets(
+            items, outcome = self._fetch_tweets(
                 call, api, window=(since_epoch, until_epoch)
             )
-            if not fetch_ok:
-                # Failed call: leave the cursor untouched so the next cycle
-                # re-sweeps this window rather than skipping it (R2).
-                call_entry["status"] = "error"
+            if outcome != "ok":
+                # Failed call (or an over-cap query): leave the cursor
+                # untouched so the next cycle re-sweeps this window rather
+                # than skipping it (R2). The outcome is carried through
+                # verbatim so an over-cap config problem cannot be misread as
+                # a transient network blip.
+                call_entry["status"] = outcome
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
                 continue
