@@ -469,7 +469,7 @@ def port_posts(
         "created_at", "fetched_at", "like_count", "retweet_count",
         "reply_count", "quote_count", "in_reply_to_user_id",
         "quoted_status_id", "conversation_id", "entities",
-        "source_query_id", "raw", "headline", "headline_source",
+        "source_query_id", "headline", "headline_source",
         "text_en", "text_zh_cn", "lang_detected", "quoted_text",
         "last_quote_count_seen", "last_quote_fetched_at",
         "created_at_epoch",
@@ -526,7 +526,7 @@ def port_posts(
                 defaults[col] = int(val) if val is not None else None
             elif col == "created_at_epoch":
                 defaults[col] = int(val) if val is not None else None
-            elif col in ("entities", "raw"):
+            elif col == "entities":
                 defaults[col] = _parse_sqlite_json(val)
             elif col.endswith("_at"):
                 defaults[col] = _parse_sqlite_dt(val)

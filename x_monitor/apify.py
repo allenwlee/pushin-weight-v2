@@ -301,7 +301,7 @@ class TwitterApiClient:
         max_per_page: int = 20,
         since_time: int | None = None,
         until_time: int | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Run an X advanced-search query via TwitterAPI.io.
 
         `query` is a raw advanced-search string (e.g., 'from:MiniMaxAI lang:en
@@ -336,7 +336,8 @@ class TwitterApiClient:
         is also silently dropped as a URL param — must be inline.
 
         Returns (items, truncated). items is up to max_results tweets;
-        _walk_search).
+        truncated is True when the per-call cap kicked in before the
+        window was exhausted (see _walk_search).
         """
         effective_query = query
         # Only inject `since:` when `since_time` is NOT provided.
@@ -361,7 +362,13 @@ class TwitterApiClient:
             if "until_time:" not in effective_query:
                 upper = int(until_time) if until_time is not None else int(time.time())
                 effective_query = f"{effective_query} until_time:{upper}"
-        return items, truncated
+        return self._walk_search(
+            effective_query,
+            max_results,
+            max_pages=max_pages,
+            max_per_page=max_per_page,
+            since_time=since_time,
+        )
 
     def get_quote_tweets(
         self,
@@ -567,10 +574,23 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "retweet_count": int(item.get("retweetCount") or 0),
         "reply_count": int(item.get("replyCount") or 0),
         "quote_count": int(item.get("quoteCount") or 0),
-        "bookmark_count": int(item.get("bookmarkCount") or 0),
-        "is_reply": bool(item.get("isReply")),
-        "is_retweet": bool(item.get("isRetweet") or retweeted),
-        "is_quote": bool(item.get("isQuote") or quoted),
+        # § 1.7: new metric columns use NULL-when-absent, not 0 coercion.
+        "bookmark_count": (
+            int(item["bookmarkCount"]) if item.get("bookmarkCount") is not None else None
+        ),
+        "is_reply": item.get("isReply"),
+        # Per § 1.7, is_retweet/is_quote are None when the TwitterAPI key
+        # is absent. The presence of a retweeted_tweet / quoted_tweet
+        # sub-object IS the canonical signal for retweet/quote, so we
+        # fall back to it before defaulting to None.
+        "is_retweet": (
+            item.get("isRetweet") if item.get("isRetweet") is not None
+            else (bool(retweeted) if retweeted else None)
+        ),
+        "is_quote": (
+            item.get("isQuote") if item.get("isQuote") is not None
+            else (bool(quoted) if quoted else None)
+        ),
         "in_reply_to_user_id": item.get("inReplyToUserId") or None,
         "quoted_status_id": str(quoted["id"]) if quoted.get("id") else None,
         "quoted_text": quoted.get("text") or None,
@@ -613,8 +633,48 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "author_profile_bio_text": (
             (author.get("profile_bio") or {}).get("description") or ""
         ),
-        # The store ignores unknown keys, so we leave the raw object too.
-        "raw": item,
+        # --- Posts.raw denormalization (U3) — author fields the prior normalize
+        # didn't extract. None-when-absent per § 1.7; the inner author envelope
+        # always carries these on TwitterAPI, but defensive None is correct
+        # for missing keys.
+        "author_is_translator": author.get("isTranslator"),
+        "author_is_automated": author.get("isAutomated"),
+        "author_automated_by": author.get("automatedBy") or None,
+        "author_can_dm": author.get("canDm"),
+        "author_can_media_tag": author.get("canMediaTag"),
+        "author_profile_bio": author.get("profile_bio"),
+        "author_cover_picture": author.get("coverPicture") or None,
+        "author_pinned_tweet_ids": author.get("pinnedTweetIds"),
+        "author_affiliates_highlighted_label": author.get("affiliatesHighlightedLabel"),
+        "author_withheld_in_countries": author.get("withheldInCountries"),
+        "author_possibly_sensitive": author.get("possiblySensitive"),
+        "author_has_custom_timelines": author.get("hasCustomTimelines"),
+        "author_entities": author.get("entities"),
+        "author_twitter_url": author.get("twitterUrl") or None,
+        "author_type": author.get("type") or None,
+        "author_url": author.get("url") or None,
+        "author_created_at_raw": author.get("createdAt") or None,
+        "author_status": author.get("status") or None,
+        # --- Posts.raw denormalization (U3) — tweet top-level fields.
+        "created_at_raw": item.get("createdAt") or item.get("created_at") or None,
+        "in_reply_to_id": item.get("inReplyToId") or None,
+        "in_reply_to_username": item.get("inReplyToUsername") or None,
+        "tweet_type": item.get("type") or None,
+        "tweet_url": item.get("url") or None,
+        "tweet_twitter_url": item.get("twitterUrl") or None,
+        "card": item.get("card"),
+        "place": item.get("place"),
+        "client_source": item.get("source") or None,
+        "view_count": item.get("viewCount"),
+        "article": item.get("article"),
+        "is_limited_reply": item.get("isLimitedReply"),
+        "community_info": item.get("communityInfo"),
+        "display_text_range": item.get("displayTextRange"),
+        "extended_entities": item.get("extendedEntities"),
+        "created_at_epoch": item.get("createdAtEpoch"),
+        # U4: `raw` JSONField is dropped from posts. The normalizer no longer
+        # leaves a full TwitterAPI.io item in the dict — all fields the harvest
+        # reads are now extracted above.
     }
 
 

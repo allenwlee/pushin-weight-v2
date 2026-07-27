@@ -394,11 +394,20 @@ class Post(models.Model):
     reply_count = models.IntegerField(blank=True, null=True)
     quote_count = models.IntegerField(blank=True, null=True)
     in_reply_to_user_id = models.TextField(blank=True, null=True)
-    quoted_status_id = models.TextField(blank=True, null=True)
+    # Self-referential FK to the inner quoted/retweeted tweet (Policy A:
+    # NULL if the parent tweet was never harvested).
+    quoted_status_id = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="quoted_by",
+        db_column="quoted_status_id",
+        db_constraint=True,
+    )
     conversation_id = models.TextField(blank=True, null=True)
     entities = models.JSONField(blank=True, null=True)
     source_query_id = models.TextField(blank=True, null=True)
-    raw = models.JSONField(blank=True, null=True)
     headline = models.TextField(blank=True, null=True)
     headline_source = models.TextField(blank=True, null=True)
     text_en = models.TextField(blank=True, null=True)
@@ -408,6 +417,61 @@ class Post(models.Model):
     last_quote_count_seen = models.IntegerField(blank=True, null=True)
     last_quote_fetched_at = models.DateTimeField(blank=True, null=True)
     created_at_epoch = models.BigIntegerField(blank=True, null=True)
+
+    # --- § 1.2 TwitterAPI top-level tweet fields ---
+    created_at_raw = models.TextField(blank=True, null=True)
+    bookmark_count = models.IntegerField(blank=True, null=True)
+    is_reply = models.BooleanField(blank=True, null=True)
+    is_retweet = models.BooleanField(blank=True, null=True)
+    is_quote = models.BooleanField(blank=True, null=True)
+    in_reply_to_id = models.TextField(blank=True, null=True)
+    in_reply_to_username = models.TextField(blank=True, null=True)
+    tweet_type = models.TextField(blank=True, null=True)
+    tweet_url = models.TextField(blank=True, null=True)
+    tweet_twitter_url = models.TextField(blank=True, null=True)
+    card = models.JSONField(blank=True, null=True)
+    place = models.JSONField(blank=True, null=True)
+    client_source = models.TextField(blank=True, null=True)
+    view_count = models.IntegerField(blank=True, null=True)
+    article = models.JSONField(blank=True, null=True)
+    is_limited_reply = models.BooleanField(blank=True, null=True)
+    community_info = models.JSONField(blank=True, null=True)
+    display_text_range = models.JSONField(blank=True, null=True)
+    extended_entities = models.JSONField(blank=True, null=True)
+    quoted_author_handle = models.TextField(blank=True, null=True)
+
+    # --- § 1.3 TwitterAPI author fields (snapshot at fetch time) ---
+    author_name = models.TextField(blank=True, null=True)
+    author_followers_count = models.IntegerField(blank=True, null=True)
+    author_following_count = models.IntegerField(blank=True, null=True)
+    author_verified = models.BooleanField(blank=True, null=True)
+    author_is_blue_verified = models.BooleanField(blank=True, null=True)
+    author_verified_type = models.TextField(blank=True, null=True)
+    author_is_translator = models.BooleanField(blank=True, null=True)
+    author_is_automated = models.BooleanField(blank=True, null=True)
+    author_automated_by = models.TextField(blank=True, null=True)
+    author_description = models.TextField(blank=True, null=True)
+    author_location = models.TextField(blank=True, null=True)
+    author_media_count = models.IntegerField(blank=True, null=True)
+    author_statuses_count = models.IntegerField(blank=True, null=True)
+    author_favourites_count = models.IntegerField(blank=True, null=True)
+    author_fast_followers_count = models.IntegerField(blank=True, null=True)
+    author_can_dm = models.BooleanField(blank=True, null=True)
+    author_can_media_tag = models.BooleanField(blank=True, null=True)
+    author_profile_picture = models.TextField(blank=True, null=True)
+    author_profile_bio = models.JSONField(blank=True, null=True)
+    author_cover_picture = models.TextField(blank=True, null=True)
+    author_pinned_tweet_ids = models.JSONField(blank=True, null=True)
+    author_affiliates_highlighted_label = models.JSONField(blank=True, null=True)
+    author_withheld_in_countries = models.JSONField(blank=True, null=True)
+    author_possibly_sensitive = models.BooleanField(blank=True, null=True)
+    author_has_custom_timelines = models.BooleanField(blank=True, null=True)
+    author_entities = models.JSONField(blank=True, null=True)
+    author_twitter_url = models.TextField(blank=True, null=True)
+    author_type = models.TextField(blank=True, null=True)
+    author_url = models.TextField(blank=True, null=True)
+    author_created_at_raw = models.TextField(blank=True, null=True)
+    author_status = models.TextField(blank=True, null=True)
 
     class Meta:
         db_table = "posts"
