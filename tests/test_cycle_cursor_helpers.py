@@ -17,7 +17,6 @@ guard for the same reason.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -34,13 +33,6 @@ from monitor.cycle import (
 from x_monitor.query_plan import PlannedCall
 
 
-_DB_TESTS_NEED_POSTGRES = pytest.mark.skipif(
-    "sqlite" in os.environ.get("DATABASE_URL", "sqlite"),
-    reason=(
-        "core models use a Postgres ICU collation; django_db tests cannot "
-        "build a SQLite test database. Run against Postgres for full coverage."
-    ),
-)
 
 NOW = datetime(2026, 7, 27, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -230,7 +222,7 @@ def test_advance_cursor_reports_success(monkeypatch):
 # --- DB-backed round trip ------------------------------------------------
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_write_then_read_round_trips_through_the_database():
     """The strongest form: a real row, read back through the real query."""
@@ -242,7 +234,7 @@ def test_write_then_read_round_trips_through_the_database():
     assert since == upper - _CURSOR_OVERLAP
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_stored_timestamp_is_timezone_aware():
     """Single assertion that catches every naive-datetime regression."""
@@ -255,7 +247,7 @@ def test_stored_timestamp_is_timezone_aware():
     assert row.last_completed_at.tzinfo is not None
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_advance_updates_in_place_without_duplicating_rows():
     from core.models import CallState
@@ -271,7 +263,7 @@ def test_advance_updates_in_place_without_duplicating_rows():
     assert rows.first().last_completed_at == second
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_none_and_empty_bucket_address_the_same_row():
     """KTD8: None must normalize to "" so the two never split into two rows."""
@@ -283,7 +275,7 @@ def test_none_and_empty_bucket_address_the_same_row():
     assert CallState.objects.filter(call_id="C2").count() == 1
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_distinct_calls_keep_independent_cursors():
     """R5: advancing one call must not move another's window."""

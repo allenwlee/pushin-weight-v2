@@ -31,7 +31,6 @@ worthless.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -41,15 +40,8 @@ from monitor.cycle import CycleRunner
 from x_monitor.query_plan import PlannedCall
 
 
-_DB_TESTS_NEED_POSTGRES = pytest.mark.skipif(
-    "sqlite" in os.environ.get("DATABASE_URL", "sqlite"),
-    reason=(
-        "core models use a Postgres ICU collation; django_db tests cannot "
-        "build a SQLite test database. Run against Postgres for full coverage."
-    ),
-)
 
-pytestmark = [_DB_TESTS_NEED_POSTGRES, pytest.mark.django_db]
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 # The six calls a real cycle fires.
 CYCLE_CALLS = [

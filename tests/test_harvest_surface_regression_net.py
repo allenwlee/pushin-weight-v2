@@ -40,7 +40,6 @@ deleted.  We pin the *shape* and the *budget*, not the content.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -60,13 +59,6 @@ CFG_PATH = REPO_ROOT / "config.yaml"
 # assertions below are the *stronger* form of the config-only ones, so we skip
 # rather than fail when the DB cannot be built: the config-only tests still
 # pin the surface everywhere, and CI/Postgres runs get the full check.
-_DB_TESTS_NEED_POSTGRES = pytest.mark.skipif(
-    "sqlite" in os.environ.get("DATABASE_URL", "sqlite"),
-    reason=(
-        "core models use a Postgres ICU collation; django_db tests cannot "
-        "build a SQLite test database. Run against Postgres for full coverage."
-    ),
-)
 
 
 # --- pinned baseline, measured 2026-07-27 ----------------------------------
@@ -97,6 +89,20 @@ EXPECTED_MAX_PER_PAGE = 20
 
 # Union of brands covered across the 5 specs.
 EXPECTED_BRAND_COVERAGE_COUNT = 20
+
+# The exact set, so swapping a brand for a typo of the same length still fails.
+EXPECTED_COVERED_BRANDS = {
+    # C1
+    "llama", "mimo", "moonshot_kimi", "yi",
+    # C2
+    "ernie", "upstage",
+    # B1
+    "deepseek", "hunyuan", "minimax", "mistral", "qwen", "stepfun",
+    # B2
+    "doubao", "glm", "inclusionai", "sensechat",
+    # B3
+    "exaone", "kuaishou", "nemo_megatron", "sakana_ai",
+}
 
 # The two inline time operators the cursor fix injects into every scheduled
 # query.  Epoch seconds are 10 digits until 2286, so this width is stable.
@@ -219,20 +225,29 @@ def test_every_spec_brand_is_covered_exactly_once_or_more(cfg):
 
     This is a silent failure mode: the brand shows up in the dashboard with a
     flat zero line and nothing errors.
+
+    Pins the SET, not just the count. An earlier version asserted only
+    `len(covered) == 20`, which would happily pass if `minimax` were dropped
+    from every spec and a misspelled `minimaxx` added somewhere else -- the
+    exact drift this test exists to catch.
     """
     covered: set[str] = set()
     for spec in cfg.x_query_specs:
         covered.update(
             spec.wide_net_brands or [] if spec.is_wide_net else spec.brands
         )
-    assert len(covered) == EXPECTED_BRAND_COVERAGE_COUNT, (
-        f"{len(covered)} brands covered across specs, expected "
-        f"{EXPECTED_BRAND_COVERAGE_COUNT}: {sorted(covered)}. A brand added "
-        "to config but not to any spec silently collects nothing."
+    missing = EXPECTED_COVERED_BRANDS - covered
+    added = covered - EXPECTED_COVERED_BRANDS
+    assert not missing and not added, (
+        f"search-spec brand coverage drifted. Missing (now collect nothing): "
+        f"{sorted(missing) or 'none'}. Added: {sorted(added) or 'none'}. "
+        "A brand wired into no spec silently collects zero forever; update "
+        "EXPECTED_COVERED_BRANDS in the same commit if this was intended."
     )
+    assert len(covered) == EXPECTED_BRAND_COVERAGE_COUNT
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_enabled_db_brands_are_all_covered_by_some_spec(cfg):
     """Every non-sentinel brand in the DB must appear in some spec.
@@ -295,7 +310,7 @@ def test_every_query_fits_the_cap_after_time_operators(planned_calls):
         )
 
 
-@_DB_TESTS_NEED_POSTGRES
+@pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_tightest_call_headroom_with_real_keywords(cfg):
     """Pin the actual margin on the tightest call using real DB keywords.

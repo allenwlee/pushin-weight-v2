@@ -21,7 +21,6 @@ strict would silently disable a real production call.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 
 import pytest
@@ -32,15 +31,8 @@ from x_monitor.queries import X_LENGTH_CAP
 from x_monitor.query_plan import PlannedCall
 
 
-_DB_TESTS_NEED_POSTGRES = pytest.mark.skipif(
-    "sqlite" in os.environ.get("DATABASE_URL", "sqlite"),
-    reason=(
-        "core models use a Postgres ICU collation; django_db tests cannot "
-        "build a SQLite test database. Run against Postgres for full coverage."
-    ),
-)
 
-pytestmark = [_DB_TESTS_NEED_POSTGRES, pytest.mark.django_db]
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 # Matches the real injected suffix: " since_time:<10> until_time:<10>".
 TIME_OPERATOR_OVERHEAD = 44

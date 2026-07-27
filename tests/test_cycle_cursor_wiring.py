@@ -19,7 +19,6 @@ a successful sweep (KTD5) while a failure must not advance.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -30,15 +29,8 @@ from x_monitor.apify import TwitterApiAuthError, TwitterApiRateLimitError
 from x_monitor.query_plan import PlannedCall
 
 
-_DB_TESTS_NEED_POSTGRES = pytest.mark.skipif(
-    "sqlite" in os.environ.get("DATABASE_URL", "sqlite"),
-    reason=(
-        "core models use a Postgres ICU collation; django_db tests cannot "
-        "build a SQLite test database. Run against Postgres for full coverage."
-    ),
-)
 
-pytestmark = [_DB_TESTS_NEED_POSTGRES, pytest.mark.django_db]
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
 def _planned(call_id: str = "B1", brand_id: str = "minimax") -> PlannedCall:
@@ -179,10 +171,50 @@ def test_auth_error_does_not_advance_cursor(wired):
 
 
 def test_one_failing_call_does_not_block_the_others(wired):
-    """A per-call failure is contained; the remaining calls still run."""
+    """A per-call failure is contained; the remaining calls still run.
+
+    The failure must be REAL for this to mean anything: an earlier version of
+    this test passed `results=[...]` with no exception, so all three calls
+    succeeded and it could not tell "iteration survives an exception" from
+    "no exception ever happened".
+    """
+    from core.models import CallState
+
     calls = [_planned("B1"), _planned("B2", "doubao"), _planned("C1", "mimo")]
-    api, _ = wired(calls=calls, results=[_tweet()])
-    assert len(api.calls) == 3
+    api = FakeApi(results=[_tweet()])
+    # First call raises, the remaining two succeed.
+    original = api.run_search
+    state = {"n": 0}
+
+    def flaky(query, **kwargs):
+        state["n"] += 1
+        if state["n"] == 1:
+            api.calls.append({"query": query, **kwargs})
+            raise TwitterApiRateLimitError("429 on the first call")
+        return original(query, **kwargs)
+
+    api.run_search = flaky
+    monkeypatch_target = cycle_mod.TwitterApiClient
+    import pytest as _pytest
+
+    with _pytest.MonkeyPatch.context() as mp:
+        mp.setattr(cycle_mod, "plan_calls_for_cycle", lambda: list(calls))
+        mp.setattr(
+            monkeypatch_target, "from_env", classmethod(lambda cls: api)
+        )
+        mp.setattr(
+            CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+        )
+        CycleRunner(cycle_kind="scheduled").run()
+
+    assert len(api.calls) == 3, (
+        f"only {len(api.calls)} of 3 calls ran; a failure on the first call "
+        "aborted the rest of the cycle"
+    )
+    # The failed call holds its cursor; the two that succeeded advance theirs.
+    assert not CallState.objects.filter(call_id="B1").exists()
+    assert CallState.objects.filter(call_id="B2").exists()
+    assert CallState.objects.filter(call_id="C1").exists()
 
 
 # --- cursor drives the next window --------------------------------------
