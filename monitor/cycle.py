@@ -816,16 +816,22 @@ class CycleRunner:
     def _persist_items(
         self,
         items: list[dict[str, Any]],
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, int]:
         """Persist attributed items via Django ORM.
 
         For each item: upsert Account → upsert Post → persist attribution
         (PostBrand + PostBrandMention + PostBrandSignal).
 
-        Returns (n_inserted, n_attributed).
+        Returns (n_inserted, n_attributed, n_failed).  `n_failed` matters for
+        the cursor: a per-item transaction that rolled back means that tweet
+        was NOT stored, so the caller must not advance past its window. Losing
+        the count would make the failure permanent, because the overlap only
+        re-covers the last minute and tweet_id dedup only suppresses
+        duplicates of writes that already succeeded.
         """
         n_inserted = 0
         n_attributed = 0
+        n_failed = 0
         for it in items:
             if it.get("_unattributed"):
                 continue
@@ -844,10 +850,11 @@ class CycleRunner:
                     )
                     n_attributed += n_attr
             except Exception as exc:
+                n_failed += 1
                 tid = str(it.get("id") or it.get("tweet_id") or "?")
                 logger.warning("_persist_items: failed for tweet_id=%s: %s", tid, exc)
                 self._errors.append(f"persist.{tid}: {exc}")
-        return n_inserted, n_attributed
+        return n_inserted, n_attributed, n_failed
 
     # ------------------------------------------------------------------
     # Step 5: Post-fetch (translate + classify)
@@ -1330,9 +1337,10 @@ class CycleRunner:
             call_entry["n_kept"] = len(kept)
 
             # Persist
-            n_inserted, n_attributed = self._persist_items(kept)
+            n_inserted, n_attributed, n_persist_failed = self._persist_items(kept)
             self._posts_inserted += n_inserted
             call_entry["n_inserted"] = n_inserted
+            call_entry["n_persist_failed"] = n_persist_failed
 
             # Accumulate for post-fetch
             seen_ids: set[str] = {
@@ -1345,17 +1353,30 @@ class CycleRunner:
                     kept_all.append(k)
                     seen_ids.add(tid)
 
-            call_entry["status"] = "completed"
-            # All steps for this call succeeded (fetch + attribute + persist),
-            # so record that we swept through the exact upper bound we
-            # queried. Doing this last means any exception above leaves the
-            # cursor unmoved and the window gets re-swept (R2).
-            if cursor_owned:
+            call_entry["status"] = (
+                "completed" if not n_persist_failed else "persist_incomplete"
+            )
+            # Advance only when fetch AND attribute AND persist all succeeded.
+            # A rolled-back item means that tweet was never stored, so moving
+            # the cursor past its window would lose it permanently: the
+            # 1-minute overlap only re-covers the boundary, and tweet_id dedup
+            # only suppresses duplicates of writes that already landed. Holding
+            # the cursor costs a bounded re-fetch, which dedup absorbs.
+            if cursor_owned and not n_persist_failed:
                 call_entry["cursor_advanced"] = _advance_cursor(
                     call,
                     upper_bound=datetime.fromtimestamp(
                         until_epoch, tz=timezone.utc
                     ),
+                )
+            elif n_persist_failed:
+                call_entry["cursor_advanced"] = False
+                logger.warning(
+                    "run: holding cursor for call_id=%s -- %d of %d items "
+                    "failed to persist; the window will be re-swept",
+                    call.call_id,
+                    n_persist_failed,
+                    len(kept),
                 )
             call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
             summary["calls"].append(call_entry)

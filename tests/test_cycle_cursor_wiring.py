@@ -293,3 +293,87 @@ def test_each_call_gets_its_own_cursor_row(wired):
     calls = [_planned("B1"), _planned("B2", "doubao"), _planned("C1", "mimo")]
     wired(calls=calls, results=[_tweet()])
     assert CallState.objects.count() == 3
+
+
+def test_persist_failure_does_not_advance_the_cursor(wired, monkeypatch):
+    """A post that failed to PERSIST must leave the window re-sweepable.
+
+    _persist_items catches per-item exceptions, rolls that item's transaction
+    back, and returns counts with no failure signal. So a tweet whose
+    Account/Post/attribution write raises is silently lost AND the cursor
+    advances past its window -- the next cycle starts at cursor minus the
+    1-minute overlap, so anything older than that boundary is never fetched
+    again. Overlap and tweet_id dedup cannot recover it: overlap only covers
+    the last minute, and dedup only suppresses duplicates of writes that
+    already succeeded.
+
+    Reported by a peer review session against 26d9071.
+    """
+    from core.models import CallState, Post
+
+    call = _planned()
+
+    def boom(raw, account=None):
+        raise RuntimeError("simulated persist failure")
+
+    monkeypatch.setattr(cycle_mod, "_upsert_post", boom)
+
+    tweet = _tweet("persist-fail")
+    tweet["text"] = "DeepSeek just shipped a new model"
+    _, stats = wired(calls=[call], results=[tweet])
+
+    assert not Post.objects.filter(tweet_id="persist-fail").exists(), (
+        "fixture bug: the post was supposed to fail persistence"
+    )
+    assert any("persist" in e for e in stats["errors"]), (
+        f"persist failure was not recorded in cycle errors: {stats['errors']}"
+    )
+    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "cursor advanced past a window whose post failed to persist -- that "
+        "tweet is now unreachable forever"
+    )
+
+
+def test_partial_persist_failure_still_holds_the_cursor(wired, monkeypatch):
+    """One failure among several items is enough to hold the window.
+
+    The successful items are already stored and dedup will discard them on the
+    re-sweep, so holding is cheap; advancing would strand the failed one.
+    """
+    from core.models import CallState, Post
+
+    call = _planned()
+    real_upsert = cycle_mod._upsert_post
+
+    def flaky(raw, account=None):
+        if str(raw.get("id")) == "bad":
+            raise RuntimeError("simulated persist failure")
+        return real_upsert(raw, account=account)
+
+    monkeypatch.setattr(cycle_mod, "_upsert_post", flaky)
+
+    good = _tweet("good")
+    good["text"] = "DeepSeek just shipped a new model"
+    bad = _tweet("bad")
+    bad["text"] = "DeepSeek also shipped something else"
+    wired(calls=[call], results=[good, bad])
+
+    assert Post.objects.filter(tweet_id="good").exists(), "good item should persist"
+    assert not Post.objects.filter(tweet_id="bad").exists()
+    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "a partial persist failure must still hold the cursor"
+    )
+
+
+def test_clean_persist_still_advances_the_cursor(wired):
+    """Guard against over-correcting: a fully successful call must advance."""
+    from core.models import CallState
+
+    call = _planned()
+    tweet = _tweet("clean")
+    tweet["text"] = "DeepSeek just shipped a new model"
+    _, stats = wired(calls=[call], results=[tweet])
+    assert CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "a clean call must still advance -- otherwise the harvest never "
+        "moves forward at all"
+    )
