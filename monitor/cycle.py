@@ -725,20 +725,47 @@ class CycleRunner:
             logger.warning("_run_post_fetch: translate failed: %s", exc)
             translation_rows = []
 
-        # Persist translations back to Post rows
+        # Persist translations back to Post rows.
+        # Invariant: if lang_detected is a Chinese variant (zh, zh-cn,
+        # zh-hans, zh-hant, zh-tw), text_zh_cn MUST equal the source
+        # text — the original IS Chinese, so the per-locale zh_CN
+        # column just mirrors `text`. Same for EN when lang_detected
+        # is "en". Without this, the dashboard's 翻译 column under
+        # zh_CN falls back to text_translated -> text (the English
+        # source) which is wrong for already-Chinese posts.
+        #
+        # Note: translation_rows from translate_batch_pragmatics do NOT
+        # carry the source `text` (the LLM already saw it). We do one
+        # bulk SELECT for the affected tweet_ids to fetch the source
+        # text, then apply the per-row invariant.
         if translation_rows:
             from core.models import Post as PostModel
 
+            CHINESE_LANG_CODES = {"zh", "zh-cn", "zh_cn", "zh-hans", "zh-hant", "zh-tw"}
+            tids = [r.get("tweet_id") for r in translation_rows if r.get("tweet_id")]
+            source_text_by_tid: dict[str, str] = {}
+            if tids:
+                for post in PostModel.objects.filter(tweet_id__in=tids).values("tweet_id", "text"):
+                    source_text_by_tid[str(post["tweet_id"])] = post["text"] or ""
             for r in translation_rows:
                 tid = r.get("tweet_id")
                 if not tid:
                     continue
+                lang_detected = r.get("lang_detected")
+                source_text = source_text_by_tid.get(str(tid), "")
+                text_zh_cn = r.get("text_zh_cn") or r.get("literal_zh") or None
+                text_en = r.get("text_en") or None
+                # Invariant: Chinese-detected posts must have text_zh_cn
+                # populated (use the source text if the LLM didn't emit one).
+                if lang_detected in CHINESE_LANG_CODES and not text_zh_cn:
+                    text_zh_cn = source_text or None
+                # Same for English-detected posts and text_en.
+                if lang_detected == "en" and not text_en:
+                    text_en = source_text or None
                 PostModel.objects.filter(tweet_id=tid).update(
-                    text_en=r.get("text_en") or None,
-                    text_zh_cn=r.get("text_zh_cn")
-                    or r.get("literal_zh")
-                    or None,
-                    lang_detected=r.get("lang_detected") or None,
+                    text_en=text_en,
+                    text_zh_cn=text_zh_cn,
+                    lang_detected=lang_detected or None,
                 )
             counters["n_translated"] = len(translation_rows)
             counters["n_failed_translate"] = sum(
