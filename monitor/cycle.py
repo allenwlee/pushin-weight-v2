@@ -181,7 +181,23 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
     floor = now - _MAX_LOOKBACK
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
-    except Exception as exc:  # pragma: no cover - defensive
+        if row is None or row.last_completed_at is None:
+            return floor
+        prior = row.last_completed_at
+        # Defensive: a naive value (USE_TZ flipped, a raw SQL insert, or a
+        # value carried over from v1's ISO-string storage) would make the
+        # comparison below raise TypeError. The per-call loop has no
+        # try/except, so that would abort the WHOLE cycle -- all six calls --
+        # rather than degrade one. Coerce to UTC instead.
+        if prior.tzinfo is None:
+            logger.warning(
+                "_read_cursor_since: naive last_completed_at for call_id=%s; "
+                "assuming UTC",
+                call.call_id,
+            )
+            prior = prior.replace(tzinfo=timezone.utc)
+        return max(prior - _CURSOR_OVERLAP, floor)
+    except Exception as exc:
         logger.warning(
             "_read_cursor_since: cursor read failed for call_id=%s: %s; "
             "falling back to clamped lookback",
@@ -189,10 +205,6 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
             exc,
         )
         return floor
-
-    if row is None or row.last_completed_at is None:
-        return floor
-    return max(row.last_completed_at - _CURSOR_OVERLAP, floor)
 
 
 def _advance_cursor(call: PlannedCall, *, upper_bound: datetime) -> bool:
@@ -635,10 +647,15 @@ class CycleRunner:
         """
         op_since = getattr(settings, "X_MONITOR_CYCLE_SINCE_TIME", None)
         op_until = getattr(settings, "X_MONITOR_CYCLE_UNTIL_TIME", None)
-        if op_since:
+        # `is not None`, not a falsy check: epoch 0 is a legitimate (if exotic)
+        # lower bound for a full-history backfill, and silently substituting
+        # the 2h cursor floor would quietly shrink an operator's window.
+        if op_since is not None and str(op_since) != "":
             return (
                 int(op_since),
-                int(op_until) if op_until else int(now.timestamp()),
+                int(op_until)
+                if op_until is not None and str(op_until) != ""
+                else int(now.timestamp()),
                 False,
             )
 

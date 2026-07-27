@@ -288,3 +288,45 @@ def test_distinct_calls_keep_independent_cursors():
 
     assert CallState.objects.filter(call_id="B1").first().last_completed_at == early
     assert CallState.objects.filter(call_id="B2").first().last_completed_at == late
+
+
+# --- defensive paths found in code review --------------------------------
+
+
+def test_naive_cursor_value_does_not_abort_the_cycle(fake_cursor):
+    """A naive last_completed_at must not raise.
+
+    `max(naive - delta, aware)` raises TypeError, and the per-call loop in
+    run() has no try/except -- so an unguarded naive value would kill the
+    WHOLE cycle (all six calls), not degrade one. Reachable if USE_TZ is
+    flipped, a raw SQL insert lands, or a v1 ISO-string value survives a
+    migration.
+    """
+    naive = datetime(2026, 7, 27, 11, 55, 0)  # no tzinfo
+    fake_cursor(row=_FakeRow(naive))
+    since = _read_cursor_since(_call(), now=NOW)
+    assert since.tzinfo is not None
+    # Treated as UTC, so it wins over the floor rather than being discarded.
+    assert since == naive.replace(tzinfo=timezone.utc) - _CURSOR_OVERLAP
+
+
+def test_operator_since_time_of_zero_is_honored(monkeypatch):
+    """Epoch 0 is a legitimate full-history backfill bound.
+
+    A falsy check would silently swap it for the 2h cursor floor, shrinking
+    an operator's requested window without saying so.
+    """
+    from monitor.cycle import CycleRunner
+
+    monkeypatch.setattr(
+        cycle_mod.settings, "X_MONITOR_CYCLE_SINCE_TIME", 0, raising=False
+    )
+    monkeypatch.setattr(
+        cycle_mod.settings, "X_MONITOR_CYCLE_UNTIL_TIME", None, raising=False
+    )
+    since, until, cursor_owned = CycleRunner(cycle_kind="manual")._resolve_window(
+        _call(), now=NOW
+    )
+    assert since == 0, "epoch 0 was discarded instead of used as the floor"
+    assert cursor_owned is False, "an operator window must not own the cursor"
+    assert until == int(NOW.timestamp())
