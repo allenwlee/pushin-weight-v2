@@ -301,7 +301,7 @@ class TwitterApiClient:
         max_per_page: int = 20,
         since_time: int | None = None,
         until_time: int | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Run an X advanced-search query via TwitterAPI.io.
 
         `query` is a raw advanced-search string (e.g., 'from:MiniMaxAI lang:en
@@ -336,7 +336,8 @@ class TwitterApiClient:
         is also silently dropped as a URL param — must be inline.
 
         Returns (items, truncated). items is up to max_results tweets;
-        _walk_search).
+        truncated is True when the per-call cap kicked in before the
+        window was exhausted (see _walk_search).
         """
         effective_query = query
         # Only inject `since:` when `since_time` is NOT provided.
@@ -361,7 +362,13 @@ class TwitterApiClient:
             if "until_time:" not in effective_query:
                 upper = int(until_time) if until_time is not None else int(time.time())
                 effective_query = f"{effective_query} until_time:{upper}"
-        return items, truncated
+        return self._walk_search(
+            effective_query,
+            max_results,
+            max_pages=max_pages,
+            max_per_page=max_per_page,
+            since_time=since_time,
+        )
 
     def get_quote_tweets(
         self,

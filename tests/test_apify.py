@@ -90,13 +90,17 @@ def test_run_search_cookies_arg_is_ignored():
             "from:x",
             cookies={"auth_token": "ignored", "ct0": "ignored"},
         )
-        assert out == []
+        items, truncated = out
+        assert items == []
+        assert truncated is False
 
 
 def test_run_search_returns_empty_on_200_with_no_tweets():
     client = TwitterApiClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})):
-        assert client.run_search("from:x") == []
+        items, truncated = client.run_search("from:x")
+        assert items == []
+        assert truncated is False
 
 
 def test_run_search_normalizes_tweet_shape():
@@ -128,8 +132,10 @@ def test_run_search_normalizes_tweet_shape():
     }
     with patch.object(requests, "get", return_value=_mock_response(200, raw)):
         out = client.run_search("from:alice")
-    assert len(out) == 1
-    t = out[0]
+    items, truncated = out
+    assert truncated is False
+    assert len(items) == 1
+    t = items[0]
     assert t["id"] == "123"
     assert t["like_count"] == 10
     assert t["retweet_count"] == 2
@@ -137,6 +143,103 @@ def test_run_search_normalizes_tweet_shape():
     assert t["author_followers_count"] == 5000
     assert t["author_verified"] is True
     assert t["in_reply_to_user_id"] == "999"
+
+
+# --- run_search (items, truncated) contract / regression net ---------------
+
+
+def test_run_search_returns_items_truncated_tuple_not_nameerror():
+    """Regression: a44b577 briefly returned unbound `items, truncated`
+    without calling _walk_search, so every harvest cycle failed with
+    `name 'items' is not defined` and collected zero search posts.
+
+    Pin the live contract: run_search always returns (list, bool) and the
+    list is populated from the API response (i.e. _walk_search ran).
+    """
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    raw = {
+        "tweets": [
+            {
+                "id": "42",
+                "text": "hello",
+                "likeCount": 1,
+                "retweetCount": 0,
+                "replyCount": 0,
+                "quoteCount": 0,
+                "author": {"userName": "bob", "name": "Bob", "followers": 1},
+            }
+        ],
+        "has_next_page": False,
+    }
+    with patch.object(requests, "get", return_value=_mock_response(200, raw)):
+        result = client.run_search("from:bob", max_results=50)
+    assert isinstance(result, tuple) and len(result) == 2, (
+        f"run_search must return (items, truncated); got {type(result)!r}"
+    )
+    items, truncated = result
+    assert isinstance(items, list)
+    assert isinstance(truncated, bool)
+    assert len(items) == 1
+    assert items[0]["id"] == "42"
+    assert truncated is False
+
+
+def test_run_search_truncated_true_when_cap_hit_with_more_pages():
+    """When max_results is hit and the API still has a next page, truncated
+    must be True so CycleRunner holds the cursor (a44b577 intent).
+    """
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    tweets = [
+        {
+            "id": str(i),
+            "text": f"t{i}",
+            "likeCount": 0,
+            "retweetCount": 0,
+            "replyCount": 0,
+            "quoteCount": 0,
+            "author": {"userName": "x", "name": "X", "followers": 0},
+        }
+        for i in range(20)
+    ]
+    raw = {
+        "tweets": tweets,
+        "has_next_page": True,
+        "next_cursor": "cursor-page-2",
+    }
+    with patch.object(requests, "get", return_value=_mock_response(200, raw)):
+        items, truncated = client.run_search(
+            "from:x", max_results=20, max_pages=5, max_per_page=20
+        )
+    assert len(items) == 20
+    assert truncated is True
+
+
+def test_run_search_truncated_false_when_window_exhausted_at_cap():
+    """Cap hit but no more pages -> truncated False (window fully swept)."""
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    tweets = [
+        {
+            "id": str(i),
+            "text": f"t{i}",
+            "likeCount": 0,
+            "retweetCount": 0,
+            "replyCount": 0,
+            "quoteCount": 0,
+            "author": {"userName": "x", "name": "X", "followers": 0},
+        }
+        for i in range(20)
+    ]
+    raw = {
+        "tweets": tweets,
+        "has_next_page": False,
+    }
+    with patch.object(requests, "get", return_value=_mock_response(200, raw)):
+        items, truncated = client.run_search(
+            "from:x", max_results=20, max_pages=5, max_per_page=20
+        )
+    assert len(items) == 20
+    assert truncated is False
+
 
 
 # --- run_followers --------------------------------------------------------
@@ -436,7 +539,8 @@ class TestWalkSearch:
         client = self._client()
         page = {"tweets": [_tweet("1"), _tweet("2")], "has_next_page": False}
         with patch.object(client, "_get", return_value=page) as mock_get:
-            out = client._walk_search("from:x", max_results=50)
+            out, truncated = client._walk_search("from:x", max_results=50)
+        assert truncated is False
         assert [t["id"] for t in out] == ["1", "2"]
         # First call: no cursor; queryType+limit present.
         args, _ = mock_get.call_args
@@ -459,7 +563,8 @@ class TestWalkSearch:
         with patch.object(
             client, "_get", side_effect=[page1, page2]
         ) as mock_get:
-            out = client._walk_search("from:x", max_results=50)
+            out, truncated = client._walk_search("from:x", max_results=50)
+        assert truncated is False
         assert len(out) == 25
         # Second call carries cursor=cur1.
         second = mock_get.call_args_list[1]
@@ -485,11 +590,13 @@ class TestWalkSearch:
         with patch.object(
             client, "_get", side_effect=[page1, page2, page3]
         ):
-            out = client._walk_search("from:x", max_results=25)
+            out, truncated = client._walk_search("from:x", max_results=25)
         # Should stop as soon as we hit 25, regardless of more pages being
         # available. The 26th-39th items must NOT be fetched/normalized.
+        # truncated=True because has_next_page was still True when the cap hit.
         assert len(out) == 25
         assert out[-1]["id"] == "b_4"
+        assert truncated is True
 
     def test_stops_at_max_pages_defensively(self):
         client = self._client()
@@ -503,16 +610,20 @@ class TestWalkSearch:
             }
 
         with patch.object(client, "_get", side_effect=infinite_pages) as mock_get:
-            out = client._walk_search("from:x", max_results=500, max_pages=3)
+            out, truncated = client._walk_search("from:x", max_results=500, max_pages=3)
         # max_pages=3 means at most 3 calls to _get, even though pages never
         # run out. Should return 3 tweets (1 per page) without spinning.
+        # truncated=False: we exited via max_pages exhaustion, not mid-page
+        # cap with has_more (the loop ends with return out, False).
         assert len(out) == 3
         assert mock_get.call_count == 3
 
     def test_returns_empty_on_empty_response(self):
         client = self._client()
         with patch.object(client, "_get", return_value={"tweets": []}):
-            assert client._walk_search("from:nobody", max_results=50) == []
+            items, truncated = client._walk_search("from:nobody", max_results=50)
+            assert items == []
+            assert truncated is False
 
     def test_honors_caller_supplied_max_pages(self):
         # U1: max_pages is configurable. Caller passes max_pages=2; the
@@ -546,7 +657,9 @@ class TestWalkSearch:
         client = self._client()
         page = {"data": [_tweet("x")], "has_next_page": False}
         with patch.object(client, "_get", return_value=page):
-            assert client._walk_search("from:x", max_results=50)[0]["id"] == "x"
+            items, truncated = client._walk_search("from:x", max_results=50)
+            assert items[0]["id"] == "x"
+            assert truncated is False
 
 
 class TestRunSearch:
@@ -558,7 +671,7 @@ class TestRunSearch:
     def test_passes_since_only_when_caller_didnt(self):
         client = self._client()
         page = {"tweets": [_tweet("1")], "has_next_page": False}
-        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+        with patch.object(client, "_walk_search", return_value=([], False)) as mock_walk:
             client.run_search("from:x", since="2026-06-01")
             # Caller passed since= and query lacked `since:` => should append.
             args, _ = mock_walk.call_args
@@ -567,7 +680,7 @@ class TestRunSearch:
 
     def test_skips_since_when_query_already_has_it(self):
         client = self._client()
-        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+        with patch.object(client, "_walk_search", return_value=([], False)) as mock_walk:
             client.run_search("from:x since:2026-05-01", since="2026-06-01")
             args, _ = mock_walk.call_args
             # The query already has since:, so the run_search `since=` arg
@@ -577,7 +690,7 @@ class TestRunSearch:
 
     def test_no_since_argument_means_no_appended_token(self):
         client = self._client()
-        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+        with patch.object(client, "_walk_search", return_value=([], False)) as mock_walk:
             client.run_search("from:x min_faves:5")
             args, _ = mock_walk.call_args
             assert "since:" not in args[0]
@@ -598,13 +711,14 @@ class TestRunSearch:
         with patch.object(
             client, "_get", side_effect=[page1, page2]
         ):
-            out = client.run_search("from:x", max_results=50)
+            out, truncated = client.run_search("from:x", max_results=50)
+        assert truncated is False
         assert len(out) == 30
 
     def test_threads_max_pages_to_walk(self):
         # U1: run_search accepts max_pages and passes it through to _walk_search.
         client = self._client()
-        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+        with patch.object(client, "_walk_search", return_value=([], False)) as mock_walk:
             client.run_search("from:x", max_pages=3)
             kwargs = mock_walk.call_args.kwargs
             assert kwargs["max_pages"] == 3
@@ -612,7 +726,7 @@ class TestRunSearch:
     def test_threads_max_per_page_to_walk(self):
         # U1: run_search accepts max_per_page and passes it through to _walk_search.
         client = self._client()
-        with patch.object(client, "_walk_search", return_value=[]) as mock_walk:
+        with patch.object(client, "_walk_search", return_value=([], False)) as mock_walk:
             client.run_search("from:x", max_per_page=8)
             kwargs = mock_walk.call_args.kwargs
             assert kwargs["max_per_page"] == 8
