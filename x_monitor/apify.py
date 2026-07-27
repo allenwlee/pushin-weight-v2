@@ -235,8 +235,16 @@ class TwitterApiClient:
         max_pages: int = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
-    ) -> list[dict[str, Any]]:
-        """Paginate advanced_search via next_cursor. Returns up to max_results.
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Paginate advanced_search via next_cursor.
+
+        Returns (items, truncated). `truncated` is True when the cap
+        kicked in AND the API still has more pages -- meaning we hit the
+        per-call ceiling before exhausting the window. The caller needs
+        this signal: advancing the cursor past a truncated window would
+        lose the 51st-and-older tweets forever, because the next cycle's
+        floor is (prior - 1min) and tweet_id dedup cannot recover what
+        was never stored.
 
         TwitterAPI.io caps each response at `max_per_page` tweets (the
         platform caps it at 20; we clamp to whatever the caller passes).
@@ -250,7 +258,9 @@ class TwitterApiClient:
         cursor: str | None = None
         for _ in range(max_pages):
             if len(out) >= max_results:
-                break
+                # We hit the cap on a previous iteration; the API still
+                # has more, so the result is truncated.
+                return out, True
             params: dict[str, Any] = {
                 "query": query,
                 "queryType": "Latest",
@@ -269,13 +279,16 @@ class TwitterApiClient:
             for t in tweets:
                 out.append(_normalize_tweet(t))
                 if len(out) >= max_results:
-                    return out
+                    has_more = bool(data.get("has_next_page")) and bool(
+                        data.get("next_cursor")
+                    )
+                    return out, has_more
             if not data.get("has_next_page"):
                 break
             cursor = data.get("next_cursor")
             if not cursor:
                 break
-        return out
+        return out, False
 
     def run_search(
         self,
@@ -322,7 +335,7 @@ class TwitterApiClient:
         the upper bound makes the time envelope explicit. `until_time:`
         is also silently dropped as a URL param — must be inline.
 
-        Returns up to max_results tweets, paginated via next_cursor (see
+        Returns (items, truncated). items is up to max_results tweets;
         _walk_search).
         """
         effective_query = query
@@ -348,13 +361,7 @@ class TwitterApiClient:
             if "until_time:" not in effective_query:
                 upper = int(until_time) if until_time is not None else int(time.time())
                 effective_query = f"{effective_query} until_time:{upper}"
-        return self._walk_search(
-            effective_query,
-            max_results,
-            max_pages=max_pages,
-            max_per_page=max_per_page,
-            since_time=since_time,
-        )
+        return items, truncated
 
     def get_quote_tweets(
         self,

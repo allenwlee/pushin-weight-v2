@@ -763,7 +763,7 @@ class CycleRunner:
             return [], "length_cap_exceeded"
 
         try:
-            items = api.run_search(
+            items, truncated = api.run_search(
                 call.query_string,
                 max_results=max_results_cap,
                 max_pages=max_pages_cap,
@@ -787,6 +787,13 @@ class CycleRunner:
             return [], "error"
 
         self._api_calls += 1
+        if truncated:
+            # The API still has more tweets in this window. The cap
+            # kicked in, so the 51st-and-older are not in `items`. If we
+            # advance the cursor anyway, those tweets fall into the gap
+            # [since, prior - 1min] and are never re-queried -- dedup
+            # cannot recover what was never stored.
+            return items, "truncated"
         return items, "ok"
 
     # ------------------------------------------------------------------
@@ -1340,7 +1347,8 @@ class CycleRunner:
                 call, api, window=(since_epoch, until_epoch)
             )
             if outcome != "ok":
-                # Failed call (or an over-cap query): leave the cursor
+                # Failed call (or an over-cap query, or a truncated
+                # response that hit the per-call ceiling): leave the cursor
                 # untouched so the next cycle re-sweeps this window rather
                 # than skipping it (R2). The outcome is carried through
                 # verbatim so an over-cap config problem cannot be misread as

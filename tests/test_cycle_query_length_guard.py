@@ -74,7 +74,7 @@ class FakeApi:
                 "lang": "en",
                 "created_at": "Sat Jul 25 12:00:00 +0000 2026",
             }
-        ]
+        ], False  # (items, truncated)
 
 
 @pytest.fixture

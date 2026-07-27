@@ -70,7 +70,7 @@ class ScriptedApi:
         step = self._script.pop(0) if self._script else []
         if isinstance(step, Exception):
             raise step
-        return list(step)
+        return list(step), False  # (items, truncated)
 
 
 @pytest.fixture

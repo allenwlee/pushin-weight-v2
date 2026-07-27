@@ -77,7 +77,7 @@ class RecordingApi:
 
     def run_search(self, query, **kwargs):
         self.calls.append({"query": query, **kwargs})
-        return list(self._results)
+        return list(self._results), False  # (items, truncated)
 
 
 def _tweet(tid: str):

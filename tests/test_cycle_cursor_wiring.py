@@ -56,7 +56,7 @@ class FakeApi:
         self.calls.append({"query": query, **kwargs})
         if self._raise is not None:
             raise self._raise
-        return list(self._results)
+        return list(self._results), False  # (items, truncated)
 
 
 def _tweet(tid: str = "1", handle: str = "someone"):
@@ -376,4 +376,121 @@ def test_clean_persist_still_advances_the_cursor(wired):
     assert CallState.objects.filter(**_cursor_key(call)).exists(), (
         "a clean call must still advance -- otherwise the harvest never "
         "moves forward at all"
+    )
+
+
+def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
+    """A window that contains more than max_results=50 tweets must NOT advance
+    the cursor past what was actually retrieved.
+
+    TwitterAPI.io answers advanced_search with up to max_results per call. If
+    the window contains 60 tweets, the first 50 are returned and the 51st
+    and beyond are lost -- they were never stored, and the next cycle's
+    window starts at (prior - 1min), so tweets older than until_time - 1min
+    are never re-queried. tweet_id dedup cannot recover what was never
+    stored.
+    """
+    from core.models import CallState, Post
+
+    call = _planned()
+
+    class TruncatingApi:
+        def __init__(self):
+            self.calls = []
+
+        def run_search(self, query, **kwargs):
+            self.calls.append({"query": query, **kwargs})
+            # Return exactly 50 distinct tweets -- the cap. None of them
+            # attribute to a real brand, so they all get dropped before
+            # persistence, but the cap is what matters here.
+            return [
+                {**_tweet(f"id-{i}"), "text": "DeepSeek does things",
+                 "created_at": "Sat Jul 25 12:00:00 +0000 2026"}
+                for i in range(50)
+            ]
+
+    api = TruncatingApi()
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: [call])
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+    )
+    monkeypatch.setattr(
+        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+    )
+    CycleRunner(cycle_kind="scheduled").run()
+
+    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "cursor advanced past a window that returned 50 (the cap), meaning "
+        "the next cycle starts at prior - 1min -- but the 51st-and-older "
+        "tweets in that window were never returned and so are lost forever"
+    )
+
+
+def test_truncated_with_empty_attribution_still_holds_cursor(wired, monkeypatch):
+    """Truncation that returns 0 attributable items must also hold the cursor.
+
+    The non-truncation empty case advances (KTD5); the truncated empty case
+    must NOT, for the same reason: 51st-and-older tweets exist but were not
+    in this call's response.
+    """
+    from core.models import CallState
+
+    call = _planned()
+
+    class TruncatedEmpty:
+        def __init__(self):
+            self.calls = []
+
+        def run_search(self, query, **kwargs):
+            self.calls.append({"query": query, **kwargs})
+            return [], True  # 0 items, truncated=True
+
+    api = TruncatedEmpty()
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: [call])
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+    )
+    monkeypatch.setattr(
+        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+    )
+    stats = CycleRunner(cycle_kind="scheduled").run()
+
+    entry = [c for c in stats["calls"] if c["call_id"] == "B1"][-1]
+    assert entry["status"] == "truncated", (
+        f"expected truncated status, got {entry['status']!r}"
+    )
+    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "cursor advanced despite a truncated result"
+    )
+
+
+def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
+    """Returns the cap's worth of items but has_next_page is False.
+
+    The cap was hit but the window is exhausted -- safe to advance.
+    """
+    from core.models import CallState
+
+    call = _planned()
+
+    class CappedButExhausted:
+        def run_search(self, query, **kwargs):
+            return [
+                {**_tweet(f"x-{i}"), "text": "DeepSeek does things",
+                 "created_at": "Sat Jul 25 12:00:00 +0000 2026"}
+                for i in range(50)
+            ], False  # 50 items, truncated=False (window exhausted)
+
+    api = CappedButExhausted()
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: [call])
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+    )
+    monkeypatch.setattr(
+        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+    )
+    CycleRunner(cycle_kind="scheduled").run()
+
+    assert CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "the cap was hit but the window was exhausted -- advance is safe"
     )
