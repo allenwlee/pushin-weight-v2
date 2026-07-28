@@ -254,6 +254,7 @@ def test_goal_columns_type_family():
 
 
 @requires_postgres
+@pytest.mark.django_db
 def test_self_fk_on_quoted_status_id():
     """Self-FK on quoted_status_id → posts.tweet_id, ON DELETE SET NULL."""
     from django.db import connection
@@ -279,6 +280,7 @@ def test_self_fk_on_quoted_status_id():
 
 
 @requires_postgres
+@pytest.mark.django_db
 def test_self_fk_is_deferrable():
     """Self-FK is DEFERRABLE INITIALLY DEFERRED so the backfill can land
     parent + child rows in any order."""
@@ -302,6 +304,7 @@ def test_self_fk_is_deferrable():
 
 
 @requires_postgres
+@pytest.mark.django_db
 def test_no_orphan_quoted_fk():
     """Every non-null quoted_status_id must resolve to an existing posts.tweet_id.
 
