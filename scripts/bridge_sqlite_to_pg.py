@@ -306,15 +306,9 @@ def _upsert_post_from_row(
     if created_at_epoch is not None:
         defaults["created_at_epoch"] = created_at_epoch
 
-    raw = row.get("raw")
-    if raw:
-        if isinstance(raw, str):
-            raw = _parse_sqlite_json(raw)
-        if raw:
-            defaults["raw"] = raw
-    elif not dry_run:
-        # Store the row itself as raw for fidelity when coming from SQLite
-        defaults["raw"] = dict(row)
+    # U4: `posts.raw` is dropped; the bridge is now a historical no-op
+    # for any column that was previously stored only in `raw`. The bridge
+    # preserves all other fields but no longer writes the JSONB blob.
 
     headline = row.get("headline") or ""
     if headline:
@@ -478,7 +472,7 @@ def tail_from_sqlite(
             "created_at", "fetched_at", "like_count", "retweet_count",
             "reply_count", "quote_count", "in_reply_to_user_id",
             "quoted_status_id", "conversation_id", "entities",
-            "source_query_id", "raw", "headline", "headline_source",
+            "source_query_id", "headline", "headline_source",
             "text_en", "text_zh_cn", "lang_detected", "quoted_text",
             "last_quote_count_seen", "last_quote_fetched_at",
             "created_at_epoch",

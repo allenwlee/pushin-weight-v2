@@ -455,6 +455,14 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
     """Create or update an Account row from a normalized tweet dict.
 
     Returns the Account instance or None if the tweet has no author info.
+
+    Dual-write (U3, R14): the Account table carries a denormalized snapshot of
+    author fields that overlap with the new posts.author_* columns. Update
+    Account here so downstream consumers that key off Account don't lose
+    recency. Use the *correct* key names — the prior version referenced
+    `author_followers` / `author_following` (without the `_count` suffix) and
+    the normalize layer never set those, so the corresponding Account fields
+    were silently never written.
     """
     author_id = str(raw.get("author_id") or raw.get("authorId") or "")
     if not author_id:
@@ -463,48 +471,75 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
     handle = raw.get("author_handle") or raw.get("authorHandle") or ""
     if handle:
         defaults["handle"] = handle
-    display_name = raw.get("author_display_name") or raw.get("authorName") or ""
+    display_name = raw.get("author_display_name") or raw.get("author_name") or raw.get("authorName") or ""
     if display_name:
         defaults["display_name"] = display_name
-    verified = raw.get("author_verified") or raw.get("authorVerified") or False
-    defaults["verified"] = bool(verified)
-    followers = raw.get("author_followers") or raw.get("authorFollowers")
+    # Per U3 § 1.7, new metric columns use NULL-when-absent. The Account dual-write
+    # was already using 0-coercion in the prior implementation; preserve that for
+    # backward-compat with existing Account readers that expect an int.
+    verified = bool(
+        raw.get("author_verified")
+        or raw.get("author_is_blue_verified")
+        or raw.get("authorVerified")
+    )
+    defaults["verified"] = verified
+    followers = raw.get("author_followers_count")
     if followers is not None:
         defaults["followers_count"] = int(followers)
-    following = raw.get("author_following") or raw.get("authorFollowing")
+    following = raw.get("author_following_count")
     if following is not None:
         defaults["following_count"] = int(following)
+    favourites = raw.get("author_favourites_count")
+    if favourites is not None:
+        defaults["favourites_count"] = int(favourites)
+    statuses = raw.get("author_statuses_count")
+    if statuses is not None:
+        defaults["statuses_count"] = int(statuses)
+    media = raw.get("author_media_count")
+    if media is not None:
+        defaults["media_count"] = int(media)
+    fast_followers = raw.get("author_fast_followers_count")
+    if fast_followers is not None:
+        defaults["fast_followers_count"] = int(fast_followers)
+    is_blue = raw.get("author_is_blue_verified")
+    if is_blue is not None:
+        defaults["is_blue_verified"] = bool(is_blue)
+    verified_type = raw.get("author_verified_type")
+    if verified_type is not None:
+        defaults["verified_type"] = verified_type
+    profile_pic = raw.get("author_profile_picture")
+    if profile_pic is not None:
+        defaults["profile_picture"] = profile_pic
+    location = raw.get("author_location")
+    if location is not None:
+        defaults["location"] = location
+    description = raw.get("author_description")
+    if description is not None:
+        defaults["description"] = description
+    profile_bio = raw.get("author_profile_bio_text")
+    if profile_bio is not None:
+        defaults["profile_bio_text"] = profile_bio
     acc, _created = Account.objects.update_or_create(
         author_id=author_id, defaults=defaults
     )
     return acc
 
 
-def _make_json_safe(obj: Any) -> Any:
-    """Recursively convert dataclass/NamedTuple instances to plain dicts for JSON."""
-    from dataclasses import asdict, is_dataclass
-
-    if isinstance(obj, dict):
-        return {k: _make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
-        return [_make_json_safe(v) for v in obj]
-    if is_dataclass(obj):
-        return _make_json_safe(asdict(obj))
-    if hasattr(obj, "_asdict"):  # NamedTuple
-        return _make_json_safe(obj._asdict())
-    return obj
-
-
 def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | None:
     """Create or update a Post row from a normalized tweet dict.
 
     Returns the Post instance or None if the tweet has no id.
-    The raw dict is stored in the `raw` JSONField for full-fidelity replay.
+
+    Posts.raw denormalization (U3): writes both the typed columns (per
+    `docs/plans/2026-07-27-004-…`) AND the `raw` JSONField for one release
+    cycle. The dual-write is removed in U4 once the harvest has had ≥1
+    cycle on the new code. The `quoted_status_id` is gated by Policy A
+    (only set if the parent tweet_id already exists in posts).
     """
     tweet_id = str(raw.get("id") or raw.get("tweet_id") or "")
     if not tweet_id:
         return None
-    defaults: dict[str, Any] = {"raw": _make_json_safe(raw)}
+    defaults: dict[str, Any] = {}
     if account is not None:
         defaults["author"] = account
     handle = raw.get("author_handle") or raw.get("authorHandle") or ""
@@ -572,6 +607,76 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
     created_at_epoch = raw.get("created_at_epoch") or raw.get("createdAtEpoch")
     if created_at_epoch is not None:
         defaults["created_at_epoch"] = int(created_at_epoch)
+
+    # --- § 1.2 New tweet top-level typed columns (U3).
+    # Per § 1.7: new fields use NULL-when-absent, not 0/false coercion. The
+    # `is not None` guard skips both missing keys AND None sentinels; the
+    # normalize layer uses None for absent keys (not 0).
+    for col, val in (
+        ("created_at_raw", raw.get("created_at_raw")),
+        ("bookmark_count", raw.get("bookmark_count")),
+        ("is_reply", raw.get("is_reply")),
+        ("is_retweet", raw.get("is_retweet")),
+        ("is_quote", raw.get("is_quote")),
+        ("in_reply_to_id", raw.get("in_reply_to_id")),
+        ("in_reply_to_username", raw.get("in_reply_to_username")),
+        ("tweet_type", raw.get("tweet_type")),
+        ("tweet_url", raw.get("tweet_url")),
+        ("tweet_twitter_url", raw.get("tweet_twitter_url")),
+        ("card", raw.get("card")),
+        ("place", raw.get("place")),
+        ("client_source", raw.get("client_source")),
+        ("view_count", raw.get("view_count")),
+        ("article", raw.get("article")),
+        ("is_limited_reply", raw.get("is_limited_reply")),
+        ("community_info", raw.get("community_info")),
+        ("display_text_range", raw.get("display_text_range")),
+        ("extended_entities", raw.get("extended_entities")),
+        ("quoted_author_handle", raw.get("quoted_author_handle")),
+    ):
+        if val is not None:
+            defaults[col] = val
+
+    # --- § 1.3 New author typed columns (U3).
+    for col, val in (
+        ("author_name", raw.get("author_name")),
+        ("author_followers_count", raw.get("author_followers_count")),
+        ("author_following_count", raw.get("author_following_count")),
+        ("author_verified", raw.get("author_verified")),
+        ("author_is_blue_verified", raw.get("author_is_blue_verified")),
+        ("author_verified_type", raw.get("author_verified_type")),
+        ("author_is_translator", raw.get("author_is_translator")),
+        ("author_is_automated", raw.get("author_is_automated")),
+        ("author_automated_by", raw.get("author_automated_by")),
+        ("author_description", raw.get("author_description")),
+        ("author_location", raw.get("author_location")),
+        ("author_media_count", raw.get("author_media_count")),
+        ("author_statuses_count", raw.get("author_statuses_count")),
+        ("author_favourites_count", raw.get("author_favourites_count")),
+        ("author_fast_followers_count", raw.get("author_fast_followers_count")),
+        ("author_can_dm", raw.get("author_can_dm")),
+        ("author_can_media_tag", raw.get("author_can_media_tag")),
+        ("author_profile_picture", raw.get("author_profile_picture")),
+        ("author_profile_bio", raw.get("author_profile_bio")),
+        ("author_cover_picture", raw.get("author_cover_picture")),
+        ("author_pinned_tweet_ids", raw.get("author_pinned_tweet_ids")),
+        ("author_affiliates_highlighted_label",
+         raw.get("author_affiliates_highlighted_label")),
+        ("author_withheld_in_countries",
+         raw.get("author_withheld_in_countries")),
+        ("author_possibly_sensitive", raw.get("author_possibly_sensitive")),
+        ("author_has_custom_timelines",
+         raw.get("author_has_custom_timelines")),
+        ("author_entities", raw.get("author_entities")),
+        ("author_twitter_url", raw.get("author_twitter_url")),
+        ("author_type", raw.get("author_type")),
+        ("author_url", raw.get("author_url")),
+        ("author_created_at_raw", raw.get("author_created_at_raw")),
+        ("author_status", raw.get("author_status")),
+    ):
+        if val is not None:
+            defaults[col] = val
+
     post, _created = Post.objects.update_or_create(
         tweet_id=tweet_id, defaults=defaults
     )
