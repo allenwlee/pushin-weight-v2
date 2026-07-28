@@ -11,6 +11,25 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Pre-cleanup: zero out quoted_status_id values whose target tweet_id is
+        # not present in posts (Policy A — no dangling FKs, no stub rows). This
+        # must run before the AlterField below turns the existing TEXT column
+        # into a ForeignKey, because ALTER TABLE ... ADD CONSTRAINT validates
+        # all existing rows immediately, and 3,042 rows have dangling values.
+        # The 0003 backfill will re-derive quoted_status_id from posts.raw using
+        # the same NULL-if-missing semantics, so this pre-cleanup is a no-op
+        # for downstream behavior.
+        migrations.RunSQL(
+            sql=(
+                "UPDATE posts SET quoted_status_id = NULL "
+                "WHERE quoted_status_id IS NOT NULL "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM posts p2 "
+                "  WHERE p2.tweet_id = posts.quoted_status_id"
+                ");"
+            ),
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.AddField(
             model_name='post',
             name='article',

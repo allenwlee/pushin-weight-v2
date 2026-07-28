@@ -26,33 +26,39 @@ def _backfill_columns(apps, schema_editor):
         # --- 1. Author fields: all inner-only per U0 census (§ 1.3) ---
         # Order: simple scalar columns first, then bools, then jsonb.
         author_scalar_updates = [
-            # (column, sql expression from raw->'raw'->'author')
-            ("author_name", "raw->'raw'->'author'->>'name'"),
-            ("author_automated_by", "raw->'raw'->'author'->>'automatedBy'"),
-            ("author_cover_picture", "raw->'raw'->'author'->>'coverPicture'"),
-            ("author_created_at_raw", "raw->'raw'->'author'->>'createdAt'"),
-            ("author_description", "raw->'raw'->'author'->>'description'"),
-            ("author_location", "raw->'raw'->'author'->>'location'"),
-            ("author_profile_picture", "raw->'raw'->'author'->>'profilePicture'"),
-            ("author_status", "raw->'raw'->'author'->>'status'"),
-            ("author_twitter_url", "raw->'raw'->'author'->>'twitterUrl'"),
-            ("author_type", "raw->'raw'->'author'->>'type'"),
-            ("author_url", "raw->'raw'->'author'->>'url'"),
-            ("author_verified_type", "raw->'raw'->'author'->>'verifiedType'"),
-            ("author_followers_count",
+            # (column, jsonb key in author, sql expression)
+            # The key is passed explicitly because the previous form derived it
+            # from `expr.split("->>")[-1].strip("'")`, which broke for
+            # expressions with trailing casts (e.g. `::int`, `::boolean`) —
+            # the trailing `')::int'` survived strip() and made the WHERE
+            # clause match a nonexistent key, so the backfill updated 0 rows
+            # for all integer/boolean author columns. Verified on staging 2026-07-28.
+            ("author_name", "name", "raw->'raw'->'author'->>'name'"),
+            ("author_automated_by", "automatedBy", "raw->'raw'->'author'->>'automatedBy'"),
+            ("author_cover_picture", "coverPicture", "raw->'raw'->'author'->>'coverPicture'"),
+            ("author_created_at_raw", "createdAt", "raw->'raw'->'author'->>'createdAt'"),
+            ("author_description", "description", "raw->'raw'->'author'->>'description'"),
+            ("author_location", "location", "raw->'raw'->'author'->>'location'"),
+            ("author_profile_picture", "profilePicture", "raw->'raw'->'author'->>'profilePicture'"),
+            ("author_status", "status", "raw->'raw'->'author'->>'status'"),
+            ("author_twitter_url", "twitterUrl", "raw->'raw'->'author'->>'twitterUrl'"),
+            ("author_type", "type", "raw->'raw'->'author'->>'type'"),
+            ("author_url", "url", "raw->'raw'->'author'->>'url'"),
+            ("author_verified_type", "verifiedType", "raw->'raw'->'author'->>'verifiedType'"),
+            ("author_followers_count", "followers",
                 "(raw->'raw'->'author'->>'followers')::int"),
-            ("author_following_count",
+            ("author_following_count", "following",
                 "(raw->'raw'->'author'->>'following')::int"),
-            ("author_media_count",
+            ("author_media_count", "mediaCount",
                 "(raw->'raw'->'author'->>'mediaCount')::int"),
-            ("author_statuses_count",
+            ("author_statuses_count", "statusesCount",
                 "(raw->'raw'->'author'->>'statusesCount')::int"),
-            ("author_favourites_count",
+            ("author_favourites_count", "favouritesCount",
                 "(raw->'raw'->'author'->>'favouritesCount')::int"),
-            ("author_fast_followers_count",
+            ("author_fast_followers_count", "fastFollowersCount",
                 "(raw->'raw'->'author'->>'fastFollowersCount')::int"),
         ]
-        for col, expr in author_scalar_updates:
+        for col, key, expr in author_scalar_updates:
             cur.execute(
                 f"""
                 UPDATE posts
@@ -61,24 +67,25 @@ def _backfill_columns(apps, schema_editor):
                   AND raw IS NOT NULL
                   AND raw->'raw'->'author' ? %s
                 """,
-                (expr.split("->>")[-1].strip("'"),),
+                (key,),
             )
 
         author_bool_updates = [
-            ("author_is_translator",
+            # (column, jsonb key in author, sql expression)
+            ("author_is_translator", "isTranslator",
                 "(raw->'raw'->'author'->>'isTranslator')::boolean"),
-            ("author_is_automated",
+            ("author_is_automated", "isAutomated",
                 "(raw->'raw'->'author'->>'isAutomated')::boolean"),
-            ("author_can_dm",
+            ("author_can_dm", "canDm",
                 "(raw->'raw'->'author'->>'canDm')::boolean"),
-            ("author_can_media_tag",
+            ("author_can_media_tag", "canMediaTag",
                 "(raw->'raw'->'author'->>'canMediaTag')::boolean"),
-            ("author_possibly_sensitive",
+            ("author_possibly_sensitive", "possiblySensitive",
                 "(raw->'raw'->'author'->>'possiblySensitive')::boolean"),
-            ("author_has_custom_timelines",
+            ("author_has_custom_timelines", "hasCustomTimelines",
                 "(raw->'raw'->'author'->>'hasCustomTimelines')::boolean"),
         ]
-        for col, expr in author_bool_updates:
+        for col, key, expr in author_bool_updates:
             cur.execute(
                 f"""
                 UPDATE posts
@@ -87,7 +94,7 @@ def _backfill_columns(apps, schema_editor):
                   AND raw IS NOT NULL
                   AND raw->'raw'->'author' ? %s
                 """,
-                (expr.split("->>")[-1].strip("'"),),
+                (key,),
             )
 
         # author_verified: union of isBlueVerified or isVerified (per U3 logic in normalize).
@@ -151,6 +158,8 @@ def _backfill_columns(apps, schema_editor):
         # --- 2. Tweet top-level fields ---
         # For each, dual-path COALESCE per § 1.6 (outer snake first, then inner raw->'raw' camelCase).
         # Many have no outer snake twin today; COALESCE handles that gracefully.
+        # NOTE: view_count is IntegerField in the model — it needs a ::int cast
+        # and lives in its own block below to keep the text-typed block clean.
         tweet_scalar_updates = [
             # (column, outer_snake_or_none, inner_camel)
             ("created_at_raw", None, "createdAt"),
@@ -160,7 +169,6 @@ def _backfill_columns(apps, schema_editor):
             ("tweet_url", "url", "url"),
             ("tweet_twitter_url", "twitterUrl", "twitterUrl"),
             ("client_source", "source", "source"),
-            ("view_count", "viewCount", "viewCount"),  # outer camelCase only; no outer snake exists
         ]
         for col, outer_key, inner_key in tweet_scalar_updates:
             if outer_key:
@@ -185,6 +193,21 @@ def _backfill_columns(apps, schema_editor):
                     """,
                     (inner_key, inner_key),
                 )
+
+        # Integer tweet fields (view_count is outer camelCase only; no outer snake exists).
+        for col, outer_key, inner_key in [
+            ("view_count", "viewCount", "viewCount"),
+        ]:
+            cur.execute(
+                f"""
+                UPDATE posts
+                SET {col} = COALESCE((raw->>%s)::int, (raw->'raw'->>%s)::int)
+                WHERE {col} IS NULL
+                  AND raw IS NOT NULL
+                  AND (raw ? %s OR raw->'raw' ? %s)
+                """,
+                (outer_key, inner_key, outer_key, inner_key),
+            )
 
         # Integer-coerced tweet fields (the existing typed cols use COALESCE outer-then-inner;
         # for the new ones, outer is empty so just inner).
@@ -268,24 +291,32 @@ def _backfill_columns(apps, schema_editor):
         # Source: top-level quoted_status_id (already populated by harvest) OR inner quoted_tweet.id
         # Set NULL if target doesn't exist in posts. (U2 runs before U3 harvest update, so the
         # top-level value is whatever the harvest wrote historically — which is the inner id.)
+        #
+        # IMPORTANT: the outer table is explicitly aliased as `p` and the column
+        # references are `p.raw->>...`. The original form used unqualified `posts`
+        # for both outer and inner tables, which caused Postgres to resolve the
+        # unqualified `raw` reference to the inner scope and hoist the EXISTS
+        # into an InitPlan — producing 0 matches instead of 2,421. Adding the
+        # `p.` prefix forces a correlated subquery. (Verified on staging with
+        # raw prod dump — see 2026-07-28 staging verification.)
         cur.execute(
             """
-            UPDATE posts
+            UPDATE posts p
             SET quoted_status_id = CASE
                 WHEN EXISTS (SELECT 1 FROM posts q WHERE q.tweet_id = COALESCE(
-                    raw->>'quoted_status_id',
-                    raw->'raw'->'quoted_tweet'->>'id'
+                    p.raw->>'quoted_status_id',
+                    p.raw->'raw'->'quoted_tweet'->>'id'
                 ))
                 THEN COALESCE(
-                    raw->>'quoted_status_id',
-                    raw->'raw'->'quoted_tweet'->>'id'
+                    p.raw->>'quoted_status_id',
+                    p.raw->'raw'->'quoted_tweet'->>'id'
                 )::text
                 ELSE NULL
             END
-            WHERE raw IS NOT NULL
+            WHERE p.raw IS NOT NULL
               AND (
-                raw ? 'quoted_status_id'
-                OR raw->'raw'->'quoted_tweet' ? 'id'
+                p.raw ? 'quoted_status_id'
+                OR p.raw->'raw'->'quoted_tweet' ? 'id'
               )
             """
         )
