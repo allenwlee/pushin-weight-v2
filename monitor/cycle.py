@@ -138,11 +138,59 @@ _CURSOR_OVERLAP = timedelta(minutes=1)
 # span would silently truncate -- the exact failure class this plan fixes.
 _MAX_LOOKBACK = timedelta(hours=2)
 
+# C1 (llama/kimi/mimo/yi + broad co-terms, min_faves:0) routinely exceeds the
+# default 50-result ceiling even on a short window. A truncated response that
+# also discarded its items left C1 permanently stuck: the cursor never
+# advanced, the window clamped at MAX_LOOKBACK, and every cycle re-hit the
+# same tip. Give C1 a higher per-call ceiling so a single pass can drain more.
+_C1_MAX_RESULTS = 150
+_C1_MAX_PAGES = 8  # 150 / 20 per page
+
+# When a window still truncates after one pass, walk until_time backward
+# (Latest order: page = newest) and re-fetch older slices until the window
+# is exhausted or this pass budget is spent. Pass 1 is the first fetch.
+_MAX_TRUNCATION_WALKS = 5
+
 # CallState.bucket is TextField(blank=True, default=""), but every v2
 # PlannedCall carries bucket=None.  Normalize on both read and write so the
 # two never address different rows.  Mirrors v1's _NULL_BUCKET_SENTINEL
 # (x_monitor/store.py:455-459).
 _NULL_BUCKET_SENTINEL = ""
+
+
+
+
+def _item_created_epoch(it: dict[str, Any]) -> int | None:
+    """Best-effort unix epoch for a normalized tweet dict (for window walks)."""
+    raw_ep = it.get("created_at_epoch") or it.get("createdAtEpoch")
+    if raw_ep is not None:
+        try:
+            return int(raw_ep)
+        except (TypeError, ValueError):
+            pass
+    created_at_str = it.get("created_at") or it.get("createdAt") or ""
+    if not created_at_str:
+        return None
+    for fmt in (
+        "%a %b %d %H:%M:%S %z %Y",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S%z",
+    ):
+        try:
+            parsed = datetime.strptime(created_at_str, fmt)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return int(parsed.timestamp())
+        except (ValueError, TypeError):
+            continue
+    try:
+        parsed = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp())
+    except (ValueError, TypeError):
+        return None
 
 
 def _cursor_key(call: PlannedCall) -> dict[str, str]:
@@ -820,6 +868,11 @@ class CycleRunner:
           "ok"                  -- the call ran; items may still be empty,
                                    which is a successful sweep of a quiet
                                    window and may advance the cursor (KTD5).
+          "truncated"           -- the per-call ceiling hit before the window
+                                   was exhausted. ``items`` still holds every
+                                   tweet retrieved across walk passes; the
+                                   caller MUST persist them but MUST NOT
+                                   advance the cursor past the original window.
           "error"               -- the call failed (auth/rate/server/other).
           "length_cap_exceeded" -- the query would exceed the 512-char cap
                                    once the time operators are injected.
@@ -828,19 +881,30 @@ class CycleRunner:
         quiet window from a failure, and only the former may advance the
         cursor (R2).  Per-call errors are caught -- one bad query doesn't kill
         the cycle.
+
+        When truncated, we walk ``until_time`` backward (Latest order returns
+        newest first) up to ``_MAX_TRUNCATION_WALKS`` times so a noisy call
+        like C1 can drain a 2h clamp instead of deadlocking on the tip.
         """
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
         max_pages = getattr(settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", None)
         max_results_cap = int(limit_per_call) if limit_per_call is not None else 50
         max_pages_cap = int(max_pages) if max_pages is not None else 5
+        # C1 needs a higher ceiling (see _C1_MAX_RESULTS docstring).
+        if call.call_id == "C1":
+            max_results_cap = max(max_results_cap, _C1_MAX_RESULTS)
+            max_pages_cap = max(max_pages_cap, _C1_MAX_PAGES)
         since_time, until_time = window
 
         logger.info(
-            "_fetch_tweets: call_id=%s window=[%s, %s] (%.1f min)",
+            "_fetch_tweets: call_id=%s window=[%s, %s] (%.1f min) "
+            "cap=%d pages=%d",
             call.call_id,
             since_time,
             until_time,
             (until_time - since_time) / 60.0,
+            max_results_cap,
+            max_pages_cap,
         )
 
         # Guard the post-injection length (R7 / KTD6). plan_calls already ran
@@ -850,6 +914,8 @@ class CycleRunner:
         # NO error, so the call looks like a quiet window and the cursor would
         # advance straight past a span that was never searched. Reporting it as
         # a distinct failure keeps the cursor pinned so the window is retried.
+        # Length uses the original until_time (widest injection); walking the
+        # upper bound shorter only shrinks the operator payload.
         effective_query = (
             f"{call.query_string} since_time:{since_time} until_time:{until_time}"
         )
@@ -871,43 +937,123 @@ class CycleRunner:
             )
             return [], "length_cap_exceeded"
 
-        try:
-            items, truncated = api.run_search(
-                call.query_string,
-                max_results=max_results_cap,
-                max_pages=max_pages_cap,
-                max_per_page=20,
-                since_time=since_time,
-                until_time=until_time,
-            )
-        except TwitterApiAuthError as exc:
-            logger.error("_fetch_tweets: auth failure on %s: %s", call.call_id, exc)
-            self._errors.append(f"fetch.{call.call_id}: auth: {exc}")
-            return [], "error"
-        except (TwitterApiRateLimitError, TwitterApiServerError) as exc:
+        all_items: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        cur_until = until_time
+        still_truncated = False
+
+        for walk in range(_MAX_TRUNCATION_WALKS):
+            try:
+                items, truncated = api.run_search(
+                    call.query_string,
+                    max_results=max_results_cap,
+                    max_pages=max_pages_cap,
+                    max_per_page=20,
+                    since_time=since_time,
+                    until_time=cur_until,
+                )
+            except TwitterApiAuthError as exc:
+                logger.error(
+                    "_fetch_tweets: auth failure on %s: %s", call.call_id, exc
+                )
+                self._errors.append(f"fetch.{call.call_id}: auth: {exc}")
+                return all_items, ("error" if not all_items else "truncated")
+            except (TwitterApiRateLimitError, TwitterApiServerError) as exc:
+                logger.warning(
+                    "_fetch_tweets: rate/server error on %s: %s", call.call_id, exc
+                )
+                self._errors.append(f"fetch.{call.call_id}: {exc}")
+                return all_items, ("error" if not all_items else "truncated")
+            except Exception as exc:
+                logger.warning(
+                    "_fetch_tweets: error on %s: %s", call.call_id, exc
+                )
+                self._errors.append(f"fetch.{call.call_id}: {exc}")
+                return all_items, ("error" if not all_items else "truncated")
+
+            self._api_calls += 1
+            new_on_pass = 0
+            for it in items or []:
+                tid = str(it.get("id") or it.get("tweet_id") or "")
+                if tid and tid in seen_ids:
+                    continue
+                if tid:
+                    seen_ids.add(tid)
+                all_items.append(it)
+                new_on_pass += 1
+
+            if not truncated:
+                still_truncated = False
+                if walk > 0:
+                    logger.info(
+                        "_fetch_tweets: call_id=%s drained window after %d "
+                        "walk(s); total_items=%d",
+                        call.call_id,
+                        walk + 1,
+                        len(all_items),
+                    )
+                break
+
+            still_truncated = True
+            epochs = [
+                ep
+                for it in (items or [])
+                if (ep := _item_created_epoch(it)) is not None
+            ]
+            if not epochs:
+                logger.warning(
+                    "_fetch_tweets: call_id=%s truncated but no parseable "
+                    "created_at on %d items; cannot walk further "
+                    "(total_items=%d)",
+                    call.call_id,
+                    len(items or []),
+                    len(all_items),
+                )
+                break
+            oldest = min(epochs)
+            # until_time is exclusive; set upper bound to the oldest returned
+            # so the next Latest page covers older posts only.
+            if oldest <= since_time or oldest >= cur_until:
+                logger.warning(
+                    "_fetch_tweets: call_id=%s truncated; oldest_epoch=%s "
+                    "does not advance walk (since=%s cur_until=%s); "
+                    "stopping (total_items=%d)",
+                    call.call_id,
+                    oldest,
+                    since_time,
+                    cur_until,
+                    len(all_items),
+                )
+                break
             logger.warning(
-                "_fetch_tweets: rate/server error on %s: %s", call.call_id, exc
+                "_fetch_tweets: call_id=%s TRUNCATED pass=%d/%d n_pass=%d "
+                "total=%d window=[%s,%s] -> walk until=%s (%.1f min left)",
+                call.call_id,
+                walk + 1,
+                _MAX_TRUNCATION_WALKS,
+                new_on_pass,
+                len(all_items),
+                since_time,
+                cur_until,
+                oldest,
+                (oldest - since_time) / 60.0,
             )
-            self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return [], "error"
-        except Exception as exc:
-            logger.warning("_fetch_tweets: error on %s: %s", call.call_id, exc)
-            self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return [], "error"
+            cur_until = oldest
+        else:
+            # exhausted walk budget while still truncated
+            still_truncated = True
+            logger.warning(
+                "_fetch_tweets: call_id=%s still truncated after %d walks; "
+                "total_items=%d — caller must hold cursor",
+                call.call_id,
+                _MAX_TRUNCATION_WALKS,
+                len(all_items),
+            )
 
-        self._api_calls += 1
-        if truncated:
-            # The API still has more tweets in this window. The cap
-            # kicked in, so the 51st-and-older are not in `items`. If we
-            # advance the cursor anyway, those tweets fall into the gap
-            # [since, prior - 1min] and are never re-queried -- dedup
-            # cannot recover what was never stored.
-            return items, "truncated"
-        return items, "ok"
+        if still_truncated:
+            return all_items, "truncated"
+        return all_items, "ok"
 
-    # ------------------------------------------------------------------
-    # Step 3: Attribute
-    # ------------------------------------------------------------------
 
     def _attribute_items(
         self,
@@ -1455,29 +1601,43 @@ class CycleRunner:
             items, outcome = self._fetch_tweets(
                 call, api, window=(since_epoch, until_epoch)
             )
-            if outcome != "ok":
-                # Failed call (or an over-cap query, or a truncated
-                # response that hit the per-call ceiling): leave the cursor
-                # untouched so the next cycle re-sweeps this window rather
-                # than skipping it (R2). The outcome is carried through
-                # verbatim so an over-cap config problem cannot be misread as
-                # a transient network blip.
+            # Hard failures: no items to keep, hold cursor, move on.
+            # "truncated" is NOT a hard failure -- items were retrieved and
+            # must be persisted; only the cursor advance is withheld so the
+            # remainder of the window is re-swept next cycle.
+            if outcome in ("error", "length_cap_exceeded"):
+                logger.warning(
+                    "run: call_id=%s outcome=%s -- holding cursor, no persist",
+                    call.call_id,
+                    outcome,
+                )
                 call_entry["status"] = outcome
+                call_entry["cursor_advanced"] = False
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
                 continue
 
             if not items:
-                # Empty but successful sweep: advance (KTD5), else a quiet
-                # brand would re-request the same window forever.
-                if cursor_owned:
-                    _advance_cursor(
-                        call,
-                        upper_bound=datetime.fromtimestamp(
-                            until_epoch, tz=timezone.utc
-                        ),
+                if outcome == "ok":
+                    # Empty but successful sweep: advance (KTD5), else a quiet
+                    # brand would re-request the same window forever.
+                    if cursor_owned:
+                        call_entry["cursor_advanced"] = _advance_cursor(
+                            call,
+                            upper_bound=datetime.fromtimestamp(
+                                until_epoch, tz=timezone.utc
+                            ),
+                        )
+                    call_entry["status"] = "no_results"
+                else:
+                    # truncated with zero items -- hold cursor (R2)
+                    logger.warning(
+                        "run: call_id=%s outcome=truncated with 0 items -- "
+                        "holding cursor",
+                        call.call_id,
                     )
-                call_entry["status"] = "no_results"
+                    call_entry["status"] = "truncated"
+                    call_entry["cursor_advanced"] = False
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
                 continue
@@ -1493,7 +1653,9 @@ class CycleRunner:
             self._posts_attributed += len(kept)
             call_entry["n_kept"] = len(kept)
 
-            # Persist
+            # Persist -- including on truncated outcomes. Dropping the page
+            # was the C1 deadlock: every cycle re-fetched the same tip, never
+            # stored it, never advanced.
             n_inserted, n_attributed, n_persist_failed = self._persist_items(kept)
             self._posts_inserted += n_inserted
             call_entry["n_inserted"] = n_inserted
@@ -1510,23 +1672,20 @@ class CycleRunner:
                     kept_all.append(k)
                     seen_ids.add(tid)
 
-            call_entry["status"] = (
-                "completed" if not n_persist_failed else "persist_incomplete"
-            )
-            # Advance only when fetch AND attribute AND persist all succeeded.
-            # A rolled-back item means that tweet was never stored, so moving
-            # the cursor past its window would lose it permanently: the
-            # 1-minute overlap only re-covers the boundary, and tweet_id dedup
-            # only suppresses duplicates of writes that already landed. Holding
-            # the cursor costs a bounded re-fetch, which dedup absorbs.
-            if cursor_owned and not n_persist_failed:
-                call_entry["cursor_advanced"] = _advance_cursor(
-                    call,
-                    upper_bound=datetime.fromtimestamp(
-                        until_epoch, tz=timezone.utc
-                    ),
+            if outcome == "truncated":
+                call_entry["status"] = "truncated"
+                call_entry["cursor_advanced"] = False
+                logger.warning(
+                    "run: holding cursor for call_id=%s -- window TRUNCATED "
+                    "after n_results=%d n_kept=%d n_inserted=%d; re-sweep "
+                    "next cycle (items were persisted)",
+                    call.call_id,
+                    len(items),
+                    len(kept),
+                    n_inserted,
                 )
             elif n_persist_failed:
+                call_entry["status"] = "persist_incomplete"
                 call_entry["cursor_advanced"] = False
                 logger.warning(
                     "run: holding cursor for call_id=%s -- %d of %d items "
@@ -1535,6 +1694,17 @@ class CycleRunner:
                     n_persist_failed,
                     len(kept),
                 )
+            else:
+                call_entry["status"] = "completed"
+                # Advance only when fetch AND attribute AND persist all
+                # succeeded AND the window was fully drained.
+                if cursor_owned:
+                    call_entry["cursor_advanced"] = _advance_cursor(
+                        call,
+                        upper_bound=datetime.fromtimestamp(
+                            until_epoch, tz=timezone.utc
+                        ),
+                    )
             call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
             summary["calls"].append(call_entry)
             summary["totals"]["n_calls_run"] += 1

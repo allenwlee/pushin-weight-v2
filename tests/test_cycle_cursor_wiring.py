@@ -309,8 +309,9 @@ def test_persist_failure_does_not_advance_the_cursor(wired, monkeypatch):
 
     Reported by a peer review session against 26d9071.
     """
-    from core.models import CallState, Post
+    from core.models import Brand, CallState, Post
 
+    Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
 
     def boom(raw, account=None):
@@ -340,8 +341,9 @@ def test_partial_persist_failure_still_holds_the_cursor(wired, monkeypatch):
     The successful items are already stored and dedup will discard them on the
     re-sweep, so holding is cheap; advancing would strand the failed one.
     """
-    from core.models import CallState, Post
+    from core.models import Brand, CallState, Post
 
+    Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
     real_upsert = cycle_mod._upsert_post
 
@@ -367,8 +369,9 @@ def test_partial_persist_failure_still_holds_the_cursor(wired, monkeypatch):
 
 def test_clean_persist_still_advances_the_cursor(wired):
     """Guard against over-correcting: a fully successful call must advance."""
-    from core.models import CallState
+    from core.models import Brand, CallState
 
+    Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
     tweet = _tweet("clean")
     tweet["text"] = "DeepSeek just shipped a new model"
@@ -380,18 +383,17 @@ def test_clean_persist_still_advances_the_cursor(wired):
 
 
 def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
-    """A window that contains more than max_results=50 tweets must NOT advance
-    the cursor past what was actually retrieved.
+    """A window that hits the per-call ceiling must NOT advance the cursor.
 
     TwitterAPI.io answers advanced_search with up to max_results per call. If
-    the window contains 60 tweets, the first 50 are returned and the 51st
-    and beyond are lost -- they were never stored, and the next cycle's
-    window starts at (prior - 1min), so tweets older than until_time - 1min
-    are never re-queried. tweet_id dedup cannot recover what was never
-    stored.
+    the window contains more tweets than the cap, truncated=True. Advancing
+    would strand the unreturned older posts forever. Items that *were*
+    returned must still be eligible for persist (see sibling test); this
+    test pins the hold-cursor half of the contract.
     """
-    from core.models import CallState, Post
+    from core.models import Brand, CallState
 
+    Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
 
     class TruncatingApi:
@@ -400,14 +402,18 @@ def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
 
         def run_search(self, query, **kwargs):
             self.calls.append({"query": query, **kwargs})
-            # Return exactly 50 distinct tweets -- the cap. None of them
-            # attribute to a real brand, so they all get dropped before
-            # persistence, but the cap is what matters here.
+            n = int(kwargs.get("max_results") or 50)
+            until = int(kwargs.get("until_time") or 0)
+            base = until - 3600 if until else 1_753_430_400
             return [
-                {**_tweet(f"id-{i}"), "text": "DeepSeek does things",
-                 "created_at": "Sat Jul 25 12:00:00 +0000 2026"}
-                for i in range(50)
-            ]
+                {
+                    **_tweet(f"id-{until}-{i}"),
+                    "text": "DeepSeek does things",
+                    "created_at": "Sat Jul 25 12:00:00 +0000 2026",
+                    "created_at_epoch": base - i,
+                }
+                for i in range(n)
+            ], True
 
     api = TruncatingApi()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: [call])
@@ -417,13 +423,105 @@ def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
     )
-    CycleRunner(cycle_kind="scheduled").run()
+    stats = CycleRunner(cycle_kind="scheduled").run()
 
-    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
-        "cursor advanced past a window that returned 50 (the cap), meaning "
-        "the next cycle starts at prior - 1min -- but the 51st-and-older "
-        "tweets in that window were never returned and so are lost forever"
+    entry = [c for c in stats["calls"] if c["call_id"] == "B1"][-1]
+    assert entry["status"] == "truncated", (
+        f"expected truncated status, got {entry['status']!r}"
     )
+    assert entry.get("cursor_advanced") is False
+    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "cursor advanced past a truncated window -- older tweets in that "
+        "window would never be re-queried"
+    )
+    assert len(api.calls) >= 2, (
+        f"expected truncation walks, only {len(api.calls)} run_search call(s)"
+    )
+
+
+def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
+    """Truncation must not discard the page: persist items, hold cursor.
+
+    C1 deadlock root cause: every cycle re-fetched the tip, threw away the
+    results on outcome=truncated, and never advanced -- zero progress forever.
+    """
+    from core.models import Brand, CallState, Post
+
+    Brand.objects.get_or_create(nickname="deepseek")
+    call = _planned()
+
+    class TruncatingApi:
+        def __init__(self):
+            self.calls = []
+
+        def run_search(self, query, **kwargs):
+            self.calls.append({"query": query, **kwargs})
+            # First pass: truncated with attributable items.
+            # Later walks: empty+not-truncated would flip to ok; keep
+            # truncated so the call stays status=truncated after budget.
+            until = int(kwargs.get("until_time") or 1_753_434_000)
+            n = 5
+            return [
+                {
+                    **_tweet(f"keep-{until}-{i}"),
+                    "text": "DeepSeek just shipped a new model",
+                    "created_at": "Sat Jul 25 12:00:00 +0000 2026",
+                    "created_at_epoch": until - 10 - i,
+                }
+                for i in range(n)
+            ], True
+
+    api = TruncatingApi()
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: [call])
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+    )
+    monkeypatch.setattr(
+        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+    )
+    stats = CycleRunner(cycle_kind="scheduled").run()
+
+    entry = [c for c in stats["calls"] if c["call_id"] == "B1"][-1]
+    assert entry["status"] == "truncated"
+    assert entry["n_inserted"] >= 1, (
+        f"truncated path must persist attributable items; n_inserted="
+        f"{entry.get('n_inserted')}"
+    )
+    assert Post.objects.filter(tweet_id__startswith="keep-").exists(), (
+        "no posts persisted on truncated outcome"
+    )
+    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
+        "cursor must still be held when truncated"
+    )
+
+
+def test_c1_uses_raised_result_ceiling(wired, monkeypatch):
+    """C1 must request at least _C1_MAX_RESULTS so the tip can drain."""
+    call = _planned(call_id="C1", brand_id="mimo")
+    seen = {}
+
+    class CaptureApi:
+        def run_search(self, query, **kwargs):
+            seen["max_results"] = kwargs.get("max_results")
+            seen["max_pages"] = kwargs.get("max_pages")
+            return [], False
+
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: [call])
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: CaptureApi())
+    )
+    monkeypatch.setattr(
+        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+    )
+    monkeypatch.setattr(
+        cycle_mod.settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50, raising=False
+    )
+    monkeypatch.setattr(
+        cycle_mod.settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", 5, raising=False
+    )
+    CycleRunner(cycle_kind="scheduled").run()
+    assert seen["max_results"] >= cycle_mod._C1_MAX_RESULTS, seen
+    assert seen["max_pages"] >= cycle_mod._C1_MAX_PAGES, seen
 
 
 def test_truncated_with_empty_attribution_still_holds_cursor(wired, monkeypatch):
@@ -469,8 +567,9 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
 
     The cap was hit but the window is exhausted -- safe to advance.
     """
-    from core.models import CallState
+    from core.models import Brand, CallState
 
+    Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
 
     class CappedButExhausted:
