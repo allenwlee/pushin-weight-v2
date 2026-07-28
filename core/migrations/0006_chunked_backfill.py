@@ -179,7 +179,7 @@ def _noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("core", "0005_fix_posts_fks_on_delete_set_null"),
+        ("core", "0003_backfill_post_twitterapi_columns"),
     ]
 
     operations = [

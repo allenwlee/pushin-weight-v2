@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0003_backfill_post_twitterapi_columns'),
+        ('core', '0006_chunked_backfill'),
     ]
 
     operations = [
