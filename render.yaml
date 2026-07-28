@@ -36,7 +36,7 @@ cronJobs:
   - name: pushinweight-harvest
     runtime: python
     plan: starter
-    schedule: "*/15 * * * *"
+    schedule: "0 0 31 2 *"
     buildCommand: ./build.sh
     startCommand: python manage.py run_cycle --limit-per-call 50
     envVars:
