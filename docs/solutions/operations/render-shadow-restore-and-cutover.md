@@ -10,6 +10,8 @@ origin_session: 2026-07-29 (fuchitalee, M3.0)
 origin_issue: docs/issues/2026-07-29-internal-restore-failed-pg-restore-eof.md
 origin_plan: docs/plans/2026-07-29-002-fix-zero-downtime-prod-db-ops-plan.md
 
+---
+
 # Render Postgres — shadow-restore + cutover recipe
 
 ## TL;DR
@@ -184,6 +186,8 @@ posts-raw-denormalize-staging-verified-2026-07-28.md`.
 3. Smoke: `render psql <shadow-db> -c "SELECT count(*) FROM posts;"`
 4. Smoke: web returns 200, feed loads.
 
+> **Cutover verification (post-deploy)**: After step 1 sets `DATABASE_URL` on the new live DB instance, verify on the dashboard that each dependent service's `DATABASE_URL` env var actually resolved to the new connection string. Render's blueprint sync from `fromDatabase` in render.yaml is not reliable on a previously-deployed service — the running service may keep the old `DATABASE_URL` even after the new deploy. If the build fails because `migrate` couldn't connect to the OLD DB hostname, that means the env var stayed stale. Manually override `DATABASE_URL` on each service via the dashboard. Watch the first 30 minutes of `/feed/` and `/accounts/login/` for 502s after every cutover.
+
 **Path B — atomic schema rename (single instance, advanced):**
 
 ```sql
@@ -235,6 +239,7 @@ After cutover, all must be true:
 - [ ] Old DB dropped after ≥1 green harvest cycle
 - [ ] `render.yaml` cron schedule restored to operational value
 - [ ] Originating issue closed with verified pin doc link
+- [ ] After deploy: `render deploys list` shows the latest deploy 'Live' AND a quick `curl -I https://<service-url>/accounts/login/` returns 200 (not 502). If you see 502 immediately after cutover, the env var stayed stale.
 
 ## Sources
 

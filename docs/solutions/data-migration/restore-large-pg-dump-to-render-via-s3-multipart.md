@@ -14,8 +14,10 @@ related_recipe: docs/solutions/operations/render-shadow-restore-and-cutover.md
 resolution_summary: |
   28,822 posts restored to pushinweight-db-shadow via boto3 multipart upload to S3
   + SSH to Render container + pg_restore against the internal DB hostname.
-  All 4 Render services cut over via render.yaml fromDatabase switch.
-  Manual harvest cycle verified (job-d9ktedrm8hqs738r59ug).
+  All 4 Render services cut over via render.yaml fromDatabase switch; the
+  env-var refresh required a dashboard override on each service because
+  render.yaml `fromDatabase` does not reliably rewrite a previously-deployed
+  service's `DATABASE_URL`. Manual harvest cycle verified (job-d9ktedrm8hqs738r59ug).
 
 ---
 # Restore a 40 MB pg_dump to Render Postgres from a home network that silently drops large HTTPS writes
@@ -182,6 +184,58 @@ databases:
 ```
 
 Apply this on the service that owns the database binding (Render rewires `DATABASE_URL` on every service that reads it). After the commit + auto-deploy, all four services (`pushinweight-web` `srv-d9go2breo5us73cg6vqg`, `pushinweight-worker` `srv-d9go2breo5us73cg6vr0`, `pushinweight-beat` `srv-d9go2breo5us73cg6vrg`, and the `pushinweight-harvest` cron `crn-d9gv94o4n6ts739tqaug`) point at the shadow URL atomically. Verified by commit `beb762c` pushed on 2026-07-29.
+
+#### ⚠️ Verify the env var updated — render.yaml `fromDatabase` is not enough
+
+The step above worked in design but the live recovery showed that `fromDatabase` in `render.yaml` is **not sufficient** to rewire a previously-deployed service's `DATABASE_URL`. The blueprint sync that Render runs on a deploy keeps the existing env var value; it does not overwrite it with the resolved connection string of the new `fromDatabase` source.
+
+**Symptom**: After `beb762c` deployed and went Live, `render.yaml` correctly read `fromDatabase: pushinweight-db-shadow`, but the runtime env var on `pushinweight-web` was still the OLD hostname (`dpg-d9go1njeo5us73cg5u00-a`, the deleted DB). The site started returning `502 Bad Gateway` on `/accounts/login/` within minutes of the deploy. Logs showed:
+
+```
+django.db.utils.OperationalError: could not translate host name "dpg-d9go1njeo5us73cg5u00-a" to address: Name or service not known
+```
+
+**Cause**: Render's blueprint sync on a previously-deployed service preserves the existing `DATABASE_URL` rather than re-resolving it from the new `fromDatabase` source. The first deploy after the cutover kept the old env var. Three subsequent deploys (`695c38e`, `f28faf2`, `22336a7`) all failed with `Build Failed` because the `build.sh` `migrate` step tried to connect to the deleted DB and failed DNS resolution. The build failure prevented the env var update from completing on those deploys. The running service kept the stale `DATABASE_URL` for the duration.
+
+**Verification** — run this on the web service immediately after the auto-deploy goes Live. The output should show successful DB connections, NOT `failed to resolve host 'dpg-<old-id>'`:
+
+```bash
+render logs -r srv-d9go2breo5us73cg6vqg --limit 100
+# expect: django.db.backends.postgresql connection messages
+# do NOT expect: failed to resolve host 'dpg-d9go1njeo5us73cg5u00-a'
+```
+
+If you see the OLD hostname in the logs, the env var stayed stale. **Do not** rely on `render deploys list` showing `Live` — a service can be Live with a stale env var.
+
+**Fix**: open the Render dashboard → `pushinweight-web` → Environment → `DATABASE_URL` → edit → paste the new shadow connection string (`postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow`) → Save. Render will trigger a redeploy automatically. Repeat for `pushinweight-worker`, `pushinweight-beat`, and `pushinweight-harvest` (the cron). This is the only path that forces an env var refresh; the CLI's `render deploys create` triggers a rebuild but does not force env var refresh, and if the build fails the running service keeps the old env var.
+
+The dashboard edit is manual but it is the only reliable path. The Render CLI/REST API exposes env var reads but the env var writes on a previously-deployed service do not propagate through the blueprint-sync layer in the way you'd expect; the dashboard is the canonical surface for this update.
+
+**Prevention**: After every `render.yaml` cutover, verify `DATABASE_URL` on every dependent service via the dashboard. The CLI's `render deploys create` triggers a rebuild but does NOT force env var refresh. If the build fails, the running service keeps the old env var. The recipe doc (`docs/solutions/operations/render-shadow-restore-and-cutover.md`) has been updated with a calibration note and a post-cutover check for this exact failure mode.
+
+**Operator command-list after a cutover**:
+
+```bash
+# 1. Confirm deploy went Live
+render deploys list --service srv-d9go2breo5us73cg6vqg | head -5
+
+# 2. Confirm DB connections are succeeding on the web service
+render logs -r srv-d9go2breo5us73cg6vqg --limit 100
+# expect: connection messages, NOT 'failed to resolve host'
+
+# 3. Confirm the env var actually points at the new DB
+ssh -o StrictHostKeyChecking=accept-new srv-d9go2breo5us73cg6vqg@ssh.oregon.render.com \
+    'env | grep ^DATABASE_URL_ | head -1; echo "---"; printenv | grep -E "^DATABASE_URL"'
+# expect: postgresql://pushinweight_shadow:...@dpg-d9koekqjobas73fvjqng-a/...
+# do NOT expect: dpg-d9go1njeo5us73cg5u00-a  (the deleted DB)
+
+# 4. Confirm the site returns 200, not 502
+curl -I https://pushinweight.ai/accounts/login/
+# expect: HTTP/2 200
+
+# 5. If any check fails, fix via the dashboard (Environment → DATABASE_URL)
+#    then re-run 1-4.
+```
 
 #### 8. Smoke test + verify harvest cron
 
