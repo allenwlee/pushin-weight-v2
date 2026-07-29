@@ -48,8 +48,11 @@ forbidden — it has caused **two** 0-table prod incidents in this repo
 - Cron paused before load+cutover (change schedule to `"0 0 31 2 *"`
   in `render.yaml`, deploy, then revert after recovery verified). See
   the decision documented in plan 2026-07-29-002 §U0.
-- md5-pinned dump file on fuchitalee (or scp'd to the operator host).
-  Verify md5 *before* any schema work.
+- md5-pinned dump file on fuchitalee. Verify md5 *before* any schema work.
+  Note: `scp` from fuchitalee to the operator host is **not** a viable transport for
+  dumps > 5 MB — fuchitalee's home router has a ~1400-byte PMTU blackhole on long
+  HTTPS writes. Use the recipe in `docs/solutions/data-migration/restore-large-pg-dump-to-render-via-s3-multipart.md`
+  (S3 multipart + SSH + Render internal path) to get the dump into Render's network.
 - IP allowlist on the shadow DB opened to wherever the restore job runs
   (`0.0.0.0/0` matches prod; tighten after recovery).
 
@@ -102,6 +105,36 @@ to fight it.
 CREATE SCHEMA shadow;
 GRANT ALL ON SCHEMA shadow TO <db_user>;
 ```
+
+### 2.5 Transfer the dump into Render's network
+
+This step is **not** as simple as `scp` or `aws s3 cp` from fuchitalee.
+Fuchitalee's home router silently drops large outgoing packets (>1400-byte payload)
+on long-lived HTTPS writes, so single PUTs of 40 MB+ to any cloud storage stall
+at ~12 MB before the TCP socket enters `CloseWait`. Repeating the bad assumption
+costs 3-4 hours of public-internet `pg_restore` at 3-4 rows/sec. The recommended
+path is documented in full at
+`docs/solutions/data-migration/restore-large-pg-dump-to-render-via-s3-multipart.md`.
+Summary:
+
+1. **Upload to S3 with boto3 multipart, 5 MB parts, dualstack endpoint**:
+   `https://s3.dualstack.us-west-2.amazonaws.com`. Each part is small enough
+   that the home router's PMTU doesn't trigger packet drops. The dualstack
+   endpoint adds IPv6 as a fallback path if IPv4 stalls.
+2. Generate a **1-hour presigned URL** with `aws s3 presign`.
+3. **SSH directly to the Render service** (bypasses the dashboard's reconnecting
+   WebSocket shell):
+   `ssh -o StrictHostKeyChecking=accept-new <service-id>@ssh.oregon.render.com`.
+4. From inside Render: `curl -fsSL -o /tmp/dump.bin "<presigned-url>"` then
+   `md5sum /tmp/dump.bin` to verify (Render's egress is data-center, no NAT timeout).
+5. Continue with section 3 below (`pg_restore` against the internal DB hostname).
+
+**Why this works**: fuchitalee's home router can't deliver 40 MB in a single
+HTTPS write, but it CAN deliver many short writes. Render's egress is a
+data-center NIC with no NAT timeout, so the fetch from inside Render succeeds
+where the same fetch from fuchitalee would have stalled. The dashboard shell
+tab is a separate Render WebSocket pool from the API/CLI SSH path; the SSH
+login works even when the dashboard is reconnecting.
 
 ### 3. Restore into shadow
 
