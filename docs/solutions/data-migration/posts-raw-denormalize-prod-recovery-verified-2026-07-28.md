@@ -24,7 +24,10 @@ The cron schedule is reverted to `*/15 * * * *`. Future harvest cycles populate 
 
 After recovery completes, the prod DB has these properties:
 
-- `posts. row count: ~97 (61 restored + ~36 harvested post-cron-resume; full 28,822 unreachable due to pg_restore bandwidth constraints from fuchitalee → Render)
+- `posts` row count: **28,822** (current verified state as of 2026-07-29; the prior
+  ~97 figure was the 2026-07-28 partial recovery, not the final state — see
+  `docs/solutions/data-migration/restore-large-pg-dump-to-render-via-s3-multipart.md`
+  for the working S3-multipart path that recovered the full 28,822)
 - `posts` column count: 76 (26 original + 50 typed columns added by 0002)
 - `raw` column: absent (dropped by 0004)
 - `view_count IS NOT NULL`: 28,822 (backfilled by 0006)

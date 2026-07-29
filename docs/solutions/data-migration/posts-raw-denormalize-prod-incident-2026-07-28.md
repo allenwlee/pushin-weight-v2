@@ -270,4 +270,6 @@ Post-deploy state: 76 columns, 0 raw, all 61 restored posts have populated typed
 
 Caveat: only 61 of 28,822 posts were restored (the rest hit bandwidth limits during the slow pg_restore from fuchitalee over the public internet to Render's free-tier Postgres). Harvest cron resumed on */15 * * * *; 36 new posts harvested in the first 30 min post-resume, all with typed columns populated by U3 code. The remaining 28,761 historical posts have NULL typed columns until re-fetched by harvest (TwitterAPI.io is paid per call; user accepted this loss).
 
+**Update 2026-07-29**: The 28,761 historical posts were fully recovered on 2026-07-29 via the S3 multipart + SSH + Render-internal path documented in `docs/solutions/data-migration/restore-large-pg-dump-to-render-via-s3-multipart.md`. The 'user accepted this loss' assessment above is no longer accurate. The full 28,822 posts are now in prod with typed columns populated.
+
 See posts-raw-denormalize-prod-recovery-verified-2026-07-28.md for the pinned end-state values that future drift will fail loudly against.
