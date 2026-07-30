@@ -681,13 +681,13 @@ class Command(BaseCommand):
                 summary["failed"] += 1
 
             # Rate-limit guard: TwitterAPI appears to use 404 as a
-            # stealth throttle during bulk lookups. Sleeping 1.5s
+            # stealth throttle during bulk lookups. Sleeping 0.25s
             # between groups keeps us well under any reasonable rate
-            # limit (~40 calls/min). The retry-with-backoff in
-            # _twitterapi_lookup handles transient 404s that slip
-            # through.
+            # limit (~240 calls/min) while still amortizing thread
+            # overhead. The retry-with-backoff in _twitterapi_lookup
+            # handles transient 404s that slip through.
             if not options["dry_run"]:
-                time.sleep(1.5)
+                time.sleep(0.25)
 
         if options["json"]:
             self.stdout.write(json.dumps(summary, indent=2, default=str))
