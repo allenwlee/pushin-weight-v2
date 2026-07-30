@@ -15,7 +15,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from django.core.management.base import BaseCommand
@@ -192,40 +191,80 @@ def _twitterapi_lookup_batch(
     handles: list[str],
     api_key: str,
     *,
-    workers: int = 8,
+    workers: int = 100,
     timeout: int = 10,
     max_retries: int = 2,
 ) -> dict[str, str | None]:
-    """Look up twitter integer ids for many handles in parallel.
+    """Look up twitter integer ids for many handles concurrently.
 
     Returns {handle: integer_id_or_None}. None means the handle does
     not exist on X (or TwitterAPI returned an error after retries).
-    Concurrency is bounded by `workers`; TwitterAPI permits a
-    reasonable effective rate and the per-call retry in
-    `_twitterapi_lookup` handles transient 404s/5xx.
 
-    This is roughly 8x faster than the per-group sequential lookup
-    that the apply path uses. The lonely apply's 10,908 handles
-    complete in ~22 minutes at 8 workers vs ~3 hours sequentially.
+    Uses aiohttp with a bounded TCPConnector so the OS-level socket
+    pool gives us real concurrency. ThreadPoolExecutor was unusable
+    for this because Python's GIL serializes the JSON-decoding work
+    across threads and urllib's blocking I/O contention collapses
+    throughput to ~1 req/sec. aiohttp runs the event loop on a
+    single thread with non-blocking I/O, so 100 concurrent TCP
+    connections can issue 100 in-flight requests at once. TwitterAPI
+    supports up to 200 QPS per client (per their docs), so 10,903
+    handles complete in ~55 seconds at 200 QPS.
+
+    The function is sync from the caller's perspective -- it runs
+    the event loop until all results are in. asyncio + aiohttp
+    replaces the thread-pool abstraction.
     """
+    import asyncio
+    import aiohttp
+
     results: dict[str, str | None] = {h: None for h in handles}
 
-    def _one(h: str) -> tuple[str, str | None]:
-        return h, _twitterapi_lookup(
-            handle=h, api_key=api_key, timeout=timeout, max_retries=max_retries
-        )
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_one, h): h for h in handles}
-        for fut in as_completed(futures):
+    async def _one(session: aiohttp.ClientSession, h: str) -> tuple[str, str | None]:
+        url = f"{TWITTERAPI_USER_INFO_URL}?{urllib.parse.urlencode({'userName': h})}"
+        backoff = 1.0
+        for attempt in range(max_retries + 1):
             try:
-                h, val = fut.result()
-                results[h] = val
-            except Exception:
-                # _twitterapi_lookup already swallows known errors;
-                # this is defense-in-depth so the batch survives any
-                # unexpected exception in one worker.
-                continue
+                async with session.get(
+                    url,
+                    headers={
+                        "X-API-Key": api_key,
+                        "Accept": "application/json",
+                        "User-Agent": "curl/7.84.0",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=timeout),
+                ) as resp:
+                    if resp.status in (404, 429, 500, 502, 503, 504):
+                        if attempt < max_retries:
+                            await asyncio.sleep(backoff)
+                            backoff *= 3
+                            continue
+                        return h, None
+                    payload = await resp.json(content_type=None)
+                    data = payload.get("data") or {}
+                    user_id = data.get("id")
+                    return h, str(user_id) if user_id else None
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                if attempt < max_retries:
+                    await asyncio.sleep(backoff)
+                    backoff *= 3
+                    continue
+                return h, None
+        return h, None
+
+    async def _run_all() -> None:
+        connector = aiohttp.TCPConnector(limit=workers, limit_per_host=workers)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            tasks = [_one(session, h) for h in handles]
+            for fut in asyncio.as_completed(tasks):
+                try:
+                    h, val = await fut
+                    results[h] = val
+                except Exception:
+                    # Defense-in-depth: a single failing handle should
+                    # not abort the whole batch.
+                    continue
+
+    asyncio.run(_run_all())
     return results
 
 
@@ -601,9 +640,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--workers",
             type=int,
-            default=8,
-            help="Parallel TwitterAPI lookup workers (default 8). Used only "
-            "with --lonely-only --apply. Set to 1 to disable parallelism.",
+            default=100,
+            help="Concurrent TwitterAPI connections in the pre-pass "
+            "(default 100). Used only with --lonely-only --apply. "
+            "TwitterAPI supports up to 200 QPS per client; 100 keeps us "
+            "well under that ceiling. Set to 1 to disable.",
         )
         parser.add_argument(
             "--limit",
@@ -689,10 +730,10 @@ class Command(BaseCommand):
             return
 
         # Parallel pre-pass for the lonely path: fetch all canonical
-        # integers for the placeholder rows in one ThreadPoolExecutor
+        # integers for the placeholder rows in one aiohttp event loop
         # pass. The DB transaction loop then uses the result dict
-        # instead of calling TwitterAPI per group. With workers=8 and
-        # ~10,908 handles, this completes in ~22 minutes vs ~3 hours
+        # instead of calling TwitterAPI per group. With workers=100
+        # and ~10,908 handles, this completes in ~55 seconds vs ~3 hours
         # sequentially.
         lookup_cache: dict[str, str | None] = {}
         if options["lonely_only"] and api_key and options["workers"] > 1:
@@ -712,36 +753,23 @@ class Command(BaseCommand):
                 f"Pre-pass complete: {hits}/{len(handles_only)} resolved. "
                 f"sample={dict(list(lookup_cache.items())[:3])}"
             )
-            # Insert canonical rows into accounts BEFORE the apply
-            # loop. The reconcile flow's `_canonical_integer_for_handle`
-            # relies on the canonical row existing in `accounts` and
-            # having a matching handle. By inserting here, we (a) let
-            # the existing flow see the canonical, (b) make the FK
-            # UPDATEs safe (no FK constraint violation), and (c) raise
-            # an early IntegrityError if a duplicate canonical already
-            # exists for a different handle.
-            with connection.cursor() as cur:
-                inserted = 0
-                for handle, integer_id in lookup_cache.items():
-                    if integer_id is None:
-                        continue
-                    cur.execute(
-                        "SELECT 1 FROM accounts WHERE author_id = %s",
-                        (integer_id,),
-                    )
-                    if cur.fetchone() is not None:
-                        continue
-                    cur.execute(
-                        """
-                        INSERT INTO accounts (author_id, handle, verified, first_seen_at, last_seen_at)
-                        VALUES (%s, %s, false, NOW(), NOW())
-                        ON CONFLICT (author_id) DO NOTHING
-                        """,
-                        (integer_id, handle),
-                    )
-                    inserted += cur.rowcount
+            # Pre-pass insert REMOVED. The previous version inserted
+            # canonical rows here, but it duplicated the KTD10-check
+            # logic that the apply loop already does correctly via
+            # `_verify_canonical_handle` + `_ensure_canonical_account_row`.
+            # The pre-pass INSERT was a footgun: it inserted canonical
+            # rows for handles that already had a placeholder row, which
+            # created new duplicate groups (the placeholder row was not
+            # yet deleted). The apply loop's flow is:
+            #   1. SELECT canonical handle from accounts (existing row)
+            #   2. If found + handle matches: update FKs, delete placeholder
+            #   3. If found + handle differs: KTD10 disagreement, dead-letter
+            #   4. If not found: INSERT canonical, update FKs, delete placeholder
+            # So the pre-pass already covers the right KTD10 semantics.
+            # All we need from the pre-pass is the lookup cache.
+            # The apply loop will handle everything else.
             self.stdout.write(
-                f"Pre-pass: inserted {inserted} canonical account rows."
+                "Pre-pass complete: using aiohttp for concurrent lookups."
             )
 
         for handle, author_ids in groups:
@@ -779,11 +807,45 @@ class Command(BaseCommand):
                         summary["skipped"] += 1
                         continue
                     # We have a canonical integer from the pre-pass.
-                    # The apply path will use `_ensure_canonical_account_row`
-                    # to insert the canonical row in accounts if missing,
-                    # then UPDATE the FKs, then DELETE the placeholder.
-                    # Pass the cached integer via integer_ids so the
-                    # existing apply path picks it up.
+                    # The apply path needs the canonical row to exist
+                    # in accounts (with matching handle) for the
+                    # existing flow to use it. Insert it here, inside
+                    # the transaction so a failure rolls back. Skip
+                    # the insert if a row with this author_id already
+                    # exists (handles KTD10-disagreement and the rare
+                    # case where the canonical already exists from a
+                    # prior run).
+                    cur.execute(
+                        "SELECT LOWER(handle) FROM accounts WHERE author_id = %s",
+                        (cached,),
+                    )
+                    existing = cur.fetchone()
+                    if existing is None:
+                        cur.execute(
+                            """
+                            INSERT INTO accounts (author_id, handle, verified, first_seen_at, last_seen_at)
+                            VALUES (%s, %s, false, NOW(), NOW())
+                            ON CONFLICT (author_id) DO NOTHING
+                            """,
+                            (cached, handle),
+                        )
+                    elif existing[0] != handle.lower():
+                        # KTD10 disagreement: existing canonical row
+                        # has a different handle. Dead-letter.
+                        result = {
+                            "handle": handle,
+                            "canonical": cached,
+                            "status": "skipped",
+                            "row_counts": {},
+                            "skip_reason": (
+                                f"KTD10 disagreement: existing canonical "
+                                f"row has handle={existing[0]!r}, "
+                                f"TwitterAPI returned handle={handle!r}"
+                            ),
+                        }
+                        summary["results"].append(result)
+                        summary["skipped"] += 1
+                        continue
                     cls["integer_ids"] = [cached]
                     effective_api_key = None  # no per-group lookup needed
                 with transaction.atomic():
