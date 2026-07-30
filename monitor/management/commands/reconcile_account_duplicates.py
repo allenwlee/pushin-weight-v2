@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -141,21 +142,43 @@ def _twitterapi_lookup(
     handle: str,
     api_key: str,
     timeout: int = 10,
+    max_retries: int = 3,
 ) -> str | None:
+    """Look up the canonical integer author_id for a handle.
+
+    Retries transient 404s and 5xx responses with exponential backoff
+    (1s, 3s, 9s). TwitterAPI.io appears to use 404 as a stealth throttle
+    during bulk lookups (handles that resolve 200 during a smoke
+    probe return 404 during a batch run). Persistent 404 (after
+    retries) is treated as a real handle-not-found and returns None.
+    """
     qs = urllib.parse.urlencode({"userName": handle})
     url = f"{TWITTERAPI_USER_INFO_URL}?{qs}"
-    req = urllib.request.Request(
-        url,
-        headers={"X-API-Key": api_key, "Accept": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-        return None
-    data = payload.get("data") or {}
-    user_id = data.get("id")
-    return str(user_id) if user_id else None
+    headers = {"X-API-Key": api_key, "Accept": "application/json"}
+    backoff = 1.0
+    for attempt in range(max_retries + 1):
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            data = payload.get("data") or {}
+            user_id = data.get("id")
+            return str(user_id) if user_id else None
+        except urllib.error.HTTPError as exc:
+            # 404 is the suspected rate-limit signal; 5xx is transient.
+            # 401 is real auth failure; do not retry.
+            if exc.code in (404, 429, 500, 502, 503, 504) and attempt < max_retries:
+                time.sleep(backoff)
+                backoff *= 3
+                continue
+            return None
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            if attempt < max_retries:
+                time.sleep(backoff)
+                backoff *= 3
+                continue
+            return None
+    return None
 
 
 def _verify_canonical_handle(
@@ -330,8 +353,51 @@ def _repoint_fk(cur, *, canonical: str, placeholder_ids: list[str], handle: str)
     columns use a non-deterministic `case_insensitive` Postgres
     collation which rejects ILIKE. LOWER() = LOWER() is portable
     across all collations.
+
+    brands_accounts special case: the live harvest often inserts a
+    `(brand_id, canonical_accounts_id)` row BEFORE the placeholder
+    seeding inserts a `(brand_id, placeholder_author_id)` row. When
+    we try to repoint the placeholder's row to the canonical integer,
+    the unique `brands_accounts_pkey` constraint fires because the
+    canonical row for that brand already exists. The fix is to detect
+    existing `(brand_id, canonical_accounts_id)` rows up front and
+    DELETE the placeholder's row in `brands_accounts` BEFORE the
+    UPDATE -- so the UPDATE has nothing to repoint for that brand,
+    and the canonical row that already satisfied the constraint is
+    preserved. The deferred per-row count for `brands_accounts`
+    reports `rows_updated`, not `rows_deleted`; the deleted-source
+    rows are reported separately as `brands_accounts_source_deleted`.
     """
     counts: dict[str, int] = {}
+
+    # brands_accounts: pre-pass to drop placeholder rows whose canonical
+    # integer already exists for the same brand_id. This avoids the
+    # brands_accounts_pkey collision in the UPDATE.
+    cur.execute(
+        """
+        SELECT DISTINCT ba.brand_id
+        FROM brands_accounts ba
+        WHERE ba.accounts_id = ANY(%s)
+          AND EXISTS (
+            SELECT 1 FROM brands_accounts ba2
+            WHERE ba2.accounts_id = %s
+              AND ba2.brand_id = ba.brand_id
+          )
+        """,
+        (placeholder_ids, canonical),
+    )
+    conflicting_brands = [row[0] for row in cur.fetchall()]
+    if conflicting_brands:
+        cur.execute(
+            """
+            DELETE FROM brands_accounts
+            WHERE accounts_id = ANY(%s)
+              AND brand_id = ANY(%s)
+            """,
+            (placeholder_ids, conflicting_brands),
+        )
+    counts["brands_accounts_source_deleted"] = cur.rowcount if conflicting_brands else 0
+
     for tbl, fk_col, has_handle_col in (
         ("posts", "author_id", True),
         ("account_post_appearances", "author_id", False),
@@ -613,6 +679,15 @@ class Command(BaseCommand):
                 summary["skipped"] += 1
             elif result["status"] == "failed":
                 summary["failed"] += 1
+
+            # Rate-limit guard: TwitterAPI appears to use 404 as a
+            # stealth throttle during bulk lookups. Sleeping 1.5s
+            # between groups keeps us well under any reasonable rate
+            # limit (~40 calls/min). The retry-with-backoff in
+            # _twitterapi_lookup handles transient 404s that slip
+            # through.
+            if not options["dry_run"]:
+                time.sleep(1.5)
 
         if options["json"]:
             self.stdout.write(json.dumps(summary, indent=2, default=str))
