@@ -131,3 +131,32 @@ The migration's precheck exists specifically to fail LOUDLY before the unique in
 The apply path is slow (~30-60 min for 2K groups). Run it during low-traffic windows; the cron is paused so there's no harvest contention, but a partial-apply run can leave the DB in a half-reconciled state if interrupted. Always re-run with `--apply` (idempotent) to complete; never `--dry-run` after a partial apply — dry-run doesn't write, so the half-reconciled state persists.
 
 If `--apply` fails partway through, inspect `pg_stat_activity` for a hung cursor and re-run `--apply` (idempotent: groups whose canonical row is already integer and placeholders already deleted are skipped because the duplicate group no longer exists).
+## 2026-07-30 — Phase 2 partial apply
+
+(see docs/investigations/2026-07-30-002-phase-2-partial-final-report.md for full report)
+
+Residual apply: 69 groups, 40 merged, 29 dead-lettered (TwitterAPI 404).
+Phase 2 (lonely placeholders): 226 of 10,908 resolved via aiohttp
+parallel pre-pass. 10,681 remaining deferred. U12 unique index NOT
+shipped. State:
+
+- dup_groups:  29
+- posts_at_placeholder:  13,667
+- apa_at_placeholder:    4,780
+- brands_at_placeholder: 15
+- integer_author_ids:    6,356
+- total_accounts:        17,059
+- placeholder_rows:      10,681 (DEFERRED)
+
+Trigger to resume: ≥24 hours of clean TwitterAPI 200 responses, then
+run:
+
+```bash
+DATABASE_URL=postgres://...pushinweight_shadow...   manage.py reconcile_account_duplicates --apply --lonely-only --workers 100
+```
+
+If the resolved handle set hits TwitterAPI rate limits, drop
+--workers to 30 and re-run. The cleanup scripts
+`scripts/u_cleanup_prepass_damage.py` and
+`scripts/u_cleanup_prepass_drift.py` revert any KTD10 conflicts
+the pre-pass creates.
