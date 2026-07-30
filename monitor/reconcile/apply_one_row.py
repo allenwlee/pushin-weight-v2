@@ -17,6 +17,16 @@ nested scope).
 Fix: rely on `transaction.atomic()` alone. On IntegrityError the whole
 block rolls back (no double-savepoint). On any other exception, same.
 
+CRITICAL: pass integer_ids=[] (NOT [canonical_author_id]) to
+_ensure_canonical_account_row. That helper has a defensive check
+`if canonical in integer_ids: return canonical` that returns WITHOUT
+inserting. The lonely-apply path has no separate group context, so
+passing the canonical in integer_ids triggers the short-circuit every
+time. The original reconcile path avoided this bug because it passed
+integer_ids from _classify_group with the GROUP's integer list, not
+just the canonical. The 2026-07-31 cron incident was triggered by
+this defensive-check bug.
+
 NO pre-pass INSERT of canonical rows (Phase 2 v4/v5 bug -- created
 387-587 new duplicate groups). The existing `_ensure_canonical_account_row`
 already handles the right KTD10 semantics; the apply INSERT happens
@@ -92,11 +102,12 @@ def apply_one_row(
     try:
         with transaction.atomic():
             # Step 1: ensure canonical row exists in accounts.
+            # NOTE: pass integer_ids=[] -- see module docstring.
             _ensure_canonical_account_row(
                 connection.cursor(),
                 canonical=canonical_author_id,
                 handle=handle,
-                integer_ids=[canonical_author_id],
+                integer_ids=[],
             )
 
             # Step 2: UPDATE-then-DELETE per FK table.
