@@ -64,3 +64,6 @@ data/*.db.dryrun-*-shm
 data/*.db.dryrun-*-wal
 data/*.test*
 
+
+# Worktree isolation
+.worktrees/
