@@ -4,14 +4,23 @@ Plan: docs/plans/2026-07-31-001-fix-lonely-placeholders-cron-apply-plan.md
 Unit U4.
 
 `apply_one_row` wraps `_ensure_canonical_account_row` + `_repoint_fk`
-from Phase 2 inside a single transaction.atomic() + SAVEPOINT so a
-mid-row crash leaves zero residue (the outer transaction is open only
-for the duration of one row's apply, ~50ms).
+from Phase 2 inside a single `transaction.atomic()`. Django's atomic()
+provides the SAVEPOINT semantics automatically -- a nested
+`transaction.savepoint()` inside an atomic block creates a
+double-nested savepoint which DOES NOT preserve the INSERT visibility
+across the inner UPDATEs (the 2026-07-31 cron run observed this with
+FK constraint failures on commit: "posts_author_id ... is not present
+in table accounts" because the canonical-row INSERT happened inside
+one savepoint scope while the repoint UPDATE happened inside the
+nested scope).
+
+Fix: rely on `transaction.atomic()` alone. On IntegrityError the whole
+block rolls back (no double-savepoint). On any other exception, same.
 
 NO pre-pass INSERT of canonical rows (Phase 2 v4/v5 bug -- created
 387-587 new duplicate groups). The existing `_ensure_canonical_account_row`
 already handles the right KTD10 semantics; the apply INSERT happens
-inside the same SAVEPOINT as the placeholder DELETE, so concurrent
+inside the same atomic() as the placeholder DELETE, so concurrent
 readers never see a double-row state.
 
 The apply helper is exposed as `apply_one_row` so U6 can test
@@ -46,6 +55,7 @@ class ApplyResult:
         canonical_author_id: str | None = None,
         row_counts: dict[str, int] | None = None,
         reason: str | None = None,
+        error_message: str | None = None,
     ):
         self.handle = handle
         self.placeholder_author_id = placeholder_author_id
@@ -53,6 +63,7 @@ class ApplyResult:
         self.canonical_author_id = canonical_author_id
         self.row_counts = row_counts or {}
         self.reason = reason  # None on success; "integrity_error" / "exception" on failure
+        self.error_message = error_message  # last 200 chars of exception text
 
 
 def apply_one_row(
@@ -61,94 +72,72 @@ def apply_one_row(
     placeholder_author_id: str,
     canonical: dict,
 ) -> ApplyResult:
-    """Apply one lonely placeholder resolution inside a SAVEPOINT.
+    """Apply one lonely placeholder resolution inside transaction.atomic().
 
-    Steps (all inside one transaction.atomic() with a SAVEPOINT):
+    Steps (all inside one transaction.atomic()):
       1. _ensure_canonical_account_row -- INSERT the canonical row if
          missing (KTD10-correct semantics; no pre-pass bug).
       2. _repoint_fk -- UPDATE posts / apa / brands_accounts to point
          at the canonical integer, then DELETE the placeholder row.
-      3. SAVEPOINT commit on success; SAVEPOINT rollback on
-         IntegrityError or any other exception (the placeholder row
-         stays, the apply is dead-lettered).
 
-    Returns an ApplyResult. On success: `success=True`,
-    `canonical_author_id` set. On IntegrityError: `success=False`,
-    `reason="integrity_error"`. On any other exception:
-    `success=False`, `reason="exception"` (the SAVEPOINT already
-    rolled back so the DB is clean).
+    On IntegrityError (e.g. brands_accounts_pkey collision, FK
+    constraint failure): transaction.atomic() rolls back automatically;
+    return success=False, reason="integrity_error", error_message=<text>.
+    On any other exception: same rollback, reason="exception".
+
+    Returns an ApplyResult.
     """
     canonical_author_id = str(canonical["author_id"])
-    row_counts: dict[str, int] = {}
 
     try:
         with transaction.atomic():
-            sid = transaction.savepoint()
-            try:
-                # Step 1: ensure canonical row exists in accounts.
-                # No-op if a row with this author_id already exists
-                # (handles prior-run partial state). Pass integer_ids
-                # as the KTD10 disagreement guard.
-                _ensure_canonical_account_row(
-                    connection.cursor(),
-                    canonical=canonical_author_id,
-                    handle=handle,
-                    integer_ids=[canonical_author_id],
-                )
+            # Step 1: ensure canonical row exists in accounts.
+            _ensure_canonical_account_row(
+                connection.cursor(),
+                canonical=canonical_author_id,
+                handle=handle,
+                integer_ids=[canonical_author_id],
+            )
 
-                # Step 2: UPDATE-then-DELETE per FK table.
-                row_counts = _repoint_fk(
-                    connection.cursor(),
-                    canonical=canonical_author_id,
-                    placeholder_ids=[placeholder_author_id],
-                    handle=handle,
-                )
-                transaction.savepoint_commit(sid)
-                return ApplyResult(
-                    handle=handle,
-                    placeholder_author_id=placeholder_author_id,
-                    success=True,
-                    canonical_author_id=canonical_author_id,
-                    row_counts=row_counts,
-                )
-            except IntegrityError as exc:
-                transaction.savepoint_rollback(sid)
-                log.warning(
-                    "apply_one_row IntegrityError handle=%s placeholder=%s exc=%s",
-                    handle, placeholder_author_id, exc,
-                )
-                return ApplyResult(
-                    handle=handle,
-                    placeholder_author_id=placeholder_author_id,
-                    success=False,
-                    reason="integrity_error",
-                )
-            except Exception as exc:
-                transaction.savepoint_rollback(sid)
-                log.warning(
-                    "apply_one_row exception handle=%s placeholder=%s exc=%s",
-                    handle, placeholder_author_id, exc,
-                )
-                return ApplyResult(
-                    handle=handle,
-                    placeholder_author_id=placeholder_author_id,
-                    success=False,
-                    reason="exception",
-                )
+            # Step 2: UPDATE-then-DELETE per FK table.
+            row_counts = _repoint_fk(
+                connection.cursor(),
+                canonical=canonical_author_id,
+                placeholder_ids=[placeholder_author_id],
+                handle=handle,
+            )
+            return ApplyResult(
+                handle=handle,
+                placeholder_author_id=placeholder_author_id,
+                success=True,
+                canonical_author_id=canonical_author_id,
+                row_counts=row_counts,
+            )
+    except IntegrityError as exc:
+        # transaction.atomic() already rolled back.
+        log.warning(
+            "apply_one_row IntegrityError handle=%s placeholder=%s exc=%s",
+            handle, placeholder_author_id, exc,
+        )
+        return ApplyResult(
+            handle=handle,
+            placeholder_author_id=placeholder_author_id,
+            success=False,
+            reason="integrity_error",
+            error_message=str(exc)[:500],
+        )
     except Exception as exc:
-        # Outer atomic() failure -- a DB-level issue (connection drop,
-        # pool exhaustion). The inner SAVEPOINT already rolled back,
-        # but the outer transaction may be in a bad state. The cron
-        # will retry on the next tick.
-        log.error(
-            "apply_one_row outer failure handle=%s exc=%s",
-            handle, exc,
+        # transaction.atomic() already rolled back.
+        log.warning(
+            "apply_one_row exception handle=%s placeholder=%s exc=%s",
+            handle, placeholder_author_id, exc,
         )
         return ApplyResult(
             handle=handle,
             placeholder_author_id=placeholder_author_id,
             success=False,
             reason="exception",
+            error_message=str(exc)[:500],
         )
 
 

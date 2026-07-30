@@ -189,6 +189,7 @@ def run_apply_loop(
                                         "handle": handle,
                                         "placeholder_author_id": placeholder_author_id,
                                         "reason": f"apply_{apply_result.reason}",
+                                        "error_message": (apply_result.error_message or "")[:500],
                                         "ts": time.strftime(
                                             "%Y-%m-%dT%H:%M:%S%z", time.localtime()
                                         ),

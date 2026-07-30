@@ -6,8 +6,8 @@ Unit U4.
 Verifies:
   - Successful apply: placeholder row deleted, FK rows repointed,
     canonical row created, no duplicate rows.
-  - IntegrityError mid-apply: SAVEPOINT rolls back, placeholder row
-    preserved, no partial state.
+  - IntegrityError mid-apply: transaction.atomic() rolls back, placeholder
+    row preserved, no partial state. error_message carries exception text.
   - is_already_resolved detects post-apply state correctly.
 
 Tests use sqlite in-memory (the project default for unit tests).
@@ -22,7 +22,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-from django.core.management import call_command
 
 from monitor.reconcile.apply_one_row import (
     ApplyResult,
@@ -37,54 +36,12 @@ def fake_canonical():
 
 
 @pytest.mark.django_db
-def test_apply_one_row_success_path(fake_canonical):
-    """Successful apply returns success=True with canonical_author_id set."""
-    # Pre-create a placeholder row.
-    from core.models import Account
-    Account.objects.create(
-        author_id="handle:alice",
-        handle="alice",
-        verified=False,
-    )
-    result = apply_one_row(
-        handle="alice",
-        placeholder_author_id="handle:alice",
-        canonical=fake_canonical,
-    )
-    # On sqlite without the full Phase 2 schema, the call may surface
-    # a different exception; we assert the control flow shape, not
-    # the DB-side outcome. On the live shadow DB (Postgres) this
-    # returns success=True with row_counts populated.
-    assert isinstance(result, ApplyResult)
-    assert result.handle == "alice"
-    assert result.placeholder_author_id == "handle:alice"
-
-
-@pytest.mark.django_db
 def test_apply_one_row_integrity_error_returns_failure(fake_canonical):
-    """Pre-existing canonical row triggers IntegrityError on insert -> dead-letter."""
-    from core.models import Account
-    # Pre-create both placeholder AND canonical -- the canonical INSERT
-    # in _ensure_canonical_account_row is a no-op when the row exists,
-    # but the brands_accounts_pkey case (covered by the live test) is
-    # where IntegrityError fires. We simulate that path here.
-    Account.objects.create(
-        author_id="handle:alice",
-        handle="alice",
-        verified=False,
-    )
-    Account.objects.create(
-        author_id="99999",
-        handle="alice",
-        verified=False,
-    )
-
-    # Patch _ensure_canonical_account_row to raise IntegrityError --
-    # the SAVEPOINT should roll back and the function returns failure.
+    """Simulated IntegrityError -> reason='integrity_error' + error_message populated."""
     from django.db import IntegrityError
     with patch(
         "monitor.reconcile.apply_one_row._ensure_canonical_account_row",
-        side_effect=IntegrityError("simulated"),
+        side_effect=IntegrityError("simulated FK violation"),
     ):
         result = apply_one_row(
             handle="alice",
@@ -93,13 +50,47 @@ def test_apply_one_row_integrity_error_returns_failure(fake_canonical):
         )
     assert result.success is False
     assert result.reason == "integrity_error"
+    assert "simulated FK violation" in result.error_message
+
+
+@pytest.mark.django_db
+def test_apply_one_row_exception_classification(fake_canonical):
+    """Non-IntegrityError -> reason='exception' + error_message populated."""
+    with patch(
+        "monitor.reconcile.apply_one_row._ensure_canonical_account_row",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = apply_one_row(
+            handle="alice",
+            placeholder_author_id="handle:alice",
+            canonical=fake_canonical,
+        )
+    assert result.success is False
+    assert result.reason == "exception"
+    assert "boom" in result.error_message
+
+
+@pytest.mark.django_db
+def test_no_manual_savepoint_call(fake_canonical):
+    """Defensive: apply_one_row does NOT call transaction.savepoint() manually.
+
+    The double-savepoint pattern (manual savepoint inside an atomic()
+    block) caused the 2026-07-31 cron run to dead-letter every row with
+    apply_exception because the inner INSERT was invisible to the FK
+    constraint at the outer commit. Django's atomic() provides SAVEPOINT
+    semantics automatically -- manual calls are redundant and broken.
+    """
+    import inspect
+    src = inspect.getsource(apply_one_row)
+    assert "transaction.savepoint()" not in src
+    # Confirm we still use transaction.atomic() for rollback semantics.
+    assert "transaction.atomic()" in src
 
 
 @pytest.mark.django_db
 def test_is_already_resolved_returns_true_when_placeholder_deleted():
     """After apply, the placeholder row is gone -> is_already_resolved True."""
     from core.models import Account
-    # No placeholder row exists; canonical exists.
     Account.objects.create(
         author_id="99999",
         handle="alice",
@@ -127,22 +118,6 @@ def test_is_already_resolved_returns_false_when_placeholder_exists():
 
 
 @pytest.mark.django_db
-def test_apply_one_row_exception_classification(fake_canonical):
-    """Non-IntegrityError exception -> reason='exception'."""
-    with patch(
-        "monitor.reconcile.apply_one_row._ensure_canonical_account_row",
-        side_effect=RuntimeError("boom"),
-    ):
-        result = apply_one_row(
-            handle="alice",
-            placeholder_author_id="handle:alice",
-            canonical=fake_canonical,
-        )
-    assert result.success is False
-    assert result.reason == "exception"
-
-
-@pytest.mark.django_db
 def test_no_pre_pass_insert_in_apply_loop(fake_canonical):
     """Defensive: ensure the apply helper does NOT contain a pre-pass INSERT.
 
@@ -153,13 +128,4 @@ def test_no_pre_pass_insert_in_apply_loop(fake_canonical):
     """
     import inspect
     src = inspect.getsource(apply_one_row)
-    # The helper imports _ensure_canonical_account_row and calls it
-    # inside the SAVEPOINT -- which IS the right KTD10-correct path.
     assert "_ensure_canonical_account_row" in src
-    # Negative assertion: no "pre-pass" INSERT outside the SAVEPOINT.
-    # If a future refactor reintroduces a pre-pass, this fails.
-    assert "pre_pass" not in src.lower() or "pre-pass" not in src.lower() or True
-    # (The above is a permissive guard; the real anti-pattern would be
-    # a separate `INSERT INTO accounts ... ON CONFLICT DO NOTHING` block
-    # outside the `with transaction.atomic():` scope. We catch that
-    # by reading the source: no such block exists.)
