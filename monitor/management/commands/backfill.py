@@ -263,6 +263,22 @@ class Command(BaseCommand):
 
         # --- execute batch ---
         from monitor.cycle import CycleRunner
+        from x_monitor.relevancy import build_binary_relevancy_llm_call
+
+        # U6 runtime wire-in: same as run_cycle — build the Anthropic
+        # llm_call for the binary relevancy gate. None when env is
+        # unconfigured; gate then runs as no-op (KEEP).
+        relevancy_client = None
+        try:
+            from x_monitor.reattribute import (
+                build_anthropic_client_from_env,
+            )
+            relevancy_client = build_anthropic_client_from_env()
+        except Exception:
+            pass
+        relevancy_llm_call = build_binary_relevancy_llm_call(
+            client=relevancy_client,
+        )
 
         for i, call_id in enumerate(batch):
             if i > 0 and options["pause"] > 0:
@@ -276,6 +292,7 @@ class Command(BaseCommand):
                     cycle_kind="manual",
                     _backfill_call_ids=[call_id],
                     _max_llm_calls=options.get("max_llm_calls"),
+                    _relevancy_llm_call=relevancy_llm_call,
                 )
                 stats = runner.run()
 

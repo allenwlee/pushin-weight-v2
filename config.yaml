@@ -129,170 +129,145 @@ x_monitor_list_id: 2067062923525275922
 # are joined with OR; co_occurrence are joined with OR.
 #
 # Default is empty (no Call C emitted; v1.7 stays at 2 calls).
+#
+# Plan 2026-07-30-002 U3 (hybrid funnel): B1 is BARE (no co). B2/B3
+# are HANDLE-ONLY (the new `handles:` field carries the @-prefixed
+# Twitter handles — see x_monitor.query_plan.XQuerySpec). C* uses a
+# 5-term minimal co allowlist (R8) instead of the full 22. No
+# xiaomi/小米/moonshot in any co-occurrence list (R10). Optional
+# `not_include` for stable hijacks is documented in the plan but
+# U3 does NOT seed it; that's U5.
 x_query_specs:
-  # Multi-brand spec — covers both MiMo and Kimi in one Call C. The
-  # primary group uses Call B's per-brand paren structure (one paren
-  # per brand) so the post-fetch attribute_to_brands regex can route
-  # each result to the right brand by which per-brand paren matched.
-  # Co-occurrence is the union of both brands' preferred terms
-  # (over-permissive vs. the per-brand intersection; the post-fetch
-  # regex still routes correctly).
+  # === C1: MiMo + Kimi + Yi + Llama with 5-term minimal co allowlist (R8/R10) ===
+  # Plan 2026-07-30-002 U3: C* replaces the full 22-term co with the
+  # shared 5-term minimal co. No xiaomi/小米/moonshot poison.
   - brands:
       mimo:   [MiMo, "Xiaomi MiMo", "小米 MiMo"]
       moonshot_kimi: [Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]
       yi:            [Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]
-      llama:         [Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]
-    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+      llama:         [Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama"]
+    co_occurrence: [llm, model, api, agentic, huggingface]
+    not_include: [f1, antonelli, mercedes, hamil, alonso, verstappen, "formula 1"]
     min_faves: 0
     call_id: C1
     notes: |
-      Co-occurrence list broadened on 2026-06-25 per plan
-      docs/plans/2026-06-25-001-refactor-b-and-c-calls-for-max-inclusion-plan.md
-      (live x_keyword_search / x_semantic_search tests surfaced relevant
-      posts that needed code / coding / agent / agentic / benchmark /
-      reasoning / release / "open source" / huggingface / inference /
-      moe / "tool calling" terms to match). The 12 new terms are
-      additive; the original 10 terms are kept for backward compat.
-      Tested length: under 512-char cap.
+      Hybrid funnel U3 — C1 keeps the 4-brand polyseme set but co
+      drops from 22 terms to the 5-term minimal allowlist
+      (R8: llm, model, api, agentic, huggingface). xiaomi/小米/
+      moonshot REMOVED from co (R10) — the foreign-first loss was
+      high (55-75% of relevant non-EN samples lack those terms).
+      The brand groups themselves still include `Xiaomi MiMo` and
+      `moonshot_kimi` for direct match; co only needs to provide
+      light AI-context.
 
-      MiMo: bare "mimo" matches Mimo Studio (kids' video app); "xiaomi"
-      alone matches phone posts. xiaomi/小米 co-occurrence terms exclude
-      phone-only false positives.
-      Kimi: "kimi" is a Turkish interrogative ("who?") and a Japanese
-      second-person pronoun (きみ); both are common-word false
-      positives. moonshot/chatbot co-occurrence terms exclude
-      non-AI uses. F1 driver Kimi Antonelli hijack is mitigated by
-      data/filters/moonshot_kimi.yaml must_have_none (F1, antonelli,
-      mercedes, ...). Bare "moonshot" is intentionally absent from
-      the brand group — matches Moonshot crypto exchange spam, not
-      Moonshot AI.
+      Moonshot F1 hijack mitigation moved from co to U5's
+      optional `not_include` (R12). F1/antonelli/mercedes etc.
+      are not in the co list anymore.
 
-      2026-07-02 (U5 review, plan docs/plans/2026-07-02-001):
-      Review-only unit — no term-list change in this unit. The
-      co-occurrence list stands at 22 OR-terms across the 4 covered
-      brands (mimo, moonshot_kimi, yi, llama); this is already the
-      most-permissive shape consistent with keeping the AND-filter's
-      intent (post-fetch regex routes each result to a specific brand).
-      Upstage moved to C2 on 2026-07-11 to fix a substring leak:
-      bare `Solar` in C1's Upstage brand OR-group matched "solar winds"
-      in the post-fetch AND-filter (the leak path that produced
-      "Any Surface model" → upstage false-positive on 2026-07-10).
-      Dropping bare `Solar` from C2's Upstage tokens closes the leak
-      at the cost of recall for posts that mention only the bare word
-      "Solar" (rare in practice — most Upstage-coverage posts say
-      "Upstage Solar", "Solar Pro", or "업스테이지").
-
-      2026-07-11 (operator directive): Upstage moved from C1 to C2.
-      C2 now covers ERNIE + Upstage; bare `Solar` token dropped from
-      the Upstage OR-group to eliminate the substring collision with
-      "solar" in everyday English (solar wind, solar panel, solar
-      energy, etc.). Length: C1 461 chars, C2 282 chars — both
-      comfortably under the 512-char cap.
-
-  # ERNIE (Baidu 文心一言) — single-brand spec. "ERNIE" collides with
-  # the Sesame Street character and (less commonly) the Bert variant;
-  # "文心" alone is rare but ambiguous. Bare "文心一言" is unambiguous
-  # and the safest token; "ERNIE" is kept for English-language coverage.
-  # Co-occurrence terms require an AI/LLM/dev context (api/llm/model/
-  # baidu/文心/code/coding/agent/...), which excludes Sesame Street
-  # threads. Was not in C1 (C1 has 7 chars of headroom only —
-  # adding ERNIE would have exceeded the 512-char cap; see
-  # docs/reference/twitterapi-live-queries-by-model.md:212).
-  # Origin: plan docs/plans/2026-06-25-001 §"Implementation Units"
-  # discusses deduping models from A and B that already exist in C;
-  # ERNIE was the deferred member of that dedup.
+  # === C2: ERNIE + Upstage with 5-term minimal co + baidu/文心 (R9 optional) ===
   - brands:
       ernie:   [ERNIE, 文心一言]
       upstage: [Upstage, "Solar Pro", "Solar LLM", 업스테이지]
-    co_occurrence: [api, llm, model, baidu, 文心, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    co_occurrence: [llm, model, api, agentic, huggingface, baidu, 文心]
     min_faves: 0
     call_id: C2
     notes: |
-      2026-07-09 (plan 2026-07-09-001 follow-up): ERNIE was originally
-      discussed in plan 2026-06-25-001 as the deferred 6th brand of
-      the C spec dedup, but the C1 spec was already at 505/512 chars
-      so we couldn't add ERNIE's paren group to C1 without either
-      dropping C1's co-occurrence terms or exceeding cap. The fix
-      is a separate C2 spec (this entry).
+      Hybrid funnel U3 — C2 keeps ERNIE + Upstage. Co collapses to
+      5-term minimal allowlist + the two C2-specific optional terms
+      (R9: baidu, 文心 — total 7 terms, under the ≤8 cap). xiaomi/
+      小米/moonshot REMOVED (R10) — they were never relevant to
+      ERNIE/Upstage.
 
-      Token choice: "ERNIE" (English) + "文心一言" (Chinese product
-      name). Bare "文心" is intentionally absent — it appears in
-      Sesame Street contexts and a few 文心兰 (orchid) product pages;
-      the baidu/文心 co-occurrence terms carry the disambiguation
-      load.
+  # === C3 (NEW in hybrid funnel): doubao + sensechat + kuaishou ===
+  # Plan 2026-07-30-002 AE/R1: 7-call layout — adds C3 as a third
+  # ambiguous-brand spec covering the previously-B2/B3 polysemes
+  # that were not in any C spec.
+  - brands:
+      doubao:    [Doubao, ByteDance]
+      sensechat: [SenseChat, SenseTime]
+      kuaishou:  [Kuaishou, KwaiYii]
+    co_occurrence: [llm, model, api, agentic, huggingface]
+    min_faves: 0
+    call_id: C3
+    notes: |
+      Hybrid funnel U3 — NEW C3 spec. Adds the third ambiguous-brand
+      group. 5-term minimal co (R8). Foreign-language coverage for
+      Doubao/ByteDance/SenseTime/Kuaishou is improved by the thin
+      co vs the old full-22 list.
 
-      Co-occurrence terms mirror C1's 22-term list with these swaps:
-      - dropped "xiaomi" + "小米" (ERNIE-irrelevant)
-      - added "baidu" + "文心" (Baidu/ERNIE disambiguators)
-
-      2026-07-11 (operator directive): Upstage moved here from C1.
-      C2's Upstage brand OR-group is `[Upstage, "Solar Pro", "Solar LLM",
-      업스테이지]` — bare `Solar` is intentionally DROPPED. The bare
-      `Solar` token in C1's prior Upstage OR-group matched substring
-      "solar" in everyday English ("solar wind", "solar panel",
-      "solar energy"), and combined with the generic `model` co-occurrence
-      term on the AND-side, leaked posts like "Any Surface model" +
-      "solar winds" into Upstage false positives. The 3-product-name
-      tokens ("Solar Pro", "Solar LLM", 업스테이지) keep precision-recall
-      intact for actual Upstage coverage (most Upstage posts use a
-      product name) while closing the substring leak.
-
-      Tested length: 282 chars (cap 512, headroom 230).
-
-  # Plan 2026-07-11-002 (U3) — wide-net B-call revival. Each B-spec
-  # is `is_wide_net: true` with an empty `brands:` map and a
-  # `wide_net_brands:` list. The renderer reads per-brand tokens
-  # from `brand_keywords.is_primary=1` rows via the
-  # `primary_keywords` kwarg. Token source is the DB, not the
-  # config; the config controls which brands participate and in what
-  # order. Co-occurrence lists are shared with C1's 22-term list as
-  # a first cut (a follow-up probe may trim per group).
-  #
-  # The v1.7 group boundaries (B1 = top-presence / global, B2 =
-  # Chinese-language, B3 = specialized / smaller) are reused — the
-  # v1.7 split kept each Call B under 512 chars because each brand
-  # contributed only the lean Q2 paren group. With the curated
-  # `is_primary=1` subset (2-4 tokens per brand), the same shape
-  # still fits under cap. Tested live: B1=473 chars, B2=470, B3=375.
+  # === B1: top-presence global brands, BARE (no co per R3) ===
+  # Plan 2026-07-30-002 U3: B1 collapses from 22-term co to ZERO.
+  # Bare keywords render `((brand_tokens)) min_faves:0` with NO
+  # secondary paren (U2).
   - is_wide_net: true
     wide_net_brands: [minimax, qwen, deepseek, mistral, stepfun, hunyuan]
     brands: {}
-    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    co_occurrence: []
     min_faves: 0
     call_id: B1
     notes: |
-      B1 = top-presence / global brands (6 brands after dedup). When credits
-      are tight, B1 drops before C2 (co-occurrence-constrained per-
-      brand). The 6 brand-groups render under 512 chars on the live
-      primary subset. The original 8 included `llama` and `ernie`, which
-      are also covered by C1 and C2 respectively (co-occurrence-constrained);
-      per the dedup decision (operator directive 2026-07-11), those brands
-      are covered exclusively by the C-specs to avoid duplicate TwitterAPI
-      credit spend on the wide-net path.
+      Hybrid funnel U3 — B1 is BARE (R3). co_occurrence=[] triggers
+      the U2 renderer's "omit secondary paren" path (R17/KTD4).
+      The brand groups are read from DB via primary_keywords at
+      render time; this config controls WHICH brands and ORDER.
+      6 brands: minimax, qwen, deepseek, mistral, stepfun, hunyuan.
 
-  - is_wide_net: true
-    wide_net_brands: [doubao, glm, sensechat, inclusionai]
+  # === B2: pure-brand OFFICIAL HANDLES ONLY (R4 + U2 handles field) ===
+  # Hybrid funnel U3: B2 switches from wide-net brand_wide to
+  # handle-only `@handle` OR-group. No co (R4). Each handle is
+  # the official X account; "list:" is wrong operator semantics
+  # for mentions (KTD3). Handles sourced from `brands_accounts`
+  # with role=official.
+  - handles:
+      - deepseek_ai
+      - Ali_TongyiLab
+      - Alibaba_Qwen
+      - hailuo_ai
+      - MiniMax_AI
+      - MiniMaxAgent
+      - StepFun_ai
+      - stepfunai
+      - MistralAI
+      - TencentHunyuan
+      - Zai_org
+      - ZhihuFrontier
+      - AntLingAGI
+      - robbyant_brain
+      - TheInclusionAI
+      - LG_AI_Research
+      - SakanaAILabs
+      - NVIDIAAI
+      - NVIDIAAIDev
     brands: {}
-    co_occurrence: [api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    co_occurrence: []
     min_faves: 0
     call_id: B2
     notes: |
-      B2 = Chinese-language brands (4 brands after dedup). The original
-      7 included `moonshot_kimi`, `mimo`, and `yi`, which are also
-      covered by C1 (co-occurrence-constrained). Per the dedup decision
-      (operator directive 2026-07-11), those brands are covered
-      exclusively by C1 to avoid duplicate TwitterAPI credit spend on
-      the wide-net path.
+      Hybrid funnel U3 — B2 is HANDLE-ONLY (R4). Uses the new
+      `handles:` field added to XQuerySpec by U2. Renderer emits
+      `(@deepseek_ai OR @Ali_TongyiLab OR ...) min_faves:0` with
+      NO co secondary (U2 handles branch handles `not spec.brands
+      and spec.handles`).
 
-  - is_wide_net: true
-    wide_net_brands: [nemo_megatron, exaone, sakana_ai, kuaishou]
+  # === B3: other-brand OFFICIAL HANDLES ONLY (R5) ===
+  - handles:
+      - bytedanceoss
+      - BytePlusGlobal
+      - doubaoai
+      - SenseTime_AI
+      - Kling_ai
+      - XiaomiMiMo
+      - XiaomiMiMoDevs
+      - Kimi_Moonshot
+      - "01AI_Yi"
+      - AIatMeta
+      - ErnieforDevs
+      - PaddlePaddle
+      - upstageai
     brands: {}
-    co_occurrence: [api, llm, model, ai, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]
+    co_occurrence: []
     min_faves: 0
     call_id: B3
     notes: |
-      B3 = specialized / smaller brands (4 brands after dedup). The
-      original 5 included `upstage`, which is also covered by C1
-      (co-occurrence-constrained). Per the dedup decision (operator
-      directive 2026-07-11), upstage is covered exclusively by C1 to
-      avoid duplicate TwitterAPI credit spend on the wide-net path.
+      Hybrid funnel U3 — B3 is HANDLE-ONLY (R5). Same shape as B2
+      but covers the other-brand set.

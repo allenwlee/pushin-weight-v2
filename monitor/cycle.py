@@ -160,6 +160,63 @@ _NULL_BUCKET_SENTINEL = ""
 
 
 
+def _matches_any_term(text: str, quoted_text: str, terms: list[str]) -> bool:
+    """Return True if any term appears in text or quoted_text (case-insensitive).
+
+    Used by the U5 post-fetch ban match in CycleRunner.run(). terms
+    must already be lowercased. Empty terms list → no match.
+    """
+    if not terms:
+        return False
+    haystack = ((text or "") + "\n" + (quoted_text or "")).lower()
+    return any(term in haystack for term in terms if term)
+
+
+def _apply_relevancy_gate(
+    items: list[dict[str, Any]],
+    *,
+    call_id: str,
+    llm_call,
+) -> list[dict[str, Any]]:
+    """Apply the U6 binary LLM relevancy gate to items.
+
+    Per-item brand_id (set by _attribute_items) drives the gate via
+    x_monitor.relevancy.should_apply_binary_gate. Drop decisions are
+    returned; KEEP/uncertain items pass through. When llm_call is
+    None the gate is a no-op (the constructor's default).
+    """
+    if llm_call is None:
+        return items
+    # Lazy import — x_monitor.relevancy is a thin module without
+    # Django dependencies, but we keep the import deferred so the
+    # cycle module can be imported in environments where the relevancy
+    # gate is intentionally disabled.
+    from x_monitor.relevancy import (
+        call_binary_relevancy_llm,
+        should_apply_binary_gate,
+    )
+
+    out: list[dict[str, Any]] = []
+    for it in items:
+        brand_hints = it.get("brand_id") or ""
+        if not should_apply_binary_gate(
+            call_id=call_id, brand_hints=brand_hints
+        ):
+            out.append(it)
+            continue
+        text = it.get("text") or ""
+        verdict = call_binary_relevancy_llm(
+            post_text=text,
+            call_id=call_id,
+            brand_hints=brand_hints,
+            llm_call=llm_call,
+        )
+        if verdict.decision == "DROP":
+            continue  # drop
+        out.append(it)
+    return out
+
+
 def _item_created_epoch(it: dict[str, Any]) -> int | None:
     """Best-effort unix epoch for a normalized tweet dict (for window walks)."""
     raw_ep = it.get("created_at_epoch") or it.get("createdAtEpoch")
@@ -791,6 +848,7 @@ class CycleRunner:
         cycle_kind: str = "manual",
         _backfill_call_ids: list[str] | None = None,
         _max_llm_calls: int | None = None,
+        _relevancy_llm_call=None,
     ) -> None:
         self.dry_run = dry_run
         self.cycle_kind = cycle_kind  # 'scheduled' or 'manual'
@@ -800,6 +858,11 @@ class CycleRunner:
         # Hard cap on LLM batches per invocation.  None = no cap.
         # Used by the backfill command to limit API spend on large windows.
         self._max_llm_calls = _max_llm_calls
+        # U6 runtime wire-in: injected llm_call(system, user) -> str
+        # dependency for the binary relevancy gate (R19a +
+        # x_monitor/relevancy.py). Default None → gate is a no-op (KEEP).
+        # Production wire-in passes an anthropic_messages_call function.
+        self._relevancy_llm_call = _relevancy_llm_call
         self._llm_call_count: int = 0
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
@@ -1653,6 +1716,56 @@ class CycleRunner:
             self._posts_attributed += len(kept)
             call_entry["n_kept"] = len(kept)
 
+            # U5 runtime wire-in: post-fetch ban match against
+            # call.not_include (R12). Stable hijacks like F1/Kimi for
+            # moonshot_kimi are listed in config.yaml's x_query_specs[*]
+            # .not_include. We match case-insensitively against the
+            # tweet's text and quoted_text. Drop counters surface in
+            # call_entry["not_include_drops"] for ops dashboards.
+            ni_terms = [t.lower() for t in (call.not_include or []) if t]
+            ni_drop_count = 0
+            if ni_terms:
+                pre_drop = len(kept)
+                kept = [
+                    it for it in kept
+                    if not _matches_any_term(
+                        it.get("text") or "", it.get("quoted_text") or "",
+                        ni_terms,
+                    )
+                ]
+                ni_drop_count = pre_drop - len(kept)
+            call_entry["not_include_drops"] = ni_drop_count
+            self._posts_attributed -= ni_drop_count  # adjust attributed count
+
+            # U6 runtime wire-in: binary LLM relevancy gate (R19a +
+            # x_monitor/relevancy.py). Fires only when:
+            #   - call_id is C1/C2/C3, OR
+            #   - per-item brand_id (set by _attribute_items) names a
+            #     C-tier brand (mimo/moonshot_kimi/yi/llama/ernie/upstage
+            #     /doubao/sensechat/kuaishou).
+            # The gate's llm_call dependency is injected by the wire-in
+            # (see CycleRunner.__init__ — defaults to None → KEEP).
+            # llm_drops counter surfaces in call_entry.
+            if self._relevancy_llm_call is not None:
+                kept = _apply_relevancy_gate(
+                    kept,
+                    call_id=call.call_id,
+                    llm_call=self._relevancy_llm_call,
+                )
+                llm_drop_count = (
+                    call_entry.get("n_kept", 0)
+                    - len(kept)
+                    - ni_drop_count
+                )
+            else:
+                llm_drop_count = 0
+            call_entry["llm_drops"] = max(llm_drop_count, 0)
+            # Re-derive n_kept after both gates
+            call_entry["n_kept"] = len(kept)
+            # Update U7 keep_rate with post-gate counts
+            nr = call_entry.get("n_results", 0)
+            call_entry["keep_rate"] = round(len(kept) / nr, 4) if nr > 0 else 0.0
+
             # Persist -- including on truncated outcomes. Dropping the page
             # was the C1 deadlock: every cycle re-fetched the same tip, never
             # stored it, never advanced.
@@ -1706,8 +1819,31 @@ class CycleRunner:
                         ),
                     )
             call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
+
+            # U7 anomaly metrics (plan 2026-07-30-002 U7): per-call
+            # fetch_n + keep_rate. not_include_drops and llm_drops are
+            # placeholders that count toward 0 until the U5 ban path
+            # and U6 LLM gate are wired into the runtime (follow-up
+            # work; this unit pins the shape so future wire-ins
+            # populate the same fields).
+            call_entry["fetch_n"] = call_entry.get("n_results", 0)
+            nr = call_entry["fetch_n"]
+            nk = call_entry.get("n_kept", 0)
+            call_entry["keep_rate"] = round(nk / nr, 4) if nr > 0 else 0.0
+            call_entry["not_include_drops"] = 0  # wire-in placeholder
+            call_entry["llm_drops"] = 0           # wire-in placeholder
+
             summary["calls"].append(call_entry)
             summary["totals"]["n_calls_run"] += 1
+
+            # U7 cycle-level anomaly aggregates: min/mean keep_rate
+            # across calls, plus max keep_rate (a spike here means a
+            # single call is much looser than the rest — investigate).
+            tr = summary["totals"]
+            rates = [c.get("keep_rate", 0.0) for c in summary["calls"]]
+            tr["keep_rate_min"] = round(min(rates), 4) if rates else 0.0
+            tr["keep_rate_mean"] = round(sum(rates) / len(rates), 4) if rates else 0.0
+            tr["keep_rate_max"] = round(max(rates), 4) if rates else 0.0
 
         # ---- Post-fetch: translate + classify ----
         if kept_all and summary["status"] != "aborted":

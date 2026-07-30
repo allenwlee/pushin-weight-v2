@@ -1,9 +1,10 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
-# TwitterAPI.io live queries -- v2 Django architecture (20 brands, A + B1/B2/B3 + C1/C2)
+# TwitterAPI.io live queries -- v2 Django architecture (20 brands, A + B1/B2/B3 + C1/C2/C3)
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-24-11:36:23 (pre-hybrid-funnel)
+Last updated: 2026-07-30 (post-hybrid-funnel -- plan 2026-07-30-002 U3)
 
-Last updated: 2026-07-24
+Last updated: 2026-07-30
 
 The harvest pipeline runs as a **Render cron job** (`render.yaml`, schedule
 `*/15 * * * *`) executing `python manage.py run_cycle --limit-per-call 50`.
@@ -11,17 +12,17 @@ Each invocation plans, fetches, attributes, and persists one complete cycle.
 
 **Source of truth (v2 Django):**
 
-- `config.yaml` -- `enabled_models` (20 brands), `x_query_specs` (5 entries: C1, C2, B1, B2, B3), `x_monitor_list_id`
+- `config.yaml` -- `enabled_models` (20 brands), `x_query_specs` (6 entries: C1, C2, C3, B1, B2, B3), `x_monitor_list_id`
 - `project/settings.py` -- `KNOWN_MODELS` (frozenset of 20), `X_MONITOR_LIST_ID`, `X_MONITOR_X_QUERY_SPECS` (loaded from config.yaml at startup)
 - `monitor/cycle.py` -- `_plan_calls()`, `_load_primary_keywords()`, `_load_x_query_specs()`, `_load_x_monitor_list_id()`
-- `x_monitor/query_plan.py` -- `plan_calls()`, `_build_query()`, `XQuerySpec` dataclass
+- `x_monitor/query_plan.py` -- `plan_calls()`, `_build_query()`, `XQuerySpec` dataclass (U2: added `handles` field for handle-only calls; renderer omits empty-co paren)
 - `core/models.py` -- `Brand`, `BrandKeyword` (Django ORM, source of `is_primary=1` tokens)
 - `monitor/management/commands/run_cycle.py` -- Django management command, the entry point invoked by the Render cron job
 
 > **Pipeline:** each cycle resolves the `KNOWN_MODELS` list, loads primary
 > keywords from `BrandKeyword.objects.filter(is_primary=True)` (Django ORM),
-> builds a **6-call plan** (1 Call A + 5 `x_query_specs` entries: C1 + C2 +
-> B1 + B2 + B3), and fires each `PlannedCall.query_string` against
+> builds a **7-call plan** (1 Call A + 6 `x_query_specs` entries: C1 + C2 +
+> C3 + B1 + B2 + B3), and fires each `PlannedCall.query_string` against
 > TwitterAPI.io's `advanced_search` endpoint.
 > `assert_under_length_cap(query_string, 512)` guards every emitted call.
 

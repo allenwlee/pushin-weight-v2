@@ -116,6 +116,11 @@ class PlannedCall:
         6-signal taxonomy is gone; per-tweet classification
         (post_type × sentiment) happens post-fetch and is not encoded
         in the query shape.
+
+    Plan 2026-07-30-002 U5 (runtime wire-in): `not_include` carries the
+    hijack ban list from the source XQuerySpec so the post-fetch ban
+    matcher in monitor/cycle.py can reject items without re-reading
+    config. Empty list for Call A and for any spec without the field.
     """
 
     call_id: str
@@ -124,6 +129,7 @@ class PlannedCall:
     bucket: str | None
     query_string: str
     query_length: int
+    not_include: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -178,13 +184,24 @@ class XQuerySpec:
 
     U9 (migration 022): `expected_signal` was REMOVED. The legacy
         6-signal taxonomy is gone.
+
+    Plan 2026-07-30-002 U2 (hybrid funnel): `handles` field added for
+    B2/B3 handle-only calls. When non-empty, the renderer emits
+    `(@h1 OR @h2 ...) min_faves:N` (no co-occurrence secondary). Mutually
+    exclusive with `is_wide_net=True` and with non-empty `brands` at
+    render time (operator misconfiguration raises). Empty list by default.
+    Also `brands` and `co_occurrence` get empty-list defaults so a
+    handle-only or list-only spec can be constructed without explicit
+    args for those fields.
     """
-    brands: dict[str, list[str]]
-    co_occurrence: list[str]
+    brands: dict[str, list[str]] = field(default_factory=dict)
+    co_occurrence: list[str] = field(default_factory=list)
     min_faves: int = 0
     call_id: str = ""
     is_wide_net: bool = False
     wide_net_brands: list[str] = field(default_factory=list)
+    handles: list[str] = field(default_factory=list)
+    not_include: list[str] = field(default_factory=list)
 
 
 # Backwards-compat alias for any external imports still using the
@@ -217,7 +234,19 @@ def _build_query(
     requires `primary_keywords` (operator misconfiguration raises).
     Brands with empty token lists are skipped (defensive — should not
     happen in practice).
+
+    Plan 2026-07-30-002 U2: handle-only spec (handles non-empty, brands
+    empty, is_wide_net=False) renders `(@h1 OR @h2 ...) min_faves:N`.
+    The handle-only branch is checked BEFORE the Call A degenerate
+    branch so the Call A path doesn't trigger when handles carry the
+    spec identity.
     """
+    # Handle-only spec (plan 2026-07-30-002 U2): checked BEFORE Call A
+    # so a handles-only spec doesn't fall into the Call A degenerate.
+    if spec.handles and not spec.brands and not spec.is_wide_net:
+        handle_group = f"({' OR '.join(f'@{h}' for h in spec.handles)})"
+        return f"{handle_group} min_faves:{spec.min_faves}"
+
     # Call A: list-based wide net (curated X-list). The
     # `is_wide_net=True` branch handles the wide-net path below; this
     # branch stays for the Call A degenerate (empty brands, empty
@@ -260,8 +289,18 @@ def _build_query(
         # an all-empty configuration still returns a syntactically
         # valid (if useless) query.
         primary = "(empty)"
+    elif len(parts) == 1:
+        # Avoid double-paren `((tokens))` when only one brand group.
+        primary = parts[0]
     else:
         primary = f"({' OR '.join(parts)})"
+
+    # Plan 2026-07-30-002 U2 (R17/KTD4): empty co_occurrence omits the
+    # secondary paren entirely. The legacy renderer always emitted
+    # `()` which is not a valid X advanced-search token.
+    if not spec.co_occurrence:
+        return f"{primary} min_faves:{spec.min_faves}"
+
     secondary = f"({' OR '.join(spec.co_occurrence)})"
     return f"{primary} {secondary} min_faves:{spec.min_faves}"
 
@@ -385,6 +424,7 @@ def plan_calls(
                 bucket=None,
                 query_string=call_query,
                 query_length=len(call_query),
+                not_include=list(spec.not_include or []),
             )
         )
     return result

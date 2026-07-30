@@ -104,10 +104,31 @@ class Command(BaseCommand):
             return
 
         from monitor.cycle import CycleRunner
+        from x_monitor.relevancy import build_binary_relevancy_llm_call
+
+        # U6 runtime wire-in: build the Anthropic-backed llm_call
+        # for the binary relevancy gate. Returns None if the env is
+        # not configured; the cycle then runs with the gate as a
+        # no-op (KEEP — multilingual keep bias).
+        relevancy_client = None
+        try:
+            from x_monitor.reattribute import (
+                build_anthropic_client_from_env,
+            )
+            relevancy_client = build_anthropic_client_from_env()
+        except Exception as exc:
+            self.stderr.write(
+                f"warn: failed to build relevancy client: {exc}; "
+                f"gate will be no-op"
+            )
+        relevancy_llm_call = build_binary_relevancy_llm_call(
+            client=relevancy_client,
+        )
 
         runner = CycleRunner(
             dry_run=options["dry_run"],
             cycle_kind="manual",
+            _relevancy_llm_call=relevancy_llm_call,
         )
         stats = runner.run()
 
