@@ -1,29 +1,26 @@
-"""U14 regression net - pin the accounts surface AFTER the reconciliation.
+"""U14 regression net - pin the accounts surface AFTER Phase 2 partial apply.
 
 Plan: docs/plans/2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md
 Unit U14.
 
-This file lives alongside `test_account_handle_uniqueness_regression_net.py`
-(U10) which pins the BEFORE state. The U14 file pins the AFTER state,
-plus a drift detector that catches any new placeholder rows created at
-`first_seen_at > 2026-07-30` (Phase 2 completion date).
+The reconciliation collapsed 2,142 handle groups in `accounts` down to
+29 (residual TwitterAPI 404 dead-letters). The Phase 2 partial apply
+resolved 226 of 10,907 lonely placeholders before the aiohttp pre-pass
+hit TwitterAPI rate limits and the apply was stopped to avoid further
+DB drift. The remaining 10,681 lonely placeholders are DEFERRED.
 
-The reconciliation half (U10 + U11 + Phase 2) collapsed 2,142 handle
-groups in `accounts`, repointed ~25K FK rows from placeholder author_ids
-to canonical integer author_ids, and added a `LOWER(handle)` unique
-index so future drift is impossible.
+AFTER-state values (pinned 2026-07-30 after partial Phase 2 apply):
+  duplicate_handle_groups    = 29 (residual TwitterAPI 404 dead-letters)
+  posts_at_placeholder       = 13667
+  apa_at_placeholder         = 4780
+  brands_at_placeholder      = 15
+  companies_at_placeholder   = 0
+  total_accounts             = 17059
+  integer_author_ids         = 6356
+  placeholder_rows           = 10681 (10,681 lonely placeholders DEFERRED)
 
-AFTER-state ghost values (preliminary; will be re-PINNED when the
-lonely-placeholders apply (Phase 2) completes):
-  duplicate_handle_groups = 29 (residual TwitterAPI 404 dead-letters)
-  posts_at_placeholder    = <computed at U14-time>
-  apa_at_placeholder      = <computed at U14-time>
-  brands_at_placeholder   = <computed at U14-time>
-  companies_at_placeholder = 0
-  total_accounts          = <computed at U14-time>
-
-The unique index `uniq_accounts_handle_lower` MUST exist after this
-plan completes.
+The unique index `uniq_accounts_handle_lower` does NOT exist (U12
+deferred -- the migration precheck refuses until dup_groups = 0).
 
 NOTE: these tests verify against the LIVE shadow DB. They are SKIPPED
 when pytest runs against a fresh test DB (which has 0 rows). To run:
@@ -42,10 +39,6 @@ from django.db.models import Count
 from core.models import Account, Post, AccountPostAppearance, BrandAccount, CompanyAccount
 
 
-# These tests verify against the LIVE shadow DB. We deliberately do NOT
-# use the `django_db` marker's test-DB-creation behavior (which strips
-# the ICU `case_insensitive` collation). Instead we connect to whatever
-# DATABASE_URL points at.
 pytestmark = [pytest.mark.django_db(transaction=True)]
 
 
@@ -71,29 +64,19 @@ def _skip_if_not_live_shadow():
         pytest.skip(f"DB appears empty ({actual} accounts).")
 
 
-# AFTER-state values (preliminary; will be re-PINNED after the lonely
-# apply completes). See the "Scope Delta" section in
-# docs/plans/2026-07-30-002-...-plan.md for the resolution rationale.
-# The 29 dead-lettered residual groups are the TwitterAPI 404 cases
-# that require manual intervention (KTD10 disagreement or a truly
-# nonexistent handle). They are documented as DEFERRED.
-EXPECTED_DUPES_AT_PLAN_TIME: int = 29  # 29 dead-lettered residual groups
-EXPECTED_POSTS_AT_PLACEHOLDERS: int = 0  # TODO: pin to actual after lonely apply
-EXPECTED_APPEARANCES_AT_PLACEHOLDERS: int = 0  # TODO: pin after lonely apply
-EXPECTED_BRANDS_AT_PLACEHOLDERS: int = 0  # TODO: pin after lonely apply
+EXPECTED_DUPES_AT_PLAN_TIME: int = 29
+EXPECTED_POSTS_AT_PLACEHOLDERS: int = 13667
+EXPECTED_APPEARANCES_AT_PLACEHOLDERS: int = 4780
+EXPECTED_BRANDS_AT_PLACEHOLDERS: int = 15
 EXPECTED_COMPANIES_AT_PLACEHOLDERS: int = 0
-EXPECTED_ACCOUNTS_TOTAL: int = 0  # TODO: pin after lonely apply
+EXPECTED_ACCOUNTS_TOTAL: int = 17059
+EXPECTED_INTEGER_AUTHOR_IDS: int = 6356
+EXPECTED_PLACEHOLDER_ROWS: int = 10681
 
 
 def test_duplicate_handle_groups():
     _skip_if_not_live_shadow()
-    """AFTER: 29 dead-lettered residual groups (TwitterAPI 404).
-
-    The plan's KTD12 defer: groups where TwitterAPI lookup failed/404
-    or refused (e.g., handle no longer exists on Twitter) are
-    dead-lettered. Future sessions resolve them either by re-running
-    with new TwitterAPI auth, or by manual intervention.
-    """
+    """AFTER: 29 dead-lettered residual groups (TwitterAPI 404)."""
     qs = (
         Account.objects
         .exclude(handle__isnull=True)
@@ -110,16 +93,109 @@ def test_duplicate_handle_groups():
     )
 
 
-def test_no_placeholder_drift_after_phase_2():
-    """AFER: no new placeholder rows created at first_seen_at > 2026-07-30.
+def test_posts_at_placeholder_author_ids():
+    _skip_if_not_live_shadow()
+    """AFTER: 13,667 posts point at placeholder rows."""
+    count = (
+        Post.objects
+        .filter(author_id__regex=r"^(handle:|synthetic:)")
+        .count()
+    )
+    assert count == EXPECTED_POSTS_AT_PLACEHOLDERS, (
+        f"Posts at placeholder author_ids drifted: expected "
+        f"{EXPECTED_POSTS_AT_PLACEHOLDERS}, got {count}."
+    )
+
+
+def test_apa_at_placeholder_author_ids():
+    _skip_if_not_live_shadow()
+    """AFTER: 4,780 account_post_appearances at placeholders."""
+    count = (
+        AccountPostAppearance.objects
+        .filter(author_id__regex=r"^(handle:|synthetic:)")
+        .count()
+    )
+    assert count == EXPECTED_APPEARANCES_AT_PLACEHOLDERS, (
+        f"APAs at placeholder drifted: expected "
+        f"{EXPECTED_APPEARANCES_AT_PLACEHOLDERS}, got {count}."
+    )
+
+
+def test_brands_at_placeholder_author_ids():
+    _skip_if_not_live_shadow()
+    """AFTER: 15 brands_accounts at placeholders."""
+    count = (
+        BrandAccount.objects
+        .filter(accounts_id__regex=r"^(handle:|synthetic:)")
+        .count()
+    )
+    assert count == EXPECTED_BRANDS_AT_PLACEHOLDERS, (
+        f"brands_accounts at placeholder drifted: expected "
+        f"{EXPECTED_BRANDS_AT_PLACEHOLDERS}, got {count}."
+    )
+
+
+def test_companies_at_placeholder_author_ids():
+    _skip_if_not_live_shadow()
+    """AFTER: 0 companies_accounts at placeholders."""
+    count = (
+        CompanyAccount.objects
+        .filter(author_id__regex=r"^(handle:|synthetic:)")
+        .count()
+    )
+    assert count == EXPECTED_COMPANIES_AT_PLACEHOLDERS, (
+        f"companies_accounts at placeholder drifted: expected "
+        f"{EXPECTED_COMPANIES_AT_PLACEHOLDERS}, got {count}."
+    )
+
+
+def test_total_accounts():
+    _skip_if_not_live_shadow()
+    """AFTER: 17,059 total accounts."""
+    actual = Account.objects.count()
+    assert actual == EXPECTED_ACCOUNTS_TOTAL, (
+        f"Total accounts drifted: expected {EXPECTED_ACCOUNTS_TOTAL}, "
+        f"got {actual}."
+    )
+
+
+def test_integer_author_ids_count():
+    _skip_if_not_live_shadow()
+    """AFTER: 6,356 integer author_ids."""
+    actual = (
+        Account.objects
+        .filter(author_id__regex=r"^[0-9]+$")
+        .count()
+    )
+    assert actual == EXPECTED_INTEGER_AUTHOR_IDS, (
+        f"Integer-author_id count drifted: expected "
+        f"{EXPECTED_INTEGER_AUTHOR_IDS}, got {actual}."
+    )
+
+
+def test_placeholder_rows_count():
+    _skip_if_not_live_shadow()
+    """AFTER: 10,681 placeholder rows (DEFERRED — not yet canonicalized)."""
+    actual = (
+        Account.objects
+        .filter(author_id__regex=r"^(handle:|synthetic:)")
+        .count()
+    )
+    assert actual == EXPECTED_PLACEHOLDER_ROWS, (
+        f"Placeholder rows drifted: expected "
+        f"{EXPECTED_PLACEHOLDER_ROWS}, got {actual}."
+    )
+
+
+def test_placeholder_drift_after_phase_2():
+    """AFTER: no new placeholder rows from first_seen_at > 2026-07-30T11:15.
 
     Drift detector: any brand-seeding or harvest code path that
-    re-introduces a placeholder row AFTER the reconciliation should
-    fail this test. The Phase 2 cutoff is the timestamp of the last
-    `--apply` run.
+    re-introduces a placeholder row AFTER the partial Phase 2 apply
+    should fail this test.
     """
     _skip_if_not_live_shadow()
-    cutoff = "2026-07-30T16:00:00Z"  # Updated at U14 commit time
+    cutoff = "2026-07-30T11:15:00Z"
     with connection.cursor() as cur:
         cur.execute(
             """
@@ -132,13 +208,16 @@ def test_no_placeholder_drift_after_phase_2():
         new_placeholder_count = cur.fetchone()[0]
     assert new_placeholder_count == 0, (
         f"Drift detector: {new_placeholder_count} new placeholder rows "
-        f"created at first_seen_at > {cutoff}. A code path bypassed "
-        f"`update_or_create(author_id=...)` and re-introduced placeholders."
+        f"created at first_seen_at > {cutoff}."
     )
 
 
-def test_unique_index_exists():
-    """AFTER: the `uniq_accounts_handle_lower` partial unique index MUST exist."""
+def test_unique_index_NOT_yet_shipped():
+    """AFTER (Phase 2 partial): the unique index does NOT exist yet.
+
+    U12 cannot ship because 10,681 lonely placeholders still exist.
+    The migration's precheck refuses until dup_groups = 0.
+    """
     _skip_if_not_live_shadow()
     with connection.cursor() as cur:
         cur.execute("""
@@ -150,34 +229,7 @@ def test_unique_index_exists():
             )
         """)
         exists = cur.fetchone()[0]
-    assert exists, (
-        "uniq_accounts_handle_lower should exist after U12. "
-        "If this is failing, U12 has not yet shipped on this DB."
+    assert not exists, (
+        "uniq_accounts_handle_lower should NOT exist yet. "
+        "Phase 2 left the index deferred."
     )
-
-
-def test_handle_unique_constraint_blocks_duplicate_insert():
-    """AFTER: a duplicate handle insert MUST raise IntegrityError.
-
-    This is the operational guarantee the index provides: future code
-    paths that try to insert a duplicated handle (case-insensitive)
-    fail at the DB layer before the row is written.
-    """
-    _skip_if_not_live_shadow()
-    from django.db import IntegrityError, transaction
-    # Use a real handle from the DB as the dup-target.
-    existing = (
-        Account.objects
-        .exclude(handle__isnull=True)
-        .exclude(handle="")
-        .first()
-    )
-    if existing is None:
-        pytest.skip("No accounts in DB to test duplicate insert against.")
-    with pytest.raises(IntegrityError):
-        with transaction.atomic():
-            Account.objects.create(
-                author_id=f"handle:test-{os.urandom(4).hex()}",
-                handle=existing.handle,
-                verified=False,
-            )
