@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05 — Headline Strip (Idea 2)</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --up: #10b981;
+    --kimi: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; }
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .meta { color: var(--muted); font-size: 11px; flex-basis: 100%; }
+  .topbar .window-toggle { display: flex; gap: 2px; font-size: 11px; align-items: center; }
+  .topbar button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .topbar button.is-active { background: var(--accent); border-color: var(--accent); }
+
+  /* Headline strip — the centerpiece */
+  .headline-strip {
+    margin-top: 10px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+    border: 1px solid #7c3aed;
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    position: relative;
+  }
+  .headline-strip .kicker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .headline-strip .pulse {
+    width: 8px; height: 8px;
+    background: var(--kimi);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--kimi);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .headline-strip .body {
+    font-size: 14px;
+    line-height: 1.4;
+    color: white;
+    font-weight: 500;
+  }
+  .headline-strip .body .brand {
+    color: #fbcfe8;
+    font-weight: 600;
+  }
+  .headline-strip .body .delta {
+    color: #86efac;
+    font-weight: 700;
+  }
+  .headline-strip .body .voice {
+    color: #ddd6fe;
+    font-weight: 400;
+  }
+  .headline-strip .chev {
+    position: absolute;
+    top: 12px; right: 14px;
+    color: #c4b5fd;
+    font-size: 14px;
+  }
+
+  /* Chart */
+  .home-chart-wrap {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .home-chart-wrap h2 {
+    font-size: 11px; margin: 0 0 6px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  canvas.home-chart {
+    width: 100%; height: 200px; display: block; border-radius: 6px;
+  }
+
+  /* Truncated feed preview */
+  .feed-strip {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .feed-strip h3 {
+    font-size: 11px; margin: 0 0 8px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  }
+  .feed-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+  }
+  .feed-row:first-of-type { border-top: none; padding-top: 0; }
+  .feed-row .avatar {
+    flex: 0 0 28px;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--kimi);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+  }
+  .feed-row .body { flex: 1; min-width: 0; }
+  .feed-row .head {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .feed-row .handle { font-weight: 600; color: var(--text); }
+  .feed-row .meta { color: var(--muted); font-size: 11px; }
+  .feed-row .text {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+  .feed-row .engagement {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 4px;
+    display: flex;
+    gap: 10px;
+  }
+  .feed-row .engagement span::before {
+    margin-right: 3px;
+  }
+  .feed-row .engagement .likes::before { content: "♥"; color: #f87171; }
+  .feed-row .engagement .rts::before { content: "↻"; color: var(--up); }
+  .feed-row .engagement .replies::before { content: "💬"; }
+
+  .see-all {
+    display: block;
+    text-align: center;
+    margin-top: 8px;
+    padding: 6px;
+    color: var(--accent);
+    font-size: 12px;
+    text-decoration: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .hint {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #052e16;
+    border: 1px solid #14532d;
+    color: #86efac;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>Pushin' Weight <small>多模态</small></h1>
+    <span class="meta">20 models · 1h window</span>
+    <nav class="window-toggle">
+      <button>15m</button><button class="is-active">1h</button><button>24h</button>
+    </nav>
+  </header>
+
+  <!-- Headline Strip -->
+  <div class="headline-strip" role="button" tabindex="0">
+    <div class="kicker">
+      <span class="pulse"></span>
+      Trending now · 1h window
+      <span class="chev">⌄</span>
+    </div>
+    <div class="body">
+      <span class="brand">Kimi 3</span> open weights dropped 2h ago on Hugging Face —
+      X volume <span class="delta">+312%</span> in 60 min,
+      87 posts, sentiment 71% positive.
+      <span class="voice">Top voices: @kimi_moonshot (12), @awnihannun (8), @rasbt (6).</span>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <section class="home-chart-wrap">
+    <h2>Multi-brand · last 1h</h2>
+    <svg class="home-chart" viewBox="0 0 360 200" preserveAspectRatio="none">
+      <rect width="360" height="200" fill="#0f172a"/>
+      <line x1="0" y1="50"  x2="360" y2="50"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="100" x2="360" y2="100" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="150" x2="360" y2="150" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.5" fill="none">
+        <polyline stroke="#ec4899" stroke-width="2.2" points="0,180 30,178 60,170 90,160 120,140 150,118 180,92 210,72 240,55 270,42 300,38 330,42 360,48"/>
+        <polyline stroke="#3b82f6" points="0,140 30,138 60,135 90,130 120,128 150,125 180,122 210,118 240,115 270,112 300,108 330,105 360,100"/>
+        <polyline stroke="#f97316" points="0,130 30,132 60,128 90,130 120,135 150,140 180,142 210,140 240,142 270,138 300,135 330,132 360,130"/>
+        <polyline stroke="#10b981" points="0,160 30,158 60,152 90,148 120,142 150,138 180,132 210,128 240,122 270,118 300,115 330,110 360,105"/>
+      </g>
+    </svg>
+  </section>
+
+  <!-- Truncated feed -->
+  <section class="feed-strip">
+    <h3>Top voices · 1h</h3>
+
+    <div class="feed-row">
+      <span class="avatar">K</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@kimi_moonshot</span>
+          <span class="meta">· 12m</span>
+        </div>
+        <div class="text">Kimi K3 open weights are out! Strong reasoning scores, MIT license. Try the 7B variant first.</div>
+        <div class="engagement">
+          <span class="likes">1.2k</span>
+          <span class="rts">340</span>
+          <span class="replies">89</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="feed-row">
+      <span class="avatar">A</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@awnihannun</span>
+          <span class="meta">· 24m</span>
+        </div>
+        <div class="text">Ran Kimi K3 on the standard reasoning eval — ahead of Qwen3 on math, behind DeepSeek-R1 on code.</div>
+        <div class="engagement">
+          <span class="likes">480</span>
+          <span class="rts">120</span>
+          <span class="replies">31</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="feed-row">
+      <span class="avatar">S</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@rasbt</span>
+          <span class="meta">· 41m</span>
+        </div>
+        <div class="text">Quick distill: Kimi K3 is a 7B/14B/32B MoE family. MIT, ~3.5k context, no RLHF weights. Solid for self-host.</div>
+        <div class="engagement">
+          <span class="likes">312</span>
+          <span class="rts">95</span>
+          <span class="replies">22</span>
+        </div>
+      </div>
+    </div>
+
+    <a class="see-all" href="#">See all 87 posts →</a>
+  </section>
+
+  <div class="hint">
+    The headline strip is the "what just dropped" answer. Tappable anywhere → drills into the brand's home. Below it, the chart + top 3 most-engaged posts.
+  </div>
+</div>
+</body>
+</html>

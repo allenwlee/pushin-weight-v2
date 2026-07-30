@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 — Pulse Bar (Idea 1)</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --up: #10b981;
+    --down: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; }
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .meta { color: var(--muted); font-size: 11px; flex-basis: 100%; }
+  .topbar .window-toggle { display: flex; gap: 2px; font-size: 11px; align-items: center; }
+  .topbar button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .topbar button.is-active { background: var(--accent); border-color: var(--accent); }
+  .topbar .window-toggle-label { color: var(--muted); margin-right: 2px; }
+
+  /* Pulse Bar */
+  .pulse-bar-wrap {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .pulse-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .pulse-bar-head .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .pulse-bar-head .window-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .pulse-bar {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pulse-bar::-webkit-scrollbar { display: none; }
+  .pulse-chip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--chip-color, var(--accent));
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    scroll-snap-align: start;
+    white-space: nowrap;
+    transition: transform 120ms;
+  }
+  .pulse-chip:active { transform: scale(0.96); }
+  .pulse-chip .name { color: var(--text); font-weight: 500; }
+  .pulse-chip .delta {
+    font-weight: 600;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .pulse-chip .delta.up { color: var(--up); }
+  .pulse-chip .delta.down { color: var(--down); }
+  .pulse-chip .delta.flat { color: var(--muted); }
+  .pulse-chip .delta::before { content: ""; }
+  .pulse-chip .delta.up::before { content: "▲"; }
+  .pulse-chip .delta.down::before { content: "▼"; }
+  .pulse-chip .delta.flat::before { content: "→"; }
+
+  /* Chart */
+  .home-chart-wrap {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .home-chart-wrap h2 {
+    font-size: 11px; margin: 0 0 6px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  canvas.home-chart { width: 100%; height: 240px; display: block; border-radius: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 10px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* Indicator */
+  .hint {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #052e16;
+    border: 1px solid #14532d;
+    color: #86efac;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>Pushin' Weight <small>多模态</small></h1>
+    <span class="meta">20 models · 15m window</span>
+    <nav class="window-toggle">
+      <span class="window-toggle-label">window:</span>
+      <button class="is-active">15m</button><button>1h</button><button>24h</button><button>7d</button>
+    </nav>
+  </header>
+
+  <!-- Pulse Bar -->
+  <section class="pulse-bar-wrap" aria-label="Trending models in last 15 min">
+    <div class="pulse-bar-head">
+      <span class="label">Trending · last 15m</span>
+      <span class="window-label">updated 23s ago</span>
+    </div>
+    <div class="pulse-bar" role="list">
+      <button class="pulse-chip" role="listitem" style="--chip-color:#ec4899">
+        <span class="name">Kimi</span>
+        <span class="delta up">+312%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#10b981">
+        <span class="name">DeepSeek</span>
+        <span class="delta up">+47%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#0ea5e9">
+        <span class="name">ERNIE</span>
+        <span class="delta up">+28%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#3b82f6">
+        <span class="name">MiniMax</span>
+        <span class="delta up">+19%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#f97316">
+        <span class="name">Qwen</span>
+        <span class="delta flat">±0%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#a855f7">
+        <span class="name">GLM</span>
+        <span class="delta flat">+2%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#dc2626">
+        <span class="name">Solar</span>
+        <span class="delta down">−8%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#6366f1">
+        <span class="name">Sakana</span>
+        <span class="delta down">−12%</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Chart (still full-size) -->
+  <section class="home-chart-wrap">
+    <h2>Multi-brand · last 15m</h2>
+    <svg class="home-chart" viewBox="0 0 360 240" preserveAspectRatio="none">
+      <rect width="360" height="240" fill="#0f172a"/>
+      <line x1="0" y1="60"  x2="360" y2="60"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="120" x2="360" y2="120" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="180" x2="360" y2="180" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.6" fill="none">
+        <polyline stroke="#ec4899" points="20,180 60,178 100,170 140,140 180,90 220,55 260,40 300,30 340,25"/>
+        <polyline stroke="#10b981" points="20,150 60,148 100,145 140,140 180,135 220,132 260,128 300,125 340,122"/>
+        <polyline stroke="#0ea5e9" points="20,170 60,168 100,160 140,155 180,148 220,140 260,135 300,128 340,120"/>
+        <polyline stroke="#3b82f6" points="20,180 60,175 100,170 140,168 180,162 220,158 260,150 300,148 340,140"/>
+        <polyline stroke="#f97316" points="20,140 60,142 100,140 140,145 180,150 220,148 260,150 300,148 340,150"/>
+      </g>
+      <text x="20" y="14" fill="#94a3b8" font-size="9">15m ago</text>
+      <text x="290" y="14" fill="#94a3b8" font-size="9">now</text>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#ec4899"></i>Kimi</span>
+      <span><i style="background:#10b981"></i>DeepSeek</span>
+      <span><i style="background:#0ea5e9"></i>ERNIE</span>
+      <span><i style="background:#3b82f6"></i>MiniMax</span>
+      <span><i style="background:#f97316"></i>Qwen</span>
+    </div>
+  </section>
+
+  <div class="hint">
+    Pulse bar above the chart, same color code as the lines. Tap a chip → drills into the brand's home. Horizontal scroll reveals more brands.
+  </div>
+</div>
+</body>
+</html>

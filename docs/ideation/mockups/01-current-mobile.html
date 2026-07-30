@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01 — Current mobile (baseline)</title>
+<style>
+  /* matches x_monitor/static/dashboard.css visual register */
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone {
+    width: 360px;
+    margin: 0 auto;
+    padding: 12px;
+    background: var(--bg);
+  }
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .meta { color: var(--muted); font-size: 11px; flex-basis: 100%; }
+  .topbar .window-toggle, .topbar .locale-toggle { display: flex; gap: 2px; font-size: 11px; }
+  .topbar button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .topbar button.is-active { background: var(--accent); border-color: var(--accent); }
+  .topbar .window-toggle-label, .topbar .locale-toggle-label { color: var(--muted); align-self: center; margin-right: 2px; }
+
+  .home-chart-wrap {
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .home-chart-wrap h2 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  canvas.home-chart {
+    width: 100%;
+    height: 360px;
+    display: block;
+    border-radius: 6px;
+  }
+
+  .control-panel {
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .control-panel h2 { font-size: 14px; margin: 0 0 8px; font-weight: 600; }
+  .control-group { padding: 6px 0; border-top: 1px solid var(--border); }
+  .control-group:first-of-type { border-top: none; padding-top: 0; }
+  .control-group-title {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    font-size: 12px;
+  }
+  .control-row .swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .label-banner {
+    margin-top: 16px;
+    padding: 8px 12px;
+    background: #422006;
+    border: 1px solid #92400e;
+    color: #fbbf24;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>Pushin' Weight <small>多模态</small></h1>
+    <span class="meta">20 models · 24h window</span>
+    <nav class="window-toggle">
+      <span class="window-toggle-label">window:</span>
+      <button>1d</button><button class="is-active">7d</button><button>30d</button>
+    </nav>
+    <nav class="locale-toggle">
+      <span class="locale-toggle-label">lang:</span>
+      <button>中文</button><button class="is-active">EN</button><button>orig</button>
+    </nav>
+  </header>
+
+  <section class="home-chart-wrap">
+    <h2>Multi-brand · last 7 days</h2>
+    <!-- SVG placeholder for the line chart -->
+    <svg class="home-chart" viewBox="0 0 360 360" preserveAspectRatio="none">
+      <rect width="360" height="360" fill="#0f172a"/>
+      <line x1="0" y1="80"  x2="360" y2="80"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="160" x2="360" y2="160" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="240" x2="360" y2="240" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="320" x2="360" y2="320" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <!-- 20 lines, mostly flat, just for visual density -->
+      <g stroke-width="1.2" fill="none" opacity="0.85">
+        <polyline stroke="#3b82f6" points="0,260 36,255 72,250 108,252 144,248 180,240 216,235 252,232 288,228 324,225 360,222"/>
+        <polyline stroke="#f97316" points="0,220 36,225 72,222 108,228 144,235 180,238 216,242 252,240 288,238 324,235 360,232"/>
+        <polyline stroke="#10b981" points="0,180 36,175 72,170 108,165 144,160 180,155 216,150 252,148 288,145 324,140 360,138"/>
+        <polyline stroke="#a855f7" points="0,290 36,288 72,292 108,295 144,298 180,300 216,302 252,300 288,305 324,308 360,310"/>
+        <polyline stroke="#eab308" points="0,200 36,202 72,205 108,200 144,195 180,192 216,195 252,200 288,205 324,202 360,200"/>
+        <polyline stroke="#ec4899" points="0,170 36,168 72,160 108,150 144,138 180,125 216,118 252,120 288,135 324,150 360,160"/>
+      </g>
+    </svg>
+  </section>
+
+  <aside class="control-panel">
+    <h2>Filters</h2>
+    <div class="control-group">
+      <div class="control-group-title">Brands</div>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#3b82f6"></span> MiniMax AI</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#f97316"></span> Qwen</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#10b981"></span> DeepSeek</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#a855f7"></span> Zhipu GLM</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#eab308"></span> Xiaomi MiMo</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#ec4899"></span> Moonshot Kimi</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#06b6d4"></span> InclusionAI</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#facc15"></span> Mistral</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#22c55e"></span> StepFun</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#0ea5e9"></span> Baidu ERNIE</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#ec4899"></span> Tencent Hunyuan</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#14b8a6"></span> Meta Llama</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#84cc16"></span> NVIDIA Megatron</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#f43f5e"></span> ByteDance Doubao</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#8b5cf6"></span> 01.AI Yi</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#d946ef"></span> SenseTime SenseChat</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#0d9488"></span> LG EXAONE</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#fb923c"></span> Kuaishou Kling</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#6366f1"></span> Sakana AI</label>
+      <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#dc2626"></span> Upstage Solar</label>
+    </div>
+    <div class="control-group">
+      <div class="control-group-title">Discourse</div>
+      <label class="control-row"><input type="checkbox" checked> genuine_hype</label>
+      <label class="control-row"><input type="checkbox" checked> sarcasm</label>
+      <label class="control-row"><input type="checkbox" checked> dunk_yingyang</label>
+      <label class="control-row"><input type="checkbox" checked> cope</label>
+      <label class="control-row"><input type="checkbox" checked> fud</label>
+      <label class="control-row"><input type="checkbox" checked> ai_slop_critique</label>
+    </div>
+    <div class="control-group">
+      <div class="control-group-title">post_type</div>
+      <label class="control-row"><input type="checkbox" checked> buzz_releases</label>
+      <label class="control-row"><input type="checkbox" checked> hands_on_usage</label>
+      <label class="control-row"><input type="checkbox" checked> performance_comparisons</label>
+      <label class="control-row"><input type="checkbox" checked> feedback_questions</label>
+    </div>
+    <div class="control-group">
+      <div class="control-group-title">account.role</div>
+      <label class="control-row"><input type="checkbox" checked> official</label>
+      <label class="control-row"><input type="checkbox" checked> staff</label>
+      <label class="control-row"><input type="checkbox" checked> community</label>
+    </div>
+  </aside>
+
+  <div class="label-banner">
+    Baseline: 52 checkboxes stacked below the chart. On a 360-px viewport the user has to scroll ~6 screen heights just to see the feed.
+  </div>
+</div>
+</body>
+</html>

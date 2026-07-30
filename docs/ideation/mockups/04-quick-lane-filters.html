@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04 — Quick-Lane Filters (Idea 11)</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-2: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; }
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .meta { color: var(--muted); font-size: 11px; flex-basis: 100%; }
+  .topbar .window-toggle { display: flex; gap: 2px; font-size: 11px; align-items: center; }
+  .topbar button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .topbar button.is-active { background: var(--accent); border-color: var(--accent); }
+
+  /* Quick-lane filter pills */
+  .quick-lane {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .quick-lane::-webkit-scrollbar { display: none; }
+  .quick-lane .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    flex: 0 0 auto;
+  }
+  .filter-pill {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-pill.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .filter-pill.more {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Chart */
+  .home-chart-wrap {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .home-chart-wrap h2 {
+    font-size: 11px; margin: 0 0 6px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  canvas.home-chart {
+    width: 100%; height: 220px; display: block; border-radius: 6px;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; font-size: 10px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  /* Active-filter chips (what the current selection looks like) */
+  .active-filters {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .active-filters .label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  }
+  .active-chip {
+    background: #1e293b;
+    color: var(--text);
+    padding: 3px 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .active-chip .x { color: var(--muted); cursor: pointer; font-size: 11px; }
+
+  .hint {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #052e16;
+    border: 1px solid #14532d;
+    color: #86efac;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>Pushin' Weight <small>多模态</small></h1>
+    <span class="meta">20 models · 7d window</span>
+    <nav class="window-toggle">
+      <button>15m</button><button>1h</button><button class="is-active">7d</button>
+    </nav>
+  </header>
+
+  <!-- Quick-Lane pills -->
+  <nav class="quick-lane" aria-label="Filter presets">
+    <span class="label">Filter:</span>
+    <button class="filter-pill">All</button>
+    <button class="filter-pill is-active">Buzz</button>
+    <button class="filter-pill">Release</button>
+    <button class="filter-pill">Meme</button>
+    <button class="filter-pill more">More ⌄</button>
+  </nav>
+
+  <!-- Active filter chips -->
+  <div class="active-filters">
+    <span class="label">Active:</span>
+    <span class="active-chip">Buzz <span class="x">×</span></span>
+    <span class="active-chip">official <span class="x">×</span></span>
+    <span class="active-chip">staff <span class="x">×</span></span>
+    <span class="active-chip">community <span class="x">×</span></span>
+  </div>
+
+  <section class="home-chart-wrap">
+    <h2>Multi-brand · last 7d · Buzz</h2>
+    <svg class="home-chart" viewBox="0 0 360 220" preserveAspectRatio="none">
+      <rect width="360" height="220" fill="#0f172a"/>
+      <line x1="0" y1="55"  x2="360" y2="55"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="110" x2="360" y2="110" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="165" x2="360" y2="165" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.5" fill="none">
+        <polyline stroke="#3b82f6" points="0,140 36,135 72,128 108,120 144,115 180,108 216,100 252,92 288,85 324,78 360,72"/>
+        <polyline stroke="#f97316" points="0,130 36,128 72,125 108,128 144,135 180,140 216,142 252,138 288,135 324,130 360,128"/>
+        <polyline stroke="#10b981" points="0,160 36,155 72,148 108,140 144,135 180,128 216,120 252,115 288,108 324,102 360,98"/>
+        <polyline stroke="#ec4899" points="0,180 36,170 72,155 108,140 144,118 180,92 216,72 252,55 288,48 324,55 360,62"/>
+        <polyline stroke="#0ea5e9" points="0,150 36,148 72,140 108,135 144,128 180,120 216,115 252,112 288,108 324,102 360,95"/>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#3b82f6"></i>MiniMax</span>
+      <span><i style="background:#f97316"></i>Qwen</span>
+      <span><i style="background:#10b981"></i>DeepSeek</span>
+      <span><i style="background:#ec4899"></i>Kimi</span>
+      <span><i style="background:#0ea5e9"></i>ERNIE</span>
+    </div>
+  </section>
+
+  <div class="hint">
+    4 pills cover the 90% case. Active selections show as chips below. "More ⌄" opens the full 52-control bottom-sheet for power users.
+  </div>
+</div>
+</body>
+</html>

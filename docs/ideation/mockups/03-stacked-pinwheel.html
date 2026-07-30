@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 — Stacked Pinwheel (Idea 3)</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; position: relative; min-height: 720px; }
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .meta { color: var(--muted); font-size: 11px; flex-basis: 100%; }
+  .topbar .window-toggle { display: flex; gap: 2px; font-size: 11px; align-items: center; }
+  .topbar button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .topbar button.is-active { background: var(--accent); border-color: var(--accent); }
+
+  /* Chart with 180 px height + filters pill in card header */
+  .home-chart-wrap {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .card-header h2 {
+    font-size: 11px; margin: 0; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  .pill .chev { color: var(--muted); font-size: 9px; }
+  canvas.home-chart {
+    width: 100%;
+    height: 180px;
+    display: block;
+    border-radius: 6px;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; font-size: 10px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  .card-footer {
+    margin-top: 12px;
+    padding: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .card-footer strong { color: var(--text); font-weight: 600; }
+
+  /* Bottom sheet modal — half-open to show structure */
+  .sheet-backdrop {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    border-radius: 12px;
+    margin: 12px;
+  }
+  .sheet {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    max-height: 70%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+  }
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 8px auto 0;
+  }
+  .sheet-head {
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sheet-head h3 { font-size: 14px; margin: 0; font-weight: 600; }
+  .sheet-head .close { color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; }
+  .sheet-body {
+    padding: 10px 16px 80px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .sheet-body .control-group { padding: 8px 0; border-top: 1px solid var(--border); }
+  .sheet-body .control-group:first-of-type { border-top: none; }
+  .sheet-body .control-group-title {
+    font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+  }
+  .sheet-body .control-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12px; }
+  .sheet-body .control-row .swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .sheet-apply {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 12px 16px;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+  }
+  .sheet-apply button {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .hint {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #052e16;
+    border: 1px solid #14532d;
+    color: #86efac;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>Pushin' Weight <small>多模态</small></h1>
+    <span class="meta">20 models · 24h window</span>
+    <nav class="window-toggle">
+      <button>15m</button><button class="is-active">1d</button><button>7d</button><button>30d</button>
+    </nav>
+  </header>
+
+  <section class="home-chart-wrap">
+    <div class="card-header">
+      <h2>Multi-brand · last 24h</h2>
+      <button class="pill">Filters <span class="chev">⌄</span></button>
+    </div>
+    <!-- 180 px tall chart (was 360 px) -->
+    <svg class="home-chart" viewBox="0 0 360 180" preserveAspectRatio="none">
+      <rect width="360" height="180" fill="#0f172a"/>
+      <line x1="0" y1="45"  x2="360" y2="45"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="90"  x2="360" y2="90"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="135" x2="360" y2="135" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.5" fill="none">
+        <polyline stroke="#3b82f6" points="0,100 36,98 72,95 108,92 144,85 180,80 216,75 252,72 288,68 324,65 360,60"/>
+        <polyline stroke="#f97316" points="0,90 36,92 72,90 108,95 144,100 180,105 216,108 252,105 288,102 324,98 360,95"/>
+        <polyline stroke="#10b981" points="0,130 36,128 72,122 108,118 144,110 180,105 216,100 252,95 288,90 324,88 360,85"/>
+        <polyline stroke="#ec4899" points="0,140 36,135 72,128 108,115 144,98 180,75 216,55 252,45 288,42 324,45 360,50"/>
+        <polyline stroke="#a855f7" points="0,150 36,152 72,148 108,150 144,155 180,158 216,160 252,158 288,162 324,165 360,168"/>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#3b82f6"></i>MiniMax</span>
+      <span><i style="background:#f97316"></i>Qwen</span>
+      <span><i style="background:#10b981"></i>DeepSeek</span>
+      <span><i style="background:#ec4899"></i>Kimi</span>
+      <span><i style="background:#a855f7"></i>GLM</span>
+    </div>
+  </section>
+
+  <div class="card-footer">
+    <strong>Kimi</strong> open weights dropped 2h ago — X volume <strong style="color:#10b981">+312%</strong>.
+  </div>
+
+  <div class="hint">
+    Chart shrunk from 360→180 px. "Filters ⌄" pill in the chart card header opens a bottom-sheet with all 52 controls.
+  </div>
+
+  <!-- Bottom-sheet modal (open, mid-state) -->
+  <div class="sheet-backdrop"></div>
+  <div class="sheet" role="dialog" aria-label="Filters">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>Filters</h3>
+      <span class="close">×</span>
+    </div>
+    <div class="sheet-body">
+      <div class="control-group">
+        <div class="control-group-title">Brands</div>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#3b82f6"></span> MiniMax AI</label>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#f97316"></span> Qwen</label>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#10b981"></span> DeepSeek</label>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#ec4899"></span> Moonshot Kimi</label>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#0ea5e9"></span> Baidu ERNIE</label>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#14b8a6"></span> Meta Llama</label>
+        <label class="control-row"><input type="checkbox" checked> <span class="swatch" style="background:#fb923c"></span> Kuaishou Kling</label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">Discourse</div>
+        <label class="control-row"><input type="checkbox" checked> genuine_hype</label>
+        <label class="control-row"><input type="checkbox" checked> sarcasm</label>
+        <label class="control-row"><input type="checkbox" checked> dunk_yingyang</label>
+        <label class="control-row"><input type="checkbox" checked> cope</label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">post_type</div>
+        <label class="control-row"><input type="checkbox" checked> buzz_releases</label>
+        <label class="control-row"><input type="checkbox" checked> hands_on_usage</label>
+        <label class="control-row"><input type="checkbox" checked> performance_comparisons</label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">account.role</div>
+        <label class="control-row"><input type="checkbox" checked> official</label>
+        <label class="control-row"><input type="checkbox" checked> staff</label>
+        <label class="control-row"><input type="checkbox" checked> community</label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">us_nationalism</div>
+        <label class="control-row"><input type="checkbox" checked> critical</label>
+        <label class="control-row"><input type="checkbox" checked> neutral</label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">cn_nationalism</div>
+        <label class="control-row"><input type="checkbox" checked> proud</label>
+        <label class="control-row"><input type="checkbox" checked> critical</label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">unsanctioned</div>
+        <label class="control-row"><input type="checkbox"> show only flagged</label>
+      </div>
+    </div>
+    <div class="sheet-apply">
+      <button>Apply</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

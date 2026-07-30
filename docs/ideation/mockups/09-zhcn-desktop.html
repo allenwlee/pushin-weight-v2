@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>09 — Tier 1 Composed (zh-CN, desktop 1280px)</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --up: #10b981;
+    --down: #f87171;
+    --kimi: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 1280px; margin: 0 auto; padding: 24px; }
+  /* 1. Compressed topbar */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 22px; margin: 0; font-weight: 600; flex: 1; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 13px; }
+  .topbar .window-toggle {
+    display: flex; gap: 4px; font-size: 13px; align-items: center;
+    background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+  }
+  .topbar .window-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .topbar .window-toggle button.is-active {
+    background: var(--accent);
+    color: white;
+  }
+
+  /* 2. Pulse bar */
+  .pulse-bar-wrap {
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px 10px;
+  }
+  .pulse-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .pulse-bar-head .label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .pulse-bar-head .updated { font-size: 12px; color: var(--muted); }
+  .pulse-bar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pulse-bar::-webkit-scrollbar { display: none; }
+  .pulse-chip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--chip-color, var(--accent));
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .pulse-chip .name { color: var(--text); font-weight: 500; }
+  .pulse-chip .delta { font-weight: 600; font-size: 12px; }
+  .pulse-chip .delta.up { color: var(--up); }
+  .pulse-chip .delta.down { color: var(--down); }
+  .pulse-chip .delta.flat { color: var(--muted); }
+  .pulse-chip .delta.up::before { content: "▲ "; }
+  .pulse-chip .delta.down::before { content: "▼ "; }
+  .pulse-chip .delta.flat::before { content: "→ "; }
+
+  /* 3. Quick-lane filter pills */
+  .quick-lane {
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .quick-lane::-webkit-scrollbar { display: none; }
+  .quick-lane .label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    flex: 0 0 auto;
+  }
+  .filter-pill {
+    flex: 0 0 auto;
+    padding: 8px 18px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-pill.is-active { background: var(--accent); border-color: var(--accent); color: white; }
+  .filter-pill.more {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  /* 4. Chart card with 180-px chart + tap-to-drill affordance */
+  .home-chart-wrap {
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px 14px;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .card-head h2 {
+    font-size: 12px; margin: 0; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .card-head .tap-hint {
+    font-size: 11px; color: var(--muted); font-style: italic;
+  }
+  canvas.home-chart { width: 100%; height: 180px; display: block; border-radius: 6px; }
+  .legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .legend::-webkit-scrollbar { display: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* 5. Headline strip */
+  .headline-strip {
+    margin-top: 12px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+    border: 1px solid #7c3aed;
+    border-radius: 10px;
+    padding: 14px 18px;
+    cursor: pointer;
+    position: relative;
+  }
+  .headline-strip .kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .headline-strip .pulse {
+    width: 9px; height: 9px;
+    background: var(--kimi);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--kimi);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .headline-strip .body {
+    font-size: 15px;
+    line-height: 1.55;
+    color: white;
+    font-weight: 500;
+  }
+  .headline-strip .body .brand { color: #fbcfe8; font-weight: 600; }
+  .headline-strip .body .delta { color: #86efac; font-weight: 700; }
+  .headline-strip .body .voice { color: #ddd6fe; font-weight: 400; }
+
+  /* 6. Truncated feed — desktop shows 6 items */
+  .feed-strip {
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px 10px;
+  }
+  .feed-strip h3 {
+    font-size: 12px; margin: 0 0 8px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  }
+  .feed-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+  }
+  .feed-row:first-of-type { border-top: none; padding-top: 0; }
+  .feed-row .avatar {
+    flex: 0 0 32px;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+  }
+  .feed-row .body { flex: 1; min-width: 0; }
+  .feed-row .head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .feed-row .handle { font-weight: 600; color: var(--text); }
+  .feed-row .meta { color: var(--muted); font-size: 11px; }
+  .feed-row .text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.55;
+    margin-top: 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .feed-row .engagement {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 4px;
+    display: flex;
+    gap: 12px;
+  }
+  .feed-row .engagement .likes::before { content: "♥ "; color: #f87171; }
+  .feed-row .engagement .rts::before { content: "↻ "; color: var(--up); }
+  .feed-row .engagement .replies::before { content: "💬 "; }
+
+  .see-all {
+    display: block;
+    text-align: center;
+    margin-top: 8px;
+    padding: 8px;
+    color: var(--accent);
+    font-size: 12px;
+    text-decoration: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .hint {
+    margin-top: 14px;
+    padding: 12px 18px;
+    background: #052e16;
+    border: 1px solid #14532d;
+    color: #86efac;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .hint strong { color: white; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>多模态 <small>Pushin' Weight</small></h1>
+    <nav class="window-toggle">
+      <button class="is-active">15m</button><button>1h</button><button>24h</button><button>7d</button>
+    </nav>
+  </header>
+
+  <!-- Pulse bar -->
+  <section class="pulse-bar-wrap" aria-label="趋势模型">
+    <div class="pulse-bar-head">
+      <span class="label">趋势 · 15m</span>
+      <span class="updated">· 23秒前</span>
+    </div>
+    <div class="pulse-bar" role="list">
+      <button class="pulse-chip" role="listitem" style="--chip-color:#ec4899">
+        <span class="name">月之暗面</span><span class="delta up">312%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#10b981">
+        <span class="name">深度求索</span><span class="delta up">47%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#0ea5e9">
+        <span class="name">文心一言</span><span class="delta up">28%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#3b82f6">
+        <span class="name">MiniMax</span><span class="delta up">19%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#f97316">
+        <span class="name">通义千问</span><span class="delta flat">0%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#a855f7">
+        <span class="name">智谱 GLM</span><span class="delta flat">2%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#dc2626">
+        <span class="name">Solar</span><span class="delta down">8%</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Quick-lane pills -->
+  <nav class="quick-lane" aria-label="筛选预设">
+    <span class="label">筛选：</span>
+    <button class="filter-pill">全部</button>
+    <button class="filter-pill is-active">热议</button>
+    <button class="filter-pill">发布</button>
+    <button class="filter-pill">梗</button>
+    <button class="filter-pill more">更多 ⌄</button>
+  </nav>
+
+  <!-- Chart (180 px) -->
+  <section class="home-chart-wrap">
+    <div class="card-head">
+      <h2>多品牌 · 15m · 热议 · 点击折线深入</h2>
+    </div>
+    <svg class="home-chart" viewBox="0 0 360 180" preserveAspectRatio="none">
+      <rect width="360" height="180" fill="#0f172a"/>
+      <line x1="0" y1="45"  x2="360" y2="45"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="90"  x2="360" y2="90"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="135" x2="360" y2="135" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.8" fill="none">
+        <polyline stroke="#ec4899" points="0,160 30,158 60,148 90,128 120,108 150,82 180,58 210,42 240,30 270,28 300,30 330,35 360,40"/>
+        <polyline stroke="#3b82f6" points="0,110 30,108 60,105 90,102 120,100 150,98 180,95 210,92 240,90 270,88 300,85 330,82 360,80"/>
+        <polyline stroke="#f97316" points="0,100 30,102 60,98 90,102 120,108 150,112 180,115 210,112 240,115 270,110 300,108 330,105 360,102"/>
+        <polyline stroke="#10b981" points="0,140 30,138 60,132 90,128 120,122 150,118 180,112 210,108 240,102 270,98 300,95 330,92 360,88"/>
+      </g>
+      <!-- 点击目标提示：Kimi 折线上的淡环 -->
+      <circle cx="240" cy="30" r="14" fill="none" stroke="#ec4899" stroke-width="1" opacity="0.5"/>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#ec4899"></i>月之暗面</span>
+      <span><i style="background:#3b82f6"></i>MiniMax</span>
+      <span><i style="background:#f97316"></i>通义千问</span>
+      <span><i style="background:#10b981"></i>深度求索</span>
+    </div>
+  </section>
+
+  <!-- Headline strip -->
+  <div class="headline-strip" role="button" tabindex="0">
+    <div class="kicker">
+      <span class="pulse"></span>
+      当前趋势
+    </div>
+    <div class="body">
+      <span class="brand">月之暗面 Kimi 3</span> 开源权重于 2 小时前发布 — 60 分钟内 X 声量
+      <span class="delta">+312%</span>, 共 87 条帖子, 情感 71% 正面。
+      <span class="voice">热门声音: @kimi_moonshot (12), @awnihannun (8), @rasbt (6)。</span>
+    </div>
+  </div>
+
+  <!-- Truncated feed — desktop shows 6 items -->
+  <section class="feed-strip">
+    <h3>15m 内 Top 6</h3>
+    <div class="feed-row">
+      <span class="avatar" style="background:#ec4899">K</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@kimi_moonshot</span>
+          <span class="meta">· 12分钟</span>
+        </div>
+        <div class="text">月之暗面 K3 开源权重已发布! 推理能力强, MIT 协议. 先试 7B 变体。</div>
+        <div class="engagement">
+          <span class="likes">1.2k</span>
+          <span class="rts">340</span>
+          <span class="replies">89</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#3b82f6">A</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@awnihannun</span>
+          <span class="meta">· 24分钟</span>
+        </div>
+        <div class="text">在标准推理测试中跑了 K3 — 数学超过 Qwen3, 代码略逊于 DeepSeek-R1。</div>
+        <div class="engagement">
+          <span class="likes">480</span>
+          <span class="rts">120</span>
+          <span class="replies">31</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#10b981">S</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@rasbt</span>
+          <span class="meta">· 41分钟</span>
+        </div>
+        <div class="text">快速总结: K3 是 7B/14B/32B MoE 家族. MIT, ~3.5k 上下文, 无 RLHF 权重. 适合自部署。</div>
+        <div class="engagement">
+          <span class="likes">312</span>
+          <span class="rts">95</span>
+          <span class="replies">22</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#f97316">阿</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@Alibaba_Qwen</span>
+          <span class="meta">· 1小时02分</span>
+        </div>
+        <div class="text">恭喜月之暗面团队. 我们 Qwen3 团队正密切关注开源权重领域 — 预计下周发回应帖。</div>
+        <div class="engagement">
+          <span class="likes">1.8k</span>
+          <span class="rts">410</span>
+          <span class="replies">127</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#0ea5e9">文</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@awnihannun</span>
+          <span class="meta">· 1小时18分</span>
+        </div>
+        <div class="text">文心 5 预览分数本周五百度 AI 日发布. 泄露基准显示推理能力大幅提升。</div>
+        <div class="engagement">
+          <span class="likes">278</span>
+          <span class="rts">67</span>
+          <span class="replies">14</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#a855f7">智</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@Zai_org</span>
+          <span class="meta">· 1小时35分</span>
+        </div>
+        <div class="text">GLM-5 训练昨夜完成 — 评测套件启动中. 跑出头条指标后即公布结果。</div>
+        <div class="engagement">
+          <span class="likes">196</span>
+          <span class="rts">48</span>
+          <span class="replies">9</span>
+        </div>
+      </div>
+    </div>
+    <a class="see-all" href="#">查看全部 →</a>
+  </section>
+
+  <div class="hint">
+    <strong>组合:</strong> 与 06 相同的单栏布局 (无 2fr|1fr 网格). 顶部脉冲条 + 快速筛选 + 180-px 折线图（点击折线深入） + 头条条 + 截断信息流 (6 条).
+    与现有桌面仪表盘一致的暗色主题 + 品牌配色. 1280-px 画布有更多留白 — 字号更大, 标签更多, 信息更多 — 但结构与 08 相同. 字体栈: PingFang SC / Hiragino Sans GB / Microsoft YaHei.
+  </div>
+</div>
+</body>
+</html>

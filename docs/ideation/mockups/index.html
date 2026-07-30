@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile Homepage Mockups — Index</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0b1220; color: #e5e7eb; padding: 24px; margin: 0; }
+  h1 { color: #f3f4f6; margin: 0 0 8px; }
+  .lede { color: #94a3b8; margin: 0 0 32px; }
+  ul { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  li a {
+    display: block;
+    padding: 16px;
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    color: #f3f4f6;
+    text-decoration: none;
+    transition: border-color 120ms;
+  }
+  li a:hover { border-color: #3b82f6; }
+  .num { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .title { font-weight: 600; font-size: 16px; }
+  .desc { color: #94a3b8; font-size: 13px; margin-top: 6px; line-height: 1.45; }
+</style>
+</head>
+<body>
+  <h1>Mobile Homepage Mockups</h1>
+  <p class="lede">Six self-contained mockups for the Pushin' Weight homepage redesign. 06 is the source-of-truth Tier 1 composition; 07/08/09 are its three derived variants (en-desktop, zh-CN-mobile, zh-CN-desktop). Open each in the appropriate viewport.</p>
+  <ul>
+    <li>
+      <a href="01-current-mobile.html">
+        <div class="num">Baseline</div>
+        <div class="title">Current mobile</div>
+        <div class="desc">Existing 2-column layout stacked at < 900 px. For comparison.</div>
+      </a>
+    </li>
+    <li>
+      <a href="02-pulse-bar.html">
+        <div class="num">Idea 1</div>
+        <div class="title">Pulse Bar</div>
+        <div class="desc">Horizontally scrollable brand-chip strip above the chart, each with delta-vs-prior-window.</div>
+      </a>
+    </li>
+    <li>
+      <a href="03-stacked-pinwheel.html">
+        <div class="num">Idea 3</div>
+        <div class="title">Stacked Pinwheel</div>
+        <div class="desc">Chart shrinks to 180 px tall; "Filters ⌄" pill at top-right opens a bottom-sheet modal for the 52 controls.</div>
+      </a>
+    </li>
+    <li>
+      <a href="04-quick-lane-filters.html">
+        <div class="num">Idea 11</div>
+        <div class="title">Quick-Lane Filters</div>
+        <div class="desc">Four preset pills (All / Release / Buzz / Meme) replace the 52-control panel; "more" opens the bottom sheet.</div>
+      </a>
+    </li>
+    <li>
+      <a href="05-headline-strip.html">
+        <div class="num">Idea 2</div>
+        <div class="title">Headline Strip</div>
+        <div class="desc">Single-sentence "what just dropped" line below the chart with brand + delta + top voices.</div>
+      </a>
+    </li>
+    <li>
+      <a href="06-tier1-composed.html">
+        <div class="num">Tier 1</div>
+        <div class="title">Tier 1 Composed (en, 360)</div>
+        <div class="desc">All six ideas together: Pulse + Quick-Lane + 180-px chart + Headline + Truncated feed. The full homepage. Source for the variants below.</div>
+      </a>
+    </li>
+    <li>
+      <a href="07-en-desktop.html">
+        <div class="num">Variant</div>
+        <div class="title">07 — en, desktop (1280)</div>
+        <div class="desc">Same composition as 06 stretched to 1280 px. Larger chips, bigger fonts, 6 feed items instead of 3. No 2fr|1fr grid.</div>
+      </a>
+    </li>
+    <li>
+      <a href="08-zhcn-mobile.html">
+        <div class="num">Variant</div>
+        <div class="title">08 — zh-CN, mobile (360)</div>
+        <div class="desc">Same composition as 06 with Simplified Chinese strings + zh-cn brand names (月之暗面, 深度求索, 通义千问, 智谱 GLM, 文心一言). CJK font stack.</div>
+      </a>
+    </li>
+    <li>
+      <a href="09-zhcn-desktop.html">
+        <div class="num">Variant</div>
+        <div class="title">09 — zh-CN, desktop (1280)</div>
+        <div class="desc">07 + 08: desktop dimensions with Simplified Chinese strings and zh-cn brand names.</div>
+      </a>
+    </li>
+  </ul>
+</body>
+</html>
