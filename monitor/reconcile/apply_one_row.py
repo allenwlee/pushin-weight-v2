@@ -4,28 +4,24 @@ Plan: docs/plans/2026-07-31-001-fix-lonely-placeholders-cron-apply-plan.md
 Unit U4.
 
 `apply_one_row` wraps `_ensure_canonical_account_row` + `_repoint_fk`
-from Phase 2 inside a single `transaction.atomic()`. Django's atomic()
-provides the SAVEPOINT semantics automatically -- a nested
-`transaction.savepoint()` inside an atomic block creates a
-double-nested savepoint which DOES NOT preserve the INSERT visibility
-across the inner UPDATEs (the 2026-07-31 cron run observed this with
-FK constraint failures on commit: "posts_author_id ... is not present
-in table accounts" because the canonical-row INSERT happened inside
-one savepoint scope while the repoint UPDATE happened inside the
-nested scope).
-
-Fix: rely on `transaction.atomic()` alone. On IntegrityError the whole
-block rolls back (no double-savepoint). On any other exception, same.
++ `_delete_placeholders` from Phase 2 inside a single `transaction.atomic()`.
+Django's atomic() provides the SAVEPOINT semantics automatically.
 
 CRITICAL: pass integer_ids=[] (NOT [canonical_author_id]) to
 _ensure_canonical_account_row. That helper has a defensive check
 `if canonical in integer_ids: return canonical` that returns WITHOUT
 inserting. The lonely-apply path has no separate group context, so
 passing the canonical in integer_ids triggers the short-circuit every
-time. The original reconcile path avoided this bug because it passed
+time. The original reconcile path avoids this bug because it passes
 integer_ids from _classify_group with the GROUP's integer list, not
-just the canonical. The 2026-07-31 cron incident was triggered by
-this defensive-check bug.
+just the canonical.
+
+ALSO: the apply helper MUST call _delete_placeholders after _repoint_fk.
+The 2026-07-31 cron run observed integer_rows growing but placeholder_rows
+staying flat -- _repoint_fk UPDATEs the FK columns to point at the
+canonical, but without _delete_placeholders the original placeholder
+row stays in `accounts`. The Phase 2 reconcile command has its OWN
+wrapper that calls both -- the lonely-apply helper must do the same.
 
 NO pre-pass INSERT of canonical rows (Phase 2 v4/v5 bug -- created
 387-587 new duplicate groups). The existing `_ensure_canonical_account_row`
@@ -45,6 +41,7 @@ from typing import Any
 from django.db import IntegrityError, connection, transaction
 
 from monitor.management.commands.reconcile_account_duplicates import (
+    _delete_placeholders,
     _ensure_canonical_account_row,
     _repoint_fk,
 )
@@ -88,7 +85,8 @@ def apply_one_row(
       1. _ensure_canonical_account_row -- INSERT the canonical row if
          missing (KTD10-correct semantics; no pre-pass bug).
       2. _repoint_fk -- UPDATE posts / apa / brands_accounts to point
-         at the canonical integer, then DELETE the placeholder row.
+         at the canonical integer.
+      3. _delete_placeholders -- DELETE the placeholder row from accounts.
 
     On IntegrityError (e.g. brands_accounts_pkey collision, FK
     constraint failure): transaction.atomic() rolls back automatically;
@@ -117,6 +115,16 @@ def apply_one_row(
                 placeholder_ids=[placeholder_author_id],
                 handle=handle,
             )
+
+            # Step 3: DELETE the placeholder row from accounts.
+            # Without this step the placeholder stays in the table and
+            # placeholder_rows never drops (the 2026-07-31 cron incident).
+            deleted = _delete_placeholders(
+                connection.cursor(),
+                placeholder_ids=[placeholder_author_id],
+            )
+            row_counts["deleted_accounts"] = deleted
+
             return ApplyResult(
                 handle=handle,
                 placeholder_author_id=placeholder_author_id,
