@@ -49,6 +49,11 @@ USER_AGENT = "curl/7.84.0"
 
 # Circuit breaker constants (user guidance 2026-07-31).
 CIRCUIT_BREAKER_THRESHOLD = 10  # consecutive 429/5xx -> trip
+# NOTE: `auth_invalid` (HTTP 401) is intentionally EXCLUDED -- a bad key
+# is not a rate-limit problem and shouldn't burn 10 dead-letter rows
+# before exiting. Instead the apply loop short-circuits on the FIRST
+# auth_invalid and writes partial=true with error="auth_invalid" so
+# the operator can rotate the key without burning the candidate pool.
 CIRCUIT_BREAKER_REASONS = ("rate_limited", "http_5xx")
 
 
@@ -152,6 +157,17 @@ def _classify_response(status: int, body_text: str) -> tuple[str, dict | None]:
         return "not_found_200", None
     if status == 404:
         return "http_404", None
+    if status == 401:
+        # TwitterAPI rejects an invalid API key with HTTP 401 (body
+        # {"error":"Unauthorized","message":"API key is invalid"}). The
+        # 2026-07-31 cron run misclassified these as http_5xx, which
+        # tripped the circuit breaker after 10 consecutive 401s and
+        # dead-lettered the entire candidate pool. Distinct reason +
+        # exempt from breaker = future runs exit cleanly on the FIRST
+        # 401 with auth_invalid surfacing in the exit summary.
+        return "auth_invalid", None
+    if status == 403:
+        return "auth_forbidden", None  # key valid but endpoint blocked
     if status == 429:
         return "rate_limited", None
     if 500 <= status < 600:
@@ -236,7 +252,15 @@ async def lookup_batch(
                     stats.by_reason[result.reason or "unknown"] = (
                         stats.by_reason.get(result.reason or "unknown", 0) + 1
                     )
-                breaker.record(result.reason)
+                # Short-circuit on FIRST auth_invalid: a bad key is not a
+                # rate-limit problem, and burning the candidate pool
+                # through 10 sequential 401s is what the 2026-07-31
+                # cron run did. Trip the breaker manually on auth_invalid
+                # so subsequent handles short-circuit via circuit_open.
+                if result.reason == "auth_invalid":
+                    breaker._tripped = True
+                else:
+                    breaker.record(result.reason)
                 # Pacing gate after every request (success or dead-letter).
                 await asyncio.sleep(gate_interval)
                 return result

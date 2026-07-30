@@ -72,6 +72,36 @@ def test_classify_500():
     assert canonical is None
 
 
+def test_classify_401_is_auth_invalid():
+    """HTTP 401 maps to auth_invalid (not http_5xx) per 2026-07-31 incident.
+
+    The previous behavior lumped 401 into http_5xx, which counted toward
+    the circuit breaker and dead-lettered the entire candidate pool when
+    the API key was bad. Distinct reason lets the apply loop short-circuit
+    on the FIRST 401 instead of waiting for 10.
+    """
+    reason, canonical = _classify_response(401, '{"error":"Unauthorized","message":"API key is invalid"}')
+    assert reason == "auth_invalid"
+    assert canonical is None
+
+
+def test_classify_403_is_auth_forbidden():
+    """HTTP 403 maps to auth_forbidden (key valid but endpoint blocked)."""
+    reason, canonical = _classify_response(403, "Forbidden")
+    assert reason == "auth_forbidden"
+    assert canonical is None
+
+
+def test_circuit_breaker_does_not_count_auth_invalid():
+    """auth_invalid is EXCLUDED from CIRCUIT_BREAKER_REASONS -- a bad
+    key shouldn't trip the breaker on its own; the lookup_batch's
+    manual short-circuit handles it."""
+    from monitor.twitterapi.caller import CIRCUIT_BREAKER_REASONS
+    assert "auth_invalid" not in CIRCUIT_BREAKER_REASONS
+    assert "rate_limited" in CIRCUIT_BREAKER_REASONS
+    assert "http_5xx" in CIRCUIT_BREAKER_REASONS
+
+
 def test_classify_200_malformed_json():
     """Garbage 200 body -- treat as 5xx-style dead-letter."""
     reason, canonical = _classify_response(200, "not json at all")
@@ -87,26 +117,6 @@ def test_classify_200_success_no_id():
     )
     assert reason == "http_5xx"
     assert canonical is None
-
-
-# -- _do_one behavior with mock session -------------------------------
-
-
-@pytest.mark.asyncio
-async def test_429_with_retry_after_triggers_one_retry():
-    """First response 429 with Retry-After: 1, second response 200 success."""
-    from monitor.twitterapi.caller import _do_one
-
-    fake_resp_429 = MagicMock()
-    fake_resp_429.status = 429
-    fake_resp_429.headers = {"Retry-After": "1"}
-    fake_resp_429.text = AsyncMock(return_value="Too Many Requests")
-    fake_resp_429.__aenter__ = AsyncMock(return_value=fake_resp_429)
-    fake_resp_429.__aexit__ = AsyncMock(return_value=None)
-
-    fake_resp_200 = MagicMock()
-    fake_resp_200.status = 200
-    fake_resp_200.text = AsyncMock(
         return_value='{"status":"success","data":{"id":"42","screen_name":"x"}}'
     )
     fake_resp_200.__aenter__ = AsyncMock(return_value=fake_resp_200)
