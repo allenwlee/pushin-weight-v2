@@ -38,6 +38,7 @@ from monitor.management.commands.reconcile_account_duplicates import (
     _find_lonely_placeholders,
     _repoint_fk,
 )
+from monitor.reconcile.apply_loop import run_apply_loop
 
 
 # KTD1 + KTD7 from the plan.
@@ -117,15 +118,15 @@ class Command(BaseCommand):
             dead_letter_set = self._load_dead_letter_set(opts["dead_letter_log"])
 
         # Register SIGTERM handler so cron `timeout` produces a clean partial summary.
-        self._received_signal: str | None = None
+        self._received_signal: list = [None]
         signal.signal(signal.SIGTERM, lambda *_: self._mark_signal("SIGTERM"))
         signal.signal(signal.SIGINT, lambda *_: self._mark_signal("SIGINT"))
 
         # Find candidate lonely placeholders.
         with connection.cursor() as cur:
             groups = _find_lonely_placeholders(cur)
-        candidate_handles = [h for h, _ in groups if h not in dead_letter_set]
-        total = len(candidate_handles)
+        candidates = [(h, a) for h, a in groups if h not in dead_letter_set]
+        total = len(candidates)
 
         if not apply_mode:
             # Dry-run summary; no TwitterAPI calls, no DB writes.
@@ -147,22 +148,21 @@ class Command(BaseCommand):
             self._emit_summary(summary, opts)
             return
 
-        # APPLY MODE: defer the actual loop body to U3 (caller) + U4
-        # (apply) + U5 (exit summary). This skeleton ships first so
-        # the flag surface + dry-run path is testable in isolation.
-        # The real apply is wired in via `_run_apply_loop` which is
-        # monkey-patched in tests.
+        # APPLY MODE: delegate to monitor.reconcile.apply_loop.run_apply_loop.
+        api_key = os.environ.get("TWITTERAPI_IO_API_KEY")
         try:
-            summary = self._run_apply_loop(
-                candidate_handles=candidate_handles,
-                opts=opts,
-                started_at=started_at,
-                started_iso=started_iso,
-                dead_letter_set=dead_letter_set,
+            summary = run_apply_loop(
+                candidate_placeholders=candidates,
+                api_key=api_key,
+                rate_qps=float(opts["rate_qps"]),
+                concurrency=int(opts["concurrency"]),
+                batch_size=int(opts["batch_size"]),
+                max_seconds=float(max_seconds),
+                apply_log_path=Path(opts["apply_log"]),
+                dead_letter_log_path=Path(opts["dead_letter_log"]),
+                received_signal_ref=self._received_signal,
             )
         except Exception as exc:
-            # Crash mid-apply: write a partial summary before re-raising
-            # so the cron can see what got done.
             crashed_at = time.time()
             summary = {
                 "started_at": started_iso,
@@ -187,7 +187,7 @@ class Command(BaseCommand):
     # --- helpers ----------------------------------------------------
 
     def _mark_signal(self, name: str) -> None:
-        self._received_signal = name
+        self._received_signal[0] = name
 
     def _load_dead_letter_set(self, path: Path) -> set[str]:
         if not path.exists():
@@ -223,33 +223,3 @@ class Command(BaseCommand):
                 f.write(line + "\n")
         except OSError:
             pass
-
-    def _run_apply_loop(
-        self,
-        *,
-        candidate_handles: list[str],
-        opts: dict,
-        started_at: float,
-        started_iso: str,
-        dead_letter_set: set[str],
-    ) -> dict[str, Any]:
-        """Apply loop. Wired in by U3 (caller) + U4 (apply).
-
-        This default body returns an empty summary; tests + the real
-        implementation override via monkey-patch or a subclass.
-        """
-        finished_at = time.time()
-        return {
-            "started_at": started_iso,
-            "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(finished_at)),
-            "dry_run": False,
-            "total_placeholders": len(candidate_handles),
-            "looked_up": 0,
-            "resolved": 0,
-            "dead_lettered": 0,
-            "retried_after_429": 0,
-            "rate_actual_qps": 0.0,
-            "max_time_wait_sockets": 0,
-            "partial": False,
-            "dead_letter_reasons": {},
-        }
