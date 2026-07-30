@@ -52,6 +52,51 @@ def _find_duplicate_groups(
     return rows
 
 
+def _find_lonely_placeholders(
+    cur,
+    *,
+    limit: int | None = None,
+) -> list[tuple[str, str]]:
+    """Phase 2 -- handle-unique placeholder rows.
+
+    Returns [(handle, placeholder_author_id), ...] for `accounts` rows
+    whose author_id is a placeholder (handle:*, synthetic:*) and whose
+    handle is NOT in any duplicate group. These are the 10,908+
+    "lonely" placeholders that the original Phase 1 reconciliation
+    skipped because they don't participate in the dup-group path.
+
+    For each row, the apply path:
+      1. TwitterAPI lookup → canonical integer
+      2. KTD10 verify against the existing accounts.handle(s)
+      3. INSERT canonical integer into accounts (if missing)
+      4. UPDATE posts + account_post_appearances + brands_accounts
+         to point at the canonical integer
+      5. DELETE the placeholder row
+
+    KTD10 disagree → skip + dead-letter (KTD12).
+    """
+    cur.execute("""
+        SELECT a.handle, a.author_id
+        FROM accounts a
+        WHERE a.handle IS NOT NULL AND a.handle != ''
+          AND (
+            a.author_id LIKE 'handle:%%'
+            OR a.author_id LIKE 'synthetic:%%'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM accounts b
+            WHERE b.handle IS NOT NULL AND b.handle != ''
+              AND LOWER(b.handle) = LOWER(a.handle)
+              AND b.author_id <> a.author_id
+          )
+        ORDER BY a.first_seen_at
+    """)
+    rows = cur.fetchall()
+    if limit is not None:
+        rows = rows[:limit]
+    return [(handle, placeholder_author_id) for handle, placeholder_author_id in rows]
+
+
 def _is_placeholder(author_id: str) -> bool:
     return any(author_id.startswith(p) for p in PLACEHOLDER_PREFIXES)
 
@@ -435,6 +480,11 @@ class Command(BaseCommand):
             help="Only process all-placeholder groups (Phase 2).",
         )
         parser.add_argument(
+            "--lonely-only",
+            action="store_true",
+            help="Only process handle-unique placeholder rows (Phase 2).",
+        )
+        parser.add_argument(
             "--limit",
             type=int,
             default=None,
@@ -449,12 +499,23 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         api_key = os.environ.get("TWITTERAPI_IO_API_KEY")
 
-        with connection.cursor() as cur:
-            groups = _find_duplicate_groups(
-                cur,
-                include_residual=options["residual_only"],
-                limit=options["limit"],
-            )
+        if options["residual_only"] and options["lonely_only"]:
+            self.stderr.write("error: --residual-only and --lonely-only are mutually exclusive")
+            return
+
+        if options["lonely_only"]:
+            with connection.cursor() as cur:
+                groups = _find_lonely_placeholders(
+                    cur,
+                    limit=options["limit"],
+                )
+        else:
+            with connection.cursor() as cur:
+                groups = _find_duplicate_groups(
+                    cur,
+                    include_residual=options["residual_only"],
+                    limit=options["limit"],
+                )
 
         summary = {
             "dry_run": options["dry_run"],
@@ -507,7 +568,16 @@ class Command(BaseCommand):
             return
 
         for handle, author_ids in groups:
-            cls = _classify_group(handle, author_ids)
+            if options["lonely_only"]:
+                # Lonely path: (handle, placeholder_author_id) tuples.
+                # No integer_ids; the apply path resolves via TwitterAPI.
+                cls = {
+                    "handle": handle,
+                    "integer_ids": [],
+                    "placeholder_ids": [author_ids],
+                }
+            else:
+                cls = _classify_group(handle, author_ids)
             with connection.cursor() as cur:
                 # SAVEPOINT requires a transaction. transaction.atomic()
                 # wraps this group in a transaction; SAVEPOINT inside
