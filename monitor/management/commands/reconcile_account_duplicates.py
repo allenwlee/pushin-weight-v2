@@ -15,6 +15,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from django.core.management.base import BaseCommand
@@ -154,7 +155,13 @@ def _twitterapi_lookup(
     """
     qs = urllib.parse.urlencode({"userName": handle})
     url = f"{TWITTERAPI_USER_INFO_URL}?{qs}"
-    headers = {"X-API-Key": api_key, "Accept": "application/json"}
+    # TwitterAPI rejects urllib's default User-Agent ("Python-urllib/3.x")
+    # with HTTP 403. Pretend to be curl.
+    headers = {
+        "X-API-Key": api_key,
+        "Accept": "application/json",
+        "User-Agent": "curl/7.84.0",
+    }
     backoff = 1.0
     for attempt in range(max_retries + 1):
         req = urllib.request.Request(url, headers=headers)
@@ -179,6 +186,47 @@ def _twitterapi_lookup(
                 continue
             return None
     return None
+
+
+def _twitterapi_lookup_batch(
+    handles: list[str],
+    api_key: str,
+    *,
+    workers: int = 8,
+    timeout: int = 10,
+    max_retries: int = 2,
+) -> dict[str, str | None]:
+    """Look up twitter integer ids for many handles in parallel.
+
+    Returns {handle: integer_id_or_None}. None means the handle does
+    not exist on X (or TwitterAPI returned an error after retries).
+    Concurrency is bounded by `workers`; TwitterAPI permits a
+    reasonable effective rate and the per-call retry in
+    `_twitterapi_lookup` handles transient 404s/5xx.
+
+    This is roughly 8x faster than the per-group sequential lookup
+    that the apply path uses. The lonely apply's 10,908 handles
+    complete in ~22 minutes at 8 workers vs ~3 hours sequentially.
+    """
+    results: dict[str, str | None] = {h: None for h in handles}
+
+    def _one(h: str) -> tuple[str, str | None]:
+        return h, _twitterapi_lookup(
+            handle=h, api_key=api_key, timeout=timeout, max_retries=max_retries
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_one, h): h for h in handles}
+        for fut in as_completed(futures):
+            try:
+                h, val = fut.result()
+                results[h] = val
+            except Exception:
+                # _twitterapi_lookup already swallows known errors;
+                # this is defense-in-depth so the batch survives any
+                # unexpected exception in one worker.
+                continue
+    return results
 
 
 def _verify_canonical_handle(
@@ -551,6 +599,13 @@ class Command(BaseCommand):
             help="Only process handle-unique placeholder rows (Phase 2).",
         )
         parser.add_argument(
+            "--workers",
+            type=int,
+            default=8,
+            help="Parallel TwitterAPI lookup workers (default 8). Used only "
+            "with --lonely-only --apply. Set to 1 to disable parallelism.",
+        )
+        parser.add_argument(
             "--limit",
             type=int,
             default=None,
@@ -633,6 +688,62 @@ class Command(BaseCommand):
             )
             return
 
+        # Parallel pre-pass for the lonely path: fetch all canonical
+        # integers for the placeholder rows in one ThreadPoolExecutor
+        # pass. The DB transaction loop then uses the result dict
+        # instead of calling TwitterAPI per group. With workers=8 and
+        # ~10,908 handles, this completes in ~22 minutes vs ~3 hours
+        # sequentially.
+        lookup_cache: dict[str, str | None] = {}
+        if options["lonely_only"] and api_key and options["workers"] > 1:
+            handles_only = [h for h, _ in groups]
+            self.stdout.write(
+                f"Pre-pass: TwitterAPI lookup for {len(handles_only)} handles "
+                f"with {options['workers']} workers... "
+                f"(api_key prefix={api_key[:8]}..., len={len(api_key)})"
+            )
+            lookup_cache = _twitterapi_lookup_batch(
+                handles=handles_only,
+                api_key=api_key,
+                workers=options["workers"],
+            )
+            hits = sum(1 for v in lookup_cache.values() if v is not None)
+            self.stdout.write(
+                f"Pre-pass complete: {hits}/{len(handles_only)} resolved. "
+                f"sample={dict(list(lookup_cache.items())[:3])}"
+            )
+            # Insert canonical rows into accounts BEFORE the apply
+            # loop. The reconcile flow's `_canonical_integer_for_handle`
+            # relies on the canonical row existing in `accounts` and
+            # having a matching handle. By inserting here, we (a) let
+            # the existing flow see the canonical, (b) make the FK
+            # UPDATEs safe (no FK constraint violation), and (c) raise
+            # an early IntegrityError if a duplicate canonical already
+            # exists for a different handle.
+            with connection.cursor() as cur:
+                inserted = 0
+                for handle, integer_id in lookup_cache.items():
+                    if integer_id is None:
+                        continue
+                    cur.execute(
+                        "SELECT 1 FROM accounts WHERE author_id = %s",
+                        (integer_id,),
+                    )
+                    if cur.fetchone() is not None:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO accounts (author_id, handle, verified, first_seen_at, last_seen_at)
+                        VALUES (%s, %s, false, NOW(), NOW())
+                        ON CONFLICT (author_id) DO NOTHING
+                        """,
+                        (integer_id, handle),
+                    )
+                    inserted += cur.rowcount
+            self.stdout.write(
+                f"Pre-pass: inserted {inserted} canonical account rows."
+            )
+
         for handle, author_ids in groups:
             if options["lonely_only"]:
                 # Lonely path: (handle, placeholder_author_id) tuples.
@@ -649,13 +760,39 @@ class Command(BaseCommand):
                 # wraps this group in a transaction; SAVEPOINT inside
                 # creates a nested savepoint; a failure rolls back to
                 # the savepoint and the outer atomic continues.
+                # For the lonely path, skip the per-group TwitterAPI
+                # lookup if the pre-pass already resolved it.
+                effective_api_key = api_key
+                if options["lonely_only"] and lookup_cache:
+                    cached = lookup_cache.get(handle)
+                    if cached is None:
+                        # Pre-pass dead-letter; don't waste another
+                        # TwitterAPI call.
+                        result = {
+                            "handle": handle,
+                            "canonical": None,
+                            "status": "skipped",
+                            "row_counts": {},
+                            "skip_reason": "TwitterAPI lookup failed/404 (pre-pass)",
+                        }
+                        summary["results"].append(result)
+                        summary["skipped"] += 1
+                        continue
+                    # We have a canonical integer from the pre-pass.
+                    # The apply path will use `_ensure_canonical_account_row`
+                    # to insert the canonical row in accounts if missing,
+                    # then UPDATE the FKs, then DELETE the placeholder.
+                    # Pass the cached integer via integer_ids so the
+                    # existing apply path picks it up.
+                    cls["integer_ids"] = [cached]
+                    effective_api_key = None  # no per-group lookup needed
                 with transaction.atomic():
                     result = reconcile_one_group(
                         cur,
                         handle=cls["handle"],
                         integer_ids=cls["integer_ids"],
                         placeholder_ids=cls["placeholder_ids"],
-                        api_key=api_key,
+                        api_key=effective_api_key,
                         dry_run=options["dry_run"],
                     )
 
