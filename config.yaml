@@ -75,11 +75,12 @@ clustering:
 #   max_results   tweets per logical call (default 50)
 #   max_per_page  TwitterAPI.io per-page request size (default 20)
 #   max_pages     pagination safety cap (default 5)
-# Credit math at defaults: 5 pages × 20 tweets = 100 tweets = ~$0.015.
+# Credit math at defaults: 100 pages × 20 tweets = 2,000 tweets per call ceiling.
+# Cursor sweep keeps the steady-state per-cycle fetch well below that.
 search:
   max_results: 50
   max_per_page: 20
-  max_pages: 5
+  max_pages: 100
 
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.
