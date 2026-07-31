@@ -78,7 +78,7 @@ clustering:
 # Credit math at defaults: 100 pages × 20 tweets = 2,000 tweets per call ceiling.
 # Cursor sweep keeps the steady-state per-cycle fetch well below that.
 search:
-  max_results: 50
+  max_results: 2000
   max_per_page: 20
   max_pages: 100
 
