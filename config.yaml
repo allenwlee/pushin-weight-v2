@@ -55,7 +55,7 @@ enabled_models:
 # spanning all enabled_models (legacy v1.7 behavior). Set to null to
 # disable the split.
 call_b_groups:
-  - [minimax, qwen, deepseek, mistral, stepfun, hunyuan]
+  - [minimax, qwen, deepseek, stepfun, hunyuan]
   - [doubao, glm, sensechat, inclusionai]
   - [nemo_megatron, exaone, sakana_ai, kuaishou]
 
@@ -144,6 +144,7 @@ x_query_specs:
   # shared 5-term minimal co. No xiaomi/小米/moonshot poison.
   - brands:
       mimo:   [MiMo, "Xiaomi MiMo", "小米 MiMo"]
+      mistral:       [Mistral, Mixtral]
       moonshot_kimi: [Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]
       yi:            [Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]
       llama:         [Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama"]
@@ -152,7 +153,7 @@ x_query_specs:
     min_faves: 0
     call_id: C1
     notes: |
-      Hybrid funnel U3 — C1 keeps the 4-brand polyseme set but co
+      Hybrid funnel U3 — C1 covers a 5-brand polyseme set (mimo/kimi/yi/llama + mistral) but co
       drops from 22 terms to the 5-term minimal allowlist
       (R8: llm, model, api, agentic, huggingface). xiaomi/小米/
       moonshot REMOVED from co (R10) — the foreign-first loss was
@@ -201,7 +202,7 @@ x_query_specs:
   # Bare keywords render `((brand_tokens)) min_faves:0` with NO
   # secondary paren (U2).
   - is_wide_net: true
-    wide_net_brands: [minimax, qwen, deepseek, mistral, stepfun, hunyuan]
+    wide_net_brands: [minimax, qwen, deepseek, stepfun, hunyuan]
     brands: {}
     co_occurrence: []
     min_faves: 0
@@ -211,7 +212,7 @@ x_query_specs:
       the U2 renderer's "omit secondary paren" path (R17/KTD4).
       The brand groups are read from DB via primary_keywords at
       render time; this config controls WHICH brands and ORDER.
-      6 brands: minimax, qwen, deepseek, mistral, stepfun, hunyuan.
+      5 brands: minimax, qwen, deepseek, stepfun, hunyuan.
 
   # === B2: pure-brand OFFICIAL HANDLES ONLY (R4 + U2 handles field) ===
   # Hybrid funnel U3: B2 switches from wide-net brand_wide to

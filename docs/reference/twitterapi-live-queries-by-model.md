@@ -151,15 +151,16 @@ brands (not listed here for brevity). The list-membership step is manual
 Configured in `config.yaml::x_query_specs` -- entries where
 `is_wide_net` is absent or `false`. Two specs are live:
 
-### C1 -- mimo + moonshot_kimi + yi + llama (4 brands, 5 co-occurrence terms)
+### C1 -- mimo + mistral + moonshot_kimi + yi + llama (5 brands, 5 co-occurrence terms)
 
-**`call_id: C1`**, **4 brands, 5 co-occurrence terms (minimal allowlist, plan 2026-07-30-002 U3 / R8).**
+**`call_id: C1`**, **5 brands, 5 co-occurrence terms (minimal allowlist, plan 2026-07-30-002 U3 / R8). Mistral added 2026-07-31 per plan 2026-07-31-002 U2 (demoted from B1 bare due to polysemy).**
 
 **Primary group tokens (inline in `config.yaml`):**
 - `mimo`: `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`
 - `moonshot_kimi`: `[Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]`
 - `yi`: `[Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]`
 - `llama`: `[Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama"]`
+- `mistral`: `[Mistral, Mixtral]`
 
 **Co-occurrence group:** `[llm, model, api, agentic, huggingface]` (5-term minimal allowlist per R8; `xiaomi`/`小米`/`moonshot` were REMOVED from co per R10 because 55-75% of relevant non-EN samples lacked those terms -- the brand groups themselves still include `Xiaomi MiMo` and `moonshot_kimi` for direct match).
 
@@ -167,9 +168,9 @@ Configured in `config.yaml::x_query_specs` -- entries where
 
 **Shape (live, from `_build_query` in `x_monitor/query_plan.py`):**
 ```
-((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama)) (llm OR model OR api OR agentic OR huggingface) min_faves:0
+((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) OR (Mistral OR Mixtral)) (llm OR model OR api OR agentic OR huggingface) min_faves:0
 ```
-**Length:** 264 characters. Headroom: 248 chars (48% of the cap).
+**Length:** 286 characters. Headroom: 226 chars (44% of the cap).
 
 **Why this exists:** these 4 brands' bare tokens collide with unrelated common nouns:
 - `MiMo` -> Mimo Studio (kids' video app); `xiaomi` alone -> phone posts.
@@ -250,9 +251,9 @@ B1 still sources per-brand tokens from `BrandKeyword` rows with
 (Django ORM). B2/B3 do NOT read DB tokens -- the handle list is
 inline in `config.yaml`.
 
-### B1 -- top-presence / global brands, BARE (6 brands)
+### B1 -- top-presence / global brands, BARE (5 brands)
 
-**`wide_net_brands`:** `[minimax, qwen, deepseek, mistral, stepfun, hunyuan]`
+**`wide_net_brands`:** `[minimax, qwen, deepseek, stepfun, hunyuan]`
 **`co_occurrence: []`** -- the renderer omits the secondary paren, so the
 shape is `((brand tokens)) min_faves:0` with NO co AND-filter.
 
@@ -261,7 +262,6 @@ shape is `((brand tokens)) min_faves:0` with NO co AND-filter.
 | 1 | `minimax` | `Hailuo`, `MiniMax`, `m2.5`, `海螺` | 4 |
 | 2 | `qwen` | `Qwen`, `Qwen3`, `通义千问` | 3 |
 | 3 | `deepseek` | `DeepSeek`, `deepseek-r1`, `深度求索` | 3 |
-| 4 | `mistral` | `Mistral`, `Mixtral` | 2 |
 | 5 | `stepfun` | `StepFun`, `阶跃星辰` | 2 |
 | 6 | `hunyuan` | `Hunyuan`, `混元`, `腾讯混元` | 3 |
 
@@ -731,3 +731,20 @@ Substantive corrections made in this 2026-07-31 review:
   uses WatchPaths + ThrottleInterval=300s. (Reaffirmed; no doc change needed.)
 - **`enabled_models` count = 20** confirmed (matches the 20 brands
   listed in the per-brand breakdown table).
+
+
+---
+
+## Last reviewed: 2026-07-31 (Mistral B1 -> C1 demotion)
+
+Plan: `docs/plans/2026-07-31-002-fix-demote-mistral-from-b1-to-c1-plan.md`
+
+- **Mistral moved** from B1 wide_net_brands to C1 brand group.
+  B1 now 5 brands (was 6); C1 now 5 brands (was 4). The 7-call shape
+  is preserved.
+- **C1 primary group extended**: added `mistral: [Mistral, Mixtral]`
+  alongside mimo/moonshot_kimi/yi/llama. Co-occurrence unchanged
+  (still the 5-term minimal allowlist).
+- **B1 shape example** no longer contains `Mistral`/`Mixtral`; C1
+  shape example now does. C1 length 264 -> 286 chars (still well
+  under 512-cap headroom).

@@ -93,7 +93,7 @@ def test_call_b_groups_brand_split_unchanged():
         f"Expected 3 call_b_groups, got {len(groups)}: {groups}. "
         f"Hybrid funnel plan preserves the 3-group split."
     )
-    assert len(groups[0]) == 6, "B1 group should have 6 brands"
+    assert len(groups[0]) == 5, "B1 group should have 5 brands (post-2026-07-31 Mistral demotion to C1; plan 2026-07-31-002 U1)"
     assert len(groups[1]) == 4, "B2 group should have 4 brands"
     assert len(groups[2]) == 4, "B3 group should have 4 brands"
 
