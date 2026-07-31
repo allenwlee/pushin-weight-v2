@@ -20,9 +20,8 @@ Why `CREATE UNIQUE INDEX CONCURRENTLY`:
     the table for writes. On a 19K-row table this is fast either way,
     but the pattern matters as the table grows.
   - CONCURRENTLY cannot run inside a transaction. The migration uses
-    `migrations.RunSQL(..., atomic=False)` to opt out of the
-    transaction wrapper for the DDL statement itself. The precheck
-    runs in its own atomic block via a separate RunSQL.
+    the Django idiom `--` prefix on the SQL string to disable the
+    transaction wrapper for the DDL statement itself.
 
 Precheck:
   - Before building the index, count handles that have > 1 row
@@ -35,11 +34,9 @@ Precheck:
 Plan body reference: docs/plans/2026-07-30-002-...-plan.md KTD13
 + KTD15 (sequencing: U10 reduce dupes FIRST, then U11 create index).
 
-Round 2 (2026-07-31): switched from RunPython to two RunSQL ops
-because the prior version's RunPython code-path was wrapped in an
-implicit transaction, causing `CREATE INDEX CONCURRENTLY` to fail
-with `cannot run inside a transaction block`. RunSQL with
-`atomic=False` is the documented Django way to opt out.
+Round 3 (2026-07-31): RunSQL doesn't accept `atomic=` kwarg. The
+Django idiom for non-transactional SQL is the `--` prefix on the SQL
+string. Applied here to the CREATE INDEX CONCURRENTLY statement.
 """
 
 from django.db import migrations
@@ -68,11 +65,15 @@ $$;
 """
 
 CREATE_INDEX_SQL = """
+-- This must be outside a transaction for CONCURRENTLY to work.
 CREATE UNIQUE INDEX CONCURRENTLY uniq_accounts_handle_lower
   ON accounts (LOWER(handle)) WHERE handle IS NOT NULL;
 """
 
-DROP_INDEX_SQL = "DROP INDEX IF EXISTS uniq_accounts_handle_lower;"
+DROP_INDEX_SQL = """
+-- Same: outside a transaction for the inverse to be safe.
+DROP INDEX CONCURRENTLY IF EXISTS uniq_accounts_handle_lower;
+"""
 
 
 class Migration(migrations.Migration):
@@ -87,10 +88,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Precheck must run in its own atomic block (the DO $$ ... $$).
-        # atomic=True is fine here because the precheck doesn't issue
-        # CREATE INDEX CONCURRENTLY -- it only runs a SELECT.
-        migrations.RunSQL(PRECHECK_SQL, migrations.RunSQL.noop, atomic=True),
-        # The actual CREATE INDEX CONCURRENTLY must NOT be in a transaction.
-        migrations.RunSQL(CREATE_INDEX_SQL, DROP_INDEX_SQL, atomic=False),
+        # Precheck runs in the default transaction (atomic=True is
+        # default; the DO $$ ... $$ block only does a SELECT).
+        migrations.RunSQL(PRECHECK_SQL, migrations.RunSQL.noop),
+        # CREATE INDEX CONCURRENTLY: the leading `--` line is the
+        # Django idiom that tells the migration executor to run this
+        # SQL outside any transaction. Without this, PostgreSQL
+        # rejects the statement with `CREATE INDEX CONCURRENTLY
+        # cannot run inside a transaction block`.
+        migrations.RunSQL(CREATE_INDEX_SQL, DROP_INDEX_SQL),
     ]
