@@ -102,3 +102,21 @@ After resume, wait ≥1 cron cycle (`/15` schedule = up to 15 min), then verify 
 - `scripts/u13_live_pin.py` (U13 AFTER pins)
 - `monitor/management/commands/reconcile_account_duplicates.py` (U10 command)
 - `core/migrations/0009_accounts_handle_unique_ci.py` (U11 migration)
+
+
+### 2026-07-31 — Resume (post-Mistral-demotion + max_results=2000 rollout)
+
+- **Operator**: User (per direct instruction via /goal: "turn the cron harvester back on")
+- **Reason**: Plan `2026-07-31-002-fix-demote-mistral-from-b1-to-c1-plan.md` landed (commit `bd280cf`); `config.yaml::search.max_results` raised 50 -> 2000 (commit `6d5e72e`). Hybrid-funnel + new caps both ready for live verification.
+- **Method**: **Dashboard toggle** (manual). Plan `2026-07-30-002` U16 resume leg was attempted via the same REST API the pause used; per the 2026-07-30 API NOTE block, `POST /suspend` with `{"suspend":"no"}` returns 200 but does NOT clear the suspended state. Operator confirmed dashboard toggle was the only working path.
+- **Services un-suspended**:
+  - `pushinweight-harvest` (cron, `crn-d9gv94o4n6ts739tqaug`)
+  - `pushinweight-beat` + `pushinweight-worker` (background workers) — status pending operator confirmation (operator said "manually restarted pushinweight-harvest"; beat/worker may still be suspended — verify)
+- **Resume condition met**: cron restarted; awaiting ≥1 green cycle for verification.
+- **Post-resume verification (planned)**: `render logs -r crn-d9gv94o4n6ts739tqaug --tail 30` after next cron tick (≤15 min post-restart); check `data/runs/LATEST.json` on fuchitalee for new cycle timestamp.
+- **Config delta since pause**:
+  - B1 wide_net_brands: 6 -> 5 brands (mistral removed, commit `bd280cf`)
+  - C1 brands: 4 -> 5 brands (mistral added with `[Mistral, Mixtral]`, commit `bd280cf`)
+  - search.max_results: 50 -> 2000 (commit `6d5e72e`)
+  - search.max_pages: 5 -> 100 (commit `10e5268`, applied during pause)
+- **Regression net**: 29/29 tests pass as of commit `bd280cf` (`test_query_plan_hybrid_shapes` + `test_hybrid_harvest_regression_net` + new `test_mistral_call_placement`).
