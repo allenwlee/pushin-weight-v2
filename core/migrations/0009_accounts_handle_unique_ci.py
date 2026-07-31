@@ -1,6 +1,6 @@
 """Plan 2026-07-30-002 U11 - partial unique index on accounts.handle.
 
-Creates `uniq_accounts_handle_lower` — a Postgres expression unique
+Creates `uniq_accounts_handle_lower` -- a Postgres expression unique
 index on `LOWER(handle)` restricted to non-NULL handles. This makes
 future drift impossible: any code path that tries to INSERT a
 duplicate handle (case-insensitive) will fail with `IntegrityError`
@@ -10,7 +10,7 @@ Why a Postgres expression index (LOWER) rather than Django's `unique=True`:
   - accounts.handle has `db_collation="case_insensitive"` (case-
     insensitive). Django's `unique=True` emits a unique index on the
     raw column bytes which would not catch `DoubaoAI` vs `doubaoai`
-    duplicates — the exact drift we are trying to prevent.
+    duplicates -- the exact drift we are trying to prevent.
   - LOWER(handle) is a deterministic expression; the index is portable
     across PostgreSQL versions and doesn't require a deterministic
     collation.
@@ -21,7 +21,8 @@ Why `CREATE UNIQUE INDEX CONCURRENTLY`:
     but the pattern matters as the table grows.
   - CONCURRENTLY cannot run inside a transaction. The migration uses
     `migrations.RunSQL(..., atomic=False)` to opt out of the
-    transaction wrapper.
+    transaction wrapper for the DDL statement itself. The precheck
+    runs in its own atomic block via a separate RunSQL.
 
 Precheck:
   - Before building the index, count handles that have > 1 row
@@ -33,18 +34,37 @@ Precheck:
 
 Plan body reference: docs/plans/2026-07-30-002-...-plan.md KTD13
 + KTD15 (sequencing: U10 reduce dupes FIRST, then U11 create index).
+
+Round 2 (2026-07-31): switched from RunPython to two RunSQL ops
+because the prior version's RunPython code-path was wrapped in an
+implicit transaction, causing `CREATE INDEX CONCURRENTLY` to fail
+with `cannot run inside a transaction block`. RunSQL with
+`atomic=False` is the documented Django way to opt out.
 """
 
 from django.db import migrations
 
 
 PRECHECK_SQL = """
-SELECT COUNT(*) FROM (
-  SELECT LOWER(handle) FROM accounts
-  WHERE handle IS NOT NULL
-  GROUP BY LOWER(handle)
-  HAVING COUNT(*) > 1
-) t;
+DO $$
+DECLARE
+    dup_count bigint;
+BEGIN
+    SELECT COUNT(*) INTO dup_count FROM (
+      SELECT LOWER(handle) FROM accounts
+      WHERE handle IS NOT NULL
+      GROUP BY LOWER(handle)
+      HAVING COUNT(*) > 1
+    ) t;
+    IF dup_count > 0 THEN
+        RAISE EXCEPTION
+          'accounts still has % duplicate handle groups '
+          '(case-insensitive). Run `manage.py reconcile_account_duplicates '
+          '--apply` first to collapse them to <= 1 per handle.',
+          dup_count;
+    END IF;
+END
+$$;
 """
 
 CREATE_INDEX_SQL = """
@@ -53,33 +73,6 @@ CREATE UNIQUE INDEX CONCURRENTLY uniq_accounts_handle_lower
 """
 
 DROP_INDEX_SQL = "DROP INDEX IF EXISTS uniq_accounts_handle_lower;"
-
-
-def _create_index(apps, schema_editor):
-    if schema_editor.connection.vendor != "postgresql":
-        return
-    from django.db import connection
-
-    with connection.cursor() as cur:
-        # KTD15 precheck: refuse if any handle still has duplicates.
-        cur.execute(PRECHECK_SQL)
-        dup_count = cur.fetchone()[0]
-        if dup_count > 0:
-            raise RuntimeError(
-                f"accounts still has {dup_count} duplicate handle groups "
-                f"(case-insensitive). Run `manage.py reconcile_account_duplicates "
-                f"--apply` first to collapse them to <= 1 per handle."
-            )
-        cur.execute(CREATE_INDEX_SQL)
-
-
-def _drop_index(apps, schema_editor):
-    if schema_editor.connection.vendor != "postgresql":
-        return
-    from django.db import connection
-
-    with connection.cursor() as cur:
-        cur.execute(DROP_INDEX_SQL)
 
 
 class Migration(migrations.Migration):
@@ -94,5 +87,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(_create_index, _drop_index, atomic=False),
+        # Precheck must run in its own atomic block (the DO $$ ... $$).
+        # atomic=True is fine here because the precheck doesn't issue
+        # CREATE INDEX CONCURRENTLY -- it only runs a SELECT.
+        migrations.RunSQL(PRECHECK_SQL, migrations.RunSQL.noop, atomic=True),
+        # The actual CREATE INDEX CONCURRENTLY must NOT be in a transaction.
+        migrations.RunSQL(CREATE_INDEX_SQL, DROP_INDEX_SQL, atomic=False),
     ]
