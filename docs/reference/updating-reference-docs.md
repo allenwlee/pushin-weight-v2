@@ -1,3 +1,4 @@
+Warning: Permanently added 'fuchitalee.tail65bd38.ts.net' (ED25519) to the list of known hosts.
 ---
 name: updating-reference-docs
 description: Use when reviewing or updating the 7 files that document x-monitoring runtime behavior (5 in docs/reference/, 1 graphviz source + PNG, plus x-monitoring/README.md). Triggers when a doc claim seems stale, when a code/config/migration change likely drifted the doc, when an operator asks to "refresh the reference docs", or when migrations have shipped without a schema.dot/PNG regen.
@@ -26,11 +27,11 @@ This skill captures the procedure used 2026-07-16 to do a parallel review pass o
 
 | File | What it covers | Source-of-truth files |
 |---|---|---|
-| `twitterapi-io-calls.md` | TwitterAPI.io endpoint inventory, credit costs, call sites, retry/backoff, budget guard | `x-monitoring/x_monitor/apify.py`, `x_monitor/run.py`, `x_monitor/query_plan.py`, `tests/test_budget_guard.py` |
-| `twitterapi-live-queries-by-model.md` | The 6-call cycle (A + B1/B2/B3 + C1/C2), per-brand token lists, sinceTime/cursor handling, LaunchAgent | `x-monitoring/config.yaml`, `x_monitor/query_plan.py`, `x_monitor/queries.py`, `deploy/*.plist` |
-| `db-schema.md` | Every table, column, type, FK, index as `.md` prose; references the generated PNG | `x-monitoring/x_monitor/migrations/*.sql` (migrations are immutable source of truth), live `.schema` dump, `docs/reference/schema.dot` |
-| **`schema.dot`** | **Graphviz source for `xmonitor-schema-post-batch.png`. MUST run BEFORE `db-schema.md` review and before the PNG regen** | Live `.schema` dump + `x-monitoring/x_monitor/migrations/*.sql` |
-| `lookup-tables.md` | `*_keys` SQL tables, `_VALID_*` frozensets, brand/company/category registry, call-group coverage | `x_monitor/attribution.py`, `x_monitor/config.py`, `x-monitoring/config.yaml`, live DB queries |
+| `twitterapi-io-calls.md` | TwitterAPI.io endpoint inventory, credit costs, call sites, retry/backoff, budget guard | `x_monitor/apify.py`, `x_monitor/run.py`, `x_monitor/query_plan.py`, `tests/test_budget_guard.py` |
+| `twitterapi-live-queries-by-model.md` | The 6-call cycle (A + B1/B2/B3 + C1/C2), per-brand token lists, sinceTime/cursor handling, LaunchAgent | `config.yaml`, `x_monitor/query_plan.py`, `x_monitor/queries.py`, `deploy/*.plist` |
+| `db-schema.md` | Every table, column, type, FK, index as `.md` prose; references the generated PNG | **`core/models.py` (Django ORM — v2 source of truth, since 2026-07-22 cutover)**, `x_monitor/migrations/*.sql` (immutable history), live PG introspection via `manage.py inspectdb`, `docs/reference/schema.dot` |
+| **`schema.dot`** | **Graphviz source for `xmonitor-schema-post-batch.png`. MUST run BEFORE `db-schema.md` review and before the PNG regen** | `core/models.py` + live PG schema (the dot's frontmatter claims "Auto-generated from Django ORM" but `scripts/build_schema_image.sh` does NOT actually introspect — verify by hand against `core/models.py`) |
+| `lookup-tables.md` | `*_keys` SQL tables, `_VALID_*` frozensets, brand/company/category registry, call-group coverage | `x_monitor/attribution.py`, `x_monitor/config.py`, `config.yaml`, live DB queries |
 | `classifier-prompts.md` | Literal system prompt text, JSON output shape, taxonomy legends, model routing | `x_monitor/attribution.py` (prompt body is the module-level constant `_PRAGMATICS_FULL_SYSTEM_PROMPT`) |
 | **`x-monitoring/README.md`** | **Operator entrypoint: pipeline lifecycle (RunPipeline 8 steps), dashboard routes, 2 launchd agents, setup, daily ops, troubleshooting, retired-paths section. Also cross-references the 6 docs above.** | Same as the 6 reference docs (this doc synthesizes — it does NOT add new source-of-truth files) |
 
@@ -61,11 +62,12 @@ The skill is applied against the canonical main branch (see [[branch-canonical-s
 Dispatch **one** subagent on `docs/reference/schema.dot` BEFORE any other agent. This subagent:
 
 - Edits only `schema.dot` (NOT the `.md`, NOT the PNG)
-- Compares every node/edge in the dot against the live `sqlite_master` schema
-- Adds migrations `024-038` worth of structure (currently missing)
+- Compares every node/edge in the dot against **the v2 Django ORM in `core/models.py`** (the source of truth since the 2026-07-22 cutover — sqlite `data/x_monitoring.db` is a legacy/dev artifact and is NOT canonical). Cross-check against `x_monitor/migrations/*.sql` for migration history (migrations are immutable history, not the live shape).
+- Adds missing structure for any migrations/models that landed after the dot's "Last regenerated" stamp
 - Fixes the `brands_accounts:"author_id" -> accounts:"id"` edge (should be `accounts_id`, per migration 031)
-- Adds a "Last regenerated: post-migration-038" stamp to the dot's frontmatter so drift is visible
+- Updates the "Last regenerated: post-migration-XXX" stamp in the dot's frontmatter to match the current `core/models.py` state (use `manage.py showmigrations` to get the latest applied migration number, or grep `ls x_monitor/migrations/*.sql | tail -1`)
 - Does NOT run `scripts/build_schema_image.sh` — that happens in Stage B
+- **Note on sqlite:** if `data/x_monitoring.db` exists, it is the **dev** database (Django's `db.sqlite3` would be at `data/django_dev.db`). It is NOT a source of truth. Prod is PostgreSQL on Render (`pushinweight.ai`). Use `core/models.py` + migrations + (optionally) `manage.py inspectdb` against the dev DB for cross-reference.
 
 **Then run `scripts/build_schema_image.sh` from the repo root yourself** (the main session, not a subagent) so the PNG is regenerated against the now-updated dot. Confirm the script exits 0 and that `docs/reference/images/xmonitor-schema-post-batch.png` was rewritten.
 
@@ -130,11 +132,11 @@ Present the consolidated drift list to the operator as a follow-up plan candidat
 |---|---|
 | Endpoint paths, headers, retry loop | `x_monitor/apify.py::TwitterApiClient._get` |
 | Credit costs | `x_monitor/run.py::_CREDITS_PER_ADVANCED_SEARCH_PAGE` (live budget guard is canonical; plan estimates are not) |
-| Calls/cycle count | `x-monitoring/config.yaml::call_b_groups` + `x_query_specs` (NOT plan docs) |
+| Calls/cycle count | `config.yaml::call_b_groups` + `x_query_specs` (NOT plan docs) |
 | sinceTime / cursor behavior | `x_monitor/queries.py`; cross-check commits `a46020f` + `dcf0a8c` (URL-side `sinceTime` is dropped on `advanced_search`) |
-| Enabled brands (count + slugs) | `x-monitoring/config.yaml::enabled_models` (currently 20) |
-| Table/column truth | `x-monitoring/x_monitor/migrations/*.sql` (migrations are immutable) |
-| Schema diagram | `docs/reference/schema.dot` (edited by Stage A agent) + `scripts/build_schema_image.sh` (run by main session in Stage B preamble) |
+| Enabled brands (count + slugs) | `config.yaml::enabled_models` (currently 20) |
+| **Table/column truth (v2 cutover 2026-07-22)** | **`core/models.py` (Django ORM — primary). `x_monitor/migrations/*.sql` is immutable history; PG `information_schema` for live prod. SQLite `data/x_monitoring.db` is legacy/dev only.** |
+| Schema diagram | `docs/reference/schema.dot` (edited by Stage A agent) + `scripts/build_schema_image.sh` (run by main session in Stage B preamble). The dot's frontmatter claims "Auto-generated from Django ORM" but `build_schema_image.sh` does NOT introspect — it just renders the hand-edited dot via `dot`. Verify by hand against `core/models.py`. |
 | Classifier prompt body | `x_monitor/attribution.py::_PRAGMATICS_FULL_SYSTEM_PROMPT` (module-level constant, NOT inline in `build_pragmatics_full_prompt`) |
 | `_VALID_*` frozensets | `x_monitor/attribution.py` |
 | LaunchAgent schedule | `deploy/*.plist` (2 agents: harvest = `StartCalendarInterval` minute 0/15/30/45; config-reload = `WatchPaths` + `ThrottleInterval=300s`) |
@@ -201,6 +203,10 @@ These are real gaps the skill did not initially cover; future agents should be a
 4. **The PNG filename `xmonitor-schema-post-batch.png` is stale.** It was named for batch 011-023 in mid-2026. **Status (2026-07-16 update):** renamed during the Stage B regen — the new PNG filename should match the migration window (e.g., `xmonitor-schema-post-mig-038.png`). Still flagged as a follow-up if the rename didn't happen automatically.
 
 5. **Subagents can race on shared review notes.** A sibling agent's pre-edited reviewer-note blockquote nearly got trusted blindly (caught by the with-skill agent's verification step). **Fix:** always re-verify every claim against code/DB before editing, even if the doc already contains a "Last reviewed" block.
+
+6. **v2 Django cutover (2026-07-22) invalidated the procedure's sqlite assumptions** (caught 2026-07-31, plan: `docs/plans/2026-07-22-002-feat-production-django-postgres-render-plan.md`). The original 2026-07-16 procedure assumed SQLite migrations (`x_monitor/migrations/*.sql`) were the source of truth and that `sqlite3 data/x_monitoring.db .schema` was a valid cross-check. Post-cutover: (a) `core/models.py` is the source of truth for the live schema, (b) `x_monitor/migrations/*.sql` are immutable history but the SHAPE they describe is now defined by Django models, (c) `data/x_monitoring.db` is dev-only — prod is PostgreSQL on Render, (d) the dot's "Auto-generated from Django ORM" header is aspirational — `scripts/build_schema_image.sh` renders whatever's in the dot, no introspection. **Fix applied:** source-of-truth column rows for `db-schema.md` + `schema.dot`, Stage A agent instructions, and Source-of-Truth Map "Table/column truth" row all updated to point at `core/models.py` as primary, migrations as history, and to flag sqlite as legacy/dev. Future agents reading this skill must NOT trust sqlite `.schema` output as live state.
+
+7. **Path drift: `x-monitoring/x_monitor/` → `x_monitor/` at repo root.** The original procedure cited `x-monitoring/x_monitor/apify.py`, `x-monitoring/x_monitor/migrations/*.sql`, `x-monitoring/config.yaml` — these are stale. The actual layout is `x_monitor/` and `config.yaml` at the repo root, with `x-monitoring/` containing only `README.md`. **Fix applied:** all paths in the source-of-truth table + Source-of-Truth Map updated. Future agents must `ls` the repo root before assuming a path.
 
 ## Verification Test Result (2026-07-16)
 

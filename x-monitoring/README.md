@@ -1,6 +1,6 @@
 # x-monitor
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 
 A daily dashboard for keeping tabs on what people are saying about 20 AI
 models on X (formerly Twitter). Serves the multi-brand home page and
@@ -47,16 +47,17 @@ Each cycle executes 5 steps:
    `config.yaml` by `project/settings.py`). Primary brand keywords are
    loaded from `BrandKeyword.objects.filter(is_primary=True)` (Django ORM).
    The plan is built by `x_monitor/query_plan.py::plan_calls()`. Emits
-   **6 calls** per cycle:
+   **7 calls** per cycle:
 
    | Call | Kind | Description |
    |---|---|---|
    | A | List-based fan-in | Curated X list (`x_monitor_list_id`) |
-   | B1 | Wide-net + AND-filter | Top-presence / global brands (6 brands) |
-   | B2 | Wide-net + AND-filter | Chinese-language brands (4 brands) |
-   | B3 | Wide-net + AND-filter | Specialized / smaller brands (4 brands) |
-   | C1 | Co-occurrence constrained | MiMo, Kimi, Yi, Llama |
-   | C2 | Co-occurrence constrained | ERNIE, Upstage |
+   | B1 | BARE wide-net | Top-presence / global brands (6 brands, no co) |
+   | B2 | HANDLE-ONLY | Chinese-language brands (4 brands, `@handle` OR-group) |
+   | B3 | HANDLE-ONLY | Specialized / smaller brands (4 brands, `@handle` OR-group) |
+   | C1 | Co-occurrence constrained | MiMo, Kimi, Yi, Llama (5-term minimal co) |
+   | C2 | Co-occurrence constrained | ERNIE, Upstage (5-term minimal co + baidu/文心) |
+   | C3 | Co-occurrence constrained | Doubao, SenseChat, Kuaishou (5-term minimal co) |
 
 2. **Fetch tweets.** Each `PlannedCall.query_string` is fired against
    TwitterAPI.io's `advanced_search` endpoint via `TwitterApiClient`
@@ -69,9 +70,9 @@ Each cycle executes 5 steps:
    `Post`, `Account`, `PostBrand`, `PostBrandMention`, `PostBrandSignal`
    (all defined in `core/models.py`).
 
-5. **Post-fetch (stubbed).** Translation and classification steps are
-   deferred to a follow-up unit. The `CycleRunner` currently returns zero
-   counters for translate/classify.
+5. **Post-fetch (translate + classify)** is handled by the
+   [Backfiller](#backfiller-post-fetch-fetch--translate--classify) — not
+   the live `run_cycle`.
 
 The command-line entry point is:
 
@@ -86,6 +87,71 @@ python manage.py run_cycle --json           # JSON stats to stdout
 **Source of truth files:** `config.yaml` (enabled models, x_query_specs),
 `monitor/cycle.py` (orchestrator), `monitor/management/commands/run_cycle.py`
 (CLI), `x_monitor/query_plan.py` (call planner).
+
+## Backfiller (post-fetch: fetch + translate + classify)
+
+The live `run_cycle` cron only handles steps 1–4 of the pipeline above
+(plan, fetch, attribute, persist). Translation and classification are
+**not** invoked by the live pipeline. Closing the translate+classify
+gap on demand is the Backfiller's job — operators run it manually.
+
+### One-shot scripts
+
+Two earlier-era scripts cover narrow backfill needs:
+
+- `scripts/backfill_brand_keywords.py` — Seeds `brand_keywords` from
+  `data/queries/<brand>.yaml` Q2 parens (the operator-curated source of
+  truth for brand tokens). INSERT-OR-IGNORE on `(brand_id, pattern)`
+  UNIQUE, so re-running is idempotent. Plan:
+  `docs/plans/2026-07-10-001-feat-brand-keywords-backfill-plan.md`.
+  Used when adding a new brand's yaml.
+- `scripts/backfill_classify_recent.py` — Walks `posts` for posts with
+  no `posts_brands_signals` row, calls real `classify_post` (not the
+  pipeline stub) with attributed brand slugs, and writes via
+  `Store.insert_posts_brands_signals`. `--limit N` caps the run;
+  `--dry-run` skips LLM calls; `--out FILE.json` dumps the work.
+
+### v2 prod backfiller
+
+The unified batched + resumable + LLM-guarded backfiller is
+`python manage.py backfill`:
+
+```bash
+python manage.py backfill --since 2026-07-01 --until 2026-07-31
+python manage.py backfill --since 2026-07-01 --until 2026-07-31 --max-llm-calls 50
+python manage.py backfill --status        # print progress from data/backfill/*.json
+python manage.py backfill --reset         # start over
+```
+
+Plan: `docs/plans/2026-07-24-002-feat-backfiller-tool-plan.md`.
+
+Key properties:
+
+- Date-bounded: `--since`/`--until` accept `YYYY-MM-DD` or
+  `YYYY-MM-DDTHH:MM:SS`. Window size drives `max_results` and
+  `max_pages` dynamically.
+- Batched + cooperative: `--batch-size N` + `--pause SECONDS` keeps the
+  pipeline lock free for the regular 15-min `pushinweight-harvest` cron.
+- Resumable: state files in `data/backfill/<epochs>.json` record
+  completed call IDs, total posts inserted, and errors. Failed calls
+  retry on the next invocation.
+- LLM-guarded: `--max-llm-calls N` is the hard safety valve — stops
+  classification after N LLM batches; remaining posts wait for the
+  next invocation. LLM calls are sequential with `X_MONITOR_LLM_PAUSE_SECONDS`
+  (default 1s) between batches.
+- Translate + classify: runs the real `classify_post` on new posts,
+  writing `text_en` / `text_zh_cn`, `PostBrandSignal`, and
+  `PostBrandDiscourse` rows.
+
+**The live pipeline (`run_cycle`) does NOT call this.** Operators run
+`manage.py backfill` manually to close the translate+classify gap on
+historical windows or to recover after an outage.
+
+**Source of truth files:** `monitor/management/commands/backfill.py`
+(command), `monitor/cycle.py` (shared `CycleRunner` — backfiller and
+the harvest cron use the same one), `data/backfill/<epochs>.json`
+(state files), `scripts/backfill_brand_keywords.py`,
+`scripts/backfill_classify_recent.py`.
 
 ## Dashboard
 
@@ -243,7 +309,7 @@ cross-reference for runtime behavior:
 | Doc | What it covers |
 |---|---|
 | `twitterapi-io-calls.md` | TwitterAPI.io endpoint inventory, credit costs, retry/backoff, budget guard |
-| `twitterapi-live-queries-by-model.md` | The 6-call cycle (A + B1/B2/B3 + C1/C2), per-brand token lists, per-cycle state |
+| `twitterapi-live-queries-by-model.md` | The 7-call hybrid funnel (A + B1 bare + B2/B3 handle-only + C1/C2/C3 co-occurrence) |
 | `db-schema.md` | Every table, column, type, FK, index; references the generated PNG |
 | `lookup-tables.md` | Enum/lookup tables (`*_keys`, `*_labels`), taxonomy values, brand/company registry |
 | `classifier-prompts.md` | Literal LLM system prompt text, JSON output shape, taxonomy legends |
@@ -273,3 +339,22 @@ commands no longer exist:
 - Flask on `localhost:5000` -- replaced by Django + gunicorn on pushinweight.ai
 
 Last reviewed: 2026-07-24
+
+Last reviewed: 2026-07-31
+- Step 5: post-fetch translate + classify — was "stubbed / deferred",
+  replaced with a forward-pointer to the new Backfiller section.
+- Pipeline lifecycle: call count was 6, now **7** (added C3 per plan
+  2026-07-30-002).
+- B1: was "Wide-net + AND-filter", now **BARE wide-net** (no co paren
+  per R3).
+- B2/B3: were "Wide-net + AND-filter", now **HANDLE-ONLY** (the
+  `handles:` XQuerySpec field per U2).
+- C1/C2/C3: now document the 5-term minimal co allowlist (R8) and
+  R10 (xiaomi/小米/moonshot removed from co).
+- Added new `## Backfiller (post-fetch: fetch + translate + classify)`
+  section documenting the `manage.py backfill` command, the two
+  one-shot scripts (`scripts/backfill_brand_keywords.py`,
+  `scripts/backfill_classify_recent.py`), and the explicit "live
+  pipeline does NOT call this" callout.
+- Where-to-look-next row for `twitterapi-live-queries-by-model.md`
+  updated to reflect the 7-call hybrid funnel.

@@ -1,5 +1,6 @@
 /* Auto-generated from Django ORM models in core/models.py. */
-/* Last regenerated: v2 Django ORM — core/models.py, 2026-07-24 */
+/* Last regenerated: v2 Django ORM — core/models.py, 2026-07-31 */
+/* Migration baseline: 039 (latest applied to dev). */
 /* Do not edit by hand. Regenerate via scripts/build_schema_image.sh */
 
 digraph xmonitor_schema {
@@ -252,10 +253,11 @@ digraph xmonitor_schema {
 <TR><TD PORT="retweet_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">retweet_count</TD><TD PORT="retweet_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="reply_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">reply_count</TD><TD PORT="reply_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="quote_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">quote_count</TD><TD PORT="quote_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="in_reply_to_user_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">in_reply_to_user_id</TD><TD PORT="in_reply_to_user_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="quoted_status_id" BGCOLOR="#D6EAF8" ALIGN="LEFT">quoted_status_id <FONT COLOR="#2874A6" POINT-SIZE="9">FK</FONT></TD><TD PORT="quoted_status_id_t" BGCOLOR="#D6EAF8" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="conversation_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">conversation_id</TD><TD PORT="conversation_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="entities" BGCOLOR="#FFFFFF" ALIGN="LEFT">entities</TD><TD PORT="entities_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
 <TR><TD PORT="source_query_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">source_query_id</TD><TD PORT="source_query_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
-<TR><TD PORT="raw" BGCOLOR="#FFFFFF" ALIGN="LEFT">raw</TD><TD PORT="raw_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
 <TR><TD PORT="headline" BGCOLOR="#FFFFFF" ALIGN="LEFT">headline</TD><TD PORT="headline_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="headline_source" BGCOLOR="#FFFFFF" ALIGN="LEFT">headline_source</TD><TD PORT="headline_source_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 <TR><TD PORT="text_en" BGCOLOR="#FFFFFF" ALIGN="LEFT">text_en</TD><TD PORT="text_en_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
@@ -265,6 +267,57 @@ digraph xmonitor_schema {
 <TR><TD PORT="last_quote_count_seen" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_quote_count_seen</TD><TD PORT="last_quote_count_seen_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
 <TR><TD PORT="last_quote_fetched_at" BGCOLOR="#FFFFFF" ALIGN="LEFT">last_quote_fetched_at</TD><TD PORT="last_quote_fetched_at_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TIMESTAMPTZ</FONT></TD></TR>
 <TR><TD PORT="created_at_epoch" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at_epoch</TD><TD PORT="created_at_epoch_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BIGINT</FONT></TD></TR>
+<TR><TD PORT="created_at_raw" BGCOLOR="#FFFFFF" ALIGN="LEFT">created_at_raw</TD><TD PORT="created_at_raw_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="bookmark_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">bookmark_count</TD><TD PORT="bookmark_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="is_reply" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_reply</TD><TD PORT="is_reply_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="is_retweet" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_retweet</TD><TD PORT="is_retweet_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="is_quote" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_quote</TD><TD PORT="is_quote_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="in_reply_to_id" BGCOLOR="#FFFFFF" ALIGN="LEFT">in_reply_to_id</TD><TD PORT="in_reply_to_id_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="in_reply_to_username" BGCOLOR="#FFFFFF" ALIGN="LEFT">in_reply_to_username</TD><TD PORT="in_reply_to_username_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="tweet_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">tweet_type</TD><TD PORT="tweet_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="tweet_url" BGCOLOR="#FFFFFF" ALIGN="LEFT">tweet_url</TD><TD PORT="tweet_url_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="tweet_twitter_url" BGCOLOR="#FFFFFF" ALIGN="LEFT">tweet_twitter_url</TD><TD PORT="tweet_twitter_url_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="card" BGCOLOR="#FFFFFF" ALIGN="LEFT">card</TD><TD PORT="card_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="place" BGCOLOR="#FFFFFF" ALIGN="LEFT">place</TD><TD PORT="place_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="client_source" BGCOLOR="#FFFFFF" ALIGN="LEFT">client_source</TD><TD PORT="client_source_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="view_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">view_count</TD><TD PORT="view_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="article" BGCOLOR="#FFFFFF" ALIGN="LEFT">article</TD><TD PORT="article_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="is_limited_reply" BGCOLOR="#FFFFFF" ALIGN="LEFT">is_limited_reply</TD><TD PORT="is_limited_reply_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="community_info" BGCOLOR="#FFFFFF" ALIGN="LEFT">community_info</TD><TD PORT="community_info_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="display_text_range" BGCOLOR="#FFFFFF" ALIGN="LEFT">display_text_range</TD><TD PORT="display_text_range_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="extended_entities" BGCOLOR="#FFFFFF" ALIGN="LEFT">extended_entities</TD><TD PORT="extended_entities_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="quoted_author_handle" BGCOLOR="#FFFFFF" ALIGN="LEFT">quoted_author_handle</TD><TD PORT="quoted_author_handle_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_name" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_name</TD><TD PORT="author_name_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_followers_count</TD><TD PORT="author_followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_following_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_following_count</TD><TD PORT="author_following_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_verified</TD><TD PORT="author_verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_is_blue_verified" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_is_blue_verified</TD><TD PORT="author_is_blue_verified_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_verified_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_verified_type</TD><TD PORT="author_verified_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_is_translator" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_is_translator</TD><TD PORT="author_is_translator_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_is_automated" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_is_automated</TD><TD PORT="author_is_automated_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_automated_by" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_automated_by</TD><TD PORT="author_automated_by_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_description" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_description</TD><TD PORT="author_description_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_location" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_location</TD><TD PORT="author_location_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_media_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_media_count</TD><TD PORT="author_media_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_statuses_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_statuses_count</TD><TD PORT="author_statuses_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_favourites_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_favourites_count</TD><TD PORT="author_favourites_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_fast_followers_count" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_fast_followers_count</TD><TD PORT="author_fast_followers_count_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">INTEGER</FONT></TD></TR>
+<TR><TD PORT="author_can_dm" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_can_dm</TD><TD PORT="author_can_dm_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_can_media_tag" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_can_media_tag</TD><TD PORT="author_can_media_tag_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_profile_picture" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_profile_picture</TD><TD PORT="author_profile_picture_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_profile_bio" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_profile_bio</TD><TD PORT="author_profile_bio_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="author_cover_picture" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_cover_picture</TD><TD PORT="author_cover_picture_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_pinned_tweet_ids" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_pinned_tweet_ids</TD><TD PORT="author_pinned_tweet_ids_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="author_affiliates_highlighted_label" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_affiliates_highlighted_label</TD><TD PORT="author_affiliates_highlighted_label_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="author_withheld_in_countries" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_withheld_in_countries</TD><TD PORT="author_withheld_in_countries_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="author_possibly_sensitive" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_possibly_sensitive</TD><TD PORT="author_possibly_sensitive_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_has_custom_timelines" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_has_custom_timelines</TD><TD PORT="author_has_custom_timelines_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">BOOL</FONT></TD></TR>
+<TR><TD PORT="author_entities" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_entities</TD><TD PORT="author_entities_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">JSON</FONT></TD></TR>
+<TR><TD PORT="author_twitter_url" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_twitter_url</TD><TD PORT="author_twitter_url_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_type" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_type</TD><TD PORT="author_type_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_url" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_url</TD><TD PORT="author_url_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_created_at_raw" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_created_at_raw</TD><TD PORT="author_created_at_raw_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
+<TR><TD PORT="author_status" BGCOLOR="#FFFFFF" ALIGN="LEFT">author_status</TD><TD PORT="author_status_t" BGCOLOR="#FFFFFF" ALIGN="LEFT"><FONT COLOR="#7F8C8D">TEXT</FONT></TD></TR>
 </TABLE>>];
 
     posts_brands [label=<
@@ -446,6 +499,7 @@ digraph xmonitor_schema {
   /* --- Entity FK edges --- */
   hf_orgs:company_id_t -> companies:nickname_t [color="#C0392B"];
   posts:author_id_t -> accounts:author_id_t [color="#7D6608"];
+  posts:quoted_status_id_t -> posts:tweet_id_t [color="#7D6608"];
 
   /* --- Junction FK edges --- */
   brands_companies:brand_id_t -> brands:nickname_t [color="#C0392B"];

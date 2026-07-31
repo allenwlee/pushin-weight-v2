@@ -1,6 +1,6 @@
 # TwitterAPI.io call inventory (v2 Django architecture)
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 
 Last reviewed: 2026-07-24
 
@@ -376,5 +376,65 @@ cookie-rot failure mode are gone.
   PostTypeKey, SentimentKey.
 
 ---
+
+Last reviewed: 2026-07-31
+
+**Substantive corrections in this review (2026-07-31):**
+
+- Verified against `x_monitor/run.py`:
+  - `_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300` (line 959) — doc claim of 300
+    credits/page matches. The earlier 2026-07-16 review had caught a
+    15→300 drift; the live value remains 300 as of this review.
+  - `_BUDGET_HARD_CAP_CREDITS = 2_000_000` (line 958) — matches the $20
+    cap referenced in the doc.
+  - `_N_CALLS = 6` — matches the A+B1+B2+B3+C1+C2 smoketest shape
+    referenced in the doc and pinned by `tests/test_budget_guard.py`.
+  - The would-spend formula `_N_CALLS * _effective_max_pages *
+    _CREDITS_PER_ADVANCED_SEARCH_PAGE` matches the formula pinned by
+    `tests/test_budget_guard.py::test_budget_guard_math_formula`.
+  - The `>` (strict greater-than) threshold matches the boundary-case
+    pin in `tests/test_budget_guard.py::test_budget_guard_threshold`.
+- Verified against `x_monitor/apify.py`:
+  - `TWITTERAPI_BASE = "https://api.twitterapi.io"` (line 28) — matches.
+  - `timeout_s: int = 60` and `max_retries: int = 2` (lines 74-75) —
+    match the "60 s, up to 3 attempts" claim in the doc.
+  - `_headers()` returns `{"X-API-Key": self.api_key, "Accept":
+    "application/json"}` (lines 95-98) — matches the doc's auth-header
+    claim.
+  - `_get` retry/backoff math: `2 ** (attempt + 2)` for 429 (4s, 8s)
+    and `2 ** attempt` for 5xx/network (1s, 2s) — matches the table in
+    the doc.
+  - `_walk_search` defaults `max_pages=5, max_per_page=20` (line 210) —
+    matches the "20/page, 5-page cap" claim.
+  - All six endpoint paths exist: `SEARCH_PATH = "/twitter/tweet/
+    advanced_search"`, `FOLLOWERS_PATH = "/twitter/user/followers"`,
+    `USER_INFO_PATH = "/twitter/user/info"`, `ARTICLE_PATH =
+    "/twitter/article"`, `QUOTES_PATH = "/twitter/tweet/quotes"`,
+    `TWEETS_BY_IDS_PATH = "/twitter/tweets"`.
+  - Public methods named in the doc (`run_search`, `get_quote_tweets`,
+    `get_tweets_by_ids`, `run_followers`, `user_info`, `get_article`)
+    all exist on `TwitterApiClient`.
+- Verified against `x_monitor/query_plan.py`:
+  - `MIN_FAVES_FOR_LIST_CALL: int = 0` (line 357) — Call A renders
+    `min_faves:0`, matching the doc's "Query: `(list:...) min_faves:0`".
+  - The 512-character length cap and `assert_under_length_cap` from
+    `x_monitor.queries` are referenced from `query_plan.py` (line 350)
+    — matches.
+- Verified against `render.yaml`:
+  - `schedule: "*/15 * * * *"` and `startCommand: python manage.py
+    run_cycle --limit-per-call 50` (lines 37, 39) — match.
+
+**No drift found.** The doc is consistent with the source-of-truth on
+every constant, path, method name, and formula that the doc references.
+The only items that remain unverifiable from source (and are not load-
+bearing for the budget/cycle math) are the per-call credit cost claims
+for `/twitter/user/info` ("~1 credit") and `/twitter/user/followers`
+("1-3 credits per follower") — neither is asserted in `x_monitor/
+apify.py` or `x_monitor/run.py` (the apify.py follower comment names
+the page-size thresholds — 20-99=3cr, 100-199=2cr, 200=1cr — but the
+general "~1 credit per call" for `/twitter/user/info` would need the
+upstream TwitterAPI.io pricing page to confirm). These are doc-only
+comments, not budget-guard inputs, so they do not affect runtime
+behavior.
 
 Last reviewed: 2026-07-24

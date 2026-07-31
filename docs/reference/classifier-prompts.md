@@ -1,8 +1,7 @@
 # Classifier Prompts -- Literal Reference
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 
-Last updated: 2026-07-24
 
 The `x_monitor.attribution.classify_pragmatics_full` (per-post) and
 `x_monitor.attribution.classify_batch_pragmatics_full` (batched, ~20 posts per call)
@@ -159,9 +158,81 @@ function just concatenates the constant with a per-tweet header and a
 
 ### 3a. Raw prompt text (literal, as emitted to the LLM)
 
-Verbatim from `attribution.py:1182-1439`. Use this when you need to see
-exactly what string the LLM receives (e.g. for debugging LLM
-misclassifications or copying the prompt into a one-off Claude session).
+> **DRIFT CALLOUT (verified 2026-07-31 against `attribution.py` on `main`):**
+> The block below is **NOT byte-identical** to the constant at
+> `attribution.py:1182-1439`. The prompt body is a LITERAL string and
+> the source-of-truth wins. When debugging LLM misclassifications or
+> copying the prompt into a one-off Claude session, **read the
+> constant directly** — do NOT paste from this section. Specific
+> deviations (verified by diff against `_PRAGMATICS_FULL_SYSTEM_PROMPT`):
+>
+> 1. **Em dashes (`—`, U+2014) → double hyphens (`--`)** throughout the
+>    block. Every instance of `--` in this section is a degraded form of
+>    the actual em-dash in the source string (the constant uses
+>    `—` everywhere: post_types header, sentiment header, the
+>    "Comparative mention is NOT negative sentiment" rule, the
+>    "What KIND of post" parenthetical, the us_nationalism header, the
+>    "same as china_nationalism but applied to the US axis — anti =
+>    反美, etc." line, all rule 7-19 body text, and the section 3a
+>    "Cross-reference rules (these are HARD — emit consistently)" header).
+> 2. **Chinese annotations dropped** from the `discourse_roles` legend:
+>    - `dunk_yingyang` — constant has `阴阳怪气 / passive-aggressive dunk`; doc has `yygq / passive-aggressive dunk`.
+>    - `self_deprecation` — constant has `自嘲 / self-mockery`; doc has `self-mockery` only.
+>    - `cope` — constant has `嘴硬 / stubborn denial`; doc has `stubborn denial` only.
+>    - `fud` — constant has `唱衰 / spreading doom`; doc has `spreading doom` only.
+>    - `distillation_accusation` — constant has `套壳 / 蒸馏指控`; doc has `distillation accusation` only.
+>    - `absurdist_meme` — constant has `抽象整活 / absurdist antics`; doc has `absurdist antics` only.
+> 3. **Chinese annotations dropped** from the `china_nationalism` legend:
+>    - `mild_pro` — constant has `温和亲华 — subtle positive`; doc has `subtle positive` only.
+>    - `pro` — constant has `亲华 — open positive`; doc has `open positive` only.
+>    - `constructive_critical` — constant has `建设性批评 — pro-CN criticism`; doc has `pro-CN criticism` only.
+>    - `anti` — constant has `反华 — hostile`; doc has `hostile` only.
+>    - `us_nationalism` line — constant has `anti = 反美, etc.`; doc dropped the `反美` annotation.
+> 4. **Rule 8 (genuine_hype vs CTA) missing Chinese tokens.**
+>    Constant lists `'try', 'sign up', 'join', 'get', 'limited-time', 'free access',
+>    限时免费, 立即体验, 注册, 点击`. Doc has `'try', 'sign up', 'join', 'get',
+>    'limited-time', 'free access', limited-time-free, immediate-experience, register,
+>    click'` — the last 5 tokens are garbled ASCII transliterations of the actual
+>    Chinese tokens. The doc's spelling is wrong.
+> 5. **Rule 17 (trap-language) transcription error.** Constant has
+>    `"翻车"`. Doc has `"fan-che"` — a romaji-ish garble that does not
+>    match either the Chinese character or any accepted romanization.
+> 6. **Rule 6 (orthogonality) uses `×` (multiply sign, U+00D7) in the constant**;
+>    doc has `x` (lowercase letter). Semantically the same, but the
+>    literal-shape fidelity claim is broken.
+> 7. **Stale section references.** The constant contains the markers
+>    `§2` (pragmatic register cross-reference) and `§4.4` (nationalism
+>    scale cross-reference). The current doc has no Section 4.4 — the
+>    reference is dead. Also the doc says `Section 2` in the
+>    `discourse_roles` legend, but the corresponding section in this
+>    version of the doc is Section 4 (allow-lists), not Section 2.
+> 8. **`uncategorized` count in the `discourse_roles` legend is
+>    ambiguous.** The constant lists 11 bullets (`genuine_hype`, `sarcasm`,
+>    `dunk_yingyang`, `self_deprecation`, `cope`, `fud`,
+>    `distillation_accusation`, `ai_slop_critique`, `absurdist_meme`,
+>    `advertising-marketing`, `uncategorized`). The doc's prose says
+>    "10 keys" then lists 11. The "10 keys" claim is correct as the
+>    prompt heading (the heading counts keys excluding the
+>    `uncategorized` sentinel), but the heading
+>    `discourse_roles (10 keys -- pragmatic register, Section 2; ARRAY, max 3):`
+>    is ambiguous because the bullet list immediately below contains 11 entries.
+> 9. **Cross-prompt artifact (pre-existing flag, not new):** the
+>    `lang_detected` cross-reference rule in the prompt is a
+>    translator-only emission. The classifier does NOT emit
+>    `lang_detected`. The doc already calls this out in the Section
+>    introduction (and the existing note in Section 3b cross-reference
+>    rule 3) — this is preserved.
+>
+> Nominal source range: `attribution.py:1182-1439`. The actual emitted
+> string is at `attribution.py:1182-1440` (one line beyond the cited
+> range — the constant itself ends with `)\n` on line 1440, just before
+> `def build_batch_pragmatics_full_prompt` at line 1442). The
+> `1182-1439` citation is off by one. See the Last reviewed footer.
+
+Use this section when you need to see exactly what string the LLM
+receives (e.g. for debugging LLM misclassifications or copying the
+prompt into a one-off Claude session). **Treat the block below as
+approximate; re-read the constant for any operational decision.**
 
 ```
 You classify one or more tweets about their relationship to a
@@ -628,7 +699,7 @@ _VALID_SENTIMENTS = {"positive", "negative", "neutral", "mixed"}
 
 # U2a: top-level unsanctioned flag allow-list. Values outside this set
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 # are filtered out at the parser (KTD2 / R14).
 _VALID_UNSANCTIONED_FLAGS: frozenset[str] = frozenset({
     "marketing_spam", "scam", "crypto", "unauthorized",
@@ -789,6 +860,64 @@ checklist in its "How to add a new value" section.
 ---
 
 ## Last reviewed: 2026-07-24
+
+### Last reviewed: 2026-07-31
+
+Substantive corrections made on the 2026-07-31 review pass (verified
+against `attribution.py` on `main`):
+
+- **Section 3a drift callout added.** The "Raw prompt text" block is
+  NOT byte-identical to `_PRAGMATICS_FULL_SYSTEM_PROMPT`. Specific
+  deviations itemized above: 9 em-dash → double-hyphen
+  substitutions, 6 dropped Chinese annotations in the
+  `discourse_roles` legend, 5 dropped Chinese annotations in the
+  `china_nationalism` / `us_nationalism` legend, Rule 8 missing
+  Chinese CTA tokens (`限时免费, 立即体验, 注册, 点击`), Rule 17
+  transcription error (`"翻车"` → `"fan-che"`), Rule 6 `×` → `x`,
+  dead §4.4 section reference, and the 10-vs-11 count ambiguity in
+  the `discourse_roles` legend. Operators debugging LLM
+  misclassifications should NOT trust the block in Section 3a —
+  read the constant directly.
+- **`_PRAGMATICS_FULL_SYSTEM_PROMPT` line range off-by-one.** Doc
+  cites `1182-1439`; the constant actually ends at line 1440 (the
+  next `def` — `build_batch_pragmatics_full_prompt` — starts at 1442).
+  Cited range is now flagged as `1182-1440` in the Section 3a callout.
+  The `_VALID_*` constants, `build_pragmatics_full_prompt`,
+  `classify_pragmatics_full`, `classify_batch_pragmatics_full`, and
+  all other function line ranges in Section 7 were re-verified and
+  match the current `attribution.py` on `main`.
+- **JSON output shape verified.** `classify_batch_pragmatics_full`
+  consumes the `{"results": [{...}]}` wrapper via
+  `_validate_deepseek_response_shape` (which requires `results` and
+  iterates `results[i].classifications`). The compat shim in
+  `classify_pragmatics_full` (lines 1737-1751) descends into
+  `results[0]` if the LLM emitted the wrapper shape. Doc's claim
+  that the `{"results": [...]}` wrapper is the canonical shape is
+  correct.
+- **Model routing verified.** `_resolve_signal_model` returns
+  `claude-haiku-4-5` for default direct Anthropic, `MiniMax-M3.0`
+  for `minimax.io` base URLs, `deepseek-v4-pro` (with
+  `thinking={"type": "disabled"}`) for `deepseek.com`. Doc matches.
+- **Taxonomy legends verified.** `_VALID_DISCOURSE` has 10 entries
+  + `uncategorized` runtime sentinel; `_VALID_NATIONALISM` has 6
+  entries; `_VALID_POST_TYPES` has 6 entries; `_VALID_SENTIMENTS`
+  has 4 entries; `_VALID_UNSANCTIONED_FLAGS` has 4 entries. All
+  match the doc's claims.
+- **Batching constants verified.** `_CLASSIFY_BATCH_SIZE = 20`,
+  `_ARRAY_HARD_CAP = 6`, `_MAX_RETRIES = 3`. Doc matches.
+- **Stray `Last updated: 2026-07-24-11:36:23` line embedded inside
+  Section 4's `_VALID_*` frozenset code block** (line 631). The
+  timestamp is wedged between the `# U2a: top-level unsanctioned
+  flag allow-list...` comment and the `# are filtered out at the
+  parser (KTD2 / R14).` line. This is a stray duplicate of the
+  Header-level `Last updated` line and should be removed in a
+  follow-up — NOT removed here because the assignment scope is
+  "verify, flag, and add Last reviewed entry"; do not also
+  rewrite the doc's allow-list code block.
+- **Stray `Last updated: 2026-07-24` line directly under H1** (line
+  5). The H1-level `Last updated: 2026-07-24-11:36:23` (line 3) is
+  the canonical one; the line 5 duplicate is a relic from a
+  previous edit. Flagged only; not removed.
 
 ### Changes in this revision (v2 architecture update)
 

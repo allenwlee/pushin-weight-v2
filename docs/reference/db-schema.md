@@ -1,10 +1,9 @@
 # x-monitor DB schema -- v2 Django ORM
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 
 Source of truth: [`core/models.py`](../../core/models.py). Migrations: `core/migrations/`.
 
-Last updated: 2026-07-24
 
 ![x-monitor schema -- v2 Django ORM (core/models.py)](images/xmonitor-schema-post-batch.png)
 
@@ -118,11 +117,10 @@ Indexes: `idx_accounts_handle (handle)`, `idx_accounts_last_seen_at (last_seen_a
 | reply_count | `IntegerField` | nullable |
 | quote_count | `IntegerField` | nullable |
 | in_reply_to_user_id | `TextField` | nullable |
-| quoted_status_id | `TextField` | nullable |
+| quoted_status_id | FK -> `self` (self-referential) | `on_delete=SET_NULL`; nullable; references the inner quoted/retweeted tweet (Policy A: NULL if the parent was never harvested); `db_constraint=True` |
 | conversation_id | `TextField` | nullable |
 | entities | `JSONField` | nullable; tweet entities payload |
 | source_query_id | `TextField` | nullable |
-| raw | `JSONField` | nullable; full tweet JSON |
 | headline | `TextField` | nullable; extracted headline |
 | headline_source | `TextField` | nullable |
 | text_en | `TextField` | nullable; English translation |
@@ -133,10 +131,80 @@ Indexes: `idx_accounts_handle (handle)`, `idx_accounts_last_seen_at (last_seen_a
 | last_quote_fetched_at | `DateTimeField` | nullable |
 | created_at_epoch | `BigIntegerField` | nullable; epoch seconds for range queries |
 
+**Section 1.2 — TwitterAPI top-level tweet fields** (added later; nullable
+snapshots of the raw TwitterAPI Advanced Search response):
+
+| Field | Type | Notes |
+|---|---|---|
+| created_at_raw | `TextField` | nullable; TwitterAPI raw timestamp string |
+| bookmark_count | `IntegerField` | nullable |
+| is_reply | `BooleanField` | nullable |
+| is_retweet | `BooleanField` | nullable |
+| is_quote | `BooleanField` | nullable |
+| in_reply_to_id | `TextField` | nullable; distinct from `in_reply_to_user_id` (the *status* id being replied to) |
+| in_reply_to_username | `TextField` | nullable |
+| tweet_type | `TextField` | nullable; TwitterAPI type tag |
+| tweet_url | `TextField` | nullable; canonical URL |
+| tweet_twitter_url | `TextField` | nullable; x.com canonical URL |
+| card | `JSONField` | nullable; TwitterAPI card object |
+| place | `JSONField` | nullable; geo place object |
+| client_source | `TextField` | nullable; client app that posted |
+| view_count | `IntegerField` | nullable |
+| article | `JSONField` | nullable; X Article object (long-form posts) |
+| is_limited_reply | `BooleanField` | nullable |
+| community_info | `JSONField` | nullable |
+| display_text_range | `JSONField` | nullable; [start, end] indices |
+| extended_entities | `JSONField` | nullable; full media/entity payload |
+| quoted_author_handle | `TextField` | nullable; handle of the quoted tweet's author |
+
+**Section 1.3 — TwitterAPI author fields** (snapshot of inner `author` object
+captured at fetch time; distinct from the per-account `accounts` row which is
+the slowly-updating canonical author profile):
+
+| Field | Type | Notes |
+|---|---|---|
+| author_name | `TextField` | nullable |
+| author_followers_count | `IntegerField` | nullable |
+| author_following_count | `IntegerField` | nullable |
+| author_verified | `BooleanField` | nullable; legacy checkmark |
+| author_is_blue_verified | `BooleanField` | nullable; X Premium |
+| author_verified_type | `TextField` | nullable; e.g. "Business", "Government" |
+| author_is_translator | `BooleanField` | nullable |
+| author_is_automated | `BooleanField` | nullable |
+| author_automated_by | `TextField` | nullable |
+| author_description | `TextField` | nullable |
+| author_location | `TextField` | nullable |
+| author_media_count | `IntegerField` | nullable |
+| author_statuses_count | `IntegerField` | nullable |
+| author_favourites_count | `IntegerField` | nullable |
+| author_fast_followers_count | `IntegerField` | nullable |
+| author_can_dm | `BooleanField` | nullable |
+| author_can_media_tag | `BooleanField` | nullable |
+| author_profile_picture | `TextField` | nullable; URL |
+| author_profile_bio | `JSONField` | nullable; full profile_bio object |
+| author_cover_picture | `TextField` | nullable; URL |
+| author_pinned_tweet_ids | `JSONField` | nullable; list of pinned tweet ids |
+| author_affiliates_highlighted_label | `JSONField` | nullable |
+| author_withheld_in_countries | `JSONField` | nullable; list of country codes |
+| author_possibly_sensitive | `BooleanField` | nullable |
+| author_has_custom_timelines | `BooleanField` | nullable |
+| author_entities | `JSONField` | nullable |
+| author_twitter_url | `TextField` | nullable |
+| author_type | `TextField` | nullable; e.g. "user", "bot" |
+| author_url | `TextField` | nullable; external URL |
+| author_created_at_raw | `TextField` | nullable |
+| author_status | `TextField` | nullable |
+
+> **Sparse data note:** The § 1.2 and § 1.3 fields are nullable snapshots
+> populated for tweets fetched after TwitterAPI Advanced Search harvesting
+> was wired in. Tweets fetched under the older Search-API-only path will
+> have NULLs in these columns. The per-account `accounts` table remains the
+> canonical, slowly-updating source of truth for an author's current
+> profile metadata.
+
 Indexes: `idx_posts_author_id (author_id)`, `idx_posts_created_at (created_at)`,
 `idx_posts_lang (lang)`, `idx_posts_lang_detected (lang_detected)`,
 `idx_posts_source_query_id (source_query_id)`, `idx_posts_created_at_epoch (created_at_epoch)`
-
 ### HFOrg (`hf_orgs`)
 
 | Field | Type | Notes |
@@ -525,3 +593,60 @@ accurate.
    `flag_set`).
 6. **on_delete semantics:** PROTECT on lookup FKs,
    CASCADE on owned junctions, SET_NULL on optional relationships.
+
+---
+
+## Last reviewed: 2026-07-31
+
+Substantive corrections made during the 2026-07-31 review pass
+(against `core/models.py`):
+
+1. **`Post.quoted_status_id` was mis-typed.** Previously documented as
+   `TextField` (nullable, plain column). It is actually a self-referential
+   `ForeignKey("self")` with `on_delete=SET_NULL`, `db_constraint=True`,
+   `related_name="quoted_by"`. Policy A semantics: NULL when the parent
+   tweet was never harvested.
+2. **`Post.raw` JSONField was removed from the schema.** Previously listed
+   as `nullable; full tweet JSON`. The field has been retired — raw
+   payloads are no longer snapshotted into `posts`. Consumers should rely
+   on the § 1.2 / § 1.3 field set or re-fetch from TwitterAPI.
+3. **`Post` table was missing the entire § 1.2 TwitterAPI top-level tweet
+   fields section** (20 fields: `created_at_raw`, `bookmark_count`,
+   `is_reply`, `is_retweet`, `is_quote`, `in_reply_to_id`,
+   `in_reply_to_username`, `tweet_type`, `tweet_url`, `tweet_twitter_url`,
+   `card`, `place`, `client_source`, `view_count`, `article`,
+   `is_limited_reply`, `community_info`, `display_text_range`,
+   `extended_entities`, `quoted_author_handle`). All nullable snapshots
+   populated for tweets fetched via the TwitterAPI Advanced Search path.
+4. **`Post` table was missing the entire § 1.3 TwitterAPI author fields
+   section** (31 fields: `author_name`, `author_followers_count`,
+   `author_following_count`, `author_verified`, `author_is_blue_verified`,
+   `author_verified_type`, `author_is_translator`, `author_is_automated`,
+   `author_automated_by`, `author_description`, `author_location`,
+   `author_media_count`, `author_statuses_count`,
+   `author_favourites_count`, `author_fast_followers_count`,
+   `author_can_dm`, `author_can_media_tag`, `author_profile_picture`,
+   `author_profile_bio`, `author_cover_picture`, `author_pinned_tweet_ids`,
+   `author_affiliates_highlighted_label`,
+   `author_withheld_in_countries`, `author_possibly_sensitive`,
+   `author_has_custom_timelines`, `author_entities`, `author_twitter_url`,
+   `author_type`, `author_url`, `author_created_at_raw`, `author_status`).
+   These are per-fetch snapshots distinct from the slowly-updating
+   `accounts` row.
+5. **`Post` table grew from ~27 documented fields to ~76 fields.** Updated
+   sparse-data note to reflect that § 1.2 / § 1.3 are nullable for tweets
+   fetched before TwitterAPI harvesting was wired in.
+
+All other tables (Brand, Company, HFOrg, Account, PostBrand,
+PostBrandMention, PostBrandSignal, PostBrandDiscourse, BrandCompany,
+BrandAccount, CompanyAccount, BrandKeyword, BrandSearchTerm, BrandHashtag,
+AccountPostAppearance, all lookup tables, CallState, AppliedConfigSnapshot,
+SearchQuery, Product, PostUnsanctionedFlag) verified accurate against
+`core/models.py` — no changes.
+
+Cross-checks performed: `db_table` Meta values, PK shapes (natural-key vs.
+CompositePrimaryKey vs. BigAutoField), on_delete semantics
+(PROTECT/CASCADE/SET_NULL), `db_column` overrides, `db_collation` on
+natural keys, index definitions, JSONField `db_column` renames
+(`tags_json`, `siblings_json`, `card_data_json`, `config_json`,
+`spaces_json`, `raw_json`, `keywords_json`).

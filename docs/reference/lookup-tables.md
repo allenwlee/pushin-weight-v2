@@ -1,8 +1,7 @@
 # Lookup Tables (v2 Django ORM)
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 
-Last updated: 2026-07-24
 
 This document catalogs every lookup/enum table in the v2 Django architecture.
 Each table constrains what the classifier (LLM-side) and the dashboard
@@ -227,7 +226,7 @@ Example Django ORM usage:
 ```python
 # Get the English label for a post type key
 
-Last updated: 2026-07-24-11:36:23
+Last updated: 2026-07-31-10:35:47
 label = PostTypeLabel.objects.get(post_type_id="buzz_releases", lang="en")
 print(label.label)  # "Buzz & Releases"
 
@@ -259,4 +258,10 @@ Steps 1-3 and 6 should land in a single commit so they do not drift.
 
 ---
 
-Last reviewed: 2026-07-24
+Last reviewed: 2026-07-31
+
+**Substantive corrections this review:** none. Verified against `core/models.py` (Brand has `nickname` TEXT PK, no synthetic `id`), `core/management/commands/seed_i18n_labels.py` (all 6 post types, 4 sentiments, 10 discourse, 6 nationalism, 3 roles match), `config.yaml::enabled_models` (20 brands, identical order to §7.1), `monitor/management/commands/load_seed.py` (`BRAND_DISPLAY`, `BRAND_TO_COMPANY` match §7.1 columns 3 and 4), `monitor/views.py::MODEL_ACCENT_COLORS` (match §7.1 column 6), and `config.yaml::call_b_groups` (3 groups as documented). Country breakdown (14 CN / 2 US / 2 KR / 1 FR / 1 JP) reconciles.
+
+**Flagged — could not verify:** the `_VALID_POST_TYPES` frozenset in `x_monitor/attribution.py` was truncated by the grep header (`_VALID_POST_TYPES = {` on line 1102, body not captured). Doc's 6-value list matches the seed list in `seed_i18n_labels.py` so the frozenset is very likely consistent, but the literal set membership was not directly confirmed. The `data/queries/` directory referenced by the 2026-07-13 call-B plan and the `call_b_groups` config comment does not exist on disk (`No such file or directory`) — the per-brand → call-group coverage matrix asserted in the plan is not enforceable in the current repo state and is not represented in this doc.
+
+**Drift noticed but not fixed:** two `Last updated:` lines under H1 (line 3 `2026-07-24-11:36:23` and line 5 `2026-07-24`) — only the second is the canonical date; the first is a leftover timestamp. Per scope, main session owns these lines.

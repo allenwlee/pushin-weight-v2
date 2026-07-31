@@ -1,10 +1,10 @@
 <!-- {{AGENT_ATTRIBUTION}} -->
 # TwitterAPI.io live queries -- v2 Django architecture (20 brands, A + B1/B2/B3 + C1/C2/C3)
 
-Last updated: 2026-07-24-11:36:23 (pre-hybrid-funnel)
-Last updated: 2026-07-30 (post-hybrid-funnel -- plan 2026-07-30-002 U3)
+Last updated: 2026-07-31-10:35:47 (pre-hybrid-funnel, stale - see live)
+Last updated: 2026-07-31-10:35:47 (post-hybrid-funnel, plan 2026-07-30-002 U3)
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31-10:35:47
 
 The harvest pipeline runs as a **Render cron job** (`render.yaml`, schedule
 `*/15 * * * *`) executing `python manage.py run_cycle --limit-per-call 50`.
@@ -43,9 +43,10 @@ Each invocation:
    (populated from `config.yaml` by `project/settings.py`). Primary brand
    keywords are loaded from the DB via `BrandKeyword.objects.filter(is_primary=True)`
    (Django ORM, `monitor/cycle.py::_load_primary_keywords()`). The plan is
-   built by `x_monitor/query_plan.py::plan_calls()`. Emit 6 calls: Call A
-   (curated X-list), C1/C2 (co-occurrence-constrained), B1/B2/B3 (wide-net
-   with co-occurrence AND-filter).
+   built by `x_monitor/query_plan.py::plan_calls()`. Emits 7 calls (post
+   hybrid-funnel U3, plan 2026-07-30-002): Call A (curated X-list),
+   C1/C2/C3 (co-occurrence-constrained brand-wide, 5-term minimal co),
+   B1 (bare wide-net, no co paren), B2 + B3 (handle-only `@handle` OR-groups).
 
 2. **Fetch posts.** Fire each query against TwitterAPI.io's `advanced_search`
    endpoint. Max 50 tweets per call (configurable via
@@ -83,13 +84,14 @@ the live query unless it also has `is_primary=True`.
 | `brand_keywords` rows (total) | **207** |
 | `brand_keywords` rows (`is_primary=True`) | **55** across 20 brands |
 | Primary tokens per brand | **2--4** (curated subset: high-signal tokens that fit under the 512-char cap) |
-| `x_query_specs` entries | **5** (C1, C2, B1, B2, B3) |
-| Plan size per cycle (live) | **6 calls** (1 Call A + 5 specs) |
+| `x_query_specs` entries | **6** (C1, C2, C3, B1, B2, B3) |
+| Plan size per cycle (live) | **7 calls** (1 Call A + 6 specs) |
 | Call A length | **38 chars** |
-| Live call-string lengths | **A 38 / C1 461 / C2 295 / B1 414 / B2 377 / B3 353** (all under 512-char cap) |
+| Live call-string lengths | **A 38 / C1 264 / C2 140 / C3 136 / B1 19 (dry-run empty) / B2 317 / B3 214** (all under 512-char cap) |
 | `degraded_skip_order` | B3 -> B2 -> B1 -> C2 -> C1 -> A |
-| Co-occurrence terms (C1/B1/B2/B3) | **22 terms** |
-| Co-occurrence terms (C2) | **20 terms** (drops `xiaomi`/`小米`, adds `baidu`/`文心`) |
+| Co-occurrence terms (C1/C3) | **5 terms** (`[llm, model, api, agentic, huggingface]`) |
+| Co-occurrence terms (C2) | **7 terms** (5-term minimal + `baidu`, `文心`) |
+| Co-occurrence terms (B1/B2/B3) | **0 terms** -- B1 is bare; B2/B3 are handle-only (no co paren emitted) |
 
 > **`plan_calls` signature:** `plan_calls(x_monitor_list_id, x_query_specs, *, primary_keywords=None)`.
 > The wide-net B-specs (B1/B2/B3) have `is_wide_net: true` and read
@@ -149,23 +151,25 @@ brands (not listed here for brevity). The list-membership step is manual
 Configured in `config.yaml::x_query_specs` -- entries where
 `is_wide_net` is absent or `false`. Two specs are live:
 
-### C1 -- mimo + moonshot_kimi + yi + llama (4 brands, 22 co-occurrence terms)
+### C1 -- mimo + moonshot_kimi + yi + llama (4 brands, 5 co-occurrence terms)
 
-**`call_id: C1`**, **4 brands, 22 co-occurrence terms.**
+**`call_id: C1`**, **4 brands, 5 co-occurrence terms (minimal allowlist, plan 2026-07-30-002 U3 / R8).**
 
 **Primary group tokens (inline in `config.yaml`):**
 - `mimo`: `[MiMo, "Xiaomi MiMo", "小米 MiMo"]`
 - `moonshot_kimi`: `[Kimi, "Moonshot AI", 月之暗面, 暗面, MoonshotAI]`
 - `yi`: `[Yi, "01.AI", 零一万物, "Yi LLM", Yi-VL, Yi-Coder]`
-- `llama`: `[Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama", "Muse Spark"]`
+- `llama`: `[Llama, "Llama 3", "Llama 4", "Meta Llama", "Code Llama"]`
 
-**Co-occurrence group:** `[api, llm, model, xiaomi, 小米, moonshot, chatbot, weights, gguf, ollama, code, coding, agent, agentic, benchmark, reasoning, release, "open source", huggingface, inference, moe, "tool calling"]`
+**Co-occurrence group:** `[llm, model, api, agentic, huggingface]` (5-term minimal allowlist per R8; `xiaomi`/`小米`/`moonshot` were REMOVED from co per R10 because 55-75% of relevant non-EN samples lacked those terms -- the brand groups themselves still include `Xiaomi MiMo` and `moonshot_kimi` for direct match).
+
+**`not_include` (F1 hijack mitigation, U3):** `[f1, antonelli, mercedes, hamil, alonso, verstappen, "formula 1"]`
 
 **Shape (live, from `_build_query` in `x_monitor/query_plan.py`):**
 ```
-((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama OR Muse Spark)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder) OR (Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama)) (llm OR model OR api OR agentic OR huggingface) min_faves:0
 ```
-**Length:** 461 characters. Headroom: 51 chars (10% of the cap).
+**Length:** 264 characters. Headroom: 248 chars (48% of the cap).
 
 **Why this exists:** these 4 brands' bare tokens collide with unrelated common nouns:
 - `MiMo` -> Mimo Studio (kids' video app); `xiaomi` alone -> phone posts.
@@ -182,23 +186,40 @@ leak -- bare `Solar` in C1's Upstage OR-group matched "solar winds" in
 the co-occurrence AND-filter, producing false positives for everyday
 "solar" English text.
 
-### C2 -- ernie + upstage (2 brands, 20 co-occurrence terms)
+### C2 -- ernie + upstage (2 brands, 7 co-occurrence terms)
 
-**`call_id: C2`**, **2 brands, 20 co-occurrence terms.**
+**`call_id: C2`**, **2 brands, 7 co-occurrence terms (5-term minimal + R9 optional `baidu`/`文心`).**
 
 **Primary group tokens (inline in `config.yaml`):**
 - `ernie`: `[ERNIE, 文心一言]`
 - `upstage`: `[Upstage, "Solar Pro", "Solar LLM", 업스테이지]`
 
-**Co-occurrence group:** Same 22-term list as C1 with 2 swaps:
-- **Dropped:** `xiaomi`, `小米` (ERNIE-irrelevant)
-- **Added:** `baidu`, `文心` (Baidu/ERNIE disambiguators)
+**Co-occurrence group:** `[llm, model, api, agentic, huggingface, baidu, 文心]` (the 5-term minimal allowlist shared with C1/C3 + the two C2-specific optional disambiguators per R9).
 
 **Shape (live, from `_build_query`):**
 ```
-((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (api OR llm OR model OR baidu OR 文心 OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) min_faves:0
 ```
-**Length:** 295 characters. Headroom: 217 chars (42% of the cap).
+**Length:** 140 characters. Headroom: 372 chars (73% of the cap).
+
+### C3 -- doubao + sensechat + kuaishou (3 brands, 5 co-occurrence terms, NEW in hybrid funnel)
+
+**`call_id: C3`**, **3 brands, 5 co-occurrence terms. New in plan 2026-07-30-002 U3 (R1) -- covers the previously-B2/B3 polysemes that were not in any C spec.**
+
+**Primary group tokens (inline in `config.yaml`):**
+- `doubao`: `[Doubao, ByteDance]`
+- `sensechat`: `[SenseChat, SenseTime]`
+- `kuaishou`: `[Kuaishou, KwaiYii]`
+
+**Co-occurrence group:** `[llm, model, api, agentic, huggingface]` (same 5-term minimal allowlist as C1).
+
+**Shape (live, from `_build_query`):**
+```
+((Doubao OR ByteDance) OR (SenseChat OR SenseTime) OR (Kuaishou OR KwaiYii)) (llm OR model OR api OR agentic OR huggingface) min_faves:0
+```
+**Length:** 136 characters. Headroom: 376 chars (73% of the cap).
+
+**Why this exists:** `ByteDance` collides with non-AI posts (TikTok, gaming). The thin 5-term co vs the old full-22 list improves foreign-language coverage for Doubao / SenseTime / Kuaishou.
 
 **Why this exists:**
 - `ERNIE` collides with the Sesame Street character and the Bert variant. C1 had only 7 chars of headroom -- adding ERNIE's paren group would have exceeded the cap, so it got its own spec (C2).
@@ -206,27 +227,34 @@ the co-occurrence AND-filter, producing false positives for everyday
 
 ---
 
-## Call B specs -- wide-net with co-occurrence AND-filter
+## Call B specs -- hybrid funnel (B1 bare + B2/B3 handle-only)
 
-Three `x_query_specs` entries with `is_wide_net: true`. Each renders a
-`(<per-brand paren groups>) (<co-occurrence>) min_faves:0` query where
-per-brand tokens come from `BrandKeyword` rows with `is_primary=True`
-(loaded once per cycle via `monitor/cycle.py::_load_primary_keywords()`
-using Django ORM).
+Three `x_query_specs` entries with B-prefixed `call_id`, but the
+post-hybrid-funnel U3 shapes are NOT the legacy wide-net-with-co
+`((brand tokens)) ((co terms)) min_faves:0` form. Plan 2026-07-30-002
+split them into two render kinds:
 
-The co-occurrence filter is the same 22-term list as C1. This means
-the B-specs are **AND-filtered** -- a tweet must mention both a brand
-token AND a co-occurrence term.
+- **B1** -- `is_wide_net: true` with **empty `co_occurrence: []`** (R3).
+  Renderer omits the secondary paren entirely (R17/KTD4). Renders as
+  bare brand-tokens: `((brand1 tokens) OR ... OR (brandN tokens)) min_faves:0`.
+- **B2 + B3** -- `handles:` field non-empty, `brands: {}`,
+  `co_occurrence: []`, `is_wide_net: false` (R4/R5). Renders as a
+  handle-only `@handle` OR-group with no co paren:
+  `(@h1 OR @h2 OR ...) min_faves:0`. The `handles:` field was added
+  to `XQuerySpec` by U2; `list:` is the wrong operator for mentions
+  (KTD3). Handles are sourced from `brands_accounts` with
+  `role=official`.
 
-### B1 -- top-presence / global brands (6 brands, 414 chars)
+B1 still sources per-brand tokens from `BrandKeyword` rows with
+`is_primary=True` via `monitor/cycle.py::_load_primary_keywords()`
+(Django ORM). B2/B3 do NOT read DB tokens -- the handle list is
+inline in `config.yaml`.
+
+### B1 -- top-presence / global brands, BARE (6 brands)
 
 **`wide_net_brands`:** `[minimax, qwen, deepseek, mistral, stepfun, hunyuan]`
-
-**Shape (live, from `_build_query`):**
-```
-((Hailuo OR MiniMax OR m2.5 OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (DeepSeek OR deepseek-r1 OR 深度求索) OR (Mistral OR Mixtral) OR (StepFun OR 阶跃星辰) OR (Hunyuan OR 混元 OR 腾讯混元)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
-```
-**Length:** 414 characters. Headroom: 98 chars (19% of the cap).
+**`co_occurrence: []`** -- the renderer omits the secondary paren, so the
+shape is `((brand tokens)) min_faves:0` with NO co AND-filter.
 
 | # | brand_id | Primary tokens (from DB, `is_primary=True`) | Count |
 |---|---|---|---|
@@ -237,50 +265,47 @@ token AND a co-occurrence term.
 | 5 | `stepfun` | `StepFun`, `阶跃星辰` | 2 |
 | 6 | `hunyuan` | `Hunyuan`, `混元`, `腾讯混元` | 3 |
 
+**Shape (live, from `_build_query`):**
+```
+((Hailuo OR MiniMax OR m2.5 OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (DeepSeek OR deepseek-r1 OR 深度求索) OR (Mistral OR Mixtral) OR (StepFun OR 阶跃星辰) OR (Hunyuan OR 混元 OR 腾讯混元)) min_faves:0
+```
+**Length:** ~218 characters (varies as `is_primary` tokens change). Dry-run with no DB rows renders `(empty) min_faves:0` at 19 chars; production runs read live tokens.
+
 **Dedup note:** `llama` and `ernie` are intentionally absent from B1 --
 they are covered exclusively by C1 and C2 respectively
 (co-occurrence-constrained) to avoid duplicate TwitterAPI credit spend on
 the wide-net path.
 
-### B2 -- Chinese-language brands (4 brands, 377 chars)
+### B2 -- handle-only, top global brands (19 handles, 317 chars)
 
-**`wide_net_brands`:** `[doubao, glm, sensechat, inclusionai]`
+**`handles:`** (each is the official X account; sourced from `brands_accounts` with `role=official`):
+`@deepseek_ai, @Ali_TongyiLab, @Alibaba_Qwen, @hailuo_ai, @MiniMax_AI, @MiniMaxAgent, @StepFun_ai, @stepfunai, @MistralAI, @TencentHunyuan, @Zai_org, @ZhihuFrontier, @AntLingAGI, @robbyant_brain, @TheInclusionAI, @LG_AI_Research, @SakanaAILabs, @NVIDIAAI, @NVIDIAAIDev`
+
+**Shape (live, from `_build_query` -- the `handles:` branch checked BEFORE the Call A degenerate):**
+```
+(@deepseek_ai OR @Ali_TongyiLab OR @Alibaba_Qwen OR @hailuo_ai OR @MiniMax_AI OR @MiniMaxAgent OR @StepFun_ai OR @stepfunai OR @MistralAI OR @TencentHunyuan OR @Zai_org OR @ZhihuFrontier OR @AntLingAGI OR @robbyant_brain OR @TheInclusionAI OR @LG_AI_Research OR @SakanaAILabs OR @NVIDIAAI OR @NVIDIAAIDev) min_faves:0
+```
+**Length:** 317 characters. Headroom: 195 chars (38% of the cap).
+
+**Why handle-only (vs old wide-net B2):** the legacy `[doubao, glm, sensechat, inclusionai]` wide-net was 377 chars with 22-term co AND-filter. After the hybrid funnel, those 4 brands split: doubao/sensechat go to **C3** for bare-token recall, glm/inclusionai land in B2 as official handles only. The handle-only shape is precision-biased -- only tweets mentioning the official account surface -- and is well under the 512-char cap.
+
+### B3 -- handle-only, Asian + frontier brands (13 handles, 214 chars)
+
+**`handles:`** (sourced from `brands_accounts` with `role=official`):
+`@bytedanceoss, @BytePlusGlobal, @doubaoai, @SenseTime_AI, @Kling_ai, @XiaomiMiMo, @XiaomiMiMoDevs, @Kimi_Moonshot, @01AI_Yi, @AIatMeta, @ErnieforDevs, @PaddlePaddle, @upstageai`
 
 **Shape (live, from `_build_query`):**
 ```
-((ByteDance OR Doubao OR 豆包) OR (ChatGLM OR GLM OR Zhipuai OR 智谱) OR (SenseChat OR SenseTime OR 日日新) OR (InclusionAI OR Ling OR Ring)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
+(@bytedanceoss OR @BytePlusGlobal OR @doubaoai OR @SenseTime_AI OR @Kling_ai OR @XiaomiMiMo OR @XiaomiMiMoDevs OR @Kimi_Moonshot OR @01AI_Yi OR @AIatMeta OR @ErnieforDevs OR @PaddlePaddle OR @upstageai) min_faves:0
 ```
-**Length:** 377 characters. Headroom: 135 chars (26% of the cap).
+**Length:** 214 characters. Headroom: 298 chars (58% of the cap).
 
-| # | brand_id | Primary tokens (from DB, `is_primary=True`) | Count |
-|---|---|---|---|
-| 1 | `doubao` | `ByteDance`, `Doubao`, `豆包` | 3 |
-| 2 | `glm` | `ChatGLM`, `GLM`, `Zhipuai`, `智谱` | 4 |
-| 3 | `sensechat` | `SenseChat`, `SenseTime`, `日日新` | 3 |
-| 4 | `inclusionai` | `InclusionAI`, `Ling`, `Ring` | 3 |
-
-**Dedup note:** `moonshot_kimi`, `mimo`, and `yi` are intentionally absent
-from B2 -- they are covered exclusively by C1.
-
-### B3 -- specialized / smaller brands (4 brands, 353 chars)
-
-**`wide_net_brands`:** `[nemo_megatron, exaone, sakana_ai, kuaishou]`
-
-**Shape (live, from `_build_query`):**
-```
-((Megatron-LM OR NVIDIA NeMo) OR (EXAONE OR LG AI) OR (Sakana OR Sakana AI OR サカナAI) OR (Kuaishou OR KwaiYii)) (api OR llm OR model OR xiaomi OR 小米 OR moonshot OR chatbot OR weights OR gguf OR ollama OR code OR coding OR agent OR agentic OR benchmark OR reasoning OR release OR open source OR huggingface OR inference OR moe OR tool calling) min_faves:0
-```
-**Length:** 353 characters. Headroom: 159 chars (31% of the cap).
-
-| # | brand_id | Primary tokens (from DB, `is_primary=True`) | Count |
-|---|---|---|---|
-| 1 | `nemo_megatron` | `Megatron-LM`, `NVIDIA NeMo` | 2 |
-| 2 | `exaone` | `EXAONE`, `LG AI` | 2 |
-| 3 | `sakana_ai` | `Sakana`, `Sakana AI`, `サカナAI` | 3 |
-| 4 | `kuaishou` | `Kuaishou`, `KwaiYii` | 2 |
-
-**Dedup note:** `upstage` is intentionally absent from B3 -- it is covered
-exclusively by C2.
+**Why this exists (vs old B3 wide-net):** handle-only is precision-biased
+-- only tweets mentioning the official account surface. The 4-brand
+wide-net form is GONE; C3 covers the bare-token polyseme recall for
+doubao/sensechat/kuaishou. `upstage` is intentionally absent from B3's
+handle-only set (handled by its own official `@upstageai` if added) --
+the old dedup note no longer applies because B3 is no longer wide-net.
 
 ### B-spec token source: `is_primary=True` via Django ORM
 
@@ -575,30 +600,36 @@ from `brands_accounts` JOIN `accounts` JOIN `roles` (`roles.key = 'official'`).
 
 ## Query rendering logic
 
-All 6 calls pass through one uniform renderer in `x_monitor/query_plan.py`:
+All 7 calls pass through one uniform renderer in `x_monitor/query_plan.py`:
 
 ```python
 def _build_query(spec, *, x_monitor_list_id=None, primary_keywords=None) -> str
 ```
 
-**Three branches, one shape:**
+**Four branches, one uniform renderer:**
 
-1. **Call A** -- `not spec.is_wide_net and not spec.brands`:
+1. **Call A** -- `not spec.is_wide_net and not spec.brands and not spec.handles`:
    Renders `(list:<x_monitor_list_id>) min_faves:0`. Uses `MIN_FAVES_FOR_LIST_CALL`
    (currently 0).
 
-2. **Wide-net B-spec** -- `spec.is_wide_net=True`:
-   Reads per-brand tokens from `primary_keywords` (loaded once per cycle from
+2. **Handle-only B-spec (B2/B3)** -- `spec.handles` non-empty, `brands={}`,
+   `is_wide_net=False`: Renders `(@h1 OR @h2 OR ...) min_faves:N`. No co
+   paren. Added by plan 2026-07-30-002 U2.
+
+3. **Wide-net B-spec (B1)** -- `spec.is_wide_net=True`: Reads per-brand
+   tokens from `primary_keywords` (loaded once per cycle from
    `BrandKeyword.objects.filter(is_primary=True)` via Django ORM). For each
    brand in `spec.wide_net_brands`, creates one `(tok1 OR tok2 OR ...)` paren
-   group. Joins all groups with OR inside an outer paren. Appends the
-   co-occurrence group. Shape: `((brand1 tokens) OR (brand2 tokens) OR ...)
-   (co_occurrence terms) min_faves:N`.
+   group. Joins all groups with OR inside an outer paren. If
+   `co_occurrence` is non-empty, appends the secondary paren; if empty,
+   the renderer omits it (R17/KTD4). Shape with empty co:
+   `((brand1 tokens) OR (brand2 tokens) OR ...) min_faves:N`. Shape with co:
+   `((brand1 tokens) OR ...) (co_occurrence terms) min_faves:N`.
 
-3. **C-spec (co-occurrence-constrained)** -- `not spec.is_wide_net and spec.brands`:
-   Same shape as B-specs, but tokens come from `spec.brands` (inline in
-   `config.yaml`) instead of the DB. Shape: `((brand1 tokens) OR ...)
-   (co_occurrence terms) min_faves:N`.
+4. **C-spec (co-occurrence-constrained, C1/C2/C3)** -- `not spec.is_wide_net
+   and spec.brands`: Same shape as B-specs with co, but tokens come from
+   `spec.brands` (inline in `config.yaml`) instead of the DB. Shape:
+   `((brand1 tokens) OR ...) (co_occurrence terms) min_faves:N`.
 
 **The 512-char cap** is enforced by `assert_under_length_cap()` in
 `x_monitor/queries.py` (called in `plan_calls()` before returning each
@@ -617,12 +648,17 @@ operators are used at the cursor level by `run_search()`.
 ## How to verify the live inventory
 
 ```bash
-# Dry-run: print the per-cycle call plan (6 calls) without network calls
-python manage.py run_cycle --dry-run --json
+# Dry-run: print the per-cycle call plan (7 calls) without network calls
+X_MONITOR_LIST_ID=2067062923525275922 python manage.py run_cycle --dry-run --json
 ```
 
-**Expected output:** 6 calls -- Call A (38 chars), C1 (461 chars), C2 (295 chars),
-B1 (414 chars), B2 (377 chars), B3 (353 chars). All under the 512-char cap.
+**Expected output (live, 2026-07-31):** 7 calls -- Call A (38 chars),
+C1 (264 chars), C2 (140 chars), C3 (136 chars), B1 (19 chars `(empty)`
+in dry-run with no DB rows; ~218 chars in production with live tokens),
+B2 (317 chars, handle-only), B3 (214 chars, handle-only). All under
+the 512-char cap. The dry-run requires `X_MONITOR_LIST_ID` to be set
+in the environment -- without it the planner emits 0 calls (Call A is
+the only place we get "faved by official handles" signal at scale).
 
 ---
 
@@ -633,8 +669,8 @@ B1 (414 chars), B2 (377 chars), B3 (353 chars). All under the 512-char cap.
 | Add a brand to `enabled_models` + `KNOWN_MODELS` | Add `BrandKeyword` rows (`is_primary=True` for the curated subset). Assign to an existing B group or a new C spec. Add official handles to `brands_accounts` + `accounts` + `roles`. Add the handle to the public X-list. |
 | Toggle `is_primary` on a `BrandKeyword` row | The token appears / disappears from the B-spec query. Re-measure length. |
 | Edit `x_query_specs[].brands` tokens (C1/C2) | The C-spec query changes. Re-measure `len(query_string)` under 512 chars. |
-| Edit `x_query_specs[].co_occurrence` | All specs sharing that list change. The current 22-term list is shared across C1/B1/B2/B3; C2 has a 20-term variant. Re-measure all affected lengths. |
-| Add a new `XQuerySpec` to `x_query_specs` in `config.yaml` | One extra API call per cycle. Must conform to the uniform `(<tokens>) (<co_occurrence>) min_faves:N` shape. |
+| Edit `x_query_specs[].co_occurrence` (C1/C2/C3 only -- B1/B2/B3 have empty co) | The C-spec query changes. The 5-term minimal allowlist is shared across C1/C3; C2 has a 7-term variant (+ `baidu`, `文心`). Re-measure the affected length. |
+| Add a new `XQuerySpec` to `x_query_specs` in `config.yaml` | One extra API call per cycle. Must conform to one of the four renderer branches (Call A / handle-only B / wide-net B / C-spec). |
 | Remove a brand from `enabled_models` | The brand's primary tokens drop from its B-spec paren group; the brand still appears in any C-spec it's part of. Remove the handle from the X-list manually. |
 | Add/change an official handle in the DB | Update `accounts` table + `brands_accounts` join row. Then manually add the handle to the public X-list (Call A). |
 | Change `x_monitor_list_id` in `config.yaml` | Call A query changes (different list). Re-verify the list contains all official handles. Also update `X_MONITOR_LIST_ID` env var in `render.yaml`. |
@@ -662,4 +698,36 @@ purely from `config.yaml` + `BrandKeyword.objects.filter(is_primary=True)` (Djan
 
 ---
 
-## Last reviewed: 2026-07-24
+## Last reviewed: 2026-07-31
+
+Substantive corrections made in this 2026-07-31 review:
+
+- **Call count:** 6 -> 7 (C3 added by plan 2026-07-30-002 U3/R1 for
+  doubao + sensechat + kuaishou).
+- **Specs:** 5 -> 6 (C1, C2, C3, B1, B2, B3).
+- **Co-occurrence collapse:** C1 dropped from 22 terms to the
+  5-term minimal allowlist (`[llm, model, api, agentic, huggingface]`)
+  per R8. C2 dropped from 20 to 7 (5-term + `baidu`/`文心` per R9).
+  `xiaomi`/`小米`/`moonshot` removed from co per R10. New C3 uses the
+  same 5-term minimal allowlist as C1.
+- **B-shape change:** B1 went from 22-co wide-net (414 chars) to BARE
+  wide-net (no co paren, R3/R17/KTD4). B2 and B3 went from
+  wide-net-with-co (377/353 chars) to handle-only `@handle`
+  OR-groups (317/214 chars) per R4/R5 (plan 2026-07-30-002 U2 added
+  the `handles:` field on `XQuerySpec`).
+- **Live call-string lengths updated** to the 2026-07-31 dry-run output
+  (A 38 / C1 264 / C2 140 / C3 136 / B2 317 / B3 214). B1 length
+  reported as 19 (`(empty)`) in dry-run with no DB rows; ~218 chars in
+  production.
+- **Dry-run invocation** now requires `X_MONITOR_LIST_ID` in the
+  environment (Call A is list-based; without it the planner emits 0 calls).
+- **`sinceTime`/`untilTime` on `advanced_search`** — verified that the
+  URL-side `sinceTime` is dropped on `advanced_search` per commits
+  `a46020f` + `dcf0a8c`. These epoch operators are used at the
+  cursor level by `run_search()`, not embedded in the URL query
+  string. (Reaffirmed; no doc change needed.)
+- **LaunchAgent schedule** — confirmed `deploy/com.fuchitalee.x-monitor.harvest.plist`
+  StartCalendarInterval fires at minutes 0/15/30/45; `deploy/com.fuchitalee.x-monitor.config-reload.plist`
+  uses WatchPaths + ThrottleInterval=300s. (Reaffirmed; no doc change needed.)
+- **`enabled_models` count = 20** confirmed (matches the 20 brands
+  listed in the per-brand breakdown table).
