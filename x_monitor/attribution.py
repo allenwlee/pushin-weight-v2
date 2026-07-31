@@ -2179,7 +2179,20 @@ class AnthropicClaudeClient:
                 else "\n".join(lines[1:])
             )
             raw = inner.strip()
-        return _json.loads(raw)
+        try:
+            return _json.loads(raw)
+        except _json.JSONDecodeError:
+            # LLM returned non-JSON (prose, explanation, empty response).
+            # The 2026-07-31 cycle run crashed here on the relevancy gate
+            # when the model returned empty/non-JSON content. Fall back
+            # to a safe "uncertain" verdict so the cycle can continue
+            # rather than aborting the whole run.
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "messages_create: LLM returned non-JSON (len=%d): %r",
+                len(raw), raw[:200],
+            )
+            return {"verdict": "uncertain", "reason": "llm_non_json_response"}
 
 
 # --- Public re-exports for compat shim (Unit 6) -------------------------

@@ -648,7 +648,19 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
         defaults["in_reply_to_user_id"] = str(in_reply_to)
     quoted_id = raw.get("quoted_status_id") or raw.get("quotedStatusId") or ""
     if quoted_id:
-        defaults["quoted_status_id"] = str(quoted_id)
+        # quoted_status_id is a FK to Post (self); must be a Post instance
+        # or None. Look up the parent Post first; if it doesn't exist
+        # (not yet harvested), leave the FK unset (NULL via
+        # on_delete=SET_NULL).
+        # The 2026-07-31 cycle run hit 8 persist failures because this
+        # was passing the raw tweet-id string into a FK field.
+        try:
+            parent_post = Post.objects.filter(tweet_id=str(quoted_id)).only("tweet_id").first()
+            if parent_post is not None:
+                defaults["quoted_status_id"] = parent_post
+            # else: leave FK unset; will be populated when parent is harvested
+        except Exception:
+            pass
     conversation_id = raw.get("conversation_id") or raw.get("conversationId") or ""
     if conversation_id:
         defaults["conversation_id"] = str(conversation_id)
