@@ -292,6 +292,16 @@ if _config_path.exists():
         pass
 X_MONITOR_X_QUERY_SPECS = _x_query_specs
 
+# Per-call TwitterAPI fetch caps (post-2026-07-31 wiring):
+# `config.yaml::search.*` is the single source of truth for the
+# per-call caps. They are exposed as Django settings so `monitor/cycle.py`
+# can read them at runtime, with the CLI flag --limit-per-call etc.
+# overriding via `monitor/management/commands/run_cycle.py`.
+_search_cfg = (_config.get("search") or {}) if _config else {}
+X_MONITOR_CYCLE_LIMIT_PER_CALL = int(_search_cfg.get("max_results", 50))
+X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = int(_search_cfg.get("max_pages", 5))
+X_MONITOR_CYCLE_MAX_PER_PAGE = int(_search_cfg.get("max_per_page", 20))
+
 # Canonical brand registry (20 brands, post-U5-rename).
 # TODO(U2): derive from `core.models.Brand.objects.values_list('nickname', flat=True)`
 # once the ORM is wired; remove this placeholder then.

@@ -963,8 +963,12 @@ class CycleRunner:
         """
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
         max_pages = getattr(settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", None)
+        max_per_page_cfg = getattr(settings, "X_MONITOR_CYCLE_MAX_PER_PAGE", None)
         max_results_cap = int(limit_per_call) if limit_per_call is not None else 50
         max_pages_cap = int(max_pages) if max_pages is not None else 5
+        # Per-page request size (post-2026-07-31 wiring from
+        # config.yaml::search.max_per_page). Falls back to 20 if unset.
+        max_per_page_cap = int(max_per_page_cfg) if max_per_page_cfg is not None else 20
         # C1 needs a higher ceiling (see _C1_MAX_RESULTS docstring).
         if call.call_id == "C1":
             max_results_cap = max(max_results_cap, _C1_MAX_RESULTS)
@@ -1023,7 +1027,7 @@ class CycleRunner:
                     call.query_string,
                     max_results=max_results_cap,
                     max_pages=max_pages_cap,
-                    max_per_page=20,
+                    max_per_page=max_per_page_cap,
                     since_time=since_time,
                     until_time=cur_until,
                 )

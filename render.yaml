@@ -36,7 +36,7 @@ cronJobs:
     plan: starter
     schedule: "*/15 * * * *"
     buildCommand: ./build.sh
-    startCommand: python manage.py run_cycle --limit-per-call 50
+    startCommand: python manage.py run_cycle
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
