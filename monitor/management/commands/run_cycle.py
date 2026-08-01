@@ -16,6 +16,7 @@ untouched. Modeled on pushin_weight/crawler/management/commands/run_cycle.py.
 """
 
 from __future__ import annotations
+from pathlib import Path
 
 import json
 
@@ -104,7 +105,12 @@ class Command(BaseCommand):
             return
 
         from monitor.cycle import CycleRunner
+        from x_monitor.config import load_config
         from x_monitor.relevancy import build_binary_relevancy_llm_call
+
+        # Plan 2026-08-01-001 U2: load Config once at process start and
+        # thread it into CycleRunner.
+        cfg = load_config(Path("config.yaml"))
 
         # U6 runtime wire-in: build the Anthropic-backed llm_call
         # for the binary relevancy gate. Returns None if the env is
@@ -125,7 +131,7 @@ class Command(BaseCommand):
             client=relevancy_client,
         )
 
-        runner = CycleRunner(
+        runner = CycleRunner(cfg=cfg, 
             dry_run=options["dry_run"],
             cycle_kind="manual",
             _relevancy_llm_call=relevancy_llm_call,

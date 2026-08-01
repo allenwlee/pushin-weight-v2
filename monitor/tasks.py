@@ -8,6 +8,8 @@ just wires the cycle loop to Celery + Django.
 """
 
 from __future__ import annotations
+from pathlib import Path
+from x_monitor.config import load_config
 
 import logging
 
@@ -25,7 +27,8 @@ def run_cycle(self, dry_run: bool = False) -> dict:
     from monitor.cycle import CycleRunner
 
     logger.info("monitor run_cycle starting (dry_run=%s)", dry_run)
-    runner = CycleRunner(
+    cfg = load_config(Path("config.yaml"))
+    runner = CycleRunner(cfg=cfg, 
         dry_run=dry_run,
         cycle_kind="scheduled",
     )

@@ -82,6 +82,17 @@ search:
   max_per_page: 20
   max_pages: 100
 
+# Cycle-level runtime constants (post-2026-08-01 wiring).
+# All five have defaults that match the prior hardcoded values in
+# monitor/cycle.py, so omitting this block preserves existing behavior.
+# Plan: docs/plans/2026-08-01-001-refactor-harvester-config-wiring-plan.md
+cycle:
+  cursor_overlap_seconds: 60   # 1 minute overlap between windows
+  max_lookback_hours: 2        # clamp cold-start sweep to 2h
+  c1_max_results: 150          # C1 override (R4 in 2026-07-30-002)
+  c1_max_pages: 8              # 150 / 20 per page
+  max_truncation_walks: 5      # drain retries on truncated windows
+
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.
 query_rot_streak_threshold: 3

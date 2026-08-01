@@ -34,6 +34,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from django.conf import settings
+from pathlib import Path
+from x_monitor.config import Config, load_config
 from django.db import transaction
 
 from core.models import (
@@ -117,7 +119,7 @@ def _now_iso() -> str:
 # past that slice between cycles was lost.  That was ~half of daily volume.
 #
 # These helpers restore the cursor.  Two deliberate differences from v1:
-#   * the first window is CLAMPED (see _MAX_LOOKBACK) so a stale cursor cannot
+#   * the first window is CLAMPED (see self.cfg.cycle.max_lookback) so a stale cursor cannot
 #     request a multi-day sweep that would silently truncate against the
 #     per-call page cap;
 #   * the value written is the same instant passed as `until_time`, so
@@ -128,28 +130,10 @@ def _now_iso() -> str:
 # second as the previous cursor cannot fall between two windows.  Mirrors v1's
 # CURSOR_OVERLAP_HOURS (x_monitor/run.py:67).  Duplicates are discarded by
 # tweet_id dedup, so overlap is cheap; a gap is not recoverable.
-_CURSOR_OVERLAP = timedelta(minutes=1)
 
-# Ceiling on how far back a single cycle will reach.  Sized to cover one
-# missed beat (15 min) plus restart/deploy slack with margin, while staying
-# far below what the per-call ceiling (max_pages * max_per_page = 100 tweets)
-# can actually drain.  This is what makes a cold start or a long-stale cursor
-# safe: prod's cursor sat frozen for ~5 days, and an unclamped sweep of that
-# span would silently truncate -- the exact failure class this plan fixes.
-_MAX_LOOKBACK = timedelta(hours=2)
 
-# C1 (llama/kimi/mimo/yi + broad co-terms, min_faves:0) routinely exceeds the
-# default 50-result ceiling even on a short window. A truncated response that
-# also discarded its items left C1 permanently stuck: the cursor never
-# advanced, the window clamped at MAX_LOOKBACK, and every cycle re-hit the
-# same tip. Give C1 a higher per-call ceiling so a single pass can drain more.
-_C1_MAX_RESULTS = 150
-_C1_MAX_PAGES = 8  # 150 / 20 per page
 
-# When a window still truncates after one pass, walk until_time backward
-# (Latest order: page = newest) and re-fetch older slices until the window
-# is exhausted or this pass budget is spent. Pass 1 is the first fetch.
-_MAX_TRUNCATION_WALKS = 5
+
 
 # CallState.bucket is TextField(blank=True, default=""), but every v2
 # PlannedCall carries bucket=None.  Normalize on both read and write so the
@@ -273,14 +257,14 @@ def _cursor_key(call: PlannedCall) -> dict[str, str]:
 
 
 def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
-    """Resolve the `since_time` floor for one call, clamped to _MAX_LOOKBACK.
+    """Resolve the `since_time` floor for one call, clamped to self.cfg.cycle.max_lookback.
 
     Returns an aware UTC datetime, always.  Four cases:
-      * no cursor row (cold start)  -> now - _MAX_LOOKBACK
-      * fresh cursor                -> cursor - _CURSOR_OVERLAP
-      * stale cursor (or DB error)  -> now - _MAX_LOOKBACK (the clamp)
+      * no cursor row (cold start)  -> now - self.cfg.cycle.max_lookback
+      * fresh cursor                -> cursor - self.cfg.cycle.cursor_overlap
+      * stale cursor (or DB error)  -> now - self.cfg.cycle.max_lookback (the clamp)
       * future cursor (NTP rollback, a v1 legacy row whose TZ was
-        mis-parsed, a manual psql write) -> now - _CURSOR_OVERLAP
+        mis-parsed, a manual psql write) -> now - self.cfg.cycle.cursor_overlap
 
     The future case is the subtle one: a prior AFTER now would otherwise
     produce since > until, TwitterAPI.io returns [] with no error, and the
@@ -288,8 +272,8 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
     losing the (now, prior) span. Clamping since to (now - overlap) bounds
     the damage to a one-cycle re-fetch, which dedup absorbs.
     """
-    floor = now - _MAX_LOOKBACK
-    ceiling = now - _CURSOR_OVERLAP
+    floor = now - self.cfg.cycle.max_lookback
+    ceiling = now - self.cfg.cycle.cursor_overlap
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
         if row is None or row.last_completed_at is None:
@@ -323,7 +307,7 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
                 prior - now,
             )
             return ceiling
-        return max(prior - _CURSOR_OVERLAP, floor)
+        return max(prior - self.cfg.cycle.cursor_overlap, floor)
     except Exception as exc:
         logger.warning(
             "_read_cursor_since: cursor read failed for call_id=%s: %s; "
@@ -440,74 +424,41 @@ def _build_brand_index(
     return index, brand_search_terms
 
 
-def _load_enabled_models(brand_filter: list[str] | None = None) -> list[str]:
-    """Load the enabled model list from settings or DB.
+def _resolve_enabled_models(cfg: Config, brand_filter: list[str] | None = None) -> list[str]:
+    """Resolve the enabled model list for a cycle.
 
-    Uses the brand_filter (from --brands CLI flag) if provided; otherwise
-    reads from settings.KNOWN_MODELS. Filters to brands that exist in the
-    brands table.
+    Reads from Config.enabled_models (plan 2026-08-01-001 U2). When
+    brand_filter is set (--brands CLI flag), restricts to that subset,
+    intersected with the brands that exist in the DB.
     """
-    if brand_filter:
-        # Validate that the requested brands exist
-        existing = set(
-            Brand.objects.filter(nickname__in=brand_filter).values_list(
-                "nickname", flat=True
-            )
+    base = list(cfg.enabled_models)
+    if not brand_filter:
+        return base
+    existing = set(
+        Brand.objects.filter(nickname__in=brand_filter).values_list(
+            "nickname", flat=True
         )
-        return [b for b in brand_filter if b in existing]
-    # Fall back to settings.KNOWN_MODELS (the canonical list).
-    # TODO(U2): derive from Brand.objects.values_list('nickname', flat=True)
-    known = getattr(settings, "KNOWN_MODELS", None)
-    if known:
-        return sorted(known)
-    # Last resort: read from DB
-    return sorted(
-        Brand.objects.filter(is_sentinel=False).values_list("nickname", flat=True)
     )
+    return [b for b in brand_filter if b in existing]
+def _resolve_x_monitor_list_id(cfg: Config) -> int | None:
+    """Resolve the X list ID from Config.
 
-
-def _load_x_monitor_list_id() -> int | None:
-    """Load the X list ID from settings or environment."""
-    list_id = getattr(settings, "X_MONITOR_LIST_ID", None)
-    if list_id is not None:
-        return int(list_id)
-    import os
-    env_val = os.environ.get("X_MONITOR_LIST_ID")
-    if env_val:
-        return int(env_val)
-    return None
-
-
-def _load_x_query_specs() -> list[XQuerySpec] | None:
-    """Load x_query_specs from settings.
-
-    Returns None when not configured (caller will use empty list).
-    If settings.X_MONITOR_X_QUERY_SPECS is a list of dicts, converts
-    them to XQuerySpec instances.
+    The Config schema's x_monitor_list_id is read from config.yaml directly.
     """
-    raw = getattr(settings, "X_MONITOR_X_QUERY_SPECS", None)
-    if raw is None:
+    list_id = cfg.x_monitor_list_id
+    if list_id is None:
         return None
-    if isinstance(raw, list):
-        specs: list[XQuerySpec] = []
-        for item in raw:
-            if isinstance(item, XQuerySpec):
-                specs.append(item)
-            elif isinstance(item, dict):
-                # Filter to only fields the dataclass accepts
-                import dataclasses as _dc
-                valid_fields = {f.name for f in _dc.fields(XQuerySpec)}
-                filtered = {k: v for k, v in item.items() if k in valid_fields}
-                specs.append(XQuerySpec(**filtered))
-        return specs if specs else None
-    return None
+    try:
+        return int(list_id)
+    except (TypeError, ValueError):
+        return None
+def _resolve_x_query_specs(cfg: Config) -> list[XQuerySpec]:
+    """Return x_query_specs from the loaded Config (already XQuerySpec instances).
 
-
-# ============================================================================
-# ORM persistence helpers
-# ============================================================================
-
-
+    The Config schema validates x_query_specs at load time, so the
+    caller can trust the shape.
+    """
+    return list(cfg.x_query_specs)
 def _upsert_account(raw: dict[str, Any]) -> Account | None:
     """Create or update an Account row from a normalized tweet dict.
 
@@ -818,7 +769,7 @@ def plan_calls_for_cycle() -> list[PlannedCall]:
     x_query_specs from Django settings. Returns empty list when the
     list ID is not configured.
     """
-    list_id = _load_x_monitor_list_id()
+    list_id = _resolve_x_monitor_list_id(self.cfg)
     if list_id is None:
         logger.warning(
             "plan_calls_for_cycle: X_MONITOR_LIST_ID not set — "
@@ -827,7 +778,7 @@ def plan_calls_for_cycle() -> list[PlannedCall]:
         return []
 
     primary_keywords = _load_primary_keywords()
-    x_query_specs = _load_x_query_specs() or []
+    x_query_specs = _resolve_x_query_specs(self.cfg) or []
 
     brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
     if brand_filter_raw and isinstance(brand_filter_raw, str):
@@ -856,12 +807,19 @@ class CycleRunner:
     def __init__(
         self,
         *,
+        cfg: Config | None = None,
         dry_run: bool = False,
         cycle_kind: str = "manual",
         _backfill_call_ids: list[str] | None = None,
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
     ) -> None:
+        # Single config source-of-truth (plan 2026-08-01-001). When None,
+        # load from config.yaml at the repo root. Tests pass a pre-built
+        # Config to avoid disk I/O.
+        if cfg is None:
+            cfg = load_config(Path("config.yaml"))
+        self.cfg = cfg
         self.dry_run = dry_run
         self.cycle_kind = cycle_kind  # 'scheduled' or 'manual'
         # If set, only execute these call IDs (all must be in the plan).
@@ -958,7 +916,7 @@ class CycleRunner:
         the cycle.
 
         When truncated, we walk ``until_time`` backward (Latest order returns
-        newest first) up to ``_MAX_TRUNCATION_WALKS`` times so a noisy call
+        newest first) up to ``self.cfg.cycle.max_truncation_walks`` times so a noisy call
         like C1 can drain a 2h clamp instead of deadlocking on the tip.
         """
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
@@ -969,10 +927,10 @@ class CycleRunner:
         # Per-page request size (post-2026-07-31 wiring from
         # config.yaml::search.max_per_page). Falls back to 20 if unset.
         max_per_page_cap = int(max_per_page_cfg) if max_per_page_cfg is not None else 20
-        # C1 needs a higher ceiling (see _C1_MAX_RESULTS docstring).
+        # C1 needs a higher ceiling (see self.cfg.cycle.c1_max_results docstring).
         if call.call_id == "C1":
-            max_results_cap = max(max_results_cap, _C1_MAX_RESULTS)
-            max_pages_cap = max(max_pages_cap, _C1_MAX_PAGES)
+            max_results_cap = max(max_results_cap, self.cfg.cycle.c1_max_results)
+            max_pages_cap = max(max_pages_cap, self.cfg.cycle.c1_max_pages)
         since_time, until_time = window
 
         logger.info(
@@ -1021,7 +979,7 @@ class CycleRunner:
         cur_until = until_time
         still_truncated = False
 
-        for walk in range(_MAX_TRUNCATION_WALKS):
+        for walk in range(self.cfg.cycle.max_truncation_walks):
             try:
                 items, truncated = api.run_search(
                     call.query_string,
@@ -1109,7 +1067,7 @@ class CycleRunner:
                 "total=%d window=[%s,%s] -> walk until=%s (%.1f min left)",
                 call.call_id,
                 walk + 1,
-                _MAX_TRUNCATION_WALKS,
+                self.cfg.cycle.max_truncation_walks,
                 new_on_pass,
                 len(all_items),
                 since_time,
@@ -1125,7 +1083,7 @@ class CycleRunner:
                 "_fetch_tweets: call_id=%s still truncated after %d walks; "
                 "total_items=%d — caller must hold cursor",
                 call.call_id,
-                _MAX_TRUNCATION_WALKS,
+                self.cfg.cycle.max_truncation_walks,
                 len(all_items),
             )
 

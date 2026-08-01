@@ -30,6 +30,7 @@ import json
 import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
+from x_monitor.config import load_config
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -287,7 +288,8 @@ class Command(BaseCommand):
 
             self.stdout.write(f"  Executing call {call_id} ({i+1}/{len(batch)})…")
             try:
-                runner = CycleRunner(
+                cfg = load_config(Path("config.yaml"))
+                runner = CycleRunner(cfg=cfg, 
                     dry_run=False,
                     cycle_kind="manual",
                     _backfill_call_ids=[call_id],

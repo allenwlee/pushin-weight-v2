@@ -280,56 +280,12 @@ X_MONITOR_LIST_ID = env.int("X_MONITOR_LIST_ID", default=None)
 # Load x_query_specs from config.yaml for Call B (wide-net keyword search)
 # and Call C (co-occurrence-constrained) queries. These are the same specs
 # the v1 pipeline uses to produce ~200 posts per 15-min cycle.
-_x_query_specs: list[dict] = []
-_config_path = BASE_DIR / "config.yaml"
-if _config_path.exists():
-    try:
-        import yaml as _yaml
-        with open(_config_path) as _fh:
-            _config = _yaml.safe_load(_fh)
-        _x_query_specs = _config.get("x_query_specs") or []
-    except Exception:
-        pass
-X_MONITOR_X_QUERY_SPECS = _x_query_specs
 
 # Per-call TwitterAPI fetch caps (post-2026-07-31 wiring):
 # `config.yaml::search.*` is the single source of truth for the
 # per-call caps. They are exposed as Django settings so `monitor/cycle.py`
 # can read them at runtime, with the CLI flag --limit-per-call etc.
 # overriding via `monitor/management/commands/run_cycle.py`.
-_search_cfg = (_config.get("search") or {}) if _config else {}
-X_MONITOR_CYCLE_LIMIT_PER_CALL = int(_search_cfg.get("max_results", 50))
-X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = int(_search_cfg.get("max_pages", 5))
-X_MONITOR_CYCLE_MAX_PER_PAGE = int(_search_cfg.get("max_per_page", 20))
-
-# Canonical brand registry (20 brands, post-U5-rename).
-# TODO(U2): derive from `core.models.Brand.objects.values_list('nickname', flat=True)`
-# once the ORM is wired; remove this placeholder then.
-KNOWN_MODELS: frozenset[str] = frozenset(
-    {
-        "minimax",
-        "qwen",
-        "deepseek",
-        "glm",
-        "mimo",
-        "moonshot_kimi",
-        "inclusionai",
-        "mistral",
-        "stepfun",
-        "ernie",
-        "hunyuan",
-        "llama",
-        "nemo_megatron",
-        "doubao",
-        "yi",
-        "sensechat",
-        "exaone",
-        "kuaishou",
-        "sakana_ai",
-        "upstage",
-    }
-)
-
 # Third-party API keys
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 TWITTERAPI_IO_API_KEY = env("TWITTERAPI_IO_API_KEY", default="")

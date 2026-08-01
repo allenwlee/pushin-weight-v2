@@ -131,6 +131,22 @@ class SearchConfig(BaseModel):
     max_pages: int = Field(default=5, ge=1)
 
 
+class CycleConfig(BaseModel):
+    """Cycle-level runtime constants (plan 2026-08-01-001).
+
+    Defaults mirror the prior hardcoded values in monitor/cycle.py
+    (_CURSOR_OVERLAP, _MAX_LOOKBACK, _C1_MAX_RESULTS, _C1_MAX_PAGES,
+    _MAX_TRUNCATION_WALKS) so omitting the `cycle:` block in
+    config.yaml preserves existing behavior.
+    """
+
+    cursor_overlap_seconds: int = Field(default=60, ge=0)
+    max_lookback_hours: int = Field(default=2, ge=1)
+    c1_max_results: int = Field(default=150, ge=1)
+    c1_max_pages: int = Field(default=8, ge=1)
+    max_truncation_walks: int = Field(default=5, ge=1)
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
@@ -186,6 +202,7 @@ class Config(BaseModel):
     # reintroduces a dupe.
     call_b_groups: list[list[str]] = Field(default_factory=list)
     dashboard: DashboardConfig = DashboardConfig()
+    cycle: CycleConfig = CycleConfig()
 
     @field_validator("x_query_specs")
     @classmethod
