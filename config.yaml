@@ -93,6 +93,19 @@ cycle:
   c1_max_pages: 8              # 150 / 20 per page
   max_truncation_walks: 5      # drain retries on truncated windows
 
+# LLM routing (plan 2026-08-01-002 U6). Defaults mirror the values
+# the v1 + v2 stacks used prior to this change; operators can
+# override per-env via X_MONITOR_<role>_MODEL without editing
+# config.yaml. The translator_base_url defaults to the
+# ANTHROPIC_BASE_URL env var (preserves the proxy path the v1
+# shell already configures).
+llm:
+  translator_model: "minimax/MiniMax-M3.0[1m]"
+  translator_base_url: null    # uses ANTHROPIC_BASE_URL env when null
+  classifier_model: "deepseek-v4-pro"
+  relevancy_model: "claude-haiku-4-5"
+  signal_model: "claude-haiku-4-5"
+
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.
 query_rot_streak_threshold: 3

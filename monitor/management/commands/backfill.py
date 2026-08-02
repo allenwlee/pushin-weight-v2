@@ -208,8 +208,10 @@ class Command(BaseCommand):
 
         from monitor.cycle import CycleRunner, plan_calls_for_cycle
 
-        # Plan calls using the shared function — same as regular harvest
-        calls = plan_calls_for_cycle()
+        # Plan calls using the shared function — same as regular harvest.
+        # Pass cfg explicitly to avoid a second config.yaml disk read.
+        cfg = load_config(Path("config.yaml"))
+        calls = plan_calls_for_cycle(cfg)
         call_ids = [c.call_id for c in calls]
 
         # --- load or init state ---
@@ -274,7 +276,7 @@ class Command(BaseCommand):
             from x_monitor.reattribute import (
                 build_anthropic_client_from_env,
             )
-            relevancy_client = build_anthropic_client_from_env()
+            relevancy_client = build_anthropic_client_from_env(cfg)
         except Exception:
             pass
         relevancy_llm_call = build_binary_relevancy_llm_call(

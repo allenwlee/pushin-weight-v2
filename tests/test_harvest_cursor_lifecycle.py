@@ -79,7 +79,7 @@ def harvest(monkeypatch):
 
     def _run_cycle(calls, script):
         api = ScriptedApi(script)
-        monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda: list(calls))
+        monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: list(calls))
         monkeypatch.setattr(
             cycle_mod.TwitterApiClient,
             "from_env",

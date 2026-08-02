@@ -46,8 +46,11 @@ See docs/plans/2026-06-17-001-refactor-two-call-wide-net-translation-plan.md
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 # Maximum tweets per LLM call. The plan's Decision 6 specifies 20.
@@ -618,6 +621,11 @@ def translate_batch_pragmatics(
         try:
             response = _call_with_retry(client, prompt)
         except Exception as exc:
+            logger.warning(
+                "translator_batch_failed",
+                exc_info=True,
+                extra={"batch_size": len(batch), "error_type": type(exc).__name__},
+            )
             for t in batch:
                 out.append(_empty_pragmatics_row(t, failed=True))
             if on_batch_error is not None:
@@ -625,6 +633,10 @@ def translate_batch_pragmatics(
             continue
         parsed = _parse_pragmatics_response(response, batch)
         if parsed is None:
+            logger.warning(
+                "translator_batch_failed",
+                extra={"batch_size": len(batch), "error_type": "ParseFailure"},
+            )
             for t in batch:
                 out.append(_empty_pragmatics_row(t, failed=True))
             if on_batch_error is not None:

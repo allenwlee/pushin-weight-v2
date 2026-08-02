@@ -772,42 +772,20 @@ class ClaudeClient(Protocol):
     def messages_create(self, **kwargs: Any) -> dict[str, Any]: ...
 
 
-def _resolve_signal_model() -> str:
+def _resolve_signal_model(cfg: "Config | None" = None) -> str:
     """Return the model id for signal classification.
 
-    The classifier's effective base URL is `X_MONITOR_CLASSIFIER_BASE_URL`
-    when set, otherwise `ANTHROPIC_BASE_URL`. This lets M3 stay as the
-    process-wide default while the classifier routes to DS V4 — set
-    `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`
-    in the shell to override just the classifier without flipping
-    other LLM callers in the same process.
-
-    Direct Anthropic API: "claude-haiku-4-5" (cheapest Claude, fits the
-    structured-JSON signal task).
-
-    Minimax proxy (classifier base URL points at api.minimax.io/anthropic):
-    the proxy only routes the operator's registered model id
-    (ANTHROPIC_MODEL env). Default to "MiniMax-M3.0" — it does NOT emit
-    a thinking block for structured JSON (6 output tokens per request).
-    "MiniMax-M2.7" still works but emits ~150 tokens of thinking per
-    call (5.5x slower) — the operator's ~/.env.secrets previously had
-    ANTHROPIC_MODEL=MiniMax-M2.7 set, which silently triggered that
-    slower path.
-
-    DeepSeek V4 Pro (classifier base URL points at api.deepseek.com/anthropic):
-    Anthropic-compatible endpoint. Default to "deepseek-v4-pro". The
-    per-call `thinking={"type": "disabled"}` is applied via
-    `_resolve_thinking_default()` (see below) so the reasoning model
-    does not consume the entire output budget on internal deliberation.
-
-    Resolution order:
-      1. X_MONITOR_CLASSIFIER_MODEL env var (classifier-specific override)
-      2. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
-      3. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
-      4. "deepseek-v4-pro" if classifier base URL routes through api.deepseek.com
-      4. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
+    Resolution order (plan 2026-08-01-002 U2):
+      1. `cfg.llm.signal_model` when cfg is provided (single source of truth).
+      2. X_MONITOR_CLASSIFIER_MODEL env var (classifier-specific override)
+      3. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
+      4. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
+      5. "deepseek-v4-pro" if classifier base URL routes through api.deepseek.com
+      6. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
+    if cfg is not None and getattr(cfg.llm, "signal_model", None):
+        return cfg.llm.signal_model
     explicit = os.environ.get("X_MONITOR_CLASSIFIER_MODEL") or os.environ.get("ANTHROPIC_MODEL")
     if explicit:
         return explicit
@@ -845,16 +823,19 @@ def _resolve_thinking_default() -> "dict | None":
     return None
 
 
-def _resolve_translator_model() -> str:
+def _resolve_translator_model(cfg: "Config | None" = None) -> str:
     """Return the model name for the translator, based on ANTHROPIC_BASE_URL.
 
-    The translator routes through `ANTHROPIC_BASE_URL` (NOT
-    `X_MONITOR_CLASSIFIER_BASE_URL`), so it needs its own model
-    resolution independent of the classifier. When the env-based
-    `ANTHROPIC_MODEL` override is set, honor it; otherwise pick
-    the sensible default for the detected provider.
+    Resolution order (plan 2026-08-01-002 U2):
+      1. `cfg.llm.translator_model` when cfg is provided (single source of truth).
+      2. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
+      3. "MiniMax-M3.0" if ANTHROPIC_BASE_URL routes through api.minimax.io
+      4. "deepseek-v4-pro" if ANTHROPIC_BASE_URL routes through api.deepseek.com
+      5. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
+    if cfg is not None and getattr(cfg.llm, "translator_model", None):
+        return cfg.llm.translator_model
     explicit = os.environ.get("ANTHROPIC_MODEL")
     if explicit:
         return explicit

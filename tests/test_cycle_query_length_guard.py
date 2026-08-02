@@ -82,7 +82,7 @@ def wired(monkeypatch):
     def _run(calls):
         api = FakeApi()
         monkeypatch.setattr(
-            cycle_mod, "plan_calls_for_cycle", lambda: list(calls)
+            cycle_mod, "plan_calls_for_cycle", lambda cfg=None: list(calls)
         )
         monkeypatch.setattr(
             cycle_mod.TwitterApiClient,

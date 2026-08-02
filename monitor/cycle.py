@@ -762,14 +762,24 @@ def _persist_attribution(
 # ============================================================================
 
 
-def plan_calls_for_cycle() -> list[PlannedCall]:
+def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
     """Plan harvest calls from settings — shared by CycleRunner and backfill.
 
     Reads X_MONITOR_LIST_ID, brand filter, primary keywords, and
     x_query_specs from Django settings. Returns empty list when the
     list ID is not configured.
+
+    The optional `cfg` parameter exists so production callers can pass
+    the loaded Config (avoids a second disk read for callers that
+    already loaded it). When `cfg is None`, the function falls back
+    to load_config(Path("config.yaml")) — preserving backward
+    compatibility with test monkeypatches that shim the function
+    with zero-arg lambdas.
     """
-    list_id = _resolve_x_monitor_list_id(self.cfg)
+    if cfg is None:
+        cfg = load_config(Path("config.yaml"))
+
+    list_id = _resolve_x_monitor_list_id(cfg)
     if list_id is None:
         logger.warning(
             "plan_calls_for_cycle: X_MONITOR_LIST_ID not set — "
@@ -778,7 +788,7 @@ def plan_calls_for_cycle() -> list[PlannedCall]:
         return []
 
     primary_keywords = _load_primary_keywords()
-    x_query_specs = _resolve_x_query_specs(self.cfg) or []
+    x_query_specs = _resolve_x_query_specs(cfg) or []
 
     brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
     if brand_filter_raw and isinstance(brand_filter_raw, str):
@@ -840,6 +850,15 @@ class CycleRunner:
         self._posts_attributed: int = 0
         self._api_calls: int = 0
         self._errors: list[str] = []
+        # Plan 2026-08-01-002 U4: typed counters surfaced via --json
+        # n_errors_by_type. Each key represents a class of tolerated error
+        # the cycle can recover from. The dashboard uses these to flag
+        # silent-failure modes (e.g., "translator_batch_failed > 0 for 3
+        # cycles in a row" = lang_detected regression in production).
+        self._error_counts: dict[str, int] = {
+            "translator_batch_failed": 0,
+            "classifier_batch_failed": 0,
+        }
 
     # ------------------------------------------------------------------
     # Step 1: Plan
@@ -848,7 +867,7 @@ class CycleRunner:
     def _plan_calls(self) -> list[PlannedCall]:
         """Build the per-cycle call list via plan_calls_for_cycle()."""
         try:
-            calls = plan_calls_for_cycle()
+            calls = plan_calls_for_cycle(self.cfg)
         except (TypeError, ValueError) as exc:
             logger.warning("CycleRunner._plan_calls: plan_calls failed: %s", exc)
             self._errors.append(f"plan: {exc}")
@@ -1243,8 +1262,8 @@ class CycleRunner:
             build_translator_client_from_env,
         )
 
-        translator_client = build_translator_client_from_env()
-        classifier_client = build_anthropic_client_from_env()
+        translator_client = build_translator_client_from_env(self.cfg)
+        classifier_client = build_anthropic_client_from_env(self.cfg)
         if translator_client is None and classifier_client is None:
             logger.warning(
                 "_run_post_fetch: no LLM client available — "
@@ -1296,10 +1315,17 @@ class CycleRunner:
         else:
             try:
                 translation_rows = translate_batch_pragmatics(
-                    tweets, ["en", "zh_cn"], translator_client
+                    tweets,
+                    ["en", "zh_cn"],
+                    translator_client,
+                    on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
+                        "translator_batch_failed",
+                        self._error_counts["translator_batch_failed"] + 1,
+                    ),
                 )
             except Exception as exc:
-                logger.warning("_run_post_fetch: translate failed: %s", exc)
+                logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
+                self._error_counts["translator_batch_failed"] += 1
                 translation_rows = []
 
         # Persist translations back to Post rows.
@@ -1361,10 +1387,17 @@ class CycleRunner:
                 )
                 return counters
             results = classify_batch_pragmatics_full(
-                tweets, brand_registry, classifier_client
+                tweets,
+                brand_registry,
+                classifier_client,
+                on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
+                    "classifier_batch_failed",
+                    self._error_counts["classifier_batch_failed"] + 1,
+                ),
             )
         except Exception as exc:
-            logger.warning("_run_post_fetch: classify failed: %s", exc)
+            logger.warning("_run_post_fetch: classify failed: %s", exc, exc_info=True)
+            self._error_counts["classifier_batch_failed"] += 1
             return counters
 
         # Persist classifications with guardrails
@@ -1823,6 +1856,13 @@ class CycleRunner:
         if kept_all and summary["status"] != "aborted":
             pf_counters = self._run_post_fetch(kept_all)
             summary.setdefault("post_fetch", {}).update(pf_counters)
+            # Plan 2026-08-01-002 U4: surface typed error counters so
+            # the dashboard (or operator grep) can flag silent-failure
+            # modes (translator_batch_failed > 0 for 3 cycles in a row
+            # = lang_detected regression in production).
+            summary.setdefault("n_errors_by_type", {}).update(
+                dict(self._error_counts)
+            )
 
         # ---- Quote-tweet channel (v1 parity; ~24% of v1 volume) ----
         # Runs after the main harvest so newly-attributed parents are in

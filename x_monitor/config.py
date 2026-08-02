@@ -147,6 +147,38 @@ class CycleConfig(BaseModel):
     max_truncation_walks: int = Field(default=5, ge=1)
 
 
+class LlmConfig(BaseModel):
+    """LLM model-name configuration (plan 2026-08-01-002 U1).
+
+    Defaults mirror the values the v1 + v2 stacks used prior to this
+    change; operators can override per-env via X_MONITOR_<role>_MODEL
+    without editing config.yaml. The translator_base_url defaults to
+    ANTHROPIC_BASE_URL env var (preserves the proxy path the v1 shell
+    already configures).
+    """
+
+    translator_model: str = Field(
+        default="minimax/MiniMax-M3.0[1m]",
+        description="Model name for the translator stage. Default matches the v1 shell's ANTHROPIC_MODEL.",
+    )
+    translator_base_url: str | None = Field(
+        default=None,
+        description="Optional override for the translator's base URL. When None, falls back to ANTHROPIC_BASE_URL env (resolves to MiniMax proxy if set).",
+    )
+    classifier_model: str = Field(
+        default="deepseek-v4-pro",
+        description="Model name for the classifier stage. Default matches the 2026-07-15 swap plan.",
+    )
+    relevancy_model: str = Field(
+        default="claude-haiku-4-5",
+        description="Model name for the relevancy gate. Default matches x_monitor/relevancy.py::DEFAULT_RELEVANCY_MODEL.",
+    )
+    signal_model: str = Field(
+        default="claude-haiku-4-5",
+        description="Model name for the per-post signal classifier. Default matches x_monitor/attribution.py::_resolve_signal_model().",
+    )
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
@@ -154,6 +186,8 @@ class Config(BaseModel):
     clustering: ClusteringConfig = ClusteringConfig()
     quote_tweets: QuoteTweetConfig = QuoteTweetConfig()
     search: SearchConfig = SearchConfig()
+    cycle: CycleConfig = CycleConfig()
+    llm: LlmConfig = LlmConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))
@@ -202,7 +236,6 @@ class Config(BaseModel):
     # reintroduces a dupe.
     call_b_groups: list[list[str]] = Field(default_factory=list)
     dashboard: DashboardConfig = DashboardConfig()
-    cycle: CycleConfig = CycleConfig()
 
     @field_validator("x_query_specs")
     @classmethod
@@ -342,6 +375,25 @@ def load_config(path: Path) -> Config:
     # Plan 2026-07-13-002 U4: same rename handling for call_b_groups.
     # Legacy v1.7.x config files may also carry this under a different
     # shape — pass through as-is when the key is present.
+    # Plan 2026-08-01-002 U1: env-var resolution into Config.llm.*.
+    # The translator's model name + base URL live in env vars on the
+    # operator's shell (ANTHROPIC_MODEL, ANTHROPIC_BASE_URL) and may
+    # differ from config.yaml. Merge env vars into Config.llm only
+    # when the field is not already explicitly set in yaml — yaml wins.
+    import os
+    raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
+    env_llm_overrides = {
+        k: v for k, v in {
+            "translator_model": os.environ.get("X_MONITOR_TRANSLATOR_MODEL"),
+            "classifier_model": os.environ.get("X_MONITOR_CLASSIFIER_MODEL"),
+            "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
+            "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
+            "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
+        }.items() if v is not None
+    }
+    if env_llm_overrides:
+        merged_llm = {**env_llm_overrides, **raw_llm}  # yaml wins over env
+        raw = {**raw, "llm": merged_llm}
     try:
         return Config.model_validate(raw)
     except ValidationError:
