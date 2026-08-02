@@ -1635,7 +1635,7 @@ class CycleRunner:
             brand_filter = [
                 b.strip() for b in brand_filter_str.split(",") if b.strip()
             ]
-        enabled_models = _load_enabled_models(brand_filter)
+        enabled_models = _resolve_enabled_models(self.cfg, brand_filter)
         index, search_terms = _build_brand_index(enabled_models)
         # Merge DB-loaded brand_search_terms into the index-derived map
         db_search_terms = _load_brand_search_terms()
