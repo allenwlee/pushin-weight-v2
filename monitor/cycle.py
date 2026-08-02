@@ -272,8 +272,8 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime, cfg: Config) -> date
     losing the (now, prior) span. Clamping since to (now - overlap) bounds
     the damage to a one-cycle re-fetch, which dedup absorbs.
     """
-    floor = now - cfg.cycle.max_lookback
-    ceiling = now - cfg.cycle.cursor_overlap
+    floor = now - timedelta(hours=cfg.cycle.max_lookback_hours)
+    ceiling = now - timedelta(seconds=cfg.cycle.cursor_overlap_seconds)
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
         if row is None or row.last_completed_at is None:
