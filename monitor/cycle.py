@@ -119,7 +119,7 @@ def _now_iso() -> str:
 # past that slice between cycles was lost.  That was ~half of daily volume.
 #
 # These helpers restore the cursor.  Two deliberate differences from v1:
-#   * the first window is CLAMPED (see self.cfg.cycle.max_lookback) so a stale cursor cannot
+#   * the first window is CLAMPED (see cfg.cycle.max_lookback) so a stale cursor cannot
 #     request a multi-day sweep that would silently truncate against the
 #     per-call page cap;
 #   * the value written is the same instant passed as `until_time`, so
@@ -256,15 +256,15 @@ def _cursor_key(call: PlannedCall) -> dict[str, str]:
     }
 
 
-def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
-    """Resolve the `since_time` floor for one call, clamped to self.cfg.cycle.max_lookback.
+def _read_cursor_since(call: PlannedCall, *, now: datetime, cfg: Config) -> datetime:
+    """Resolve the `since_time` floor for one call, clamped to cfg.cycle.max_lookback.
 
     Returns an aware UTC datetime, always.  Four cases:
-      * no cursor row (cold start)  -> now - self.cfg.cycle.max_lookback
-      * fresh cursor                -> cursor - self.cfg.cycle.cursor_overlap
-      * stale cursor (or DB error)  -> now - self.cfg.cycle.max_lookback (the clamp)
+      * no cursor row (cold start)  -> now - cfg.cycle.max_lookback
+      * fresh cursor                -> cursor - cfg.cycle.cursor_overlap
+      * stale cursor (or DB error)  -> now - cfg.cycle.max_lookback (the clamp)
       * future cursor (NTP rollback, a v1 legacy row whose TZ was
-        mis-parsed, a manual psql write) -> now - self.cfg.cycle.cursor_overlap
+        mis-parsed, a manual psql write) -> now - cfg.cycle.cursor_overlap
 
     The future case is the subtle one: a prior AFTER now would otherwise
     produce since > until, TwitterAPI.io returns [] with no error, and the
@@ -272,8 +272,8 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
     losing the (now, prior) span. Clamping since to (now - overlap) bounds
     the damage to a one-cycle re-fetch, which dedup absorbs.
     """
-    floor = now - self.cfg.cycle.max_lookback
-    ceiling = now - self.cfg.cycle.cursor_overlap
+    floor = now - cfg.cycle.max_lookback
+    ceiling = now - cfg.cycle.cursor_overlap
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
         if row is None or row.last_completed_at is None:
@@ -307,7 +307,7 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime) -> datetime:
                 prior - now,
             )
             return ceiling
-        return max(prior - self.cfg.cycle.cursor_overlap, floor)
+        return max(prior - cfg.cycle.cursor_overlap, floor)
     except Exception as exc:
         logger.warning(
             "_read_cursor_since: cursor read failed for call_id=%s: %s; "
@@ -908,7 +908,7 @@ class CycleRunner:
                 False,
             )
 
-        since_dt = _read_cursor_since(call, now=now)
+        since_dt = _read_cursor_since(call, now=now, cfg=self.cfg)
         return int(since_dt.timestamp()), int(now.timestamp()), True
 
     def _fetch_tweets(
