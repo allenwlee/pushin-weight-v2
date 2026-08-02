@@ -307,7 +307,7 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime, cfg: Config) -> date
                 prior - now,
             )
             return ceiling
-        return max(prior - cfg.cycle.cursor_overlap, floor)
+        return max(prior - timedelta(seconds=cfg.cycle.cursor_overlap_seconds), floor)
     except Exception as exc:
         logger.warning(
             "_read_cursor_since: cursor read failed for call_id=%s: %s; "
