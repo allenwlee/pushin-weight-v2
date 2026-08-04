@@ -182,7 +182,15 @@ def _call_with_retry(
         try:
             return client.messages_create(
                 model=model,
-                max_tokens=4096,
+                # Per-call output budget. The previous value (4096) was
+                # too tight for 20-tweet translation batches — observed
+                # in prod on 2026-08-04 truncating responses mid-JSON
+                # at ~9-12K bytes (~2-3K tokens), losing lang_detected
+                # for those posts. M3 supports up to 128K output tokens
+                # per the platform docs; 16384 gives ~4-8x headroom for
+                # typical batches without runaway cost risk.
+                # See docs/plans/2026-08-04-002-bump-translator-max-tokens.md
+                max_tokens=16384,
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as e:
