@@ -48,6 +48,8 @@ from __future__ import annotations
 import json
 import logging
 import time
+
+from ._json_parser import parse_llm_response
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
@@ -946,10 +948,13 @@ class AnthropicClaudeClient:
             if hasattr(block, "text"):
                 text_parts.append(block.text)
         raw = "\n".join(text_parts).strip()
-        # Strip code fences if present.
-        if raw.startswith("```"):
-            lines = raw.splitlines()
-            # Drop first (```json) and last (```) lines.
-            inner = "\n".join(lines[1:-1]) if lines[-1].strip().startswith("```") else "\n".join(lines[1:])
-            raw = inner.strip()
-        return _json.loads(raw)
+        # Trailing-prose-tolerant parser (plan 2026-08-04-001).
+        # Replaces the inline json.loads() that raised on trailing prose.
+        # Soft-fails to {"results": []} on parse failure; the consumer
+        # (translate_batch -> _parse_response) handles empty results
+        # by marking the batch as translation_failed=True.
+        return parse_llm_response(
+            raw,
+            logger_name="x_monitor.translator",
+            fallback={"results": []},
+        )

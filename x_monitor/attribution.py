@@ -37,6 +37,8 @@ import json
 import logging
 import re
 import time
+
+from ._json_parser import parse_llm_response
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
@@ -2152,28 +2154,14 @@ class AnthropicClaudeClient:
             if block.get("type") == "text":
                 text_parts.append(block.get("text", ""))
         raw = "\n".join(text_parts).strip()
-        if raw.startswith("```"):
-            lines = raw.splitlines()
-            inner = (
-                "\n".join(lines[1:-1])
-                if lines[-1].strip().startswith("```")
-                else "\n".join(lines[1:])
-            )
-            raw = inner.strip()
-        try:
-            return _json.loads(raw)
-        except _json.JSONDecodeError:
-            # LLM returned non-JSON (prose, explanation, empty response).
-            # The 2026-07-31 cycle run crashed here on the relevancy gate
-            # when the model returned empty/non-JSON content. Fall back
-            # to a safe "uncertain" verdict so the cycle can continue
-            # rather than aborting the whole run.
-            import logging as _logging
-            _logging.getLogger(__name__).warning(
-                "messages_create: LLM returned non-JSON (len=%d): %r",
-                len(raw), raw[:200],
-            )
-            return {"verdict": "uncertain", "reason": "llm_non_json_response"}
+        # Trailing-prose-tolerant parser (plan 2026-08-04-001).
+        # Replaces the inline json.loads + except fallback with the shared
+        # helper. Same warning shape and same fallback dict as before.
+        return parse_llm_response(
+            raw,
+            logger_name="x_monitor.attribution",
+            fallback={"verdict": "uncertain", "reason": "llm_non_json_response"},
+        )
 
 
 # --- Public re-exports for compat shim (Unit 6) -------------------------
