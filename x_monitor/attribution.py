@@ -802,7 +802,7 @@ def _resolve_signal_model(cfg: "Config | None" = None) -> str:
     return "claude-haiku-4-5"
 
 
-def _resolve_thinking_default() -> "dict | None":
+def _resolve_thinking_default(base_url: str = "", *, role: str = "classifier") -> "dict | None":
     """Return the `thinking` kwarg for the Anthropic SDK messages.create call.
 
     When routing through the DeepSeek V4 Pro endpoint, the model is a
@@ -812,14 +812,31 @@ def _resolve_thinking_default() -> "dict | None":
     this — return `None` so the parameter is omitted from the SDK call
     and behavior is unchanged from the pre-swap state.
 
+    Args:
+        base_url: the actual base URL the call will be made against.
+                  Caller passes the resolved URL (not the operator's
+                  other env config). Empty string falls back to the
+                  per-role override + ANTHROPIC_BASE_URL.
+        role: "classifier" (default) or "translator". Determines
+              which per-role override env var is read when base_url
+              is empty: "classifier" -> X_MONITOR_CLASSIFIER_BASE_URL,
+              "translator" -> X_MONITOR_TRANSLATOR_BASE_URL.
+
     Returns:
         {"type": "disabled"} for the DeepSeek path, else None.
     """
     import os
-    base_url = os.environ.get(
-        "X_MONITOR_CLASSIFIER_BASE_URL",
-        os.environ.get("ANTHROPIC_BASE_URL", ""),
-    )
+    if not base_url:
+        if role == "translator":
+            base_url = os.environ.get(
+                "X_MONITOR_TRANSLATOR_BASE_URL",
+                os.environ.get("ANTHROPIC_BASE_URL", ""),
+            )
+        else:
+            base_url = os.environ.get(
+                "X_MONITOR_CLASSIFIER_BASE_URL",
+                os.environ.get("ANTHROPIC_BASE_URL", ""),
+            )
     if "deepseek.com" in base_url:
         return {"type": "disabled"}
     return None
@@ -1950,7 +1967,11 @@ def classify_batch_pragmatics_full(
     # {"type": "disabled"} so the reasoning model does not consume the
     # entire output budget on internal deliberation.
     if thinking is None:
-        thinking = _resolve_thinking_default()
+        import os as _os
+        thinking = _resolve_thinking_default(_os.environ.get(
+            "X_MONITOR_CLASSIFIER_BASE_URL",
+            _os.environ.get("ANTHROPIC_BASE_URL", ""),
+        ))
 
     if brand_registry:
         registry_ids = {b.brand_id for b in brand_registry}
@@ -2104,7 +2125,11 @@ class AnthropicClaudeClient:
         # always carries at least one TextBlock. MiniMax / direct
         # Anthropic paths return None (no-op).
         if "thinking" not in kwargs:
-            thinking = _resolve_thinking_default()
+            import os as _os
+            thinking = _resolve_thinking_default(_os.environ.get(
+                "X_MONITOR_CLASSIFIER_BASE_URL",
+                _os.environ.get("ANTHROPIC_BASE_URL", ""),
+            ))
             if thinking is not None:
                 kwargs["thinking"] = thinking
 

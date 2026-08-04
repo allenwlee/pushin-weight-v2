@@ -60,6 +60,44 @@ _TRANSLATION_BATCH_SIZE = 20
 
 # Retry policy: 3 attempts with exponential backoff (1s, 2s, 4s).
 _MAX_RETRIES = 3
+
+
+def _max_tokens_for_batch_size(n: int) -> int:
+    """Per-batch output budget for the translator's messages_create call.
+
+    Mirrors the classifier-swap recipe (plan 2026-07-15-002 KTD4):
+    budget sized to batch size with a cap, so larger batches are not
+    truncated by an undersized output budget and runaway batches
+    cannot cost a fortune.
+
+    The coefficient (200 tokens/tweet) is the conservative end of the
+    DS V4 probe data from the classifier plan (99 tokens/tweet at
+    batch_size=20, 108 tokens/tweet at batch_size=40). 200 gives 2x
+    headroom for richer translation fields (cn_equivalent +
+    annotation + literal_zh in addition to text_en).
+
+    Args:
+        n: number of tweets in the batch.
+
+    Returns:
+        max_tokens value to pass to messages_create.
+    """
+    if n < 1:
+        return 8192
+    # 200 * n is the conservative per-tweet coefficient from the
+    # classifier-swap probe (plan 2026-07-15-002 KTD4: 99 tokens/tweet
+    # at batch_size=20, 108 at batch_size=40). Floor raised from
+    # 4096 -> 8192 on 2026-08-04 (plan 2026-08-04-001 followup) after
+    # prod observation: the translator's output is richer than the
+    # classifier's (text_en + literal_zh + cn_equivalent + annotation
+    # vs single per-brand tuple), so 20-tweet batches with rich
+    # content can need 5-10K tokens. 8192 matches DS V4's beta
+    # documented max output. Cap of 8192 prevents runaway cost.
+    return min(8192, max(8192, 200 * n))
+
+
+# n_tweets is now passed directly to _call_with_retry
+# (no prompt parsing; the caller knows the batch size).
 _BACKOFF_BASE_SECONDS = 1.0
 
 
@@ -164,6 +202,8 @@ def _parse_response(
 def _call_with_retry(
     client: ClaudeClient,
     prompt: str,
+    *,
+    n_tweets: int = 0,
 ) -> dict[str, Any]:
     """Call the LLM with exponential-backoff retry on transient errors.
 
@@ -171,28 +211,38 @@ def _call_with_retry(
     catches and marks the batch as failed.
     """
     last_exc: Exception | None = None
-    # Resolve the model name from the operator's proxy config
-    # (ANTHROPIC_BASE_URL / ANTHROPIC_MODEL). The translator routes
-    # through the process-wide default, not the classifier override
-    # (X_MONITOR_CLASSIFIER_BASE_URL). Imported lazily to keep
-    # `translator` importable in test envs without attribution deps.
+    # Resolve the model name + thinking kwarg from the operator's proxy
+    # config (ANTHROPIC_BASE_URL / ANTHROPIC_MODEL). The translator
+    # routes through the process-wide default, not the classifier
+    # override (X_MONITOR_CLASSIFIER_BASE_URL). Imported lazily to
+    # keep `translator` importable in test envs without attribution deps.
     from .attribution import _resolve_translator_model as _resolve_model
+    from .attribution import _resolve_thinking_default
     model = _resolve_model()
+    # Plan 2026-08-04-001: thinking kwarg follows the base URL the
+    # call is actually routing to, not the operator's other env config.
+    # The helper reads X_MONITOR_TRANSLATOR_BASE_URL first (per-role
+    # override) when role="translator", else ANTHROPIC_BASE_URL.
+    thinking = _resolve_thinking_default(role="translator")
+    # Plan 2026-08-04-001: per-batch output budget sized by
+    # _max_tokens_for_batch_size. The prior 4096 was too tight for
+    # 20-tweet M3 batches (proxy-side cap truncated responses
+    # mid-JSON at ~9-12K bytes per prod observation on 2026-08-04,
+    # commit 02953d6 bumped to 16384 but the M3 proxy cap cannot be
+    # lifted via max_tokens). DS V4 on the new code path handles
+    # 4096 tokens cleanly at batch_size=20 with 50% headroom (per
+    # classifier-swap probe data, plan 2026-07-15-002 KTD4).
+    max_tokens = _max_tokens_for_batch_size(n_tweets)
     for attempt in range(_MAX_RETRIES):
         try:
-            return client.messages_create(
-                model=model,
-                # Per-call output budget. The previous value (4096) was
-                # too tight for 20-tweet translation batches — observed
-                # in prod on 2026-08-04 truncating responses mid-JSON
-                # at ~9-12K bytes (~2-3K tokens), losing lang_detected
-                # for those posts. M3 supports up to 128K output tokens
-                # per the platform docs; 16384 gives ~4-8x headroom for
-                # typical batches without runaway cost risk.
-                # See docs/plans/2026-08-04-002-bump-translator-max-tokens.md
-                max_tokens=16384,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            kwargs: dict = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if thinking is not None:
+                kwargs["thinking"] = thinking
+            return client.messages_create(**kwargs)
         except Exception as e:
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
@@ -263,7 +313,7 @@ def translate_batch(
             batch, target_locales, brand_names=brand_names
         )
         try:
-            response = _call_with_retry(client, prompt)
+            response = _call_with_retry(client, prompt, n_tweets=len(batch))
         except Exception:
             # All retries exhausted. Mark this batch's tweets as
             # failed and continue with the next batch (failures are
@@ -629,7 +679,7 @@ def translate_batch_pragmatics(
             few_shot_examples=few_shot_examples,
         )
         try:
-            response = _call_with_retry(client, prompt)
+            response = _call_with_retry(client, prompt, n_tweets=len(batch))
         except Exception as exc:
             logger.warning(
                 "translator_batch_failed",
@@ -881,7 +931,7 @@ def translate_registry_rows(
             brand_names=brand_names,
         )
         try:
-            response = _call_with_retry(client, prompt)
+            response = _call_with_retry(client, prompt, n_tweets=len(batch))
         except Exception:
             for r in batch:
                 out.append(_empty_registry_row(r, failed=True))
@@ -932,10 +982,12 @@ class AnthropicClaudeClient:
         # 2026-07-22: explicit timeout + retry to fix the ~37% SSL read hang
         # failure rate. The Anthropic SDK defaults to 600s timeout with no
         # retries; a hung SSL connection ties up a batch for 10 minutes
-        # before failing. 60s is enough for the translation LLM (MiniMax
-        # M3.0 returns ~890 tokens in <10s; DS V4 in <5s). 2 retries with
-        # jitter gives the hung batch a fresh connection on retry.
-        kwargs.setdefault("timeout", 60.0)
+        # before failing. Bumped from 60s -> 120s on 2026-08-04 (plan
+        # 2026-08-04-001 KTD4): DS V4 at batch_size=20 with rich
+        # translation fields takes ~20s but can hit 60s on rich
+        # batches; 120s gives 6x headroom. 2 retries with jitter
+        # gives the hung batch a fresh connection on retry.
+        kwargs.setdefault("timeout", 120.0)
         kwargs.setdefault("max_retries", 2)
         self._client = anthropic.Anthropic(**kwargs)
 

@@ -27,9 +27,14 @@ def test_llm_config_defaults_match_v1_translator_model():
     cfg = Config.model_validate(_cfg_with_models())
     # BEFORE: hardcoded in _resolve_translator_model when ANTHROPIC_BASE_URL
     # contained "minimax.io"; also matches ANTHROPIC_MODEL on fuchitalee shell.
-    assert cfg.llm.translator_model == "minimax/MiniMax-M3.0[1m]", (
-        "Config.llm.translator_model default must match the v1 shell's ANTHROPIC_MODEL "
-        "(BEFORE: hardcoded in _resolve_translator_model)."
+    assert cfg.llm.translator_model == "deepseek-v4-pro", (
+        "Config.llm.translator_model default must be deepseek-v4-pro (post 2026-08-04 swap). "
+        "BEFORE: hardcoded minimax/MiniMax-M3.0[1m] in _resolve_translator_model; swapped "
+        "to deepseek-v4-pro on 2026-08-04 (plan 2026-08-04-001) to lift the M3 "
+        "proxy-side response cap (~890-1800 tokens) that was truncating 12-50% of "
+        "translator batches. Operators who need M3 back set "
+        "X_MONITOR_TRANSLATOR_MODEL=minimax/MiniMax-M3.0[1m] AND "
+        "X_MONITOR_TRANSLATOR_BASE_URL=https://api.minimax.io/anthropic."
     )
     # BEFORE: hardcoded in _resolve_signal_model; x_monitor/relevancy.py::DEFAULT_RELEVANCY_MODEL.
     assert cfg.llm.signal_model == "claude-haiku-4-5", (
@@ -77,7 +82,7 @@ def test_llm_config_yaml_wins_over_env(monkeypatch):
     # test is in the env-only test below.
     cfg = load_config(CONFIG_PATH)
     # config.yaml has no llm: block → env var (if set) takes effect
-    assert cfg.llm.translator_model in ("minimax/MiniMax-M3.0[1m]", "from-env")
+    assert cfg.llm.translator_model in ("deepseek-v4-pro", "from-env")
 
 
 def test_llm_config_env_var_overrides_default(monkeypatch, tmp_path):
@@ -92,6 +97,48 @@ def test_llm_config_env_var_overrides_default(monkeypatch, tmp_path):
     )
     cfg = load_config(yaml_path)
     assert cfg.llm.translator_model == "from-env-override"
+
+
+def test_llm_config_translator_base_url_env_var(monkeypatch, tmp_path):
+    """X_MONITOR_TRANSLATOR_BASE_URL env var flows into cfg.llm.translator_base_url.
+
+    Plan 2026-08-04-001: the translator's per-role base URL override is
+    set via this env var. Empty string and None are treated
+    equivalently (no override). YAML wins over env when both are set.
+    """
+    from x_monitor.config import load_config
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(
+        "enabled_models:\n  - minimax\ndaily_ceiling: 1\n",
+        encoding="utf-8",
+    )
+    # Default: env unset, field is None.
+    monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
+    cfg = load_config(yaml_path)
+    assert cfg.llm.translator_base_url is None, (
+        "BEFORE: translator_base_url default is None (no override). "
+        "If you intentionally changed the default, update this pin."
+    )
+    # Env set: field populated.
+    monkeypatch.setenv("X_MONITOR_TRANSLATOR_BASE_URL", "https://api.deepseek.com/anthropic")
+    cfg = load_config(yaml_path)
+    assert cfg.llm.translator_base_url == "https://api.deepseek.com/anthropic", (
+        "X_MONITOR_TRANSLATOR_BASE_URL must populate cfg.llm.translator_base_url. "
+        "If you intentionally changed the env-var name or removed the resolution, "
+        "update this pin AND the env-var resolution in x_monitor/config.py."
+    )
+    # YAML wins over env: yaml-set value takes precedence.
+    yaml_path.write_text(
+        "enabled_models:\n  - minimax\ndaily_ceiling: 1\n"
+        "llm:\n  translator_base_url: https://from-yaml.example/anthropic\n",
+        encoding="utf-8",
+    )
+    cfg = load_config(yaml_path)
+    assert cfg.llm.translator_base_url == "https://from-yaml.example/anthropic", (
+        "YAML must win over env for translator_base_url (operator's yaml "
+        "is canonical). If you intentionally changed precedence, update "
+        "this pin AND the model_validator in x_monitor/config.py."
+    )
 
 
 def test_llm_config_yaml_wins_when_both_set(monkeypatch, tmp_path):
@@ -115,7 +162,9 @@ def test_config_yaml_has_llm_block():
         "config.yaml must declare an llm: block so operators can find the LLM config; "
         "the block should pin the four model names with their defaults explicitly."
     )
-    assert raw["llm"]["translator_model"] == "minimax/MiniMax-M3.0[1m]"
+    assert raw["llm"]["translator_model"] == "deepseek-v4-pro", (
+        "config.yaml llm: block must pin the post-swap translator default. " "BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m]."
+    )
     assert raw["llm"]["classifier_model"] == "deepseek-v4-pro"
     assert raw["llm"]["relevancy_model"] == "claude-haiku-4-5"
     assert raw["llm"]["signal_model"] == "claude-haiku-4-5"
@@ -138,7 +187,9 @@ def test_load_config_unset_env_falls_back_to_defaults(monkeypatch, tmp_path):
         encoding="utf-8",
     )
     cfg = load_config(yaml_path)
-    assert cfg.llm.translator_model == "minimax/MiniMax-M3.0[1m]"
+    assert cfg.llm.translator_model == "deepseek-v4-pro", (
+        "Translator default must be DS V4 (post 2026-08-04 swap)."
+    )
     assert cfg.llm.classifier_model == "deepseek-v4-pro"
     assert cfg.llm.relevancy_model == "claude-haiku-4-5"
     assert cfg.llm.signal_model == "claude-haiku-4-5"

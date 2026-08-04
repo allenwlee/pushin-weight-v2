@@ -100,7 +100,7 @@ cycle:
 # ANTHROPIC_BASE_URL env var (preserves the proxy path the v1
 # shell already configures).
 llm:
-  translator_model: "minimax/MiniMax-M3.0[1m]"
+  translator_model: "deepseek-v4-pro"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
   translator_base_url: null    # uses ANTHROPIC_BASE_URL env when null
   classifier_model: "deepseek-v4-pro"
   relevancy_model: "claude-haiku-4-5"

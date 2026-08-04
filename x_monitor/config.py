@@ -158,8 +158,8 @@ class LlmConfig(BaseModel):
     """
 
     translator_model: str = Field(
-        default="minimax/MiniMax-M3.0[1m]",
-        description="Model name for the translator stage. Default matches the v1 shell's ANTHROPIC_MODEL.",
+        default="deepseek-v4-pro",
+        description="Model name for the translator stage. Default swapped to deepseek-v4-pro on 2026-08-04 (plan 2026-08-04-001) to lift the MiniMax M3 proxy-side response cap (~890-1800 tokens) that was truncating 12-50% of translator batches. Operators who need M3 back set X_MONITOR_TRANSLATOR_MODEL=minimax/MiniMax-M3.0[1m] and X_MONITOR_TRANSLATOR_BASE_URL=https://api.minimax.io/anthropic.",
     )
     translator_base_url: str | None = Field(
         default=None,
