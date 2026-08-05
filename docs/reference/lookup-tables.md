@@ -1,6 +1,7 @@
 # Lookup Tables (v2 Django ORM)
 
-Last updated: 2026-07-31-10:35:47
+Last updated: 2026-08-05-20:38:42
+
 
 
 This document catalogs every lookup/enum table in the v2 Django architecture.
@@ -165,35 +166,51 @@ Runtime opt-in is via `KNOWN_MODELS` in `project/settings.py`, which mirrors
 
 ### 7.1 Enabled brands (20)
 
-| # | nickname | display name | parent company | HQ | accent color |
-|---:|---|---|---|---|
-| 1 | `minimax` | MiniMax | MiniMax | CN | `#3b82f6` |
+The `#` column is the canonical ordering of `enabled_models` in
+`config.yaml` (mirrored by `KNOWN_MODELS` in `project/settings.py`).
+The brands table itself holds **33 rows** at last review (sibling brands
+seeded by migration 033, plus discovery rows for `gemini`/`gemma`/`gpt`/`grok`
+and a `test_brand` row) — only the 20 in `enabled_models` are loaded
+into the hot path; sibling/discovery rows are visible to admin tooling
+but excluded from `model_validator(_validate_models)` in
+`x_monitor/config.py`.
+
+| # | nickname | display name (live) | parent company | HQ | accent color (live) |
+|---:|---|---|---|---|---|
+| 1 | `minimax` | MiniMax AI | MiniMax | CN | `#3b82f6` |
 | 2 | `qwen` | Qwen | Alibaba Group | CN | `#f97316` |
 | 3 | `deepseek` | DeepSeek | DeepSeek | CN | `#10b981` |
-| 4 | `glm` | GLM / ChatGLM | Zhipu AI | CN | `#a855f7` |
-| 5 | `mimo` | MiMo | Meituan | CN | `#eab308` |
-| 6 | `moonshot_kimi` | Moonshot AI / Kimi | Moonshot AI | CN | `#ec4899` |
+| 4 | `glm` | Zhipu GLM | Zhipu AI | CN | `#a855f7` |
+| 5 | `mimo` | Xiaomi MiMo | Meituan | CN | `#eab308` |
+| 6 | `moonshot_kimi` | Moonshot Kimi | Moonshot AI | CN | `#ec4899` |
 | 7 | `inclusionai` | InclusionAI | InclusionAI Co. | CN | `#06b6d4` |
 | 8 | `mistral` | Mistral | Mistral AI | FR | `#facc15` |
 | 9 | `stepfun` | StepFun | StepFun | CN | `#22c55e` |
-| 10 | `ernie` | ERNIE | Baidu Inc. | CN | `#0ea5e9` |
-| 11 | `hunyuan` | Hunyuan | Tencent | CN | `#ec4899` |
-| 12 | `llama` | Llama | Meta Platforms Inc. | US | `#14b8a6` |
-| 13 | `nemo_megatron` | NeMo / Megatron | NVIDIA | US | `#84cc16` |
-| 14 | `doubao` | Doubao | ByteDance | CN | `#f43f5e` |
-| 15 | `yi` | Yi | 01.AI | CN | `#8b5cf6` |
-| 16 | `sensechat` | SenseChat | SenseTime | CN | `#d946ef` |
-| 17 | `exaone` | EXAONE | LG AI Research | KR | `#0d9488` |
-| 18 | `kuaishou` | Kling / Kuaishou | Kuaishou Technology | CN | `#fb923c` |
-| 19 | `sakana_ai` | Sakana AI | Sakana | JP | `#6366f1` |
-| 20 | `upstage` | Upstage | Upstage Inc. | KR | `#dc2626` |
+| 10 | `ernie` | Baidu ERNIE | Baidu Inc. | CN | `#0ea5e9` |
+| 11 | `hunyuan` | Tencent Hunyuan | Tencent | CN | `#ec4899` |
+| 12 | `llama` | Meta Llama | Meta Platforms Inc. | US | `#1877f2` |
+| 13 | `nemo_megatron` | NVIDIA NeMo | NVIDIA | US | `#76b900` |
+| 14 | `doubao` | ByteDance Doubao | ByteDance | CN | `#000000` |
+| 15 | `yi` | 01.AI Yi | 01.AI | CN | `#7c3aed` |
+| 16 | `sensechat` | SenseTime SenseChat | SenseTime | CN | `#ff6b00` |
+| 17 | `exaone` | LG EXAONE | LG AI Research | KR | `#a50034` |
+| 18 | `kuaishou` | Kuaishou KwaiYii | Kuaishou Technology | CN | `#ff4906` |
+| 19 | `sakana_ai` | Sakana AI | Sakana | JP | `#1e40af` |
+| 20 | `upstage` | Upstage Solar | Upstage Inc. | KR | `#22c55e` |
 
 **Country breakdown:** 14 CN, 2 US, 2 KR, 1 FR, 1 JP.
 
-Company mappings are sourced from `BRAND_TO_COMPANY` in
-`monitor/management/commands/load_seed.py`. Display names are from
-`BRAND_DISPLAY` in the same file. Accent colors are from
-`MODEL_ACCENT_COLORS` in `monitor/views.py`.
+**Source-of-truth note.** Column 3 (display name) and column 6 (accent
+color) reflect the live `brands` table (`brands.display_name` and
+`brands.accent_color` columns). The seeder
+(`monitor/management/commands/load_seed.py::BRAND_DISPLAY`) and the
+dashboard view (`monitor/views.py::MODEL_ACCENT_COLORS` and
+`MODEL_DISPLAY_NAMES`) are *fallbacks*: the dashboard render path
+does `brand_obj.display_name or MODEL_DISPLAY_NAMES.get(...)`, so the
+DB row wins. The 20 rows above mirror the live `brands` table as of
+2026-08-05. Parent-company mappings are from `BRAND_TO_COMPANY` in
+`load_seed.py` and HQ countries are derived from `Company.hq_country`
+via `brands_companies`.
 
 ### 7.2 Sentinel brand
 
@@ -226,7 +243,6 @@ Example Django ORM usage:
 ```python
 # Get the English label for a post type key
 
-Last updated: 2026-07-31-10:35:47
 label = PostTypeLabel.objects.get(post_type_id="buzz_releases", lang="en")
 print(label.label)  # "Buzz & Releases"
 
@@ -258,10 +274,73 @@ Steps 1-3 and 6 should land in a single commit so they do not drift.
 
 ---
 
-Last reviewed: 2026-07-31
+Last reviewed: 2026-08-05
 
-**Substantive corrections this review:** none. Verified against `core/models.py` (Brand has `nickname` TEXT PK, no synthetic `id`), `core/management/commands/seed_i18n_labels.py` (all 6 post types, 4 sentiments, 10 discourse, 6 nationalism, 3 roles match), `config.yaml::enabled_models` (20 brands, identical order to §7.1), `monitor/management/commands/load_seed.py` (`BRAND_DISPLAY`, `BRAND_TO_COMPANY` match §7.1 columns 3 and 4), `monitor/views.py::MODEL_ACCENT_COLORS` (match §7.1 column 6), and `config.yaml::call_b_groups` (3 groups as documented). Country breakdown (14 CN / 2 US / 2 KR / 1 FR / 1 JP) reconciles.
+**Substantive corrections this review:** §7.1 was rewritten to reflect the
+**live `brands` table** (queried 2026-08-05 against
+`dpg-d9koekqjobas73fvjqng-a`). Display names and accent colors in the
+previous review came from `BRAND_DISPLAY` / `MODEL_ACCENT_COLORS`, but
+the dashboard render path does
+`brand_obj.display_name or MODEL_DISPLAY_NAMES.get(...)` — so the DB
+column is the operator-visible value, not the seeder/view constant.
+Differences vs the 2026-07-31 review:
 
-**Flagged — could not verify:** the `_VALID_POST_TYPES` frozenset in `x_monitor/attribution.py` was truncated by the grep header (`_VALID_POST_TYPES = {` on line 1102, body not captured). Doc's 6-value list matches the seed list in `seed_i18n_labels.py` so the frozenset is very likely consistent, but the literal set membership was not directly confirmed. The `data/queries/` directory referenced by the 2026-07-13 call-B plan and the `call_b_groups` config comment does not exist on disk (`No such file or directory`) — the per-brand → call-group coverage matrix asserted in the plan is not enforceable in the current repo state and is not represented in this doc.
+- 14 display-name changes (e.g. `minimax` MiniMax → MiniMax AI, `glm`
+  GLM / ChatGLM → Zhipu GLM, `mimo` MiMo → Xiaomi MiMo, `llama` Llama →
+  Meta Llama, `kuaishou` Kling / Kuaishou → Kuaishou KwaiYii, `upstage`
+  Upstage → Upstage Solar, etc.). All match the live DB row.
+- 7 accent-color changes (`llama`, `nemo_megatron`, `doubao`, `yi`,
+  `sensechat`, `exaone`, `kuaishou`, `upstage`, `sakana_ai`). All match
+  the live DB row.
+- Added a note that the brands table now holds 33 rows (20 enabled +
+  6 sibling rows from migration 033: `chatglm`, `sensenova`, `step`,
+  `kwaiyii`, `wenxin`, `seed`; plus 4 discovery rows: `gemini`,
+  `gemma`, `gpt`, `grok`; plus a `test_brand` row). Only the 20
+  `enabled_models` flow into the hot path.
 
-**Drift noticed but not fixed:** two `Last updated:` lines under H1 (line 3 `2026-07-24-11:36:23` and line 5 `2026-07-24`) — only the second is the canonical date; the first is a leftover timestamp. Per scope, main session owns these lines.
+Verified against `core/models.py` (Brand PK = `nickname` TEXT, no
+synthetic `id`; `_unattributed` is a sentinel row, not a synthetic
+integer), `x_monitor/attribution.py` (the `_VALID_POST_TYPES`,
+`_VALID_SENTIMENTS`, `_VALID_DISCOURSE`, `_VALID_NATIONALISM`,
+`_VALID_UNSANCTIONED_FLAGS` frozensets now confirmed at lines
+1111-1134; all match the taxonomy tables 1:1), `x_monitor/config.py`
+(`KNOWN_MODELS` frozenset order matches §7.1; `VALID_CALL_IDS = ("A",
+"B1", "B2", "B3", "C1", "C2")`; `VALID_REVIEW_REASONS` =
+{`low_engagement`, `off_topic`, `suspicious_actor`, `ambiguous_role`,
+`banned_token`} — note: `banned_token` is in the frozenset but NOT in
+`config.yaml::review_reasons`, so it's a known-unused value),
+`config.yaml::call_b_groups` (3 groups as documented: B1 =
+`minimax, qwen, deepseek, stepfun, hunyuan`; B2 = `doubao, glm,
+sensechat, inclusionai`; B3 = `nemo_megatron, exaone, sakana_ai,
+kuaishou`), and `x_monitor/migrations/027` + `seed_i18n_labels.py`
+(post types 6 / sentiments 4 / discourse 10 / nationalism 6 / roles 3
+all match). Country breakdown (14 CN / 2 US / 2 KR / 1 FR / 1 JP)
+reconciles.
+
+**Flagged — could not verify:** the `data/queries/` directory
+referenced by the 2026-07-13 call-B plan and the `call_b_groups`
+config comment does not exist on disk (no `No such file or directory`
+returned) — the per-brand → call-group coverage matrix asserted in
+the plan is not enforceable in the current repo state. The B/C
+grouping is now sourced from `config.yaml::x_query_specs` (5 specs:
+C1, C2, C3, B1, B2, B3) rather than the retired `data/queries/`
+files; this doc references the `config.yaml` source of truth. The
+last review's `_VALID_POST_TYPES` "could not verify" flag is now
+resolved (frozenset confirmed at `x_monitor/attribution.py:1122`,
+6 elements: `buzz_releases`, `hands_on_usage`,
+`performance_comparisons`, `feedback_questions`,
+`advertising_marketing`, `event_announcement`).
+
+**Drift noticed but not fixed:** two `Last updated:` lines (line 3 and
+line 229) — both were bumped to 2026-08-05 in this pass; the
+duplication itself is left for a future pass since the main session
+owns cleanup of header scaffolding. The KTD7 (`advertising-marketing`
+hyphen) label set also has historical drift:
+`x_monitor/migrations/027` originally seeded
+`'Advertising / Marketing speak'` / `'广告 / 营销话术'`, but
+`core/management/commands/seed_i18n_labels.py` later settled on
+`'Advertising / Marketing'` / `'广告营销'`. The live row matches the
+seed; this doc follows the seed (canonical). Same pattern for
+`advertising_marketing` post-type zh-cn: migration 027 had
+`'广告与营销'`, the seed settled on `'广告营销'`. Live matches seed.
+

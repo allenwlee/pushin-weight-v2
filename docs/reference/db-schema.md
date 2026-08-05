@@ -1,15 +1,15 @@
 # x-monitor DB schema -- v2 Django ORM
 
-Last updated: 2026-07-31-10:35:47
+Last updated: 2026-08-05-20:38:42
 
-Source of truth: [`core/models.py`](../../core/models.py). Migrations: `core/migrations/`.
+Source of truth: [`core/models.py`](../../core/models.py). Migrations: `core/migrations/` (range: 001-039 applied).
 
 
-![x-monitor schema -- v2 Django ORM (core/models.py)](images/xmonitor-schema-post-batch.png)
+![x-monitor schema -- v2 Django ORM, post-migration-039 (core/models.py)](images/xmonitor-schema-post-batch.png)
 
-> **Note:** The schema image is currently still generated from the legacy
-> `schema.dot`. After the Django cutover is complete, regenerate it from the
-> Django model graph instead.
+> **Note:** The schema image is auto-generated from `schema.dot`, which is
+> derived from the Django ORM graph in `core/models.py`. The PNG stamp
+> reflects the latest applied migration at regeneration time.
 
 ## Conventions
 
@@ -573,8 +573,8 @@ Indexes: `idx_unsanctioned_flag_set (flag_set)`
 
 ## Last reviewed: 2026-07-24
 
-**Source-of-truth:** `core/models.py` (Django 5.2 ORM), migration `core/migrations/0001_initial.py`.
-All 28 models, their fields, types, FKs, indexes, and constraints were
+**Source-of-truth:** `core/models.py` (Django 5.2 ORM), migrations `core/migrations/` (range: 001-039 applied as of 2026-08-05).
+All 32 models, their fields, types, FKs, indexes, and constraints were
 cross-referenced against the model source and migration file and found to be
 accurate.
 
@@ -650,3 +650,4 @@ CompositePrimaryKey vs. BigAutoField), on_delete semantics
 natural keys, index definitions, JSONField `db_column` renames
 (`tags_json`, `siblings_json`, `card_data_json`, `config_json`,
 `spaces_json`, `raw_json`, `keywords_json`).
+

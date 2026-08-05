@@ -1,5 +1,5 @@
 /* Auto-generated from Django ORM models in core/models.py. */
-/* Last regenerated: v2 Django ORM — core/models.py, 2026-07-31 */
+/* Last regenerated: post-migration-039 */
 /* Migration baseline: 039 (latest applied to dev). */
 /* Do not edit by hand. Regenerate via scripts/build_schema_image.sh */
 

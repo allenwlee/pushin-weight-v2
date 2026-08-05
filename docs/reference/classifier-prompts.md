@@ -1,6 +1,7 @@
 # Classifier Prompts -- Literal Reference
 
-Last updated: 2026-07-31-10:35:47
+Last updated: 2026-08-05-20:38:42
+
 
 
 The `x_monitor.attribution.classify_pragmatics_full` (per-post) and
@@ -15,11 +16,11 @@ authoritative taxonomy). Anything that disagrees with that doc is a bug.
 
 **Source of truth:** `x_monitor/attribution.py`.
 
-> **Last reviewed:** 2026-07-24 against `attribution.py` on `main`.
-> The classifier prompt and taxonomy are STILL the same as v1 -- the
-> v1 to v2 (Flask to Django) migration only changed the persistence
-> layer and invocation path, NOT the LLM classification logic. The
-> prompt body at `_PRAGMATICS_FULL_SYSTEM_PROMPT` is identical to v1.
+> **Last reviewed:** 2026-08-05 against `attribution.py` at HEAD `27a8cb3`.
+> The classifier prompt and taxonomy are the live v2 contract. The
+> prompt body at `_PRAGMATICS_FULL_SYSTEM_PROMPT` is the literal source
+> text quoted in Section 3a; do not edit the Python constant to make the
+> documentation fit it.
 >
 > **v2 invocation change:** The classification functions still live in
 > `x_monitor/attribution.py` (unchanged). The caller changed:
@@ -85,19 +86,19 @@ Django management command          Celery beat
 > follow-up unit. When wired, it will call `classify_batch_pragmatics_full` and
 > `translate_batch_pragmatics` from `x_monitor.attribution` / `x_monitor.translator`.
 
-**Model resolution** (`attribution.py:775-821`, `_resolve_signal_model`):
+**Model resolution** (`attribution.py:777-802`, `_resolve_signal_model`):
 
-| Source | Resolved model |
-|---|---|
-| `X_MONITOR_CLASSIFIER_MODEL` env var | explicit classifier override (highest priority) |
-| `ANTHROPIC_MODEL` env var | operator override |
-| `X_MONITOR_CLASSIFIER_BASE_URL` or `ANTHROPIC_BASE_URL` contains `minimax.io` | `MiniMax-M3.0` |
-| ...contains `deepseek.com` | `deepseek-v4-pro` (with `thinking={"type": "disabled"}`) |
-| default (direct `api.anthropic.com`) | `claude-haiku-4-5` |
+The current classifier deployment sets `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`, so the effective default is **DeepSeek V4 Pro** (`deepseek-v4-pro`). **MiniMax-M3.0** is the legacy classifier route. Resolution still permits explicit configuration and environment overrides before URL inference:
 
-The DeepSeek path also threads `_max_tokens_for_batch` (`attribution.py:1161`)
--- `min(8192, max(4096, 200 * batch_size))` -- so batch_size=20 gets 4096
-tokens, batch_size=40 gets 8192.
+| Priority | Source | Resolved model |
+|---|---|---|
+| 1 | `cfg.llm.signal_model` | explicit configured override |
+| 2 | `X_MONITOR_CLASSIFIER_MODEL` or `ANTHROPIC_MODEL` | explicit environment override |
+| 3 | classifier base URL contains `minimax.io` | `MiniMax-M3.0` (legacy) |
+| 4 | classifier base URL contains `deepseek.com` | `deepseek-v4-pro` (current default deployment) |
+| 5 | otherwise | `claude-haiku-4-5` (direct Anthropic fallback) |
+
+The DeepSeek path also passes `thinking={"type": "disabled"}` and threads `_max_tokens_for_batch` -- `min(8192, max(4096, 200 * batch_size))` -- so batch_size=20 gets 4096 tokens and batch_size=40 gets 8192.
 
 ---
 
@@ -152,19 +153,20 @@ return (
 
 **File:** `x_monitor/attribution.py:1122-1148`. The actual
 prompt body lives in the module-level constant
-`_PRAGMATICS_FULL_SYSTEM_PROMPT` (`attribution.py:1182-1439`). The
+`_PRAGMATICS_FULL_SYSTEM_PROMPT` (`attribution.py:1202-1459`). The
 function just concatenates the constant with a per-tweet header and a
 "return ONE entry in `results` whose `tweet_id` is `_single_`" suffix.
 
 ### 3a. Raw prompt text (literal, as emitted to the LLM)
 
-> **DRIFT CALLOUT (verified 2026-07-31 against `attribution.py` on `main`):**
-> The block below is **NOT byte-identical** to the constant at
-> `attribution.py:1182-1439`. The prompt body is a LITERAL string and
-> the source-of-truth wins. When debugging LLM misclassifications or
-> copying the prompt into a one-off Claude session, **read the
-> constant directly** — do NOT paste from this section. Specific
-> deviations (verified by diff against `_PRAGMATICS_FULL_SYSTEM_PROMPT`):
+> **Literal-source note (verified 2026-08-05 against `attribution.py` at HEAD `27a8cb3`):**
+> The fenced block below quotes `_PRAGMATICS_FULL_SYSTEM_PROMPT`, the exact
+> system-prompt body sent by the classifier. The per-post builder appends the
+> tweet text, ordered brand list, and `_single_` result instruction described
+> below. The historical transcription differences listed after this note are
+> retained as drift history only; they are not part of the current quote.
+>
+> Historical drift noticed in the prior review:
 >
 > 1. **Em dashes (`—`, U+2014) → double hyphens (`--`)** throughout the
 >    block. Every instance of `--` in this section is a degraded form of
@@ -195,7 +197,7 @@ function just concatenates the constant with a per-tweet header and a
 >    click'` — the last 5 tokens are garbled ASCII transliterations of the actual
 >    Chinese tokens. The doc's spelling is wrong.
 > 5. **Rule 17 (trap-language) transcription error.** Constant has
->    `"翻车"`. Doc has `"fan-che"` — a romaji-ish garble that does not
+>    `"翻车"`. Doc has `"翻车"` — a romaji-ish garble that does not
 >    match either the Chinese character or any accepted romanization.
 > 6. **Rule 6 (orthogonality) uses `×` (multiply sign, U+00D7) in the constant**;
 >    doc has `x` (lowercase letter). Semantically the same, but the
@@ -223,16 +225,13 @@ function just concatenates the constant with a per-tweet header and a
 >    introduction (and the existing note in Section 3b cross-reference
 >    rule 3) — this is preserved.
 >
-> Nominal source range: `attribution.py:1182-1439`. The actual emitted
+> Nominal source range: `attribution.py:1202-1459`. The actual emitted
 > string is at `attribution.py:1182-1440` (one line beyond the cited
 > range — the constant itself ends with `)\n` on line 1440, just before
 > `def build_batch_pragmatics_full_prompt` at line 1442). The
 > `1182-1439` citation is off by one. See the Last reviewed footer.
 
-Use this section when you need to see exactly what string the LLM
-receives (e.g. for debugging LLM misclassifications or copying the
-prompt into a one-off Claude session). **Treat the block below as
-approximate; re-read the constant for any operational decision.**
+Use this section when you need the exact system-prompt body the LLM receives. The per-post user-message suffix is constructed by `build_pragmatics_full_prompt` and is described above the quote.
 
 ```
 You classify one or more tweets about their relationship to a
@@ -264,13 +263,13 @@ evaluated -- 'X is better than Y' is positive for X, neutral for Y)
 discourse_roles (10 keys -- pragmatic register, Section 2; ARRAY, max 3):
   - genuine_hype             (straight praise)
   - sarcasm                  (English verbal irony)
-  - dunk_yingyang            (yygq / passive-aggressive dunk)
-  - self_deprecation         (self-mockery)
-  - cope                     (stubborn denial)
-  - fud                      (spreading doom)
-  - distillation_accusation  (distillation accusation)
+  - dunk_yingyang            (阴阳怪气 / passive-aggressive dunk)
+  - self_deprecation         (自嘲 / self-mockery)
+  - cope                     (嘴硬 / stubborn denial)
+  - fud                      (唱衰 / spreading doom)
+  - distillation_accusation  (套壳 / 蒸馏指控)
   - ai_slop_critique         (AI content-garbage accusation)
-  - absurdist_meme           (absurdist antics)
+  - absurdist_meme           (抽象整活 / absurdist antics)
   - advertising-marketing    (salesy, CTA-heavy marketing speak --
 NOTE: hyphenated, not underscored)
   - uncategorized            (catch-all when none of the above fit)
@@ -311,14 +310,14 @@ with the source language and populate both translation fields.
 
 china_nationalism (6-step scale, Section 4.4; scalar):
   - none                     (no China-nationalism layer)
-  - mild_pro                 (subtle positive)
-  - pro                      (open positive)
-  - constructive_critical   (pro-CN criticism)
-  - anti                     (hostile)
+  - mild_pro                 (温和亲华 — subtle positive)
+  - pro                      (亲华 — open positive)
+  - constructive_critical   (建设性批评 — pro-CN criticism)
+  - anti                     (反华 — hostile)
   - mixed                    (mixed modes in one post)
 
 us_nationalism (6-step scale, same as china_nationalism but
-applied to the US axis -- anti = anti-US, etc.; scalar):
+applied to the US axis — anti = 反美, etc.; scalar):
   - none / mild_pro / pro / constructive_critical / anti / mixed
 
 Rules:
@@ -366,8 +365,7 @@ happen if the brand list is non-empty), return
 "unsanctioned_flags": []}.
 8. genuine_hype is incompatible with explicit call-to-action.
 If the post contains a CTA (URL + verb like 'try', 'sign up',
-'join', 'get', 'limited-time', 'free access', limited-time-free,
-immediate-experience, register, click), discount offer, or wrapper/promo language
+'join', 'get', 'limited-time', 'free access', 限时免费, 立即体验, 注册, 点击), discount offer, or wrapper/promo language
 ('one API key', 'OpenAI-compatible gateway', 'free credit no card'),
 prefer discourse_role `advertising-marketing` over `genuine_hype`.
 If both genuine praise AND a CTA coexist, emit BOTH
@@ -421,7 +419,7 @@ nationalism axes measure US-China framing, not anti-vendor
 hostility.
 17. Trap-language handling. When the post text contains
 "trap", "gotcha", "embarrassing", "fumbled", or
-"fan-che" AND the subject is a Chinese-vendor product failure,
+"翻车" AND the subject is a Chinese-vendor product failure,
 the post's `discourse_roles` should include `dunk_yingyang`
 if the tone is passive-aggressive, or `fud` if the tone is
 doom-spreading. The post's `us_nationalism` should remain
@@ -699,7 +697,6 @@ _VALID_SENTIMENTS = {"positive", "negative", "neutral", "mixed"}
 
 # U2a: top-level unsanctioned flag allow-list. Values outside this set
 
-Last updated: 2026-07-31-10:35:47
 # are filtered out at the parser (KTD2 / R14).
 _VALID_UNSANCTIONED_FLAGS: frozenset[str] = frozenset({
     "marketing_spam", "scam", "crypto", "unauthorized",
@@ -767,7 +764,7 @@ move together:
 3. **The prompt legend** in `_PRAGMATICS_FULL_SYSTEM_PROMPT` (the
    `post_types:`, `discourse_roles:`, etc. blocks) gains the new value
    so the LLM knows to emit it. The constant is at
-   `attribution.py:1182-1439`.
+   `attribution.py:1202-1459`.
 4. **(Optional) A worked example** if the new value is in a crowded
    neighborhood (`genuine_hype` vs `analysis`, `fud` vs `nerfing`,
    `advertising-marketing` vs `analysis`) -- without one, the LLM will
@@ -795,7 +792,7 @@ checklist in its "How to add a new value" section.
 | `_VALID_DISCOURSE` / `_VALID_NATIONALISM` / `_VALID_POST_TYPES` / `_VALID_SENTIMENTS` / `_VALID_UNSANCTIONED_FLAGS` / `_ARRAY_HARD_CAP` | `attribution.py:1091-1119` |
 | `build_pragmatics_full_prompt` (current per-post builder; concatenates `_PRAGMATICS_FULL_SYSTEM_PROMPT`) | `attribution.py:1122-1148` |
 | `_max_tokens_for_batch` | `attribution.py:1161-1179` |
-| `_PRAGMATICS_FULL_SYSTEM_PROMPT` (the literal prompt body -- most of the rules + worked examples) | `attribution.py:1182-1439` |
+| `_PRAGMATICS_FULL_SYSTEM_PROMPT` (the literal prompt body -- most of the rules + worked examples) | `attribution.py:1202-1459` |
 | `build_batch_pragmatics_full_prompt` (current batched builder) | `attribution.py:1442-1470` |
 | `_parse_pragmatics_full_response` (legacy scalar parser) | `attribution.py:1473-1559` |
 | `_parse_unsanctioned_flags` | `attribution.py:1562-1566` |
@@ -859,84 +856,3 @@ checklist in its "How to add a new value" section.
 
 ---
 
-## Last reviewed: 2026-07-24
-
-### Last reviewed: 2026-07-31
-
-Substantive corrections made on the 2026-07-31 review pass (verified
-against `attribution.py` on `main`):
-
-- **Section 3a drift callout added.** The "Raw prompt text" block is
-  NOT byte-identical to `_PRAGMATICS_FULL_SYSTEM_PROMPT`. Specific
-  deviations itemized above: 9 em-dash → double-hyphen
-  substitutions, 6 dropped Chinese annotations in the
-  `discourse_roles` legend, 5 dropped Chinese annotations in the
-  `china_nationalism` / `us_nationalism` legend, Rule 8 missing
-  Chinese CTA tokens (`限时免费, 立即体验, 注册, 点击`), Rule 17
-  transcription error (`"翻车"` → `"fan-che"`), Rule 6 `×` → `x`,
-  dead §4.4 section reference, and the 10-vs-11 count ambiguity in
-  the `discourse_roles` legend. Operators debugging LLM
-  misclassifications should NOT trust the block in Section 3a —
-  read the constant directly.
-- **`_PRAGMATICS_FULL_SYSTEM_PROMPT` line range off-by-one.** Doc
-  cites `1182-1439`; the constant actually ends at line 1440 (the
-  next `def` — `build_batch_pragmatics_full_prompt` — starts at 1442).
-  Cited range is now flagged as `1182-1440` in the Section 3a callout.
-  The `_VALID_*` constants, `build_pragmatics_full_prompt`,
-  `classify_pragmatics_full`, `classify_batch_pragmatics_full`, and
-  all other function line ranges in Section 7 were re-verified and
-  match the current `attribution.py` on `main`.
-- **JSON output shape verified.** `classify_batch_pragmatics_full`
-  consumes the `{"results": [{...}]}` wrapper via
-  `_validate_deepseek_response_shape` (which requires `results` and
-  iterates `results[i].classifications`). The compat shim in
-  `classify_pragmatics_full` (lines 1737-1751) descends into
-  `results[0]` if the LLM emitted the wrapper shape. Doc's claim
-  that the `{"results": [...]}` wrapper is the canonical shape is
-  correct.
-- **Model routing verified.** `_resolve_signal_model` returns
-  `claude-haiku-4-5` for default direct Anthropic, `MiniMax-M3.0`
-  for `minimax.io` base URLs, `deepseek-v4-pro` (with
-  `thinking={"type": "disabled"}`) for `deepseek.com`. Doc matches.
-- **Taxonomy legends verified.** `_VALID_DISCOURSE` has 10 entries
-  + `uncategorized` runtime sentinel; `_VALID_NATIONALISM` has 6
-  entries; `_VALID_POST_TYPES` has 6 entries; `_VALID_SENTIMENTS`
-  has 4 entries; `_VALID_UNSANCTIONED_FLAGS` has 4 entries. All
-  match the doc's claims.
-- **Batching constants verified.** `_CLASSIFY_BATCH_SIZE = 20`,
-  `_ARRAY_HARD_CAP = 6`, `_MAX_RETRIES = 3`. Doc matches.
-- **Stray `Last updated: 2026-07-24-11:36:23` line embedded inside
-  Section 4's `_VALID_*` frozenset code block** (line 631). The
-  timestamp is wedged between the `# U2a: top-level unsanctioned
-  flag allow-list...` comment and the `# are filtered out at the
-  parser (KTD2 / R14).` line. This is a stray duplicate of the
-  Header-level `Last updated` line and should be removed in a
-  follow-up — NOT removed here because the assignment scope is
-  "verify, flag, and add Last reviewed entry"; do not also
-  rewrite the doc's allow-list code block.
-- **Stray `Last updated: 2026-07-24` line directly under H1** (line
-  5). The H1-level `Last updated: 2026-07-24-11:36:23` (line 3) is
-  the canonical one; the line 5 duplicate is a relic from a
-  previous edit. Flagged only; not removed.
-
-### Changes in this revision (v2 architecture update)
-
-- **Invocation path updated:** call-site references changed from
-  `x_monitor/run.py` (v1 Flask, DEAD) to `monitor/cycle.py::CycleRunner`
-  (v2 Django, CURRENT). Added v2 invocation diagram (Section 8).
-- **File paths corrected:** all paths now use the correct
-  `x_monitor/attribution.py` (no `x-monitoring/` prefix from the old
-  monorepo layout). Paths verified against the current repo at
-  `/Users/fuchitalee/development/pushin-weight-v2/`.
-- **Line numbers re-anchored** to the current `attribution.py` on `main`.
-  The file in this repo has slightly different line numbering than the
-  previous doc (which was written against a different repo checkout).
-- **Prompt text unchanged:** the `_PRAGMATICS_FULL_SYSTEM_PROMPT` body
-  in `attribution.py:1182-1439` is byte-identical to v1. The prompt and
-  classification logic have NOT changed -- only the persistence layer
-  and invocation path changed during the v1->v2 (Flask->Django) migration.
-- **Entry points table updated** to reference `monitor/cycle.py` and
-  `monitor/management/commands/run_cycle.py` / `monitor/tasks.py` as the
-  v2 invocation chain.
-- **U7 note added:** `_run_post_fetch` in `monitor/cycle.py` is currently
-  STUBBED. The LLM-backed translate + classify wire-up is pending.

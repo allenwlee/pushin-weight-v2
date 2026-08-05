@@ -1,6 +1,7 @@
 # x-monitor
 
-Last updated: 2026-07-31-10:35:47
+Last updated: 2026-08-05-20:38:42
+
 
 A daily dashboard for keeping tabs on what people are saying about 20 AI
 models on X (formerly Twitter). Serves the multi-brand home page and
@@ -9,10 +10,12 @@ per-brand drill-downs at **pushinweight.ai**, behind Google OAuth.
 ## What this is
 
 x-monitor scans X every 15 minutes for posts about 20 AI models
-(MiniMax, Qwen, DeepSeek, GLM, Xiaomi MiMo, Moonshot Kimi, Mistral,
-ERNIE, Llama, Doubao, and others), attributes each post to the brands
-it mentions, persists everything in PostgreSQL, and displays the results
-on a browser dashboard with chart, feed, and filter controls.
+(minimax, qwen, deepseek, glm, mimo, moonshot_kimi, inclusionai,
+mistral, stepfun, ernie, hunyuan, llama, nemo_megatron, doubao, yi,
+sensechat, exaone, kuaishou, sakana_ai, upstage — the canonical
+`enabled_models` list in `config.yaml`), attributes each post to the
+brands it mentions, persists everything in PostgreSQL, and displays the
+results on a browser dashboard with chart, feed, and filter controls.
 
 It was built for MiniMax's developer relations team so they always know
 what the public is saying about these models: who's excited, who's
@@ -37,7 +40,7 @@ The harvest cycle runs every 15 minutes via the Render cron job
 `pushinweight-harvest` (`render.yaml`, schedule `*/15 * * * *`):
 
 ```
-startCommand: python manage.py run_cycle --limit-per-call 50
+startCommand: python manage.py run_cycle
 ```
 
 Each cycle executes 5 steps:
@@ -52,12 +55,12 @@ Each cycle executes 5 steps:
    | Call | Kind | Description |
    |---|---|---|
    | A | List-based fan-in | Curated X list (`x_monitor_list_id`) |
-   | B1 | BARE wide-net | Top-presence / global brands (6 brands, no co) |
-   | B2 | HANDLE-ONLY | Chinese-language brands (4 brands, `@handle` OR-group) |
-   | B3 | HANDLE-ONLY | Specialized / smaller brands (4 brands, `@handle` OR-group) |
-   | C1 | Co-occurrence constrained | MiMo, Kimi, Yi, Llama (5-term minimal co) |
-   | C2 | Co-occurrence constrained | ERNIE, Upstage (5-term minimal co + baidu/文心) |
-   | C3 | Co-occurrence constrained | Doubao, SenseChat, Kuaishou (5-term minimal co) |
+   | B1 | BARE wide-net | Top-presence / global brands (5 brands: minimax, qwen, deepseek, stepfun, hunyuan — no co) |
+   | B2 | HANDLE-ONLY | Chinese-language brand handles (4 brands: doubao, glm, sensechat, inclusionai — `@handle` OR-group) |
+   | B3 | HANDLE-ONLY | Other-brand official handles (4 brands: nemo_megatron, exaone, sakana_ai, kuaishou — `@handle` OR-group) |
+   | C1 | Co-occurrence constrained | llama, mimo, mistral, moonshot_kimi, yi (5-term minimal co + f1-anchors not_include) |
+   | C2 | Co-occurrence constrained | ernie, upstage (5-term minimal co + baidu, 文心) |
+   | C3 | Co-occurrence constrained | doubao, kuaishou, sensechat (5-term minimal co) |
 
 2. **Fetch tweets.** Each `PlannedCall.query_string` is fired against
    TwitterAPI.io's `advanced_search` endpoint via `TwitterApiClient`
@@ -303,7 +306,7 @@ All commands support `--help` for full usage.
 
 ## Where to look next
 
-The 6 reference docs in `docs/reference/` are the authoritative
+The reference docs in `docs/reference/` are the authoritative
 cross-reference for runtime behavior:
 
 | Doc | What it covers |
@@ -314,6 +317,7 @@ cross-reference for runtime behavior:
 | `lookup-tables.md` | Enum/lookup tables (`*_keys`, `*_labels`), taxonomy values, brand/company registry |
 | `classifier-prompts.md` | Literal LLM system prompt text, JSON output shape, taxonomy legends |
 | `home-pages-ui-guide.md` | Dashboard UI element catalog (selectors, data-attrs, JS owners, CSS sources) |
+| `schema.dot` + `images/xmonitor-schema-post-batch.png` | Graphviz source + generated schema diagram (referenced by `db-schema.md`) |
 
 Additional operational docs:
 - `docs/deploy/render.md` -- Full Render deployment runbook
@@ -338,6 +342,28 @@ commands no longer exist:
 - `deploy/*.plist` files -- replaced by `render.yaml`
 - Flask on `localhost:5000` -- replaced by Django + gunicorn on pushinweight.ai
 
+Other recent retirements (config + data shape):
+
+- `data/queries/<brand>.yaml` -- per-brand keyword YAMLs retired 2026-07-11
+  (plan `docs/plans/2026-07-11-001-feat-queries-and-filters-retire-and-export-poststep-plan.md`).
+  Replaced by the `brand_keywords` DB table seeded by
+  `scripts/backfill_brand_keywords.py` and refreshed by
+  `load_seed` / `seed_i18n_labels`.
+- `data/accounts/<brand>.yaml` -- per-brand official/staff-handle YAMLs
+  retired 2026-07-11 (plan
+  `docs/plans/2026-07-11-002-feat-call-b-revival-via-x-query-specs-plan.md`).
+  Replaced by the `brands_accounts` DB table (joined to `accounts` and
+  `roles`, filtered to `role_id IN (2, 3)` -- i.e. official and staff).
+- `x-monitoring/` wrapper directory flattened on 2026-07-22 (plan
+  `docs/plans/2026-07-22-002-feat-production-django-postgres-render-plan.md`).
+  The wrapper that nested `x_monitor/` has been collapsed; this
+  `x-monitoring/README.md` is the surviving shell directory used
+  only for this README. The `x_monitor/` Python package now lives at
+  the repo root.
+- `x_monitor/run.py::RunPipeline` (v1 pipeline) -- replaced by
+  `monitor/cycle.py::CycleRunner` (v2). RunPipeline is preserved for
+  migration testing but is not invoked by `python manage.py run_cycle`.
+
 Last reviewed: 2026-07-24
 
 Last reviewed: 2026-07-31
@@ -358,3 +384,27 @@ Last reviewed: 2026-07-31
   pipeline does NOT call this" callout.
 - Where-to-look-next row for `twitterapi-live-queries-by-model.md`
   updated to reflect the 7-call hybrid funnel.
+
+Last reviewed: 2026-08-05
+- Brand enumeration in the "What this is" section: was 10 named brands
+  + "and others" (misleading), now lists the full 20 in
+  `enabled_models` order with a pointer to `config.yaml`.
+- Pipeline lifecycle call table: B1 brand count corrected from 6 to 5
+  per live `config.yaml::x_query_specs` (B1 wide_net_brands =
+  minimax, qwen, deepseek, stepfun, hunyuan). C1 brand set expanded
+  from 4 to 5 brands to include `mistral` per
+  `docs/plans/2026-07-31-002-fix-demote-mistral-from-b1-to-c1-plan.md`
+  and live `x_query_specs` C1. B2 brand list corrected to
+  doubao/glm/sensechat/inclusionai; B3 to
+  nemo_megatron/exaone/sakana_ai/kuaishou. C2/C3 brand lists
+  cross-checked against `twitterapi-live-queries-by-model.md` §"Brand
+  → call_ids coverage".
+- Render cron `startCommand` corrected: render.yaml is `python
+  manage.py run_cycle` (no `--limit-per-call 50` flag). The flag
+  is operator-supplied for ad-hoc runs only; see CLI examples below.
+- Header `Last updated` and footer `Last reviewed` stamps refreshed to
+  2026-08-05.
+- "Retired / removed" section expanded with the 2026-07-11 yaml
+  retirements, the 2026-07-22 `x-monitoring/` wrapper flatten, and
+  the `RunPipeline` -> `CycleRunner` v1-to-v2 migration.
+

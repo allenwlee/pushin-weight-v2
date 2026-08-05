@@ -1,8 +1,9 @@
 # TwitterAPI.io call inventory (v2 Django architecture)
 
-Last updated: 2026-07-31-10:35:47
+Last updated: 2026-08-05-20:38:42
 
-Last reviewed: 2026-07-24
+
+Last reviewed: 2026-08-05
 
 **Stack:** Django + gunicorn + WhiteNoise on Render (v2). The legacy v1
 Flask + macOS launchd system is retired.
@@ -15,8 +16,8 @@ tweets vs $3/1k on Apify).
 **Base URL:** `https://api.twitterapi.io`
 **HTTP method:** All calls are `GET` with `params=...` query string.
 **Auth header:** `X-API-Key: <key>`
-**Timeout:** 60 s per request; up to 3 attempts (1 initial + 2 retries)
-on 429/5xx/network errors.
+**Timeout:** 60 s per request; up to 3 attempts (1 initial + 2 retries,
+`max_retries=2`) on 429/5xx/network errors.
 
 ---
 
@@ -123,10 +124,16 @@ video app, "kimi" matches an F1 driver and a Turkish interrogative).
 **Method:** `TwitterApiClient.run_search(query, max_results, since, ...)`
 → `_walk_search(query, max_results, max_pages=5, max_per_page=20)`.
 
-**Per-page cap:** 20 tweets (the TwitterAPI.io platform cap).
-**Pagination:** `has_next_page` + `next_cursor`; up to 5 pages (100 tweets
-max) per call. The `max_pages=5` defensive cap guards against a runaway
-cursor draining the credit budget.
+**Per-page cap:** 20 tweets (the TwitterAPI.io platform cap; the live
+`config.yaml` `search.max_per_page` overrides to 20 — same value, no
+drift).
+**Pagination:** `has_next_page` + `next_cursor`. The apify default is
+`max_pages=5`, but the live `config.yaml` sets `search.max_pages: 100`
+(operator-tunable via the config block). The `_effective_max_pages` that
+drives the budget guard reads this config value unless
+`--max-pages-per-call` is passed on the CLI. The `max_pages=5` default
+in `apify._walk_search` is the defensive ceiling used when
+`config.search.max_pages` is unset.
 
 **Query params sent:**
 - `query` (str) — X advanced-search string.
@@ -135,12 +142,19 @@ cursor draining the credit budget.
 - `cursor` (str, optional) — `next_cursor` from previous page.
 
 **Time-cursor operators** (injected into the query string, NOT as URL params
-— TwitterAPI.io silently drops unknown URL params on this endpoint):
-- `since:<YYYY-MM-DD>` — date-only floor, injected only when `since_time` is
-  not set (the two operators conflict).
+— TwitterAPI.io silently drops unknown URL params on this endpoint;
+verified by direct API test 2026-07-14 — see commits `a46020f` and
+`dcf0a8c`, and `docs/debug/2026-07-14-160222-call-state-not-persisting.md`):
+- `since:<YYYY-MM-DD>` — date-only floor, injected only when `since_time`
+  is not set AND `since:` is absent from the query. The two operators
+  conflict — when both are present, TwitterAPI.io's parser silently
+  drops results, so `run_search` suppresses the `since:` injection when
+  `since_time` is active.
 - `since_time:<epoch>` + `until_time:<now>` — sub-day-precision window,
-  injected together when a prior cycle cursor exists. `until_time` is
-  exclusive (everything up to the moment of the cycle).
+  injected together when a prior cycle cursor exists.
+  `until_time` is exclusive (everything up to the moment of the cycle);
+  TwitterAPI.io's verified-working pattern is `since_time:<floor>
+  until_time:<now>`.
 
 **Credit cost:** **300 credits per page** (flat rate regardless of
 `n_results`). This is the figure used by the pre-flight budget guard
@@ -153,11 +167,16 @@ loud-fail prevents credit burn.
 
 **Response shape:** `{ "tweets": [...], "has_next_page": bool, "next_cursor": "..."|null, "status": "success" }`.
 
-**Per-cycle credit cost (1 page each, 6 calls):** 6 x 300 = **1,800
-credits/cycle minimum**. At 4 cycles/hour x 24 hours = **172,800
-credits/day** (~$25.92/day at $0.15/1k). Actual costs are lower — many
-cycles return 0 new tweets, and the wide-net B/C calls may produce empty
-results for low-volume brands.
+**Per-cycle credit cost (1 page each, 6 calls at `max_pages=1`):** 6 x 300 =
+**1,800 credits/cycle minimum**. At the live config defaults
+(`search.max_pages=100`, `search.max_results=2000`), worst-case per-call
+ceiling is **100 pages × 300 credits = 30,000 credits/call**; worst-case
+per-cycle is **6 × 30,000 = 180,000 credits/cycle** — but the pre-flight
+budget guard caps a single run at **2,000,000 credits** regardless of
+`max_pages` (see "Credit tracking and budget guard" below). At 4
+cycles/hour × 24 hours = 96 cycles/day nominal; actual daily spend is
+gated by the budget guard, and many cycles return 0 new tweets because
+wide-net B/C calls may produce empty results for low-volume brands.
 
 ### 2. `GET /twitter/article` — long-form X article body
 
@@ -244,9 +263,20 @@ silently draining the budget.
   under the $20 cap.
 - The Render cron passes `--limit-per-call 50` explicitly.
 
+At the live config defaults (`config.yaml::search.max_pages=100`,
+`config.yaml::search.max_results=2000`):
+- Would-spend: 6 × 100 × 300 = **180,000 credits/run** (~$27/run) — still
+  under the 2,000,000 hard cap, so the guard does NOT trip on a fresh
+  run. The guard only fires when the operator passes a
+  `--max-pages-per-call` value that, combined with `_N_CALLS × 300`,
+  would exceed 2,000,000 — i.e., `--max-pages-per-call >= 1112` would
+  trip it.
+
 **Operator overrides** via management command flags:
-- `--limit-per-call N` — cap tweets per call (default 50).
-- `--max-pages-per-call N` — cap pagination depth (default 5).
+- `--limit-per-call N` — cap tweets per call (default 50; falls back to
+  `config.search.max_results` when unset — currently 2000 on Render).
+- `--max-pages-per-call N` — cap pagination depth (default 5; falls back
+  to `config.search.max_pages` when unset — currently 100 on Render).
 - `--skip-fetch` — plan only, no API calls (for dry-run inspection).
 
 ---
@@ -266,8 +296,13 @@ objects.
 ### Phase 2: Fetch
 
 For each `PlannedCall`, `_fetch_tweets()` calls
-`TwitterApiClient.run_search(call.query_string, max_results=50,
-max_pages=5, max_per_page=20)`. Returns normalized tweet dicts.
+`TwitterApiClient.run_search(call.query_string, max_results=<config>,
+max_pages=<config>, max_per_page=20)`. The `max_results` and `max_pages`
+values come from `config.search.{max_results, max_pages}` (2000 and 100
+on Render); the CLI flags `--limit-per-call` and `--max-pages-per-call`
+override these when set. The `max_per_page=20` value is the
+TwitterAPI.io platform cap and is hardcoded into `apify._walk_search`'s
+default. Returns normalized tweet dicts.
 
 Per-call errors (rate limit, server error) are caught — one bad query does
 not kill the cycle. Auth errors (HTTP 401) are fatal.
@@ -438,3 +473,83 @@ comments, not budget-guard inputs, so they do not affect runtime
 behavior.
 
 Last reviewed: 2026-07-24
+
+---
+
+## Review pass 2026-08-05 — drift corrections
+
+Re-verified against HEAD `27a8cb3`. Drift found and corrected:
+
+- **`max_pages` default vs. live config drift** — the doc claims
+  `max_pages=5` (the apify.py default) without distinguishing that the
+  live `config.yaml` sets `search.max_pages: 100`. The
+  `_effective_max_pages` value the budget guard reads is
+  `self.config.search.max_pages` (100 on Render) unless the CLI flag
+  `--max-pages-per-call` overrides it. The doc's "Pagination" paragraph
+  and "At default settings" example were updated to call this out, and
+  the Phase 2 Fetch example now shows the config-driven values rather
+  than the code-default.
+- **`max_results` default vs. live config drift** — the doc claimed
+  `max_results=50` (apify.py default) without noting that the live
+  `config.yaml` sets `search.max_results: 2000`. Phase 2 Fetch now
+  shows `<config>` instead of the hardcoded 50.
+- **`--limit-per-call` default clarification** — the doc listed this as
+  "default 50" without noting it falls back to `config.search.
+  max_results` (2000 on Render). Now documented.
+- **sinceTime/untilTime operator injection** — the doc claimed the
+  injection logic without noting (a) TwitterAPI.io silently DROPS
+  results when both `since:` and `since_time:` are present (so the
+  code suppresses `since:` when `since_time` is active), and (b) the
+  inline-only contract was verified by direct API test on 2026-07-14
+  (commits `a46020f`, `dcf0a8c`). Updated the Time-cursor operators
+  bullet to spell out both behaviors.
+- **Per-cycle credit cost** — the doc's "1,800 credits/cycle minimum"
+  example was based on the implicit `max_pages=1` baseline; with the
+  live `max_pages=100` config the worst-case per-call ceiling is 100 ×
+  300 = 30,000 credits and worst-case per-cycle is 6 × 30,000 =
+  180,000 credits. Updated to show both baselines, plus the budget
+  guard interaction.
+- **Budget guard trip threshold** — the doc did not state the
+  `--max-pages-per-call` value that would actually trip the guard.
+  Now documented: `>= 1112` pages/call would exceed 2,000,000 credits
+  (6 × 1112 × 300 = 2,001,600).
+
+**No drift found** on the items re-verified below:
+
+- `_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300`, `_BUDGET_HARD_CAP_CREDITS =
+  2_000_000`, `_N_CALLS = 6`, the would-spend formula, the `>` strict
+  threshold — all match `x_monitor/run.py` (lines 959-981) and
+  `tests/test_budget_guard.py`.
+- `TWITTERAPI_BASE = "https://api.twitterapi.io"`, `timeout_s: int = 60`,
+  `max_retries: int = 2`, the `_headers()` shape (`{"X-API-Key":
+  api_key, "Accept": "application/json"}`), the retry/backoff math
+  (`2 ** (attempt + 2)` for 429, `2 ** attempt` for 5xx/network) — all
+  match `x_monitor/apify.py` (lines 28, 80, 96-100, 117-145).
+- `_walk_search` defaults `max_pages=5, max_per_page=20` — still
+  correct as the code default.
+- All six endpoint paths (`SEARCH_PATH`, `FOLLOWERS_PATH`,
+  `USER_INFO_PATH`, `ARTICLE_PATH`, `QUOTES_PATH`, `TWEETS_BY_IDS_PATH`)
+  and all public methods (`run_search`, `get_quote_tweets`,
+  `get_tweets_by_ids`, `run_followers`, `user_info`, `get_article`) —
+  still present.
+- `MIN_FAVES_FOR_LIST_CALL: int = 0` — matches Call A rendering
+  `min_faves:0`.
+- `X_LENGTH_CAP = 512` and `assert_under_length_cap` — match.
+- `render.yaml` `schedule: "*/15 * * * *"` and `startCommand: python
+  manage.py run_cycle --limit-per-call 50` — match.
+
+**Items that remain unverifiable from source** (unchanged from prior
+review, still not load-bearing):
+
+- `/twitter/user/info` credit cost ("~1 credit") — no source-of-truth
+  in repo.
+- `/twitter/user/followers` credit cost ("1-3 credits per follower
+  depending on page size") — the page-size thresholds (20-99=3cr,
+  100-199=2cr, 200=1cr) are in `apify.py`'s `FOLLOWERS_MAX_PER_PAGE`
+  comment; the per-call totals would need the upstream pricing page.
+- Per-cycle credit cost when the live config is used — depends on
+  actual `max_pages` × `max_results` × TwitterAPI.io's page-fill
+  behavior; the doc shows the worst-case ceiling only.
+
+Last reviewed: 2026-08-05
+
