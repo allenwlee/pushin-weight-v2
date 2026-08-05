@@ -1,0 +1,333 @@
+brands:
+  minimax:
+    paths:
+    - bare
+    - handle
+    tokens:
+    - Hailuo
+    - MiniMax
+    - 海螺
+    notes: B1 bare-keyword fan-out (live wire path).
+    handles:
+    - MiniMaxAgent
+    - MiniMax_AI
+    - hailuo_ai
+  qwen:
+    paths:
+    - bare
+    - handle
+    tokens:
+    - Qwen
+    - Qwen3
+    - 通义千问
+    notes: B1 bare-keyword fan-out (live wire path).
+    handles:
+    - Ali_TongyiLab
+    - Alibaba_Qwen
+  deepseek:
+    paths:
+    - bare
+    - handle
+    tokens:
+    - DeepSeek
+    - 深度求索
+    notes: B1 bare-keyword fan-out (live wire path).
+    handles:
+    - deepseek_ai
+  glm:
+    paths:
+    - handle
+    notes: Not present in any current spec; explicit opt-out pending review.
+    handles:
+    - Zai_org
+  mimo:
+    paths:
+    - co
+    - handle
+    tokens:
+    - MiMo
+    - Xiaomi MiMo
+    - 小米 MiMo
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C1.'
+    not_include:
+    - f1
+    - antonelli
+    - mercedes
+    - hamil
+    - alonso
+    - verstappen
+    - formula 1
+    handles:
+    - XiaomiMiMo
+    - XiaomiMiMoDevs
+    handle_tier: other
+  moonshot_kimi:
+    paths:
+    - co
+    - handle
+    tokens:
+    - Kimi
+    - Moonshot AI
+    - 月之暗面
+    - 暗面
+    - MoonshotAI
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C1.'
+    not_include:
+    - f1
+    - antonelli
+    - mercedes
+    - hamil
+    - alonso
+    - verstappen
+    - formula 1
+    handles:
+    - Kimi_Moonshot
+    handle_tier: other
+  inclusionai:
+    paths:
+    - handle
+    notes: Not present in any current spec; explicit opt-out pending review.
+    handles:
+    - AntLingAGI
+    - TheInclusionAI
+    - ZhihuFrontier
+    - robbyant_brain
+  mistral:
+    paths:
+    - co
+    - handle
+    tokens:
+    - Mistral
+    - Mixtral
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C1.'
+    not_include:
+    - f1
+    - antonelli
+    - mercedes
+    - hamil
+    - alonso
+    - verstappen
+    - formula 1
+    handles:
+    - MistralAI
+  stepfun:
+    paths:
+    - bare
+    - handle
+    tokens:
+    - StepFun
+    - 阶跃星辰
+    notes: B1 bare-keyword fan-out (live wire path).
+    handles:
+    - StepFun_ai
+    - stepfunai
+  ernie:
+    paths:
+    - co
+    - handle
+    tokens:
+    - ERNIE
+    - 文心一言
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    - baidu
+    - 文心
+    notes: 'Owning pack: C2.'
+    handles:
+    - ErnieforDevs
+    - PaddlePaddle
+    handle_tier: other
+  hunyuan:
+    paths:
+    - bare
+    - handle
+    tokens:
+    - Hunyuan
+    - 混元
+    - 腾讯混元
+    notes: B1 bare-keyword fan-out (live wire path).
+    handles:
+    - TencentHunyuan
+  llama:
+    paths:
+    - co
+    - handle
+    tokens:
+    - Llama
+    - Llama 3
+    - Llama 4
+    - Meta Llama
+    - Code Llama
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C1.'
+    not_include:
+    - f1
+    - antonelli
+    - mercedes
+    - hamil
+    - alonso
+    - verstappen
+    - formula 1
+    handles:
+    - AIatMeta
+    handle_tier: other
+    versioned_tokens:
+    - Llama 4
+    - Llama 3
+  nemo_megatron:
+    paths:
+    - handle
+    notes: Not present in any current spec; explicit opt-out pending review.
+    handles:
+    - NVIDIAAI
+    - NVIDIAAIDev
+  doubao:
+    paths:
+    - co
+    - handle
+    tokens:
+    - Doubao
+    - ByteDance
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C3.'
+    handles:
+    - BytePlusGlobal
+    - bytedanceoss
+    - doubaoai
+    handle_tier: other
+  yi:
+    paths:
+    - co
+    - handle
+    tokens:
+    - Yi
+    - 01.AI
+    - 零一万物
+    - Yi LLM
+    - Yi-VL
+    - Yi-Coder
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C1.'
+    not_include:
+    - f1
+    - antonelli
+    - mercedes
+    - hamil
+    - alonso
+    - verstappen
+    - formula 1
+    handles:
+    - 01AI_Yi
+    handle_tier: other
+  sensechat:
+    paths:
+    - co
+    - handle
+    tokens:
+    - SenseChat
+    - SenseTime
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C3.'
+    handles:
+    - Kling_ai
+    - SenseTime_AI
+    handle_tier: other
+  exaone:
+    paths:
+    - handle
+    notes: Not present in any current spec; explicit opt-out pending review.
+    handles:
+    - LG_AI_Research
+  kuaishou:
+    paths:
+    - co
+    tokens:
+    - Kuaishou
+    - KwaiYii
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C3.'
+  sakana_ai:
+    paths:
+    - handle
+    notes: Not present in any current spec; explicit opt-out pending review.
+    handles:
+    - SakanaAILabs
+  upstage:
+    paths:
+    - co
+    - handle
+    tokens:
+    - Upstage
+    - Solar Pro
+    - Solar LLM
+    - 업스테이지
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    - baidu
+    - 文心
+    notes: 'Owning pack: C2.'
+    handles:
+    - upstageai
+    handle_tier: other
+co_packs:
+- - llama
+  - mimo
+  - mistral
+  - moonshot_kimi
+  - yi
+- - ernie
+  - upstage
+- - doubao
+  - kuaishou
+  - sensechat

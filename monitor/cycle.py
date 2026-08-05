@@ -453,11 +453,25 @@ def _resolve_x_monitor_list_id(cfg: Config) -> int | None:
     except (TypeError, ValueError):
         return None
 def _resolve_x_query_specs(cfg: Config) -> list[XQuerySpec]:
-    """Return x_query_specs from the loaded Config (already XQuerySpec instances).
+    """Resolve per-cycle XQuerySpec list.
 
-    The Config schema validates x_query_specs at load time, so the
-    caller can trust the shape.
+    Plan 2026-08-05-001 (3/5): prefer the brand-centric harvest policy
+    (config/harvest_policy.yaml) when present. Fall back to legacy
+    `cfg.x_query_specs` only if the policy file is absent (pre-U5 mode;
+    the migration cutover removes this fallback).
+
+    Returns:
+        list[XQuerySpec] ready for plan_calls(). Already validated by
+        the policy loader.
     """
+    # 3/5: try policy first
+    policy_path = Path("config") / "harvest_policy.yaml"
+    if policy_path.exists():
+        from x_monitor.harvest_policy import load_policy
+        from x_monitor.specs_from_policy import specs_from_policy
+        policy = load_policy(policy_path)
+        return list(specs_from_policy(policy))
+    # Pre-U5 fallback: legacy x_query_specs
     return list(cfg.x_query_specs)
 def _upsert_account(raw: dict[str, Any]) -> Account | None:
     """Create or update an Account row from a normalized tweet dict.
@@ -787,8 +801,20 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         )
         return []
 
-    primary_keywords = _load_primary_keywords()
     x_query_specs = _resolve_x_query_specs(cfg) or []
+
+    # 3/5: prefer policy-derived primary_keywords over the DB-backed
+    # keyword table for search-token sourcing (R8). DB remains for
+    # attribution.
+    primary_keywords: dict[str, list[str]] | None = None
+    policy_path = Path("config") / "harvest_policy.yaml"
+    if policy_path.exists():
+        from x_monitor.harvest_policy import load_policy
+        from x_monitor.specs_from_policy import primary_keywords_from_policy
+        policy = load_policy(policy_path)
+        primary_keywords = primary_keywords_from_policy(policy)
+    else:
+        primary_keywords = _load_primary_keywords()
 
     brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
     if brand_filter_raw and isinstance(brand_filter_raw, str):

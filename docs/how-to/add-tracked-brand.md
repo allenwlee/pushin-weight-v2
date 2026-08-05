@@ -61,7 +61,7 @@ foollm:
   not_include: []   # brand-local bans for co path (e.g. Kimi F1 terms)
 ```
 
-**Multi-path is allowed.** Examples:
+**Multi-path is allowed.** Handle-only or handle+keyword brands also declare `handle_tier: top-presence` (default; joins B2) or `handle_tier: other` (joins B3) to keep each handle spec under the 512-char X advanced-search cap. Examples:
 
 | Intent | `paths` |
 |---|---|
@@ -84,9 +84,13 @@ foollm:
 ### 4. Preview
 
 ```bash
-# Exact entrypoint follows U4 ship (examples):
+# Shipped CLI (U4): offline preview + coverage invariant.
 python manage.py harvest_preview
-# or: python -m x_monitor.harvest_preview
+# CI mode: exit 1 if any enabled brand lacks a search path.
+python manage.py harvest_preview --fail-on-invariant-violation
+
+# Library entrypoint (no Django):
+python -c "from x_monitor.harvest_preview import build_preview, render_preview; from pathlib import Path; r = build_preview(config_path=Path('config.yaml')); render_preview(r, open('/tmp/preview.md', 'w'))"
 ```
 
 Confirm:
@@ -209,4 +213,6 @@ Until then, use this checklist and `harvest_preview` as the source of truth for 
 | `x_monitor/harvest_policy.py` | load + `specs_from_policy` |
 | `monitor/cycle.py` | `plan_calls_for_cycle` |
 | `docs/plans/2026-08-05-001-refactor-harvest-policy-3of5-plan.md` | Implementation plan |
-| `docs/reference/twitterapi-live-queries-by-model.md` | Reference map (may lag; prefer preview) |
+| `docs/reference/twitterapi-live-queries-by-model.md` | Auto-generated via `scripts/build_reference_doc.py` (M11: current state only) |
+| `scripts/build_harvest_policy.py` | Rebuild policy YAML from live config (offline; HANDLE_TO_BRAND table for B2/B3) |
+| `scripts/build_reference_doc.py` | Regenerate the live-queries reference doc from current policy |
