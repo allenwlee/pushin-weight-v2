@@ -70,11 +70,26 @@ def _max_tokens_for_batch_size(n: int) -> int:
     truncated by an undersized output budget and runaway batches
     cannot cost a fortune.
 
-    The coefficient (200 tokens/tweet) is the conservative end of the
-    DS V4 probe data from the classifier plan (99 tokens/tweet at
-    batch_size=20, 108 tokens/tweet at batch_size=40). 200 gives 2x
-    headroom for richer translation fields (cn_equivalent +
-    annotation + literal_zh in addition to text_en).
+    The coefficient (1000 tokens/tweet) reflects the translator's
+    proven worst-case output density, not the classifier's. On
+    2026-08-05 a prod-typical 20-post rich-content batch consumed
+    19,554 output tokens at DeepSeek V4 Pro (~977 tokens/post);
+    with classification per-tweet overhead (text_en + literal_zh +
+    cn_equivalent + annotation + JSON framing) the budget must
+    scale as O(n) with a high per-post coefficient. 1000 tokens/post
+    gives ~5% headroom over the observed worst case.
+
+    The hard cap is 65536 — DeepSeek's documented max output. The
+    earlier 8192 cap was based on an outdated "DS V4 beta max"
+    assumption; live API calls accept and require up to 65k for
+    rich-content batches (see plan 2026-08-05-003 U1).
+
+    Notes on prior values:
+      * 2026-08-04 02953d6: 16384 (lifted after M3 truncation first
+        observed). M3 proxy-side cap cannot be raised via max_tokens.
+      * 2026-08-04 4d3db60: 8192 (incorrectly assumed to match DS V4
+        beta max). Caused ~25% of prod batches to truncate mid-JSON.
+      * 2026-08-05 3/1 (this): 65536 cap, 1000 tokens/post coefficient.
 
     Args:
         n: number of tweets in the batch.
@@ -83,17 +98,11 @@ def _max_tokens_for_batch_size(n: int) -> int:
         max_tokens value to pass to messages_create.
     """
     if n < 1:
-        return 8192
-    # 200 * n is the conservative per-tweet coefficient from the
-    # classifier-swap probe (plan 2026-07-15-002 KTD4: 99 tokens/tweet
-    # at batch_size=20, 108 at batch_size=40). Floor raised from
-    # 4096 -> 8192 on 2026-08-04 (plan 2026-08-04-001 followup) after
-    # prod observation: the translator's output is richer than the
-    # classifier's (text_en + literal_zh + cn_equivalent + annotation
-    # vs single per-brand tuple), so 20-tweet batches with rich
-    # content can need 5-10K tokens. 8192 matches DS V4's beta
-    # documented max output. Cap of 8192 prevents runaway cost.
-    return min(8192, max(8192, 200 * n))
+        return 16384
+    # 1000 tokens/post from the 2026-08-05 prod probe (19,554 tokens on
+    # 20 posts). Floor of 16384 defends against tiny-batch edge cases
+    # (1-2 tweet batches still need room for framing + cn_equivalent).
+    return min(65536, max(16384, 1000 * n))
 
 
 # n_tweets is now passed directly to _call_with_retry
