@@ -5,7 +5,7 @@ execution: code
 title: "feat: swap translator to DeepSeek V4 (lift M3 proxy-side response cap)"
 created: 2026-08-04
 amended: 2026-08-05
-amendment_note: "U8 fixes a load_config merge bug where yaml `translator_base_url: null` silently overrode the env-var X_MONITOR_TRANSLATOR_BASE_URL. Translator was hitting MiniMax with a DS V4 model name -> silent socket timeout -> text_zh_cn NULL for 6+ hours. U9 adds a regression pin. Captured in this amendment per user directive. Skill: avoiding-recurring-mistakes M12 (default-model assumption) — the swap shipped the model default without verifying the runtime base URL actually changed."
+amendment_note: "U8 fixes a load_config merge bug where yaml `translator_base_url: null` silently overrode the env-var X_MONITOR_TRANSLATOR_BASE_URL. Translator was hitting MiniMax with a DS V4 model name -> silent socket timeout -> text_zh_cn NULL for 6+ hours. U9 adds a regression pin. Captured in this amendment per user directive. Skill: avoiding-recurring-mistakes M12 (default-model assumption) — the swap shipped the model default without verifying the runtime base URL actually changed. U10/U11 (this commit, 2026-08-05 09:08): the second live-state audit found that the per-batch max_tokens helper was a constant 8192 for every batch size (cap was mis-set to 8192 thinking it was DS V4's beta max; live API accepts 65536). 6 of 9 prod cycles at 06:00–09:00 UTC hit mid-JSON truncation (len=12134-28283). Fix: cap raised to 65536, coefficient raised to 1000 tokens/post, floor 16384. 3 new regression pins added. Skill: avoiding-recurring-mistakes M?? (provider-cap assumption) — replicating the classifier-swap probe (200 tokens/post) without re-measuring for the translator's richer output density."
 target_repo: pushin-weight-v2
 origin:
   - docs/plans/2026-07-15-002-feat-swap-classifier-to-deepseek-v4-plan.md
@@ -242,6 +242,129 @@ This is the canonical "drift in the env-vs-yaml precedence rule" failure mode th
 3. Test assertions include the BEFORE state in the failure message (mirroring the `BEFORE` style from `test_harvest_surface_regression_net.py`).
 
 **Verification.** `pytest tests/test_translator_env_override.py -v` green.
+
+## Live-state audit (2026-08-05 09:08) — 8192 token cap silently truncated prod batches
+
+After the U8/U9 fixes landed, 6 of the 9 cron cycles in the 3-hour window
+between 06:00–09:00 UTC still showed `translator_batch_failed` with
+`non-JSON (len=12134..28283)`. The 400-error class was gone, but
+truncation persisted at a different layer.
+
+### Root cause — constant 8192 cap on a variable-density output
+
+`x_monitor/translator.py:_max_tokens_for_batch_size` after U1:
+
+```python
+return min(8192, max(8192, 200 * n))  # collapses to 8192 for every n
+```
+
+The formula was wrong in two ways:
+1. **`max(8192, 200 * n)` clamps the coefficient to 0** for any batch
+   size ≤ 40. The 200 tokens/post coefficient was inherited from the
+   classifier plan (`2026-07-15-002 KTD4`) where it was empirically
+   sufficient (99 tokens/post at batch_size=20, 108 tokens/post at
+   batch_size=40). The translator's output is richer
+   (`text_en` + `literal_zh` + `cn_equivalent` + `annotation` + JSON
+   framing) and density is ~977 tokens/post in prod.
+2. **`min(8192, 8192)` makes the cap a constant** — the helper returned
+   8192 for every batch size, including 1-post and 100-post batches.
+
+The 8192 cap was based on an outdated "DS V4 beta max" assumption.
+Live API probe (2026-08-05) confirmed `max_tokens=65536` is accepted
+(HTTP 200) — the API ceiling is roughly 65k, not 8k.
+
+### Live evidence
+
+| Cycle | posts | with_zh_cn | pct |
+|---|---|---|---|
+| 06:00–06:59 | 297 | 207 | 69.7% |
+| 07:00–07:59 | 299 | 267 | 89.3% |
+| 08:00–08:59 | 253 | 198 | 78.3% |
+| 09:00–09:59 | (in progress) | — | — |
+
+At 09:08 UTC CR-cron deployed `c09a291` with the new helper:
+`min(65536, max(16384, 1000 * n))`. A 20-post batch now requests
+20,000 tokens.
+
+### End-to-end verification (local repro)
+
+Same 20 posts that failed in the 09:00 cycle, replayed with the new
+helper against the live DS V4 API:
+
+```
+Loaded 20 prod-typical failing posts
+Helper value for n=20: 20000
+HTTP 200, stop_reason=end_turn, output_tokens=15318, chars=41925
+Parsed 20 result rows
+  keys: ['annotation', 'cn_equivalent', 'lang_detected', 'literal_zh',
+         'noop_en', 'noop_zh', 'text_en', 'tweet_id']
+  text_en: True
+  literal_zh: True
+  cn_equivalent: True
+  cn_equivalent sample: 微软画饼，MiniMax 直接端上桌
+```
+
+`stop_reason=end_turn` (no truncation), 20/20 rows have all four
+translation fields populated. The same 20 posts with the old
+`max_tokens=8192` truncated at `stop_reason=max_tokens` with 8,192
+output tokens and a mid-JSON cut.
+
+### U10. Replace 8192 cap with 65536 cap and 1000 tokens/post coefficient
+
+**Goal.** A 20-post rich-content batch has enough output budget to
+finish naturally, not truncate mid-JSON.
+
+**Files.**
+- Modify: `x_monitor/translator.py` `_max_tokens_for_batch_size`
+  (lines 65-96).
+- Modify: `tests/test_translator_max_tokens.py` for new contract
+  (3 new pins, all updated constants).
+
+**Approach.**
+1. Replace `min(8192, max(8192, 200 * n))` with
+   `min(65536, max(16384, 1000 * n))`.
+2. Floor of 16384 defends against tiny-batch edge cases (1-2 tweet
+   batches still need room for framing + cn_equivalent).
+3. Cap of 65536 matches the API ceiling (DS V4 documented max).
+4. Coefficient 1000 is from the prod observation: 20,000 tokens
+   produced 15,318 output tokens at batch_size=20 ≈ 766 tokens/post;
+   1000 tokens/post gives ~30% headroom.
+
+**Why not also raise the SDK timeout or restructure batching?**
+- 120s SDK timeout is sufficient: 20-post batch finishes in 30s.
+- Restructuring to smaller batches would *increase* overall token
+  spend (more calls, more framing overhead) without addressing the
+  underlying truncation.
+
+**Verification.**
+- `pytest tests/test_translator_max_tokens.py -v` green (7 tests).
+- End-to-end repro with the same 20 failing posts parses cleanly.
+- Production cron logs show no `translator_batch_failed` for
+  rich-content batches in the 09:15+ window.
+
+### U11. Regression net for the new contract
+
+**Goal.** Any future helper regression that returns `n=20` < 20,000
+or caps below 65,536 fails the test net loudly.
+
+**Files.**
+- Modify: `tests/test_translator_max_tokens.py`.
+
+**New pins.**
+- `test_max_tokens_helper_covers_prod_observed_rich_batch` —
+  `helper(20) >= 20_000` (would fail on the 8192-cap pre-fix).
+- `test_max_tokens_helper_cap_matches_deepseek_max` —
+  `helper(100) <= 65536 AND helper(100) >= 20_000`.
+- `test_max_tokens_helper_rejects_pre_8192_truncation` —
+  `helper(1) < helper(20) < helper(60)` (rejects the constant-8192
+  bug shape).
+
+**Pattern.** Each new pin includes the BEFORE state in the failure
+message, mirroring `test_translator_env_override.py` and the broader
+regression-net convention. The WHY for each pin is the empirical
+observation, not just the value.
+
+**Verification.** `pytest tests/test_translator_max_tokens.py -v` green.
 
 ## Out of Scope
 
