@@ -392,7 +392,18 @@ def load_config(path: Path) -> Config:
         }.items() if v is not None
     }
     if env_llm_overrides:
-        merged_llm = {**env_llm_overrides, **raw_llm}  # yaml wins over env
+        # Plan 2026-08-04-001: yaml wins over env, BUT a yaml `null` is
+        # not "set" — it's an explicit instruction to use the default
+        # path (which falls back to ANTHROPIC_BASE_URL). Filter nulls
+        # from yaml so the env override takes effect. Without this
+        # filter, a yaml like `translator_base_url: null` clobbers an
+        # env-set value and silently re-routes the translator to the
+        # M3 proxy with the DS V4 model name (timeout, lang_detected
+        # NULL on every post).
+        raw_llm_filtered = {
+            k: v for k, v in raw_llm.items() if v is not None
+        }
+        merged_llm = {**env_llm_overrides, **raw_llm_filtered}  # yaml wins over env (non-null only)
         raw = {**raw, "llm": merged_llm}
     try:
         return Config.model_validate(raw)

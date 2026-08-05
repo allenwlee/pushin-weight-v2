@@ -4,6 +4,8 @@ artifact_readiness: implementation-ready
 execution: code
 title: "feat: swap translator to DeepSeek V4 (lift M3 proxy-side response cap)"
 created: 2026-08-04
+amended: 2026-08-05
+amendment_note: "U8 fixes a load_config merge bug where yaml `translator_base_url: null` silently overrode the env-var X_MONITOR_TRANSLATOR_BASE_URL. Translator was hitting MiniMax with a DS V4 model name -> silent socket timeout -> text_zh_cn NULL for 6+ hours. U9 adds a regression pin. Captured in this amendment per user directive. Skill: avoiding-recurring-mistakes M12 (default-model assumption) — the swap shipped the model default without verifying the runtime base URL actually changed."
 target_repo: pushin-weight-v2
 origin:
   - docs/plans/2026-07-15-002-feat-swap-classifier-to-deepseek-v4-plan.md
@@ -186,6 +188,60 @@ That plan's "Out of scope" section explicitly states: *"Translator path (`x_moni
 - New yaml-wins test: `Config({"llm": {"translator_model": "from-yaml"}})` keeps the yaml value.
 
 **Verification.** `pytest tests/test_llm_config.py -v` green.
+
+## Live-state audit (2026-08-05) — yaml null silently overrode env
+
+Investigation of the `text_zh_cn` regression surfaced this drift:
+
+- Translator traceback hits `api.minimax.io/anthropic` (the M3 proxy), not `api.deepseek.com/anthropic`.
+- Service-level env on `pushinweight-harvest` correctly has `X_MONITOR_TRANSLATOR_BASE_URL=https://api.deepseek.com/anthropic`.
+- `load_config` merge code at `x_monitor/config.py:384-394`:
+  ```python
+  merged_llm = {**env_llm_overrides, **raw_llm}  # yaml wins over env
+  ```
+- `config.yaml` has `llm.translator_base_url: null` (the original M3 fallback instruction).
+- YAML's `null` is a real Python `None`, which OVERWRITES the env value in the dict spread. `cfg.llm.translator_base_url` ends up `None`, so `build_translator_client_from_env` falls through to `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic`.
+
+Net effect: the swap plan shipped model default `deepseek-v4-pro` + env-var resolution code, BUT the env override never reached `cfg.llm.translator_base_url` because yaml `null` was treated as "set". MiniMax got the DS V4 model name, timed out the socket read silently, every cycle produced `text_zh_cn IS NULL`.
+
+This is the canonical "drift in the env-vs-yaml precedence rule" failure mode the swap plan's U2 step 2 should have caught but didn't: "yaml wins over env" is true for non-null values; `null` is an explicit instruction to use the default fallback, not "yaml wins".
+
+### U8. Filter yaml null from the env-merge so operator env vars take effect
+
+**Goal.** `cfg.llm.translator_base_url` honors `X_MONITOR_TRANSLATOR_BASE_URL` when yaml has `translator_base_url: null`. Operators pin the fallback intentionally; the env override is the actual production path.
+
+**Files.**
+- Modify: `x_monitor/config.py` lines 384-397 (`load_config` env-merge block).
+
+**Approach.**
+1. After building `raw_llm = raw.get("llm", {})`, also build `raw_llm_filtered = {k: v for k, v in raw_llm.items() if v is not None}`.
+2. Merge env into the filtered dict: `merged_llm = {**env_llm_overrides, **raw_llm_filtered}`.
+3. Comment update: replace the `# yaml wins over env` with `# yaml wins over env (non-null only)` and a paragraph explaining the bug.
+
+**Test scenarios.**
+- yaml `translator_base_url: null` + env `X_MONITOR_TRANSLATOR_BASE_URL=https://api.deepseek.com/anthropic` -> `cfg.llm.translator_base_url == "https://api.deepseek.com/anthropic"`.
+- yaml `translator_base_url: https://api.deepseek.com/anthropic` + env `X_MONITOR_TRANSLATOR_BASE_URL=https://api.minimax.io/anthropic` -> yaml wins (non-null).
+- yaml `translator_base_url: null` + no env -> `cfg.llm.translator_base_url is None` (fallback path).
+- yaml has no `llm:` block at all + env -> env takes effect.
+
+**Verification (M5).**
+- `pytest tests/test_translator_env_override.py -v` green (4 cases).
+- After deploy: next cron cycle logs `messages_create` to `api.deepseek.com/anthropic` (not `api.minimax.io/anthropic`).
+- 1-hour cohort `lang_detected` coverage ≥ 95%.
+
+### U9. Regression net for env-vs-yaml precedence in `load_config`
+
+**Goal.** Future drift in the merge logic fails loudly instead of silently overwriting the translator's base URL.
+
+**Files.**
+- New: `tests/test_translator_env_override.py` (pinned 2026-08-05 with the U8 fix).
+
+**Approach.**
+1. The test file covers the 4 scenarios from U8's Test scenarios section.
+2. File header documents the prod incident in a `Why this file exists` section.
+3. Test assertions include the BEFORE state in the failure message (mirroring the `BEFORE` style from `test_harvest_surface_regression_net.py`).
+
+**Verification.** `pytest tests/test_translator_env_override.py -v` green.
 
 ## Out of Scope
 
