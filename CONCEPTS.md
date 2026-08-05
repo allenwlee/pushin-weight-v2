@@ -55,6 +55,32 @@ The pattern matters because operators triaging failures want to grep a stable pr
 - "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the v1.7 short-code call ids (`A`, `B1`..`C2`). The v1.7 call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
 
+## Translator env-vs-yaml precedence
+
+The rule that resolves which source wins when both `config.yaml` and process env vars supply a value for the same translator setting.
+
+### Rule
+
+**`yaml wins over env for non-null values. A yaml literal `null` is NOT "set" — it is an explicit instruction to use the default fallback path, and the env override takes effect.**
+
+The rule encodes the distinction between *an active pin* (yaml sets a value the operator wants enforced) and *an inert placeholder* (yaml keeps the key but signals "use the default"). Reading `config.yaml:99-105` and seeing `translator_base_url: null` with the comment `# uses ANTHROPIC_BASE_URL env when null` is the canonical reference; the `x_monitor/config.py:384-397` env-merge block is the canonical implementation.
+
+### Resolution chain (translator client)
+
+`build_translator_client_from_env` resolves the translator's base URL as:
+
+1. `cfg.llm.translator_base_url` (yaml-loaded, env-merged) if non-null
+2. otherwise `ANTHROPIC_BASE_URL` env var (the process-wide default)
+3. otherwise direct Anthropic
+
+The model name resolves as: `cfg.llm.translator_model` (yaml-loaded, env-merged) → `X_MONITOR_TRANSLATOR_MODEL` env var → default `deepseek-v4-pro`. The model name and base URL are independent — a yaml `null` for one does NOT block the env override for the other.
+
+### Translator base URL
+
+The endpoint the translator pipeline calls for the message-translate stage. Set via `X_MONITOR_TRANSLATOR_BASE_URL` env var or `config.yaml llm.translator_base_url`. The classifier has a separate env override (`X_MONITOR_CLASSIFIER_BASE_URL`) and field (`cfg.llm.classifier_base_url`) because the translator and classifier may need different endpoints.
+
+*Avoid:* `translator_endpoint` — the canonical name is base URL, matching the Anthropic SDK's `base_url` parameter.
+
 ## x-monitor deployment
 
 Vocabulary scoped to the launchd-based deployment story — the two LaunchAgents, the pause sentinel, and the in-process lockfile that prevents overlapping cycles.
