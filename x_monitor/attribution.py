@@ -843,14 +843,25 @@ def _resolve_thinking_default(base_url: str = "", *, role: str = "classifier") -
 
 
 def _resolve_translator_model(cfg: "Config | None" = None) -> str:
-    """Return the model name for the translator, based on ANTHROPIC_BASE_URL.
+    """Return the model name for the translator.
 
-    Resolution order (plan 2026-08-01-002 U2):
+    Resolution order:
       1. `cfg.llm.translator_model` when cfg is provided (single source of truth).
-      2. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
-      3. "MiniMax-M3.0" if ANTHROPIC_BASE_URL routes through api.minimax.io
-      4. "deepseek-v4-pro" if ANTHROPIC_BASE_URL routes through api.deepseek.com
-      5. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
+      2. ANTHROPIC_MODEL env var (operator shell / wrapper override).
+      3. Otherwise infer from the base URL the call will actually route
+         to. The translator has a per-role override env var
+         (X_MONITOR_TRANSLATOR_BASE_URL) that takes priority over the
+         process-wide ANTHROPIC_BASE_URL — without this, the inference
+         path would see the env-group's stale ANTHROPIC_BASE_URL
+         (api.minimax.io) and return the legacy "MiniMax-M3.0" even
+         though the actual translator client is calling DeepSeek.
+         Mirrors the role-aware resolution in
+         _resolve_thinking_default(role="translator").
+
+    Inference rules:
+      - "deepseek.com" in base_url -> "deepseek-v4-pro"
+      - "minimax.io"   in base_url -> "MiniMax-M3.0"
+      - otherwise                  -> "claude-haiku-4-5"
     """
     import os
     if cfg is not None and getattr(cfg.llm, "translator_model", None):
@@ -858,11 +869,20 @@ def _resolve_translator_model(cfg: "Config | None" = None) -> str:
     explicit = os.environ.get("ANTHROPIC_MODEL")
     if explicit:
         return explicit
-    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
-    if "minimax.io" in base_url:
-        return "MiniMax-M3.0"
+    # Read the role-specific override FIRST, then fall back to the
+    # process-wide ANTHROPIC_BASE_URL. This is the parallel fix to
+    # commit f77cb90 which fixed the same precedence rule on the
+    # base-URL path; the model-name inference was reading the
+    # env-group's stale ANTHROPIC_BASE_URL and selecting MiniMax-M3.0
+    # even when X_MONITOR_TRANSLATOR_BASE_URL routed to DeepSeek.
+    base_url = os.environ.get(
+        "X_MONITOR_TRANSLATOR_BASE_URL",
+        os.environ.get("ANTHROPIC_BASE_URL", ""),
+    )
     if "deepseek.com" in base_url:
         return "deepseek-v4-pro"
+    if "minimax.io" in base_url:
+        return "MiniMax-M3.0"
     return "claude-haiku-4-5"
 
 
