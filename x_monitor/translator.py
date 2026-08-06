@@ -209,25 +209,32 @@ def _parse_response(
 
 
 def _call_with_retry(
-    client: ClaudeClient,
+    client: "ClaudeClient",
     prompt: str,
     *,
     n_tweets: int = 0,
+    cfg: "Config | None" = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential-backoff retry on transient errors.
 
     Raises the LAST exception if all retries fail. The translator
     catches and marks the batch as failed.
+
+    Pass `cfg` to thread cfg.llm.translator_model + cfg.llm.translator_base_url
+    into the model/thinking resolution. Without cfg, resolution falls back
+    to env inference (ANTHROPIC_BASE_URL / X_MONITOR_TRANSLATOR_BASE_URL
+    substring) which can pick the wrong model when the env-group still
+    points at api.minimax.io/anthropic while the cron override routes
+    through api.deepseek.com/anthropic. This is the missing call-site
+    wire-up for the swap-translator plan 2026-08-04-001; commit a46d2de
+    fixed `_resolve_translator_model` but missed this call site.
     """
     last_exc: Exception | None = None
-    # Resolve the model name + thinking kwarg from the operator's proxy
-    # config (ANTHROPIC_BASE_URL / ANTHROPIC_MODEL). The translator
-    # routes through the process-wide default, not the classifier
-    # override (X_MONITOR_CLASSIFIER_BASE_URL). Imported lazily to
-    # keep `translator` importable in test envs without attribution deps.
     from .attribution import _resolve_translator_model as _resolve_model
     from .attribution import _resolve_thinking_default
-    model = _resolve_model()
+    # cfg-threaded resolution: cfg.llm.translator_model is canonical
+    # when provided; env inference is the fallback.
+    model = _resolve_model(cfg)
     # Plan 2026-08-04-001: thinking kwarg follows the base URL the
     # call is actually routing to, not the operator's other env config.
     # The helper reads X_MONITOR_TRANSLATOR_BASE_URL first (per-role
@@ -286,6 +293,7 @@ def translate_batch(
     *,
     brand_names: list[str] | None = None,
     dry_run: bool = False,
+    cfg: "Config | None" = None,
 ) -> list[dict[str, Any]]:
     """Translate a batch of tweets into the target locales.
 
@@ -322,7 +330,7 @@ def translate_batch(
             batch, target_locales, brand_names=brand_names
         )
         try:
-            response = _call_with_retry(client, prompt, n_tweets=len(batch))
+            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
         except Exception:
             # All retries exhausted. Mark this batch's tweets as
             # failed and continue with the next batch (failures are
@@ -663,8 +671,10 @@ def translate_batch_pragmatics(
     few_shot_examples: list[dict[str, Any]] | None = None,
     dry_run: bool = False,
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
+    cfg: "Config | None" = None,
 ) -> list[dict[str, Any]]:
     """U3: translate a batch of tweets with the §5.1 four-pronged contract.
+    Pass cfg to thread through to model resolution (per swap-translator plan).
 
     on_batch_error (U7): optional callback invoked per-batch when the
     LLM call raised (after retries exhausted) OR the response failed
@@ -688,7 +698,7 @@ def translate_batch_pragmatics(
             few_shot_examples=few_shot_examples,
         )
         try:
-            response = _call_with_retry(client, prompt, n_tweets=len(batch))
+            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
         except Exception as exc:
             logger.warning(
                 "translator_batch_failed",
@@ -905,6 +915,7 @@ def translate_registry_rows(
     brand_names: list[str] | None = None,
     batch_size: int = _TRANSLATION_BATCH_SIZE,
     dry_run: bool = False,
+    cfg: "Config | None" = None,
 ) -> list[dict[str, Any]]:
     """Translate a batch of registry rows into the target locales.
 
@@ -940,7 +951,7 @@ def translate_registry_rows(
             brand_names=brand_names,
         )
         try:
-            response = _call_with_retry(client, prompt, n_tweets=len(batch))
+            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
         except Exception:
             for r in batch:
                 out.append(_empty_registry_row(r, failed=True))

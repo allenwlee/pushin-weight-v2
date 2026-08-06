@@ -1348,6 +1348,7 @@ class CycleRunner:
                         "translator_batch_failed",
                         self._error_counts["translator_batch_failed"] + 1,
                     ),
+                    cfg=self.cfg,
                 )
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)

@@ -99,28 +99,31 @@ def _build_tweets(n: int, text_len_chars: int) -> list:
     return out
 
 
-def _build_client():
+def _build_client_and_cfg():
     """Mirror cycle.py: load config, pass cfg through the canonical factory.
 
-    build_translator_client_from_env reads `cfg.llm.translator_base_url`
-    first, falling back to ANTHROPIC_BASE_URL. The factory internally
-    resolves the right API key based on the base URL substring (MiniMax
-    proxy vs DeepSeek vs direct Anthropic). Callers do not touch
-    credentials directly -- they reuse the production translation
-    client and inherit the same key switch the cron uses.
+    Returns (client, cfg) so callers can thread cfg into the model
+    resolver. build_translator_client_from_env reads
+    `cfg.llm.translator_base_url` first, falling back to
+    ANTHROPIC_BASE_URL; the factory resolves the API key by base-URL
+    substring (MiniMax proxy vs DeepSeek vs direct Anthropic). Callers
+    do not touch credentials directly -- they reuse the production
+    translation client and inherit the same key switch the cron uses.
 
-    Returns None when no credential is available; callers should treat
-    None as a stop signal (not an error).
+    Returns (None, cfg) when no credential is available; callers should
+    treat None as a stop signal (not an error).
     """
     from x_monitor.config import load_config
     from x_monitor.reattribute import build_translator_client_from_env
 
     cfg = load_config(Path("config.yaml"))
-    return build_translator_client_from_env(cfg=cfg)
+    client = build_translator_client_from_env(cfg=cfg)
+    return client, cfg
 
 
 def _fire_one_translation(
     client,
+    cfg,
     tweets: list,
     max_tokens: int,
     thinking,
@@ -133,7 +136,7 @@ def _fire_one_translation(
     prompt = build_pragmatics_translation_prompt(
         tweets, target_locales=["en", "zh_cn"], brand_names=DEFAULT_BRAND_IDS[:5],
     )
-    model = _resolve_translator_model()
+    model = _resolve_translator_model(cfg)
     t0 = time.monotonic()
     row = {
         "n_tweets": len(tweets),
@@ -183,36 +186,36 @@ def _fire_one_translation(
 # --- sweeps -----------------------------------------------------------------
 
 
-def sweep_max_tokens(client, base_n: int = 20, base_text_len: int = 1_000,
+def sweep_max_tokens(client, cfg, base_n: int = 20, base_text_len: int = 1_000,
                      base_thinking={"type": "disabled"}) -> list:
     """A1: max_tokens varies at fixed batch_size."""
     tweets = _build_tweets(base_n, base_text_len)
-    return [_fire_one_translation(client, tweets, max_tokens=mt, thinking=base_thinking)
+    return [_fire_one_translation(client, cfg, tweets, max_tokens=mt, thinking=base_thinking)
             for mt in MAX_TOKENS_VALUES]
 
 
-def sweep_batch_size(client, base_text_len: int = 1_000,
+def sweep_batch_size(client, cfg, base_text_len: int = 1_000,
                      base_max_tokens: int = 65_536,
                      base_thinking={"type": "disabled"}) -> list:
     """A2: batch_size varies at fixed max_tokens."""
-    return [_fire_one_translation(client, _build_tweets(n, base_text_len),
+    return [_fire_one_translation(client, cfg, _build_tweets(n, base_text_len),
                                   max_tokens=base_max_tokens, thinking=base_thinking)
             for n in BATCH_SIZE_VALUES]
 
 
-def sweep_input_tokens(client, base_n: int = 20,
+def sweep_input_tokens(client, cfg, base_n: int = 20,
                        base_max_tokens: int = 65_536,
                        base_thinking={"type": "disabled"}) -> list:
     """A3: per-tweet text length varies at fixed batch_size."""
-    return [_fire_one_translation(client, _build_tweets(base_n, tl),
+    return [_fire_one_translation(client, cfg, _build_tweets(base_n, tl),
                                   max_tokens=base_max_tokens, thinking=base_thinking)
             for tl in INPUT_TOKEN_VALUES]
 
 
-def sweep_thinking(client, base_n: int = 20, base_text_len: int = 1_000,
+def sweep_thinking(client, cfg, base_n: int = 20, base_text_len: int = 1_000,
                    base_max_tokens: int = 65_536) -> list:
     """A4: thinking kwarg varies."""
-    return [_fire_one_translation(client, _build_tweets(base_n, base_text_len),
+    return [_fire_one_translation(client, cfg, _build_tweets(base_n, base_text_len),
                                   max_tokens=base_max_tokens, thinking=th)
             for th in THINKING_VALUES]
 
@@ -305,7 +308,7 @@ def main(argv=None) -> int:
                 _dry_run_row(th, 65_536, args.batch_size, 1_000) for th in THINKING_VALUES
             ]
     else:
-        client = _build_client()
+        client, cfg = _build_client_and_cfg()
         if client is None:
             print("build_translator_client_from_env returned None; check env + config.yaml.")
             return 2
@@ -313,16 +316,16 @@ def main(argv=None) -> int:
         sweep_results = {}
         if "max_tokens" in axes:
             print("running A1 max_tokens sweep...")
-            sweep_results["max_tokens"] = sweep_max_tokens(client, base_n=args.batch_size)
+            sweep_results["max_tokens"] = sweep_max_tokens(client, cfg, base_n=args.batch_size)
         if "batch_size" in axes:
             print("running A2 batch_size sweep...")
-            sweep_results["batch_size"] = sweep_batch_size(client)
+            sweep_results["batch_size"] = sweep_batch_size(client, cfg)
         if "input_tokens" in axes:
             print("running A3 input_tokens sweep...")
-            sweep_results["input_tokens"] = sweep_input_tokens(client, base_n=args.batch_size)
+            sweep_results["input_tokens"] = sweep_input_tokens(client, cfg, base_n=args.batch_size)
         if "thinking" in axes:
             print("running A4 thinking sweep...")
-            sweep_results["thinking"] = sweep_thinking(client, base_n=args.batch_size)
+            sweep_results["thinking"] = sweep_thinking(client, cfg, base_n=args.batch_size)
 
     cols = [
         ("n_tweets", "n_tweets"),
