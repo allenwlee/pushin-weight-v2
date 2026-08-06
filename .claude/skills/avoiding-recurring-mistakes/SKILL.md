@@ -329,6 +329,74 @@ The full procedure is in `docs/operations/pause-and-resume-harvest-cron.md`. **I
 
 ---
 
+---
+
+## M18 — Function-only regression net is a regression waiting to happen
+
+**Pattern that bit us.** A fix lands on 2026-08-05 in commit `a46d2de`. The companion regression net (`tests/test_translator_model_resolution.py`, 5 tests) mocks env and calls `_resolve_translator_model()` directly. **All 5 tests passed. The function was correct.** But the production call chain (`_call_with_retry` → `_resolve_model()` with no cfg) had never been updated, so the resolver received `cfg=None` and fell straight through to the env-inference branch — the same broken path that pre-existed a46d2de. The 11,108-byte truncation in the 2026-08-06 08:47:02 UTC cron run was the first symptom. **26 hours between the "fixed" commit and the first prod failure.**
+
+**Rule.** For any behavior-changing plan that touches a function used by a production caller, the regression net MUST include at least one **end-to-end call-chain test** that exercises a real (or fake-with-captured-kwargs) production caller and asserts the captured downstream behavior matches spec. Function-level tests pin the function; **they do not pin production correctness**.
+
+**Heuristic that catches the trap:** "if my regression net only calls `fn(...)` and asserts the return value, it tests the function in isolation. It does NOT test the call chain."
+
+**When to suspect the trap** — open question before signing off on a fix commit:
+
+| Symptom in commit | Trap risk |
+|---|---|
+| Function signature gains `cfg=None` kwarg | High — call sites may still pass nothing |
+| Function signature gains a new arg with default | Medium — existing callers' default may be wrong |
+| Function body changes resolution order / precedence rule | High — existing test setup may not match new defaults |
+| Function body adds a new feature/flag | Medium — flag may not be threaded to callers |
+| Pure-refactor (no behavior change) | Low — call chain is identical to before |
+
+**Concrete template — the end-to-end call-chain pin.** The shape that would have caught the 2026-08-06 bug:
+
+```python
+def test_translate_batch_uses_canonical_model_not_env_inference(monkeypatch):
+    """Regression pin: model=deepseek-v4-pro must reach DeepSeek even when
+    the env-group's ANTHROPIC_BASE_URL still points at api.minimax.io."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    cfg = make_cfg(translator_model="deepseek-v4-pro")
+    fake_client = FakeClaudeClient(capture_kwargs=True)
+    translate_batch_pragmatics(
+        [{"tweet_id": "1", "text": "x", "brand_id": "y"}],
+        ["en", "zh_cn"],
+        fake_client,
+        cfg=cfg,
+    )
+    assert fake_client.last_call_model == "deepseek-v4-pro", (
+        f"Production caller sent model={fake_client.last_call_model!r} to "
+        f"DeepSeek. Cron will 400. Fix: thread cfg through _call_with_retry."
+    )
+```
+
+Pair this with the function-level test. The function-level test pins the resolver. The call-chain test pins the production caller. Both must pass.
+
+**Verify-in-same-commit checklist** (use before pushing a behavior-changing fix):
+
+1. Run `git grep -E "fn_name\(" -- ':!tests/'` — every existing call site listed.
+2. For each call site, trace whether the new arg/kwarg/precedence rule reaches the function in production. If the call site doesn't pass cfg and the function reads `cfg.x`, the fix is incomplete.
+3. Drop the heuristic on your plan body's Definition of Done: **"N call-chain tests + M function-level tests, all green"**. Don't say "all tests pass"; name the count and the shape.
+4. After pushing, wait for the next cron tick + 1 cycle window, then check Render logs for absence of the failure mode the regression net asserts against. Function-level green ≠ production green until that log check passes.
+
+**Incremental improvement recipe** (apply to existing regression nets, one per branch):
+
+1. Pick the highest-risk surface area (anything matching the symptom table above, plus anything tagged "fix(" in the last 30 days).
+2. Add ONE call-chain test that exercises a real production caller with a fake client. Add it to the existing test file.
+3. Don't refactor the file. Don't change existing tests. One test, one fake client, one assertion on captured kwargs.
+4. Land as its own commit titled `test(<surface>): pin <caller> behavior end-to-end`. No code change to the production path.
+5. Repeat on the next-highest-risk surface.
+
+The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe.py`) is itself a form of this learning — it surfaced the original bug precisely because it called the production function with the env-mismatched base URL. Use it as a template when designing new probes: `git show af3de15` to see the canonical pattern (load cfg, pass to the canonical factory, mirror what cycle.py does).
+
+**Related cross-project memories** (loaded with this skill when triggered):
+- `feedback_cfg_first_resolution_call_site_wiring.md` — the fix-side rule: a function-level commit is incomplete without wiring the call sites.
+- `feedback_regression_net_must_pin_call_chain.md` — the test-side rule: function-level tests stay green while production breaks.
+
+---
+
 ## Quick reference table
 
 | # | Mistake | One-line rule |
@@ -350,6 +418,7 @@ The full procedure is in `docs/operations/pause-and-resume-harvest-cron.md`. **I
 | M15 | Unrelated-dir deletion | "Looks empty" ≠ authorization to `rm -rf` |
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
 | M17 | Diagnose-then-fix without halting | Halt the cron first, then read `.claude/skills/`, then pin a regression |
+| M18 | Function-only regression net | Pin the production call chain end-to-end (fake client + captured kwargs); function-level tests stay green while production breaks |
 
 ---
 
