@@ -141,7 +141,7 @@ class CycleConfig(BaseModel):
     """
 
     cursor_overlap_seconds: int = Field(default=60, ge=0)
-    max_lookback_hours: int = Field(default=2, ge=1)
+    max_lookback_hours: float = Field(default=0.25, gt=0, le=24)
     c1_max_results: int = Field(default=150, ge=1)
     c1_max_pages: int = Field(default=8, ge=1)
     max_truncation_walks: int = Field(default=5, ge=1)
