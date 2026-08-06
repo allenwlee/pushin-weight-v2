@@ -97,3 +97,84 @@ Local-scope notes this project's agents have added, not from the upstream docs s
 | File | Title | Description |
 |---|---|---|
 | [rate-limit-ux.md](rate-limit-ux.md) | Rate Limit & User Experience | What the docs actually say about QPS, what 30-day community research found, and what the 29 dead-lettered handles in Phase 2 reconciliation likely were. |
+
+
+## Pricing (scraped 2026-08-06 from https://twitterapi.io/pricing)
+
+**Source:** `https://twitterapi.io/pricing` (scraped 2026-08-06 via Firecrawl). Reproduce with:
+```bash
+firecrawl scrape "https://twitterapi.io/pricing" -o .firecrawl/twitterapi-pricing.md
+```
+
+### Per-result rates (the canonical pricing model)
+
+| Resource unit | Rate | Notes |
+|---|---|---|
+| **Tweets** | **15 credits / returned tweet** | `$0.15 per 1K tweets`. Applies to `/twitter/tweet/advanced_search`, `/twitter/tweet/quotes`, `/twitter/tweet/replies`, `/twitter/tweet/retweeter`, `/twitter/tweet/thread_context`, `/twitter/tweet/by_ids`, `/twitter/tweet/last_tweets`, `/twitter/tweet/timeline`, `/twitter/list/timeline`, `/twitter/user/mention`, etc. |
+| **Profiles** | **18 credits / returned profile** | `$0.18 per 1K users`. Applies to `/twitter/user/by_username`, `/twitter/user/batch_by_userids`, `/twitter/user/me`. |
+| **Followers / Following** | **Tiered, per returned item** | See table below. |
+| **Follower IDs** | **Tiered, per returned ID** | See table below. |
+
+### Tiered pricing (followers / following / follower IDs)
+
+Volume discount — the more items per call, the cheaper each one gets.
+
+| Endpoint | Page size | Credits / item |
+|---|---|---|
+| `/twitter/user/followers` / `/twitter/user/followings` | 20–99 returned | 3 credits each |
+| `/twitter/user/followers` / `/twitter/user/followings` | 100–199 returned | 2 credits each |
+| `/twitter/user/followers` / `/twitter/user/followings` | 200 returned (max) | 1 credit each |
+| `/twitter/user/followers_ids` | 50–199 returned | 2 credits / ID |
+| `/twitter/user/followers_ids` | 200–3,999 returned | 1 credit / ID |
+| `/twitter/user/followers_ids` | 4,000–5,000 returned | 0.45 credits / ID |
+
+### Per-call floors and special cases
+
+| Rule | Cost |
+|---|---|
+| **Minimum per call** | 15 credits (waived for bulk data responses) |
+| List function calls (effective 2026-10-01) | 150 credits ($0.0015) per call |
+| Login V2 | free |
+| Tweet create / reply / quote (`v2`) | 300 credits ($0.003) per call |
+| Like / retweet / bookmark / follow (`v2`) | 200 credits ($0.002) per call |
+| Get article | 100 credits per article |
+| Get community info | 20 credits per call |
+| Community member / moderator / tweet lists | 20 credits per page |
+
+### Currency
+
+1 USD = 100,000 credits.
+
+### Worked examples (from the pricing page)
+
+- API returns 4 tweets → 60 credits charged
+- API returns 2 tweets → 30 credits charged
+- API returns 0 or 1 tweet → 15 credits charged (the floor)
+- Fetch 200 followers in one call → 200 credits (1 each)
+- Fetch 5,000 follower IDs in one call → 2,250 credits (0.45 each)
+
+### Recharge / subscription terms
+
+- Pay-as-you-go, no minimum spend
+- Recharged credits never expire
+- Bonus credits included with every recharge
+- Bonus credits valid for 30 days
+- Higher recharge amounts get bigger discounts (up to 5% off)
+- Subscription adds monthly credit return on top of per-call rates
+
+### Implication for the x-monitor harvester
+
+The local budget guard in `x_monitor/run.py:959` uses `_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300` — a flat per-page estimate. The actual TwitterAPI.io rate is **15 credits per returned tweet**. The discrepancy matters at scale:
+
+- Per cycle (7 calls × up to 50 tweets each × 15 credits) = **up to 5,250 credits/cycle**
+- 96 cycles/day = **up to 504,000 credits/day** (~$7.56/day at the per-tweet rate)
+- The `daily_ceiling: 333` in `config.yaml:65` is a stale placeholder; nothing in the codebase enforces it.
+- The `_BUDGET_HARD_CAP_CREDITS = 2_000_000` per-cycle guard in `x_monitor/run.py:958` is a single-run limit, not a daily cap.
+
+If you hit HTTP 402 `Credits is not enough. Please recharge.` on the cron, you've exhausted the monthly TwitterAPI.io allotment — top up via `https://twitterapi.io/payment`.
+
+### Related
+
+- `docs/reference/twitterapi-io-calls.md` — operator-facing reference doc on the harvester's call sites. The "300 credits per page" claim there is WRONG per the live pricing model; the doc needs a refresh.
+- `x_monitor/run.py:958-978` — the `x_monitor/run.py` budget guard. The `_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300` constant is the source of the drift.
+- `x_monitor/apify.py` — the `TwitterApiClient` that dispatches every API call. No per-call credit tracking is currently logged.
