@@ -2,6 +2,8 @@
 title: "Harvest policy 3/5 — per-brand search paths (4/5 deferred) - Plan"
 type: refactor
 date: 2026-08-05
+amended: 2026-08-05
+amendment_note: "Aligned with .claude/skills/avoiding-recurring-mistakes (M1/M4/M5/M7/M8/M11/M14): pre-exec git hygiene, DoD verification queries, DRY reuse of query_plan, preview no external API, reference docs current-state only"
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -11,6 +13,7 @@ related:
   - docs/reference/twitterapi-live-queries-by-model.md
   - docs/plans/2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md
   - docs/how-to/add-tracked-brand.md
+  - .claude/skills/avoiding-recurring-mistakes/SKILL.md
 ---
 
 # Harvest policy 3/5 — per-brand search paths (4/5 deferred) - Plan
@@ -69,7 +72,15 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 - R13. Regression nets pin **policy outcomes** (mode/paths, token membership, coverage, co allowlist, length) — not full multi-hundred-char C1 strings as the primary pin.
 - R14. How-to guide for adding tracked brands ships with this plan (`docs/how-to/add-tracked-brand.md`).
-- R15. Update or mark stale sections of `docs/reference/twitterapi-live-queries-by-model.md` so brand→call map matches policy (full auto-regen is 4/5).
+- R15. Update `docs/reference/twitterapi-live-queries-by-model.md` to **current state only** after cutover (brand→call map + live shapes from preview). **No** "previously…", dual-history remnants, or obsolete call-centric authoring prose — git is the archive (M11). Full auto-regen of that file is 4/5.
+
+#### Execution hygiene (from avoiding-recurring-mistakes)
+
+- R19. **Pre-exec gate (M4):** Before coding or merging this plan, `git fetch`, note `main` tip + open `feat/*`/`fix/*` that touch `monitor/cycle.py`, `x_monitor/query_plan.py`, `config.yaml`, or `docs/reference/`; surface uncommitted work and parallel branches to the user — do not silently merge.
+- R20. **DRY (M7):** Do **not** invent a second query builder or parallel "policy renderer" that duplicates `_build_query` / `plan_calls`. New code is load + partition + `XQuerySpec` construction; render stays in `x_monitor/query_plan.py`.
+- R21. **No external tax on preview (M8):** `harvest_preview` is **offline** — loads policy + derives strings only. It must not call TwitterAPI.io, LLM, Apify, or prod DB writes. (Live harvest rate limits/concurrency are unchanged by this plan; do not expand fetch concurrency here.)
+- R22. **Canonical stack (M1):** v2 Django + Render only; do not write harvest policy loaders that target retired v1 SQLite/`data/x_monitoring.db`. Schema/config changes stay in repo files + existing Django patterns.
+- R23. **Plan path (M14):** This plan lives at `docs/plans/YYYY-MM-DD-NNN-…-plan.md` only.
 
 #### Future brands (~1/month) — notes for implementers / operators
 
@@ -118,13 +129,17 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 - **KTD3.** Brand-local `not_include`. `(session-settled: user-directed — Kimi F1 bans must not be only call-level bleed)`
 
-- **KTD4.** Derive `XQuerySpec` then reuse `_build_query` / `plan_calls` renderer. Avoid rewriting the fetch pipeline.
+- **KTD4.** Derive `XQuerySpec` then reuse `_build_query` / `plan_calls` renderer. Avoid rewriting the fetch pipeline. **(M7 DRY — session-settled + skill)**
 
 - **KTD5.** 3/5 fixed/hand co packs OK; 4/5 auto-pack deferred. Schema must not encode "brand forever on C1" as a permanent field — packs are planner-internal.
 
 - **KTD6.** Ship how-to guide in-repo as part of this plan (user-requested), not only plan prose.
 
 - **KTD7.** 4/5 is **todo only** in Scope Boundaries — no implementation units for packer/UI/regen in this plan.
+
+- **KTD8.** Reference doc edits describe **current** harvest policy + derived calls only (M11). No remnant dual-authoring narrative.
+
+- **KTD9.** Verification is part of each unit's DoD, not a post-ship afterthought (M5). Concrete checks listed under Verification Contract.
 
 ### High-Level Technical Design
 
@@ -183,13 +198,34 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 ## Implementation Units
 
+### U0. Pre-exec hygiene (M4)
+
+**Goal.** Avoid colliding with parallel harvest/config work before any code lands.
+
+**Requirements.** R19
+
+**Dependencies.** None
+
+**Files.** none (ops gate)
+
+**Approach.**
+1. `git fetch`; log `origin/main` tip; list branches touching `monitor/cycle.py`, `x_monitor/query_plan.py`, `config.yaml`, `docs/reference/twitterapi-live-queries-by-model.md`.
+2. `git status` / `git worktree list` — surface dirty trees and other worktrees.
+3. If parallel work exists on the same surfaces, **stop and ask the user** before branching or editing.
+
+**Test expectation:** none — process gate.
+
+**Verification.** Written note in the PR/commit body or execution log: "no conflicting open work" or "user approved proceed despite …".
+
+---
+
 ### U1. Pin harvest surface regression net (BEFORE)
 
 **Goal.** Capture current brand→call / string properties so migration cannot silently regress unrelated brands.
 
 **Requirements.** R13 (BEFORE pins)
 
-**Dependencies.** None
+**Dependencies.** U0
 
 **Files.**
 - `tests/test_harvest_policy_regression_net.py` (new) or extend `tests/test_hybrid_harvest_regression_net.py`
@@ -203,7 +239,9 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 - Covers AE: pins load against current planner before policy cutover.
 - AFTER notes: intentional path changes for migrated brands documented in pin comments.
 
-**Verification.** pytest green on current main before U3 lands.
+**Verification (M5).**
+- `pytest` on the pin file green on current `main` **before** U3 wire flip.
+- Record pin file path + count of pinned brand→call entries in the unit PR note.
 
 ---
 
@@ -211,7 +249,7 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 **Goal.** Define policy structure and load it from `config/harvest_policy.yaml` (or agreed path).
 
-**Requirements.** R1–R5, R2 multi-paths
+**Requirements.** R1–R5, R2 multi-paths, R22
 
 **Dependencies.** U1
 
@@ -223,7 +261,7 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 **Approach.**
 1. Schema fields: paths, tokens, co, handles, not_include (optional notes).
 2. Validation: unknown path names fail; empty tokens with bare/co path fail; handle path requires ≥1 handle.
-3. Do not yet wire planner (U3).
+3. Do not yet wire planner (U3). No v1 SQLite paths.
 
 **Test scenarios.**
 - Happy: load fixture with multi-path brand.
@@ -231,7 +269,9 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 - Error: co path with empty co list fails or warns per chosen rule (prefer fail).
 - Error: unknown path key rejected.
 
-**Verification.** unit tests green; sample file documents 2–3 brands including multi-path and not_include.
+**Verification (M5).**
+- `pytest tests/test_harvest_policy_load.py` green.
+- Loader rejects a deliberately broken fixture (assert one negative case).
 
 ---
 
@@ -239,13 +279,13 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 **Goal.** `plan_calls_for_cycle` uses `specs_from_policy` instead of hand-authored heterogeneous specs as source of truth.
 
-**Requirements.** R6–R9, R12
+**Requirements.** R6–R9, R12, R20 (DRY)
 
 **Dependencies.** U2
 
 **Files.**
 - `x_monitor/harvest_policy.py` (`specs_from_policy`)
-- `x_monitor/query_plan.py` (only if adapter needed)
+- `x_monitor/query_plan.py` (only if adapter needed — prefer zero fork of render logic)
 - `monitor/cycle.py` (`plan_calls_for_cycle` / `_resolve_x_query_specs`)
 - `tests/test_specs_from_policy.py` (new)
 - `config.yaml` — stop authoring live brands/handles lists as source (remove or generate-only)
@@ -254,7 +294,7 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 1. Partition brands by paths → bare list, co list, handle lists (pure vs other if still desired — can keep B2/B3 split via policy flag `handle_tier: pure|other` or two handle packs).
 2. Fixed co packs (3/5): table or YAML section `co_packs: [[...],[...],...]` owned next to policy.
 3. Union `not_include` onto co specs for brands in each pack.
-4. Wire cycle to load policy → specs → existing `plan_calls`.
+4. Wire cycle to load policy → specs → **existing** `plan_calls` / `_build_query` only (M7).
 
 **Patterns to follow.** Existing `XQuerySpec`, `_build_query` handle-only / empty-co omit paren behavior.
 
@@ -264,8 +304,12 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 - Happy: multi-path brand appears on bare/co and handle calls.
 - Edge: all strings &lt; 512.
 - Integration: `plan_calls_for_cycle` returns 7 calls with expected call_ids.
+- DRY: no new module reimplements paren/OR/co join (grep/code review gate).
 
-**Verification.** unit + cycle plan smoke.
+**Verification (M5).**
+- `pytest tests/test_specs_from_policy.py` green.
+- `plan_calls_for_cycle` (or dry-run entry already in repo) returns 7 call_ids; each `len(query_string) < 512`.
+- Diff review: no second renderer path.
 
 ---
 
@@ -273,7 +317,7 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 **Goal.** Operator and CI can see brand→call map and fail on under-coverage.
 
-**Requirements.** R10, R11, R16
+**Requirements.** R10, R11, R16, R21 (no external API)
 
 **Dependencies.** U3
 
@@ -285,13 +329,18 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 1. Preview prints call_id, len, headroom, query (optional truncate), coverage map.
 2. Invariant test: foreach enabled brand, coverage non-empty unless explicit none.
 3. Optional: warn if co brand missing from all co_packs.
+4. **Must not** network to TwitterAPI/LLM/Render (M8). Pure local derive.
 
 **Test scenarios.**
 - Covers AE1: enabled brand with empty paths fails invariant.
 - Happy: full policy of 20 brands passes.
 - Edge: explicit `paths: []` allowed only with flag/reason field if required by schema.
+- Guard: unit test or review confirms preview has no HTTP client imports for fetch/LLM.
 
-**Verification.** command runs locally; invariant in pytest.
+**Verification (M5).**
+- Preview command exits 0 offline; prints coverage for every enabled brand.
+- `pytest tests/test_harvest_coverage_invariant.py` green.
+- Intentionally drop one brand's paths in a temp fixture → invariant fails.
 
 ---
 
@@ -299,21 +348,22 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 
 **Goal.** Seed `harvest_policy.yaml` from current live behavior (or intentional small fixes), delete dual authoring.
 
-**Requirements.** R8, R9, R15; notes R16–R18
+**Requirements.** R8, R9, R15 (M11 current-only), R16–R18
 
 **Dependencies.** U3, U4
 
 **Files.**
 - `config/harvest_policy.yaml` (full 20 brands)
 - `config.yaml` (strip obsolete x_query_specs brand/handle authoring)
-- `docs/reference/twitterapi-live-queries-by-model.md` (brand→call map sync; mark generated strings as preview-sourced where needed)
+- `docs/reference/twitterapi-live-queries-by-model.md` (**rewrite current state only** — M11)
 - U1 AFTER pins
 
 **Approach.**
-1. Map each enabled brand from current config/docs into paths/tokens/handles/co/not_include.
-2. Preserve Kimi/C1 F1 not_include on moonshot_kimi.
-3. GLM: migrate current handle path; **recommend** adding versioned_bare or co path in same PR only if product agrees — otherwise pin handle-only as explicit and file follow-up issue (do not leave accidental). Prefer making GLM keyword path intentional in this unit if session consensus holds under-capture is a bug.
+1. Map each enabled brand from current config into paths/tokens/handles/co/not_include.
+2. Preserve Kimi F1 not_include on moonshot_kimi.
+3. GLM: migrate handle path; **prefer intentional keyword path** (versioned_bare and/or co) if product still treats under-capture as bug — else explicit handle-only + tracked follow-up. Never accidental silence.
 4. Update AFTER regression pins.
+5. Reference doc: replace call-centric authoring description with policy → derived calls **as of cutover**. Delete obsolete dual-list prose; one line max if v1 ever mentioned.
 
 **Test scenarios.**
 - All 20 brands in policy.
@@ -321,9 +371,13 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 - Lengths &lt; 512 for all calls.
 - Snapshot of brand→call map stable except documented intentional deltas.
 
-**Verification.** preview matches expectations; pytest green.
+**Verification (M5).**
+- `harvest_preview` brand map matches policy for all 20 nicknames.
+- `pytest` full harvest-policy + hybrid nets green.
+- Reference doc: grepping for "legacy wide-net B2" / dual-authoring remnants returns no false "current" claims (spot-check).
+- After deploy (when user asks to deploy — not volunteered): one harvest cycle can still plan 7 calls (log or dry-run on Render) — **only if user requests deploy verification**.
 
-**Execution note:** Prefer characterization of current planner output before flipping the wire.
+**Execution note:** Characterization of current planner output before flipping the wire. Do not volunteer commit/push/deploy (M2).
 
 ---
 
@@ -336,17 +390,20 @@ Replace call-centric authoring (`x_query_specs` as the human source of truth wit
 **Dependencies.** U5 (or draft in parallel after U2 schema frozen; finalize after U5)
 
 **Files.**
-- `docs/how-to/add-tracked-brand.md` (new) — **also delivered as part of this planning request; keep in sync with shipped behavior at U6**
+- `docs/how-to/add-tracked-brand.md` — already drafted with plan; **finalize** command names against U4 ship
 
 **Approach.**
 1. Checklist: DB brand + keywords + official handle → policy block → co pack if needed → preview → deploy → optional dashboard.
 2. Decision tree: bare vs co vs versioned tokens.
 3. Examples: bare lab; polyseme with not_include; dual path.
 4. Point to 4/5 deferred improvements (auto-pack).
+5. Explicit "do not only enable without policy paths" (GLM-class).
 
 **Test expectation:** none — documentation unit; verify links and commands match U4/U5 names.
 
-**Verification.** guide reviewed against `harvest_preview` real flags; linked from reference or CONCEPTS if present.
+**Verification (M5).**
+- How-to commands match the real entrypoint from U4 (copy-paste dry-run).
+- Link from reference or README/CONCEPTS only if those files already list how-tos — do not invent new chrome.
 
 ---
 
@@ -368,21 +425,36 @@ Track as future plan (do **not** implement here):
 
 ## Verification Contract
 
-- pytest: policy load, specs_from_policy, coverage invariant, thin regression AFTER, length &lt; 512
-- `harvest_preview` shows 7 calls + brand map for all enabled brands
-- Manual: flip one token in policy → preview changes that call only
+**Automated**
+- pytest: policy load, specs_from_policy, coverage invariant, thin regression BEFORE/AFTER, length &lt; 512
+- Coverage invariant fails if any enabled brand lacks paths without explicit none
+
+**Operator (local / staging — no prod write required for this plan)**
+- `harvest_preview` (exact command from U4) prints 7 calls + brand→call map for all enabled brands
+- Manual: flip one token in policy → preview changes that call only; flip back
 - How-to steps match shipped commands
+
+**Prod (only when user requests deploy verification — M2/M5)**
+- Via Render CLI / logs: harvest cycle still plans 7 calls after policy deploy (no TwitterAPI probe required for config-only change)
+- Do **not** use ad-hoc direct psql to prod host for routine checks; prefer existing Render CLI patterns in repo memory
+
+**Not in scope to verify**
+- LLM concurrency / classifier model (unchanged; M8/M12 do not add new LLM paths here)
+- i18n catalog (no user-facing chrome strings in this plan)
 
 ## Definition of Done
 
+- [ ] U0 pre-exec hygiene recorded
 - [ ] U1 BEFORE/AFTER regression net green
 - [ ] Policy file authoring live for all enabled brands
-- [ ] Planner derives specs; dual hand-authored handle/brand lists removed as source of truth
-- [ ] harvest_preview + coverage invariant green
-- [ ] How-to `docs/how-to/add-tracked-brand.md` accurate
-- [ ] Reference brand→call map consistent with policy
+- [ ] Planner derives specs via existing `_build_query`/`plan_calls` (no parallel renderer)
+- [ ] Dual hand-authored handle/brand lists removed as search source of truth
+- [ ] `harvest_preview` offline + coverage invariant green
+- [ ] How-to `docs/how-to/add-tracked-brand.md` accurate vs shipped CLI
+- [ ] Reference doc = **current** brand→call / shapes only (M11)
 - [ ] 4/5 only in Deferred (no packer/UI units shipped as "done")
-- [ ] Scope delivered vs plan documented in commits
+- [ ] Scope delivered vs plan documented in commits (plan-execution contract)
+- [ ] No volunteer commit/push/deploy unless user asked (M2)
 
 ---
 
@@ -391,12 +463,14 @@ Track as future plan (do **not** implement here):
 - Harvest config authoring becomes brand-centric; fewer silent gaps when adding brands monthly.
 - Attribution/DB keyword paths may still exist for non-search uses — document boundary.
 - Cron deploy still ships policy with code until 4/5 hot-reload.
+- No new external API surface or URL endpoints (M9 N/A).
 
 ## Documentation / Operational Notes
 
 - Primary operator doc after ship: `docs/how-to/add-tracked-brand.md`
-- Live string inspection: `harvest_preview` over hand-maintained reference strings
+- Live string inspection: `harvest_preview` is source of truth; reference doc is current snapshot only
 - When adding co brands under 3/5: edit `co_packs` in the same PR as the policy block
+- Skill: re-read `.claude/skills/avoiding-recurring-mistakes/SKILL.md` at start of `ce-work` on this plan
 
 ## Sources & Research
 
@@ -404,3 +478,4 @@ Track as future plan (do **not** implement here):
 - Session: 3/5 then 4/5 succession; multi-paths + brand-local not_include required
 - Code: `config.yaml` `x_query_specs`, `x_monitor/query_plan.py`, `monitor/cycle.py` `_load_primary_keywords` / `plan_calls_for_cycle`
 - Docs: `docs/reference/twitterapi-live-queries-by-model.md`, hybrid funnel plans 2026-07-28/30
+- Skill: `.claude/skills/avoiding-recurring-mistakes/SKILL.md` (M1, M2, M4, M5, M7, M8, M11, M14)

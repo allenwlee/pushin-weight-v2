@@ -178,3 +178,129 @@ If you hit HTTP 402 `Credits is not enough. Please recharge.` on the cron, you'v
 - `docs/reference/twitterapi-io-calls.md` — operator-facing reference doc on the harvester's call sites. The "300 credits per page" claim there is WRONG per the live pricing model; the doc needs a refresh.
 - `x_monitor/run.py:958-978` — the `x_monitor/run.py` budget guard. The `_CREDITS_PER_ADVANCED_SEARCH_PAGE = 300` constant is the source of the drift.
 - `x_monitor/apify.py` — the `TwitterApiClient` that dispatches every API call. No per-call credit tracking is currently logged.
+
+---
+
+## Dashboard backend API (undocumented — discovered 2026-08-06)
+
+The TwitterAPI.io dashboard at `https://twitterapi.io/dashboard` is powered by a **separate, undocumented API** under `https://api.twitterapi.io/backend/user/*` that is NOT in the public OpenAPI spec (`https://docs.twitterapi.io/api-reference/openapi.json`). It is reverse-engineered from the Next.js JS bundles the dashboard loads — specifically `/_next/static/chunks/5377-*.js`.
+
+**Discovery source:** `/tmp/.firecrawl/bundle-5377.js` (downloaded 2026-08-06 from the live dashboard HTML). URLs were extracted by grepping all `/_next/static/chunks/*.js` files referenced from `https://twitterapi.io/dashboard` for `fetch(` calls. Refresh by re-running the same grep.
+
+**Auth:** All `/backend/user/*` endpoints require `Authorization: Bearer <session.accessToken>` (NextAuth session token, NOT your X-API-Key). The session token is short-lived (~24h); grab it from a logged-in browser via DevTools → Network → any `/backend/user/*` request → request headers, or automate the NextAuth login flow (`api/auth/signin` + `api/auth/callback/credentials`).
+
+### Endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/backend/user/api_calls` | GET | **The "Recent API Calls" table source.** Paginated call log. |
+| `/backend/user/consumption_by_endpoint` | GET | Aggregated usage by endpoint. Query: `?days=30&top_n=15` |
+| `/backend/user/consumption_summary` | GET | 1d / 7d / 30d window stats |
+| `/backend/user/info` | GET | Account info (different from `/oapi/my/info`) |
+| `/backend/user/rotate_api_key` | POST | Rotate your API key |
+| `/stripe/create_portal_session` | POST | Stripe customer portal link |
+
+### `/backend/user/api_calls` — full spec
+
+This is the endpoint the dashboard's "Recent API Calls" table fetches. 90-day server-side retention.
+
+```
+GET https://api.twitterapi.io/backend/user/api_calls?limit=50&cursor=<opaque>
+Authorization: Bearer <session.accessToken>
+```
+
+**Query params:**
+- `limit` — page size. Dashboard uses 50. No documented max.
+- `cursor` — opaque pagination cursor. Omit on first request; pass `response.data.next_cursor` on subsequent requests. Loop until `next_cursor` is null/empty.
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "calls": [
+      {
+        "id": "<string>",
+        "trace_id": "<string>",
+        "endpoint_path": "/twitter/tweet/advanced_search",
+        "method": "GET",
+        "http_status": 200,
+        "credits_consumed": 15,
+        "data_items_count": 20,
+        "request_time_ms": 412,
+        "time_cost_ms": 387,
+        "request_summary": "<string>",
+        "response_summary": "<string>",
+        "created_at": "<iso8601>"
+      }
+    ],
+    "next_cursor": "<opaque string or null>",
+    "data_source": "mysql",
+    "retention_days": 90
+  }
+}
+```
+
+**Field-to-table-column mapping** (matches the dashboard table headers):
+| JSON field | Dashboard column |
+|---|---|
+| `endpoint_path` | Endpoint |
+| `method` | Method |
+| `http_status` | Status |
+| `credits_consumed` | Credits |
+| `data_items_count` | Data Count |
+| `request_time_ms` (or `time_cost_ms`) | Latency |
+| `created_at` | Time (UTC+9) |
+
+**Caveat:** The dashboard bundle includes the string `"Method, status, and request/response previews are temporarily unavailable. Full details will r..."` — so `request_summary` and `response_summary` may be redacted in responses. The other fields are populated.
+
+### Pagination behavior
+
+Cursor-based, server-side capped at 90 days retention. For a heavy account (~50k calls over 90 days) at `limit=50`, expect ~1000 page requests. Add a polite `time.sleep(0.3)` between requests.
+
+### `/backend/user/consumption_summary` response shape
+
+```json
+{
+  "status": "success",
+  "data": {
+    "window_1d":  { "api_calls_count": N, "credits_consumed": N },
+    "window_7d":  { "api_calls_count": N, "credits_consumed": N },
+    "window_30d": { "api_calls_count": N, "credits_consumed": N },
+    "by_endpoint": [
+      { "endpoint_path": "...", "api_calls_count": N, "credits_consumed": N }
+    ]
+  }
+}
+```
+
+`/backend/user/consumption_by_endpoint?days=30&top_n=15` returns the same `by_endpoint` shape.
+
+### Use cases for x-monitor
+
+1. **Audit / reconciliation.** Periodically diff the dashboard's `/backend/user/api_calls` against our own application-layer call log to catch drift, missing calls, or unexpected endpoint usage.
+2. **Cost reporting.** Pull `/backend/user/consumption_summary` and `/backend/user/consumption_by_endpoint` for monthly cost dashboards without instrumenting the application.
+3. **Historical backfill (within 90 days).** Reconstruct usage patterns from the vendor's own log.
+
+### Caveats
+
+- **Undocumented.** Vendor can change paths, field names, auth scheme, or rate limits without notice. Pin to a specific bundle hash if you depend on this.
+- **Session token expires.** ~24h lifetime; needs a refresh flow.
+- **90-day hard cap.** Older data is gone. Vendor retention is opaque but the dashboard literally tells you `retention_days: 90`.
+- **No CSV endpoint.** Convert the JSON yourself; field names map 1:1 to the dashboard table columns.
+- **Don't use as system of record.** Application-layer logging (`x_monitor/apify.py` / `x_monitor/run.py`) should remain the source of truth for x-monitor's own analytics. The dashboard API is for vendor-side reconciliation.
+
+### Re-discovery recipe
+
+To re-verify or re-discover these endpoints after a vendor update:
+
+```bash
+# Get JS bundle URLs from dashboard HTML
+curl -sSf https://twitterapi.io/dashboard | grep -oE 'src="[^"]+\.js"' | sed 's/src="//;s/"$//'
+
+# Grep all bundles for fetch() calls to backend paths
+for js in $(curl -sSf https://twitterapi.io/dashboard | grep -oE 'src="[^"]+\.js"' | sed 's/src="//;s/"$//'); do
+  curl -sSf "https://twitterapi.io$js" | grep -oE 'fetch\("[^"]+"|"/backend/[^"]+"'
+done | sort -u
+```
+
