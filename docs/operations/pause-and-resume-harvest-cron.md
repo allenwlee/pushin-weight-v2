@@ -120,3 +120,15 @@ After resume, wait ≥1 cron cycle (`/15` schedule = up to 15 min), then verify 
   - search.max_results: 50 -> 2000 (commit `6d5e72e`)
   - search.max_pages: 5 -> 100 (commit `10e5268`, applied during pause)
 - **Regression net**: 29/29 tests pass as of commit `bd280cf` (`test_query_plan_hybrid_shapes` + `test_hybrid_harvest_regression_net` + new `test_mistral_call_placement`).
+
+### 2026-08-06 ~07:00 UTC — Pause (investigate 989-fetched vs 86-inserted gap)
+
+- **Operator**: Claude (per user direction: "first, halt the harvester. read our /.claude/skills in the project repo file")
+- **Reason**: User flagged that the 86 posts inserted per 15-min cycle is suspiciously low vs. the ~989 tweets fetched per cycle (real dashboard data from 01:00 JST cycle). Two hypotheses to investigate:
+  1. **Cursor/date drift** — the `since_time` cursor is missing its proper lower bound, so the cycle re-fetches the same window repeatedly and `INSERT OR IGNORE` discards the duplicates.
+  2. **Unintended post-fetch filter** — a classification/filter step is dropping valid posts before they get persisted.
+- **Method**: Render REST API `POST /v1/services/crn-d9gv94o4n6ts739tqaug/suspend` with `{"suspend":"yes"}`.
+- **Pause confirmed**: `GET /v1/services/crn-d9gv94o4n6ts739tqaug` returns `"suspended": "suspended"`.
+- **Next step**: Diagnose the cursor derivation in `monitor/cycle.py:_read_cursor_since` (around line 259) and the post-fetch filter in `x_monitor/run.py` (around line 1196). Re-run with a single dry cycle after the fix lands to confirm the fix before resuming.
+- **Strict rule from the user**: "first, halt the harvester. read our /.claude/skills in the project repo file, there may be directions there." — the project's `.claude/skills/avoiding-recurring-mistakes/SKILL.md` does not contain a halt procedure (the v1 launchd pause sentinel in CONCEPTS.md doesn't apply to v2 Render cron). The pause is via the Render REST API per the runbook's first pause method.
+- **Resume**: not until the cursor-vs-insert discrepancy is diagnosed and a regression pin is added.
