@@ -92,6 +92,7 @@ class RegressionNet:
         self._check_feed_avatars(html)
         self._check_filter_contract(html)
         self._check_chart_contract(html)
+        self._check_chart_no_hover_isolate(session)
         self._check_locale_exhibits(html)
         self._check_defaults(html, session)
         self._check_static_files(html)
@@ -496,6 +497,55 @@ class RegressionNet:
             "pw-chart" in html,
             "pw-chart.js not referenced in HTML",
         )
+
+    def _check_chart_no_hover_isolate(self, session):
+        """Net D (U4) — hover-isolate control flow absent in pw-chart.js.
+
+        Per plan § Net D: "pw-chart.js post-change: no hover-isolate
+        control flow (`hoveredBrandIndex` absent or inert)."
+        Static-analysis: fetch /static/pw-chart.js and assert that
+        `hoveredBrandIndex` is not used in active code (only in comments
+        describing the removal is OK).
+        """
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(self.url)
+        js_url = urlunparse((parsed.scheme, parsed.netloc, "/static/pw-chart.js", "", "", ""))
+        try:
+            r = session.get(js_url, timeout=30, allow_redirects=True)
+        except Exception as e:
+            self.failures.append(("net-d-js-http", f"GET {js_url} failed: {e}"))
+            return
+        if r.status_code != 200:
+            self.failures.append(("net-d-js-status", f"status {r.status_code}"))
+            return
+        js_source = r.text
+
+        # Strip line comments and block comments — only check active code
+        import re as _re
+        # Remove single-line comments (// ...) and block comments (/* ... */)
+        stripped = _re.sub(r"//[^\n]*", "", js_source)
+        stripped = _re.sub(r"/\*.*?\*/", "", stripped, flags=_re.DOTALL)
+
+        # Now check for any active usage of `hoveredBrandIndex` in non-comment code
+        active_uses = _re.findall(r"\bhoveredBrandIndex\b", stripped)
+        self.assert_(
+            "U4: hover-isolate removed — no active `hoveredBrandIndex` references in pw-chart.js",
+            len(active_uses) == 0,
+            f"found {len(active_uses)} active uses of hoveredBrandIndex in non-comment code",
+        )
+
+        # Also verify the onHover callback exists (so Chart.js doesn't error)
+        # and is a no-op or only contains an inert comment.
+        m = _re.search(r"onHover\s*:\s*function\s*\([^)]*\)\s*\{([^}]*)\}", js_source)
+        if m:
+            body = m.group(1).strip()
+            # Strip comments from body too
+            body_stripped = _re.sub(r"//[^\n]*", "", body).strip()
+            self.assert_(
+                "U4: onHover callback body is a no-op (no ds.hidden mutations)",
+                body_stripped == "" or "ds.hidden" not in body_stripped,
+                f"onHover still mutates ds.hidden: {body!r}",
+            )
 
     def _check_locale_exhibits(self, html):
         # Net G — Locale exhibits.
