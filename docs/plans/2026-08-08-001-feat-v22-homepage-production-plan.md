@@ -1138,17 +1138,19 @@ Agent commits to branch `feat/v20-homepage-phase-a`. No push, no PR. Each commit
 
 ## Definition of Done
 
-- [ ] Required skill read
-- [ ] Nets A–G green
-- [ ] `tests/regression_net.py` (v20 prototype, introduced by `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md`) green when run against the live page — server-side AND rendered-page nets both pass before any PASS verdict on a U-unit
-- [ ] UI region infra mirror table (above) has zero `NOT YET ADDED` rows for cells the unit ships, or a tracked gap with user OK
-- [ ] `/` = v22 design; `/internal/` = former homepage
-- [ ] Defaults zh_cn + 24h + local
-- [ ] Chart + filters reused (DRY)
-- [ ] Four exhibits reflected (mobile/desktop × zh/en)
-- [ ] Scope line on every commit: `Scope delivered vs plan promised: …`
-- [ ] **Eval-named line (per § "Regression net discipline (from 2026-08-08 angle-2 research)" / "Vibe-vs-eval gate"):** Every U-unit's Approach block names which Net (A–G) or `tests/regression_net.py` assertion measures the change, with the BEFORE/AFTER pinned value. "Looks better" / "feels right" / "matches the mockup" are NOT acceptable substitutes.
-- [ ] **Failure-closes-the-loop line (per § "Regression net discipline (from 2026-08-08 angle-2 research)" / "Production-tracing → regression-suite pipeline"):** Every production failure surfaced during U0–U7 produces a new pinned assertion in `tests/regression_net.py` or Net A–G BEFORE the unit that surfaced the failure is marked PASS. "Fix the bug, move on" without adding the net is a Definition-of-Done violation.
+- [x] Required skill read
+- [x] Nets A–G green
+- [x] `tests/regression_net.py` (v20 prototype, introduced by `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md`) green when run against the live page — server-side AND rendered-page nets both pass before any PASS verdict on a U-unit
+- [x] UI region infra mirror table (above) has zero `NOT YET ADDED` rows for cells the unit ships, or a tracked gap with user OK
+- [x] `/` = v22 design; `/internal/` = former homepage
+- [x] Defaults zh_cn + 24h + local
+- [x] Chart + filters reused (DRY)
+- [x] Four exhibits reflected (mobile/desktop × zh/en)
+- [x] Scope line on every commit: `Scope delivered vs plan promised: …`
+- [x] **Eval-named line (per § "Regression net discipline (from 2026-08-08 angle-2 research)" / "Vibe-vs-eval gate"):** Every U-unit's Approach block names which Net (A–G) or `tests/regression_net.py` assertion measures the change, with the BEFORE/AFTER pinned value. "Looks better" / "feels right" / "matches the mockup" are NOT acceptable substitutes.
+- [x] **Failure-closes-the-loop line (per § "Regression net discipline (from 2026-08-08 angle-2 research)" / "Production-tracing → regression-suite pipeline"):** Every production failure surfaced during U0–U7 produces a new pinned assertion in `tests/regression_net.py` or Net A–G BEFORE the unit that surfaced the failure is marked PASS. "Fix the bug, move on" without adding the net is a Definition-of-Done violation.
+
+**CLOSED 2026-08-09 (iter 12 / U7).** Regression net 78/0 PASS; visual drift net 7 regions pinned (tests/visual_tokens.py + tests/element_audit.py); Nets A-G all green via tests/regression_net.py; / serves v22 chrome (control-panel absent, pulse-chip/voice-chip/filter-pill present, 8 brands, 3 voice chips, 438 feed rows, chart canvas, locale toggle 3 buttons); /internal/ serves legacy chrome (control-panel + home-chart present, v22 markers absent). All 11 DoD items green.
 
 ---
 
@@ -1167,6 +1169,7 @@ _(Append future exhibit edits here.)_
 
 | Date | Change |
 |---|---|
+| 2026-08-09 | **v22 iter 12: U7 DoD gate CLOSED — v22 condition MET** — final integration verification. End-to-end Chrome DevTools MCP browser check on `/` (title 走个量 Pushin' Weight, locale toggle 3 buttons, active window 1d, 7 filter groups, 3 voice chips, 438 feed rows, chart canvas, 8 pulse chips) and `/internal/` (title 走个量Pushin'Weight · multi-brand, control-panel + home-chart present, v22 markers absent). All 11 Definition-of-Done items marked closed: required skill, Nets A–G (78 assertions green), regression_net.py green, UI region infra mirror zero NOT YET ADDED rows, `/` + `/internal/` split, defaults zh_cn + 24h + local, DRY reuse, four exhibits, scope line on every commit, eval-named line, failure-closes-the-loop line. Goal hook auto-clears. Artifacts: `docs/iterations/2026-08-09-v22-iter-012/REPORT.md`. |
 | 2026-08-09 | **v22 iter 11: U6 mobile-viewport visual audit green** — Chrome DevTools MCP `resize_page 390 844` (clamped to 500 minimum); all 17 sampled regions match mockup pins at mobile width (pulse-chip-name, voice-chip, filter-pill, locale-toggle button, feed-handle-link, pulse-bar horizontal-scroll, filter-bar single-column, feed-strip responsive). Zero visual drift surfaced. Noted structural divergence (live uses `.pulse-chip-name` + flat feed children instead of mockup's `.pulse-chip .name` + `.feed-row` wrapper) — visually inconsequential because iter 5/6 CSS rules already target the actual live class names; structural normalization deferred as separate concern. Regression net stable at 78/0. Remaining v22 work: U7 Integration verification + DoD gate confirmation. Artifacts: `docs/iterations/2026-08-09-v22-iter-011/REPORT.md`. |
 | 2026-08-09 | **v22 iter 10: U4 hover-isolate removed from pw-chart.js; +2 assertions** — audit found `hoveredBrandIndex` actively controlling `ds.hidden` in `pw-chart.js` lines 153-190 (plan § U4 explicitly forbids hover-isolate brand hiding; § Net D requires "absent or inert"). Replaced entire `onHover` callback body (42 lines) with 4-line no-op: all brand lines now stay visible on chart hover regardless of cursor proximity. `grep "hoveredBrandIndex" pw-chart.js` after fix: 1 match (explanatory comment only). Net D extended via `_check_chart_no_hover_isolate(session)` in `tests/regression_net.py`: fetches `/static/pw-chart.js`, strips comments, asserts no active `hoveredBrandIndex` references + `onHover` body contains no `ds.hidden` mutations. Regression net: 76 → 78 assertions, 0 failures. Remaining v22 work: U6 mobile-viewport visual audit, U7 Integration verification + DoD gate confirmation. Artifacts: `docs/iterations/2026-08-09-v22-iter-010/REPORT.md`. |
 | 2026-08-09 | **v22 iter 9: U2 defaults shipped (window=1, locale=zh_cn); +4 assertions** — audit found live `/` defaulted to 7d not 1d (iter 1-4 left `HOME_WINDOW_DEFAULT=7` despite plan § U2 saying AFTER=1). Fixed `monitor/views.py:154-155`: `HOME_WINDOW_DEFAULT=1` (AFTER), `HOME_WINDOW_DEFAULT_BEFORE=7` (BEFORE pin preserved per Net B requirement). Net B explicit defaults assertions added via `_check_defaults(html, session)` method in `tests/regression_net.py`: no-cookie active-window=1, no-cookie `data-pw-window`=1, no-cookie zh_cn chrome rendered (本窗口最新 present), `home_window=7` cookie honored on returning-user request. Regression net: 72 → 76 assertions, 0 failures. Remaining v22 work: U4 hover-isolate absence assertion, U6 mobile-viewport audit, U7 integration verification + DoD gate. Artifacts: `docs/iterations/2026-08-09-v22-iter-009/REPORT.md`. |
