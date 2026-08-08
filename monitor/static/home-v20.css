@@ -945,3 +945,18 @@ body.desktop-shell .desktop-grid .feed-strip {
   color: #fbbf24;
   font-weight: 600;
 }
+
+/* v22 iter 5: visual-drift fix — pin pulse-chip-name and feed-handle-link to mockup values */
+.pulse-chip-name {
+  color: var(--text);
+  font-weight: 500;
+}
+.feed-strip .feed-handle-link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.feed-strip .feed-handle-link:hover {
+  color: var(--link);
+  text-decoration: underline;
+}

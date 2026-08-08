@@ -1,0 +1,8 @@
+{
+  "_note": "iter 5 post-edit Chrome DevTools MCP evaluate_script capture (getComputedStyle). All drifted regions resolved per mockup-canon rule.",
+  ".pulse-chip .name": {"color": "rgb(243, 244, 246)", "fontWeight": "500"},
+  ".voice-chip": {"color": "rgb(233, 213, 255)", "backgroundColor": "rgba(124, 58, 237, 0.18)", "padding": "1px 6px", "borderRadius": "8px"},
+  ".feed-handle": {"color": "rgb(243, 244, 246)", "textDecoration": "none", "fontWeight": "600"},
+  ".filter-button.is-active": {"color": "rgb(255, 255, 255)", "backgroundColor": "rgb(59, 130, 246)"},
+  ".delta.up::before": "NOT FOUND"
+}
