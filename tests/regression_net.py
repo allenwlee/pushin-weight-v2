@@ -42,6 +42,7 @@ EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
 EXPECTED_SECTIONS = {
     "banner": ["window-toggle", "tz-pill", "locale-toggle"],
     "trending-models": ["脉冲", "窗口内热度"],  # zh_cn hardcoded labels
+    # Trending pills carry .delta.up/.down/.flat spans with pct values (iter 2 v22)
     "filter-groups": ["Brands", "Discourse", "account.role", "lang",
                       "Sentiment", "Nationalism", "unsanctioned"],
     "chart": ["Daily total posts per brand"],
@@ -85,6 +86,7 @@ class RegressionNet:
         self._check_time_window_buttons(html)
         self._check_locale_toggle(html)
         self._check_sections(html)
+        self._check_trending_deltas(html)
         self._check_static_files(html)
         self._check_console_errors(html)
 
@@ -186,6 +188,27 @@ class RegressionNet:
                 present = kw in html
                 self.assert_(f"section {section} has '{kw}'", present,
                              f"text '{kw}' not found in HTML")
+
+    def _check_trending_deltas(self, html):
+        # Trending pills must each carry a .delta span with a pct value
+        # (▲/▼/→ arrow rendered by CSS .delta.up/.down/.flat::before).
+        # Pinned by iter 2 (v22) of the agentic iteration loop.
+        delta_spans = re.findall(r'<span class="delta (\w+)">(-?\d+%)</span>', html)
+        self.assert_("trending has >= 1 delta span",
+                     len(delta_spans) >= 1,
+                     f"got {len(delta_spans)} delta spans")
+        # Each delta must have a valid CSS class (up/down/flat)
+        if delta_spans:
+            valid_classes = {"up", "down", "flat"}
+            bad = [d for d in delta_spans if d[0] not in valid_classes]
+            self.assert_("all trending delta classes are up/down/flat",
+                         not bad,
+                         f"invalid: {bad[:3]}")
+            # Each pct value must end with %
+            bad_pct = [d for d in delta_spans if not d[1].endswith("%")]
+            self.assert_("all trending delta values end with %",
+                         not bad_pct,
+                         f"invalid: {bad_pct[:3]}")
 
     def _check_static_files(self, html):
         # Look for the static asset references in the HTML

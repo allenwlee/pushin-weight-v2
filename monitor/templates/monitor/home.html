@@ -78,6 +78,7 @@
       {% for brand in brands|slice:":8" %}
         <button type="button" class="pulse-chip" role="listitem" style="--chip-color:{{ brand.accent_color }}">
           <span class="pulse-chip-name">{{ brand.display_name }}</span>
+          <span class="delta {{ brand.pct_class }}">{{ brand.pct_change }}%</span>
         </button>
       {% empty %}
         <span class="muted">{% trans "no brands" %}</span>

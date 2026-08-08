@@ -19,7 +19,7 @@ from typing import Any
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Prefetch, Q, QuerySet
+from django.db.models import Case, CharField, Count, Prefetch, Q, QuerySet, Value, When
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
@@ -969,6 +969,38 @@ def _build_home_chart_payload(
 # ============================================================================
 
 
+def _compute_brand_deltas() -> dict[str, dict[str, int]]:
+    """Return per-brand post counts for the last 60 min and prior 60-120 min.
+
+    Used by _build_brands_context to render the trending %change arrow.
+    Single aggregation query against PostBrand joined to Post.
+    """
+    now = django_timezone.now()
+    window_end = now
+    window_mid = now - timedelta(minutes=60)
+    window_start = now - timedelta(minutes=120)
+
+    # Count post-brand links whose post falls in [now-60m, now) and [now-120m, now-60m).
+    counts = (
+        PostBrand.objects
+        .filter(post__created_at__gte=window_start)
+        .annotate(bucket=(
+            Case(
+                When(post__created_at__gte=window_mid, then=Value("recent")),
+                default=Value("prior"),
+                output_field=CharField(),
+            )
+        ))
+        .values("brand__nickname", "bucket")
+        .annotate(n=Count("post"))
+    )
+    out: dict[str, dict[str, int]] = {}
+    for row in counts:
+        nick = row["brand__nickname"]
+        out.setdefault(nick, {"recent": 0, "prior": 0})[row["bucket"]] = row["n"]
+    return out
+
+
 def _build_brands_context() -> list[dict[str, Any]]:
     """Return pre-merged brand data list for templates.
 
@@ -977,6 +1009,11 @@ def _build_brands_context() -> list[dict[str, Any]]:
 
     Brands are ordered by post volume (descending) for the top 15,
     then alphabetically for any remaining brands.
+
+    Also attaches recent/prior deltas (per-brand post counts in the last
+    60 min vs prior 60-120 min) so the trending pill can render an arrow
+    + percentage. pct_arrow is one of "up", "down", "flat"; pct_class is
+    the CSS modifier matching the v22-master mockup (delta.up/.down/.flat).
     """
     _BRAND_ORDER = [
         "deepseek", "qwen", "glm", "minimax", "llama", "mistral",
@@ -985,17 +1022,37 @@ def _build_brands_context() -> list[dict[str, Any]]:
     ]
     _order_map = {nick: i for i, nick in enumerate(_BRAND_ORDER)}
 
+    deltas = _compute_brand_deltas()
+
     brand_qs = Brand.objects.filter(is_sentinel=False)
-    brands = [
-        {
+    brands = []
+    for b in brand_qs:
+        recent = deltas.get(b.nickname, {}).get("recent", 0)
+        prior = deltas.get(b.nickname, {}).get("prior", 0)
+        if prior > 0:
+            pct = round((recent - prior) / prior * 100)
+        elif recent > 0:
+            pct = 100  # no prior window, all new = +100%
+        else:
+            pct = 0
+        if pct > 0:
+            arrow, cls = "up", "up"
+        elif pct < 0:
+            arrow, cls = "down", "down"
+        else:
+            arrow, cls = "flat", "flat"
+        brands.append({
             "nickname": b.nickname,
             "display_name": b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
             "accent_color": b.accent_color or MODEL_ACCENT_COLORS.get(b.nickname, "#9ca3af"),
             "display_name_en": b.display_name_en or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
             "display_name_zh_cn": b.display_name_zh_cn or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
-        }
-        for b in brand_qs
-    ]
+            "recent_count": recent,
+            "prior_count": prior,
+            "pct_change": pct,
+            "pct_arrow": arrow,
+            "pct_class": cls,
+        })
     brands.sort(key=lambda b: (_order_map.get(b["nickname"], 999), b["nickname"]))
     return brands
 
