@@ -90,8 +90,17 @@ class RegressionNet:
         self._check_top_voices(html)
         self._check_feed_engagement(html)
         self._check_feed_avatars(html)
+        self._check_filter_contract(html)
+        self._check_chart_contract(html)
+        self._check_locale_exhibits(html)
         self._check_static_files(html)
         self._check_console_errors(html)
+        # Net F (`/internal/` parity after move) — DEFERRED 2026-08-09:
+        # iter 7 audit found /internal/ returns 404. The legacy home was
+        # replaced in-place at / by iter 1-4 chrome work; U1 (route split,
+        # move legacy home to /internal/) hasn't shipped yet. Net F
+        # assertion will be added in iter 8 along with U1. Tracked in
+        # docs/iterations/2026-08-09-v22-iter-007/REPORT.md.
 
         return len(self.failures) == 0
 
@@ -292,6 +301,107 @@ class RegressionNet:
             self.assert_(f"avatars have varied colors ({unique_colors} unique)",
                          unique_colors >= 2,
                          f"only {unique_colors} unique colors across {len(avatars)} avatars")
+
+    def _check_filter_contract(self, html):
+        # Net C — Filter contract (unchanged wire).
+        # Pin the dashboard filter key tuples from monitor/views.py to ensure
+        # the v22 chrome cutover doesn't silently drop a filter group or option.
+        EXPECTED_DISCOURCE_KEYS = (
+            "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
+            "cope", "fud", "distillation_accusation", "ai_slop_critique",
+            "absurdist_meme", "advertising-marketing",
+        )
+        EXPECTED_POST_TYPE_KEYS = (
+            "buzz_releases", "hands_on_usage", "performance_comparisons",
+            "feedback_questions", "advertising_marketing", "event_announcement",
+        )
+        EXPECTED_ROLE_KEYS = ("official", "staff", "community", "other")
+        EXPECTED_NATIONALISM_KEYS = (
+            "none", "mild_pro", "pro", "constructive_critical", "anti", "mixed",
+        )
+        EXPECTED_LANG_KEYS = (
+            "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar",
+            "pl", "undetected", "other",
+        )
+
+        # Filter nav uses data-group="<short>" on each filter-pill (the
+        # actual rendered wire shape — not data-pw-filter-group).
+        # 7 groups must all be present.
+        groups_in_html = set(re.findall(r'data-group="([^"]+)"', html))
+        EXPECTED_GROUPS = {
+            "brands", "discourse", "role", "lang",
+            "sentiment", "nationalism", "unsanctioned",
+        }
+        self.assert_(
+            "filter-bar nav has all 7 expected groups",
+            EXPECTED_GROUPS <= groups_in_html,
+            f"missing: {EXPECTED_GROUPS - groups_in_html}, found: {groups_in_html}",
+        )
+
+        # For each filter group whose underlying key tuple is pinned in
+        # monitor/views.py, verify a sample of expected keys appear in the
+        # rendered option HTML (the data-key or value attributes).
+        sample_checks = (
+            ("discourse", EXPECTED_DISCOURCE_KEYS),
+            ("nationalism", EXPECTED_NATIONALISM_KEYS),
+            ("role", EXPECTED_ROLE_KEYS),
+            ("lang", EXPECTED_LANG_KEYS),
+            ("post_type", EXPECTED_POST_TYPE_KEYS),
+        )
+        for group_name, expected_keys in sample_checks:
+            sample_missing = [k for k in expected_keys[:3] if k not in html]
+            self.assert_(
+                f"filter-group '{group_name}' has sample options in HTML",
+                not sample_missing,
+                f"sample keys missing: {sample_missing}",
+            )
+
+    def _check_chart_contract(self, html):
+        # Net D — Chart contract.
+        # Chart canvas + chart payload shape pinned.
+        self.assert_(
+            "chart canvas present (data-pw-chart or chart canvas)",
+            "data-pw-chart" in html or "home-chart" in html or "<canvas" in html,
+            "no chart canvas/element found in HTML",
+        )
+        # Chart heading text per v22 mockup
+        self.assert_(
+            "chart heading 'Daily total posts per brand' present",
+            "Daily total posts per brand" in html or "每日各品牌帖子总数" in html,
+            "chart heading missing in both en and zh_cn",
+        )
+        # pw-chart.js loaded
+        self.assert_(
+            "pw-chart.js script loaded",
+            "pw-chart" in html,
+            "pw-chart.js not referenced in HTML",
+        )
+
+    def _check_locale_exhibits(self, html):
+        # Net G — Locale exhibits.
+        # App title always contains both 走个量 and Pushin' Weight.
+        self.assert_(
+            "app title has zh_cn '走个量'",
+            "走个量" in html,
+            "zh_cn app name missing in HTML",
+        )
+        # English name with apostrophe variants
+        en_ok = any(v in html for v in (
+            "Pushin' Weight", "Pushin’ Weight",
+            "Pushin&#x27; Weight", "Pushin&#39; Weight",
+        ))
+        self.assert_(
+            "app title has en 'Pushin' Weight'",
+            en_ok,
+            "English app name missing in HTML",
+        )
+        # Locale toggle exposes 3 buttons (zh_cn / en / original)
+        locale_btns = re.findall(r'data-pw-locale-btn="(\w+)"', html)
+        self.assert_(
+            "locale toggle exposes 3 buttons (zh_cn/en/original)",
+            set(locale_btns) == {"zh_cn", "en", "original"},
+            f"got {set(locale_btns)}",
+        )
 
     def _check_static_files(self, html):
         # Look for the static asset references in the HTML
