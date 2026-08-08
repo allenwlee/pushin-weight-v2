@@ -58,7 +58,7 @@ Functionally, **line chart + filter system** stay the same as today’s home —
 | 2 | This plan | Product + technical contract |
 | 3 | `docs/reference/lookup-tables.md` | zh-cn/en taxonomy labels for filters and feed signals |
 | 4 | The v22 exhibit | Visual + interaction source of truth |
-| 5 | `research/2026-08-08-design-system-contract-gap-analysis-raw.md` (WebSearch supplemental at the end is the load-bearing part — clusters 1, 14, plus Christine Vallaure, Nathan Curtis, REGRESSION.md, arXiv 2603.17973, Tricentis) | Background research for the § "Design system contract framework" section; do not re-litigate the patterns, they're already mapped to this plan's units below. |
+| 5 | `docs/research/2026-08-08-design-system-contract-gap-analysis-raw.md` (WebSearch supplemental at the end is the load-bearing part — clusters 1, 14, plus Christine Vallaure, Nathan Curtis, REGRESSION.md, arXiv 2603.17973, Tricentis) | Background research for the § "Design system contract framework" section; do not re-litigate the patterns, they're already mapped to this plan's units below. |
 
 
 ---
@@ -187,7 +187,7 @@ These four files are the **final markups / exhibits** for this plan. Implementat
 
 ## Design system contract framework (from 2026-08-08 research)
 
-**Source:** `research/2026-08-08-design-system-contract-gap-analysis-raw.md` (1,979 lines; raw `/last30days` output on "design system component contract gap analysis tooling" + 16 WebSearch supplemental citations).
+**Source:** `docs/research/2026-08-08-design-system-contract-gap-analysis-raw.md` (1,979 lines; raw `/last30days` output on "design system component contract gap analysis tooling" + 16 WebSearch supplemental citations).
 
 The research confirms the patterns already in this plan and identifies three new disciplines the plan now adopts. Each pattern lists the cluster in the research file and where the plan already implements (or now adds) it.
 
@@ -261,9 +261,87 @@ Step 6 is the load-bearing change. Without it, the drift documented in the r/Cla
 
 ---
 
+## Visual-drift detection: Element Audit + Chrome DevTools MCP (added 2026-08-08)
+
+The angle-1 section above ("Iteration drift mitigation") and the v20 prototype regression net at `tests/regression_net.py` together pin the **structural** surface (right HTML elements present, right text in them). They do NOT pin **computed CSS values** — `getComputedStyle(el).color`, `background-color`, `font-weight`, `padding`, `border-radius`. This gap surfaced on 2026-08-08: `.pulse-chip-name` rendered **black** text on the dark pulse-card (invisible against the dark pulse fill), but every one of the 50 regression-net assertions passed because the `<span class="pulse-chip-name">` element existed with the right text content. The HTML was correct; the visual output was wrong, and only a human eye on the live page caught it.
+
+The research angle-1 corpus is explicit about why this gap exists. Two load-bearing citations:
+
+- **Tokens fix theming; screenshots catch the drift tokens can't express** ([digitalapplied.com](https://www.digitalapplied.com/blog/screenshot-driven-ui-development-vision-models-2026), 2026-08-01, cluster 1, score 51): "Design tokens fix theming. They cannot express spacing rhythm, visual hierarchy, density, or [other visual drift]." Structural assertions (HTML + class names) are the *tokens* layer; computed styles are the *visual* layer. The regression net currently asserts only the token layer.
+- **Accessibility snapshots beat screenshots for structural verification** ([dev.to pointchecknote, 2026-08-05](https://dev.to/pointchecknote/browser-automation-with-claude-playwright-mcp-why-accessibility-snapshots-beat-screenshots-2pke), angle-1 cluster "alternatives"): the a11y tree gives stable, machine-diffable structural tokens; pixel screenshots give the visual layer neither can express alone. Both layers are needed.
+
+### Why Chrome DevTools MCP, not Playwright (per session-settled decision)
+
+Per the prior session's research incorporation (`docs/research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md`, X12 grok 2026-07-10, angle-1 cluster on browser control): "Browser control via Playwright headless Chromium or Google's Chrome DevTools MCP has been doable for custom agents for a while. **The difference: Claude now has a native in-app browser.**" Anthropic's `mcp__chrome-devtools__` exposes:
+
+| Tool | What it returns | Drift signal it catches |
+|---|---|---|
+| `take_snapshot` (a11y tree) | Stable structural tokens w/ uids | "right element exists at right uid" — same as current HTML grep |
+| `take_screenshot` | PNG of live viewport | Pixel diff vs mockup PNG — catches the visual drift tokens can't express |
+| `evaluate_script(fn)` | Return value of arbitrary JS in page context | `getComputedStyle(el).color` / `background-color` / `font-weight` for any element — catches the *black-on-dark* class of defects that a11y snapshots and HTML greps both miss |
+
+The third row is the new capability. The existing regression net's 50 assertions inspect only the first column (a11y-equivalent: HTML structure). Adding the third column catches the pulse-chip-color defect on the next iteration.
+
+Playwright MCP would give the same capability surface (Playwright has `page.evaluate()` for computed styles and `page.screenshot()` for pixel diffs), but requires spinning a separate browser binary; Chrome DevTools MCP uses the user's already-running Chrome instance via CDP — zero install, zero config, and the screenshots/pixel diffs are guaranteed to be in the same viewport the user is testing in. The cost saved is the "does the agent's headless Chromium match the user's Chrome" reconciliation problem.
+
+### Element Audit script — `tests/element_audit.py` (NEW)
+
+The audit walks the v22-master mockup DOM and the live page DOM in parallel, captures computed styles for every region in the **UI region table** (§ "UI region → DB query → view function → template loop"), and emits a per-region diff. The diff is FAIL if any region's computed-style values differ; PASS otherwise.
+
+**Region targets (pinned to the 5 most-drifted regions from the 2026-08-08 visual review):**
+
+| Region | Mockup computed value (pinned) | Live computed value (must match) |
+|---|---|---|
+| `.pulse-chip-name` | `color: rgb(255, 255, 255)` (white) | (asserted at audit time) |
+| `.voice-chip` background | `rgba(124, 58, 237, 0.18)` purple tint | (asserted at audit time) |
+| `.filter-button:hover` | distinct hover color from default state | (asserted at audit time) |
+| `.feed-handle` text-decoration | `none` (no underline by default) | (asserted at audit time) |
+| `.delta.up::before` content | `"▲"` + green color | (asserted at audit time) |
+
+The pinned values above are the **AFTER** state the plan INTENTIONALLY lands on; a BEFORE comment in the assertion captures the diff (e.g., `# BEFORE: color was rgb(0, 0, 0) — invisible on dark pulse-card fill`).
+
+### Regression-net extension — `_check_visual_tokens()` (NEW)
+
+Extends `tests/regression_net.py` with a new method that runs against the **mockup HTML file** served locally (the v22-master file is a static HTML; the audit serves it via `python -m http.server` on port 5051 during the audit run, OR fetches it directly via `file://`) and against the live Django page. For each pinned region, both responses' `getComputedStyle` are captured and compared to the pinned values via a small headless driver.
+
+Since `tests/regression_net.py` is intentionally **no-browser-dependency** (per its module docstring: "the only client-side changes (htmx chart refresh, time-window JS) are noted separately"), the Element Audit lives in a SEPARATE file (`tests/element_audit.py`) that requires `playwright` or uses the Chrome DevTools MCP directly. The two are coupled by **shared pinned-values table** (single source of truth in `tests/visual_tokens.py`):
+
+```python
+# tests/visual_tokens.py (single source of truth for pinned CSS values)
+VISUAL_TOKENS = {
+    ".pulse-chip-name": {"color": "rgb(255, 255, 255)"},
+    ".voice-chip": {"background-color": "rgba(124, 58, 237, 0.18)"},
+    ".delta.up::before": {"content": "\"▲\""},
+    # ... 5+ regions, one row per pinned token
+}
+```
+
+Both `tests/element_audit.py` (browser-driven) and `tests/regression_net.py` (HTTP-only) read from this dict. When the plan INTENTIONALLY changes a value, only this file is updated — both surfaces pick up the new pinned value on next run, and the BEFORE comment in the assertion preserves the audit trail.
+
+### Per-iteration contract extension
+
+The v20 plan's "Per-iteration contract" step 6 (diff live vs mockup, NOT live vs previous-live) is extended to:
+
+> 6a. Run `tests/element_audit.py` against v22-master + live at the same viewport + locale
+> 6b. For each row in `tests/visual_tokens.py`, assert mockup computed value == live computed value == pinned value
+> 6c. If 6b fails: file a NEW P0/P1 in the UI region table; do NOT proceed to scenario capture
+
+Step 6a-c is the **load-bearing change** vs the current process. Without it, the drift documented in the r/ClaudeCode thread (cited in angle-1) re-appears at the *visual* layer even when the structural regression net is green — which is exactly what happened with the pulse-chip color on 2026-08-08.
+
+### Definition of Done (new line)
+
+> **Visual drift net shipped and green** — `tests/visual_tokens.py` has ≥ 5 pinned regions, `tests/element_audit.py` runs against mockup + live and fails on any mismatch, and the 2026-08-08 pulse-chip-color defect (and any other pre-existing visual defects surfaced by manual review) are pinned in the AFTER state.
+
+### Patterns deliberately skipped (and why)
+
+- **Pure pixel-diff screenshot comparison** (`pixelmatch` / `odiff` libraries) — catches more than computed-style diff (rendering quirks, font hinting, anti-aliasing) but is brittle across viewports and CSS class renames. The structural computed-style pin catches the same class of defect the user complained about (color, contrast, weight) without the brittleness. Pixel diff can be added later as a Tier-2 audit if computed-style proves insufficient.
+- **Figma-to-CSS token sync** (Tokens Studio, Style Dictionary) — source of truth is HTML exhibits, not Figma. Same cargo-cult skip as the angle-1 § "Patterns deliberately skipped" list.
+- **CSS-in-JS runtime assertions** (e.g., styled-components `jest-styled-components`) — the v22 shell uses plain `home-v20.css`; no CSS-in-JS runtime exists to hook into.
+---
+
 ## Regression net discipline (from 2026-08-08 angle-2 research)
 
-**Source:** `research/2026-08-08-regression-nets-for-ai-agents-raw.md` (1,826 lines; raw `/last30days` run on "regression test AI agent code changes pin UNCHANGED surface" + 8 WebSearch supplemental sources). 153 items across Reddit (34), HN (29), TikTok (27), GitHub (24), YouTube (13), Web (12), Instagram (7), X (7).
+**Source:** `docs/research/2026-08-08-regression-nets-for-ai-agents-raw.md` (1,826 lines; raw `/last30days` run on "regression test AI agent code changes pin UNCHANGED surface" + 8 WebSearch supplemental sources). 153 items across Reddit (34), HN (29), TikTok (27), GitHub (24), YouTube (13), Web (12), Instagram (7), X (7).
 
 Angle-2 narrows angle-1's iteration-drift topic to a specific discipline: **regression nets are not just a defensive net — they are the eval/QA primitive for AI-driven code change**, and they must be built BEFORE the production failure they prevent closes. Six patterns are adopted; two deliberately skipped.
 
@@ -823,17 +901,24 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 **Do not start ce-work / production cutover** until the user explicitly freezes (or explicitly authorizes “implement against current v20 knowing mock may still move”).
 
-| Gate | Ready when… |
-|---|---|
-| G1 | User says mock is frozen **or** “ship against current v22” |
-| G2 | Session-settled decisions table still accepted (especially defaults, `/internal`, Open/Closed, TZ labels, ☆ = followers) |
-| G3 | post_type primary-bar choice resolved **or** explicitly deferred with A3 |
-| G4 | Sentiment functional vs decorative resolved (A6) |
-| G5 | No parallel session mid-edit of the same mock without merge note |
+| Gate | Status (2026-08-08) | Resolution |
+|---|---|---|
+| G1 — mock frozen | **✅ RESOLVED** | User confirmed `06-tier1-composed.v22-master.html` is final. Mobile/desktop × zh/en exhibits are the four production target renders. |
+| G2 — session-settled decisions | **✅ RESOLVED** | Defaults = 24h / zh_cn / user-local-TZ. `LANGUAGE_CODE="zh-hans"`, `/internal` legacy route, ☆ = followers by voice_score all stand. |
+| G3 — post_type primary-bar | **✅ RESOLVED** | All 6 post_type keys ship as peers in the filter dropdown (no primary-bar grouping): `buzz_releases / hands_on_usage / performance_comparisons / feedback_questions / advertising_marketing / event_announcement`. |
+| G4 — Sentiment functional vs decorative (A6) | **✅ RESOLVED (DB-canonical)** | Sentiment filter is functional. 4 keys ship per `docs/reference/lookup-tables.md § 2`: `positive / negative / neutral / mixed`. Plan defers to DB; do not invent labels in code or template. |
+| G4b — Nationalism axis (added 2026-08-08) | **✅ RESOLVED (DB-canonical)** | Two parallel axes (china_nationalism + us_nationalism), 6 keys each per `docs/reference/lookup-tables.md § 4`: `none / mild_pro / pro / constructive_critical / anti / mixed`. Plan defers to DB. |
+| G4c — Discourse vocabulary (added 2026-08-08) | **✅ RESOLVED (DB-canonical)** | 10 keys per `docs/reference/lookup-tables.md § 3`: `genuine_hype / sarcasm / dunk_yingyang / self_deprecation / cope / fud / distillation_accusation / ai_slop_critique / absurdist_meme / advertising-marketing` (note hyphen). |
+| G4d — Roles (added 2026-08-08) | **✅ RESOLVED (DB-canonical)** | 3 persisted Roles (`official / staff / community`) + 1 computed-at-query (`other`) per `docs/reference/lookup-tables.md § 5`. |
+| G4e — Unsanctioned flags (added 2026-08-08) | **✅ RESOLVED (DB-canonical)** | 4 keys per `docs/reference/lookup-tables.md § 6`: `marketing_spam / scam / crypto / unauthorized`. No `*Label` table exists for this one. |
+| G4f — Filter wire (added 2026-08-08) | **✅ RESOLVED** | All 7 filter groups ship as-is: Brands / Discourse / account.role / lang / Sentiment / Nationalism / unsanctioned. |
+| G5 — No parallel session mid-edit | **🟢 ACTIVE** | No parallel session currently editing the same mock. |
 
-**Allowed before freeze (optional):** U0 regression net only, if user wants early contract pins. Route split (U1) and window default (U2) may start only when user says product defaults are settled even if chrome still moves.
+**Canonical reference for every filter value:** `docs/reference/lookup-tables.md`. Per user direction 2026-08-08: "literally all of the filter labels should be determined by db … make sure to clearly have the plan use db as canon for every filter and choices within each." Plan body, templates, view code, and i18n catalogs must read from the DB at runtime — not hardcode labels or option sets.
 
-**Not allowed before freeze:** Full U3–U6 chrome cutover, deploy, “while we’re at it” brand page restyle (M2).
+**Allowed before freeze (optional):** U0 regression net only, if user wants early contract pins. Route split (U1) and window default (U2) may start only when user says product defaults are settled even if chrome still moves. **All gates now RESOLVED → U3–U6 are unblocked.**
+
+**Not allowed before freeze:** ~~Full U3–U6 chrome cutover, deploy, "while we're at it" brand page restyle (M2).~~ **SUPERSEDED 2026-08-08** — gates G1–G4f are RESOLVED. Phase B (U1-full chrome, U3, U4-chrome, U5, U6) is now go-decision-only at the user's `/goal` prompt.
 
 ---
 
@@ -871,15 +956,17 @@ When a new mock version lands (v19+), update:
 
 Do **not** start full ce-work cutover until:
 
-| Gate | Meaning |
-|---|---|
-| G1 | User freezes the **v22 exhibit** (or says “ship against current v22”) |
-| G2 | Session-settled table still accepted |
-| G3 | `/internal` path confirmed (supersedes any older `/old` notes) |
-| G4 | Regression net list A–G accepted |
-| G5 | Skill `avoiding-recurring-mistakes` acknowledged by implementer |
+| Gate | Status (2026-08-08) | Meaning / Resolution |
+|---|---|---|
+| G1 | **✅ RESOLVED** | User freezes the **v22 exhibit** (or says "ship against current v22") — confirmed v22-master is final. |
+| G2 | **✅ RESOLVED** | Session-settled table still accepted — defaults confirmed (24h/zh_cn/local-TZ), filter wire confirmed (7 groups ship as-is, all values DB-canonical). |
+| G3 | **✅ RESOLVED** | `/internal` path confirmed (supersedes any older `/old` notes) — already adopted in U1. |
+| G4 | **🟡 ACTIVE** | Regression net list A–G accepted — Nets A–G defined in plan; **needs implementer acceptance before U7 Integration Verification can close**. Mark accepted when first U-unit ships and the net reads green. |
+| G5 | **🟡 ACTIVE** | Skill `avoiding-recurring-mistakes` acknowledged by implementer — skill exists at `.claude/skills/avoiding-recurring-mistakes/SKILL.md`; require explicit acknowledgement in agent handoff before Phase B starts. |
 
-**Allowed before freeze:** U0 nets only (characterization against live `/`).
+**Allowed before freeze:** U0 nets only (characterization against live `/`). **Gates G1–G3 now RESOLVED → U1-stub, U2, U4-hover-removal are go-decision-only.**
+
+**Note on block duplication:** This block (G1–G5 = mock/session/internal/nets/skill) and the prior block (G1–G5 = mock/session/post_type/sentiment/parallel-edit) cover overlapping-but-distinct gates. The first block is the **product-decision** freeze; the second is the **project-hygiene** freeze. Both must be cleared before U7 (Integration Verification + Definition of Done) closes. As of 2026-08-08 the product-decision freeze is fully cleared; project-hygiene freeze is at 3/5 RESOLVED with the implementer-acknowledgement gates (G4, G5) deferred to the agent that picks up Phase B.
 
 ---
 
@@ -927,14 +1014,16 @@ _(Append future exhibit edits here.)_
 
 | Date | Change |
 |---|---|
+| 2026-08-08 | **All 7 freeze-criteria gates RESOLVED (Phase B unblocked)** — product-decision freeze fully cleared: F1 defaults = 24h/zh_cn/local-TZ; F2 filter wire = 7 groups ship as-is (Brands/Discourse/account.role/lang/Sentiment/Nationalism/unsanctioned); G1 mock freeze = `06-tier1-composed.v22-master.html` is final; G3 post_type = 6 keys as peers (no primary-bar grouping); G4 sentiment = DB-canonical (4 keys per `lookup-tables.md § 2`); G4b nationalism = DB-canonical (6 keys × 2 axes per § 4); G4c discourse = DB-canonical (10 keys per § 3); G4d roles = DB-canonical (3 persisted + 1 computed per § 5); G4e unsanctioned = DB-canonical (4 keys per § 6). User direction 2026-08-08: "literally all of the filter labels should be determined by db … make sure to clearly have the plan use db as canon for every filter and choices within each." Both freeze blocks updated; second block's G4 (Net A–G acceptance) and G5 (avoiding-recurring-mistakes skill acknowledgement) remain ACTIVE — implementer-acknowledgement gates, deferred to Phase B agent. Phase B (U1-full chrome, U3, U4-chrome, U5, U6) is now go-decision-only at the user's `/goal` prompt. |
+| 2026-08-08 | **Visual-drift detection: Element Audit + Chrome DevTools MCP added** — new § "Visual-drift detection: Element Audit + Chrome DevTools MCP (added 2026-08-08)" inserted between angle-1 (iteration drift) and angle-2 (regression net) sections. Distills the prior research-incorporation session's browser-tool decision (Chrome DevTools MCP native `mcp__chrome-devtools__` over Playwright MCP: zero-install CDP, shares user's running Chrome, exposes both `take_snapshot` and `evaluate_script(fn)`). Adds **NEW** unit: `tests/visual_tokens.py` (single source of truth, ≥ 5 pinned regions) + `tests/element_audit.py` (Chrome DevTools MCP-driven computed-style diff vs `tests/regression_net.py` HTTP-only). Pinned regions include `.pulse-chip-name` color (the 2026-08-08 defect — black on dark fill — AFTER state: `rgb(255, 255, 255)`), `.voice-chip` background, `.filter-button:hover`, `.feed-handle` text-decoration, `.delta.up::before` content. Per-iteration contract extended with steps 6a-6c; new Definition-of-Done line "Visual drift net shipped and green." Scope: angle-3 incorporation. Implementation units TBD in iter 5 — no silent narrowing. |
 | 2026-08-08 | **v22 iter 4: Top Voices body RESOLVED (historical blocker)** — P0 #1 of 5 fixed. Added `_multi_top_voices(window_days, limit=3)` view function joining Post × Account; voice_score = mention_count × log10(followers_count+10). Rendered `<span class="headline-voices">` block with `<a class="voice-chip">@handle (☆ N)</a>` chips, ordered by star DESC, comma-separated. CSS `.headline-voices` / `.voice-chip` / `.voice-star` appended to `home-v20.css`. Regression net extended from 46 to 50 assertions (+5 top-voices checks), all green. Live verified: @JulianGoldieSEO (☆ 869), @Megannewman99 (☆ 631), @tushar_koshti (☆ 445). **All 4 P0 gaps closed — goal `v22` condition MET.** |
 | 2026-08-08 | **v22 iter 3: Feed engagement + avatar circles resolved** — P0 #3 + #4 of 5 from iter 1 audit fixed. Added `_avatar_initials()` (1-2 char uppercase from handle), `_avatar_color()` (djb2 hash → stable HSL), `_engagement_pretty()` (compact counters); extended `_post_to_wire()` return with `retweet_count`/`reply_count`/`quote_count`/`avatar_initials`/`avatar_color`/`engagement_pretty`. Template `_feed_initial.html` wraps handle cell in `<div class="feed-author">` with avatar + adds `<div class="feed-engagement">` with 4 `.engagement-stat` spans (👥/♥/↻/💬 HTML entities). CSS `.feed-author`/`.avatar`/`.feed-engagement`/`.engagement-icon` appended to `home-v20.css`. Regression net extended from 37 to 46 assertions (+6 engagement +3 avatar), all green. UI region table updated. 1 P0 gap remains: Top Voices. |
 | 2026-08-08 | **v22 iter 2: Trending %change deltas resolved** — P0 #2 of 5 from iter 1 fixed. Added `_compute_brand_deltas()` (single aggregation query against PostBrand x Post, 60 min vs prior 60 min buckets); extended `_build_brands_context()` with pct_change / pct_arrow / pct_class; template renders `<span class="delta {{ b.pct_class }}">{{ b.pct_change }}%</span>` inside pulse-chip. CSS .delta.up/.down/.flat arrows were already in `home-v20.css:200-206`. Regression net extended from 34 to 37 assertions (added 3 trending-delta checks), all green. UI region table updated; Locale default P0 dropped (false positive — `LANGUAGE_CODE="zh-hans"`). 3 P0 gaps remain (Top Voices, Feed engagement counts, Feed avatar circles). Goal hook still holding. |
 | 2026-08-08 | **v22 iter 1: Element Audit + 5 new P0 gaps filed** — regression net 34/0 PASS; live vs v22-master diff surfaced Top Voices (pre-existing), Trending %change deltas, Feed engagement counts, Feed avatar circles, Locale default. UI region table extended with 4 new NOT YET ADDED rows. Per per-iteration contract step 8, scenario captures deferred until P0 audit failures are addressed. Artifacts: `docs/iterations/2026-08-08-v22-iter-001/{REPORT.md, live.png, v22-master.png}`. |
 | 2026-08-08 | **Mockup consolidation: 4 v20-* files collapsed to single `06-tier1-composed.v22-master.html`** (responsive mobile ↔ desktop + locale toggle built-in). All 5 mockup references in plan updated to point at v22-master (3 doc-paths + 1 local mirror + 1 Sources bullet). v20-* files retained on disk as design-history. |
-| 2026-08-08 | **Regression net discipline incorporated** from `research/2026-08-08-regression-nets-for-ai-agents-raw.md`: new § "Regression net discipline (from 2026-08-08 angle-2 research)" with 6 adopted patterns (Evals-as-regression-tests / Closed-loop RUN-detect-diagnose / REGRESSION.md-named-after-failure / Production-tracing-suite-pipeline / Vibe-vs-eval / Agent-as-QA-PR-gate) + 2 deliberately skipped (AgentCore Evaluations / TDD-useless-tests). Sub-sections: "Evals as regression tests (v18)" framing Nets A–G as the v18 analog of LLM evals; "Closed-loop RUN → detect reds → diagnose" mapping hackproduct9 5 stages onto v18/v20 verification gate; "Production-tracing → regression-suite pipeline" adapting Metacto/LangSmith/Langfuse/Arize/Braintrust loop; "Vibe-vs-eval gate" reinforcing Definition of Done with two new lines (eval-named + failure-closes-the-loop).
-| 2026-08-08 | **Iteration drift mitigation incorporated** from `research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md`: new § "Iteration drift mitigation (from 2026-08-08 angle-1 research)" with 4 adopted patterns w/ citations (compare-live-vs-mockup-not-previous-live, bounded-loop task contract, Playwright/browser-MCP evidence, explicit approval before baseline update) + 3 deliberately skipped + drift-mitigation discipline paragraph referencing v20 plan's per-iteration contract step 6 verbatim. |
-| 2026-08-08 | **Design system contract framework incorporated** from `research/2026-08-08-design-system-contract-gap-analysis-raw.md`: new § "Design system contract framework" (8 adopted patterns w/ citations, 3 deliberately skipped); **UI region → DB query → view function → template loop** table (12 regions × 5 columns) + mockup-side infra mirror table (11 rows); **regression-net-discipline paragraph** pointing to `tests/regression_net.py` prototype from v20 plan; Sources section updated; end-of-unit scope delta footer. |
+| 2026-08-08 | **Regression net discipline incorporated** from `docs/research/2026-08-08-regression-nets-for-ai-agents-raw.md`: new § "Regression net discipline (from 2026-08-08 angle-2 research)" with 6 adopted patterns (Evals-as-regression-tests / Closed-loop RUN-detect-diagnose / REGRESSION.md-named-after-failure / Production-tracing-suite-pipeline / Vibe-vs-eval / Agent-as-QA-PR-gate) + 2 deliberately skipped (AgentCore Evaluations / TDD-useless-tests). Sub-sections: "Evals as regression tests (v18)" framing Nets A–G as the v18 analog of LLM evals; "Closed-loop RUN → detect reds → diagnose" mapping hackproduct9 5 stages onto v18/v20 verification gate; "Production-tracing → regression-suite pipeline" adapting Metacto/LangSmith/Langfuse/Arize/Braintrust loop; "Vibe-vs-eval gate" reinforcing Definition of Done with two new lines (eval-named + failure-closes-the-loop).
+| 2026-08-08 | **Iteration drift mitigation incorporated** from `docs/research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md`: new § "Iteration drift mitigation (from 2026-08-08 angle-1 research)" with 4 adopted patterns w/ citations (compare-live-vs-mockup-not-previous-live, bounded-loop task contract, Playwright/browser-MCP evidence, explicit approval before baseline update) + 3 deliberately skipped + drift-mitigation discipline paragraph referencing v20 plan's per-iteration contract step 6 verbatim. |
+| 2026-08-08 | **Design system contract framework incorporated** from `docs/research/2026-08-08-design-system-contract-gap-analysis-raw.md`: new § "Design system contract framework" (8 adopted patterns w/ citations, 3 deliberately skipped); **UI region → DB query → view function → template loop** table (12 regions × 5 columns) + mockup-side infra mirror table (11 rows); **regression-net-discipline paragraph** pointing to `tests/regression_net.py` prototype from v20 plan; Sources section updated; end-of-unit scope delta footer. |
 | 2026-08-07 | **Agent handoff brief:** Phase A authorized now (U0–U2, U4); Phase B after exhibit freeze; hard stop conditions; copy-paste agent prompt. |
 | 2026-08-07 | **Canonical exhibits = four v20 files**; session prompts incorporated; **DRY/reuse chart+filters** mandate; **required** avoiding-recurring-mistakes skill; **comprehensive regression nets A–G**; legacy home path **`/internal`** (not replace; not `/old`); root = new design. |
 | 2026-08-07 | Feed shell tint filter-aware (R12/KTD11). |
@@ -950,13 +1039,15 @@ _(Append future exhibit edits here.)_
 - Skill: `.claude/skills/avoiding-recurring-mistakes/SKILL.md`
 - Live home: `monitor/templates/monitor/home.html`, `monitor/views.py`, `monitor/static/pw-*.js`
 - Design session: dropdown debug → taxonomy → TZ → feed signals → v22 trifurcation (+ desktop)
-- Research: `research/2026-08-08-design-system-contract-gap-analysis-raw.md` (WebSearch supplemental results enumerate the contract / schema / regression-net / agentic-iteration citations referenced in § "Design system contract framework")
-- Research: `research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md` (drift-mitigation citations referenced in § "Iteration drift mitigation")
-- Research: `research/2026-08-08-regression-nets-for-ai-agents-raw.md` (regression-net / closed-loop / production-tracing / agent-as-QA citations referenced in § "Regression net discipline (from 2026-08-08 angle-2 research)")
+- Research: `docs/research/2026-08-08-design-system-contract-gap-analysis-raw.md` (WebSearch supplemental results enumerate the contract / schema / regression-net / agentic-iteration citations referenced in § "Design system contract framework")
+- Research: `docs/research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md` (drift-mitigation citations referenced in § "Iteration drift mitigation")
+- Research: `docs/research/2026-08-08-regression-nets-for-ai-agents-raw.md` (regression-net / closed-loop / production-tracing / agent-as-QA citations referenced in § "Regression net discipline (from 2026-08-08 angle-2 research)")
 - Companion plan (prototype iteration loop + `tests/regression_net.py`): `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md`
+- Visual drift pin source (single source of truth for computed-style assertions): `tests/visual_tokens.py` (NEW — to be created in iter 5)
+- Visual drift audit script: `tests/element_audit.py` (NEW — Chrome DevTools MCP-driven, to be created in iter 5)
 
 ---
 
 ## End-of-unit scope delta
 
-`Scope delivered vs plan promised: match — three research incorporations completed (first research = design-system-contract, second = agentic-ui-iteration-loop-drift, third = regression-nets-for-ai-agents) + mockup consolidation (4 v20-* files — single v22-master). Added by angle-2 (this revision): § "Regression net discipline (from 2026-08-08 angle-2 research)" (6 adopted patterns w/ citations, 2 deliberately skipped) + 4 sub-sections + 2 new Definition-of-Done lines + Sources entry for the angle-2 research file + Changelog row. Added by mockup-consolidation (this revision): all 4 v20-* mockup file references collapsed to single v22-master file (responsive mobile ↔ desktop + locale toggle built-in) using the fuchitalee absolute path. No units deferred; no silent narrowing.
+`Scope delivered vs plan promised: match — three research incorporations completed (first research = design-system-contract, second = agentic-ui-iteration-loop-drift, third = regression-nets-for-ai-agents) + mockup consolidation (4 v20-* files — single v22-master). Added by angle-2 (this revision): § "Regression net discipline (from 2026-08-08 angle-2 research)" (6 adopted patterns w/ citations, 2 deliberately skipped) + 4 sub-sections + 2 new Definition-of-Done lines + Sources entry for the angle-2 research file + Changelog row. Added by mockup-consolidation (this revision): all 4 v20-* mockup file references collapsed to single v22-master file (responsive mobile ↔ desktop + locale toggle built-in) using the fuchitalee absolute path. Added by angle-3 visual-drift-detection (this revision): § "Visual-drift detection: Element Audit + Chrome DevTools MCP (added 2026-08-08)" — distills prior session's Chrome DevTools MCP vs Playwright decision; defines NEW unit `tests/visual_tokens.py` (pinned computed-style values for ≥ 5 regions) + `tests/element_audit.py` (Chrome DevTools MCP-driven visual diff); per-iteration contract extended with steps 6a-6c; new Definition-of-Done line "Visual drift net shipped and green." Implementation units TBD in iter 5 — design-only scope this revision; no code changes yet. Added by gate-resolution (this revision): all 7 product-decision freeze gates RESOLVED via sequential Q&A (F1 defaults, F2 filter wire, G1 mock freeze, G3 post_type, G4 sentiment, G4b nationalism, G4c discourse, G4d roles, G4e unsanctioned) — every filter value DB-canonical per `docs/reference/lookup-tables.md`. Phase B (U1-full chrome, U3, U4-chrome, U5, U6) now unblocked. Project-hygiene gates G4 (Net A–G acceptance) and G5 (avoiding-recurring-mistakes skill acknowledgement) remain ACTIVE — implementer-acknowledgement gates, deferred to Phase B agent. No units deferred; no silent narrowing.
