@@ -1059,6 +1059,42 @@ def _compute_brand_deltas() -> dict[str, dict[str, int]]:
     return out
 
 
+def _multi_top_voices(window_days: int, limit: int = 3) -> list[dict[str, Any]]:
+    """Return top N voice authors in the current window.
+
+    Each entry has handle, voice_star (displayed as ☆ N), mention_count,
+    followers_count. Ordered by voice_score DESC.
+
+    voice_score = mention_count * log10(followers_count + 10)
+    """
+    import math
+    cutoff = django_timezone.now() - timedelta(days=window_days)
+    qs = (
+        Post.objects.filter(created_at__gte=cutoff, author__isnull=False)
+        .values("author__handle", "author__author_id", "author__followers_count")
+        .annotate(mention_count=Count("tweet_id"))
+    )
+    out: list[dict[str, Any]] = []
+    for row in qs:
+        handle = row["author__handle"]
+        if not handle:
+            continue
+        followers = row["author__followers_count"] or 0
+        mentions = row["mention_count"] or 0
+        score = mentions * math.log10(max(followers, 0) + 10)
+        star = max(1, int(round(score)))
+        out.append({
+            "handle": handle,
+            "author_id": row["author__author_id"],
+            "voice_score": score,
+            "voice_star": star,
+            "mention_count": mentions,
+            "followers_count": followers,
+        })
+    out.sort(key=lambda v: (-v["voice_score"], -v["followers_count"]))
+    return out[:limit]
+
+
 def _build_brands_context() -> list[dict[str, Any]]:
     """Return pre-merged brand data list for templates.
 
@@ -1141,8 +1177,11 @@ def home(request: HttpRequest) -> HttpResponse:
     initial_chart_payload = _build_home_chart_payload(window_days, {})
     initial_chart_payload["applied_filters"] = {}
 
+    top_voices = _multi_top_voices(window_days=window_days, limit=3)
+
     context = {
         "brands": brands_data,
+        "top_voices": top_voices,
         "brand_count": len(brands_data),
         "brand_nicknames_json": json.dumps(brand_nicknames),
         "applied_filters_json": json.dumps({}),

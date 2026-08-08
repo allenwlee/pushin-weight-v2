@@ -234,6 +234,16 @@
         <span class="pulse"></span>
         <span class="headline-label">{% trans "Top voices" %}</span>
         <span class="headline-meta muted">☆ {% trans "by followers" %}</span>
+        <span class="headline-voices">
+          {% for voice in top_voices %}
+            <a class="voice-chip" href="https://x.com/{{ voice.handle|cut:'@' }}" target="_blank" rel="noopener noreferrer">
+              <span class="voice-handle">@{{ voice.handle }}</span>
+              <span class="voice-star">(☆ {{ voice.voice_star }})</span>
+            </a>{% if not forloop.last %}, {% endif %}
+          {% empty %}
+            <span class="muted">{% trans "no top voices this period" %}</span>
+          {% endfor %}
+        </span>
       </div>
     </div>
 

@@ -915,3 +915,33 @@ body.desktop-shell .desktop-grid .feed-strip {
   font-size: 12px;
   line-height: 1;
 }
+
+/* v22 iter 4: top voices body */
+.headline-voices {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.headline-voices .voice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(124, 58, 237, 0.18);
+  color: #e9d5ff;
+  text-decoration: none;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.headline-voices .voice-chip:hover {
+  background: rgba(124, 58, 237, 0.32);
+  color: #fff;
+}
+.headline-voices .voice-star {
+  color: #fbbf24;
+  font-weight: 600;
+}

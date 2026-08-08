@@ -87,6 +87,7 @@ class RegressionNet:
         self._check_locale_toggle(html)
         self._check_sections(html)
         self._check_trending_deltas(html)
+        self._check_top_voices(html)
         self._check_feed_engagement(html)
         self._check_feed_avatars(html)
         self._check_static_files(html)
@@ -211,6 +212,38 @@ class RegressionNet:
             self.assert_("all trending delta values end with %",
                          not bad_pct,
                          f"invalid: {bad_pct[:3]}")
+
+    def _check_top_voices(self, html):
+        # Top Voices body must contain at least 1 .voice-chip with @handle + ☆ N
+        # (the historical blocker from v18-v20; pinned by iter 4 v22).
+        chips = re.findall(
+            r'<a class="voice-chip"[^>]*>\s*<span class="voice-handle">@([^<]+)</span>\s*<span class="voice-star">\(☆ (\d+)\)</span>\s*</a>',
+            html,
+        )
+        self.assert_("top-voices has >= 1 voice chip",
+                     len(chips) >= 1,
+                     f"got {len(chips)} voice chips")
+        if chips:
+            # Each chip has a non-empty handle
+            bad_handles = [(h, s) for h, s in chips if not h.strip()]
+            self.assert_("all voice chips have non-empty handle",
+                         not bad_handles,
+                         f"empty: {bad_handles[:3]}")
+            # Each ☆ count is a positive integer
+            bad_stars = [(h, s) for h, s in chips if int(s) < 1]
+            self.assert_("all voice star counts are >= 1",
+                         not bad_stars,
+                         f"zero/negative: {bad_stars[:3]}")
+            # Chips must be ordered by star DESC (top first)
+            stars = [int(s) for _, s in chips]
+            sorted_desc = all(stars[i] >= stars[i+1] for i in range(len(stars)-1))
+            self.assert_("voice chips ordered by star DESC",
+                         sorted_desc,
+                         f"order: {stars}")
+            # Top Voices region must NOT have an empty-state placeholder when chips render
+            if "no top voices this period" in html and len(chips) > 0:
+                self.assert_("empty-state not shown when voices present", False,
+                             "placeholder text present alongside chips")
 
     def _check_feed_engagement(self, html):
         # Feed cards must each render the 4-icon engagement stats block
