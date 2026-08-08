@@ -1208,6 +1208,55 @@ def home(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def home_internal(request: HttpRequest) -> HttpResponse:
+    """GET /internal/ — legacy multi-brand Pushin' Weight home (pre-v22 chrome).
+
+    U1 (route split): legacy home moved here when v22 chrome replaced /.
+    Renders the pre-v22 home.html template (now saved as home_internal.html).
+    Same data layer as the v22 home (sharing _resolve_locale, _resolve_home_window,
+    _build_brands_context, _get_feed_posts, _post_to_wire, _build_home_chart_payload)
+    so behavior is identical except for the visual chrome.
+    """
+    locale = _resolve_locale(request)
+    window_days = _resolve_home_window(request)
+
+    brands_data = _build_brands_context()
+    brand_nicknames = [b["nickname"] for b in brands_data]
+
+    feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
+    enriched = _enrich_posts_with_classifications(feed_posts)
+    enriched_map = {e["tweet_id"]: e for e in enriched}
+    feed_rows = [
+        _post_to_wire(p, locale, enriched_map.get(p.tweet_id))
+        for p in feed_posts
+    ]
+
+    initial_chart_payload = _build_home_chart_payload(window_days, {})
+    initial_chart_payload["applied_filters"] = {}
+
+    context = {
+        "brands": brands_data,
+        "brand_count": len(brands_data),
+        "brand_nicknames_json": json.dumps(brand_nicknames),
+        "applied_filters_json": json.dumps({}),
+        "feed": {"rows": feed_rows, "next_cursor": None},
+        "active_locale": locale,
+        "home_window_days": window_days,
+        "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
+        "app_name_zh": APP_DISPLAY_NAME_ZH,
+        "app_name_en": APP_DISPLAY_NAME_EN,
+        "app_title_zh": APP_TITLE_ZH,
+        "discourse_keys": _DASHBOARD_DISCOURSE_KEYS,
+        "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
+        "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
+        "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
+        "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
+        "payload": json.dumps(initial_chart_payload),
+    }
+    return render(request, "monitor/home_internal.html", context)
+
+
+@login_required
 def brand_home(
     request: HttpRequest,
     brand: str,

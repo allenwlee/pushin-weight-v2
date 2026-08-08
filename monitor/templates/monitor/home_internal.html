@@ -1,0 +1,180 @@
+{% load static %}
+{% load i18n %}
+<!doctype html>
+<html lang="{{ active_locale|slice:":2"|default:"en" }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ app_title_zh }} · multi-brand</title>
+  {# CSS — served from x_monitor/static/ via Flask dev server for now; U8 moves to WhiteNoise. #}
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}">
+  {# JS — CDN for htmx + Chart.js; custom scripts loaded from static (will 404 until U8). #}
+  <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+  <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
+  <script src="{% static 'pw-filter-store.js' %}" defer></script>
+  <script src="{% static 'pw-chart.js' %}" defer></script>
+  <script src="{% static 'pw-brand-chart.js' %}" defer></script>
+  <script src="{% static 'pw-feed.js' %}" defer></script>
+  <script src="{% static 'pw-locale-toggle.js' %}" defer></script>
+  <script src="{% static 'dashboard.js' %}" defer></script>
+</head>
+{% csrf_token %}
+<body data-pw-filters='{{ applied_filters_json|safe }}'
+      data-pw-brands='{{ brand_nicknames_json|safe }}'
+      data-pw-locale="{{ active_locale }}"
+      data-pw-window="{{ home_window_days }}"
+      data-pw-page="multi">
+  <header class="topbar">
+    <h1>{{ app_name_zh }} <small>{{ app_name_en }}</small></h1>
+    <span class="muted">{{ brand_count }} models · {% if home_window_days == 1 %}{% trans "24h window" %}{% else %}{% blocktrans with days=home_window_days %}{{ days }}d window{% endblocktrans %}{% endif %}</span>
+
+    <nav class="window-toggle" aria-label="Time-period selector">
+      <span class="window-toggle-label">{% trans "window:" %}</span>
+      {% for n in allowed_home_windows %}
+        <button class="window-btn{% if home_window_days == n %} is-active{% endif %}"
+                data-pw-window-btn="{{ n }}">{{ n }}d</button>
+      {% endfor %}
+    </nav>
+
+    <nav class="locale-toggle" aria-label="Display language">
+      <span class="locale-toggle-label">{% trans "lang:" %}</span>
+      <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
+              data-pw-locale-btn="zh_cn">中文</button>
+      <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
+              data-pw-locale-btn="en">EN</button>
+      <button class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
+              data-pw-locale-btn="original">orig</button>
+    </nav>
+  </header>
+
+  <main class="home-pane">
+    <section class="home-chart-wrap" id="home-chart"
+             hx-get="/chart.html"
+             hx-trigger="load every 60s"
+             hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
+             hx-swap="innerHTML">
+      {% include "monitor/_home_chart.html" %}
+    </section>
+
+    <aside class="control-panel" id="control-panel">
+      <h2>{% trans "Filters" %}</h2>
+
+      <div class="control-group">
+        <div class="control-group-title">
+          {% trans "Brands" %}
+          <span class="brand-col-headers">
+            <span class="col-only">{% trans "only" %}</span>
+            <span class="col-include">{% trans "all" %}</span>
+          </span>
+        </div>
+        {% for brand in brands %}
+          <label class="control-row brand-row" style="--swatch: {{ brand.accent_color }};">
+            <input type="checkbox" data-pw-filter-only="brands" value="{{ brand.nickname }}" class="only-cb">
+            <input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}" checked>
+            <span class="swatch" style="background: {{ brand.accent_color }};"></span>
+            {{ brand.display_name }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "Discourse" %}</div>
+        {% for key in discourse_keys %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked>
+            {{ key }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "post_type" %}</div>
+        {% for key in post_type_keys %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="post_types" value="{{ key }}" checked>
+            {{ key }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "account.role" %}</div>
+        {% for key in role_keys %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked>
+            {{ key }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "lang" %}</div>
+        {% for entry in lang_entries %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="lang" value="{{ entry.key }}" checked>
+            {{ entry.label }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "us_nationalism" %}</div>
+        {% for key in nationalism_keys %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ key }}" checked>
+            {{ key }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "cn_nationalism" %}</div>
+        {% for key in nationalism_keys %}
+          <label class="control-row">
+            <input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ key }}" checked>
+            {{ key }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">{% trans "unsanctioned" %}</div>
+        <label class="control-row">
+          <input type="checkbox" data-pw-filter-group="unsanctioned" value="only">
+          {% trans "show only flagged posts" %}
+        </label>
+      </div>
+    </aside>
+  </main>
+
+  <section class="feed" id="feed"
+           data-pw-feed
+           data-pw-locale="{{ active_locale }}">
+    <table>
+      <thead>
+        <tr>
+          <th><button data-pw-sort="created_at" data-pw-order="desc">{% trans "datetime" %}</button></th>
+          <th>{% trans "brand" %}</th>
+          <th>{% trans "translated" %}</th>
+          <th>{% trans "original" %}</th>
+          <th>{% trans "classifications" %}</th>
+          <th>{% trans "handle" %}</th>
+        </tr>
+      </thead>
+      <tbody data-pw-feed-body>
+        {% include "monitor/_feed_initial.html" %}
+      </tbody>
+    </table>
+    <div class="feed-sentinel" data-pw-feed-sentinel>{% trans "loading more…" %}</div>
+    <div class="feed-end" data-pw-feed-end hidden>{% trans "end of feed" %}</div>
+  </section>
+
+  <aside id="api-spend" class="spend-panel-wrap"
+         hx-get="/spend.html"
+         hx-trigger="load every 60s"
+         hx-swap="innerHTML">
+    <div class="spend-panel" style="padding: 1rem; color: #6b7280;">
+      {% trans "Spend panel — stubbed for U7." %} API endpoint not yet available.
+    </div>
+  </aside>
+</body>
+</html>

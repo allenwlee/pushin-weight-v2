@@ -13,6 +13,7 @@ from . import views
 urlpatterns = [
     # Pages
     path("", views.home, name="home"),
+    path("internal/", views.home_internal, name="home_internal"),
     path("brands/<str:brand>/", views.brand_home, name="brand_home"),
 
     # JSON data APIs

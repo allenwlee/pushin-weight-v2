@@ -95,14 +95,66 @@ class RegressionNet:
         self._check_locale_exhibits(html)
         self._check_static_files(html)
         self._check_console_errors(html)
-        # Net F (`/internal/` parity after move) — DEFERRED 2026-08-09:
-        # iter 7 audit found /internal/ returns 404. The legacy home was
-        # replaced in-place at / by iter 1-4 chrome work; U1 (route split,
-        # move legacy home to /internal/) hasn't shipped yet. Net F
-        # assertion will be added in iter 8 along with U1. Tracked in
-        # docs/iterations/2026-08-09-v22-iter-007/REPORT.md.
+        # Net F (`/internal/` parity after move) — shipped iter 8.
+        # /internal/ serves legacy home chrome (U1 route split landed).
+        # Run the same session against /internal/ — Net F checks verify
+        # legacy chrome markers are present and v22 chrome markers absent.
+        self._check_internal_parity(session)
 
         return len(self.failures) == 0
+
+    def _check_internal_parity(self, session):
+        """Net F — /internal/ parity after move (U1).
+
+        Asserts the legacy home at /internal/ renders the pre-v22 chrome
+        and does NOT depend on v22-only DOM (the legacy page must work
+        without .pulse-chip, .voice-chip, .filter-pill).
+        """
+        # Derive /internal/ URL from self.url
+        from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+        parsed = urlparse(self.url)
+        # Strip any query string for the /internal/ hit
+        internal_url = urlunparse((parsed.scheme, parsed.netloc, "/internal/", "", "", ""))
+        try:
+            r = session.get(internal_url, timeout=30, allow_redirects=True)
+        except Exception as e:
+            self.failures.append(("net-f-http", f"GET {internal_url} failed: {e}"))
+            return
+        if r.status_code != 200:
+            self.failures.append(("net-f-status", f"GET {internal_url} returned {r.status_code}"))
+            return
+        html = r.text
+
+        # Legacy chrome markers (per pre-v22 home.html saved as home_internal.html)
+        legacy_markers = [
+            ('id="control-panel"', 'legacy control-panel marker present'),
+            ('id="home-chart"', 'legacy home-chart canvas wrapper present'),
+            ('window-toggle', 'legacy window toggle nav present'),
+            ('locale-btn', 'legacy locale button class present'),
+            ('filter-group', 'legacy filter-group class present'),
+        ]
+        for marker, desc in legacy_markers:
+            self.assert_(f"net-f legacy: {desc}", marker in html,
+                         f"missing legacy marker {marker!r} on /internal/")
+
+        # v22 chrome must be ABSENT on /internal/
+        v22_markers_absent = [
+            ('pulse-chip', 'v22 pulse-chip chrome absent on /internal/'),
+            ('voice-chip', 'v22 voice-chip chrome absent on /internal/'),
+            ('filter-pill', 'v22 filter-pill chrome absent on /internal/'),
+        ]
+        for marker, desc in v22_markers_absent:
+            self.assert_(f"net-f v22 absent: {desc}", marker not in html,
+                         f"v22 marker {marker!r} leaked into /internal/ — legacy page must not depend on v22 chrome")
+
+        # App title must still have both names (legacy chrome renders the same brand)
+        self.assert_("net-f: 走个量 name on /internal/",
+                     "走个量" in html, "zh_cn name missing on /internal/")
+        en_present = any(p in html for p in (
+            "Pushin' Weight", "Pushin&#x27; Weight", "Pushin&#39; Weight",
+        ))
+        self.assert_("net-f: Pushin' Weight name on /internal/",
+                     en_present, "English name missing on /internal/")
 
     def _check_header(self, html):
         # The header is "走个量 Pushin' Weight" with two spans (zh_cn and en).
