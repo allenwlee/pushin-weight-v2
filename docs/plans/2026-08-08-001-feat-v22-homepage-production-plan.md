@@ -1,6 +1,6 @@
 ---
 title: "feat: Ship v22 homepage exhibits as production root"
-date: 2026-08-05
+date: 2026-08-08
 last_updated: 2026-08-08
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: living-wip
@@ -9,7 +9,7 @@ product_contract_source: design-session + v22 exhibits + live home + design-syst
 plan_type: feat
 status: wip
 supersedes:
-  - docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md  # DEPRECATED 2026-08-08; per-iteration procedure consolidated into § "Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)"
+  - docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md  # DEPRECATED 2026-08-08; per-iteration procedure consolidated into § "Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)"
 ---
 
 # feat: Ship v22 homepage exhibits as production root
@@ -22,7 +22,7 @@ supersedes:
 > **Required reading before any implementation:** `.claude/skills/avoiding-recurring-mistakes/SKILL.md` (full file; M1–M16 at minimum). Treat that skill as a gate, not optional background.
 
 **Target repo:** pushin-weight-v2  
-**Canonical plan file:** `docs/plans/2026-08-05-002-feat-v22-homepage-production-plan.md`  
+**Canonical plan file:** `docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md`  
 **Local mock mirror:** `/Users/allenwlee/Downloads/pushin-weight-mockups/`  
 **Repo mock path:** `docs/ideation/mockups/`  
 **Live surfaces to reuse:** `monitor/templates/monitor/home.html`, `monitor/views.py`, `monitor/static/pw-filter-store.js`, `pw-chart.js`, `pw-feed.js`, `monitor/urls.py`, chart partials, feed JSON  
@@ -68,7 +68,7 @@ Functionally, **line chart + filter system** stay the same as today’s home —
 ## Agent handoff brief (start here)
 
 **Audience:** implementing agent with no prior session context.  
-**Plan file:** `docs/plans/2026-08-05-002-feat-v22-homepage-production-plan.md`  
+**Plan file:** `docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md`  
 **Status:** living-wip — **not** authorized for full production cutover of `/` chrome until freeze (see Stop conditions).
 
 ### 0. Before any edit
@@ -82,7 +82,7 @@ Functionally, **line chart + filter system** stay the same as today’s home —
 
 | Role | Path |
 |---|---|
-| Plan | `docs/plans/2026-08-05-002-feat-v22-homepage-production-plan.md` |
+| Plan | `docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md` |
 | Skill | `.claude/skills/avoiding-recurring-mistakes/SKILL.md` |
 | Exhibits (canonical) | `/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/mockups/06-tier1-composed.v22-master.html` |
 | Taxonomy labels | `docs/reference/lookup-tables.md` |
@@ -144,7 +144,7 @@ Local Mac mirror of exhibit (if needed): `/Users/allenwlee/Downloads/pushin-weig
 
 ### 6. One-line agent prompt (copy-paste)
 
-> Execute Phase A only of `docs/plans/2026-08-05-002-feat-v22-homepage-production-plan.md`: read `.claude/skills/avoiding-recurring-mistakes/SKILL.md` first; ship U0 nets A–G, U1 move legacy home to `/internal`, U2 defaults (24h/zh_cn/local), U4 chart reuse without hover-isolate; DRY reuse of pw-filter-store and pw-chart; no Phase B chrome, no deploy, no commit unless asked; stop on any hard stop condition in the plan’s Agent handoff brief.
+> Execute Phase A only of `docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md`: read `.claude/skills/avoiding-recurring-mistakes/SKILL.md` first; ship U0 nets A–G, U1 move legacy home to `/internal`, U2 defaults (24h/zh_cn/local), U4 chart reuse without hover-isolate; DRY reuse of pw-filter-store and pw-chart; no Phase B chrome, no deploy, no commit unless asked; stop on any hard stop condition in the plan’s Agent handoff brief.
 
 ---
 
@@ -214,7 +214,7 @@ The research confirms the patterns already in this plan and identifies three new
 
 ### Regression net discipline (v20 prototype)
 
-This plan's regression nets A–G already implement the "REGRESSION.md" discipline at the unit level: each net pins a contract value that the shell rewrite cannot silently break. The companion file `tests/regression_net.py` (introduced by the v20 agentic iteration plan at `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md`) is the **prototype implementation** for the iteration-loop half of this discipline — assertions about page elements that must remain present after every iteration, not just at unit-test time. Both nets must be green before any "PASS" verdict on a U-unit: A–G catches server-side contract drift; `regression_net.py` catches rendered-page drift. The "Scope delivered vs plan promised" commit footer (per CLAUDE.md plan-execution-contract) is the third leg: every commit names whether the scope matched the plan.
+This plan's regression nets A–G already implement the "REGRESSION.md" discipline at the unit level: each net pins a contract value that the shell rewrite cannot silently break. The companion file `tests/regression_net.py` (introduced by the v20 agentic iteration plan at `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md`) is the **prototype implementation** for the iteration-loop half of this discipline — assertions about page elements that must remain present after every iteration, not just at unit-test time. Both nets must be green before any "PASS" verdict on a U-unit: A–G catches server-side contract drift; `regression_net.py` catches rendered-page drift. The "Scope delivered vs plan promised" commit footer (per CLAUDE.md plan-execution-contract) is the third leg: every commit names whether the scope matched the plan.
 
 ---
 
@@ -234,7 +234,7 @@ This is the v20 loop drift the user surfaced: comparing live against *previous l
 
 | Pattern | Source | Where in plan |
 |---|---|---|
-| **Compare live screenshots against canonical mockups, NOT against previous-live** | angle-1 cluster 8 (Tristan Bob X post: "1) Come up with an idea 2) Generate screenshots 3) Generate a prompt to build the UI mockup 4) Give your agentic coding tool the screenshots") + Christine Vallaure contract framing (first research) | Already implicit in the v20 companion plan at `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md` "Per-iteration contract" step 6: *"compare live vs mockup, not live vs previous live."* New: explicit reference here so the v18 plan does not duplicate the v20 fix in the wrong direction. |
+| **Compare live screenshots against canonical mockups, NOT against previous-live** | angle-1 cluster 8 (Tristan Bob X post: "1) Come up with an idea 2) Generate screenshots 3) Generate a prompt to build the UI mockup 4) Give your agentic coding tool the screenshots") + Christine Vallaure contract framing (first research) | Already implicit in the v20 companion plan at `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md` "Per-iteration contract" step 6: *"compare live vs mockup, not live vs previous live."* New: explicit reference here so the v18 plan does not duplicate the v20 fix in the wrong direction. |
 | **Bound autonomous loops with a fixed task contract** | angle-1 cluster 6 (r/ClaudeCode drift thread) + testdouble double-loop model (first research, already in § "Design system contract framework") | Already: **Stop conditions (hard)** § and **Agent handoff brief** §. New: cite the drift thread explicitly in the handoff brief so future implementers see the bound is a load-bearing guard, not a perfunctory one. |
 | **Use Playwright / browser-MCP evidence for iterative visual verification** | angle-1 cluster 7 (Rustwright Rust rewrite of Playwright on HN, 12 pts) + angle-1 supplement (MCP Market "Visual Regression Claude Code Skill", Jeffallan `claude-skills/playwright-expert/SKILL.md`, AI Skill Market "Visual Regression Until Match") | Already: `tests/regression_net.py` is the lightweight structural subset of this pattern (no browser dependency, see v20 plan regression net section). New: add one-line note in § "Regression net discipline" that a Playwright-MCP upgrade path exists when/if structural assertions prove insufficient. |
 | **Explicit approval before updating visual baselines** | angle-1 supplement (AI Skill Market "Visual Regression Until Match": "fixes unintended diffs until baselines match intentionally") | Already implicit in **Stop conditions** § (no unit ships without user-visible verification). New: codify in § "Verification Contract" that an agent cannot self-promote a snapshot diff to "expected" without surfacing it to the user - the regression net is a detector, not an approver. |
@@ -974,7 +974,7 @@ Do **not** start full ce-work cutover until:
 
 ## Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)
 
-The v20 iteration-loop companion plan at `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md` defined the per-iteration operating procedure that drove iter 1-4. To prevent two-plan drift, that content is consolidated here. The v20 plan is now **DEPRECATED** (see its frontmatter banner) and any future iteration procedure edits happen in this section.
+The v20 iteration-loop companion plan at `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md` defined the per-iteration operating procedure that drove iter 1-4. To prevent two-plan drift, that content is consolidated here. The v20 plan is now **DEPRECATED** (see its frontmatter banner) and any future iteration procedure edits happen in this section.
 
 This section is the **operating contract for iter N≥5**. The v22 plan body sections above (research incorporations, regression nets A–G, gate resolutions, visual-drift unit) are the **strategic context**; this section is the **per-iteration execution protocol**.
 
@@ -1140,7 +1140,7 @@ Agent commits to branch `feat/v20-homepage-phase-a`. No push, no PR. Each commit
 
 - [ ] Required skill read
 - [ ] Nets A–G green
-- [ ] `tests/regression_net.py` (v20 prototype, introduced by `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md`) green when run against the live page — server-side AND rendered-page nets both pass before any PASS verdict on a U-unit
+- [ ] `tests/regression_net.py` (v20 prototype, introduced by `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md`) green when run against the live page — server-side AND rendered-page nets both pass before any PASS verdict on a U-unit
 - [ ] UI region infra mirror table (above) has zero `NOT YET ADDED` rows for cells the unit ships, or a tracked gap with user OK
 - [ ] `/` = v22 design; `/internal/` = former homepage
 - [ ] Defaults zh_cn + 24h + local
@@ -1167,7 +1167,7 @@ _(Append future exhibit edits here.)_
 
 | Date | Change |
 |---|---|
-| 2026-08-08 | **v20 iteration-loop companion plan CONSOLIDATED into v22 (DEPRECATED)** — `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md` is now DEPRECATED. Its content (Scenario matrix A-H, Element Audit procedure, Viewport morphology, Time-based testing, Local servers, Iteration loop / per-iteration contract steps 0-9, Auth handling, "matches/doesn't match" P0-P3 ranking, Commit policy) is absorbed into new § "Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)". Frontmatter updated with `supersedes:` block. Eliminates two-plan drift; one source of truth. Visual source of truth path updated from `v20-{mobile,desktop}-{en,zhcn}.html` (4 files) to `06-tier1-composed.v22-master.html` (1 file with responsive built-in) per the earlier changelog mockup-consolidation entry. |
+| 2026-08-08 | **v20 iteration-loop companion plan CONSOLIDATED into v22 (DEPRECATED)** — `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md` is now DEPRECATED. Its content (Scenario matrix A-H, Element Audit procedure, Viewport morphology, Time-based testing, Local servers, Iteration loop / per-iteration contract steps 0-9, Auth handling, "matches/doesn't match" P0-P3 ranking, Commit policy) is absorbed into new § "Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)". Frontmatter updated with `supersedes:` block. Eliminates two-plan drift; one source of truth. Visual source of truth path updated from `v20-{mobile,desktop}-{en,zhcn}.html` (4 files) to `06-tier1-composed.v22-master.html` (1 file with responsive built-in) per the earlier changelog mockup-consolidation entry. |
 | 2026-08-08 | **All 7 freeze-criteria gates RESOLVED (Phase B unblocked)** — product-decision freeze fully cleared: F1 defaults = 24h/zh_cn/local-TZ; F2 filter wire = 7 groups ship as-is (Brands/Discourse/account.role/lang/Sentiment/Nationalism/unsanctioned); G1 mock freeze = `06-tier1-composed.v22-master.html` is final; G3 post_type = 6 keys as peers (no primary-bar grouping); G4 sentiment = DB-canonical (4 keys per `lookup-tables.md § 2`); G4b nationalism = DB-canonical (6 keys × 2 axes per § 4); G4c discourse = DB-canonical (10 keys per § 3); G4d roles = DB-canonical (3 persisted + 1 computed per § 5); G4e unsanctioned = DB-canonical (4 keys per § 6). User direction 2026-08-08: "literally all of the filter labels should be determined by db … make sure to clearly have the plan use db as canon for every filter and choices within each." Both freeze blocks updated; second block's G4 (Net A–G acceptance) and G5 (avoiding-recurring-mistakes skill acknowledgement) remain ACTIVE — implementer-acknowledgement gates, deferred to Phase B agent. Phase B (U1-full chrome, U3, U4-chrome, U5, U6) is now go-decision-only at the user's `/goal` prompt. |
 | 2026-08-08 | **Visual-drift detection: Element Audit + Chrome DevTools MCP added** — new § "Visual-drift detection: Element Audit + Chrome DevTools MCP (added 2026-08-08)" inserted between angle-1 (iteration drift) and angle-2 (regression net) sections. Distills the prior research-incorporation session's browser-tool decision (Chrome DevTools MCP native `mcp__chrome-devtools__` over Playwright MCP: zero-install CDP, shares user's running Chrome, exposes both `take_snapshot` and `evaluate_script(fn)`). Adds **NEW** unit: `tests/visual_tokens.py` (single source of truth, ≥ 5 pinned regions) + `tests/element_audit.py` (Chrome DevTools MCP-driven computed-style diff vs `tests/regression_net.py` HTTP-only). Pinned regions include `.pulse-chip-name` color (the 2026-08-08 defect — black on dark fill — AFTER state: `rgb(255, 255, 255)`), `.voice-chip` background, `.filter-button:hover`, `.feed-handle` text-decoration, `.delta.up::before` content. Per-iteration contract extended with steps 6a-6c; new Definition-of-Done line "Visual drift net shipped and green." Scope: angle-3 incorporation. Implementation units TBD in iter 5 — no silent narrowing. |
 | 2026-08-08 | **v22 iter 4: Top Voices body RESOLVED (historical blocker)** — P0 #1 of 5 fixed. Added `_multi_top_voices(window_days, limit=3)` view function joining Post × Account; voice_score = mention_count × log10(followers_count+10). Rendered `<span class="headline-voices">` block with `<a class="voice-chip">@handle (☆ N)</a>` chips, ordered by star DESC, comma-separated. CSS `.headline-voices` / `.voice-chip` / `.voice-star` appended to `home-v20.css`. Regression net extended from 46 to 50 assertions (+5 top-voices checks), all green. Live verified: @JulianGoldieSEO (☆ 869), @Megannewman99 (☆ 631), @tushar_koshti (☆ 445). **All 4 P0 gaps closed — goal `v22` condition MET.** |
@@ -1196,7 +1196,7 @@ _(Append future exhibit edits here.)_
 - Research: `docs/research/2026-08-08-design-system-contract-gap-analysis-raw.md` (WebSearch supplemental results enumerate the contract / schema / regression-net / agentic-iteration citations referenced in § "Design system contract framework")
 - Research: `docs/research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md` (drift-mitigation citations referenced in § "Iteration drift mitigation")
 - Research: `docs/research/2026-08-08-regression-nets-for-ai-agents-raw.md` (regression-net / closed-loop / production-tracing / agent-as-QA citations referenced in § "Regression net discipline (from 2026-08-08 angle-2 research)")
-- Companion plan (prototype iteration loop + `tests/regression_net.py`): `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md`
+- Companion plan (prototype iteration loop + `tests/regression_net.py`): `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md`
 - Visual drift pin source (single source of truth for computed-style assertions): `tests/visual_tokens.py` (NEW — to be created in iter 5)
 - Visual drift audit script: `tests/element_audit.py` (NEW — Chrome DevTools MCP-driven, to be created in iter 5)
 
