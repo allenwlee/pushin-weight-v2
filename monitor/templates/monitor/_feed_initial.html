@@ -77,18 +77,27 @@
     </td>
     <td>
       {% with handle=row.account.handle|default:'' %}
-        {% if handle %}
-          <a class="feed-handle-link"
-             href="https://x.com/{{ handle|cut:'@' }}"
-             target="_blank" rel="noopener noreferrer">
-            {{ handle }}
-          </a>
-        {% else %}
-          @unknown
-        {% endif %}
+        <div class="feed-author">
+          <span class="avatar" style="background: {{ row.avatar_color }}" aria-hidden="true">{{ row.avatar_initials }}</span>
+          {% if handle %}
+            <a class="feed-handle-link"
+               href="https://x.com/{{ handle|cut:'@' }}"
+               target="_blank" rel="noopener noreferrer">
+              {{ handle }}
+            </a>
+          {% else %}
+            @unknown
+          {% endif %}
+        </div>
       {% endwith %}
       {% if row.account.followers_pretty %} · {{ row.account.followers_pretty }}{% endif %}
       {% if row.account.role_label %} · <span class="pill role-{{ row.account.role_label }}">{{ row.account.role_label }}</span>{% endif %}
+      <div class="feed-engagement">
+        <span class="engagement-stat"><span class="engagement-icon" aria-hidden="true">&#128101;</span> {{ row.engagement_pretty.followers }}</span>
+        <span class="engagement-stat"><span class="engagement-icon" aria-hidden="true">&#9825;</span> {{ row.engagement_pretty.likes }}</span>
+        <span class="engagement-stat"><span class="engagement-icon" aria-hidden="true">&#8634;</span> {{ row.engagement_pretty.retweets }}</span>
+        <span class="engagement-stat"><span class="engagement-icon" aria-hidden="true">&#128172;</span> {{ row.engagement_pretty.replies }}</span>
+      </div>
     </td>
   </tr>
 {% empty %}

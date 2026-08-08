@@ -424,6 +424,53 @@ def _get_feed_posts(
 # ============================================================================
 
 
+def _avatar_initials(handle: str) -> str:
+    """Derive 1-2 char avatar initials from an X handle."""
+    h = (handle or "").lstrip("@").strip()
+    if not h:
+        return "?"
+    chars = [c for c in h if c.isalnum()]
+    if not chars:
+        return "?"
+    if len(chars) == 1:
+        return chars[0].upper()
+    return (chars[0] + chars[1]).upper()
+
+
+def _avatar_color(handle: str) -> str:
+    """Stable per-handle avatar background color (HSL hash)."""
+    h = (handle or "").lstrip("@").strip().lower()
+    if not h:
+        return "hsl(0, 0%, 50%)"
+    n = 5381
+    for ch in h:
+        n = ((n << 5) + n) + ord(ch)
+        n &= 0xFFFFFFFF
+    hue = n % 360
+    return f"hsl({hue}, 55%, 45%)"
+
+
+def _engagement_pretty(followers: int, likes: int, rts: int, replies: int) -> dict[str, str]:
+    """Compact pretty-print for engagement counters (128.4k / 1.2k / 340 / 89)."""
+    def _fmt(n) -> str:
+        if n is None:
+            return ""
+        n = int(n)
+        if n < 1000:
+            return str(n)
+        for unit, threshold in (("M", 1_000_000), ("k", 1000)):
+            if n >= threshold:
+                v = n / threshold
+                return f"{v:.1f}{unit}"
+        return str(n)
+    return {
+        "followers": _fmt(followers),
+        "likes": _fmt(likes),
+        "retweets": _fmt(rts),
+        "replies": _fmt(replies),
+    }
+
+
 def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = None) -> dict[str, Any]:
     """Serialize a Post ORM instance to the JSON wire shape for the feed.
 
@@ -528,6 +575,17 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
         "text_en": post.text_en,
         "text_zh_cn": post.text_zh_cn,
         "like_count": post.like_count or 0,
+        "retweet_count": post.retweet_count or 0,
+        "reply_count": post.reply_count or 0,
+        "quote_count": post.quote_count or 0,
+        "avatar_initials": _avatar_initials(account_wire.get("handle", "") or post.author_handle or ""),
+        "avatar_color": _avatar_color(account_wire.get("handle", "") or post.author_handle or ""),
+        "engagement_pretty": _engagement_pretty(
+            account_wire.get("followers_count", 0),
+            post.like_count or 0,
+            post.retweet_count or 0,
+            post.reply_count or 0,
+        ),
         "brands": brands_wire,
         "brand_nicknames": brand_nicknames,
         "classifications": classifications,

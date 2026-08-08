@@ -87,6 +87,8 @@ class RegressionNet:
         self._check_locale_toggle(html)
         self._check_sections(html)
         self._check_trending_deltas(html)
+        self._check_feed_engagement(html)
+        self._check_feed_avatars(html)
         self._check_static_files(html)
         self._check_console_errors(html)
 
@@ -209,6 +211,54 @@ class RegressionNet:
             self.assert_("all trending delta values end with %",
                          not bad_pct,
                          f"invalid: {bad_pct[:3]}")
+
+    def _check_feed_engagement(self, html):
+        # Feed cards must each render the 4-icon engagement stats block
+        # (👥/♥/↻/💬 with compact numbers). Pinned by iter 3 (v22).
+        eng_blocks = re.findall(r'<div class="feed-engagement">.*?</div>', html, re.DOTALL)
+        self.assert_("feed has >= 1 engagement block",
+                     len(eng_blocks) >= 1,
+                     f"got {len(eng_blocks)} engagement blocks")
+        if eng_blocks:
+            # Each block must contain all 4 stat icons
+            for label in ("engagement-stat",):
+                bad = [b for b in eng_blocks if label not in b]
+                self.assert_(f"every engagement block has {label}",
+                             not bad,
+                             f"missing in {len(bad)}/{len(eng_blocks)} blocks")
+            # Must contain all 4 icon HTML entities
+            for icon_check in [("&#128101;", "👥 followers icon"),
+                                ("&#9825;", "♥ likes icon"),
+                                ("&#8634;", "↻ retweets icon"),
+                                ("&#128172;", "💬 replies icon")]:
+                bad = [b for b in eng_blocks if icon_check[0] not in b]
+                self.assert_(f"every engagement block has {icon_check[1]}",
+                             not bad,
+                             f"missing in {len(bad)}/{len(eng_blocks)} blocks")
+
+    def _check_feed_avatars(self, html):
+        # Feed cards must each render an avatar circle with stable HSL color
+        # and 1-2 char initials. Pinned by iter 3 (v22).
+        avatars = re.findall(r'<span class="avatar" style="background: (hsl\([^)]+\))"[^>]*>([^<]+)</span>', html)
+        self.assert_("feed has >= 1 avatar circle",
+                     len(avatars) >= 1,
+                     f"got {len(avatars)} avatars")
+        if avatars:
+            # Each avatar has a valid hsl() color
+            for color, initials in avatars[:3]:
+                if not color.startswith("hsl("):
+                    self.assert_("avatar color is hsl(...)", False, f"got {color!r}")
+                    return
+            # Each initials is 1-2 chars, alphanumeric or '?'
+            bad = [(c, i) for c, i in avatars if not (1 <= len(i) <= 2) or (i != '?' and not i.isalnum())]
+            self.assert_("avatar initials are 1-2 chars [A-Z?]",
+                         not bad,
+                         f"bad: {bad[:3]}")
+            # All avatars must use the same hsl() pattern (stable hash)
+            unique_colors = len(set(c for c, _ in avatars))
+            self.assert_(f"avatars have varied colors ({unique_colors} unique)",
+                         unique_colors >= 2,
+                         f"only {unique_colors} unique colors across {len(avatars)} avatars")
 
     def _check_static_files(self, html):
         # Look for the static asset references in the HTML
