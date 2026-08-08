@@ -8,6 +8,8 @@ execution: code
 product_contract_source: design-session + v22 exhibits + live home + design-system-contract-research
 plan_type: feat
 status: wip
+supersedes:
+  - docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md  # DEPRECATED 2026-08-08; per-iteration procedure consolidated into § "Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)"
 ---
 
 # feat: Ship v22 homepage exhibits as production root
@@ -970,6 +972,157 @@ Do **not** start full ce-work cutover until:
 
 ---
 
+## Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)
+
+The v20 iteration-loop companion plan at `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md` defined the per-iteration operating procedure that drove iter 1-4. To prevent two-plan drift, that content is consolidated here. The v20 plan is now **DEPRECATED** (see its frontmatter banner) and any future iteration procedure edits happen in this section.
+
+This section is the **operating contract for iter N≥5**. The v22 plan body sections above (research incorporations, regression nets A–G, gate resolutions, visual-drift unit) are the **strategic context**; this section is the **per-iteration execution protocol**.
+
+### Scenario matrix
+
+| # | Scenario | Pre-state | Actions | Expected | Captures |
+|---|---|---|---|---|---|
+| A | Unauthenticated landing | no session | open `/` | login CTA, no data, show v22 layout | 1 live + 1 mockup |
+| B | Authenticated default | logged in, defaults | open `/` | chart + filter rail, default brand set | 1 live + 1 mockup |
+| C | Filter interaction | logged in, default | tap brand pill to unselect one brand → wait → screenshot | chart line drops, mention count updates, KPIs reflect | 1 before + 1 after |
+| D | Locale switch | logged in, defaults | tap locale toggle en ↔ zh_cn | chart labels, axis, legend, recommendation text all translated; layout reflows | 2 screenshots |
+| E | Time window switch | logged in, defaults | tap 24h → 7d → 30d | chart axis and data update, no overlap | 3 screenshots |
+| F | Empty / no-data state | logged in, filter to brand with no mentions | observe | graceful empty state, no broken layout, no "NaN" | 1 live + 1 mockup |
+| G | Mobile scroll | logged in, defaults | swipe down | filter drawer collapses, chart scrolls, no overlap | 1 live + 1 mockup |
+| H | Top Voices body | logged in, defaults | scroll to top voices | 3-5 voice chips with @handle, star, permalink | 1 live + 1 mockup |
+
+(Visual source of truth: `docs/ideation/mockups/06-tier1-composed.v22-master.html` — single file, responsive mobile ↔ desktop × locale built-in. The 4 `v20-*` files were consolidated into v22-master per the changelog 2026-08-08 entry "Mockup consolidation"; they're retained as design-history previews but no longer the canonical target.)
+
+### Element Audit (Step 0 of every iteration) — Chrome DevTools MCP
+
+Before any scenario capture, the live page must contain every visible element that the v22-master mockup shows, and the visible elements must be functionally identical (same DOM role, same text content, same purpose, same approximate position). This is the load-bearing pre-flight — if the live page is missing a section, no scenario diff is meaningful.
+
+Procedure (Chrome DevTools MCP, **not Playwright** per § "Visual-drift detection: Element Audit + Chrome DevTools MCP"):
+
+1. `mcp__chrome-devtools__navigate_page` to the live URL (e.g. `/` for scenarios A-G, append `?locale=zh_cn` for locale variants).
+2. Wait for the page to settle: `mcp__chrome-devtools__wait_for` on the body, `mcp__chrome-devtools__list_console_messages` to confirm no JS errors, then `mcp__chrome-devtools__evaluate_script("() => document.readyState === 'complete'")` to confirm full load.
+3. `mcp__chrome-devtools__take_snapshot` to get the a11y tree of the live page.
+4. Navigate to the v22-master mockup via `file://` or local `python -m http.server 8001`, `take_snapshot` again.
+5. **Viewport-morphology check** (see dedicated subsection below): `mcp__chrome-devtools__resize_page` to the other breakpoint, re-snapshot, verify the DOM structure morphs correctly (desktop → mobile: feed nests under top-voices; mobile → desktop: feed becomes a sibling).
+6. Diff the two a11y trees by **section**, not by exact pixel position:
+   - For each top-level `<section>`, `<header>`, `<nav>`, `<main>`, `<footer>` in the mockup, confirm an equivalent element exists in the live page.
+   - For each heading (`h1`-`h6`), confirm the live page has the same heading at the same nesting level, with the same text content (or a translation-equivalent for `zh_cn` variants).
+   - For each interactive control (`button`, `a[href]`, `input`, `select`), confirm it exists in the live page with the same role and similar text.
+   - For the feed element specifically, verify its structural parent matches the breakpoint (under top-voices at mobile, sibling at desktop).
+7. Write `audit.md` in the iteration dir with: **Identical (matched)** / **Missing on live (P0 blocker)** / **Extra on live** / **Different position** sections.
+8. If any P0 missing element is found, **stop the scenario captures and surface to the user**. Fix the missing element first, then re-run the audit.
+
+The audit is fast (~5-10 MCP calls) and runs every iteration. It catches regressions early — if a previous iteration's fix removed a section, the next iteration's audit catches it.
+
+#### What "identical" means at the audit level
+
+The audit defines "identical" at the structural level: every visible region in the mockup exists on the live page with the same role and same text content. Rendering differences (color, spacing, animation, minor typographic drift) are captured by the **per-iteration contract step 6a-c** (see § "Visual-drift detection: Element Audit + Chrome DevTools MCP") and ranked P1/P2/P3 — they are not blockers. Element-presence is the P0 gate.
+
+#### First iteration is audit-first
+
+Iteration 1 runs the Element Audit against the canonical mobile-en mockup, then against mobile-zhcn (if locale is reachable), then runs scenario A (unauthenticated landing). Subsequent iterations re-run the audit as Step 0 first, then proceed to the chosen scenario.
+
+### Viewport morphology (desktop ↔ mobile is the SAME page)
+
+The v22 home is a **single responsive page**, not two separate desktop and mobile layouts. The mockup files (mobile preview + desktop preview) are previews of the same page at different breakpoints, not separate code paths. The plan body is explicit:
+
+- One `<body>` element, one template, one CSS bundle.
+- Tailwind responsive prefixes (`md:`, `sm:`) handle the layout changes.
+- The feed lives **inside the "Top Voices" section** at mobile widths (it sits below the top-voices list rather than as its own full-width section). This is the load-bearing layout rule — if the feed is rendered as a separate region at mobile widths, the morphology is broken.
+
+Per-iteration procedure for the responsive check:
+
+1. **Element Audit at desktop width** (1440×900, or whatever the available window allows):
+   - Run the standard audit against the v22-master mockup at desktop width.
+   - Capture the live page snapshot at desktop width.
+   - Verify: top voices section, chart section, recommendations section, feed section all present. At desktop width, the feed is **its own full-width section** below the top voices.
+2. **Element Audit at mobile width** (390×844):
+   - `mcp__chrome-devtools__resize_page 390 844` to switch to mobile viewport.
+   - Wait for the page to settle, take the second snapshot.
+   - Verify: top voices section is still present, but the **feed is now nested inside the top-voices section** rather than being its own sibling. If the feed re-renders as a separate section at mobile width, that's a P0 (morphology is broken).
+3. **Morphology diff**: compare the two a11y trees specifically around the feed's structural parent:
+   - Desktop: feed is a sibling of top-voices (both sit under `main`)
+   - Mobile: feed is a child of top-voices
+   - If the parent chain differs between breakpoints, the responsive code is using `hidden` / `block` toggles instead of relocating the DOM. That's wrong — the relocation should be in the DOM, not just visual.
+4. Save both desktop and mobile snapshots to the iteration dir: `audit-desktop-snapshot.txt` and `audit-mobile-snapshot.txt`. Add a `morphology.md` with the parent's-a11y-path comparison.
+5. The morphology check is part of every iteration's Element Audit, alongside the standard t=0 / t=60 time-based pass.
+
+### Time-based element testing (audit variation)
+
+The v22 home displays live data that refreshes over time (Top Voices stream, mention counts, time-series chart points). Static snapshots miss elements that only appear after a delay. **Every iteration must include a time-based test pass** that re-runs the audit after a 30s to 60s wait, and compares the delayed state to the t=0 state.
+
+Why this matters:
+
+- Top Voices and live-tile sections may be empty at t=0 and populate after the first data fetch completes (typical 30-60s depending on the harvester schedule).
+- Auto-refresh logic (the 60s refresh in the original `pw-feed.js`) is exactly what we want to verify, not bypass.
+- The audit at t=0 may show "missing voice chips" as a P0 blocker, but at t=60 the section is populated; the time-based pass prevents false positives.
+
+Procedure for the time-based pass:
+
+1. After completing the t=0 Element Audit, leave the live page open in the Chrome DevTools MCP browser.
+2. Wait 60 seconds using `mcp__chrome-devtools__evaluate_script("async () => { await new Promise(r => setTimeout(r, 60000)); return true; }")`.
+3. `mcp__chrome-devtools__take_snapshot` again to capture the post-wait a11y tree.
+4. Diff the t=0 tree against the t=60 tree:
+   - **New elements that appeared:** voice chips, mention rows, chart updates — these are expected, not blockers.
+   - **New elements that appeared but should have been there at t=0:** P0 — the live page is failing to render critical content immediately.
+   - **Elements that changed state (e.g. "Loading..." → "47 mentions"):** expected, not a blocker.
+5. Save both snapshots to the iteration dir: `audit-t0-snapshot.txt` and `audit-t60-snapshot.txt`.
+6. Update `audit.md` with the time-based diff: section per element, marked `appeared_after_t0` or `present_at_t0`.
+
+The time-based pass is essentially the same audit run twice with a 60s gap. It catches the most common category of false-positive P0 in data-driven UIs: "element missing" that is actually "element lazy-loaded after the data fetch completes."
+
+### Local servers
+
+| Surface | URL | Source |
+|---|---|---|
+| Live dev (Django) | `http://127.0.0.1:5050/` | fuchitalee `:5050` via SSH tunnel |
+| Mockup canonical | `http://127.0.0.1:8001/06-tier1-composed.v22-master.html` | fuchitalee `:8001` (python -m http.server) |
+
+### Iteration loop (per-iteration contract — REPLACES the v20-plan version)
+
+For each iteration N (1..N_max):
+
+```
+For iteration N:
+  0. Run Element Audit (a11y tree diff) against live + mockup at same viewport+locale
+  1. Run tests/regression_net.py against the live page (asserts all PASSes from previous iterations still pass)
+  1a. Run tests/element_audit.py (Chrome DevTools MCP) — NEW per § "Visual-drift detection"
+  2. Pick scenario from the matrix (table-driven, not agent-decided)
+  3. Run Step 0 audit (a11y tree) at t=0 + t=60 (time-based variation)
+  4. Screenshot the mockup at the same viewport + locale
+  5. Screenshot the live page at the same viewport + locale
+  6. Diff: live vs mockup (NOT live vs previous live)
+  7. If diff shows new P0: file gap, add to UI region table above
+  8. If diff shows regression: STOP, revert or fix, surface to user
+  9. Otherwise: write REPORT.md, commit (with plan-execution-contract footer), advance iteration N+1
+```
+
+The critical change is **step 6: compare live against mockup, not against previous live**. This is the cure for the drift the user identified.
+
+### Auth handling
+
+Iter 1: Element Audit (at t=0 and t=60) + scenario A only (no auth). Then sign in via the form on `/accounts/login/?next=/`, persist the session cookie in the Chrome DevTools MCP browser context, run audit + scenarios B, C, G, H.
+
+Local-dev test credentials: `allen@quantma.com` / `ono` (per project-context memory). If login fails (missing test account, password reset required, etc.), the agent surfaces the blocker rather than guessing. Logs in next iteration after the user resolves.
+
+### "What matches / doesn't match" — P0/P1/P2/P3 ranking
+
+For each scenario, the diff is structural:
+
+- **Matches:** layout, hierarchy, spacing, typography, component rendering, color, motion (post-disable)
+- **Doesn't match:** same list, ranked:
+  - **P0 (blocker):** element missing, broken layout, console error, JS error
+  - **P1:** visible regression vs mockup (catches the .pulse-chip-name-color defect class)
+  - **P2:** polish / proportion / color
+  - **P3:** nice-to-have
+
+### Commit policy
+
+Agent commits to branch `feat/v20-homepage-phase-a`. No push, no PR. Each commit gets the plan-execution-contract `Scope delivered vs plan promised: [match | narrower: deferred Y for reason Z]` line.
+
+
+---
+
 ## Verification Contract
 
 1. Nets A–G green.
@@ -1014,6 +1167,7 @@ _(Append future exhibit edits here.)_
 
 | Date | Change |
 |---|---|
+| 2026-08-08 | **v20 iteration-loop companion plan CONSOLIDATED into v22 (DEPRECATED)** — `docs/plans/2026-08-07-001-feat-v20-agentic-iteration-plan.md` is now DEPRECATED. Its content (Scenario matrix A-H, Element Audit procedure, Viewport morphology, Time-based testing, Local servers, Iteration loop / per-iteration contract steps 0-9, Auth handling, "matches/doesn't match" P0-P3 ranking, Commit policy) is absorbed into new § "Per-iteration procedure (consolidated from 2026-08-07-001, added 2026-08-08)". Frontmatter updated with `supersedes:` block. Eliminates two-plan drift; one source of truth. Visual source of truth path updated from `v20-{mobile,desktop}-{en,zhcn}.html` (4 files) to `06-tier1-composed.v22-master.html` (1 file with responsive built-in) per the earlier changelog mockup-consolidation entry. |
 | 2026-08-08 | **All 7 freeze-criteria gates RESOLVED (Phase B unblocked)** — product-decision freeze fully cleared: F1 defaults = 24h/zh_cn/local-TZ; F2 filter wire = 7 groups ship as-is (Brands/Discourse/account.role/lang/Sentiment/Nationalism/unsanctioned); G1 mock freeze = `06-tier1-composed.v22-master.html` is final; G3 post_type = 6 keys as peers (no primary-bar grouping); G4 sentiment = DB-canonical (4 keys per `lookup-tables.md § 2`); G4b nationalism = DB-canonical (6 keys × 2 axes per § 4); G4c discourse = DB-canonical (10 keys per § 3); G4d roles = DB-canonical (3 persisted + 1 computed per § 5); G4e unsanctioned = DB-canonical (4 keys per § 6). User direction 2026-08-08: "literally all of the filter labels should be determined by db … make sure to clearly have the plan use db as canon for every filter and choices within each." Both freeze blocks updated; second block's G4 (Net A–G acceptance) and G5 (avoiding-recurring-mistakes skill acknowledgement) remain ACTIVE — implementer-acknowledgement gates, deferred to Phase B agent. Phase B (U1-full chrome, U3, U4-chrome, U5, U6) is now go-decision-only at the user's `/goal` prompt. |
 | 2026-08-08 | **Visual-drift detection: Element Audit + Chrome DevTools MCP added** — new § "Visual-drift detection: Element Audit + Chrome DevTools MCP (added 2026-08-08)" inserted between angle-1 (iteration drift) and angle-2 (regression net) sections. Distills the prior research-incorporation session's browser-tool decision (Chrome DevTools MCP native `mcp__chrome-devtools__` over Playwright MCP: zero-install CDP, shares user's running Chrome, exposes both `take_snapshot` and `evaluate_script(fn)`). Adds **NEW** unit: `tests/visual_tokens.py` (single source of truth, ≥ 5 pinned regions) + `tests/element_audit.py` (Chrome DevTools MCP-driven computed-style diff vs `tests/regression_net.py` HTTP-only). Pinned regions include `.pulse-chip-name` color (the 2026-08-08 defect — black on dark fill — AFTER state: `rgb(255, 255, 255)`), `.voice-chip` background, `.filter-button:hover`, `.feed-handle` text-decoration, `.delta.up::before` content. Per-iteration contract extended with steps 6a-6c; new Definition-of-Done line "Visual drift net shipped and green." Scope: angle-3 incorporation. Implementation units TBD in iter 5 — no silent narrowing. |
 | 2026-08-08 | **v22 iter 4: Top Voices body RESOLVED (historical blocker)** — P0 #1 of 5 fixed. Added `_multi_top_voices(window_days, limit=3)` view function joining Post × Account; voice_score = mention_count × log10(followers_count+10). Rendered `<span class="headline-voices">` block with `<a class="voice-chip">@handle (☆ N)</a>` chips, ordered by star DESC, comma-separated. CSS `.headline-voices` / `.voice-chip` / `.voice-star` appended to `home-v20.css`. Regression net extended from 46 to 50 assertions (+5 top-voices checks), all green. Live verified: @JulianGoldieSEO (☆ 869), @Megannewman99 (☆ 631), @tushar_koshti (☆ 445). **All 4 P0 gaps closed — goal `v22` condition MET.** |
