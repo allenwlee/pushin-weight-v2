@@ -93,6 +93,7 @@ class RegressionNet:
         self._check_filter_contract(html)
         self._check_chart_contract(html)
         self._check_locale_exhibits(html)
+        self._check_defaults(html, session)
         self._check_static_files(html)
         self._check_console_errors(html)
         # Net F (`/internal/` parity after move) — shipped iter 8.
@@ -245,6 +246,73 @@ class RegressionNet:
         self.assert_("locale-toggle has 3 buttons (zh_cn/en/original)",
                      actual == EXPECTED_LOCALE_TOGGLE,
                      f"got {actual}")
+
+    def _check_defaults(self, html, session):
+        """Net B (U2) — Defaults: window=1, locale=zh_cn, no cookie required.
+
+        Per plan § U2: HOME_WINDOW_DEFAULT=1 (24h), LANGUAGE_CODE="zh-hans"
+        (zh_cn default). BEFORE per iter 9 audit: HOME_WINDOW_DEFAULT was 7
+        (BEFORE state pinned as HOME_WINDOW_DEFAULT_BEFORE in views.py).
+        """
+        from urllib.parse import urlparse
+        parsed = urlparse(self.url)
+        # No-cookie request: default window must be 1 (24h, not 7d)
+        try:
+            r = session.get(self.url, timeout=30, allow_redirects=True)
+        except Exception as e:
+            self.failures.append(("u2-http", f"GET {self.url} failed: {e}"))
+            return
+        if r.status_code != 200:
+            self.failures.append(("u2-status", f"status {r.status_code}"))
+            return
+        default_html = r.text
+        # Find the is-active window button — must be 1 (24h), not 7
+        m = re.search(r'<button[^>]*class="window-btn is-active"[^>]*data-pw-window-btn="(\d+)"', default_html)
+        if m:
+            active = int(m.group(1))
+            self.assert_(
+                "U2: default window is 1 (24h) without cookie/filters",
+                active == 1,
+                f"active window was {active}d; expected 1d per U2",
+            )
+        else:
+            self.assert_(
+                "U2: default window is 1 (24h) without cookie/filters",
+                False,
+                "no is-active window button found in default request",
+            )
+        # data-pw-window attr must also be 1
+        m2 = re.search(r'data-pw-window="(\d+)"', default_html)
+        if m2:
+            self.assert_(
+                "U2: data-pw-window attr = 1 in default response",
+                int(m2.group(1)) == 1,
+                f"got {m2.group(1)}",
+            )
+        # Locale default: zh_cn (Django LANGUAGE_CODE="zh-hans")
+        # Verify the home renders with zh_cn locale (Chinese chrome strings present)
+        # We don't assert 走个量 (Net G covers that); we assert zh-cnfied chrome like "本窗口最新"
+        self.assert_(
+            "U2: zh_cn default renders zh-cnfied chrome (本窗口最新)",
+            "本窗口最新" in default_html,
+            "zh-cnfied feed heading missing in default response — locale default not zh_cn",
+        )
+
+        # Cookie home_window=7 honored (returning user override)
+        try:
+            r7 = session.get(self.url, timeout=30,
+                             cookies={"home_window": "7"}, allow_redirects=True)
+        except Exception as e:
+            self.failures.append(("u2-cookie-http", f"GET with cookie failed: {e}"))
+            return
+        cookie_html = r7.text
+        m3 = re.search(r'<button[^>]*class="window-btn is-active"[^>]*data-pw-window-btn="(\d+)"', cookie_html)
+        if m3:
+            self.assert_(
+                "U2: home_window=7 cookie honored (returning user override)",
+                int(m3.group(1)) == 7,
+                f"with cookie home_window=7, active was {m3.group(1)}d; expected 7d",
+            )
 
     def _check_sections(self, html):
         for section, keywords in EXPECTED_SECTIONS.items():

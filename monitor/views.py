@@ -151,7 +151,8 @@ _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
 }
 
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
-HOME_WINDOW_DEFAULT: int = 7
+HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
+HOME_WINDOW_DEFAULT_BEFORE: int = 7  # pinned for Net B regression (BEFORE value, not used in code)
 HOME_WINDOW_COOKIE: str = "home_window"
 
 FEED_HARD_CAP: int = 500
