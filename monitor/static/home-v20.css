@@ -960,3 +960,18 @@ body.desktop-shell .desktop-grid .feed-strip {
   color: var(--link);
   text-decoration: underline;
 }
+/* v22 iter 6: visual-drift fix — pin locale-toggle and feed-row to mockup values */
+.locale-toggle button,
+[data-pw-locale-btn] {
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: 1px solid rgb(148, 163, 184);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.feed-row,
+.feed-rows > * {
+  color: var(--text);
+  border-color: var(--text);
+}

@@ -47,6 +47,20 @@ VISUAL_TOKENS = {
         "color": "rgb(34, 197, 94)",
         "_note": "Pin only asserted when at least one .delta.up exists in current window. Otherwise tolerate absence (data-dependent).",
     },
+    ".locale-toggle button": {
+        "color": "rgb(148, 163, 184)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "border-color": "rgb(148, 163, 184)",
+        "border-radius": "6px",
+        "padding": "5px 12px",
+        "font-size": "12px",
+        "_before": "BEFORE 2026-08-08: color rgb(0, 0, 0), border-color rgb(0, 0, 0), border-radius 0px, padding 1px 6px — browser default button styles leaking through.",
+    },
+    ".feed-row": {
+        "color": "rgb(243, 244, 246)",
+        "border-color": "rgb(243, 244, 246)",
+        "_before": "BEFORE 2026-08-08: color rgb(0, 0, 238), border-color rgb(0, 0, 238) — browser default link styles inheriting through .feed-row anchor descendants.",
+    },
 }
 
 

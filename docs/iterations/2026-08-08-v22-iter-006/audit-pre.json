@@ -1,0 +1,9 @@
+{
+  "_note": "iter 6 pre-edit Chrome DevTools MCP evaluate_script capture (getComputedStyle). U3-U6 chrome audit.",
+  ".locale-toggle button": {"color": "rgb(0, 0, 0)", "bg": "rgb(239, 239, 239)", "border": "rgb(0, 0, 0)", "borderRadius": "0px", "padding": "1px 6px", "fontSize": "13.3333px"},
+  ".feed-row": {"color": "rgb(0, 0, 238)", "border": "rgb(0, 0, 238)", "bg": "rgba(0, 0, 0, 0)"},
+  ".filter-group-button": {"color": "rgb(255, 255, 255)", "bg": "rgb(59, 130, 246)", "borderRadius": "6px"},
+  ".filter-pill": {"color": "rgb(243, 244, 246)", "bg": "rgb(15, 23, 42)", "borderRadius": "999px"},
+  ".chart-wrap": {"bg": "rgb(15, 23, 42)", "borderRadius": "10px"},
+  ".pulse-bar-wrap": {"bg": "rgb(17, 24, 39)", "borderRadius": "10px"}
+}

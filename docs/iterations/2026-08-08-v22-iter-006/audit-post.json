@@ -1,0 +1,9 @@
+{
+  "_note": "iter 6 post-edit Chrome DevTools MCP evaluate_script capture. All drifted regions resolved per mockup-canon rule.",
+  ".locale-toggle button": {"color": "rgb(148, 163, 184)", "bg": "rgba(0, 0, 0, 0)", "border": "rgb(148, 163, 184)", "borderRadius": "6px", "padding": "5px 12px", "fontSize": "12px"},
+  ".feed-row": {"color": "rgb(243, 244, 246)", "border": "rgb(243, 244, 246)"},
+  ".filter-group-button": {"color": "rgb(255, 255, 255)", "bg": "rgb(59, 130, 246)", "borderRadius": "6px"},
+  ".filter-pill": {"color": "rgb(243, 244, 246)", "bg": "rgb(15, 23, 42)", "borderRadius": "999px"},
+  ".chart-wrap": {"bg": "rgb(15, 23, 42)", "borderRadius": "10px"},
+  ".pulse-bar-wrap": {"bg": "rgb(17, 24, 39)", "borderRadius": "10px"}
+}
