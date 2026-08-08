@@ -51,9 +51,9 @@
         {% endfor %}
         <div class="cls-block">
           <span class="cls-brand">{{ _meta.display_name_zh_cn if active_locale == 'zh_cn' else (_meta.display_name_en or _meta.nickname or nick) }}</span>
-          {% if cls.get('post_types') %}<span class="cls-row"><span class="cls-label">types:</span> {% for v in cls.get('post_types') or [] %}<span class="pill">{{ v }}</span>{% endfor %}</span>{% endif %}
-          {% if cls.get('discourse') %}<span class="cls-row"><span class="cls-label">discourses:</span> {% for v in cls.get('discourse') or [] %}<span class="pill">{{ v if v is not none else '—' }}</span>{% endfor %}</span>{% endif %}
-          {% if cls.get('sentiments') %}<span class="cls-row"><span class="cls-label">sentiments:</span> {% for v in cls.get('sentiments') or [] %}<span class="pill">{{ v }}</span>{% endfor %}</span>{% endif %}
+          {% if cls.get('post_types') %}<span class="cls-row"><span class="cls-label">types:</span> {% for v in cls.get('post_types') or [] %}<span class="pill" data-key="{{ v.key if v is mapping else '' }}">{{ v.label if v is mapping else v }}</span>{% endfor %}</span>{% endif %}
+          {% if cls.get('discourse') %}<span class="cls-row"><span class="cls-label">discourses:</span> {% for v in cls.get('discourse') or [] %}<span class="pill" data-key="{{ v.key if v is mapping else '' }}">{{ (v.label if v is mapping else v) if v is not none else '—' }}</span>{% endfor %}</span>{% endif %}
+          {% if cls.get('sentiments') %}<span class="cls-row"><span class="cls-label">sentiments:</span> {% for v in cls.get('sentiments') or [] %}<span class="pill" data-key="{{ v.key if v is mapping else '' }}">{{ v.label if v is mapping else v }}</span>{% endfor %}</span>{% endif %}
           {% if cls.get('cn_nationalism') %}<span class="cls-row"><span class="cls-label">cn:</span> <span class="pill muted">{{ cls.get('cn_nationalism') }}</span></span>{% endif %}
           {% if cls.get('us_nationalism') %}<span class="cls-row"><span class="cls-label">us:</span> <span class="pill muted">{{ cls.get('us_nationalism') }}</span></span>{% endif %}
         </div>

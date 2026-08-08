@@ -1,0 +1,880 @@
+
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --up: #10b981;
+    --down: #f87171;
+    --kimi: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; }
+  /* 1. Compressed topbar */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 1; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .window-toggle {
+    display: flex; gap: 2px; font-size: 11px; align-items: center;
+    background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 2px;
+  }
+  .topbar .window-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .topbar .window-toggle button.is-active {
+    background: var(--accent);
+    color: white;
+  }
+
+
+  /* App title on its own row; controls flush below */
+  .topbar.tz-hitch {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .topbar.tz-hitch h1.app-name {
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar.tz-hitch h1.app-name .zh {
+    font-weight: 600;
+  }
+  .topbar.tz-hitch h1.app-name .en {
+    font-weight: 500;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+  .topbar-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 28px;
+  }
+  .topbar-controls .window-toggle {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .topbar-controls .tz-pill {
+    flex: 0 0 auto;
+    margin-left: auto;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .topbar-controls .window-toggle button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    line-height: 1;
+    padding: 0 10px;
+    box-sizing: border-box;
+  }
+
+
+  /* TZ Idea C — pill hitchhiked on topbar */
+  .topbar.tz-hitch {
+    align-items: center;
+  }
+  .topbar .tz-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .topbar .tz-pill:hover { border-color: var(--accent); }
+  .topbar .tz-pill:focus { outline: none; border-color: var(--accent); }
+  .topbar .tz-pill .tz-emoji { font-size: 12px; }
+  .topbar .tz-pill .tz-time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .topbar .tz-pill .tz-city { color: var(--muted); }
+  .topbar .tz-pill .tz-pair {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 10px;
+  }
+
+  /* 2. Pulse bar */
+  .pulse-bar-wrap {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 10px 5px;
+  }
+  .pulse-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  .pulse-bar-head .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .pulse-bar-head .updated { font-size: 10px; color: var(--muted); }
+  .pulse-bar {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pulse-bar::-webkit-scrollbar { display: none; }
+  .pulse-chip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--chip-color, var(--accent));
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    scroll-snap-align: start;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .pulse-chip .name { color: var(--text); font-weight: 500; }
+  .pulse-chip .delta { font-weight: 600; font-size: 10px; }
+  .pulse-chip .delta.up { color: var(--up); }
+  .pulse-chip .delta.down { color: var(--down); }
+  .pulse-chip .delta.flat { color: var(--muted); }
+  .pulse-chip .delta.up::before { content: "▲ "; }
+  .pulse-chip .delta.down::before { content: "▼ "; }
+  .pulse-chip .delta.flat::before { content: "→ "; }
+
+  /* 3. Filter bar — English live taxonomy, drag-scroll pills, full-width dropdowns. */
+  .filter-bar {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 8px;
+    position: relative;
+    z-index: 20;
+  }
+  .filter-bar-scroller {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    cursor: grab;
+    touch-action: pan-y; /* horizontal drag handled in JS */
+  }
+  .filter-bar-scroller.is-dragging { cursor: grabbing; }
+  .filter-bar-scroller::-webkit-scrollbar { display: none; }
+
+  .filter-pill {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.1;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .filter-pill .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    pointer-events: none;
+  }
+  .filter-pill .status-dot.is-default {
+    background: transparent;
+    border: 1px solid var(--muted);
+  }
+  .filter-pill .status-dot.is-changed {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .filter-pill .title,
+  .filter-pill .carat { pointer-events: none; }
+  .filter-pill .carat { color: var(--muted); font-size: 9px; line-height: 1; transition: transform 0.15s ease; }
+  .filter-pill:focus { outline: none; border-color: var(--accent); }
+  .filter-pill.is-open { border-color: var(--accent); }
+  .filter-pill.is-open .carat { transform: rotate(180deg); }
+
+  /* Full width of the filter-bar / card column (aligns with topbar, pulse, chart).
+     JS pins left/width from .filter-bar getBoundingClientRect — NOT .phone (which includes padding). */
+  .filter-dropdown {
+    display: none;
+    position: fixed;
+    max-height: min(52vh, 360px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0 0 12px 12px;
+    padding: 8px 10px 10px;
+    z-index: 1000;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.55);
+    -webkit-user-select: auto;
+    user-select: auto;
+    box-sizing: border-box;
+  }
+  .filter-pill.is-open > .filter-dropdown { display: block; }
+
+  .filter-dropdown .dd-toolbar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-dropdown .dd-toolbar button {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .filter-dropdown .dd-toolbar button:active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .filter-dropdown .dd-grid {
+    display: grid;
+    gap: 2px 10px;
+  }
+  .filter-dropdown .dd-grid.cols-1 { grid-template-columns: 1fr; }
+  .filter-dropdown .dd-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .filter-dropdown .dd-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .filter-dropdown label {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 3px 0;
+    font-size: 10.5px;
+    line-height: 1.25;
+    color: var(--text);
+    cursor: pointer;
+    min-width: 0;
+  }
+  .filter-dropdown label span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .filter-dropdown input[type="checkbox"] {
+    margin: 1px 0 0;
+    flex: 0 0 auto;
+    cursor: pointer;
+  }
+
+
+  /* Idea B lineage: segmented lens (Open/Closed, US/CN) — no Both */
+  .dd-segment {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    margin-bottom: 8px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .dd-segment button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 5px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .dd-segment button .n {
+    font-weight: 500;
+    opacity: 0.75;
+  }
+  .dd-segment button.is-active {
+    background: var(--accent);
+    color: #fff;
+  }
+  /* Single checkbox DOM; lens shows only the active tier */
+  .dd-lens-body[data-active-lens="open"] [data-tier-grid="closed"],
+  .dd-lens-body[data-active-lens="closed"] [data-tier-grid="open"],
+  .dd-lens-body[data-active-lens="us"] [data-tier-grid="cn"],
+  .dd-lens-body[data-active-lens="cn"] [data-tier-grid="us"] {
+    display: none;
+  }
+  .dd-lens-body .dd-subhead { display: none; }
+
+  /* 4. Chart card
+  /* 4. Chart card — head removed on mobile, chart sits at the top */
+  .home-chart-wrap {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px 10px;
+  }
+  canvas.home-chart { width: 100%; height: 180px; display: block; border-radius: 6px; }
+  .legend {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 9px;
+    color: var(--muted);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .legend::-webkit-scrollbar { display: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+  .legend i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+  /* 5. Headline strip */
+  .headline-strip {
+    margin-top: 8px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+    border: 1px solid #7c3aed;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    position: relative;
+  }
+  .headline-strip .kicker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .headline-strip .pulse {
+    width: 7px; height: 7px;
+    background: var(--kimi);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--kimi);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .headline-strip .body {
+    font-size: 13px;
+    line-height: 1.4;
+    color: white;
+    font-weight: 500;
+  }
+  .headline-strip .body .brand { color: #fbcfe8; font-weight: 600; }
+  .headline-strip .body .delta { color: #86efac; font-weight: 700; }
+  .headline-strip .body .voice { color: #ddd6fe; font-weight: 400; }
+
+  /* 6. Feed — scrollable body (infinite within strip); 4/5 post + 1/5 meta */
+  .feed-strip {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px 6px;
+    display: flex;
+    flex-direction: column;
+    max-height: min(52vh, 420px);
+    min-height: 200px;
+  }
+  .feed-strip h3 {
+    font-size: 10px; margin: 0 0 6px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+    flex: 0 0 auto;
+  }
+  .feed-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    padding-right: 2px;
+  }
+  .feed-scroll::-webkit-scrollbar { width: 5px; }
+  .feed-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+  .feed-scroll-sentinel {
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  .feed-scroll-status {
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 8px 0 4px;
+  }
+  /* Outer alignment unchanged vs other cards; tint lives inside strip padding */
+  .feed-row {
+    margin: 0 -4px;
+    padding: 4px 0;
+    border-top: 1px solid var(--border);
+  }
+  .feed-row:first-of-type { border-top: none; padding-top: 0; }
+  .feed-row-shell {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    border-radius: 8px;
+    padding: 6px 6px 5px;
+    /* default: no tint */
+    background: transparent;
+  }
+  /* Sentiment tints @ 25% — single or multi-stop for mixed-brand posts */
+  .feed-row-shell.tint-positive {
+    background: rgba(16, 185, 129, 0.25);
+  }
+  .feed-row-shell.tint-negative {
+    background: rgba(248, 113, 113, 0.25);
+  }
+  .feed-row-shell.tint-mixed {
+    background: rgba(168, 85, 247, 0.25);
+  }
+  .feed-row-shell.tint-neutral {
+    background: transparent;
+  }
+  .feed-row-shell.tint-pos-neg {
+    background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(248,113,113,0.25) 100%);
+  }
+  .feed-row-shell.tint-pos-mixed {
+    background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(168,85,247,0.25) 100%);
+  }
+  .feed-row-shell.tint-neg-mixed {
+    background: linear-gradient(90deg, rgba(248,113,113,0.25) 0%, rgba(168,85,247,0.25) 100%);
+  }
+  .feed-row-shell.tint-pos-neg-mixed {
+    background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(168,85,247,0.25) 50%, rgba(248,113,113,0.25) 100%);
+  }
+
+  /* R col ~1/5 — metadata / signal stack (DOM after main) */
+  .feed-signals {
+    flex: 0 0 20%;
+    max-width: 20%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    padding-top: 2px;
+  }
+  .feed-signals .sig-row {
+    min-height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 1px;
+    font-size: 13px;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+  .feed-signals .sig-row.is-empty {
+    visibility: hidden; /* keep vertical space when nationalism blank */
+  }
+  .feed-signals .sig-nat-prefix {
+    font-size: 12px;
+    margin-right: 1px;
+  }
+
+  /* L col ~4/5 — post text + avatar + engagement (DOM first) */
+  .feed-main {
+    flex: 1 1 80%;
+    min-width: 0;
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .feed-row .avatar {
+    flex: 0 0 22px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+  }
+  .feed-row .body { flex: 1; min-width: 0; }
+  .feed-row .head {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 10.5px;
+  }
+  .feed-row .handle { font-weight: 600; color: var(--text); }
+  .feed-row .meta { color: var(--muted); font-size: 9.5px; }
+  .feed-row .text {
+    font-size: 10.5px;
+    color: var(--text);
+    line-height: 1.35;
+    margin-top: 1px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 2px;
+    margin-left: -2px;
+  }
+  .feed-row .text:hover { background: rgba(255,255,255,0.04); }
+  .feed-row .text .text-layer-tag {
+    display: inline-block;
+    font-size: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 4px;
+    font-weight: 600;
+  }
+  .feed-row .engagement {
+    color: var(--muted);
+    font-size: 9.5px;
+    margin-top: 3px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .feed-row .engagement .likes::before { content: "♥ "; color: #f87171; }
+  .feed-row .engagement .rts::before { content: "↻ "; color: var(--up); }
+  .feed-row .engagement .replies::before { content: "💬 "; }
+  .feed-row .engagement .followers::before { content: "👥 "; font-size: 9px; }
+
+  /* CA mark — tiny monogram, not the letters "SV" */
+  .tz-ca-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: linear-gradient(145deg, #f59e0b 0%, #b45309 100%);
+    color: #111827;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    flex: 0 0 auto;
+    vertical-align: -2px;
+  }
+  .tz-ca-icon svg { display: block; width: 10px; height: 10px; }
+  .topbar .tz-pill .tz-zone {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .topbar .tz-pill .tz-zone.is-ca { color: #fbbf24; }
+  .topbar .tz-pill .tz-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .topbar .tz-pill .tz-pair .tz-ca-icon { opacity: 0.9; }
+
+  .feed-row .meta .ts-abs {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .feed-row .meta .ts-abs .tz-ca-icon {
+    width: 11px;
+    height: 11px;
+    font-size: 7px;
+    vertical-align: 0;
+    margin-left: 1px;
+  }
+  .feed-row .engagement .followers::before {
+    content: "👥 ";
+    font-size: 9px;
+  }
+  .headline-strip .body .voice .star {
+    color: #fde68a;
+    font-weight: 600;
+  }
+
+  .see-all {
+    display: block;
+    text-align: center;
+    margin-top: 6px;
+    padding: 5px;
+    color: var(--accent);
+    font-size: 11px;
+    text-decoration: none;
+    border-top: 1px solid var(--border);
+  }
+
+  /* --- Desktop shell (v20) --- */
+  body.desktop-shell {
+    font-size: 15px;
+  }
+  body.desktop-shell .phone {
+    width: min(1280px, 100%);
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 28px 40px;
+  }
+  body.desktop-shell .topbar {
+    padding: 12px 16px;
+    gap: 10px 14px;
+  }
+  body.desktop-shell .topbar h1.app-name { font-size: 18px; }
+  body.desktop-shell .topbar h1.app-name .en { font-size: 15px; }
+  body.desktop-shell .topbar .window-toggle { font-size: 12px; }
+  body.desktop-shell .topbar .window-toggle button { padding: 5px 12px; font-size: 12px; }
+  body.desktop-shell .tz-pill { font-size: 12px; padding: 5px 12px; }
+  body.desktop-shell .pulse-chip { font-size: 12px; padding: 6px 10px; }
+  body.desktop-shell .filter-pill { font-size: 12px; padding: 5px 12px; }
+  body.desktop-shell .filter-dropdown { max-height: min(60vh, 480px); }
+  body.desktop-shell .filter-dropdown label { font-size: 12px; }
+  body.desktop-shell .home-chart-wrap { padding: 12px 14px; }
+  body.desktop-shell .home-chart { min-height: 240px; }
+  body.desktop-shell .headline-strip { padding: 14px 16px; }
+  body.desktop-shell .headline-strip .body { font-size: 15px; }
+  body.desktop-shell .feed-strip {
+    max-height: min(72vh, 720px);
+    min-height: 320px;
+    padding: 12px 14px 10px;
+  }
+  body.desktop-shell .feed-strip h3 { font-size: 11px; margin-bottom: 8px; }
+  body.desktop-shell .feed-row .text { font-size: 13px; -webkit-line-clamp: 4; }
+  body.desktop-shell .feed-row .handle { font-size: 13px; }
+  body.desktop-shell .feed-signals .sig-row { font-size: 15px; min-height: 18px; }
+  body.desktop-shell .legend { font-size: 11px; }
+  /* Layout stack/side-by-side controlled in Production shell wrappers below */
+
+
+
+/* === Production shell wrappers (v20 exhibits + Django) === */
+body.pw-v20 {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Shell width grows with viewport; container query drives chart|feed layout */
+.pw-v20 .app-shell {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 12px;
+  box-sizing: border-box;
+  container-type: inline-size;
+  container-name: pw-shell;
+}
+@media (min-width: 768px) {
+  .pw-v20 .app-shell { max-width: 900px; }
+}
+@media (min-width: 1100px) {
+  .pw-v20 .app-shell { max-width: 1100px; }
+}
+
+/*
+ * DEFAULT = stacked (mobile): chart then feed under it.
+ * Side-by-side ONLY when shell is wide enough (container) AND viewport is wide.
+ * minmax(0, fr) prevents the classic grid bug where the feed column
+ * squeezes to 0 width and "disappears" while still sitting on the right.
+ */
+.pw-v20 .desktop-grid,
+body.desktop-shell .desktop-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px;
+  margin-top: 8px;
+  width: 100%;
+  min-width: 0;
+  /* kill any leftover 2-col grid tracks */
+  grid-template-columns: none !important;
+}
+.pw-v20 .desktop-col-main,
+.pw-v20 .desktop-col-feed,
+body.desktop-shell .desktop-col-main,
+body.desktop-shell .desktop-col-feed {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex: none;
+  float: none !important;
+  position: relative !important;
+}
+.pw-v20 .desktop-grid .home-chart-wrap,
+.pw-v20 .desktop-grid .headline-strip,
+.pw-v20 .desktop-grid .feed-strip {
+  width: 100%;
+  margin-top: 0;
+}
+.pw-v20 .desktop-grid .feed-strip,
+body.desktop-shell .desktop-grid .feed-strip {
+  max-height: min(70vh, 640px);
+  min-height: 240px;
+}
+
+/* Viewport-wide: allow side-by-side */
+@media (min-width: 900px) {
+  .pw-v20 .desktop-grid,
+  body.desktop-shell .desktop-grid {
+    display: grid !important;
+    flex-direction: unset !important;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) !important;
+    gap: 14px;
+    align-items: start;
+  }
+  .pw-v20 .desktop-col-main,
+  .pw-v20 .desktop-col-feed,
+  body.desktop-shell .desktop-col-main,
+  body.desktop-shell .desktop-col-feed {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important; /* critical: allow fr track to shrink */
+  }
+  .pw-v20 .desktop-grid .headline-strip { margin-top: 10px; }
+  .pw-v20 .desktop-grid .feed-strip,
+  body.desktop-shell .desktop-grid .feed-strip {
+    max-height: min(78vh, 780px);
+    min-height: 320px;
+  }
+}
+
+/*
+ * Container query: if the shell itself is narrow (resized window / narrow
+ * max-width), force stack even when viewport media would still be "desktop".
+ * Styles target descendants of the container (.app-shell).
+ */
+@container pw-shell (max-width: 839px) {
+  .desktop-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+  }
+  .desktop-col-main,
+  .desktop-col-feed {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .desktop-grid .feed-strip {
+    max-height: min(70vh, 640px);
+    min-height: 240px;
+  }
+  canvas.home-chart {
+    height: 180px !important;
+  }
+}
+
+.pw-v20 .home-chart-wrap {
+  position: relative;
+  min-height: 200px;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+}
+.pw-v20 canvas.home-chart {
+  width: 100% !important;
+  height: 220px !important;
+  display: block;
+}
+@media (max-width: 899px) {
+  .pw-v20 canvas.home-chart {
+    height: 180px !important;
+  }
+  body.desktop-shell .home-chart {
+    min-height: 0;
+  }
+}
+
+.pw-v20 .filter-bar#control-panel {
+  /* alias: filter store still finds #control-panel */
+}
+.pw-v20 .spend-panel-wrap { display: none; }

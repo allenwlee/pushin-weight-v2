@@ -1,0 +1,1986 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 — Tier 1 · v21 · en · desktop</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --up: #10b981;
+    --down: #f87171;
+    --kimi: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; }
+  /* 1. Compressed topbar */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 1; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .window-toggle {
+    display: flex; gap: 2px; font-size: 11px; align-items: center;
+    background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 2px;
+  }
+  .topbar .window-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .topbar .window-toggle button.is-active {
+    background: var(--accent);
+    color: white;
+  }
+
+
+  /* App title on its own row; controls flush below */
+  .topbar.tz-hitch {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .topbar.tz-hitch h1.app-name {
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar.tz-hitch h1.app-name .zh {
+    font-weight: 600;
+  }
+  .topbar.tz-hitch h1.app-name .en {
+    font-weight: 500;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+  /* App name + locale toggle on one row */
+  .topbar-title-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+  }
+  .topbar-title-row .app-name {
+    flex: 1 1 auto;
+    width: auto !important;
+    min-width: 0;
+  }
+  .topbar-title-row .locale-toggle {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .topbar-title-row .locale-toggle button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    line-height: 1;
+    padding: 0 10px;
+    box-sizing: border-box;
+  }
+  .topbar-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 28px;
+  }
+  .topbar-controls .window-toggle {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .topbar-controls .tz-pill {
+    flex: 0 0 auto;
+    margin-left: auto;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .topbar-controls .window-toggle button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    line-height: 1;
+    padding: 0 10px;
+    box-sizing: border-box;
+  }
+
+
+  /* TZ Idea C — pill hitchhiked on topbar */
+  .topbar.tz-hitch {
+    align-items: center;
+  }
+  .topbar .tz-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .topbar .tz-pill:hover { border-color: var(--accent); }
+  .topbar .tz-pill:focus { outline: none; border-color: var(--accent); }
+  .topbar .tz-pill .tz-emoji { font-size: 12px; }
+  .topbar .tz-pill .tz-time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .topbar .tz-pill .tz-city { color: var(--muted); }
+  .topbar .tz-pill .tz-pair {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 10px;
+  }
+
+  /* 2. Pulse bar */
+  .pulse-bar-wrap {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 10px 5px;
+  }
+  .pulse-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  .pulse-bar-head .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .pulse-bar-head .updated { font-size: 10px; color: var(--muted); }
+  .pulse-bar {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pulse-bar::-webkit-scrollbar { display: none; }
+  .pulse-chip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--chip-color, var(--accent));
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    scroll-snap-align: start;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .pulse-chip .name { color: var(--text); font-weight: 500; }
+  .pulse-chip .delta { font-weight: 600; font-size: 10px; }
+  .pulse-chip .delta.up { color: var(--up); }
+  .pulse-chip .delta.down { color: var(--down); }
+  .pulse-chip .delta.flat { color: var(--muted); }
+  .pulse-chip .delta.up::before { content: "▲ "; }
+  .pulse-chip .delta.down::before { content: "▼ "; }
+  .pulse-chip .delta.flat::before { content: "→ "; }
+
+  /* 3. Filter bar — English live taxonomy, drag-scroll pills, full-width dropdowns. */
+  .filter-bar {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 8px;
+    position: relative;
+    z-index: 20;
+  }
+  .filter-bar-scroller {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    cursor: grab;
+    touch-action: pan-y; /* horizontal drag handled in JS */
+  }
+  .filter-bar-scroller.is-dragging { cursor: grabbing; }
+  .filter-bar-scroller::-webkit-scrollbar { display: none; }
+
+  .filter-pill {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.1;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .filter-pill .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    pointer-events: none;
+  }
+  .filter-pill .status-dot.is-default {
+    background: transparent;
+    border: 1px solid var(--muted);
+  }
+  .filter-pill .status-dot.is-changed {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .filter-pill .title,
+  .filter-pill .carat { pointer-events: none; }
+  .filter-pill .carat { color: var(--muted); font-size: 9px; line-height: 1; transition: transform 0.15s ease; }
+  .filter-pill:focus { outline: none; border-color: var(--accent); }
+  .filter-pill.is-open { border-color: var(--accent); }
+  .filter-pill.is-open .carat { transform: rotate(180deg); }
+
+  /* Full width of the filter-bar / card column (aligns with topbar, pulse, chart).
+     JS pins left/width from .filter-bar getBoundingClientRect — NOT .phone (which includes padding). */
+  .filter-dropdown {
+    display: none;
+    position: fixed;
+    max-height: min(52vh, 360px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0 0 12px 12px;
+    padding: 8px 10px 10px;
+    z-index: 1000;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.55);
+    -webkit-user-select: auto;
+    user-select: auto;
+    box-sizing: border-box;
+  }
+  .filter-pill.is-open > .filter-dropdown { display: block; }
+
+  .filter-dropdown .dd-toolbar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-dropdown .dd-toolbar button {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .filter-dropdown .dd-toolbar button:active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .filter-dropdown .dd-grid {
+    display: grid;
+    gap: 2px 10px;
+  }
+  .filter-dropdown .dd-grid.cols-1 { grid-template-columns: 1fr; }
+  .filter-dropdown .dd-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .filter-dropdown .dd-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .filter-dropdown label {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 3px 0;
+    font-size: 10.5px;
+    line-height: 1.25;
+    color: var(--text);
+    cursor: pointer;
+    min-width: 0;
+  }
+  .filter-dropdown label span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .filter-dropdown input[type="checkbox"] {
+    margin: 1px 0 0;
+    flex: 0 0 auto;
+    cursor: pointer;
+  }
+
+
+  /* Idea B lineage: segmented lens (Open/Closed, US/CN) — no Both */
+  .dd-segment {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    margin-bottom: 8px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .dd-segment button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 5px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .dd-segment button .n {
+    font-weight: 500;
+    opacity: 0.75;
+  }
+  .dd-segment button.is-active {
+    background: var(--accent);
+    color: #fff;
+  }
+  /* Single checkbox DOM; lens shows only the active tier */
+  .dd-lens-body[data-active-lens="open"] [data-tier-grid="closed"],
+  .dd-lens-body[data-active-lens="closed"] [data-tier-grid="open"],
+  .dd-lens-body[data-active-lens="us"] [data-tier-grid="cn"],
+  .dd-lens-body[data-active-lens="cn"] [data-tier-grid="us"] {
+    display: none;
+  }
+  .dd-lens-body .dd-subhead { display: none; }
+
+  /* 4. Chart card
+  /* 4. Chart card — head removed on mobile, chart sits at the top */
+  .home-chart-wrap {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px 10px;
+  }
+  canvas.home-chart { width: 100%; height: 180px; display: block; border-radius: 6px; }
+  .legend {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 9px;
+    color: var(--muted);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .legend::-webkit-scrollbar { display: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+  .legend i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+  /* 5. Headline strip */
+  .headline-strip {
+    margin-top: 8px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+    border: 1px solid #7c3aed;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    position: relative;
+  }
+  .headline-strip .kicker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .headline-strip .pulse {
+    width: 7px; height: 7px;
+    background: var(--kimi);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--kimi);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .headline-strip .body {
+    font-size: 13px;
+    line-height: 1.4;
+    color: white;
+    font-weight: 500;
+  }
+  .headline-strip .body .brand { color: #fbcfe8; font-weight: 600; }
+  .headline-strip .body .delta { color: #86efac; font-weight: 700; }
+  .headline-strip .body .voice { color: #ddd6fe; font-weight: 400; }
+
+  /* 6. Feed — scrollable body (infinite within strip); 4/5 post + 1/5 meta */
+  .feed-strip {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px 6px;
+    display: flex;
+    flex-direction: column;
+    max-height: min(52vh, 420px);
+    min-height: 200px;
+  }
+  .feed-strip h3 {
+    font-size: 10px; margin: 0 0 6px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+    flex: 0 0 auto;
+  }
+  .feed-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    padding-right: 2px;
+  }
+  .feed-scroll::-webkit-scrollbar { width: 5px; }
+  .feed-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+  .feed-scroll-sentinel {
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  .feed-scroll-status {
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 8px 0 4px;
+  }
+  /* Outer alignment unchanged vs other cards; tint lives inside strip padding */
+  .feed-row {
+    margin: 0 -4px;
+    padding: 4px 0;
+    border-top: 1px solid var(--border);
+  }
+  .feed-row:first-of-type { border-top: none; padding-top: 0; }
+  .feed-row-shell {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    border-radius: 8px;
+    padding: 6px 6px 5px;
+    /* default: no tint */
+    background: transparent;
+  }
+  /* Sentiment tints @ 25% — single or multi-stop for mixed-brand posts */
+  .feed-row-shell.tint-positive {
+    background: rgba(16, 185, 129, 0.25);
+  }
+  .feed-row-shell.tint-negative {
+    background: rgba(248, 113, 113, 0.25);
+  }
+  .feed-row-shell.tint-mixed {
+    background: rgba(168, 85, 247, 0.25);
+  }
+  .feed-row-shell.tint-neutral {
+    background: transparent;
+  }
+  .feed-row-shell.tint-pos-neg {
+    background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(248,113,113,0.25) 100%);
+  }
+  .feed-row-shell.tint-pos-mixed {
+    background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(168,85,247,0.25) 100%);
+  }
+  .feed-row-shell.tint-neg-mixed {
+    background: linear-gradient(90deg, rgba(248,113,113,0.25) 0%, rgba(168,85,247,0.25) 100%);
+  }
+  .feed-row-shell.tint-pos-neg-mixed {
+    background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(168,85,247,0.25) 50%, rgba(248,113,113,0.25) 100%);
+  }
+
+  /* R col ~1/5 — metadata / signal stack (DOM after main) */
+  .feed-signals {
+    flex: 0 0 20%;
+    max-width: 20%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    padding-top: 2px;
+  }
+  .feed-signals .sig-row {
+    min-height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 1px;
+    font-size: 13px;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+  .feed-signals .sig-row.is-empty {
+    visibility: hidden; /* keep vertical space when nationalism blank */
+  }
+  .feed-signals .sig-nat-prefix {
+    font-size: 12px;
+    margin-right: 1px;
+  }
+
+  /* L col ~4/5 — post text + avatar + engagement (DOM first) */
+  .feed-main {
+    flex: 1 1 80%;
+    min-width: 0;
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .feed-row .avatar {
+    flex: 0 0 22px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+  }
+  .feed-row .body { flex: 1; min-width: 0; }
+  .feed-row .head {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 10.5px;
+  }
+  .feed-row .handle { font-weight: 600; color: var(--text); }
+  .feed-row .meta { color: var(--muted); font-size: 9.5px; }
+  .feed-row .text {
+    font-size: 10.5px;
+    color: var(--text);
+    line-height: 1.35;
+    margin-top: 1px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 2px;
+    margin-left: -2px;
+  }
+  .feed-row .text:hover { background: rgba(255,255,255,0.04); }
+  .feed-row .text .text-layer-tag {
+    display: inline-block;
+    font-size: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 4px;
+    font-weight: 600;
+  }
+  .feed-row .engagement {
+    color: var(--muted);
+    font-size: 9.5px;
+    margin-top: 3px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .feed-row .engagement .likes::before { content: "♥ "; color: #f87171; }
+  .feed-row .engagement .rts::before { content: "↻ "; color: var(--up); }
+  .feed-row .engagement .replies::before { content: "💬 "; }
+  .feed-row .engagement .followers::before { content: "👥 "; font-size: 9px; }
+
+  /* CA mark — tiny monogram, not the letters "SV" */
+  .tz-ca-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: linear-gradient(145deg, #f59e0b 0%, #b45309 100%);
+    color: #111827;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    flex: 0 0 auto;
+    vertical-align: -2px;
+  }
+  .tz-ca-icon svg { display: block; width: 10px; height: 10px; }
+  .topbar .tz-pill .tz-zone {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .topbar .tz-pill .tz-zone.is-ca { color: #fbbf24; }
+  .topbar .tz-pill .tz-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .topbar .tz-pill .tz-pair .tz-ca-icon { opacity: 0.9; }
+
+  .feed-row .meta .ts-abs {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .feed-row .meta .ts-abs .tz-ca-icon {
+    width: 11px;
+    height: 11px;
+    font-size: 7px;
+    vertical-align: 0;
+    margin-left: 1px;
+  }
+  .feed-row .engagement .followers::before {
+    content: "👥 ";
+    font-size: 9px;
+  }
+  .headline-strip .body .voice .star {
+    color: #fde68a;
+    font-weight: 600;
+  }
+
+  .see-all {
+    display: block;
+    text-align: center;
+    margin-top: 6px;
+    padding: 5px;
+    color: var(--accent);
+    font-size: 11px;
+    text-decoration: none;
+    border-top: 1px solid var(--border);
+  }
+
+  /* --- Desktop shell (v21) --- */
+  body.desktop-shell {
+    font-size: 15px;
+  }
+  body.desktop-shell .phone {
+    width: min(1280px, 100%);
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 28px 40px;
+  }
+  body.desktop-shell .topbar {
+    padding: 12px 16px;
+    gap: 10px 14px;
+  }
+  body.desktop-shell .topbar h1.app-name { font-size: 18px; }
+  body.desktop-shell .topbar h1.app-name .en { font-size: 15px; }
+  body.desktop-shell .topbar .window-toggle { font-size: 12px; }
+  body.desktop-shell .topbar .window-toggle button { padding: 5px 12px; font-size: 12px; }
+  body.desktop-shell .topbar-title-row .locale-toggle { font-size: 12px; }
+  body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; font-size: 12px; height: auto; }
+  body.desktop-shell .tz-pill { font-size: 12px; padding: 5px 12px; }
+  body.desktop-shell .pulse-chip { font-size: 12px; padding: 6px 10px; }
+  body.desktop-shell .filter-pill { font-size: 12px; padding: 5px 12px; }
+  body.desktop-shell .filter-dropdown { max-height: min(60vh, 480px); }
+  body.desktop-shell .filter-dropdown label { font-size: 12px; }
+  body.desktop-shell .home-chart-wrap { padding: 12px 14px; }
+  body.desktop-shell .home-chart { min-height: 240px; }
+  body.desktop-shell .headline-strip { padding: 14px 16px; }
+  body.desktop-shell .headline-strip .body { font-size: 15px; }
+  body.desktop-shell .feed-strip {
+    max-height: min(72vh, 720px);
+    min-height: 320px;
+    padding: 12px 14px 10px;
+  }
+  body.desktop-shell .feed-strip h3 { font-size: 11px; margin-bottom: 8px; }
+  body.desktop-shell .feed-row .text { font-size: 13px; -webkit-line-clamp: 4; }
+  body.desktop-shell .feed-row .handle { font-size: 13px; }
+  body.desktop-shell .feed-signals .sig-row { font-size: 15px; min-height: 18px; }
+  /* Default: stack (mobile collapse). Side-by-side only when wide. */
+  body.desktop-shell .desktop-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+  body.desktop-shell .desktop-col-main,
+  body.desktop-shell .desktop-col-feed {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.desktop-shell .desktop-grid .home-chart-wrap { margin-top: 0; }
+  body.desktop-shell .desktop-grid .headline-strip { margin-top: 10px; }
+  body.desktop-shell .desktop-grid .feed-strip {
+    margin-top: 0;
+    max-height: min(70vh, 640px);
+    width: 100%;
+  }
+  body.desktop-shell .legend { font-size: 11px; }
+
+  /* Juxtaposed chart | feed only when viewport is wide enough */
+  @media (min-width: 900px) {
+    body.desktop-shell .desktop-grid {
+      display: grid;
+      /* minmax(0, fr) prevents feed column collapsing to 0 width */
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 14px;
+      align-items: start;
+    }
+    body.desktop-shell .desktop-col-main,
+    body.desktop-shell .desktop-col-feed {
+      width: auto;
+      max-width: none;
+      min-width: 0;
+    }
+    body.desktop-shell .desktop-grid .feed-strip {
+      max-height: min(78vh, 780px);
+    }
+  }
+
+</style>
+</head>
+<body class="desktop-shell" data-pw-locale="en" data-pw-layout="desktop" data-pw-variant="v21-desktop-en">
+<div class="phone">
+  <header class="topbar tz-hitch">
+    <div class="topbar-title-row">
+    <h1 class="app-name"><span class="zh">走个量</span><span class="en">Pushin' Weight</span></h1>
+    <nav class="window-toggle locale-toggle" aria-label="Display language">
+      <button type="button" data-pw-locale-btn="en" class="is-active">en</button><button type="button" data-pw-locale-btn="zh_cn">zh-cn</button><button type="button" data-pw-locale-btn="original">original</button>
+    </nav>
+    </div>
+    <div class="topbar-controls">
+    <nav class="window-toggle" aria-label="Time-period selector">
+      <button class="is-active">24h</button><button>7d</button><button>30d</button><button>365d</button>
+    </nav>
+    <button type="button" class="tz-pill" data-tz-widget data-tz-idea="c" data-tz-active="local"
+            title="Toggle local ⇄ California time" aria-label="Timezone toggle">
+      <span class="tz-emoji" data-tz-emoji>☀️</span>
+      <span class="tz-time" data-tz-time>00:00</span>
+      <span class="tz-zone" data-tz-zone>local</span>
+      <span class="tz-pair" data-tz-pair>⇄ <span class="tz-ca-icon" title="California" aria-label="California">CA</span></span>
+    </button>
+    </div>
+  </header>
+
+  <!-- Pulse bar -->
+  <section class="pulse-bar-wrap" aria-label="Trending models">
+    <div class="pulse-bar-head">
+      <span class="label">Trending · 24h</span>
+      <span class="updated">· 23s ago</span>
+    </div>
+    <div class="pulse-bar" role="list">
+      <button class="pulse-chip" role="listitem" style="--chip-color:#ec4899">
+        <span class="name">Kimi</span><span class="delta up">312%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#10b981">
+        <span class="name">DeepSeek</span><span class="delta up">47%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#3b82f6">
+        <span class="name">MiniMax</span><span class="delta up">19%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#f97316">
+        <span class="name">Qwen</span><span class="delta flat">0%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#0ea5e9">
+        <span class="name">ERNIE</span><span class="delta up">28%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#a855f7">
+        <span class="name">GLM</span><span class="delta flat">2%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#dc2626">
+        <span class="name">Solar</span><span class="delta down">8%</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Filter bar: Brands → Discourse → Role → Lang → Sentiment → Nationalism → Unsanctioned -->
+  <nav class="filter-bar" aria-label="Filter groups">
+    <div class="filter-bar-scroller" id="filter-bar-scroller">
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="brands">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Brands</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Brands" data-idea="b" data-lens-pair="open,closed">
+        <div class="dd-segment" role="tablist" aria-label="Brand tier">
+          <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true">Open <span class="n" data-lens-count="open">· 32</span></button>
+          <button type="button" role="tab" data-lens="closed" aria-selected="false">Closed <span class="n" data-lens-count="closed">· 0</span></button>
+        </div>
+        <div class="dd-toolbar">
+          <button type="button" data-dd-action="all" data-dd-scope="visible">all</button>
+          <button type="button" data-dd-action="clear" data-dd-scope="visible">clear</button>
+        </div>
+        <div class="dd-lens-body" data-active-lens="open">
+          <div class="dd-grid cols-3" data-tier-grid="open">
+          <label><input type="checkbox" checked><span>DeepSeek</span></label>
+          <label><input type="checkbox" checked><span>Qwen</span></label>
+          <label><input type="checkbox" checked><span>Zhipu GLM</span></label>
+          <label><input type="checkbox" checked><span>MiniMax AI</span></label>
+          <label><input type="checkbox" checked><span>Meta Llama</span></label>
+          <label><input type="checkbox" checked><span>Mistral</span></label>
+          <label><input type="checkbox" checked><span>Xiaomi MiMo</span></label>
+          <label><input type="checkbox" checked><span>ByteDance Doubao</span></label>
+          <label><input type="checkbox" checked><span>01.AI Yi</span></label>
+          <label><input type="checkbox" checked><span>Tencent Hunyuan</span></label>
+          <label><input type="checkbox" checked><span>StepFun</span></label>
+          <label><input type="checkbox" checked><span>Baidu ERNIE</span></label>
+          <label><input type="checkbox" checked><span>Kuaishou KwaiYii</span></label>
+          <label><input type="checkbox" checked><span>Upstage Solar</span></label>
+          <label><input type="checkbox" checked><span>InclusionAI</span></label>
+          <label><input type="checkbox" checked><span>ChatGLM</span></label>
+          <label><input type="checkbox" checked><span>Claude</span></label>
+          <label><input type="checkbox" checked><span>LG EXAONE</span></label>
+          <label><input type="checkbox" checked><span>Gemini</span></label>
+          <label><input type="checkbox" checked><span>Gemma</span></label>
+          <label><input type="checkbox" checked><span>GPT</span></label>
+          <label><input type="checkbox" checked><span>Grok</span></label>
+          <label><input type="checkbox" checked><span>KwaiYii</span></label>
+          <label><input type="checkbox" checked><span>Moonshot Kimi</span></label>
+          <label><input type="checkbox" checked><span>NVIDIA NeMo</span></label>
+          <label><input type="checkbox" checked><span>Sakana AI</span></label>
+          <label><input type="checkbox" checked><span>Seed</span></label>
+          <label><input type="checkbox" checked><span>SenseTime SenseChat</span></label>
+          <label><input type="checkbox" checked><span>SenseNova</span></label>
+          <label><input type="checkbox" checked><span>Step</span></label>
+          <label><input type="checkbox" checked><span>Test</span></label>
+          <label><input type="checkbox" checked><span>Wenxin / Wenxin</span></label>
+          </div>
+          <div class="dd-grid cols-2" data-tier-grid="closed">
+          <label><input type="checkbox"><span>Anthropic</span></label>
+          <label><input type="checkbox"><span>OpenAI</span></label>
+          <label><input type="checkbox"><span>SpaceXAI</span></label>
+          <label><input type="checkbox"><span>Google</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Discourse</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Discourse">
+        <div class="dd-grid cols-3">
+          <label><input type="checkbox" checked><span>genuine_hype</span></label>
+          <label><input type="checkbox" checked><span>sarcasm</span></label>
+          <label><input type="checkbox" checked><span>dunk_yingyang</span></label>
+          <label><input type="checkbox" checked><span>self_deprecation</span></label>
+          <label><input type="checkbox" checked><span>cope</span></label>
+          <label><input type="checkbox" checked><span>fud</span></label>
+          <label><input type="checkbox" checked><span>distillation_accusation</span></label>
+          <label><input type="checkbox" checked><span>ai_slop_critique</span></label>
+          <label><input type="checkbox" checked><span>absurdist_meme</span></label>
+          <label><input type="checkbox" checked><span>advertising-marketing</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="role">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Role</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Role">
+        <div class="dd-grid cols-2">
+          <label><input type="checkbox" checked><span>official</span></label>
+          <label><input type="checkbox" checked><span>staff</span></label>
+          <label><input type="checkbox" checked><span>community</span></label>
+          <label><input type="checkbox" checked><span>other</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="lang">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Lang</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Lang">
+        <div class="dd-toolbar">
+          <button type="button" data-dd-action="all">all</button>
+          <button type="button" data-dd-action="clear">clear</button>
+        </div>
+        <div class="dd-grid cols-3">
+          <label><input type="checkbox" checked><span>English</span></label>
+          <label><input type="checkbox" checked><span>简体中文</span></label>
+          <label><input type="checkbox" checked><span>日本語</span></label>
+          <label><input type="checkbox" checked><span>Español</span></label>
+          <label><input type="checkbox" checked><span>Türkçe</span></label>
+          <label><input type="checkbox" checked><span>Français</span></label>
+          <label><input type="checkbox" checked><span>Português</span></label>
+          <label><input type="checkbox" checked><span>한국어</span></label>
+          <label><input type="checkbox" checked><span>Bahasa Indonesia</span></label>
+          <label><input type="checkbox" checked><span>العربية</span></label>
+          <label><input type="checkbox" checked><span>Polski</span></label>
+          <label><input type="checkbox" checked><span>undetected</span></label>
+          <label><input type="checkbox" checked><span>other</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="sentiment">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Sentiment</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Sentiment">
+        <div class="dd-grid cols-2">
+          <label><input type="checkbox" checked value="positive"><span>Positive</span></label>
+          <label><input type="checkbox" checked value="negative"><span>Negative</span></label>
+          <label><input type="checkbox" checked value="neutral"><span>Neutral</span></label>
+          <label><input type="checkbox" checked value="mixed"><span>Mixed</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="nationalism">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Nationalism</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Nationalism" data-idea="b" data-lens-pair="us,cn">
+        <div class="dd-segment" role="tablist" aria-label="Nationalism region">
+          <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">US <span class="n" data-lens-count="us">· 6</span></button>
+          <button type="button" role="tab" data-lens="cn" aria-selected="false">CN <span class="n" data-lens-count="cn">· 6</span></button>
+        </div>
+        <div class="dd-toolbar">
+          <button type="button" data-dd-action="all" data-dd-scope="visible">all</button>
+          <button type="button" data-dd-action="clear" data-dd-scope="visible">clear</button>
+        </div>
+        <div class="dd-lens-body" data-active-lens="us">
+          <div class="dd-grid cols-3" data-tier-grid="us">
+          <label><input type="checkbox" checked><span>none</span></label>
+          <label><input type="checkbox" checked><span>mild_pro</span></label>
+          <label><input type="checkbox" checked><span>pro</span></label>
+          <label><input type="checkbox" checked><span>constructive_critical</span></label>
+          <label><input type="checkbox" checked><span>anti</span></label>
+          <label><input type="checkbox" checked><span>mixed</span></label>
+          </div>
+          <div class="dd-grid cols-3" data-tier-grid="cn">
+          <label><input type="checkbox" checked><span>none</span></label>
+          <label><input type="checkbox" checked><span>mild_pro</span></label>
+          <label><input type="checkbox" checked><span>pro</span></label>
+          <label><input type="checkbox" checked><span>constructive_critical</span></label>
+          <label><input type="checkbox" checked><span>anti</span></label>
+          <label><input type="checkbox" checked><span>mixed</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="unsanctioned">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">Unsanctioned</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Unsanctioned">
+        <div class="dd-grid cols-1">
+          <label><input type="checkbox" value="only" data-pw-filter-group="unsanctioned"><span>show only flagged posts</span></label>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- /.filter-bar-scroller -->
+  </nav>
+
+  <!-- Chart: 5 lines for the top-5 brands by post count in the selected window -->
+    <div class="desktop-grid">
+    <div class="desktop-col-main">
+<section class="home-chart-wrap">
+    <svg class="home-chart" viewBox="0 0 360 180" preserveAspectRatio="none">
+      <rect width="360" height="180" fill="#0f172a"/>
+      <line x1="0" y1="45"  x2="360" y2="45"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="90"  x2="360" y2="90"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="135" x2="360" y2="135" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.8" fill="none">
+        <polyline stroke="#ec4899" points="0,160 30,158 60,148 90,128 120,108 150,82 180,58 210,42 240,30 270,28 300,30 330,35 360,40"/>
+        <polyline stroke="#10b981" points="0,140 30,138 60,132 90,128 120,122 150,118 180,112 210,108 240,102 270,98 300,95 330,92 360,88"/>
+        <polyline stroke="#3b82f6" points="0,110 30,108 60,105 90,102 120,100 150,98 180,95 210,92 240,90 270,88 300,85 330,82 360,80"/>
+        <polyline stroke="#f97316" points="0,100 30,102 60,98 90,102 120,108 150,112 180,115 210,112 240,115 270,110 300,108 330,105 360,102"/>
+        <polyline stroke="#0ea5e9" points="0,130 30,128 60,124 90,118 120,114 150,108 180,100 210,92 240,84 270,80 300,74 330,70 360,66"/>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#ec4899"></i>Kimi</span>
+      <span><i style="background:#10b981"></i>DeepSeek</span>
+      <span><i style="background:#3b82f6"></i>MiniMax</span>
+      <span><i style="background:#f97316"></i>Qwen</span>
+      <span><i style="background:#0ea5e9"></i>ERNIE</span>
+    </div>
+  </section>
+
+  <!-- Headline strip -->
+  <div class="headline-strip" role="button" tabindex="0">
+    <div class="kicker">
+      <span class="pulse"></span>
+      Trending now
+    </div>
+    <div class="body">
+      <span class="brand">Kimi 3</span> open weights dropped 2h ago — X volume
+      <span class="delta">+312%</span> in 60 min, 87 posts, sentiment 71% positive.
+      <span class="voice">Top voices: @kimi_moonshot (<span class="star">☆</span> 12), @awnihannun (<span class="star">☆</span> 8), @rasbt (<span class="star">☆</span> 6).</span>
+    </div>
+  </div>
+
+  <!-- Feed: L post 4/5 · R metadata 1/5 · infinite scroll inside strip -->
+      </div>
+    <div class="desktop-col-feed">
+<section class="feed-strip">
+    <h3>Latest in window</h3>
+    <div class="feed-scroll" id="feed-scroll" data-feed-scroll>
+    <div class="feed-rows" id="feed-rows" data-feed-rows>
+
+    <!-- Row 1: positive + mixed brands → green→purple tint; CN+US nationalism -->
+    <div class="feed-row"
+         data-posted-offset-min="12"
+         data-unsanctioned=""
+         data-followers="128400"
+         data-sentiments="positive,mixed"
+         data-post-types="buzz_releases,hands_on_usage"
+         data-nat-cn="pro"
+         data-nat-us="mild_pro">
+      <div class="feed-row-shell">
+        <div class="feed-main">
+          <span class="avatar" style="background:#ec4899">K</span>
+          <div class="body">
+            <div class="head">
+              <span class="handle">@kimi_moonshot</span>
+              <span class="meta">· 12m <span class="ts-abs" data-ts-abs></span></span>
+            </div>
+            <div class="text" data-text-cycle role="button" tabindex="0"
+                 data-voice-zh-cn="月之暗面开源权重上线，推理表现亮眼，MIT 协议。建议先试 7B。"
+                 data-text-zh-cn="Kimi K3 开源权重已发布！推理分数强，MIT 许可。先从 7B 变体试起。"
+                 data-text="Kimi K3 open weights are out! Strong reasoning scores, MIT license. Try the 7B variant first."
+                 data-text-en="Kimi K3 open weights are out! Strong reasoning scores, MIT license. Try the 7B variant first."></div>
+            <div class="engagement">
+              <span class="followers">128.4k</span>
+              <span class="likes">1.2k</span>
+              <span class="rts">340</span>
+              <span class="replies">89</span>
+            </div>
+          </div>
+        </div>
+        <div class="feed-signals" aria-hidden="true">
+          <div class="sig-row sig-sentiment" data-sig-sentiment></div>
+          <div class="sig-row sig-post-type" data-sig-post-type></div>
+          <div class="sig-row sig-nat" data-sig-nat></div>
+          <div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: negative only → red tint; no nationalism (blank row keeps space) -->
+    <div class="feed-row"
+         data-posted-offset-min="24"
+         data-unsanctioned="1"
+         data-followers="89200"
+         data-sentiments="negative"
+         data-post-types="performance_comparisons,feedback_questions"
+         data-nat-cn=""
+         data-nat-us="">
+      <div class="feed-row-shell">
+        <div class="feed-main">
+          <span class="avatar" style="background:#3b82f6">A</span>
+          <div class="body">
+            <div class="head">
+              <span class="handle">@awnihannun</span>
+              <span class="meta">· 24m <span class="ts-abs" data-ts-abs></span></span>
+            </div>
+            <div class="text" data-text-cycle role="button" tabindex="0"
+                 data-voice-zh-cn="跑了一轮推理评测：数学超 Qwen3，代码仍落后 R1。"
+                 data-text-zh-cn="在标准推理评测上跑了 Kimi K3——数学超 Qwen3，代码落后 DeepSeek-R1。"
+                 data-text="Ran Kimi K3 on the standard reasoning eval — ahead of Qwen3 on math, behind DeepSeek-R1 on code."
+                 data-text-en="Ran Kimi K3 on the standard reasoning eval — ahead of Qwen3 on math, behind DeepSeek-R1 on code."></div>
+            <div class="engagement">
+              <span class="followers">89.2k</span>
+              <span class="likes">480</span>
+              <span class="rts">120</span>
+              <span class="replies">31</span>
+            </div>
+          </div>
+        </div>
+        <div class="feed-signals" aria-hidden="true">
+          <div class="sig-row sig-sentiment" data-sig-sentiment></div>
+          <div class="sig-row sig-post-type" data-sig-post-type></div>
+          <div class="sig-row sig-nat" data-sig-nat></div>
+          <div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: positive + negative → dual tint; US flag only -->
+    <div class="feed-row"
+         data-posted-offset-min="41"
+         data-unsanctioned=""
+         data-followers="312000"
+         data-sentiments="positive,negative"
+         data-post-types="buzz_releases,advertising_marketing,event_announcement"
+         data-nat-cn=""
+         data-nat-us="mild_pro">
+      <div class="feed-row-shell">
+        <div class="feed-main">
+          <span class="avatar" style="background:#10b981">S</span>
+          <div class="body">
+            <div class="head">
+              <span class="handle">@rasbt</span>
+              <span class="meta">· 41m <span class="ts-abs" data-ts-abs></span></span>
+            </div>
+            <div class="text" data-text-cycle role="button" tabindex="0"
+                 data-voice-zh-cn="一句话：7B/14B/32B MoE，MIT，自托管友好。"
+                 data-text-zh-cn="速览：Kimi K3 是 7B/14B/32B MoE 家族。MIT，约 3.5k 上下文，无 RLHF 权重。适合自托管。"
+                 data-text="Quick distill: Kimi K3 is a 7B/14B/32B MoE family. MIT, ~3.5k context, no RLHF weights. Solid for self-host."
+                 data-text-en="Quick distill: Kimi K3 is a 7B/14B/32B MoE family. MIT, ~3.5k context, no RLHF weights. Solid for self-host."></div>
+            <div class="engagement">
+              <span class="followers">312k</span>
+              <span class="likes">312</span>
+              <span class="rts">95</span>
+              <span class="replies">22</span>
+            </div>
+          </div>
+        </div>
+        <div class="feed-signals" aria-hidden="true">
+          <div class="sig-row sig-sentiment" data-sig-sentiment></div>
+          <div class="sig-row sig-post-type" data-sig-post-type></div>
+          <div class="sig-row sig-nat" data-sig-nat></div>
+          <div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- /.feed-rows -->
+    <div class="feed-scroll-sentinel" data-feed-sentinel aria-hidden="true"></div>
+    <div class="feed-scroll-status" data-feed-status hidden>Loading…</div>
+    </div><!-- /.feed-scroll -->
+  </section>
+    </div>
+  </div>
+
+</div>
+<script>
+(function () {
+  "use strict";
+  var bar = document.querySelector(".filter-bar");
+  if (!bar) return;
+  var scroller = bar.querySelector(".filter-bar-scroller");
+  var pills = Array.prototype.slice.call(bar.querySelectorAll(".filter-pill"));
+
+  // --- Panel aligns to filter-bar (same width as topbar / pulse / chart cards) ---
+  function placeDropdown(pill) {
+    var dd = pill.querySelector(".filter-dropdown");
+    if (!dd) return;
+    var barR = bar.getBoundingClientRect();
+    dd.style.top = Math.round(barR.bottom + 2) + "px";
+    dd.style.left = Math.round(barR.left) + "px";
+    dd.style.width = Math.round(barR.width) + "px";
+    dd.style.right = "auto";
+  }
+
+  function setExpanded(pill, open) {
+    pill.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function closeAll() {
+    pills.forEach(function (p) {
+      p.classList.remove("is-open");
+      setExpanded(p, false);
+    });
+  }
+
+  function openPill(pill) {
+    closeAll();
+    pill.classList.add("is-open");
+    setExpanded(pill, true);
+    requestAnimationFrame(function () {
+      placeDropdown(pill);
+      requestAnimationFrame(function () { placeDropdown(pill); });
+    });
+  }
+
+  function refreshDots() {
+    pills.forEach(function (p) {
+      var boxes = p.querySelectorAll(".filter-dropdown input[type=checkbox]");
+      var changed = false;
+      boxes.forEach(function (b) {
+        if (b.checked !== b.defaultChecked) changed = true;
+      });
+      var dot = p.querySelector(".status-dot");
+      if (dot) {
+        dot.classList.toggle("is-changed", changed);
+        dot.classList.toggle("is-default", !changed);
+      }
+    });
+  }
+
+  // --- Drag-to-scroll the pill row (click+drag / touch) ---
+  // Open/close is deferred to pointerup so a drag does not toggle a pill.
+  var drag = {
+    active: false,
+    moved: false,
+    startX: 0,
+    scrollLeft: 0,
+    pointerId: null,
+    pressPill: null
+  };
+  var DRAG_THRESHOLD = 6; // px
+
+  if (scroller) {
+    scroller.addEventListener("pointerdown", function (e) {
+      // Don't start a bar-drag from inside a dropdown panel
+      if (e.target.closest && e.target.closest(".filter-dropdown")) return;
+      if (e.button != null && e.button !== 0) return;
+      drag.active = true;
+      drag.moved = false;
+      drag.startX = e.clientX;
+      drag.scrollLeft = scroller.scrollLeft;
+      drag.pointerId = e.pointerId;
+      // Prefer the pill under the press; fall back to closest from target
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      drag.pressPill = (el && el.closest) ? el.closest(".filter-pill") : null;
+      if (!drag.pressPill && e.target.closest) {
+        drag.pressPill = e.target.closest(".filter-pill");
+      }
+      // Do NOT setPointerCapture until we know it's a drag — capture retargets
+      // pointerup to the scroller and breaks pill open on simple taps.
+    });
+
+    scroller.addEventListener("pointermove", function (e) {
+      if (!drag.active) return;
+      var dx = e.clientX - drag.startX;
+      if (!drag.moved && Math.abs(dx) >= DRAG_THRESHOLD) {
+        drag.moved = true;
+        scroller.classList.add("is-dragging");
+        closeAll();
+        try { scroller.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
+      if (drag.moved) {
+        scroller.scrollLeft = drag.scrollLeft - dx;
+        e.preventDefault();
+      }
+    });
+
+    function endDrag(e) {
+      if (!drag.active) return;
+      var wasMoved = drag.moved;
+      drag.active = false;
+      scroller.classList.remove("is-dragging");
+      try {
+        if (drag.pointerId != null) scroller.releasePointerCapture(drag.pointerId);
+      } catch (err) { /* ignore */ }
+      // Stash for the capture-phase document handler (runs same event)
+      drag._justFinishedDrag = wasMoved;
+    }
+
+    scroller.addEventListener("pointerup", endDrag);
+    scroller.addEventListener("pointercancel", endDrag);
+  }
+
+  // --- Open / close: pointerup so drag can cancel the open ---
+  document.addEventListener("pointerup", function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+
+    // Finished a horizontal drag → swallow the would-be click
+    if (drag.moved || drag._justFinishedDrag) {
+      drag.moved = false;
+      drag._justFinishedDrag = false;
+      drag.pressPill = null;
+      return;
+    }
+
+    // Inside open dropdown (checkbox / toolbar): keep open
+    var dd = t.closest(".filter-dropdown");
+    if (dd) {
+      var owner = dd.closest(".filter-pill");
+      if (owner && owner.classList.contains("is-open")) return;
+    }
+
+    // Prefer pressPill (recorded on pointerdown) — reliable when capture/retargeting
+    // would make e.target the scroller instead of the pill.
+    var pill = drag.pressPill;
+    if (!pill) {
+      pill = t.closest(".filter-pill");
+    }
+    drag.pressPill = null;
+
+    if (pill && bar.contains(pill) && !(t.closest && t.closest(".filter-dropdown"))) {
+      if (pill.classList.contains("is-open")) closeAll();
+      else openPill(pill);
+      return;
+    }
+
+    // Outside bar + outside dropdown → close
+    if (!t.closest(".filter-bar") && !t.closest(".filter-dropdown")) {
+      closeAll();
+    }
+  }, true);
+
+  // Keyboard: Enter/Space toggle; Escape closes
+  bar.addEventListener("keydown", function (e) {
+    var pill = e.target && e.target.closest ? e.target.closest(".filter-pill") : null;
+    if (!pill || !bar.contains(pill)) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (pill.classList.contains("is-open")) closeAll();
+      else openPill(pill);
+    } else if (e.key === "Escape") {
+      closeAll();
+      pill.focus();
+    }
+  });
+
+  // Flat-group toolbar (Lang, etc.): all / clear on all boxes in that dropdown
+  bar.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("[data-dd-action]") : null;
+    if (!btn) return;
+    if (btn.hasAttribute("data-dd-scope")) return; // handled by lens scoped handlers
+    var dd = btn.closest(".filter-dropdown");
+    if (!dd) return;
+    if (dd.getAttribute("data-idea") === "a" || dd.getAttribute("data-idea") === "b") return;
+    var boxes = dd.querySelectorAll(".dd-grid input[type=checkbox]");
+    var action = btn.getAttribute("data-dd-action");
+    var on = action === "all";
+    boxes.forEach(function (b) {
+      b.checked = on;
+    });
+    refreshDots();
+    e.preventDefault();
+  });
+
+  pills.forEach(function (p) {
+    p.querySelectorAll(".filter-dropdown input[type=checkbox]").forEach(function (cb) {
+      cb.addEventListener("change", refreshDots);
+    });
+  });
+
+  function repositionOpen() {
+    var open = bar.querySelector(".filter-pill.is-open");
+    if (open) placeDropdown(open);
+  }
+  window.addEventListener("resize", repositionOpen);
+  window.addEventListener("scroll", repositionOpen, true);
+
+
+    // --- Segmented lens (Brands Open/Closed, Nationalism US/CN) + clear ---
+  function updateLensCounts(dd) {
+    if (!dd) return;
+    dd.querySelectorAll("[data-lens-count]").forEach(function (el) {
+      var tier = el.getAttribute("data-lens-count");
+      var boxes = dd.querySelectorAll('[data-tier-grid="' + tier + '"] input[type=checkbox]');
+      var on = 0;
+      boxes.forEach(function (b) { if (b.checked) on++; });
+      el.textContent = "· " + on;
+      var tab = dd.querySelector('[data-lens="' + tier + '"]');
+      if (tab) tab.title = tier + " " + on + "/" + boxes.length + " selected";
+    });
+  }
+
+  bar.addEventListener("click", function (e) {
+    var tab = e.target.closest ? e.target.closest("[data-lens]") : null;
+    if (!tab || tab.closest(".dd-segment") == null) return;
+    var dd = tab.closest(".filter-dropdown");
+    if (!dd || dd.getAttribute("data-idea") !== "b") return;
+    var lens = tab.getAttribute("data-lens");
+    dd.querySelectorAll(".dd-segment [data-lens]").forEach(function (b) {
+      var on = b === tab;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    var body = dd.querySelector(".dd-lens-body");
+    if (body) body.setAttribute("data-active-lens", lens);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  // Scoped all/clear: only currently visible lens tier
+  bar.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("[data-dd-action][data-dd-scope=visible]") : null;
+    if (!btn) return;
+    var dd = btn.closest(".filter-dropdown");
+    if (!dd || dd.getAttribute("data-idea") !== "b") return;
+    var body = dd.querySelector(".dd-lens-body");
+    var lens = body ? body.getAttribute("data-active-lens") : null;
+    if (!lens) return;
+    var boxes = dd.querySelectorAll('[data-tier-grid="' + lens + '"] input[type=checkbox]');
+    var action = btn.getAttribute("data-dd-action");
+    var on = action === "all";
+    boxes.forEach(function (b) { b.checked = on; });
+    refreshDots();
+    updateLensCounts(dd);
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
+  var _refreshDotsLens = refreshDots;
+  refreshDots = function () {
+    _refreshDotsLens();
+    bar.querySelectorAll(".filter-dropdown[data-idea=b]").forEach(updateLensCounts);
+  };
+
+  refreshDots();
+
+  window.__pwDebug = {
+    version: 'v21-desktop-en',
+    clicks: 0,
+    opens: 0,
+    visibleDropdowns: 0,
+    lastAction: null,
+    lastTarget: null
+  };
+  document.addEventListener("pointerup", function (e) {
+    window.__pwDebug.clicks++;
+    var t = e.target;
+    window.__pwDebug.lastTarget = {
+      tag: t && t.tagName,
+      cls: t && typeof t.className === "string" ? t.className : "",
+      inPill: !!(t && t.closest && t.closest(".filter-pill")),
+      inBar: !!(t && t.closest && t.closest(".filter-bar")),
+      inDropdown: !!(t && t.closest && t.closest(".filter-dropdown"))
+    };
+  }, true);
+  setInterval(function () {
+    var open = document.querySelectorAll(".filter-pill.is-open").length;
+    var vis = Array.prototype.slice.call(document.querySelectorAll(".filter-dropdown")).filter(function (el) {
+      return getComputedStyle(el).display !== "none";
+    }).length;
+    window.__pwDebug.opens = open;
+    window.__pwDebug.visibleDropdowns = vis;
+  }, 250);
+})();
+</script>
+
+
+
+<script>
+(function () {
+  "use strict";
+  var root = document.querySelector("[data-tz-widget]");
+  if (!root) return;
+
+  // local = browser/user local (CN majority). ca = America/Los_Angeles.
+  var TZ_LOCAL = undefined; // Intl default = runtime local
+  var TZ_CA = "America/Los_Angeles";
+  var active = root.getAttribute("data-tz-active") || "local"; // "local" | "ca"
+
+  var CA_ICON_HTML = '<span class="tz-ca-icon" title="California" aria-label="California">CA</span>';
+
+  function zoneHour(tz) {
+    var opts = { hour: "numeric", hourCycle: "h23" };
+    if (tz) opts.timeZone = tz;
+    var parts = new Intl.DateTimeFormat("en-GB", opts).formatToParts(new Date());
+    var h = parts.find(function (p) { return p.type === "hour"; });
+    return h ? parseInt(h.value, 10) : 0;
+  }
+
+  function zoneTime(date, tz) {
+    var opts = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+    if (tz) opts.timeZone = tz;
+    return new Intl.DateTimeFormat("en-GB", opts).format(date);
+  }
+
+  function dayEmoji(hour) {
+    if (hour >= 5 && hour < 8) return "🌅";
+    if (hour >= 8 && hour < 17) return "☀️";
+    if (hour >= 17 && hour < 20) return "🌆";
+    return "🌙";
+  }
+
+  function activeTzId() {
+    return active === "ca" ? TZ_CA : TZ_LOCAL; // undefined => local
+  }
+
+  function zoneLabelHtml() {
+    if (active === "ca") return CA_ICON_HTML;
+    return "local";
+  }
+
+  function pairHtml() {
+    // show the other pole
+    if (active === "ca") return "⇄ local";
+    return "⇄ " + CA_ICON_HTML;
+  }
+
+  function renderFeedStamps() {
+    var now = Date.now();
+    var tz = activeTzId();
+    document.querySelectorAll(".feed-row[data-posted-offset-min]").forEach(function (row) {
+      var mins = parseInt(row.getAttribute("data-posted-offset-min"), 10) || 0;
+      var posted = new Date(now - mins * 60 * 1000);
+      var el = row.querySelector("[data-ts-abs]");
+      if (!el) return;
+      var ageMs = now - posted.getTime();
+      if (ageMs >= 24 * 60 * 60 * 1000) {
+        el.textContent = "";
+        el.hidden = true;
+        return;
+      }
+      el.hidden = false;
+      var t = zoneTime(posted, tz);
+      if (active === "ca") {
+        el.innerHTML = "(" + t + " " + CA_ICON_HTML + ")";
+      } else {
+        el.textContent = "(" + t + " local)";
+      }
+    });
+  }
+
+  function render() {
+    var tz = activeTzId();
+    var hour = zoneHour(tz);
+    var time = zoneTime(new Date(), tz);
+    var emoji = dayEmoji(hour);
+
+    root.setAttribute("data-tz-active", active);
+    root.setAttribute("aria-label", "Timezone " + (active === "ca" ? "California" : "local") + " " + time);
+
+    var emojiEl = root.querySelector("[data-tz-emoji]");
+    var timeEl = root.querySelector("[data-tz-time]");
+    var zoneEl = root.querySelector("[data-tz-zone]");
+    var pairEl = root.querySelector("[data-tz-pair]");
+
+    if (emojiEl) emojiEl.textContent = emoji;
+    if (timeEl) timeEl.textContent = time;
+    if (zoneEl) {
+      zoneEl.classList.toggle("is-ca", active === "ca");
+      if (active === "ca") zoneEl.innerHTML = CA_ICON_HTML;
+      else zoneEl.textContent = "local";
+    }
+    if (pairEl) pairEl.innerHTML = pairHtml();
+
+    document.documentElement.setAttribute("data-tz-mode", active);
+    renderFeedStamps();
+  }
+
+  function toggle() {
+    active = active === "local" ? "ca" : "local";
+    render();
+  }
+
+  root.addEventListener("click", function () { toggle(); });
+  root.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  // Expose for other scripts / console
+  window.__pwTz = {
+    get mode() { return active; },
+    setMode: function (m) { active = m === "ca" ? "ca" : "local"; render(); },
+    toggle: toggle
+  };
+
+  render();
+  setInterval(render, 15000);
+})();
+</script>
+
+
+<script>
+(function () {
+  "use strict";
+
+  var SENT_FACE = {
+    positive: "😊",
+    neutral: "😶",
+    negative: "🙁",
+    mixed: "😐"
+  };
+  var POST_TYPE_EMOJI = {
+    hands_on_usage: "🤚",
+    performance_comparisons: "📊",
+    buzz_releases: "📢",
+    feedback_questions: "❓",
+    advertising_marketing: "円",
+    event_announcement: "📅"
+  };
+  // Unique set order for faces / types (stable display order)
+  var SENT_ORDER = ["positive", "neutral", "negative", "mixed"];
+  var TYPE_ORDER = [
+    "buzz_releases", "hands_on_usage", "performance_comparisons",
+    "feedback_questions", "advertising_marketing", "event_announcement"
+  ];
+
+  function parseList(raw) {
+    if (!raw) return [];
+    return raw.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function uniqueInOrder(keys, order) {
+    var seen = {};
+    var out = [];
+    order.forEach(function (k) {
+      if (keys.indexOf(k) !== -1 && !seen[k]) {
+        seen[k] = true;
+        out.push(k);
+      }
+    });
+    // any unknown keys last
+    keys.forEach(function (k) {
+      if (!seen[k]) { seen[k] = true; out.push(k); }
+    });
+    return out;
+  }
+
+  function tintClass(sents) {
+    var hasP = sents.indexOf("positive") !== -1;
+    var hasN = sents.indexOf("negative") !== -1;
+    var hasM = sents.indexOf("mixed") !== -1;
+    // neutral alone → no tint
+    if (hasP && hasN && hasM) return "tint-pos-neg-mixed";
+    if (hasP && hasN) return "tint-pos-neg";
+    if (hasP && hasM) return "tint-pos-mixed";
+    if (hasN && hasM) return "tint-neg-mixed";
+    if (hasP) return "tint-positive";
+    if (hasN) return "tint-negative";
+    if (hasM) return "tint-mixed";
+    return "tint-neutral";
+  }
+
+  function renderSignals(row) {
+    var sents = uniqueInOrder(parseList(row.getAttribute("data-sentiments")), SENT_ORDER);
+    var types = uniqueInOrder(parseList(row.getAttribute("data-post-types")), TYPE_ORDER);
+    var natCn = (row.getAttribute("data-nat-cn") || "").trim();
+    var natUs = (row.getAttribute("data-nat-us") || "").trim();
+    // nationalism present if attr non-empty and not "none"
+    var showCn = natCn && natCn !== "none";
+    var showUs = natUs && natUs !== "none";
+
+    var shell = row.querySelector(".feed-row-shell");
+    if (shell) {
+      shell.className = "feed-row-shell " + tintClass(sents);
+    }
+
+    var elS = row.querySelector("[data-sig-sentiment]");
+    if (elS) {
+      elS.textContent = sents.map(function (k) { return SENT_FACE[k] || ""; }).join("");
+    }
+
+    var elT = row.querySelector("[data-sig-post-type]");
+    if (elT) {
+      // max one emoji per post_type key
+      elT.textContent = types.map(function (k) { return POST_TYPE_EMOJI[k] || ""; }).join("");
+    }
+
+    var elN = row.querySelector("[data-sig-nat]");
+    if (elN) {
+      if (!showCn && !showUs) {
+        elN.innerHTML = "";
+        elN.classList.add("is-empty");
+      } else {
+        elN.classList.remove("is-empty");
+        var flags = "";
+        if (showCn) flags += "🇨🇳";
+        if (showUs) flags += "🇺🇸";
+        elN.innerHTML = '<span class="sig-nat-prefix">🗯️:</span> ' + flags;
+      }
+    }
+
+    // Row 4: unsanctioned — 🚫 when present, blank (space kept) when not
+    var elU = row.querySelector("[data-sig-unsanctioned]");
+    if (elU) {
+      var uns = (row.getAttribute("data-unsanctioned") || "").trim();
+      var isUn = uns === "1" || uns === "true" || uns === "yes" || uns === "only";
+      if (isUn) {
+        elU.classList.remove("is-empty");
+        elU.textContent = "🚫";
+      } else {
+        elU.textContent = "";
+        elU.classList.add("is-empty");
+      }
+    }
+  }
+
+  document.querySelectorAll(".feed-row").forEach(renderSignals);
+
+  // --- Display lang + text cycle ---
+  // zh_cn: synthesis(综合) → text_zh_cn → text
+  // en:    text_en (fb text) → text
+  // original: text → text_en → loop
+  // Layer tag: synthesis (en UI) / 综合 (zh_cn UI) — not "voice"
+  function getLocale() {
+    return document.body.getAttribute("data-pw-locale") || "zh_cn";
+  }
+
+  function synthesisLabel(locale) {
+    if (locale === "zh_cn" || locale === "zh-CN" || locale === "zh_hans") return "综合";
+    return "synthesis";
+  }
+
+  function pick(el, key) {
+    var v = el.getAttribute("data-" + key);
+    if (v == null || v === "") return null;
+    return v;
+  }
+
+  function layersForLocale(el, locale) {
+    if (locale === "en") {
+      var en = pick(el, "text-en") || pick(el, "text");
+      var src = pick(el, "text");
+      var layers = [];
+      if (en) layers.push({ key: "text_en", label: "en", value: en });
+      if (src && src !== en) layers.push({ key: "text", label: "src", value: src });
+      else if (src && layers.length === 0) layers.push({ key: "text", label: "src", value: src });
+      if (layers.length === 1 && src) {
+        layers.push({ key: "text", label: "src", value: src });
+      }
+      return layers;
+    }
+    if (locale === "original") {
+      var t = pick(el, "text");
+      var te = pick(el, "text-en");
+      var o = [];
+      if (t) o.push({ key: "text", label: "src", value: t });
+      if (te) o.push({ key: "text_en", label: "en", value: te });
+      if (te) o.push({ key: "text_en", label: "en", value: te });
+      return o;
+    }
+    // zh_cn default — first layer is synthesis (data-voice-zh-cn attr kept for now)
+    var layers = [];
+    var v = pick(el, "voice-zh-cn");
+    var zh = pick(el, "text-zh-cn");
+    var raw = pick(el, "text");
+    if (v) layers.push({ key: "synthesis", label: synthesisLabel(locale), value: v });
+    if (zh) layers.push({ key: "text_zh_cn", label: "zh", value: zh });
+    if (raw) layers.push({ key: "text", label: "src", value: raw });
+    return layers;
+  }
+
+  function renderText(el) {
+    var locale = getLocale();
+    var layers = layersForLocale(el, locale);
+    if (!layers.length) {
+      el.textContent = "";
+      return;
+    }
+    var idx = parseInt(el.getAttribute("data-layer-idx") || "0", 10);
+    if (isNaN(idx) || idx < 0 || idx >= layers.length) idx = 0;
+    el.setAttribute("data-layer-idx", String(idx));
+    var layer = layers[idx];
+    el.innerHTML = '<span class="text-layer-tag">' + layer.label + '</span>' +
+      escapeHtml(layer.value);
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function advanceText(el) {
+    var locale = getLocale();
+    var layers = layersForLocale(el, locale);
+    if (layers.length < 2) return;
+    var idx = parseInt(el.getAttribute("data-layer-idx") || "0", 10);
+    idx = (idx + 1) % layers.length;
+    // original: after third (duplicate text_en) wrap to 0
+    el.setAttribute("data-layer-idx", String(idx));
+    renderText(el);
+  }
+
+  function resetAllTextLayers() {
+    document.querySelectorAll("[data-text-cycle]").forEach(function (el) {
+      el.setAttribute("data-layer-idx", "0");
+      renderText(el);
+    });
+  }
+
+  function bindTextCycle(el) {
+    if (el.getAttribute("data-text-bound") === "1") {
+      renderText(el);
+      return;
+    }
+    el.setAttribute("data-text-bound", "1");
+    el.setAttribute("data-layer-idx", "0");
+    renderText(el);
+    el.addEventListener("click", function (e) {
+      e.stopPropagation();
+      advanceText(el);
+    });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        advanceText(el);
+      }
+    });
+  }
+
+  function wireFeedRow(row) {
+    renderSignals(row);
+    var te = row.querySelector("[data-text-cycle]");
+    if (te) bindTextCycle(te);
+    // TZ stamps if present
+    if (window.__pwTz && typeof window.__pwTz.refreshStamps === "function") {
+      window.__pwTz.refreshStamps();
+    }
+  }
+
+  document.querySelectorAll("[data-text-cycle]").forEach(bindTextCycle);
+
+  // Locale toggle
+  document.querySelectorAll("[data-pw-locale-btn]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var loc = btn.getAttribute("data-pw-locale-btn");
+      document.body.setAttribute("data-pw-locale", loc);
+      document.querySelectorAll("[data-pw-locale-btn]").forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle("is-active", on);
+        b.style.background = on ? "var(--accent)" : "transparent";
+        b.style.color = on ? "#fff" : "var(--muted)";
+      });
+      resetAllTextLayers();
+    });
+  });
+
+  // --- Infinite scroll inside .feed-scroll (mock: clone seed rows) ---
+  (function infiniteFeed() {
+    var scroller = document.querySelector("[data-feed-scroll]");
+    var rowsHost = document.querySelector("[data-feed-rows]");
+    var sentinel = document.querySelector("[data-feed-sentinel]");
+    var status = document.querySelector("[data-feed-status]");
+    if (!scroller || !rowsHost || !sentinel) return;
+
+    var seeds = Array.prototype.slice.call(rowsHost.querySelectorAll(".feed-row"));
+    if (!seeds.length) return;
+
+    var page = 0;
+    var loading = false;
+    var maxPages = 12; // mock cap so it doesn't grow forever
+
+    function setStatus(msg, show) {
+      if (!status) return;
+      if (show) {
+        status.hidden = false;
+        status.textContent = msg;
+      } else {
+        status.hidden = true;
+      }
+    }
+
+    function appendBatch() {
+      if (loading || page >= maxPages) {
+        if (page >= maxPages) setStatus("End of window", true);
+        return;
+      }
+      loading = true;
+      setStatus("Loading…", true);
+      // Simulate network; production will hit /feed/?cursor=
+      window.setTimeout(function () {
+        page += 1;
+        seeds.forEach(function (seed, i) {
+          var clone = seed.cloneNode(true);
+          clone.removeAttribute("id");
+          // stagger relative labels slightly for mock variety
+          var meta = clone.querySelector(".meta");
+          if (meta) {
+            var mins = parseInt(clone.getAttribute("data-posted-offset-min") || "10", 10);
+            mins = mins + page * 3 + i;
+            clone.setAttribute("data-posted-offset-min", String(mins));
+            var handle = clone.querySelector(".handle");
+            var abs = clone.querySelector("[data-ts-abs]");
+            meta.innerHTML = "· " + mins + "m " + (abs ? abs.outerHTML : "");
+            // keep handle
+            if (handle && !meta.contains(handle)) { /* handle is sibling */ }
+          }
+          // re-bind text cycle (cloned listeners don't copy)
+          var te = clone.querySelector("[data-text-cycle]");
+          if (te) {
+            te.removeAttribute("data-text-bound");
+            te.removeAttribute("data-layer-idx");
+          }
+          rowsHost.appendChild(clone);
+          wireFeedRow(clone);
+        });
+        // move sentinel + status to end
+        scroller.appendChild(sentinel);
+        if (status) scroller.appendChild(status);
+        loading = false;
+        if (page >= maxPages) setStatus("End of window", true);
+        else setStatus("", false);
+      }, 280);
+    }
+
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) appendBatch();
+        });
+      }, { root: scroller, rootMargin: "80px", threshold: 0 });
+      io.observe(sentinel);
+    } else {
+      scroller.addEventListener("scroll", function () {
+        if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 48) {
+          appendBatch();
+        }
+      });
+    }
+  })();
+})();
+</script>
+
+</body>
+</html>

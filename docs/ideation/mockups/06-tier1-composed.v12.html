@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 — Tier 1 Composed (the full homepage)</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --up: #10b981;
+    --down: #f87171;
+    --kimi: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .phone { width: 360px; margin: 0 auto; padding: 12px; }
+  /* 1. Compressed topbar */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .topbar h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 1; }
+  .topbar h1 small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .topbar .window-toggle {
+    display: flex; gap: 2px; font-size: 11px; align-items: center;
+    background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 2px;
+  }
+  .topbar .window-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .topbar .window-toggle button.is-active {
+    background: var(--accent);
+    color: white;
+  }
+
+  /* 2. Pulse bar */
+  .pulse-bar-wrap {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 10px 5px;
+  }
+  .pulse-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  .pulse-bar-head .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .pulse-bar-head .updated { font-size: 10px; color: var(--muted); }
+  .pulse-bar {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pulse-bar::-webkit-scrollbar { display: none; }
+  .pulse-chip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--chip-color, var(--accent));
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    scroll-snap-align: start;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .pulse-chip .name { color: var(--text); font-weight: 500; }
+  .pulse-chip .delta { font-weight: 600; font-size: 10px; }
+  .pulse-chip .delta.up { color: var(--up); }
+  .pulse-chip .delta.down { color: var(--down); }
+  .pulse-chip .delta.flat { color: var(--muted); }
+  .pulse-chip .delta.up::before { content: "▲ "; }
+  .pulse-chip .delta.down::before { content: "▼ "; }
+  .pulse-chip .delta.flat::before { content: "→ "; }
+
+  /* 3. Filter bar — 8 live groups, horizontal scroll on mobile.
+     overflow lives on an INNER scroller so open dropdowns (portaled via
+     position:fixed in JS) are never clipped by the bar. */
+  .filter-bar {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 8px;
+    position: relative;
+    z-index: 20;
+  }
+  .filter-bar-scroller {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .filter-bar-scroller::-webkit-scrollbar { display: none; }
+
+  .filter-pill {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0f172a;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.1;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .filter-pill .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    pointer-events: none;
+  }
+  .filter-pill .status-dot.is-default {
+    background: transparent;
+    border: 1px solid var(--muted);
+  }
+  .filter-pill .status-dot.is-changed {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .filter-pill .title,
+  .filter-pill .carat { pointer-events: none; }
+  .filter-pill .carat { color: var(--muted); font-size: 9px; line-height: 1; transition: transform 0.15s ease; }
+  .filter-pill:focus { outline: none; border-color: var(--accent); }
+  .filter-pill.is-open { border-color: var(--accent); }
+  .filter-pill.is-open .carat { transform: rotate(180deg); }
+
+  /* Open state is driven ONLY by .is-open (JS). focus-within is intentionally
+     not used — it fought the click handler and never reliably toggled. */
+  .filter-dropdown {
+    display: none;
+    position: fixed; /* escape any ancestor overflow */
+    min-width: 160px;
+    max-width: 240px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+  .filter-pill.is-open > .filter-dropdown { display: block; }
+  .filter-dropdown label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 11px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .filter-dropdown input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  /* 4. Chart card — head removed on mobile, chart sits at the top */
+  .home-chart-wrap {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px 10px;
+  }
+  canvas.home-chart { width: 100%; height: 180px; display: block; border-radius: 6px; }
+  .legend {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 9px;
+    color: var(--muted);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .legend::-webkit-scrollbar { display: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+  .legend i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+  /* 5. Headline strip */
+  .headline-strip {
+    margin-top: 8px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+    border: 1px solid #7c3aed;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    position: relative;
+  }
+  .headline-strip .kicker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .headline-strip .pulse {
+    width: 7px; height: 7px;
+    background: var(--kimi);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--kimi);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .headline-strip .body {
+    font-size: 13px;
+    line-height: 1.4;
+    color: white;
+    font-weight: 500;
+  }
+  .headline-strip .body .brand { color: #fbcfe8; font-weight: 600; }
+  .headline-strip .body .delta { color: #86efac; font-weight: 700; }
+  .headline-strip .body .voice { color: #ddd6fe; font-weight: 400; }
+
+  /* 6. Truncated feed */
+  .feed-strip {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px 6px;
+  }
+  .feed-strip h3 {
+    font-size: 10px; margin: 0 0 6px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  }
+  .feed-row {
+    display: flex;
+    gap: 7px;
+    align-items: flex-start;
+    padding: 5px 0;
+    border-top: 1px solid var(--border);
+  }
+  .feed-row:first-of-type { border-top: none; padding-top: 0; }
+  .feed-row .avatar {
+    flex: 0 0 24px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+  }
+  .feed-row .body { flex: 1; min-width: 0; }
+  .feed-row .head {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .feed-row .handle { font-weight: 600; color: var(--text); }
+  .feed-row .meta { color: var(--muted); font-size: 10px; }
+  .feed-row .text {
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.4;
+    margin-top: 1px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .feed-row .engagement {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 3px;
+    display: flex;
+    gap: 8px;
+  }
+  .feed-row .engagement .likes::before { content: "♥ "; color: #f87171; }
+  .feed-row .engagement .rts::before { content: "↻ "; color: var(--up); }
+  .feed-row .engagement .replies::before { content: "💬 "; }
+
+  .see-all {
+    display: block;
+    text-align: center;
+    margin-top: 6px;
+    padding: 5px;
+    color: var(--accent);
+    font-size: 11px;
+    text-decoration: none;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header class="topbar">
+    <h1>走个量 <small>Pushin' Weight</small></h1>
+    <nav class="window-toggle" aria-label="Time-period selector">
+      <button class="is-active">24h</button><button>7d</button><button>30d</button><button>365d</button>
+    </nav>
+  </header>
+
+  <!-- Pulse bar -->
+  <section class="pulse-bar-wrap" aria-label="Trending models">
+    <div class="pulse-bar-head">
+      <span class="label">Trending · 24h</span>
+      <span class="updated">· 23s ago</span>
+    </div>
+    <div class="pulse-bar" role="list">
+      <button class="pulse-chip" role="listitem" style="--chip-color:#ec4899">
+        <span class="name">Kimi</span><span class="delta up">312%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#10b981">
+        <span class="name">DeepSeek</span><span class="delta up">47%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#3b82f6">
+        <span class="name">MiniMax</span><span class="delta up">19%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#f97316">
+        <span class="name">Qwen</span><span class="delta flat">0%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#0ea5e9">
+        <span class="name">ERNIE</span><span class="delta up">28%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#a855f7">
+        <span class="name">GLM</span><span class="delta flat">2%</span>
+      </button>
+      <button class="pulse-chip" role="listitem" style="--chip-color:#dc2626">
+        <span class="name">Solar</span><span class="delta down">8%</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Filter bar: 8 live groups in live control-panel order -->
+  <nav class="filter-bar" aria-label="Filter groups">
+    <div class="filter-bar-scroller">
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">品牌</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Brands">
+        <label><input type="checkbox" checked>kimi</label>
+        <label><input type="checkbox" checked>deepseek</label>
+        <label><input type="checkbox" checked>minimax</label>
+        <label><input type="checkbox" checked>qwen</label>
+        <label><input type="checkbox" checked>ernie</label>
+        <label><input type="checkbox" checked>glm</label>
+        <label><input type="checkbox" checked>llama</label>
+        <label><input type="checkbox" checked>doubao</label>
+        <label><input type="checkbox" checked>hunyuan</label>
+        <label><input type="checkbox" checked>mistral</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">话语</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Discourse">
+        <label><input type="checkbox" checked>genuine_hype</label>
+        <label><input type="checkbox" checked>sarcasm</label>
+        <label><input type="checkbox" checked>dunk</label>
+        <label><input type="checkbox" checked>dunk_yingyang</label>
+        <label><input type="checkbox" checked>constructive</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">文章类型</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Post types">
+        <label><input type="checkbox" checked>hands_on_usage</label>
+        <label><input type="checkbox" checked>release</label>
+        <label><input type="checkbox" checked>update</label>
+        <label><input type="checkbox" checked>review</label>
+        <label><input type="checkbox" checked>comparison</label>
+        <label><input type="checkbox" checked>meme</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">角色</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Account role">
+        <label><input type="checkbox" checked>official</label>
+        <label><input type="checkbox" checked>researcher</label>
+        <label><input type="checkbox" checked>executive</label>
+        <label><input type="checkbox" checked>investor</label>
+        <label><input type="checkbox" checked>staff</label>
+        <label><input type="checkbox" checked>community</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">语言</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Language">
+        <label><input type="checkbox" checked>zh</label>
+        <label><input type="checkbox" checked>en</label>
+        <label><input type="checkbox" checked>mixed</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">美式民族主义</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="US nationalism">
+        <label><input type="checkbox" checked>none</label>
+        <label><input type="checkbox" checked>mild_pro</label>
+        <label><input type="checkbox" checked>pro</label>
+        <label><input type="checkbox" checked>constructive_critical</label>
+        <label><input type="checkbox" checked>anti</label>
+        <label><input type="checkbox" checked>mixed</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">中式民族主义</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="CN nationalism">
+        <label><input type="checkbox" checked>none</label>
+        <label><input type="checkbox" checked>mild_pro</label>
+        <label><input type="checkbox" checked>pro</label>
+        <label><input type="checkbox" checked>constructive_critical</label>
+        <label><input type="checkbox" checked>anti</label>
+        <label><input type="checkbox" checked>mixed</label>
+      </div>
+    </div>
+    <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="status-dot is-default" aria-hidden="true"></span>
+      <span class="title">未授权</span>
+      <span class="carat" aria-hidden="true">▾</span>
+      <div class="filter-dropdown" role="group" aria-label="Unsanctioned">
+        <!-- default OFF is intentional; dot uses defaultChecked so this stays is-default -->
+        <label><input type="checkbox" value="only" data-pw-filter-group="unsanctioned">show only flagged posts</label>
+      </div>
+    </div>
+    </div><!-- /.filter-bar-scroller -->
+  </nav>
+
+  <!-- Chart: 5 lines for the top-5 brands by post count in the selected window -->
+  <section class="home-chart-wrap">
+    <svg class="home-chart" viewBox="0 0 360 180" preserveAspectRatio="none">
+      <rect width="360" height="180" fill="#0f172a"/>
+      <line x1="0" y1="45"  x2="360" y2="45"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="90"  x2="360" y2="90"  stroke="#1f2937" stroke-dasharray="2 4"/>
+      <line x1="0" y1="135" x2="360" y2="135" stroke="#1f2937" stroke-dasharray="2 4"/>
+      <g stroke-width="1.8" fill="none">
+        <polyline stroke="#ec4899" points="0,160 30,158 60,148 90,128 120,108 150,82 180,58 210,42 240,30 270,28 300,30 330,35 360,40"/>
+        <polyline stroke="#10b981" points="0,140 30,138 60,132 90,128 120,122 150,118 180,112 210,108 240,102 270,98 300,95 330,92 360,88"/>
+        <polyline stroke="#3b82f6" points="0,110 30,108 60,105 90,102 120,100 150,98 180,95 210,92 240,90 270,88 300,85 330,82 360,80"/>
+        <polyline stroke="#f97316" points="0,100 30,102 60,98 90,102 120,108 150,112 180,115 210,112 240,115 270,110 300,108 330,105 360,102"/>
+        <polyline stroke="#0ea5e9" points="0,130 30,128 60,124 90,118 120,114 150,108 180,100 210,92 240,84 270,80 300,74 330,70 360,66"/>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#ec4899"></i>Kimi</span>
+      <span><i style="background:#10b981"></i>DeepSeek</span>
+      <span><i style="background:#3b82f6"></i>MiniMax</span>
+      <span><i style="background:#f97316"></i>Qwen</span>
+      <span><i style="background:#0ea5e9"></i>ERNIE</span>
+    </div>
+  </section>
+
+  <!-- Headline strip -->
+  <div class="headline-strip" role="button" tabindex="0">
+    <div class="kicker">
+      <span class="pulse"></span>
+      Trending now
+    </div>
+    <div class="body">
+      <span class="brand">Kimi 3</span> open weights dropped 2h ago — X volume
+      <span class="delta">+312%</span> in 60 min, 87 posts, sentiment 71% positive.
+      <span class="voice">Top voices: @kimi_moonshot (12), @awnihannun (8), @rasbt (6).</span>
+    </div>
+  </div>
+
+  <!-- Truncated feed -->
+  <section class="feed-strip">
+    <h3>Top 3 in 24h</h3>
+    <div class="feed-row">
+      <span class="avatar" style="background:#ec4899">K</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@kimi_moonshot</span>
+          <span class="meta">· 12m</span>
+        </div>
+        <div class="text">Kimi K3 open weights are out! Strong reasoning scores, MIT license. Try the 7B variant first.</div>
+        <div class="engagement">
+          <span class="likes">1.2k</span>
+          <span class="rts">340</span>
+          <span class="replies">89</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#3b82f6">A</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@awnihannun</span>
+          <span class="meta">· 24m</span>
+        </div>
+        <div class="text">Ran Kimi K3 on the standard reasoning eval — ahead of Qwen3 on math, behind DeepSeek-R1 on code.</div>
+        <div class="engagement">
+          <span class="likes">480</span>
+          <span class="rts">120</span>
+          <span class="replies">31</span>
+        </div>
+      </div>
+    </div>
+    <div class="feed-row">
+      <span class="avatar" style="background:#10b981">S</span>
+      <div class="body">
+        <div class="head">
+          <span class="handle">@rasbt</span>
+          <span class="meta">· 41m</span>
+        </div>
+        <div class="text">Quick distill: Kimi K3 is a 7B/14B/32B MoE family. MIT, ~3.5k context, no RLHF weights. Solid for self-host.</div>
+        <div class="engagement">
+          <span class="likes">312</span>
+          <span class="rts">95</span>
+          <span class="replies">22</span>
+        </div>
+      </div>
+    </div>
+    <a class="see-all" href="#">See all →</a>
+  </section>
+</div>
+<script>
+(function () {
+  "use strict";
+  var bar = document.querySelector(".filter-bar");
+  if (!bar) return;
+  var pills = Array.prototype.slice.call(bar.querySelectorAll(".filter-pill"));
+
+  function placeDropdown(pill) {
+    var dd = pill.querySelector(".filter-dropdown");
+    if (!dd) return;
+    var r = pill.getBoundingClientRect();
+    var width = Math.max(160, Math.min(240, dd.offsetWidth || 180));
+    var left = r.left;
+    // Keep panel on-screen
+    if (left + width > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - width - 8);
+    }
+    if (left < 8) left = 8;
+    dd.style.top = Math.round(r.bottom + 4) + "px";
+    dd.style.left = Math.round(left) + "px";
+  }
+
+  function setExpanded(pill, open) {
+    pill.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function closeAll() {
+    pills.forEach(function (p) {
+      p.classList.remove("is-open");
+      setExpanded(p, false);
+    });
+  }
+
+  function openPill(pill) {
+    closeAll();
+    pill.classList.add("is-open");
+    setExpanded(pill, true);
+    // Two rAFs: first paint with display:block so offsetWidth is real, then pin.
+    requestAnimationFrame(function () {
+      placeDropdown(pill);
+      requestAnimationFrame(function () { placeDropdown(pill); });
+    });
+  }
+
+  function refreshDots() {
+    pills.forEach(function (p) {
+      var boxes = p.querySelectorAll(".filter-dropdown input[type=checkbox]");
+      var changed = false;
+      // Compare to HTML default — unchecked-by-default options (未授权) stay is-default.
+      boxes.forEach(function (b) {
+        if (b.checked !== b.defaultChecked) changed = true;
+      });
+      var dot = p.querySelector(".status-dot");
+      if (dot) {
+        dot.classList.toggle("is-changed", changed);
+        dot.classList.toggle("is-default", !changed);
+      }
+    });
+  }
+
+  // Single capture-phase document handler. Avoids the v4–v11 failure mode where
+  // bubble-phase pill listeners + document outside-close raced, or focus-within
+  // CSS opened then immediately lost focus without is-open ever sticking.
+  document.addEventListener("pointerdown", function (e) {
+    var t = e.target;
+    if (!t || !t.closest) {
+      closeAll();
+      return;
+    }
+
+    // Click inside an open dropdown: keep it open, let checkbox/label work.
+    var dd = t.closest(".filter-dropdown");
+    if (dd) {
+      var owner = dd.closest(".filter-pill");
+      if (owner && owner.classList.contains("is-open")) {
+        return;
+      }
+    }
+
+    var pill = t.closest(".filter-pill");
+    if (pill && bar.contains(pill)) {
+      // Header hit (title/dot/carat have pointer-events:none so target is the pill
+      // itself, or any non-dropdown child). Toggle this pill.
+      if (pill.classList.contains("is-open")) {
+        closeAll();
+      } else {
+        openPill(pill);
+      }
+      return;
+    }
+
+    // Anywhere else → close.
+    closeAll();
+  }, true);
+
+  // Keyboard: Enter/Space toggles focused pill; Escape closes all.
+  bar.addEventListener("keydown", function (e) {
+    var pill = e.target && e.target.closest ? e.target.closest(".filter-pill") : null;
+    if (!pill || !bar.contains(pill)) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (pill.classList.contains("is-open")) closeAll();
+      else openPill(pill);
+    } else if (e.key === "Escape") {
+      closeAll();
+      pill.focus();
+    }
+  });
+
+  pills.forEach(function (p) {
+    p.querySelectorAll(".filter-dropdown input[type=checkbox]").forEach(function (cb) {
+      cb.addEventListener("change", refreshDots);
+    });
+  });
+
+  function repositionOpen() {
+    var open = bar.querySelector(".filter-pill.is-open");
+    if (open) placeDropdown(open);
+  }
+  window.addEventListener("resize", repositionOpen);
+  window.addEventListener("scroll", repositionOpen, true);
+
+  refreshDots();
+
+  // Lightweight debug (read in console: JSON.stringify(window.__pwDebug))
+  window.__pwDebug = {
+    version: 12,
+    clicks: 0,
+    opens: 0,
+    visibleDropdowns: 0,
+    lastAction: null,
+    lastTarget: null
+  };
+  document.addEventListener("pointerdown", function (e) {
+    window.__pwDebug.clicks++;
+    var t = e.target;
+    window.__pwDebug.lastTarget = {
+      tag: t && t.tagName,
+      cls: t && typeof t.className === "string" ? t.className : "",
+      inPill: !!(t && t.closest && t.closest(".filter-pill")),
+      inBar: !!(t && t.closest && t.closest(".filter-bar")),
+      inDropdown: !!(t && t.closest && t.closest(".filter-dropdown"))
+    };
+  }, true);
+  setInterval(function () {
+    var open = document.querySelectorAll(".filter-pill.is-open").length;
+    var vis = Array.prototype.slice.call(document.querySelectorAll(".filter-dropdown")).filter(function (el) {
+      return getComputedStyle(el).display !== "none";
+    }).length;
+    window.__pwDebug.opens = open;
+    window.__pwDebug.visibleDropdowns = vis;
+  }, 250);
+})();
+</script>
+
+</body>
+</html>

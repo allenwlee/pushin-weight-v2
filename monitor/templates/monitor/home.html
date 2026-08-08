@@ -1,180 +1,256 @@
 {% load static %}
 {% load i18n %}
 <!doctype html>
-<html lang="{{ active_locale|slice:":2"|default:"en" }}">
+<html lang="{{ active_locale|slice:':2'|default:'zh' }}">
 <head>
   <meta charset="utf-8">
-  <title>{{ app_title_zh }} · multi-brand</title>
-  {# CSS — served from x_monitor/static/ via Flask dev server for now; U8 moves to WhiteNoise. #}
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}">
-  {# JS — CDN for htmx + Chart.js; custom scripts loaded from static (will 404 until U8). #}
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name_zh }} {{ app_name_en }}</title>
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=stack2">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}" defer></script>
+  <script src="{% static 'pw-filter-pills.js' %}" defer></script>
   <script src="{% static 'pw-chart.js' %}" defer></script>
-  <script src="{% static 'pw-brand-chart.js' %}" defer></script>
   <script src="{% static 'pw-feed.js' %}" defer></script>
+  <script src="{% static 'pw-tz.js' %}" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}" defer></script>
-  <script src="{% static 'dashboard.js' %}" defer></script>
 </head>
 {% csrf_token %}
-<body data-pw-filters='{{ applied_filters_json|safe }}'
+<!-- pw-shell:v20 -->
+<body class="pw-v20 desktop-shell"
+      data-pw-filters='{{ applied_filters_json|safe }}'
       data-pw-brands='{{ brand_nicknames_json|safe }}'
       data-pw-locale="{{ active_locale }}"
       data-pw-window="{{ home_window_days }}"
-      data-pw-page="multi">
-  <header class="topbar">
-    <h1>{{ app_name_zh }} <small>{{ app_name_en }}</small></h1>
-    <span class="muted">{{ brand_count }} models · {% if home_window_days == 1 %}{% trans "24h window" %}{% else %}{% blocktrans with days=home_window_days %}{{ days }}d window{% endblocktrans %}{% endif %}</span>
+      data-pw-page="multi"
+      data-pw-shell="v20"
+      data-tz-active="local"
+      data-pw-layout="desktop"
+      data-pw-variant="v20">
 
-    <nav class="window-toggle" aria-label="Time-period selector">
-      <span class="window-toggle-label">{% trans "window:" %}</span>
-      {% for n in allowed_home_windows %}
-        <button class="window-btn{% if home_window_days == n %} is-active{% endif %}"
-                data-pw-window-btn="{{ n }}">{{ n }}d</button>
-      {% endfor %}
-    </nav>
+<div class="app-shell">
 
-    <nav class="locale-toggle" aria-label="Display language">
-      <span class="locale-toggle-label">{% trans "lang:" %}</span>
-      <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
-              data-pw-locale-btn="zh_cn">中文</button>
-      <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
-              data-pw-locale-btn="en">EN</button>
-      <button class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
-              data-pw-locale-btn="original">orig</button>
-    </nav>
+  <header class="topbar tz-hitch">
+    <h1 class="app-name">
+      <span class="zh">{{ app_name_zh }}</span>
+      <span class="en">{{ app_name_en }}</span>
+    </h1>
+    <div class="topbar-controls">
+      <nav class="window-toggle" aria-label="{% trans 'Time-period selector' %}">
+        {% for n in allowed_home_windows %}
+          <button type="button"
+                  class="window-btn{% if home_window_days == n %} is-active{% endif %}"
+                  data-pw-window-btn="{{ n }}">
+            {% if active_locale == 'en' %}
+              {% if n == 1 %}24h{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
+            {% else %}
+              {% if n == 1 %}24小时{% elif n == 7 %}7天{% elif n == 30 %}30天{% elif n == 365 %}365天{% else %}{{ n }}d{% endif %}
+            {% endif %}
+          </button>
+        {% endfor %}
+      </nav>
+      <button type="button" class="tz-pill" data-tz-widget data-tz-idea="c" data-tz-active="local"
+              aria-label="{% trans 'Timezone' %}">
+        <span class="tz-emoji" data-tz-emoji>☀️</span>
+        <span class="tz-time" data-tz-time>--</span>
+        <span class="tz-zone" data-tz-zone>{% trans "本地" %}</span>
+        <span class="tz-pair" data-tz-pair>⇄ <span class="tz-ca-icon" title="California" aria-label="California">CA</span></span>
+      </button>
+      <nav class="locale-toggle" aria-label="Display language">
+        <span class="locale-toggle-label">{% trans "lang:" %}</span>
+        <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
+                data-pw-locale-btn="zh_cn">中文</button>
+        <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
+                data-pw-locale-btn="en">EN</button>
+        <button class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
+                data-pw-locale-btn="original">orig</button>
+      </nav>
+    </div>
   </header>
 
-  <main class="home-pane">
-    <section class="home-chart-wrap" id="home-chart"
-             hx-get="/chart.html"
-             hx-trigger="load every 60s"
-             hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
-             hx-swap="innerHTML">
-      {% include "monitor/_home_chart.html" %}
-    </section>
-
-    <aside class="control-panel" id="control-panel">
-      <h2>{% trans "Filters" %}</h2>
-
-      <div class="control-group">
-        <div class="control-group-title">
-          {% trans "Brands" %}
-          <span class="brand-col-headers">
-            <span class="col-only">{% trans "only" %}</span>
-            <span class="col-include">{% trans "all" %}</span>
-          </span>
-        </div>
-        {% for brand in brands %}
-          <label class="control-row brand-row" style="--swatch: {{ brand.accent_color }};">
-            <input type="checkbox" data-pw-filter-only="brands" value="{{ brand.nickname }}" class="only-cb">
-            <input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}" checked>
-            <span class="swatch" style="background: {{ brand.accent_color }};"></span>
-            {{ brand.display_name }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "Discourse" %}</div>
-        {% for key in discourse_keys %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked>
-            {{ key }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "post_type" %}</div>
-        {% for key in post_type_keys %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="post_types" value="{{ key }}" checked>
-            {{ key }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "account.role" %}</div>
-        {% for key in role_keys %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked>
-            {{ key }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "lang" %}</div>
-        {% for entry in lang_entries %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="lang" value="{{ entry.key }}" checked>
-            {{ entry.label }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "us_nationalism" %}</div>
-        {% for key in nationalism_keys %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ key }}" checked>
-            {{ key }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "cn_nationalism" %}</div>
-        {% for key in nationalism_keys %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ key }}" checked>
-            {{ key }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="control-group">
-        <div class="control-group-title">{% trans "unsanctioned" %}</div>
-        <label class="control-row">
-          <input type="checkbox" data-pw-filter-group="unsanctioned" value="only">
-          {% trans "show only flagged posts" %}
-        </label>
-      </div>
-    </aside>
-  </main>
-
-  <section class="feed" id="feed"
-           data-pw-feed
-           data-pw-locale="{{ active_locale }}">
-    <table>
-      <thead>
-        <tr>
-          <th><button data-pw-sort="created_at" data-pw-order="desc">{% trans "datetime" %}</button></th>
-          <th>{% trans "brand" %}</th>
-          <th>{% trans "translated" %}</th>
-          <th>{% trans "original" %}</th>
-          <th>{% trans "classifications" %}</th>
-          <th>{% trans "handle" %}</th>
-        </tr>
-      </thead>
-      <tbody data-pw-feed-body>
-        {% include "monitor/_feed_initial.html" %}
-      </tbody>
-    </table>
-    <div class="feed-sentinel" data-pw-feed-sentinel>{% trans "loading more…" %}</div>
-    <div class="feed-end" data-pw-feed-end hidden>{% trans "end of feed" %}</div>
+  <section class="pulse-bar-wrap" aria-label="{% trans 'Trending models' %}">
+    <div class="pulse-bar-head">
+      <strong>{% trans "脉冲" %}</strong>
+      <span class="muted">{% trans "窗口内热度" %}</span>
+    </div>
+    <div class="pulse-bar" role="list">
+      {% for brand in brands|slice:":8" %}
+        <button type="button" class="pulse-chip" role="listitem" style="--chip-color:{{ brand.accent_color }}">
+          <span class="pulse-chip-name">{{ brand.display_name }}</span>
+        </button>
+      {% empty %}
+        <span class="muted">{% trans "no brands" %}</span>
+      {% endfor %}
+    </div>
   </section>
 
-  <aside id="api-spend" class="spend-panel-wrap"
-         hx-get="/spend.html"
-         hx-trigger="load every 60s"
-         hx-swap="innerHTML">
-    <div class="spend-panel" style="padding: 1rem; color: #6b7280;">
-      {% trans "Spend panel — stubbed for U7." %} API endpoint not yet available.
+  {# Filter store hydrates via #control-panel id on the filter bar #}
+  <nav class="filter-bar" id="control-panel" aria-label="{% trans 'Filter groups' %}">
+    <div class="filter-bar-scroller" id="filter-bar-scroller">
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="brands">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "Brands" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'Brands' %}" data-idea="b" data-lens-pair="open,closed">
+          <div class="dd-segment" role="tablist" aria-label="{% trans 'Brand tier' %}">
+            <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true">{% trans "开源" %} <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
+            <button type="button" role="tab" data-lens="closed" aria-selected="false">{% trans "闭源" %} <span class="n" data-lens-count="closed">· {{ closed_brands|length }}</span></button>
+          </div>
+          <div class="dd-toolbar">
+            <button type="button" data-dd-action="all" data-dd-scope="visible">{% trans "all" %}</button>
+            <button type="button" data-dd-action="clear" data-dd-scope="visible">{% trans "clear" %}</button>
+          </div>
+          <div class="dd-lens-body" data-active-lens="open">
+            <div class="dd-grid cols-3" data-tier-grid="open">
+              {% for brand in open_brands %}
+                <label><input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}" checked><span>{{ brand.display_name }}</span></label>
+              {% empty %}
+                <span class="muted">{% trans "none" %}</span>
+              {% endfor %}
+            </div>
+            <div class="dd-grid cols-2" data-tier-grid="closed">
+              {% for brand in closed_brands %}
+                <label><input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}"><span>{{ brand.display_name }}</span></label>
+              {% empty %}
+                <span class="muted">{% trans "none" %}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "Discourse" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'Discourse' %}">
+          <div class="dd-grid cols-3">
+            {% for key in discourse_keys %}
+              <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked><span>{{ key }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="role">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "account.role" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'account.role' %}">
+          <div class="dd-grid cols-2">
+            {% for key in role_keys %}
+              <label><input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked><span>{{ key }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="lang">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "lang" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'lang' %}">
+          <div class="dd-toolbar">
+            <button type="button" data-dd-action="all">{% trans "all" %}</button>
+            <button type="button" data-dd-action="clear">{% trans "clear" %}</button>
+          </div>
+          <div class="dd-grid cols-3">
+            {% for entry in lang_entries %}
+              <label><input type="checkbox" data-pw-filter-group="lang" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="sentiment">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "Sentiment" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'Sentiment' %}">
+          <div class="dd-grid cols-2">
+            {% for key in sentiment_keys %}
+              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ key }}" checked><span>{{ key }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="nationalism">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "Nationalism" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'Nationalism' %}" data-idea="b" data-lens-pair="us,cn">
+          <div class="dd-segment" role="tablist" aria-label="{% trans 'Nationalism region' %}">
+            <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">{% trans "US" %} <span class="n" data-lens-count="us">· {{ nationalism_keys|length }}</span></button>
+            <button type="button" role="tab" data-lens="cn" aria-selected="false">{% trans "CN" %} <span class="n" data-lens-count="cn">· {{ nationalism_keys|length }}</span></button>
+          </div>
+          <div class="dd-toolbar">
+            <button type="button" data-dd-action="all" data-dd-scope="visible">{% trans "all" %}</button>
+            <button type="button" data-dd-action="clear" data-dd-scope="visible">{% trans "clear" %}</button>
+          </div>
+          <div class="dd-lens-body" data-active-lens="us">
+            <div class="dd-grid cols-3" data-tier-grid="us">
+              {% for key in nationalism_keys %}
+                <label><input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ key }}" checked><span>{{ key }}</span></label>
+              {% endfor %}
+            </div>
+            <div class="dd-grid cols-3" data-tier-grid="cn">
+              {% for key in nationalism_keys %}
+                <label><input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ key }}" checked><span>{{ key }}</span></label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="unsanctioned">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title">{% trans "unsanctioned" %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% trans 'unsanctioned' %}">
+          <div class="dd-grid cols-1">
+            <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span>{% trans "show only flagged posts" %}</span></label>
+          </div>
+        </div>
+      </div>
+
     </div>
-  </aside>
+  </nav>
+
+  <div class="desktop-grid">
+    <div class="desktop-col-main">
+      <section class="home-chart-wrap" id="home-chart"
+               hx-get="/chart.html"
+               hx-trigger="load every 60s"
+               hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
+               hx-swap="innerHTML">
+        {% include "monitor/_home_chart.html" %}
+      </section>
+
+      <div class="headline-strip" role="region" aria-label="{% trans 'Top voices' %}">
+        <span class="pulse"></span>
+        <span class="headline-label">{% trans "Top voices" %}</span>
+        <span class="headline-meta muted">☆ {% trans "by followers" %}</span>
+      </div>
+    </div>
+
+    <div class="desktop-col-feed">
+      <section class="feed-strip" id="feed" data-pw-feed data-pw-locale="{{ active_locale }}">
+        <h3>{% trans "本窗口最新" %}</h3>
+        <div class="feed-scroll" id="feed-scroll" data-feed-scroll data-pw-feed-scroll>
+          <div class="feed-rows" id="feed-rows" data-feed-rows data-pw-feed-body>
+            {% include "monitor/_feed_initial.html" %}
+          </div>
+          <div class="feed-scroll-sentinel" data-pw-feed-sentinel data-feed-sentinel aria-hidden="true"></div>
+          <div class="feed-scroll-status" data-pw-feed-status data-feed-status hidden>{% trans "loading more…" %}</div>
+          <div class="feed-end" data-pw-feed-end hidden>{% trans "end of feed" %}</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+</div>
 </body>
 </html>
