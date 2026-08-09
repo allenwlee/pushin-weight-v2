@@ -975,3 +975,33 @@ body.desktop-shell .desktop-grid .feed-strip {
   color: var(--text);
   border-color: var(--text);
 }
+
+/* v22 iter 15 (U6): app-name + locale-toggle on one row per mockup L122-146 */
+.topbar-title-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.topbar-title-row .app-name {
+  flex: 1 1 auto;
+  width: auto !important;
+  min-width: 0;
+}
+.topbar-title-row .locale-toggle {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.topbar-title-row .locale-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  line-height: 1;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+body.desktop-shell .topbar-title-row .locale-toggle { font-size: 12px; }
+body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; font-size: 12px; height: auto; }

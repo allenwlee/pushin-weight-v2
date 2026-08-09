@@ -32,12 +32,27 @@
 <div class="app-shell">
 
   <header class="topbar tz-hitch">
-    <h1 class="app-name">
-      <span class="zh">{{ app_name_zh }}</span>
-      <span class="en">{{ app_name_en }}</span>
-    </h1>
+    <div class="topbar-title-row">
+      <h1 class="app-name">
+        <span class="zh">{{ app_name_zh }}</span>
+        <span class="en">{{ app_name_en }}</span>
+      </h1>
+      {# iter 15 (U6): locale toggle moves into topbar-title-row, gets window-toggle
+         class for shared CSS, labels aligned to mockup (英文/中文/原文). #}
+      <nav class="window-toggle locale-toggle" aria-label="{% trans 'Display language' %}" data-i18n-aria="locale">
+        <button type="button" class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
+                data-pw-locale-btn="en"
+                data-label-en="en" data-label-zh="英文">{% trans "English" %}</button>
+        <button type="button" class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
+                data-pw-locale-btn="zh_cn"
+                data-label-en="zh-cn" data-label-zh="中文">{% trans "Chinese" %}</button>
+        <button type="button" class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
+                data-pw-locale-btn="original"
+                data-label-en="original" data-label-zh="原文">{% trans "Original" %}</button>
+      </nav>
+    </div>
     <div class="topbar-controls">
-      <nav class="window-toggle" aria-label="{% trans 'Time-period selector' %}">
+      <nav class="window-toggle" aria-label="{% trans 'Time-period selector' %}" data-i18n-aria="window">
         {% for n in allowed_home_windows %}
           <button type="button"
                   class="window-btn{% if home_window_days == n %} is-active{% endif %}"
@@ -57,15 +72,6 @@
         <span class="tz-zone" data-tz-zone>{% trans "本地" %}</span>
         <span class="tz-pair" data-tz-pair>⇄ <span class="tz-ca-icon" title="California" aria-label="California">CA</span></span>
       </button>
-      <nav class="locale-toggle" aria-label="Display language">
-        <span class="locale-toggle-label">{% trans "lang:" %}</span>
-        <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
-                data-pw-locale-btn="zh_cn">中文</button>
-        <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
-                data-pw-locale-btn="en">EN</button>
-        <button class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
-                data-pw-locale-btn="original">orig</button>
-      </nav>
     </div>
   </header>
 

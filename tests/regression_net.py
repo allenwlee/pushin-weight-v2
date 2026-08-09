@@ -234,8 +234,10 @@ class RegressionNet:
                          f"not found")
 
     def _check_locale_toggle(self, html):
-        # In zh_cn, the locale-toggle is rendered; in en, also rendered
-        nav_match = re.search(r'<nav[^>]*class="locale-toggle"[^>]*>(.*?)</nav>',
+        # In zh_cn, the locale-toggle is rendered; in en, also rendered.
+        # iter 15 (U6): the locale nav is `<nav class="window-toggle locale-toggle">`
+        # (combined class per mockup L848) so the regex accepts either form.
+        nav_match = re.search(r'<nav[^>]*class="[^"]*locale-toggle[^"]*"[^>]*>(.*?)</nav>',
                               html, re.DOTALL)
         if not nav_match:
             self.assert_("locale-toggle nav exists", False,
@@ -248,6 +250,17 @@ class RegressionNet:
         self.assert_("locale-toggle has 3 buttons (zh_cn/en/original)",
                      actual == EXPECTED_LOCALE_TOGGLE,
                      f"got {actual}")
+        # iter 15: locale nav must live inside .topbar-title-row (mockup L846-849).
+        self.assert_("locale-toggle nav is inside .topbar-title-row",
+                     re.search(r'<div class="topbar-title-row"[^>]*>.*?locale-toggle.*?</div>\s*<div class="topbar-controls"',
+                               html, re.DOTALL) is not None,
+                     "locale-toggle not in .topbar-title-row (mockup-canon layout)")
+        # iter 15: labels carry mockup data-label-zh attrs (英文/中文/原文).
+        self.assert_("locale-toggle buttons carry data-label-zh attrs (mockup-canon)",
+                     'data-label-zh="英文"' in html
+                     and 'data-label-zh="中文"' in html
+                     and 'data-label-zh="原文"' in html,
+                     "mockup labels 英文/中文/原文 missing from locale buttons")
 
     def _check_defaults(self, html, session):
         """Net B (U2) — Defaults: window=1, locale=zh_cn, no cookie required.
