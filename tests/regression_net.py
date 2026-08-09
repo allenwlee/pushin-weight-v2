@@ -83,6 +83,7 @@ class RegressionNet:
 
         self._check_header(html)
         self._check_filter_buttons(html)
+        self._check_filter_lens_geometry(html)
         self._check_time_window_buttons(html)
         self._check_locale_toggle(html)
         self._check_sections(html)
@@ -216,6 +217,33 @@ class RegressionNet:
             self.assert_(f"filter-group '{group}' present",
                          in_en or in_zh,
                          f"not found in {self.locale} filter nav")
+
+    def _check_filter_lens_geometry(self, html):
+        # iter 16 (U3): Branded pill has Open/Closed lens (data-tier-grid="open"
+        # + "closed"); Nationalism pill has US/CN dual-grid ("us" + "cn").
+        # Also pin .filter-bar-scroller exists and pw-filter-pills.js loaded.
+        # Mockup source: docs/ideation/mockups/06-tier1-composed.v22-master.html L940-980 (Brands), L1000-1075 (Nationalism).
+        for tier in ("open", "closed"):
+            self.assert_("brands pill has data-tier-grid=" + repr(tier),
+                         'data-tier-grid="' + tier + '"' in html,
+                         "tier grid missing - mockup lens partition")
+        for tier in ("us", "cn"):
+            self.assert_("nationalism pill has data-tier-grid=" + repr(tier),
+                         'data-tier-grid="' + tier + '"' in html,
+                         "tier grid missing - mockup US/CN lens partition")
+        self.assert_("brands pill has data-lens-pair=open,closed",
+                     'data-lens-pair="open,closed"' in html,
+                     "brands pill lens-pair attribute missing")
+        self.assert_("nationalism pill has data-lens-pair=us,cn",
+                     'data-lens-pair="us,cn"' in html,
+                     "nationalism pill lens-pair attribute missing")
+        scoped = html.count('data-dd-scope="visible"')
+        self.assert_("dd-toolbar has >= 4 scoped all/clear buttons",
+                     scoped >= 4,
+                     "only " + str(scoped) + " visible-scope actions; expected >= 4 (Brands all/clear x2 + Nat all/clear x2)")
+        self.assert_(".filter-bar-scroller exists (drag-scroll target)",
+                     'class="filter-bar-scroller"' in html,
+                     "scroller container missing - drag-to-scroll won't work")
 
     def _check_time_window_buttons(self, html):
         # Time-period selector nav
@@ -650,6 +678,11 @@ class RegressionNet:
         has_locale_toggle_js = any('pw-locale-toggle' in s for s in scripts)
         self.assert_("pw-locale-toggle.js loaded",
                      has_locale_toggle_js,
+                     f"scripts: {scripts[:10]}")
+        # iter 16 (U3): pw-filter-pills.js — drag-scroll + lens pills
+        has_pills_js = any('pw-filter-pills' in s for s in scripts)
+        self.assert_("pw-filter-pills.js loaded (U3 drag-scroll + lens pills)",
+                     has_pills_js,
                      f"scripts: {scripts[:10]}")
 
     def _check_console_errors(self, html):
