@@ -263,82 +263,74 @@ Step 6 is the load-bearing change. Without it, the drift documented in the r/Cla
 
 ---
 
-## Visual-drift detection: Element Audit + Chrome DevTools MCP (added 2026-08-08)
+## Visual-drift detection: Element Audit + Chrome DevTools MCP (rewritten iter 13, 2026-08-09)
 
-The angle-1 section above ("Iteration drift mitigation") and the v20 prototype regression net at `tests/regression_net.py` together pin the **structural** surface (right HTML elements present, right text in them). They do NOT pin **computed CSS values** — `getComputedStyle(el).color`, `background-color`, `font-weight`, `padding`, `border-radius`. This gap surfaced on 2026-08-08: `.pulse-chip-name` rendered **black** text on the dark pulse-card (invisible against the dark pulse fill), but every one of the 50 regression-net assertions passed because the `<span class="pulse-chip-name">` element existed with the right text content. The HTML was correct; the visual output was wrong, and only a human eye on the live page caught it.
+### Single goal statement (the contract)
 
-The research angle-1 corpus is explicit about why this gap exists. Two load-bearing citations:
+> **The live page at viewport X with locale Y must be visually indistinguishable from the v22-master mockup at the same viewport X + locale Y, from the perspective of the user opening both tabs side-by-side.**
 
-- **Tokens fix theming; screenshots catch the drift tokens can't express** ([digitalapplied.com](https://www.digitalapplied.com/blog/screenshot-driven-ui-development-vision-models-2026), 2026-08-01, cluster 1, score 51): "Design tokens fix theming. They cannot express spacing rhythm, visual hierarchy, density, or [other visual drift]." Structural assertions (HTML + class names) are the *tokens* layer; computed styles are the *visual* layer. The regression net currently asserts only the token layer.
-- **Accessibility snapshots beat screenshots for structural verification** ([dev.to pointchecknote, 2026-08-05](https://dev.to/pointchecknote/browser-automation-with-claude-playwright-mcp-why-accessibility-snapshots-beat-screenshots-2pke), angle-1 cluster "alternatives"): the a11y tree gives stable, machine-diffable structural tokens; pixel screenshots give the visual layer neither can express alone. Both layers are needed.
+That sentence is the entire contract. It does not enumerate which elements to check, which computed-style values to pin, or which CSS properties matter. The model figures that out. Any method the model picks — element-tree diff, computed-style assertions, pixel-diff screenshots, manual eyeball comparison, structural assertions, accessibility-snapshot comparison — is valid as long as the live page ends up matching the mockup by the user's eye.
 
-### Why Chrome DevTools MCP, not Playwright (per session-settled decision)
+**Why a goal statement, not a region enumeration:** the iter 5-12 visual-drift net enumerated 7 specific computed-style values across 7 specific regions. That approach caught micro-drift (wrong color, wrong padding, browser-default leaks) but **fundamentally cannot catch spatial / structural drift** — the kind where the live page renders the right elements in the wrong shape (e.g., feed rows without a right-column metadata panel, or layout columns missing). When the user can see "this is wrong" and the regression net says "all green," the regression net is wrong, not the user. The fix is to invert the contract: tell the model the *outcome*, not the *region list*.
 
-Per the prior session's research incorporation (`docs/research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md`, X12 grok 2026-07-10, angle-1 cluster on browser control): "Browser control via Playwright headless Chromium or Google's Chrome DevTools MCP has been doable for custom agents for a while. **The difference: Claude now has a native in-app browser.**" Anthropic's `mcp__chrome-devtools__` exposes:
+### What the model has to work with
 
-| Tool | What it returns | Drift signal it catches |
+The Chrome DevTools MCP exposes the full surface needed to satisfy the goal:
+
+| Tool | What it returns | When to reach for it |
 |---|---|---|
-| `take_snapshot` (a11y tree) | Stable structural tokens w/ uids | "right element exists at right uid" — same as current HTML grep |
-| `take_screenshot` | PNG of live viewport | Pixel diff vs mockup PNG — catches the visual drift tokens can't express |
-| `evaluate_script(fn)` | Return value of arbitrary JS in page context | `getComputedStyle(el).color` / `background-color` / `font-weight` for any element — catches the *black-on-dark* class of defects that a11y snapshots and HTML greps both miss |
+| `take_snapshot` (a11y tree) | Stable structural tokens w/ uids | "Are the right elements present in the right semantic roles?" |
+| `take_screenshot` | PNG of live viewport | "Does the rendered shape match the mockup at the pixel level?" |
+| `evaluate_script(fn)` | Return value of arbitrary JS in the page | "What is `getComputedStyle(el).{prop}` for this element? What's the DOM tree shape? What is the layout (column count, position, size)?" |
 
-The third row is the new capability. The existing regression net's 50 assertions inspect only the first column (a11y-equivalent: HTML structure). Adding the third column catches the pulse-chip-color defect on the next iteration.
+Per the prior session's settled decision (X12 grok 2026-07-10 in `docs/research/2026-08-08-agentic-ui-iteration-loop-drift-raw.md`): Chrome DevTools MCP over Playwright MCP because the MCP uses the user's already-running Chrome via CDP — zero install, the screenshots/pixel diffs are guaranteed to be the same viewport the user is testing in. No "does the agent's headless Chromium match the user's Chrome" reconciliation problem.
 
-Playwright MCP would give the same capability surface (Playwright has `page.evaluate()` for computed styles and `page.screenshot()` for pixel diffs), but requires spinning a separate browser binary; Chrome DevTools MCP uses the user's already-running Chrome instance via CDP — zero install, zero config, and the screenshots/pixel diffs are guaranteed to be in the same viewport the user is testing in. The cost saved is the "does the agent's headless Chromium match the user's Chrome" reconciliation problem.
+### Per-iteration summary (mandatory)
 
-### Element Audit script — `tests/element_audit.py` (NEW)
+Every iteration that touches the v22 homepage (or any chrome that the user can see) MUST end with a `## Summary` section in `docs/iterations/YYYY-MM-DD-v22-iter-NNN/REPORT.md` that contains exactly four paragraphs:
 
-The audit walks the v22-master mockup DOM and the live page DOM in parallel, captures computed styles for every region in the **UI region table** (§ "UI region → DB query → view function → template loop"), and emits a per-region diff. The diff is FAIL if any region's computed-style values differ; PASS otherwise.
+1. **Method used** — what mechanism did this iter use to approach the goal? Examples: "computed-style assertions on 5 pinned regions," "pixel-diff screenshots via `mcp__chrome-devtools__take_screenshot` + dHash comparison," "DOM-tree diff on `.feed-row` children," "manual side-by-side browser comparison with screenshots saved to disk."
 
-**Region targets (pinned to the 5 most-drifted regions from the 2026-08-08 visual review):**
+2. **What failed** — what specifically was wrong with the live page vs the mockup after this iter? Be concrete: which region, which element, what visual difference. Do NOT say "looks better" or "matches the mockup" without evidence (screenshot, computed-style value, tree-shape diff).
 
-| Region | Mockup computed value (pinned) | Live computed value (must match) |
-|---|---|---|
-| `.pulse-chip-name` | `color: rgb(255, 255, 255)` (white) | (asserted at audit time) |
-| `.voice-chip` background | `rgba(124, 58, 237, 0.18)` purple tint | (asserted at audit time) |
-| `.filter-button:hover` | distinct hover color from default state | (asserted at audit time) |
-| `.feed-handle` text-decoration | `none` (no underline by default) | (asserted at audit time) |
-| `.delta.up::before` content | `"▲"` + green color | (asserted at audit time) |
+3. **Learnings** — what did this iter teach about the *method* itself? Did the mechanism catch the right thing, or did it let a defect slip through? Did the green PASS verdict prove what it claimed? If a deferred finding was deprioritized last iter, was that the right call?
 
-The pinned values above are the **AFTER** state the plan INTENTIONALLY lands on; a BEFORE comment in the assertion captures the diff (e.g., `# BEFORE: color was rgb(0, 0, 0) — invisible on dark pulse-card fill`).
+4. **Re-direction for next iter** — given the method/failure/learning, what specifically should the next iter do? Do NOT pick a region from the previous iter's findings; re-derive from the goal statement + current state. If the goal isn't met, the next iter's method should change (not just iterate on the same method).
 
-### Regression-net extension — `_check_visual_tokens()` (NEW)
+The four-paragraph summary is **how drift gets caught**. If an iter is busy pinning more computed-style values while the user is complaining about feed layout, the Summary's "Learning" should say *"the computed-style method is not catching spatial/structural drift; next iter must use element-tree diff or pixel-diff screenshots."* Without that re-direction, the agent will keep adding more micro-assertions and the user's complaint will persist indefinitely.
 
-Extends `tests/regression_net.py` with a new method that runs against the **mockup HTML file** served locally (the v22-master file is a static HTML; the audit serves it via `python -m http.server` on port 5051 during the audit run, OR fetches it directly via `file://`) and against the live Django page. For each pinned region, both responses' `getComputedStyle` are captured and compared to the pinned values via a small headless driver.
+### Re-direction rule (the drift brake)
 
-Since `tests/regression_net.py` is intentionally **no-browser-dependency** (per its module docstring: "the only client-side changes (htmx chart refresh, time-window JS) are noted separately"), the Element Audit lives in a SEPARATE file (`tests/element_audit.py`) that requires `playwright` or uses the Chrome DevTools MCP directly. The two are coupled by **shared pinned-values table** (single source of truth in `tests/visual_tokens.py`):
+> **If a `## Summary` ends with a re-direction that points at the same kind of method as the previous iter, the iter is drifting. The next iter MUST pick a *different* method class.**
 
-```python
-# tests/visual_tokens.py (single source of truth for pinned CSS values)
-VISUAL_TOKENS = {
-    ".pulse-chip-name": {"color": "rgb(255, 255, 255)"},
-    ".voice-chip": {"background-color": "rgba(124, 58, 237, 0.18)"},
-    ".delta.up::before": {"content": "\"▲\""},
-    # ... 5+ regions, one row per pinned token
-}
-```
+Method classes (non-exhaustive, the model may invent others):
 
-Both `tests/element_audit.py` (browser-driven) and `tests/regression_net.py` (HTTP-only) read from this dict. When the plan INTENTIONALLY changes a value, only this file is updated — both surfaces pick up the new pinned value on next run, and the BEFORE comment in the assertion preserves the audit trail.
+- **Computed-style assertions** — fast, deterministic, catches micro-drift (colors, padding, font-weight). Misses spatial/structural drift.
+- **Element-tree diff** — fast, catches structural drift (which children are inside which parents, what the column structure is). Misses visual style drift.
+- **Pixel-diff screenshots** — slow, brittle to animation/font hinting, but catches everything a human eye would catch.
+- **Accessibility snapshot diff** — fast, stable, catches semantic-structure drift. Misses visual style drift.
+- **Manual eyeball comparison** — the ground truth; the user is the final verifier. Always required as the last step before claiming "matches the mockup."
 
-### Per-iteration contract extension
+The point is: each method has a class of drift it catches and a class it misses. The agent cycles through methods as needed; pinning 50 computed-style values doesn't help if the user's complaint is about layout.
 
-The v20 plan's "Per-iteration contract" step 6 (diff live vs mockup, NOT live vs previous-live) is extended to:
+### What the prior approach got wrong (lessons learned)
 
-> 6a. Run `tests/element_audit.py` against v22-master + live at the same viewport + locale
-> 6b. For each row in `tests/visual_tokens.py`, assert mockup computed value == live computed value == pinned value
-> 6c. If 6b fails: file a NEW P0/P1 in the UI region table; do NOT proceed to scenario capture
+iter 5-12 used the **computed-style assertions** method exclusively. It caught 9 micro-drifts (correctly) but missed:
+- The feed row layout has no right-column metadata panel (mockup has it; live doesn't). iter 11 noted this as "structural divergence, visually inconsequential" and deferred. That call was wrong.
+- The locale buttons render as plain text rather than styled chips. iter 6 fixed the colors but not the shape.
+- The filter pills collapse to a single row on mobile rather than wrapping. iter 11 sampled filter-bar but didn't compare its mobile layout to the mockup's mobile layout.
 
-Step 6a-c is the **load-bearing change** vs the current process. Without it, the drift documented in the r/ClaudeCode thread (cited in angle-1) re-appears at the *visual* layer even when the structural regression net is green — which is exactly what happened with the pulse-chip color on 2026-08-08.
+**Why "computed-style green" gave false confidence:** the 50/72/78-assertion green counts proved the audit ran, not that the page matched the mockup. The user's eye sees spatial relationships between elements; the audit was checking individual properties in isolation.
 
-### Definition of Done (new line)
+**The fix for iter 13+:** the Summary's "Method used" must explicitly name the method class, and "What failed" must include a screenshot diff OR an element-tree diff OR a manual side-by-side comparison — not just a value-by-value table. If the iter's Method is "computed-style assertions" and the user's complaint is about layout, the iter must either (a) switch to a layout-aware method or (b) stop and ask why this method class is the right tool for the current gap.
 
-> **Visual drift net shipped and green** — `tests/visual_tokens.py` has ≥ 5 pinned regions, `tests/element_audit.py` runs against mockup + live and fails on any mismatch, and the 2026-08-08 pulse-chip-color defect (and any other pre-existing visual defects surfaced by manual review) are pinned in the AFTER state.
+### What to do with the existing `tests/visual_tokens.py` and `tests/element_audit.py`
 
-### Patterns deliberately skipped (and why)
+**Keep them as one tool the model can use, not the contract.** They are useful for catching micro-drift and they ship working. They are not the goal. Future iters may add other tools (e.g., a pixel-diff helper, a tree-diff helper) to the `tests/` directory; the goal statement doesn't care which tools exist, only whether the live page matches the mockup.
 
-- **Pure pixel-diff screenshot comparison** (`pixelmatch` / `odiff` libraries) — catches more than computed-style diff (rendering quirks, font hinting, anti-aliasing) but is brittle across viewports and CSS class renames. The structural computed-style pin catches the same class of defect the user complained about (color, contrast, weight) without the brittleness. Pixel diff can be added later as a Tier-2 audit if computed-style proves insufficient.
-- **Figma-to-CSS token sync** (Tokens Studio, Style Dictionary) — source of truth is HTML exhibits, not Figma. Same cargo-cult skip as the angle-1 § "Patterns deliberately skipped" list.
-- **CSS-in-JS runtime assertions** (e.g., styled-components `jest-styled-components`) — the v22 shell uses plain `home-v20.css`; no CSS-in-JS runtime exists to hook into.
+### Definition of Done (revised)
+
+> **Visual drift net shipped and green** — the live page at the tested viewport + locale matches the v22-master mockup at the same viewport + locale by the user's eye. The supporting test files (`tests/visual_tokens.py`, `tests/element_audit.py`, and any future tools) document what mechanism was used, what failed in previous iters, and what was learned — so the next iter re-derives its method from the goal, not from the previous iter's findings.
 ---
 
 ## Regression net discipline (from 2026-08-08 angle-2 research)
@@ -1169,6 +1161,7 @@ _(Append future exhibit edits here.)_
 
 | Date | Change |
 |---|---|
+| 2026-08-09 | **v22 iter 13: § Visual-drift detection rewritten with single goal statement + per-iter Summary mandate** — user flagged that v22 looked "completely off" despite iter 12 marking all 11 DoD items green. Root cause: the iter 5-12 visual-drift approach enumerated 7 specific computed-style values across 7 specific regions, which caught micro-drift (wrong color, wrong padding) but **fundamentally could not catch spatial/structural drift** (e.g., feed rows without a right-column metadata panel, locale buttons as plain text rather than styled chips, mobile layout collapse). The 78 green-assertion count proved the audit ran, not that the page matched the mockup. **The fix:** rewrite § Visual-drift detection with (1) a single goal statement — "the live page at viewport X + locale Y must be visually indistinguishable from the v22-master mockup at the same viewport + locale" — replacing the enumerated-region approach; (2) a mandatory 4-paragraph `## Summary` in every iter REPORT (Method used / What failed / Learnings / Re-direction for next iter) so each iter explicitly names its method class and re-derives from the goal; (3) a re-direction rule that prevents iterating on the same method class when the user's complaint shifts to a drift class that method doesn't catch. `tests/visual_tokens.py` and `tests/element_audit.py` retained as one tool the model can reach for, not the contract. iter 13 will drive actual fixes using the new goal-oriented method: open mockup + live side-by-side via Chrome DevTools MCP, identify the feed layout divergence + locale buttons + other defects, fix-now per mockup-canon. Artifacts: `docs/iterations/2026-08-09-v22-iter-013/REPORT.md` (forthcoming). |
 | 2026-08-09 | **v22 iter 12: U7 DoD gate CLOSED — v22 condition MET** — final integration verification. End-to-end Chrome DevTools MCP browser check on `/` (title 走个量 Pushin' Weight, locale toggle 3 buttons, active window 1d, 7 filter groups, 3 voice chips, 438 feed rows, chart canvas, 8 pulse chips) and `/internal/` (title 走个量Pushin'Weight · multi-brand, control-panel + home-chart present, v22 markers absent). All 11 Definition-of-Done items marked closed: required skill, Nets A–G (78 assertions green), regression_net.py green, UI region infra mirror zero NOT YET ADDED rows, `/` + `/internal/` split, defaults zh_cn + 24h + local, DRY reuse, four exhibits, scope line on every commit, eval-named line, failure-closes-the-loop line. Goal hook auto-clears. Artifacts: `docs/iterations/2026-08-09-v22-iter-012/REPORT.md`. |
 | 2026-08-09 | **v22 iter 11: U6 mobile-viewport visual audit green** — Chrome DevTools MCP `resize_page 390 844` (clamped to 500 minimum); all 17 sampled regions match mockup pins at mobile width (pulse-chip-name, voice-chip, filter-pill, locale-toggle button, feed-handle-link, pulse-bar horizontal-scroll, filter-bar single-column, feed-strip responsive). Zero visual drift surfaced. Noted structural divergence (live uses `.pulse-chip-name` + flat feed children instead of mockup's `.pulse-chip .name` + `.feed-row` wrapper) — visually inconsequential because iter 5/6 CSS rules already target the actual live class names; structural normalization deferred as separate concern. Regression net stable at 78/0. Remaining v22 work: U7 Integration verification + DoD gate confirmation. Artifacts: `docs/iterations/2026-08-09-v22-iter-011/REPORT.md`. |
 | 2026-08-09 | **v22 iter 10: U4 hover-isolate removed from pw-chart.js; +2 assertions** — audit found `hoveredBrandIndex` actively controlling `ds.hidden` in `pw-chart.js` lines 153-190 (plan § U4 explicitly forbids hover-isolate brand hiding; § Net D requires "absent or inert"). Replaced entire `onHover` callback body (42 lines) with 4-line no-op: all brand lines now stay visible on chart hover regardless of cursor proximity. `grep "hoveredBrandIndex" pw-chart.js` after fix: 1 match (explanatory comment only). Net D extended via `_check_chart_no_hover_isolate(session)` in `tests/regression_net.py`: fetches `/static/pw-chart.js`, strips comments, asserts no active `hoveredBrandIndex` references + `onHover` body contains no `ds.hidden` mutations. Regression net: 76 → 78 assertions, 0 failures. Remaining v22 work: U6 mobile-viewport visual audit, U7 Integration verification + DoD gate confirmation. Artifacts: `docs/iterations/2026-08-09-v22-iter-010/REPORT.md`. |
