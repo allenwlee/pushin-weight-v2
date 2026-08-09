@@ -643,7 +643,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U0. Comprehensive regression nets (A–G) — pin contracts before move — **FOUNDATION-STABLE**
+### U0. Comprehensive regression nets (A–G) — pin contracts before move — **FOUNDATION-STABLE** ✅ SHIPPED (iter 7-8)
+
+**Shipping notes:** Nets A-G all green in `tests/regression_net.py` (78 assertions). Net A/B/E landed with iter 5-v20 prototype. Nets C/D/G added iter 7 (+12 assertions). Net F added iter 8 (+10 assertions) after iter 7 audit surfaced `/internal/` 404. Net B defaults assertions added iter 9 (+4 assertions). Net D hover-isolate assertion added iter 10 (+2 assertions). Total: 78/0 PASS.
 
 **Goal:** Freeze current filter keys, window default (pre-change), chart payload shape, and feed wire fields so the shell rewrite cannot silently break data contracts.
 
@@ -673,7 +675,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U1. Route split: `/` new shell stub, `/internal` legacy — **FOUNDATION-STABLE** (stub) / **EXHIBIT-DEPENDENT** (full chrome)
+### U1. Route split: `/` new shell stub, `/internal` legacy — **FOUNDATION-STABLE** (stub) / **EXHIBIT-DEPENDENT** (full chrome) ✅ SHIPPED (iter 8)
+
+**Shipping notes:** `/internal/` route added to `monitor/urls.py:16`. Legacy chrome preserved as `monitor/templates/monitor/home_internal.html` (180 lines, saved from git `6ac2ddd^`). `home_internal()` view function added at `monitor/views.py:1211`. Both `/` and `/internal/` return 200 with correct chrome markers. Net F assertion pins parity (`/internal/` has `id="control-panel"` + `id="home-chart"` + 3 v22 markers absent).
 
 **Goal:** Introduce `/internal` without losing today’s home; free `/` for the new shell.
 
@@ -706,7 +710,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U2. Defaults: window=1, confirm zh_cn, TZ local default — **FOUNDATION-STABLE**
+### U2. Defaults: window=1, confirm zh_cn, TZ local default — **FOUNDATION-STABLE** ✅ SHIPPED (iter 9)
+
+**Shipping notes:** `HOME_WINDOW_DEFAULT` changed from 7 to 1 per plan § U2 AFTER state. `HOME_WINDOW_DEFAULT_BEFORE = 7` preserved as Net B BEFORE pin (not used in code). Net B defaults assertions added: no-cookie active-window=1, no-cookie `data-pw-window=1`, no-cookie zh_cn chrome rendered, cookie `home_window=7` honored on returning-user request. zh_cn default verified via `LANGUAGE_CODE="zh-hans"` (Django setting) + `本窗口最新` chrome present in default response. TZ local default verified via `data-tz-active="local"` chrome marker.
 
 **Goal:** First-paint product defaults match session decisions.
 
@@ -735,7 +741,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U3. Filter bar UI → v22 pills; keep filter store contract — **EXHIBIT-DEPENDENT**
+### U3. Filter bar UI → v22 pills; keep filter store contract — **EXHIBIT-DEPENDENT** 🟡 PARTIAL
+
+**Shipping notes:** 7 filter pills render with correct labels (Brands/Discourse/account.role/lang/Sentiment/Nationalism/unsanctioned per Net C pin), `data-group="..."` attribute present on each pill. CSS for `.filter-pill` (bg `rgb(15, 23, 42)`, color `rgb(243, 244, 246)`, radius `999px`) matches mockup pin. **NOT YET validated** (per iter 13 element-tree diff): Open/Closed lens (Brands split into Anthropic/OpenAI/SpaceXAI/Google vs rest), US/CN dual-grid on Nationalism lens, drag-to-scroll on `.filter-bar-scroller`, dropdown geometry (`width/left = filter-bar box not viewport`). Filter store contract (`pw:filter-change` + same filter JSON shape) assumed intact from prior work — not re-validated post iter 1-4 chrome cutover.
 
 **Goal:** Replace vertical control panel with horizontal pill bar + full-bar-width dropdowns; filters still emit `pw:filter-change` and serialize the same filter JSON shape.
 
@@ -775,7 +783,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U4. Chart: reuse payload; remove hover isolate — **FOUNDATION-STABLE** (hover removal) / **EXHIBIT-DEPENDENT** (chrome wrap)
+### U4. Chart: reuse payload; remove hover isolate — **FOUNDATION-STABLE** (hover removal) / **EXHIBIT-DEPENDENT** (chrome wrap) ✅ PARTIAL (hover removal shipped; chrome wrap deferred)
+
+**Shipping notes:** Hover-isolate removed (iter 10): `pw-chart.js` `onHover` body replaced with no-op (42 → 4 lines). Net D assertion `_check_chart_no_hover_isolate(session)` pins: no active `hoveredBrandIndex` references in non-comment code, `onHover` body contains no `ds.hidden` mutations. **DEFERRED:** chart chrome wrap (multi-series legend, time-window chip, granualarity selector) — iter 6 visual audit showed chart-wrap bg + radius match mockup, but the legend/chip/selector regions were not sampled in the iter 6 audit; U5's element-tree diff didn't cover the chart region specifically.
 
 **Goal:** Chart continuous with production data; no hover brand isolation.
 
@@ -804,7 +814,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U5. Pulse, headline, feed chrome (followers, TZ stamps, ☆ voices) — **EXHIBIT-DEPENDENT**
+### U5. Pulse, headline, feed chrome (followers, TZ stamps, ☆ voices) — **EXHIBIT-DEPENDENT** 🟡 PARTIAL — feed row structure MISSING (iter 13)
+
+**Shipping notes:** Pulse chrome (8 brand chips with `→ 0%` deltas per iter 2, `.pulse-chip-name` color fix per iter 5), Top Voices body (3 voice chips with `@handle (☆ N)` per iter 4), feed engagement (👥/♥/↻/💬 per iter 3), avatar circles (HSL-colored initials per iter 3) all shipped + regression-pinned. **NOT SHIPPED — flagged by iter 13 element-tree diff:** the mockup's feed row structure is a **2-column grid** (`.feed-row-shell` containing `.feed-main` LEFT + `.feed-signals` RIGHT), where `.feed-signals` has 3 emoji-row children for sentiment / post-type / nationalism signals (`😊😐`, `📢🤚`, `🗯️ 🇨🇳🇺🇸`). The live page renders feed rows as 5 flat sibling cells (`.feed-date-link`, `.pill`, `.lang-sub`, `.cell-truncated`, `.muted-cell`) inside `.feed-rows` — no row wrapper, no avatar in row, no meta/ts-abs/text-layer-tag/engagement block, **no emoji signal rows at all**. The right column the user sees in the mockup is completely missing. iter 14 + 15 must rewrite `_feed_initial.html` template + extend `_post_to_wire` view function to render the 2-column structure.
 
 **Goal:** Match v22 information density under the chart.
 
@@ -839,7 +851,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U6. Responsive layout + i18n chrome pass — **EXHIBIT-DEPENDENT**
+### U6. Responsive layout + i18n chrome pass — **EXHIBIT-DEPENDENT** 🟡 PARTIAL — locale button container differs from mockup (iter 13)
+
+**Shipping notes:** Mobile-viewport visual audit (iter 11) green — 17 sampled regions match mockup at vw=500 (pulse-chip-name, voice-chip, filter-pill, locale-toggle button, feed-handle-link, pulse-bar horizontal-scroll, filter-bar single-column, feed-strip responsive). Chinese + English chrome complete per Net G assertion. **NOT SHIPPED — flagged by iter 13 element-tree diff:** mockup renders locale buttons (英文/中文/原文) inside a combined `window-toggle locale-toggle` nav (single container holding both time-window + locale controls); live renders them inside a separate `locale-toggle` nav (window-toggle + locale-toggle as two distinct navs). The button labels also differ (mockup: 英文/中文/原文; live: 中文/EN/orig). Whether this is structural mismatch or just a wire-shape difference is TBD — needs visual side-by-side confirmation in iter 14.
 
 **Goal:** Desktop usable; Chinese/English chrome complete.
 
@@ -865,7 +879,9 @@ Units keep U0–U7 shape. Early units (regression net, route split, defaults) ar
 
 ---
 
-### U7. Integration verification + Definition of Done gate — after freeze + U1–U6
+### U7. Integration verification + Definition of Done gate — after freeze + U1–U6 🟡 FALSE-POSITIVE (iter 12; reversed by iter 13)
+
+**Shipping notes:** iter 12 end-to-end Chrome DevTools MCP browser check on `/` + `/internal/`, all 11 DoD items marked `[x]`. **REVERSED by iter 13 element-tree diff:** the iter 12 green PASS was structural-only ("all 50+ assertions green"); iter 13 caught U5 feed row structure missing + U6 locale button container mismatch that the iter 12 end-to-end check missed because the iter 12 audit only confirmed element presence (e.g., "feed-handle-link exists") not element shape (e.g., "feed row has a `.feed-signals` right column with 3 emoji-row children"). DoD gate will reopen after U5 + U6 chrome catch up to mockup shape.
 
 **Goal:** End-to-end proof before ship.
 
@@ -1131,18 +1147,19 @@ Agent commits to branch `feat/v20-homepage-phase-a`. No push, no PR. Each commit
 ## Definition of Done
 
 - [x] Required skill read
-- [x] Nets A–G green
+- [x] Nets A–G green (78 assertions; iter 7-10)
 - [x] `tests/regression_net.py` (v20 prototype, introduced by `docs/plans/2026-08-07-001-DEPRECATED-feat-v20-agentic-iteration-plan.md`) green when run against the live page — server-side AND rendered-page nets both pass before any PASS verdict on a U-unit
 - [x] UI region infra mirror table (above) has zero `NOT YET ADDED` rows for cells the unit ships, or a tracked gap with user OK
-- [x] `/` = v22 design; `/internal/` = former homepage
-- [x] Defaults zh_cn + 24h + local
+- [x] `/` = v22 design; `/internal/` = former homepage (iter 8)
+- [x] Defaults zh_cn + 24h + local (iter 9)
 - [x] Chart + filters reused (DRY)
 - [x] Four exhibits reflected (mobile/desktop × zh/en)
 - [x] Scope line on every commit: `Scope delivered vs plan promised: …`
 - [x] **Eval-named line (per § "Regression net discipline (from 2026-08-08 angle-2 research)" / "Vibe-vs-eval gate"):** Every U-unit's Approach block names which Net (A–G) or `tests/regression_net.py` assertion measures the change, with the BEFORE/AFTER pinned value. "Looks better" / "feels right" / "matches the mockup" are NOT acceptable substitutes.
 - [x] **Failure-closes-the-loop line (per § "Regression net discipline (from 2026-08-08 angle-2 research)" / "Production-tracing → regression-suite pipeline"):** Every production failure surfaced during U0–U7 produces a new pinned assertion in `tests/regression_net.py` or Net A–G BEFORE the unit that surfaced the failure is marked PASS. "Fix the bug, move on" without adding the net is a Definition-of-Done violation.
+- [ ] **v22 mockup-canon gate:** the live page at viewport X + locale Y must be visually indistinguishable from the v22-master mockup by the user's eye (per § "Visual-drift detection" rewritten iter 13). NOT YET green — iter 13 element-tree diff surfaced structural divergence on the feed row (U5: no `.feed-row-shell` 2-column grid, no emoji signal rows) and locale button container (U6: separate nav vs mockup's combined nav). Will close when U5 chrome + U6 chrome catch up to mockup shape.
 
-**CLOSED 2026-08-09 (iter 12 / U7).** Regression net 78/0 PASS; visual drift net 7 regions pinned (tests/visual_tokens.py + tests/element_audit.py); Nets A-G all green via tests/regression_net.py; / serves v22 chrome (control-panel absent, pulse-chip/voice-chip/filter-pill present, 8 brands, 3 voice chips, 438 feed rows, chart canvas, locale toggle 3 buttons); /internal/ serves legacy chrome (control-panel + home-chart present, v22 markers absent). All 11 DoD items green.
+**STATUS 2026-08-09 (iter 13):** 10 of 11 DoD items green. The iter 12 "All 11 DoD items green" claim was a false-positive — it counted structural-only assertions as sufficient proof of "page matches mockup," which the rewritten § Visual-drift detection (single goal statement, model picks method) now explicitly forbids. The "v22 mockup-canon gate" checkbox above is the new corrective item that the iter 13 element-tree diff surfaced must be closed before any U7 / DoD green.
 
 ---
 
@@ -1161,6 +1178,7 @@ _(Append future exhibit edits here.)_
 
 | Date | Change |
 |---|---|
+| 2026-08-09 | **v22 iter 13b: U-unit checkboxes added + iter 12 DoD closure REVERSED** — marked U0-U7 with shipped status. U0/U1/U2/U4 ✅ shipped (iter 7-10). U3/U5/U6 🟡 partial — U5 missing the 2-column feed row structure with emoji signal rows (the actual reason user said "completely off"), U6 missing the combined `window-toggle locale-toggle` nav, U3 missing Open/Closed lens + drag-to-scroll + dropdown geometry. U7 🟡 false-positive — iter 12's "all 11 DoD green" was structural-only; iter 13 element-tree diff showed the chrome doesn't actually match the mockup. Reopened DoD gate with new "v22 mockup-canon gate" checkbox that closes only when U5 + U6 chrome catches up to mockup shape. Shipping notes added under each U-unit heading cite the specific iter that landed (or didn't land) the work. |
 | 2026-08-09 | **v22 iter 13: § Visual-drift detection rewritten with single goal statement + per-iter Summary mandate** — user flagged that v22 looked "completely off" despite iter 12 marking all 11 DoD items green. Root cause: the iter 5-12 visual-drift approach enumerated 7 specific computed-style values across 7 specific regions, which caught micro-drift (wrong color, wrong padding) but **fundamentally could not catch spatial/structural drift** (e.g., feed rows without a right-column metadata panel, locale buttons as plain text rather than styled chips, mobile layout collapse). The 78 green-assertion count proved the audit ran, not that the page matched the mockup. **The fix:** rewrite § Visual-drift detection with (1) a single goal statement — "the live page at viewport X + locale Y must be visually indistinguishable from the v22-master mockup at the same viewport + locale" — replacing the enumerated-region approach; (2) a mandatory 4-paragraph `## Summary` in every iter REPORT (Method used / What failed / Learnings / Re-direction for next iter) so each iter explicitly names its method class and re-derives from the goal; (3) a re-direction rule that prevents iterating on the same method class when the user's complaint shifts to a drift class that method doesn't catch. `tests/visual_tokens.py` and `tests/element_audit.py` retained as one tool the model can reach for, not the contract. iter 13 will drive actual fixes using the new goal-oriented method: open mockup + live side-by-side via Chrome DevTools MCP, identify the feed layout divergence + locale buttons + other defects, fix-now per mockup-canon. Artifacts: `docs/iterations/2026-08-09-v22-iter-013/REPORT.md` (forthcoming). |
 | 2026-08-09 | **v22 iter 12: U7 DoD gate CLOSED — v22 condition MET** — final integration verification. End-to-end Chrome DevTools MCP browser check on `/` (title 走个量 Pushin' Weight, locale toggle 3 buttons, active window 1d, 7 filter groups, 3 voice chips, 438 feed rows, chart canvas, 8 pulse chips) and `/internal/` (title 走个量Pushin'Weight · multi-brand, control-panel + home-chart present, v22 markers absent). All 11 Definition-of-Done items marked closed: required skill, Nets A–G (78 assertions green), regression_net.py green, UI region infra mirror zero NOT YET ADDED rows, `/` + `/internal/` split, defaults zh_cn + 24h + local, DRY reuse, four exhibits, scope line on every commit, eval-named line, failure-closes-the-loop line. Goal hook auto-clears. Artifacts: `docs/iterations/2026-08-09-v22-iter-012/REPORT.md`. |
 | 2026-08-09 | **v22 iter 11: U6 mobile-viewport visual audit green** — Chrome DevTools MCP `resize_page 390 844` (clamped to 500 minimum); all 17 sampled regions match mockup pins at mobile width (pulse-chip-name, voice-chip, filter-pill, locale-toggle button, feed-handle-link, pulse-bar horizontal-scroll, filter-bar single-column, feed-strip responsive). Zero visual drift surfaced. Noted structural divergence (live uses `.pulse-chip-name` + flat feed children instead of mockup's `.pulse-chip .name` + `.feed-row` wrapper) — visually inconsequential because iter 5/6 CSS rules already target the actual live class names; structural normalization deferred as separate concern. Regression net stable at 78/0. Remaining v22 work: U7 Integration verification + DoD gate confirmation. Artifacts: `docs/iterations/2026-08-09-v22-iter-011/REPORT.md`. |
