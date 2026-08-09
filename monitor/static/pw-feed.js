@@ -100,7 +100,7 @@
   // even when the page doesn't reload.
   function formatVisibleTimestamps() {
     var now = new Date();
-    $$('[data-pw-feed-row]').forEach(function (tr) {
+    $$('.feed-row[data-pw-feed-row]').forEach(function (tr) {
       var iso = tr.getAttribute('data-created-at-iso');
       if (!iso) return;
       var a = tr.querySelector('a.feed-date-link');
@@ -118,12 +118,18 @@
   }
 
   function renderRow(row) {
-    var tr = document.createElement('tr');
-    tr.setAttribute('data-pw-feed-row', '');
-    tr.setAttribute('data-tweet-id', row.tweet_id || '');
-    tr.setAttribute('data-created-at-iso', row.created_at_iso || '');
-    tr.innerHTML = renderRowHtml(row);
-    return tr;
+    var div = document.createElement('div');
+    div.className = 'feed-row';
+    div.setAttribute('data-pw-feed-row', '');
+    div.setAttribute('data-tweet-id', row.tweet_id || '');
+    div.setAttribute('data-created-at-iso', row.created_at_iso || '');
+    div.setAttribute('data-sentiments', (row.sentiment_keys || []).join(','));
+    div.setAttribute('data-post-types', (row.post_type_keys || []).join(','));
+    div.setAttribute('data-nat-cn', row.nat_cn || '');
+    div.setAttribute('data-nat-us', row.nat_us || '');
+    div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
+    div.innerHTML = renderRowHtml(row);
+    return div;
   }
 
   function escapeHtml(s) {
@@ -141,125 +147,158 @@
     return h.replace(/^@+/, '');
   }
 
+  // iter 14 (U5): render mockup-canon 2-column grid. Emoji + tint are
+  // populated by paintSignals() once the row is in the DOM.
   function renderRowHtml(row) {
-    var now = new Date();
-    var relTime = formatRelative(row.created_at_iso || row.created_at, now);
-    var tooltip = formatLocalTooltip(row.created_at_iso || row.created_at);
-    var dateCell = '<a class="feed-date-link" ' +
-      'href="https://x.com/i/status/' + escapeHtml(row.tweet_id || '') + '" ' +
-      'target="_blank" rel="noopener noreferrer" ' +
-      'title="' + escapeHtml(tooltip) + '">' + escapeHtml(relTime) + '</a>';
-    var langSub = row.lang_detected
-      ? '<div class="lang-sub">translated from: [' + escapeHtml(row.lang_detected) + ']</div>'
-      : '';
-    var brandPills = (row.brands || []).map(function (b) {
-      var label = b.display_name_zh_cn || b.display_name_en || b.nickname || '';
-      return '<span class="pill">' + escapeHtml(label) + '</span>';
-    }).join('');
-    // U4: per-brand grouped classifications.
-    var classBlocks = [];
-    var nicknames = row.brand_nicknames || [];
-    var byBrand = row.classifications || {};
-    var brandMeta = {};
-    (row.brands || []).forEach(function (b) {
-      if (b && b.nickname) brandMeta[b.nickname] = b;
-    });
-    nicknames.forEach(function (nick) {
-      var cls = byBrand[nick] || {};
-      var meta = brandMeta[nick] || {};
-      var headerLabel = meta.display_name_zh_cn || meta.display_name_en || meta.nickname || nick;
-      var lines = [];
-      var pts = cls.post_types || [];
-      var disc = cls.discourse || [];
-      var sents = cls.sentiments || [];
-      if (pts.length) {
-        lines.push(
-          '<span class="cls-label">types:</span> ' +
-          pts.map(function (v) {
-            var key = (v && v.key) || v;
-            var label = (v && v.label) || v;
-            return '<span class="pill" data-key="' + escapeHtml(key) + '">' + escapeHtml(label) + '</span>';
-          }).join('')
-        );
-      }
-      if (disc.length) {
-        lines.push(
-          '<span class="cls-label">discourses:</span> ' +
-          disc.map(function (v) {
-            if (v == null || v === '') return '<span class="pill muted">—</span>';
-            var key = (v && v.key) || v;
-            var label = (v && v.label) || v;
-            return '<span class="pill" data-key="' + escapeHtml(key) + '">' + escapeHtml(label) + '</span>';
-          }).join('')
-        );
-      }
-      if (sents.length) {
-        lines.push(
-          '<span class="cls-label">sentiments:</span> ' +
-          sents.map(function (v) {
-            var key = (v && v.key) || v;
-            var label = (v && v.label) || v;
-            return '<span class="pill" data-key="' + escapeHtml(key) + '">' + escapeHtml(label) + '</span>';
-          }).join('')
-        );
-      }
-      if (cls.cn_nationalism) {
-        var cnKey = (cls.cn_nationalism && cls.cn_nationalism.key) || cls.cn_nationalism;
-        var cnLabel = (cls.cn_nationalism && cls.cn_nationalism.label) || cls.cn_nationalism;
-        lines.push('<span class="cls-label">中国民族主义:</span> <span class="pill muted" data-key="' + escapeHtml(cnKey) + '">' + escapeHtml(cnLabel) + '</span>');
-      }
-      if (cls.us_nationalism) {
-        var usKey = (cls.us_nationalism && cls.us_nationalism.key) || cls.us_nationalism;
-        var usLabel = (cls.us_nationalism && cls.us_nationalism.label) || cls.us_nationalism;
-        lines.push('<span class="cls-label">美国民族主义:</span> <span class="pill muted" data-key="' + escapeHtml(usKey) + '">' + escapeHtml(usLabel) + '</span>');
-      }
-      classBlocks.push(
-        '<div class="cls-block">' +
-          '<span class="cls-brand">' + escapeHtml(headerLabel) + '</span>' +
-          (lines.length ? lines.join('<br>') : '') +
-        '</div>'
-      );
-    });
-    if (row.unsanctioned) {
-      classBlocks.push('<div class="cls-block"><span class="pill flagged">unsanctioned</span></div>');
-    }
     var handleRaw = (row.account && row.account.handle) || '';
     var handleLabel = handleRaw || '@unknown';
-    var handleCell = handleRaw
+    var handleHtml = handleRaw
       ? '<a class="feed-handle-link" ' +
           'href="https://x.com/' + escapeHtml(cleanHandle(handleRaw)) + '" ' +
           'target="_blank" rel="noopener noreferrer">' +
           escapeHtml(handleLabel) + '</a>'
       : escapeHtml(handleLabel);
-    var role = (row.account && row.account.role) || '';
-    var roleLabel = (row.account && row.account.role_label) || role;
     var followersPretty = (row.account && row.account.followers_pretty) || '';
+    var eng = row.engagement_pretty || {};
+    var tint = row.tint_class || 'tint-neutral';
+    var metaText = row.meta_text || '';
+    var tsAbs = row.ts_abs_text || '';
     return (
-      '<td class="muted-cell">' + dateCell + '</td>' +
-      '<td>' + brandPills + '</td>' +
-      '<td>' + langSub +
-        '<div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text_translated || 'NULL') + '</div>' +
-        '<div class="muted-cell">★ ' + (row.like_count || 0) + '</div>' +
-      '</td>' +
-      '<td><div class="cell-truncated" data-pw-cell-truncated>' + escapeHtml(row.text_original || row.text || '') + '</div></td>' +
-      '<td>' + classBlocks.join('') + '</td>' +
-      '<td>' + handleCell + (followersPretty ? ' · ' + escapeHtml(followersPretty) : '') + (roleLabel ? ' · <span class="pill role-' + escapeHtml(role) + '">' + escapeHtml(roleLabel) + '</span>' : '') + '</td>'
+      '<div class="feed-row-shell ' + escapeHtml(tint) + '">' +
+        '<div class="feed-main">' +
+          '<span class="avatar" style="background: ' + escapeHtml(row.avatar_color || '') + '">' + escapeHtml(row.avatar_initials || '?') + '</span>' +
+          '<div class="body">' +
+            '<div class="head">' +
+              '<span class="handle">' + handleHtml + '</span>' +
+              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span></span>' +
+            '</div>' +
+            '<div class="text" data-text-cycle role="button" tabindex="0">' +
+              escapeHtml((row.text_translated || row.text_en || row.text || '').toString().slice(0, 600)) +
+            '</div>' +
+            '<div class="engagement">' +
+              '<span class="followers">' + escapeHtml(eng.followers || '') + '</span>' +
+              '<span class="likes">' + escapeHtml(eng.likes || '') + '</span>' +
+              '<span class="rts">' + escapeHtml(eng.retweets || '') + '</span>' +
+              '<span class="replies">' + escapeHtml(eng.replies || '') + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="feed-signals" aria-hidden="true">' +
+          '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
+          '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
+          '<div class="sig-row sig-nat" data-sig-nat></div>' +
+          '<div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>' +
+        '</div>' +
+      '</div>'
     );
   }
 
+  // ---------------------------------------------------------------------
+  // iter 14 (U5): signal painter — emoji + tint for the right column.
+  // Mirrors mockup script (06-tier1-composed.v22-master.html ~L1660).
+  // ---------------------------------------------------------------------
+  var SENT_FACE = {
+    positive: '\uD83D\uDE0A',  // 😊
+    neutral:  '\uD83D\uDE36',  // 😶
+    negative: '\uD83D\uDE41',  // 🙁
+    mixed:    '\uD83D\uDE10'   // 😐
+  };
+  var POST_TYPE_EMOJI = {
+    hands_on_usage:           '\uD83E\uDD1A', // 🤚
+    performance_comparisons:  '\uD83D\uDCCA', // 📊
+    buzz_releases:            '\uD83D\uDCE2', // 📢
+    feedback_questions:       '\u2754',         // ❓
+    advertising_marketing:    '\u5186',         // 円 (intentional, matches mockup)
+    event_announcement:       '\uD83D\uDCC5'  // 📅
+  };
+  var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
+  var TYPE_ORDER = [
+    'buzz_releases', 'hands_on_usage', 'performance_comparisons',
+    'feedback_questions', 'advertising_marketing', 'event_announcement'
+  ];
+
+  function parseListAttr(raw) {
+    if (!raw) return [];
+    return raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  function uniqueInOrder(keys, order) {
+    var seen = {}, out = [];
+    order.forEach(function (k) {
+      if (keys.indexOf(k) !== -1 && !seen[k]) { seen[k] = true; out.push(k); }
+    });
+    keys.forEach(function (k) {
+      if (!seen[k]) { seen[k] = true; out.push(k); }
+    });
+    return out;
+  }
+  function tintClass(sents) {
+    var s = sents, hasP = s.indexOf('positive') !== -1,
+        hasN = s.indexOf('negative') !== -1,
+        hasM = s.indexOf('mixed') !== -1;
+    if (hasP && hasN && hasM) return 'tint-pos-neg-mixed';
+    if (hasP && hasN) return 'tint-pos-neg';
+    if (hasP && hasM) return 'tint-pos-mixed';
+    if (hasN && hasM) return 'tint-neg-mixed';
+    if (hasP) return 'tint-positive';
+    if (hasN) return 'tint-negative';
+    if (hasM) return 'tint-mixed';
+    return 'tint-neutral';
+  }
+  function paintSignals(row) {
+    var sents = uniqueInOrder(parseListAttr(row.getAttribute('data-sentiments')), SENT_ORDER);
+    var types = uniqueInOrder(parseListAttr(row.getAttribute('data-post-types')), TYPE_ORDER);
+    var natCn = (row.getAttribute('data-nat-cn') || '').trim();
+    var natUs = (row.getAttribute('data-nat-us') || '').trim();
+    var showCn = natCn && natCn !== 'none';
+    var showUs = natUs && natUs !== 'none';
+    var shell = row.querySelector('.feed-row-shell');
+    if (shell) {
+      // Strip any prior tint-* class so the new one wins cleanly.
+      var cl = shell.className.split(/\s+/).filter(function (c) {
+        return c && c.indexOf('tint-') !== 0;
+      });
+      cl.push(tintClass(sents));
+      shell.className = cl.join(' ');
+    }
+    var elS = row.querySelector('[data-sig-sentiment]');
+    if (elS) elS.textContent = sents.map(function (k) { return SENT_FACE[k] || ''; }).join('');
+    var elT = row.querySelector('[data-sig-post-type]');
+    if (elT) elT.textContent = types.map(function (k) { return POST_TYPE_EMOJI[k] || ''; }).join('');
+    var elN = row.querySelector('[data-sig-nat]');
+    if (elN) {
+      if (!showCn && !showUs) { elN.innerHTML = ''; elN.classList.add('is-empty'); }
+      else {
+        elN.classList.remove('is-empty');
+        var flags = (showCn ? '\uD83C\uDDE8\uD83C\uDDF3' : '') +
+                    (showUs ? '\uD83C\uDDFA\uD83C\uDDF8' : '');
+        elN.innerHTML = '<span class="sig-nat-prefix">\uD83D\uDDAC:</span> ' + flags;
+      }
+    }
+    var elU = row.querySelector('[data-sig-unsanctioned]');
+    if (elU) {
+      var uns = (row.getAttribute('data-unsanctioned') || '').trim();
+      var isUn = uns === '1' || uns === 'true' || uns === 'yes';
+      if (isUn) { elU.classList.remove('is-empty'); elU.textContent = '\uD83D\uDEAB'; }
+      else      { elU.textContent = ''; elU.classList.add('is-empty'); }
+    }
+  }
+  function paintAllSignals(root) {
+    if (!root) return;
+    $$('.feed-row[data-pw-feed-row]', root).forEach(paintSignals);
+  }
+
   function attachCellClickHandlers(root) {
-    $$('td.is-expanded', root).forEach(function (td) { td.classList.remove('is-expanded'); });
-    $$('[data-pw-cell-truncated]', root).forEach(function (el) {
+    if (!root) return;
+    // iter 14: rows are divs; collapse any pre-expanded .text then wire
+    // click-toggle on each .text cell. Legacy /internal/ still uses <td>
+    // and is handled by its own template (unaffected by this function).
+    $$('.text.is-expanded', root).forEach(function (t) { t.classList.remove('is-expanded'); });
+    $$('.feed-row .text[data-text-cycle]', root).forEach(function (el) {
       el.onclick = function (e) {
-        var td = el.closest('td');
-        if (!td) return;
-        var wasExpanded = td.classList.contains('is-expanded');
-        // Collapse all in this row.
-        var tr = td.closest('tr');
-        if (tr) {
-          $$('td.is-expanded', tr).forEach(function (other) { other.classList.remove('is-expanded'); });
-        }
-        if (!wasExpanded) td.classList.add('is-expanded');
+        var row = el.closest('.feed-row');
+        if (!row) return;
+        $$('.text.is-expanded', row).forEach(function (other) { other.classList.remove('is-expanded'); });
+        el.classList.add('is-expanded');
         e.stopPropagation();
       };
     });
@@ -274,8 +313,8 @@
     exhausted: false,
   };
 
-  function readCursorFromLastRow(tbody) {
-    var rows = tbody.querySelectorAll('[data-pw-feed-row]');
+  function readCursorFromLastRow(body) {
+    var rows = body.querySelectorAll('.feed-row[data-pw-feed-row]');
     if (rows.length === 0) return null;
     var last = rows[rows.length - 1];
     var twid = last.getAttribute('data-tweet-id');
@@ -300,24 +339,24 @@
   function clearAndRefetch() {
     var root = getFeedRoot();
     if (!root) return;
-    var tbody = $('[data-pw-feed-body]', root);
-    if (!tbody) return;
+    var body = $('[data-pw-feed-body]', root);
+    if (!body) return;
     state.cursor = null;
     state.total = 0;
     state.exhausted = false;
     // Clear the body but preserve the first batch (already rendered by
     // Jinja). For the simplest behavior, refetch from the server and
-    // replace the entire tbody. U4 (2026-07-16): pass the current
+    // replace the entire body. U4 (2026-07-16): pass the current
     // control-panel filter so the immediate refetch honors it (was
     // previously fetching the un-filtered feed on every toggle).
     var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
     fetchBatch(filters).then(function (payload) {
       if (!payload || !payload.rows) return;
-      tbody.innerHTML = '';
+      body.innerHTML = '';
       payload.rows.forEach(function (row) {
-        tbody.appendChild(renderRow(row));
+        body.appendChild(renderRow(row));
       });
-      attachCellClickHandlers(tbody);
+      attachCellClickHandlers(body);
       state.cursor = payload.next_cursor;
       state.total = payload.rows.length;
       if (!state.cursor) {
@@ -351,8 +390,8 @@
     if (!root) return;
     var sentinel = $('[data-pw-feed-sentinel]', root);
     if (!sentinel) return;
-    var tbody = $('[data-pw-feed-body]', root);
-    if (!tbody) return;
+    var body = $('[data-pw-feed-body]', root);
+    if (!body) return;
 
     var observer = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
@@ -366,7 +405,7 @@
         state.fetching = true;
         // Read the current cursor from the last rendered row
         // (covers filter changes that re-fetched the first page).
-        state.cursor = readCursorFromLastRow(tbody);
+        state.cursor = readCursorFromLastRow(body);
         var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
         fetchBatch(filters).then(function (payload) {
           if (!payload || !payload.rows) {
@@ -374,9 +413,9 @@
             return;
           }
           payload.rows.forEach(function (row) {
-            tbody.appendChild(renderRow(row));
+            body.appendChild(renderRow(row));
           });
-          attachCellClickHandlers(tbody);
+          attachCellClickHandlers(body);
           formatVisibleTimestamps();
           state.cursor = payload.next_cursor;
           state.total += payload.rows.length;
@@ -437,8 +476,8 @@
       if (document.hidden) return;
       var root = getFeedRoot();
       if (!root) return;
-      var tbody = $('[data-pw-feed-body]', root);
-      if (!tbody) return;
+      var body = $('[data-pw-feed-body]', root);
+      if (!body) return;
       // Refetch the first page and replace the body. U4: pass the
       // current control-panel filter so the auto-refresh keeps the
       // feed aligned with whatever the user has selected.
@@ -446,11 +485,11 @@
       var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
       fetchBatch(filters).then(function (payload) {
         if (!payload || !payload.rows) return;
-        tbody.innerHTML = '';
+        body.innerHTML = '';
         payload.rows.forEach(function (row) {
-          tbody.appendChild(renderRow(row));
+          body.appendChild(renderRow(row));
         });
-        attachCellClickHandlers(tbody);
+        attachCellClickHandlers(body);
         formatVisibleTimestamps();
         state.cursor = payload.next_cursor;
         state.total = payload.rows.length;
@@ -473,15 +512,16 @@
 
   function init() {
     if (!getFeedRoot()) return;
-    var tbody = $('[data-pw-feed-body]');
-    if (tbody) attachCellClickHandlers(tbody);
+    var body = $('[data-pw-feed-body]');
+    if (body) attachCellClickHandlers(body);
     // Format the server-rendered timestamps immediately so the
     // user never sees the raw Twitter-format string.
     formatVisibleTimestamps();
+    paintAllSignals(document);
     // Click anywhere outside the expanded cell collapses it.
     document.addEventListener('click', function (e) {
-      if (!e.target.closest('[data-pw-cell-truncated]')) {
-        $$('td.is-expanded').forEach(function (td) { td.classList.remove('is-expanded'); });
+      if (!e.target.closest('.feed-row .text[data-text-cycle]')) {
+        $$('.text.is-expanded').forEach(function (el) { el.classList.remove('is-expanded'); });
       }
     });
     wireSentinel();

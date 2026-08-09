@@ -90,6 +90,7 @@ class RegressionNet:
         self._check_top_voices(html)
         self._check_feed_engagement(html)
         self._check_feed_avatars(html)
+        self._check_feed_row_shape(html)
         self._check_filter_contract(html)
         self._check_chart_contract(html)
         self._check_chart_no_hover_isolate(session)
@@ -422,6 +423,55 @@ class RegressionNet:
             self.assert_(f"avatars have varied colors ({unique_colors} unique)",
                          unique_colors >= 2,
                          f"only {unique_colors} unique colors across {len(avatars)} avatars")
+
+    def _check_feed_row_shape(self, html):
+        # iter 14 (U5): feed row must match v22-master mockup-canon shape.
+        # Per docs/ideation/mockups/06-tier1-composed.v22-master.html L1131-1245:
+        #   .feed-row > .feed-row-shell > (.feed-main | .feed-signals[4 .sig-rows])
+        rows = re.findall(r'<div class="feed-row"[^>]*data-pw-feed-row[^>]*>', html)
+        self.assert_(">= 1 .feed-row with data-pw-feed-row attr",
+                     len(rows) >= 1,
+                     f"got {len(rows)} rows; live page may still render legacy <tr> shape")
+        # Each row must carry the data-* signals for the JS painter.
+        for attr in ("data-sentiments=", "data-post-types=", "data-nat-cn=", "data-nat-us=", "data-unsanctioned="):
+            self.assert_(f"feed rows carry {attr}",
+                         attr in html,
+                         f"{attr} missing — JS signal-painter won't run")
+        # feed-row-shell with tint class
+        shells = re.findall(r'<div class="feed-row-shell tint-\w+"', html)
+        self.assert_(">= 1 .feed-row-shell with tint-* class",
+                     len(shells) >= 1,
+                     f"got {len(shells)} shells; template may not have migrated to mockup shape")
+        # feed-main + feed-signals column structure
+        mains = re.findall(r'<div class="feed-main">', html)
+        signals = re.findall(r'<div class="feed-signals"[^>]*>', html)
+        self.assert_(".feed-main present (>=1 per row)",
+                     len(mains) >= 1,
+                     f"got {len(mains)}")
+        self.assert_(".feed-signals present (>=1 per row)",
+                     len(signals) >= 1,
+                     f"got {len(signals)}")
+        # 4 sig-row children inside feed-signals
+        for sig in ("sig-sentiment", "sig-post-type", "sig-nat", "sig-unsanctioned"):
+            self.assert_(f".sig-row.{sig} present",
+                         f'class="sig-row {sig}"' in html,
+                         f"missing — right column missing emoji signals")
+        # Inside feed-main: avatar, head (handle + meta), text, engagement
+        self.assert_(".feed-main .avatar present",
+                     re.search(r'<div class="feed-main">\s*<span class="avatar"', html, re.DOTALL) is not None,
+                     "avatar must be first child of .feed-main")
+        self.assert_(".feed-main .head present",
+                     '<div class="head">' in html,
+                     "head row missing from .feed-main")
+        self.assert_(".feed-main .ts-abs present",
+                     'class="ts-abs"' in html,
+                     "absolute timestamp span missing")
+        self.assert_(".text-layer-tag present (en 'synthesis' or zh '综合')",
+                     'class="text-layer-tag"' in html,
+                     "text layer tag missing — synthesis/综合 indicator absent")
+        self.assert_(".engagement with 4 .followers/.likes/.rts/.replies present",
+                     all(f'class="{k}"' in html for k in ('followers', 'likes', 'rts', 'replies')),
+                     "engagement spans missing one of followers/likes/rts/replies")
 
     def _check_filter_contract(self, html):
         # Net C — Filter contract (unchanged wire).

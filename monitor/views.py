@@ -472,6 +472,139 @@ def _engagement_pretty(followers: int, likes: int, rts: int, replies: int) -> di
     }
 
 
+def _feed_relative_age(when, now=None) -> str:
+    """Pretty relative age for feed row meta (e.g. "12m" / "2h" / "Mon DD").
+
+    Mirrors the mockup pattern: <24h → "Nm" / "Nh"; <7d → weekday short;
+    same year → "Mon DD"; older → "Mon DD YYYY".
+    """
+    if not when:
+        return ""
+    from datetime import datetime as _dt
+    if isinstance(when, str):
+        try:
+            when = _dt.fromisoformat(when.replace("Z", "+00:00"))
+        except ValueError:
+            return ""
+    if not isinstance(when, _dt):
+        return ""
+    n = now or _dt.now(when.tzinfo) if when.tzinfo else _dt.now()
+    delta = int((n - when).total_seconds())
+    if delta < 0:
+        return "just now"
+    if delta < 60:
+        return "just now"
+    if delta < 60 * 60:
+        return f"{delta // 60}m"
+    if delta < 60 * 60 * 24:
+        return f"{delta // 3600}h"
+    if delta < 60 * 60 * 24 * 7:
+        return when.strftime("%a")
+    if n.year == when.year:
+        return when.strftime("%b %-d") if hasattr(when, "strftime") else when.strftime("%b %d")
+    return when.strftime("%b %-d %Y") if hasattr(when, "strftime") else when.strftime("%b %d %Y")
+
+
+def _feed_abs_stamp(when, tz_mode: str = "local") -> str:
+    """Absolute HH:MM stamp for the meta line. Empty when >= 24h old.
+
+    Mockup pattern: <24h → "(10:21 本地)" or "(10:21 CA)"; >=24h → "".
+    """
+    if not when:
+        return ""
+    from datetime import datetime as _dt
+    if isinstance(when, str):
+        try:
+            when = _dt.fromisoformat(when.replace("Z", "+00:00"))
+        except ValueError:
+            return ""
+    if not isinstance(when, _dt):
+        return ""
+    now = _dt.now(when.tzinfo) if when.tzinfo else _dt.now()
+    delta = int((now - when).total_seconds())
+    if delta >= 60 * 60 * 24:
+        return ""
+    if tz_mode == "ca":
+        from zoneinfo import ZoneInfo
+        try:
+            t = when.astimezone(ZoneInfo("America/Los_Angeles"))
+            return f"({t.strftime('%H:%M')} CA)"
+        except Exception:
+            pass
+    return f"({when.strftime('%H:%M')} 本地)"
+
+
+def _feed_signal_keys(classifications: dict[str, dict[str, Any]]) -> tuple[list[str], list[str], str, str]:
+    """Flatten per-brand classifications into feed-row signal keys.
+
+    Returns (sentiment_keys, post_type_keys, nat_cn_key, nat_us_key) used by
+    the JS signal-painter to populate the .sig-* rows. Order is stable
+    (SENT_ORDER / TYPE_ORDER).
+    """
+    sent_order = ["positive", "neutral", "negative", "mixed"]
+    type_order = [
+        "buzz_releases", "hands_on_usage", "performance_comparisons",
+        "feedback_questions", "advertising_marketing", "event_announcement",
+    ]
+    sents: set[str] = set()
+    types: set[str] = set()
+    cn_keys: set[str] = set()
+    us_keys: set[str] = set()
+    for cls in classifications.values():
+        for v in (cls.get("sentiments") or []):
+            k = (v.get("key") if isinstance(v, dict) else v) if v else None
+            if k:
+                sents.add(k)
+        for v in (cls.get("post_types") or []):
+            k = (v.get("key") if isinstance(v, dict) else v) if v else None
+            if k:
+                types.add(k)
+        cn = cls.get("cn_nationalism")
+        if cn:
+            k = (cn.get("key") if isinstance(cn, dict) else cn) if cn else None
+            if k and k != "none":
+                cn_keys.add(k)
+        us = cls.get("us_nationalism")
+        if us:
+            k = (us.get("key") if isinstance(us, dict) else us) if us else None
+            if k and k != "none":
+                us_keys.add(k)
+    sent_list = [k for k in sent_order if k in sents]
+    for k in sorted(sents):
+        if k not in sent_list:
+            sent_list.append(k)
+    type_list = [k for k in type_order if k in types]
+    for k in sorted(types):
+        if k not in type_list:
+            type_list.append(k)
+    nat_cn = sorted(cn_keys)[0] if cn_keys else ""
+    nat_us = sorted(us_keys)[0] if us_keys else ""
+    return sent_list, type_list, nat_cn, nat_us
+
+
+def _feed_tint_class(sentiment_keys: list[str]) -> str:
+    """Map sentiment keys → mockup tint class on .feed-row-shell."""
+    s = set(sentiment_keys)
+    has_p = "positive" in s
+    has_n = "negative" in s
+    has_m = "mixed" in s
+    if has_p and has_n and has_m:
+        return "tint-pos-neg-mixed"
+    if has_p and has_n:
+        return "tint-pos-neg"
+    if has_p and has_m:
+        return "tint-pos-mixed"
+    if has_n and has_m:
+        return "tint-neg-mixed"
+    if has_p:
+        return "tint-positive"
+    if has_n:
+        return "tint-negative"
+    if has_m:
+        return "tint-mixed"
+    return "tint-neutral"
+
+
 def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = None) -> dict[str, Any]:
     """Serialize a Post ORM instance to the JSON wire shape for the feed.
 
@@ -564,6 +697,12 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
     created_at_iso = created_at_raw
     unsanctioned = enriched.get("unsanctioned", False) if enriched else False
 
+    # iter 14 (U5): mockup-canon signal keys + relative/abs stamps.
+    sent_keys, type_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
+    tint_class = _feed_tint_class(sent_keys)
+    rel_age = _feed_relative_age(post.created_at)
+    abs_stamp = _feed_abs_stamp(post.created_at)
+
     return {
         "tweet_id": post.tweet_id,
         "created_at": created_at_raw,
@@ -592,6 +731,14 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
         "classifications": classifications,
         "unsanctioned": unsanctioned,
         "account": account_wire,
+        # iter 14 (U5 feed row structure) — mockup-canon shape for .feed-row
+        "sentiment_keys": sent_keys,
+        "post_type_keys": type_keys,
+        "nat_cn": nat_cn,
+        "nat_us": nat_us,
+        "tint_class": tint_class,
+        "meta_text": rel_age,
+        "ts_abs_text": abs_stamp,
     }
 
 

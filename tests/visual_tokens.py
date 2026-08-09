@@ -61,6 +61,43 @@ VISUAL_TOKENS = {
         "border-color": "rgb(243, 244, 246)",
         "_before": "BEFORE 2026-08-08: color rgb(0, 0, 238), border-color rgb(0, 0, 238) — browser default link styles inheriting through .feed-row anchor descendants.",
     },
+    # iter 14 (U5): feed row layout pinned to mockup-canon 2-column grid.
+    # Mockup source: docs/ideation/mockups/06-tier1-composed.v22-master.html L564-573
+    # and monitor/static/home-v20.css L498-571.
+    ".feed-row-shell": {
+        "display": "flex",
+        "flex-direction": "row",
+        "border-radius": "8px",
+        "padding": "6px 6px 5px",
+        "_note": "iter 14: pinned to mockup 2-column shell; tint-* class adds background.",
+    },
+    ".feed-main": {
+        "flex-grow": "1",
+        "flex-shrink": "1",
+        "flex-basis": "80%",
+        "display": "flex",
+        "_note": "iter 14: 80% column for handle/meta/text/engagement.",
+    },
+    ".feed-signals": {
+        "flex-grow": "0",
+        "flex-shrink": "0",
+        "flex-basis": "20%",
+        "max-width": "20%",
+        "display": "flex",
+        "flex-direction": "column",
+        "_note": "iter 14: 20% column for 4 emoji .sig-rows.",
+    },
+    ".feed-row .avatar": {
+        "border-radius": "50%",
+        "width": "22px",
+        "height": "22px",
+        "_note": "iter 14: avatar circle per row inside .feed-main.",
+    },
+    ".feed-signals .sig-row": {
+        "min-height": "16px",
+        "display": "flex",
+        "_note": "iter 14: emoji row in right column.",
+    },
 }
 
 

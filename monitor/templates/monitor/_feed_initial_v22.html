@@ -1,0 +1,64 @@
+{% load monitor_filters %}
+{% load i18n %}
+{% for row in feed.rows %}
+  {# iter 14 (U5 feed row structure): mockup-canon 2-column grid. #}
+  {# Layout (per docs/ideation/mockups/06-tier1-composed.v22-master.html): #}
+  {#   .feed-row                                                  <- outer (data-* feeds JS signal painter + tint) #}
+  {#     .feed-row-shell[tint-class]                              <- flex row, tinted background #}
+  {#       .feed-main    [flex 1 1 80%]   : avatar + handle + meta + text-layer-tag + text + engagement #}
+  {#       .feed-signals [flex 0 0 20%]   : 4 .sig-row children (sentiment / post-type / nat / unsanctioned) #}
+  {# #}
+  <div class="feed-row"
+       data-pw-feed-row
+       data-tweet-id="{{ row.tweet_id }}"
+       data-created-at-iso="{{ row.created_at_iso|default:'' }}"
+       data-sentiments="{{ row.sentiment_keys|join:',' }}"
+       data-post-types="{{ row.post_type_keys|join:',' }}"
+       data-nat-cn="{{ row.nat_cn|default:'' }}"
+       data-nat-us="{{ row.nat_us|default:'' }}"
+       data-unsanctioned="{{ row.unsanctioned|yesno:'1,' }}"
+       data-tint="{{ row.tint_class|default:'tint-neutral' }}">
+    <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
+      <div class="feed-main">
+        <span class="avatar" style="background: {{ row.avatar_color }}" aria-hidden="true">{{ row.avatar_initials }}</span>
+        <div class="body">
+          <div class="head">
+            {% with handle=row.account.handle|default:'' %}
+              <span class="handle">
+                {% if handle %}
+                  <a class="feed-handle-link"
+                     href="https://x.com/{{ handle|cut:'@' }}"
+                     target="_blank" rel="noopener noreferrer">{{ handle }}</a>
+                {% else %}@unknown{% endif %}
+              </span>
+            {% endwith %}
+            <span class="meta">· {{ row.meta_text|default:'' }} <span class="ts-abs">{{ row.ts_abs_text|default:'' }}</span></span>
+          </div>
+          <div class="text" data-text-cycle role="button" tabindex="0">
+            {% if active_locale == 'zh_cn' %}
+              <span class="text-layer-tag">{% trans "综合" %}</span>{{ row.text_translated|default:row.text_original|default:row.text|default:'NULL' }}
+            {% elif active_locale == 'original' %}
+              {{ row.text_original|default:row.text|default:'NULL' }}
+            {% else %}
+              <span class="text-layer-tag">{% trans "synthesis" %}</span>{{ row.text_en|default:row.text_translated|default:row.text|default:'NULL' }}
+            {% endif %}
+          </div>
+          <div class="engagement">
+            <span class="followers">{{ row.engagement_pretty.followers }}</span>
+            <span class="likes">{{ row.engagement_pretty.likes }}</span>
+            <span class="rts">{{ row.engagement_pretty.retweets }}</span>
+            <span class="replies">{{ row.engagement_pretty.replies }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="feed-signals" aria-hidden="true">
+        <div class="sig-row sig-sentiment" data-sig-sentiment></div>
+        <div class="sig-row sig-post-type" data-sig-post-type></div>
+        <div class="sig-row sig-nat" data-sig-nat></div>
+        <div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>
+      </div>
+    </div>
+  </div>
+{% empty %}
+  <div class="feed-row"><div class="feed-row-shell tint-neutral"><div class="feed-main"><div class="body"><div class="text muted-cell">{% trans "no posts in window" %}</div></div></div><div class="feed-signals" aria-hidden="true"></div></div></div>
+{% endfor %}
