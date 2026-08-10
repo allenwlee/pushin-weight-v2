@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -24,9 +25,12 @@ from django.test import Client
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 from tests.mockup_spec import DEFAULT_SOURCE, MockupSpec, load_spec
-from tests.shell_diff import parse_rendered_html, select_one
-from tests.test_home_v22_mockup_diff import _fixture_from_oracle, _seed_real_home_orm
-from tests.v22_support import V22_TEST_USER_EMAIL
+from tests.shell_diff import AUTHORED_REGIONS, parse_rendered_html, select_one
+from tests.v22_support import (
+    V22_TEST_USER_EMAIL,
+    fixture_from_oracle,
+    seed_real_home_orm,
+)
 
 pytestmark = pytest.mark.requires_postgres
 
@@ -35,14 +39,7 @@ VIEWPORTS = {
     "mobile": {"width": 390, "height": 844},
 }
 LOCALES = ("zh_cn", "en", "original")
-REGION_SELECTORS = {
-    "topbar": "header.topbar",
-    "filters": "nav.filter-bar",
-    "chart": "section.home-chart-wrap",
-    "feed": "section.feed-strip",
-    "locale": "nav.locale-toggle",
-    "timezone": "[data-tz-widget]",
-}
+REGION_SELECTORS = dict(AUTHORED_REGIONS)
 STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
 # The threshold is intentionally below a wholly unrelated frame.  It is not a
 # checked-in image baseline: every run compares fresh captures to the mockup.
@@ -51,6 +48,7 @@ STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
 # frame or a materially rearranged shell.
 MAX_CHANGED_PIXEL_FRACTION = 0.45
 PIXEL_DELTA = 32
+DEFAULT_BROWSER_ARTIFACT_RETENTION = 10
 
 
 class _QuietStaticHandler(SimpleHTTPRequestHandler):
@@ -75,12 +73,53 @@ def serve_mockup_over_http() -> Iterator[str]:
         server.server_close()
 
 
+def _prune_default_artifact_runs(root: Path, *, keep: int) -> None:
+    """Best-effort cleanup that never removes the report being written."""
+    runs = sorted(
+        (path for path in root.iterdir() if path.is_dir() and not path.is_symlink()),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
+    stale_runs = runs[:-keep] if keep else runs
+    for run in stale_runs:
+        shutil.rmtree(run, ignore_errors=True)
+
+
 def _artifact_dir() -> Path:
     configured = os.environ.get("V22_BROWSER_REPORT_DIR")
     root = Path(configured) if configured else Path.home() / ".pytest-v22-browser-artifacts"
+    root.mkdir(parents=True, exist_ok=True)
+    if not configured:
+        _prune_default_artifact_runs(root, keep=DEFAULT_BROWSER_ARTIFACT_RETENTION - 1)
     path = root / datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    path.mkdir(parents=True, exist_ok=True)
+    path.mkdir(exist_ok=True)
     return path
+
+
+def test_default_browser_artifact_retention_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default report root remains inspectable without growing forever."""
+    monkeypatch.delenv("V22_BROWSER_REPORT_DIR", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    root = tmp_path / ".pytest-v22-browser-artifacts"
+    for index in range(10):
+        (root / f"old-{index}").mkdir(parents=True)
+
+    artifact_dir = _artifact_dir()
+
+    assert artifact_dir.is_dir()
+    assert len([path for path in root.iterdir() if path.is_dir()]) <= DEFAULT_BROWSER_ARTIFACT_RETENTION
+
+
+def test_configured_browser_artifact_dir_is_not_pruned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit report directory retains every artifact for its owner."""
+    root = tmp_path / "operator-reports"
+    for index in range(DEFAULT_BROWSER_ARTIFACT_RETENTION):
+        (root / f"old-{index}").mkdir(parents=True)
+    monkeypatch.setenv("V22_BROWSER_REPORT_DIR", str(root))
+
+    artifact_dir = _artifact_dir()
+
+    assert artifact_dir.is_dir()
+    assert len([path for path in root.iterdir() if path.is_dir()]) == DEFAULT_BROWSER_ARTIFACT_RETENTION + 1
 
 
 def _freeze_clock(context: BrowserContext) -> None:
@@ -219,14 +258,14 @@ def _assert_parser_regions(page: Page, spec: MockupSpec, *, locale: str, viewpor
 class HomeV22BrowserTests(StaticLiveServerTestCase):
     """Root-route, real-PostgreSQL browser proof for v22's visible shell."""
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        super().setUpClass()
-        cls.fixture = _fixture_from_oracle()
-        _seed_real_home_orm(cls.fixture)
+    def setUp(self) -> None:
+        """Rebuild browser-visible fixtures after TransactionTestCase flushes."""
+        super().setUp()
+        self.fixture = fixture_from_oracle()
+        seed_real_home_orm(self.fixture)
         from django.contrib.auth import get_user_model
 
-        cls.browser_user = get_user_model().objects.create_user(
+        self.browser_user = get_user_model().objects.create_user(
             username="v22-browser-verifier",
             email=V22_TEST_USER_EMAIL,
             password="v22-browser-test-only-password",
@@ -247,6 +286,27 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         context.add_cookies(cookies)
         return context
 
+    def test_zh_hans_renders_chinese_chrome_in_browser(self) -> None:
+        """The Django ``zh_hans`` alias keeps v22 chrome Chinese after JS initializes."""
+        cookies = self._authenticated_cookies("zh_hans")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._authenticated_context(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/", wait_until="networkidle")
+                    page.wait_for_function("() => window.__pwTz && window.pwApplyChrome")
+                    self.assertEqual(page.locator("body").get_attribute("data-pw-locale"), "zh_hans")
+                    self.assertEqual(page.locator("nav.locale-toggle").get_attribute("aria-label"), "显示语言")
+                    self.assertEqual(page.locator("[data-pw-locale-btn='zh_cn']").inner_text(), "中文")
+                    self.assertEqual(page.locator("[data-pw-locale-btn='zh_cn']").get_attribute("class"), "is-active")
+                    self.assertEqual(page.locator("[data-tz-zone]").inner_text(), "本地")
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_fixture_root_route_matches_mockup_in_browser(self) -> None:
         spec = load_spec()
         artifacts = _artifact_dir()
@@ -266,6 +326,33 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         try:
                             page.goto(f"{self.live_server_url}/", wait_until="networkidle")
                             reference.goto(mockup_url, wait_until="networkidle")
+                            reference.evaluate(
+                                """({locale, chrome}) => {
+                                  const dict = chrome[locale];
+                                  const useZh = locale === 'zh_cn';
+                                  document.body.setAttribute('data-pw-locale', locale);
+                                  document.querySelectorAll('[data-i18n]').forEach((element) => {
+                                    const value = dict[element.getAttribute('data-i18n')];
+                                    if (value != null) element.textContent = value;
+                                  });
+                                  const localeNav = document.querySelector('.locale-toggle');
+                                  if (localeNav) {
+                                    localeNav.setAttribute('aria-label', dict.locale_aria);
+                                    localeNav.querySelectorAll('[data-pw-locale-btn]').forEach((button) => {
+                                      button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
+                                    });
+                                  }
+                                  document.querySelectorAll('.window-toggle:not(.locale-toggle)').forEach((nav) => {
+                                    nav.setAttribute('aria-label', dict.window_aria);
+                                    nav.querySelectorAll('button').forEach((button) => {
+                                      button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
+                                    });
+                                  });
+                                  const timezone = document.querySelector('[data-tz-widget]');
+                                  if (timezone) timezone.setAttribute('title', dict.tz_title);
+                                }""",
+                                {"locale": locale, "chrome": spec.chrome},
+                            )
                             page.wait_for_function(
                                 """() => window.__pwTz && document.querySelector('[data-tz-time]')?.textContent !== '00:00'"""
                             )
@@ -296,6 +383,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 self.assertLess(actual_geometry["chart"]["y"], actual_geometry["feed"]["y"])
 
                             tz = page.locator("[data-tz-widget]")
+                            feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
+                            initial_feed_stamp = feed_stamp.text_content()
                             initial_time = tz.locator("[data-tz-time]").text_content()
                             self.assertRegex(initial_time or "", r"^\d{2}:\d{2}$")
                             self.assertNotEqual(initial_time, "00:00", "timezone runtime left its authored placeholder unchanged")
@@ -303,6 +392,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             page.wait_for_function("() => window.__pwTz?.mode === 'ca'")
                             self.assertEqual(tz.get_attribute("data-tz-active"), "ca")
                             self.assertIn("CA", tz.inner_text())
+                            self.assertNotEqual(feed_stamp.text_content(), initial_feed_stamp)
 
                             actual_png = page.screenshot()
                             reference_png = reference.screenshot()

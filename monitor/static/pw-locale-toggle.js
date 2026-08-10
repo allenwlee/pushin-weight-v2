@@ -46,7 +46,7 @@
   };
 
   function chromeLocale(locale) {
-    return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh-cn' ? 'zh_cn' : 'en';
+    return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh-cn' || locale === 'zh_hans' || locale === 'zh-hans' ? 'zh_cn' : 'en';
   }
 
   function applyChrome(locale) {
@@ -67,7 +67,7 @@
       localeNav.setAttribute('aria-label', dict.locale_aria);
       localeNav.querySelectorAll('[data-pw-locale-btn]').forEach(function (button) {
         button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
-        button.classList.toggle('is-active', button.getAttribute('data-pw-locale-btn') === locale);
+        button.classList.toggle('is-active', chromeLocale(button.getAttribute('data-pw-locale-btn')) === key);
       });
     }
 

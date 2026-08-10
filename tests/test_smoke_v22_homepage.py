@@ -52,6 +52,12 @@ def test_missing_hook_and_cross_origin_asset_are_detected() -> None:
     assert "pw-tz.js" not in smoke.required_asset_urls(html, "https://app.example/")
 
 
+def test_shell_hooks_in_comments_or_scripts_do_not_count_as_rendered_elements() -> None:
+    html = "<!-- data-pw-shell=\"v20\" data-pw-chart data-pw-feed data-tz-widget data-tz-time -->"
+    html += "<script>const hooks = 'data-pw-chart data-pw-feed data-tz-widget data-tz-time';</script>"
+    assert smoke.missing_shell_hooks(html) == list(smoke.SHELL_HOOKS)
+
+
 def test_cookie_parser_keeps_cookie_values_out_of_diagnostics() -> None:
     cookies = smoke._cookies_from_header("Cookie: sessionid=opaque-value; csrftoken=another-value")
     assert [cookie["name"] for cookie in cookies] == ["sessionid", "csrftoken"]

@@ -13,6 +13,14 @@ from typing import Any
 from tests.mockup_spec import MockupSpec
 
 _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+AUTHORED_REGIONS = (
+    ("topbar", "header.topbar"),
+    ("filters", "nav.filter-bar"),
+    ("chart", "section.home-chart-wrap"),
+    ("feed", "section.feed-strip"),
+    ("locale", "nav.locale-toggle"),
+    ("timezone", "[data-tz-widget]"),
+)
 
 
 class _Parser(HTMLParser):
@@ -196,8 +204,7 @@ def first_authored_difference(spec: MockupSpec, rendered_html: str, *, locale: s
                 node["children"][index] = localize_expected(child)
         return node
 
-    regions = (("topbar", "header.topbar"), ("filters", "nav.filter-bar"), ("chart", "section.home-chart-wrap"), ("feed", "section.feed-strip"), ("locale", "nav.locale-toggle"), ("timezone", "[data-tz-widget]"))
-    for region, selector in regions:
+    for region, selector in AUTHORED_REGIONS:
         expected = localize_expected(spec.regions[region])
         actual = select_one(rendered, selector=selector, locale=locale, viewport=viewport, oracle_source=str(spec.source))
         diff = _compare_nodes(expected, actual, region=region, selector=selector, path=selector)

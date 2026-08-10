@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -25,7 +24,7 @@ from html.parser import HTMLParser
 from http.cookies import CookieError, SimpleCookie
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 URL_ENV = "V22_SMOKE_URL"
 COOKIE_ENV = "V22_SMOKE_COOKIE"
@@ -35,11 +34,11 @@ BROWSER_ENV = "V22_SMOKE_BROWSER"
 # the full template.  The smoke check should fail on a cutover/login page but
 # must not turn mutable production data into a visual golden test.
 SHELL_HOOKS = {
-    "root shell": r"\bdata-pw-shell\s*=\s*['\"]v20['\"]",
-    "chart entry point": r"\bdata-pw-chart\b",
-    "feed entry point": r"\bdata-pw-feed\b",
-    "timezone widget": r"\bdata-tz-widget\b",
-    "timezone time node": r"\bdata-tz-time\b",
+    "root shell": ("data-pw-shell", "v20"),
+    "chart entry point": ("data-pw-chart", None),
+    "feed entry point": ("data-pw-feed", None),
+    "timezone widget": ("data-tz-widget", None),
+    "timezone time node": ("data-tz-time", None),
 }
 REQUIRED_ASSETS = (
     "home-v20.css",
@@ -59,6 +58,29 @@ class HttpResult:
     status: int | None
     body: str
     final_url: str
+    content_type: str = ""
+
+
+class _ShellHookParser(HTMLParser):
+    """Collect real element attributes without accepting script/comment text."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.attributes: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.attributes.append(dict(attrs))
+
+
+class _SameOriginRedirectHandler(HTTPRedirectHandler):
+    """Never replay an operator cookie onto another origin after a redirect."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        source = urlsplit(request.full_url)
+        target = urlsplit(newurl)
+        if (source.scheme, source.netloc) != (target.scheme, target.netloc):
+            return None
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 
 class _AssetParser(HTMLParser):
@@ -118,7 +140,17 @@ def _cookies_from_header(value: str) -> list[dict[str, str]]:
 
 def missing_shell_hooks(html: str) -> list[str]:
     """Return human-safe labels for required v22 shell entry hooks."""
-    return [label for label, pattern in SHELL_HOOKS.items() if not re.search(pattern, html)]
+    parser = _ShellHookParser()
+    parser.feed(html)
+    parser.close()
+    missing = []
+    for label, (attribute, expected_value) in SHELL_HOOKS.items():
+        if not any(
+            attribute in attrs and (expected_value is None or attrs[attribute] == expected_value)
+            for attrs in parser.attributes
+        ):
+            missing.append(label)
+    return missing
 
 
 def _required_asset_name(filename: str) -> str | None:
@@ -161,11 +193,12 @@ def _fetch(url: str, cookie_header: str, timeout: float) -> HttpResult:
         },
     )
     try:
-        with urlopen(request, timeout=timeout) as response:  # nosec B310: operator-controlled URL
+        with build_opener(_SameOriginRedirectHandler()).open(request, timeout=timeout) as response:  # nosec B310: operator-controlled URL
             return HttpResult(
                 status=response.getcode(),
                 body=response.read().decode("utf-8", errors="replace"),
                 final_url=response.geturl(),
+                content_type=response.headers.get_content_type(),
             )
     except HTTPError as exc:
         return HttpResult(status=exc.code, body="", final_url=url)
@@ -202,7 +235,7 @@ def _browser_timezone_check(
                     page.wait_for_function(
                         """() => {
                           const value = document.querySelector('[data-tz-time]')?.textContent?.trim();
-                          return /^\\d{2}:\\d{2}$/.test(value || '') && value !== '00:00';
+                          return window.__pwTz && /^\\d{2}:\\d{2}$/.test(value || '');
                         }""",
                         timeout=timeout_ms,
                     )
@@ -273,8 +306,11 @@ def main(argv: list[str] | None = None) -> int:
             failures.append(f"required local asset is not referenced by root: {name}")
             continue
         result = _fetch(asset_url, cookie_header, args.timeout)
-        if result.status == 200:
+        expected_type = {"text/css"} if name.endswith(".css") else {"application/javascript", "text/javascript"}
+        if result.status == 200 and result.content_type in expected_type:
             passes.append(f"local asset {name} -> 200")
+        elif result.status == 200:
+            failures.append(f"local asset {name} returned {result.content_type or 'unknown content type'}")
         elif result.status is None:
             failures.append(f"local asset {name} request could not be completed")
         else:

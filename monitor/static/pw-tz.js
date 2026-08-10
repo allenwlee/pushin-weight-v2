@@ -8,17 +8,39 @@
   var CA_TIMEZONE = 'America/Los_Angeles';
   var active = root.getAttribute('data-tz-active') === 'ca' ? 'ca' : 'local';
   var CA_ICON_HTML = '<span class="tz-ca-icon" title="California" aria-label="California">CA</span>';
+  var formattersByZone = Object.create(null);
+
+  function formattersFor(timezone) {
+    var key = timezone || 'local';
+    if (!formattersByZone[key]) {
+      var timeOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+      var hourOptions = { hour: 'numeric', hourCycle: 'h23' };
+      if (timezone) {
+        timeOptions.timeZone = timezone;
+        hourOptions.timeZone = timezone;
+      }
+      formattersByZone[key] = {
+        time: new Intl.DateTimeFormat('en-GB', timeOptions),
+        hour: new Intl.DateTimeFormat('en-GB', hourOptions)
+      };
+    }
+    return formattersByZone[key];
+  }
+
+  function setText(element, value) {
+    if (element.textContent !== value) element.textContent = value;
+  }
+
+  function setHTML(element, value) {
+    if (element.innerHTML !== value) element.innerHTML = value;
+  }
 
   function zoneTime(date, timezone) {
-    var options = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
-    if (timezone) options.timeZone = timezone;
-    return new Intl.DateTimeFormat('en-GB', options).format(date);
+    return formattersFor(timezone).time.format(date);
   }
 
   function zoneHour(timezone) {
-    var options = { hour: 'numeric', hourCycle: 'h23' };
-    if (timezone) options.timeZone = timezone;
-    var hour = new Intl.DateTimeFormat('en-GB', options).formatToParts(new Date()).find(function (part) {
+    var hour = formattersFor(timezone).hour.formatToParts(new Date()).find(function (part) {
       return part.type === 'hour';
     });
     return hour ? Number(hour.value) : 0;
@@ -37,25 +59,26 @@
 
   function localLabel() {
     var key = document.body.getAttribute('data-pw-locale');
-    return key === 'zh_cn' || key === 'zh-CN' || key === 'zh-cn' ? '本地' : 'local';
+    return key === 'zh_cn' || key === 'zh-CN' || key === 'zh-cn' || key === 'zh_hans' || key === 'zh-hans' ? '本地' : 'local';
   }
 
   function renderFeedStamps() {
     var now = Date.now();
     var timezone = activeTimezone();
-    document.querySelectorAll('.feed-row[data-posted-offset-min]').forEach(function (row) {
-      var minutes = Number(row.getAttribute('data-posted-offset-min')) || 0;
-      var stamp = row.querySelector('[data-ts-abs]');
-      if (!stamp) return;
+    document.querySelectorAll('.feed-row[data-created-at-iso]').forEach(function (row) {
+      var createdAt = new Date(row.getAttribute('data-created-at-iso') || '');
+      var stamp = row.querySelector('.ts-abs');
+      if (!stamp || Number.isNaN(createdAt.getTime())) return;
+      var minutes = Math.max(0, Math.floor((now - createdAt.getTime()) / (60 * 1000)));
       if (minutes >= 24 * 60) {
-        stamp.textContent = '';
-        stamp.hidden = true;
+        if (stamp.textContent !== '') stamp.textContent = '';
+        if (!stamp.hidden) stamp.hidden = true;
         return;
       }
-      stamp.hidden = false;
-      var time = zoneTime(new Date(now - minutes * 60 * 1000), timezone);
-      if (active === 'ca') stamp.innerHTML = '(' + time + ' ' + CA_ICON_HTML + ')';
-      else stamp.textContent = '(' + time + ' ' + localLabel() + ')';
+      if (stamp.hidden) stamp.hidden = false;
+      var time = zoneTime(createdAt, timezone);
+      if (active === 'ca') setHTML(stamp, '(' + time + ' ' + CA_ICON_HTML + ')');
+      else setText(stamp, '(' + time + ' ' + localLabel() + ')');
     });
   }
 
@@ -68,14 +91,14 @@
     var timeElement = root.querySelector('[data-tz-time]');
     var zone = root.querySelector('[data-tz-zone]');
     var pair = root.querySelector('[data-tz-pair]');
-    if (emoji) emoji.textContent = dayEmoji(zoneHour(timezone));
-    if (timeElement) timeElement.textContent = time;
+    if (emoji) setText(emoji, dayEmoji(zoneHour(timezone)));
+    if (timeElement) setText(timeElement, time);
     if (zone) {
       zone.classList.toggle('is-ca', active === 'ca');
       if (active === 'ca') zone.innerHTML = CA_ICON_HTML;
-      else zone.textContent = localLabel();
+      else setText(zone, localLabel());
     }
-    if (pair) pair.innerHTML = active === 'ca' ? '⇄ ' + localLabel() : '⇄ ' + CA_ICON_HTML;
+    if (pair) setHTML(pair, active === 'ca' ? '⇄ ' + localLabel() : '⇄ ' + CA_ICON_HTML);
     renderFeedStamps();
   }
 

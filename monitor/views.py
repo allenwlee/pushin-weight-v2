@@ -103,6 +103,7 @@ _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
     "zh-CN": "zh_cn",
     "zh_cn": "zh_cn",
+    "zh_hans": "zh_cn",
     "original": "__source__",
 }
 
@@ -170,11 +171,18 @@ def _normalize_locale(locale: str | None) -> str:
         return "zh_cn"
     if locale.casefold() == "original":
         return "original"
+    if locale.casefold() == "zh-hans":
+        return "zh_hans"
     for sup in SUPPORTED_LOCALES:
         if locale.casefold() == sup.casefold():
             return sup
     log.warning("unsupported display_locale %r; falling back to 'en'", locale)
     return "en"
+
+
+def _is_zh_locale(locale: str) -> bool:
+    """Whether a display-locale alias should render the Chinese v22 chrome."""
+    return locale in {"zh_cn", "zh-CN", "zh_hans"}
 
 
 def _pretty_followers(count: int | None) -> str:
@@ -238,7 +246,7 @@ def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     both fall through `en` (the source-text locale uses the original
     English-language label rows).
     """
-    if locale == "zh_cn":
+    if locale in {"zh_cn", "zh-CN", "zh_hans"}:
         return _ZHCN_LANG_CODES
     return _EN_LANG_CODES
 
@@ -1335,6 +1343,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "applied_filters_json": json.dumps({}),
         "feed": {"rows": feed_rows, "next_cursor": None},
         "active_locale": locale,
+        "is_zh_chrome": _is_zh_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
