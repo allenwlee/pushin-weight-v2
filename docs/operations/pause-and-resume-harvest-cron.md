@@ -132,3 +132,13 @@ After resume, wait ≥1 cron cycle (`/15` schedule = up to 15 min), then verify 
 - **Next step**: Diagnose the cursor derivation in `monitor/cycle.py:_read_cursor_since` (around line 259) and the post-fetch filter in `x_monitor/run.py` (around line 1196). Re-run with a single dry cycle after the fix lands to confirm the fix before resuming.
 - **Strict rule from the user**: "first, halt the harvester. read our /.claude/skills in the project repo file, there may be directions there." — the project's `.claude/skills/avoiding-recurring-mistakes/SKILL.md` does not contain a halt procedure (the v1 launchd pause sentinel in CONCEPTS.md doesn't apply to v2 Render cron). The pause is via the Render REST API per the runbook's first pause method.
 - **Resume**: not until the cursor-vs-insert discrepancy is diagnosed and a regression pin is added.
+
+## 2026-08-10T05:30Z — metrics-refresh cutover (plan 2026-08-10-002)
+
+- **Reason**: Ship one-shot metrics refresh; stop continuous QT recheck credit burn.
+- **Pause**: Render API POST suspend yes on pushinweight-harvest (crn-d9gv94o4n6ts739tqaug) confirmed suspended.
+- **Code**: commit c603638 pushed to main (metrics_refreshed_at + metrics_refresh path).
+- **Web**: auto-deploy c603638 live; migration 0010_post_metrics_refreshed_at applied (column present on prod DB).
+- **Resume**: POST /v1/services/{id}/resume returned HTTP 202; suspended cleared to not_suspended.
+- **Harvest deploy**: triggered after resume (cannot deploy while suspended); live on c603638.
+- **Note**: POST suspend with suspend=no still does not clear suspend; use POST /resume instead.
