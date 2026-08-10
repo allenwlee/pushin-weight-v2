@@ -3,6 +3,13 @@
 Rules for AI agents (and humans) working in this repo. Honor these unless
 explicitly told otherwise.
 
+## UI fixes
+
+Before changing a visible UI surface, browser interaction, mockup fidelity,
+locale-visible copy, or visual regression, read and follow
+`.claude/skills/fix-ui/SKILL.md`. This applies to every agent working in this
+repository, including Claude Code and Codex.
+
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules
 
@@ -58,6 +65,8 @@ pytest
 python manage.py check --deploy
 ```
 
+- **Harvest cost (TwitterAPI credits):** `scripts/harvest_cost/` — run `python -m scripts.harvest_cost` when pricing harvest spend, investigating credit burn, or producing a periodic cost report over recent cycles (search + one-shot metrics). See `scripts/harvest_cost/README.md`.
+
 ## Render deploy
 
 Deployment is via Render Blueprint (`render.yaml`). On push to the
@@ -96,7 +105,6 @@ discussing domain concepts.
 
 Topic files live under `~/.claude/projects/-Users-allenwlee/memory/` and are loaded on demand. Each entry below has a corresponding detail file with the full context.
 
-- `project_pushin_weight_2026-06.md` — [SUPERSEDED 2026-07-27] v1 + v1.5 + v1.6 deployment, 330 tests, Render Postgres, oauth, allauth — historical; v1 launchd/SQLite stack now retired
 - `reference_pushinweight_prod_db_via_render_cli.md` — query prod via render psql dpg-d9go1njeo5us73cg5u00-a --command ... routed through fuchitalee
 - `feedback_playwright_first_for_ui.md` — drive Playwright FIRST when fixing UI; do not reason from code
 - `feedback_parallel_subagents_ximports.md` — budget a reconciliation subagent for cross-import drift in parallel dispatch
@@ -115,23 +123,3 @@ Topic files live under `~/.claude/projects/-Users-allenwlee/memory/` and are loa
 - `feedback_no_oversell.md` — test must exercise the differentiator; do not claim stacks-can-match wins
 - `feedback_artifact_arbiter.md` — for AI demos, artifact is final arbiter; skip pre-validation gates
 - `feedback_regression_net_in_every_plan.md` — every plan that modifies existing behavior must include a regression-net unit
-- `project_x_monitor_feed_2026-07-16.md` — [x-monitor] column-alias + wire-shape bugs caused 7-row feed; 2-commit fix
-- `project_x_monitor_feed_pretty_2026-07-16.md` — [x-monitor] 5-feed UX fixes (relative dates, hyperlinks, grouped classifications)
-- `project_x_monitor_filter_wiring_2026-07-16.md` — [x-monitor] full filter wiring 6 commits, control-panel across 7 filter groups
-- `project_x_monitor_filter_collapse_2026-07-17.md` — [x-monitor] uncheck any box blanked chart; collapse-to-all sentinel + playwright harness
-- `project_x_monitor_role_other_2026-07-17.md` — [x-monitor] synthetic other bucket for account.role; 4th checkbox
-- `project_x_monitor_window_1min_bucketing_2026-07-17.md` — [x-monitor] 1d window = 1440 minute buckets; granularity field + tick formatter
-- `project_x_monitoring_2026-06-07.md` — [x-monitor] curated query library + community graph for 9 Chinese AI models
-- `project_x_monitoring_2026-06-16.md` — [x-monitor] v1.6 OR-collapsed queries + 15-min cron + staleness (complete)
-- `project_x_monitoring_2026-06-17.md` — [x-monitor] v1.7 design 2-call wide-net + LLM translation (planned)
-- `project_x_monitoring_cloudflare_block_2026-06-18.md` — [x-monitor] list-add blocked by Cloudflare interstitial preflight + create_all
-- `project_x_monitoring_combined_chart_2026-06-19.md` — [x-monitor] Combined chart page shipped 3rd topbar tab, multi-brand lines, 6-signal toggle
-- `project_x_monitoring_list_management_2026-06-17.md` — [x-monitor] v1.7 list-management script built; BLOCKED on expired OAuth tokens
-- `project_x_monitoring_treemap_2026-06-17.md` — [x-monitor] Finviz-style treemap on /, 11 enabled models, 9-card grid preserved
-- `project_x_monitoring_v17_2026-06-17.md` — [x-monitor] v1.7 shipped 2-call wide-net + LLM translation + locale switcher
-- `project_x_monitoring_v18_2026-06-19.md` — [x-monitor] v1.8 design notes (pre-impl)
-- `project_xmonitor_i18n_2026-06-23.md` — [x-monitor] i18n plan in flight; migration 006 shipped, 007 WIP
-- `project_xmonitor_quote_tweets_2026-06-22.md` — [x-monitor] quote-tweet capture + RT-fold (Units 1-6) SHIPPED on feat/capture-quote-tweets
-- `project_xmonitor_reattribute_blocker_2026-06-21.md` — [x-monitor] real root cause of _unattributed: run.py only ran attribute_to_brands in one branch
-- `project_xmonitor_schema_modernization_2026-06-26.md` — [x-monitor] migrations 020+022 landed; signals+signal_labels GONE; 155/155 tests pass
-- `project_xmonitor_v18_unit2_rename_2026-06-19.md` — [x-monitor] v1.8 U2 rename notes (pre-impl)
