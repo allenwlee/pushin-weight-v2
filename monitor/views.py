@@ -24,6 +24,7 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from core.models import (
@@ -1309,7 +1310,7 @@ def _build_brands_context() -> list[dict[str, Any]]:
     return brands
 
 
-@login_required
+@ensure_csrf_cookie
 def home(request: HttpRequest) -> HttpResponse:
     """GET / — multi-brand Pushin' Weight home page.
 
@@ -1665,7 +1666,6 @@ def _paginate_feed(
     return rows, next_cursor, has_more
 
 
-@login_required
 def home_feed_json(request: HttpRequest) -> JsonResponse:
     """GET /feed/ — cursor-paginated feed for multi-brand home.
 
@@ -1823,7 +1823,6 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
 # ============================================================================
 
 
-@login_required
 def chart_json(request: HttpRequest) -> JsonResponse:
     """GET /chart/ — multi-brand chart data (JSON).
 
@@ -1837,7 +1836,6 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     return JsonResponse(payload)
 
 
-@login_required
 def chart_html(request: HttpRequest) -> HttpResponse:
     """GET /chart.html — multi-brand chart HTML partial for htmx swap.
 
@@ -2001,7 +1999,6 @@ def _safe_home_redirect(request: HttpRequest) -> str:
     return "/"
 
 
-@login_required
 @require_POST
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     """POST /locale/<locale>/ — set locale cookie and redirect back."""
@@ -2021,7 +2018,6 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     return response
 
 
-@login_required
 @require_POST
 def set_window(request: HttpRequest, days: int) -> HttpResponse:
     """POST /window/<days>/ — set window cookie and redirect back."""

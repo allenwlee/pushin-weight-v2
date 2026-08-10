@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from django.test import Client
 
 from tests.mockup_spec import load_spec
 from tests.shell_diff import (
@@ -67,3 +68,14 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
         window = self.client.post("/window/7/", HTTP_REFERER="http://127.0.0.1/")
         self.assertEqual(window.status_code, 302)
         self.assertEqual(window["Location"], "http://127.0.0.1/")
+
+    def test_root_shell_and_its_runtime_endpoints_are_public(self):
+        anonymous = Client(HTTP_HOST="127.0.0.1")
+        root = anonymous.get("/")
+        self.assertEqual(root.status_code, 200)
+        self.assertIn("csrftoken", anonymous.cookies)
+        self.assertEqual(anonymous.get("/feed/").status_code, 200)
+        self.assertEqual(anonymous.get("/chart.html").status_code, 200)
+        self.assertEqual(anonymous.post("/locale/en/", HTTP_REFERER="http://127.0.0.1/").status_code, 302)
+        self.assertEqual(anonymous.post("/window/7/", HTTP_REFERER="http://127.0.0.1/").status_code, 302)
+        self.assertEqual(anonymous.get("/internal/").status_code, 302)
