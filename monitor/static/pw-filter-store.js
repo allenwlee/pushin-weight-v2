@@ -55,11 +55,17 @@
     return defaultFilters();
   }
 
+  // Legacy pages retain #control-panel; the v22 root uses the mockup's
+  // id-free .filter-bar.
+  function getFilterPanel() {
+    return document.getElementById('control-panel') || document.querySelector('.filter-bar');
+  }
+
   // Hydrate state from the body attribute + read the actual checkbox
   // state from the control panel (this is the source of truth for
   // which keys are currently toggled).
   function hydrateFromControlPanel(state) {
-    var panel = document.getElementById('control-panel');
+    var panel = getFilterPanel();
     if (!panel) return state;
     var groups = panel.querySelectorAll('[data-pw-filter-group]');
     var seen = {};
@@ -119,7 +125,7 @@
 
   // Wire up checkbox change events on the control panel.
   function wireControlPanel() {
-    var panel = document.getElementById('control-panel');
+    var panel = getFilterPanel();
     if (!panel) return;
     var inputs = panel.querySelectorAll('input[type="checkbox"][data-pw-filter-group]');
     inputs.forEach(function (input) {

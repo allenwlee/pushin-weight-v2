@@ -74,6 +74,19 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
             oracle_source="v22-master L914-1078",
         )
 
+    def test_root_filter_bar_has_no_legacy_control_panel_id(self):
+        r = self._get_home()
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode("utf-8")
+        self.assertNotIn('id="control-panel"', body)
+
+    def test_root_chart_uses_mockup_safe_data_marker_not_legacy_id(self):
+        r = self._get_home()
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode("utf-8")
+        self.assertIn('<section class="home-chart-wrap" data-pw-chart', body)
+        self.assertNotIn('id="home-chart"', body)
+
     def test_brands_pill_has_open_closed_lens(self):
         r = self._get_home()
         body = r.content.decode("utf-8")

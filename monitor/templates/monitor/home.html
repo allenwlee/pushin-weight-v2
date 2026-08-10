@@ -39,25 +39,26 @@
       </h1>
       {# iter 15 (U6): locale toggle moves into topbar-title-row, gets window-toggle
          class for shared CSS, labels aligned to mockup (英文/中文/原文). #}
-      <nav class="window-toggle locale-toggle" aria-label="{% trans 'Display language' %}" data-i18n-aria="locale">
-        <button type="button" class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
+      <nav class="window-toggle locale-toggle" aria-label="{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}显示语言{% else %}Display language{% endif %}" data-i18n-aria="locale">
+        <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
                 data-pw-locale-btn="en"
-                data-label-en="en" data-label-zh="英文">{% trans "English" %}</button>
-        <button type="button" class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
+                data-label-en="en" data-label-zh="英文">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}英文{% else %}en{% endif %}</button>
+        <button type="button"{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} class="is-active"{% endif %}
                 data-pw-locale-btn="zh_cn"
-                data-label-en="zh-cn" data-label-zh="中文">{% trans "Chinese" %}</button>
-        <button type="button" class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
+                data-label-en="zh-cn" data-label-zh="中文">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}中文{% else %}zh-cn{% endif %}</button>
+        <button type="button"{% if active_locale == 'original' %} class="is-active"{% endif %}
                 data-pw-locale-btn="original"
-                data-label-en="original" data-label-zh="原文">{% trans "Original" %}</button>
+                data-label-en="original" data-label-zh="原文">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}原文{% else %}original{% endif %}</button>
       </nav>
     </div>
     <div class="topbar-controls">
-      <nav class="window-toggle" aria-label="{% trans 'Time-period selector' %}" data-i18n-aria="window">
+      <nav class="window-toggle" aria-label="{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}时间窗口{% else %}Time-period selector{% endif %}" data-i18n-aria="window">
         {% for n in allowed_home_windows %}
           <button type="button"
-                  class="window-btn{% if home_window_days == n %} is-active{% endif %}"
-                  data-pw-window-btn="{{ n }}">
-            {% if active_locale == 'en' %}
+                  {% if home_window_days == n %}class="is-active"{% endif %}
+                  data-pw-window-btn="{{ n }}" data-window="{{ n }}"
+                  {% if n == 1 %}data-label-en="24h" data-label-zh="24小时"{% elif n == 7 %}data-label-en="7d" data-label-zh="7天"{% elif n == 30 %}data-label-en="30d" data-label-zh="30天"{% elif n == 365 %}data-label-en="365d" data-label-zh="365天"{% else %}data-label-en="{{ n }}d" data-label-zh="{{ n }}d"{% endif %}>
+            {% if active_locale == 'en' or active_locale == 'original' %}
               {% if n == 1 %}24h{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
             {% else %}
               {% if n == 1 %}24小时{% elif n == 7 %}7天{% elif n == 30 %}30天{% elif n == 365 %}365天{% else %}{{ n }}d{% endif %}
@@ -66,10 +67,11 @@
         {% endfor %}
       </nav>
       <button type="button" class="tz-pill" data-tz-widget data-tz-idea="c" data-tz-active="local"
-              aria-label="{% trans 'Timezone' %}">
+              title="{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}切换 本地 ⇄ 加州时间{% else %}Toggle local ⇄ California time{% endif %}"
+              aria-label="{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}切换 本地 ⇄ 加州时间{% else %}Toggle local ⇄ California time{% endif %}">
         <span class="tz-emoji" data-tz-emoji>☀️</span>
-        <span class="tz-time" data-tz-time>--</span>
-        <span class="tz-zone" data-tz-zone>{% trans "本地" %}</span>
+        <span class="tz-time" data-tz-time>00:00</span>
+        <span class="tz-zone" data-tz-zone data-i18n-tz-local="1">本地</span>
         <span class="tz-pair" data-tz-pair>⇄ <span class="tz-ca-icon" title="California" aria-label="California">CA</span></span>
       </button>
     </div>
@@ -92,22 +94,21 @@
     </div>
   </section>
 
-  {# Filter store hydrates via #control-panel id on the filter bar #}
-  <nav class="filter-bar" id="control-panel" aria-label="{% trans 'Filter groups' %}">
+  <nav class="filter-bar" aria-label="Filter groups">
     <div class="filter-bar-scroller" id="filter-bar-scroller">
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="brands">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "Brands" %}</span>
+        <span class="title" data-i18n="pill_brands">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}品牌{% else %}Brands{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'Brands' %}" data-idea="b" data-lens-pair="open,closed">
-          <div class="dd-segment" role="tablist" aria-label="{% trans 'Brand tier' %}">
-            <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true">{% trans "开源" %} <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
-            <button type="button" role="tab" data-lens="closed" aria-selected="false">{% trans "闭源" %} <span class="n" data-lens-count="closed">· {{ closed_brands|length }}</span></button>
+        <div class="filter-dropdown" role="group" aria-label="Brands" data-idea="b" data-lens-pair="open,closed">
+          <div class="dd-segment" role="tablist" aria-label="Brand tier">
+            <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true"><span data-i18n="lens_open">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}开源{% else %}Open{% endif %}</span> <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
+            <button type="button" role="tab" data-lens="closed" aria-selected="false"><span data-i18n="lens_closed">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}闭源{% else %}Closed{% endif %}</span> <span class="n" data-lens-count="closed">· {{ closed_brands|length }}</span></button>
           </div>
           <div class="dd-toolbar">
-            <button type="button" data-dd-action="all" data-dd-scope="visible">{% trans "all" %}</button>
-            <button type="button" data-dd-action="clear" data-dd-scope="visible">{% trans "clear" %}</button>
+            <button type="button" data-dd-action="all" data-dd-scope="visible" data-i18n="btn_all">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}全选{% else %}all{% endif %}</button>
+            <button type="button" data-dd-action="clear" data-dd-scope="visible" data-i18n="btn_clear">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}清空{% else %}clear{% endif %}</button>
           </div>
           <div class="dd-lens-body" data-active-lens="open">
             <div class="dd-grid cols-3" data-tier-grid="open">
@@ -130,9 +131,9 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "Discourse" %}</span>
+        <span class="title" data-i18n="pill_discourse">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}话语{% else %}Discourse{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'Discourse' %}">
+        <div class="filter-dropdown" role="group" aria-label="Discourse">
           <div class="dd-grid cols-3">
             {% for key in discourse_keys %}
               <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked><span>{{ key }}</span></label>
@@ -143,9 +144,9 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="role">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "account.role" %}</span>
+        <span class="title" data-i18n="pill_role">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}角色{% else %}Role{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'account.role' %}">
+        <div class="filter-dropdown" role="group" aria-label="Role">
           <div class="dd-grid cols-2">
             {% for key in role_keys %}
               <label><input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked><span>{{ key }}</span></label>
@@ -156,12 +157,12 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="lang">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "lang" %}</span>
+        <span class="title" data-i18n="pill_lang">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}语言{% else %}Lang{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'lang' %}">
+        <div class="filter-dropdown" role="group" aria-label="Lang">
           <div class="dd-toolbar">
-            <button type="button" data-dd-action="all">{% trans "all" %}</button>
-            <button type="button" data-dd-action="clear">{% trans "clear" %}</button>
+            <button type="button" data-dd-action="all" data-i18n="btn_all">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}全选{% else %}all{% endif %}</button>
+            <button type="button" data-dd-action="clear" data-i18n="btn_clear">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}清空{% else %}clear{% endif %}</button>
           </div>
           <div class="dd-grid cols-3">
             {% for entry in lang_entries %}
@@ -173,9 +174,9 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="sentiment">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "Sentiment" %}</span>
+        <span class="title" data-i18n="pill_sentiment">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}情绪{% else %}Sentiment{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'Sentiment' %}">
+        <div class="filter-dropdown" role="group" aria-label="Sentiment">
           <div class="dd-grid cols-2">
             {% for key in sentiment_keys %}
               <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ key }}" checked><span>{{ key }}</span></label>
@@ -186,16 +187,16 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="nationalism">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "Nationalism" %}</span>
+        <span class="title" data-i18n="pill_nationalism">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}民族主义{% else %}Nationalism{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'Nationalism' %}" data-idea="b" data-lens-pair="us,cn">
-          <div class="dd-segment" role="tablist" aria-label="{% trans 'Nationalism region' %}">
-            <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">{% trans "US" %} <span class="n" data-lens-count="us">· {{ nationalism_keys|length }}</span></button>
-            <button type="button" role="tab" data-lens="cn" aria-selected="false">{% trans "CN" %} <span class="n" data-lens-count="cn">· {{ nationalism_keys|length }}</span></button>
+        <div class="filter-dropdown" role="group" aria-label="Nationalism" data-idea="b" data-lens-pair="us,cn">
+          <div class="dd-segment" role="tablist" aria-label="Nationalism region">
+            <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">美 <span class="n" data-lens-count="us">· {{ nationalism_keys|length }}</span></button>
+            <button type="button" role="tab" data-lens="cn" aria-selected="false">中 <span class="n" data-lens-count="cn">· {{ nationalism_keys|length }}</span></button>
           </div>
           <div class="dd-toolbar">
-            <button type="button" data-dd-action="all" data-dd-scope="visible">{% trans "all" %}</button>
-            <button type="button" data-dd-action="clear" data-dd-scope="visible">{% trans "clear" %}</button>
+            <button type="button" data-dd-action="all" data-dd-scope="visible" data-i18n="btn_all">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}全选{% else %}all{% endif %}</button>
+            <button type="button" data-dd-action="clear" data-dd-scope="visible" data-i18n="btn_clear">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}清空{% else %}clear{% endif %}</button>
           </div>
           <div class="dd-lens-body" data-active-lens="us">
             <div class="dd-grid cols-3" data-tier-grid="us">
@@ -214,9 +215,9 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="unsanctioned">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title">{% trans "unsanctioned" %}</span>
+        <span class="title" data-i18n="pill_unsanctioned">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}未授权{% else %}Unsanctioned{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="{% trans 'unsanctioned' %}">
+        <div class="filter-dropdown" role="group" aria-label="Unsanctioned">
           <div class="dd-grid cols-1">
             <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span>{% trans "show only flagged posts" %}</span></label>
           </div>
@@ -228,12 +229,12 @@
 
   <div class="desktop-grid">
     <div class="desktop-col-main">
-      <section class="home-chart-wrap" id="home-chart"
+      <section class="home-chart-wrap" data-pw-chart
                hx-get="/chart.html"
                hx-trigger="load every 60s"
                hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
                hx-swap="innerHTML">
-        {% include "monitor/_home_chart.html" %}
+        {% include "monitor/_home_chart.html" with chart_renderer="svg" %}
       </section>
 
       <div class="headline-strip" role="region" aria-label="{% trans 'Top voices' %}">
@@ -254,8 +255,8 @@
     </div>
 
     <div class="desktop-col-feed">
-      <section class="feed-strip" id="feed" data-pw-feed data-pw-locale="{{ active_locale }}">
-        <h3>{% trans "本窗口最新" %}</h3>
+      <section class="feed-strip" data-pw-feed data-pw-locale="{{ active_locale }}">
+        <h3 data-i18n="feed_title">{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %}本窗口最新{% else %}Latest in window{% endif %}</h3>
         <div class="feed-scroll" id="feed-scroll" data-feed-scroll data-pw-feed-scroll>
           <div class="feed-rows" id="feed-rows" data-feed-rows data-pw-feed-body>
             {% include "monitor/_feed_initial_v22.html" %}
