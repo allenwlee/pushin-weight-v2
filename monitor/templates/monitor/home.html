@@ -37,8 +37,6 @@
         <span class="zh">{{ app_name_zh }}</span>
         <span class="en">{{ app_name_en }}</span>
       </h1>
-      {# iter 15 (U6): locale toggle moves into topbar-title-row, gets window-toggle
-         class for shared CSS, labels aligned to mockup (英文/中文/原文). #}
       <nav class="window-toggle locale-toggle" aria-label="{% if is_zh_chrome %}显示语言{% else %}Display language{% endif %}" data-i18n-aria="locale">
         <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
                 data-pw-locale-btn="en"
