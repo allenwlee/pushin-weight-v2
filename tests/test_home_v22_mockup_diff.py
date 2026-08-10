@@ -79,3 +79,20 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
         self.assertEqual(anonymous.post("/locale/en/", HTTP_REFERER="http://127.0.0.1/").status_code, 302)
         self.assertEqual(anonymous.post("/window/7/", HTTP_REFERER="http://127.0.0.1/").status_code, 302)
         self.assertEqual(anonymous.get("/internal/").status_code, 302)
+
+    def test_chart_partial_has_no_execution_comment_or_rendered_note(self):
+        """Regression pin: chart implementation notes must never reach users."""
+        chart_partial = (
+            Path(__file__).resolve().parents[1]
+            / "monitor/templates/monitor/_home_chart.html"
+        )
+        source = chart_partial.read_text(encoding="utf-8")
+        self.assertNotIn(
+            "{#",
+            source,
+            "Public chart markup must not contain Django execution comments.",
+        )
+
+        rendered = self._render("en")
+        self.assertNotIn("The root shell retains the authored mockup", rendered)
+        self.assertNotIn("pw-chart.js redraws these fallback paths", rendered)

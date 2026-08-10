@@ -1,7 +1,5 @@
 {% load i18n %}
 {% if chart_renderer == "svg" %}
-  {# The root shell retains the authored mockup's SVG + legend contract.
-     pw-chart.js redraws these fallback paths from data-home after load/swap. #}
   <svg class="home-chart"
        viewBox="0 0 360 180"
        preserveAspectRatio="none"
