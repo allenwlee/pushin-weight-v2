@@ -412,6 +412,71 @@ def _is_simplified_chinese_family(lang: str) -> bool:
     bare = lang_norm.split("-")[0]
     return bare == "zh"
 
+
+
+# Plan 2026-08-10-004: closed allowlist for pragmatics lang_detected.
+LANG_DETECTED_ALLOWLIST: frozenset[str] = frozenset(
+    {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
+)
+
+# Synonym map: bare / region tags → allowlist form (after lower+hyphen normalize).
+_LANG_SYNONYMS: dict[str, str] = {
+    "en": "en",
+    "eng": "en",
+    "zh": "zh-Hans",
+    "zh-cn": "zh-Hans",
+    "zh-hans": "zh-Hans",
+    "zh-sg": "zh-Hans",
+    "zh-tw": "zh-Hant",
+    "zh-hk": "zh-Hant",
+    "zh-hant": "zh-Hant",
+    "zh-mo": "zh-Hant",
+    "ja": "ja",
+    "jpn": "ja",
+    "jp": "ja",
+    "ko": "ko",
+    "kor": "ko",
+    "kr": "ko",
+    "other": "other",
+}
+
+
+def normalize_lang_detected(raw: object) -> str | None:
+    """Map raw LLM lang_detected to an allowlist form, or None if invalid."""
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raw = str(raw)
+    s = raw.strip().lower().replace("_", "-")
+    if not s:
+        return None
+    # Exact synonym table first.
+    if s in _LANG_SYNONYMS:
+        return _LANG_SYNONYMS[s]
+    # en-US / en-gb → en
+    bare = s.split("-")[0]
+    if bare == "en":
+        return "en"
+    if bare == "ja":
+        return "ja"
+    if bare == "ko":
+        return "ko"
+    # zh-* traditional markers
+    if bare == "zh":
+        for marker in ("hant", "tw", "hk", "mo"):
+            if marker in s:
+                return "zh-Hant"
+        return "zh-Hans"
+    if s in LANG_DETECTED_ALLOWLIST:
+        return s
+    # Case-sensitive allowlist members already covered; reject freeform.
+    return None
+
+
+def validate_lang_detected(raw: object) -> bool:
+    """True when raw normalizes to an allowlisted lang_detected value."""
+    return normalize_lang_detected(raw) is not None
+
 # U3: the fixed-translation dictionary from research §4.5 — these are
 # proper nouns in the Chinese AI circle and don't need annotation when
 # they appear in source text. Used by apply_friction_judge.
@@ -451,60 +516,43 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "You understand English X expressions such as meme / slang / irony / "
     "dunk / FUD / 抽象 / 翻车, and you understand Chinese parallel "
     "expressions such as 阴阳怪气 / 抽象话 / 套壳 / 蒸馏 / 舔狗 / 翻车 / 整活.\n\n"
-    "For each input tweet, output exactly the fields listed below in this YAML shape:\n"
-    "  literal_zh:       Simplified Chinese literal translation. Preserve\n"
-    "                    the original slang — do NOT smooth it out. "
-    "Mixed Chinese/English is permitted (e.g. 'Sora 2', 'DeepSeek-V4').\n"
-    "                    @mentions, URLs, and emojis stay verbatim.\n"
-    "  text_en:          English text. Always populate with the best "
-    "interpretation\n"
-    "                    of the source (English posts get the source "
-    "verbatim;\n"
-    "                    non-English posts get a literal translation). "
-    "Server-side\n"
-    "                    will NULL this column if the post's "
-    "`lang_detected` is\n"
-    "                    English or Simplified Chinese (the server-side noop\n"
-    "                    NULLs text_en in those cases — never echo the source\n"
-    "                    into a locale column that matches the source).\n"
-    "  lang_detected:    ISO 639-1 + script (e.g. 'en', 'zh-Hans').\n"
-    "  cn_equivalent:    A 'how would Chinese netizens on Weibo/Zhihu/"
-    "Bilibili\n"
-    "                    say the same thing' rendering. Use 'N/A' if "
-    "no equivalent.\n"
+    "For EACH input tweet, set fields in this order. "
+    "`lang_detected` is REQUIRED and must never be omitted.\n\n"
+    "  lang_detected:    REQUIRED. One of: en | zh-Hans | zh-Hant | ja | ko | other. "
+    "Detect from the tweet text (not optional). Use `other` when none of the "
+    "named codes fit. Never leave blank.\n"
+    "  text_en:          English text. Best interpretation of the source "
+    "(English posts may echo source; non-English get a translation). "
+    "Server-side may NULL this column when lang_detected is English.\n"
     "  literal_zh:       Best-interpretation Simplified Chinese rendering. "
-    "Always\n"
-    "                    populate — server-side will NULL the zh-CN column\n"
-    "                    if `lang_detected` is already Simplified "
-    "Chinese.\n"
-    "  annotation:       A 1-3 sentence cultural-background annotation. "
-    "ONLY when\n"
-    "                    the post contains F2 or F3 friction (meme origin, "
-    "named\n"
-    "                    event, brand-specific slur). Otherwise leave empty.\n"
-    "  noop_en:          (optional hint) true if the source is already "
-    "English.\n"
-    "  noop_zh:          true if source is already Simplified Chinese. "
-    "The\n"
-    "                    server-side translator may use this as a hint but\n"
-    "                    ultimately decides via `lang_detected`.\n\n"
-    "Fixed-translation dictionary — use these for the literal_zh field "
-    "WITHOUT annotation:\n"
+    "Preserve slang; mixed Chinese/English OK for model names. "
+    "@mentions, URLs, and emojis stay verbatim. Server-side may NULL the "
+    "zh-CN column when lang_detected is already Simplified Chinese.\n"
+    "  cn_equivalent:    How Chinese netizens on Weibo/Zhihu/Bilibili would "
+    "say the same thing. Use 'N/A' if no equivalent.\n"
+    "  annotation:       Optional 1-3 sentence cultural note ONLY for F2/F3 "
+    "friction (meme origin, named event). Otherwise empty string.\n"
+    "  noop_en:          Optional hint: true if source is already English.\n"
+    "  noop_zh:          Optional hint: true if source is already Simplified "
+    "Chinese. Server decides columns via lang_detected.\n\n"
+    "Fixed-translation dictionary — use these for literal_zh WITHOUT "
+    "annotation:\n"
     "  vibe coding → 氛围编程;  sycophancy → 舔狗;  distillation → 蒸馏;\n"
     "  wrapper → 套壳;  fine-tune → 微调;  open-weight → 开放权重;\n"
     "  roast → 毒舌;  based → 敢说真话.\n\n"
     "Rules:\n"
     "1. Return ONLY a JSON object of the form:\n"
-    '   {"results": [{"tweet_id": str, "text_en": str, "literal_zh": str, '
-    '"lang_detected": str, "cn_equivalent": str, "annotation": str, '
-    '"noop_en": bool, "noop_zh": bool}, ...]}\n'
-    "2. One result per input tweet, in the same order.\n"
-    "3. Total output per post ≤ 280 characters (excluding tweet_id).\n"
-    "4. Model names, brand names, personal names, @mentions, URLs, and "
+    '   {"results": [{"tweet_id": str, "lang_detected": str, '
+    '"text_en": str, "literal_zh": str, "cn_equivalent": str, '
+    '"annotation": str, "noop_en": bool, "noop_zh": bool}, ...]}\n'
+    "2. One result per input tweet, in the same order. "
+    "lang_detected first on every object.\n"
+    "3. Model names, brand names, personal names, @mentions, URLs, and "
     "emojis stay verbatim.\n"
-    "5. Do not include any prose, explanation, or code fences outside "
+    "4. Do not include any prose, explanation, or code fences outside "
     "the JSON.\n"
 )
+
 
 
 def _load_few_shot_examples() -> list[dict[str, Any]]:
@@ -662,6 +710,105 @@ def _parse_pragmatics_response(
     return results
 
 
+def _finalize_pragmatics_row(
+    tweet: dict[str, Any],
+    parsed: dict[str, Any],
+    *,
+    lang_canonical: str,
+) -> dict[str, Any]:
+    """Apply friction judge + server-side EN/ZH noop for a validated lang."""
+    judged = apply_friction_judge(tweet, parsed)
+    # Prefer canonical allowlist form for storage and noop checks.
+    lang = lang_canonical
+    lang_for_family = lang.lower()
+    is_already_zh = _is_simplified_chinese_family(lang_for_family)
+    is_already_en = _is_english_family(lang_for_family)
+    _raw_en = judged.get("text_en")
+    _source_text = (tweet.get("text") or "").strip()
+    _en_is_echo = (
+        _raw_en is not None
+        and isinstance(_raw_en, str)
+        and _raw_en.strip() == _source_text
+        and not is_already_en
+    )
+    text_en = (
+        None
+        if is_already_en or is_already_zh or _en_is_echo
+        else _raw_en
+    )
+    literal_zh_raw = (
+        None if is_already_zh
+        else (judged.get("literal_zh") or parsed.get("text_zh_cn"))
+    )
+    text_zh_cn = None if is_already_zh else literal_zh_raw
+    return {
+        "tweet_id": str(
+            parsed.get("tweet_id") or tweet.get("tweet_id") or tweet.get("id")
+        ),
+        "brand_id": tweet.get("brand_id"),
+        "text_en": text_en,
+        "text_zh_cn": text_zh_cn,
+        "lang_detected": lang_canonical,
+        "noop_en": text_en is None,
+        "noop_zh": text_zh_cn is None,
+        "literal_zh": literal_zh_raw,
+        "cn_equivalent": judged.get("cn_equivalent"),
+        "annotation": judged.get("annotation"),
+    }
+
+
+def _merge_repair_row(
+    first: dict[str, Any],
+    repair: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge repair into first-pass row: lang from repair; keep first texts if repair empty."""
+    merged = dict(first)
+    for key in (
+        "lang_detected",
+        "text_en",
+        "literal_zh",
+        "text_zh_cn",
+        "cn_equivalent",
+        "annotation",
+        "noop_en",
+        "noop_zh",
+    ):
+        if key not in repair:
+            continue
+        val = repair.get(key)
+        if key == "lang_detected":
+            merged[key] = val
+            continue
+        if val is None:
+            continue
+        if isinstance(val, str) and not val.strip():
+            continue
+        merged[key] = val
+    return merged
+
+
+def _build_lang_repair_prompt(
+    tweets: list[dict[str, Any]],
+    target_locales: list[str],
+    brand_names: list[str] | None = None,
+) -> str:
+    """Short repair prompt: full pragmatics JSON with required lang_detected."""
+    base = build_pragmatics_translation_prompt(
+        tweets,
+        target_locales,
+        brand_names=brand_names,
+        few_shot_examples=[],  # no few-shot on repair — keep small
+    )
+    addendum = (
+        "\n\nREPAIR: A previous response omitted or used an invalid "
+        "lang_detected. For EVERY tweet below, return the full results "
+        "array again. lang_detected is REQUIRED and must be one of: "
+        "en | zh-Hans | zh-Hant | ja | ko | other. Put lang_detected "
+        "first on each object. Do not omit it."
+    )
+    return base + addendum
+
+
 def translate_batch_pragmatics(
     tweets: list[dict[str, Any]],
     target_locales: list[str],
@@ -675,6 +822,10 @@ def translate_batch_pragmatics(
 ) -> list[dict[str, Any]]:
     """U3: translate a batch of tweets with the §5.1 four-pronged contract.
     Pass cfg to thread through to model resolution (per swap-translator plan).
+
+    Plan 2026-08-10-004: after parse, each row must have allowlisted
+    lang_detected. Invalid rows get at most one repair LLM call (bad
+    ids only); residual invalid → failed empty rows (no null-lang success).
 
     on_batch_error (U7): optional callback invoked per-batch when the
     LLM call raised (after retries exhausted) OR the response failed
@@ -721,76 +872,78 @@ def translate_batch_pragmatics(
             if on_batch_error is not None:
                 on_batch_error(batch, ValueError("parse failure"))
             continue
+
+        # Index first-pass rows by tweet_id (and by position as fallback).
+        first_by_tid: dict[str, dict[str, Any]] = {}
+        order_tids: list[str] = []
         for t, p in zip(batch, parsed):
-            judged = apply_friction_judge(t, p)
-            # Server-side noop logic is deterministic and based
-            # on `lang_detected`, NOT the LLM's noop_* flags (the
-            # LLM is a sloppy noop reporter — it echoes the source
-            # into the locale column anyway, and the shape contract
-            # is "the locale column is NULL when the source is
-            # already in that locale").
-            #
-            # text_en: NULL only when lang is in the English family
-            #   (en, en-US, en-GB, ...) — the source `text` is
-            #   already the English version. For ALL other languages
-            #   (including Chinese), the LLM's English translation
-            #   is preserved. Echo detection (below) catches the
-            #   rare case where the LLM echoes the source text into
-            #   text_en instead of translating.
-            #
-            # text_zh_cn: populated for ALL non-zh-Hans sources.
-            #   The LLM's output is treated as a best-interpretation
-            #   rendering with nuance (idioms / memes annotated
-            #   via cn_equivalent + annotation), NOT a literal
-            #   word-for-word translation. When the source IS
-            #   already Simplified Chinese, the column stays NULL
-            #   (source serves).
-            #
-            # The LLM's `noop_en` / `noop_zh` flags are surfaced
-            # for downstream consumers (dashboard badges) but
-            # are NOT trusted for column population.
-            lang = (judged.get("lang_detected") or "").lower()
-            is_already_zh = _is_simplified_chinese_family(lang)
-            is_already_en = _is_english_family(lang)
-            # text_en: NULL only for English source (already English).
-            # Chinese and all other non-English languages get the LLM's
-            # English translation. Echo guard: if the LLM echoed the
-            # source text verbatim into text_en (the v10 smoketest
-            # Post 4 bug), nullify it — a non-English source echoed
-            # into the English column is not a translation.
-            _raw_en = judged.get("text_en")
-            _source_text = (t.get("text") or "").strip()
-            _en_is_echo = (
-                _raw_en is not None
-                and isinstance(_raw_en, str)
-                and _raw_en.strip() == _source_text
-                and not is_already_en
+            tid = str(p.get("tweet_id") or t.get("tweet_id") or t.get("id") or "")
+            order_tids.append(tid)
+            first_by_tid[tid] = dict(p)
+            first_by_tid[tid]["_tweet"] = t
+
+        invalid_tids = [
+            tid for tid in order_tids
+            if not validate_lang_detected(first_by_tid[tid].get("lang_detected"))
+        ]
+
+        if invalid_tids:
+            bad_tweets = [first_by_tid[tid]["_tweet"] for tid in invalid_tids]
+            repair_prompt = _build_lang_repair_prompt(
+                bad_tweets, target_locales, brand_names=brand_names
             )
-            text_en = (
-                None
-                if is_already_en or _en_is_echo
-                else _raw_en
-            )
-            literal_zh_raw = (
-                None if is_already_zh
-                else (judged.get("literal_zh") or p.get("text_zh_cn"))
-            )
-            text_zh_cn = None if is_already_zh else literal_zh_raw
-            out.append({
-                "tweet_id": str(
-                    p.get("tweet_id") or t.get("tweet_id") or t.get("id")
-                ),
-                "brand_id": t.get("brand_id"),
-                "text_en": text_en,
-                "text_zh_cn": text_zh_cn,
-                "lang_detected": lang or None,
-                "noop_en": text_en is None,
-                "noop_zh": text_zh_cn is None,
-                "literal_zh": literal_zh_raw,
-                "cn_equivalent": judged.get("cn_equivalent"),
-                "annotation": judged.get("annotation"),
-            })
+            try:
+                repair_resp = _call_with_retry(
+                    client, repair_prompt, n_tweets=len(bad_tweets), cfg=cfg
+                )
+                repair_parsed = _parse_pragmatics_response(repair_resp, bad_tweets)
+            except Exception as exc:
+                logger.warning(
+                    "translator_lang_repair_failed",
+                    exc_info=True,
+                    extra={"n_invalid": len(invalid_tids), "error_type": type(exc).__name__},
+                )
+                repair_parsed = None
+                if on_batch_error is not None:
+                    on_batch_error(bad_tweets, exc)
+
+            if repair_parsed is not None:
+                for t, rp in zip(bad_tweets, repair_parsed):
+                    tid = str(
+                        rp.get("tweet_id") or t.get("tweet_id") or t.get("id") or ""
+                    )
+                    if tid not in first_by_tid:
+                        # Map by position if id drift
+                        continue
+                    first_by_tid[tid] = _merge_repair_row(first_by_tid[tid], rp)
+                    first_by_tid[tid]["_tweet"] = t
+                logger.info(
+                    "translator_lang_repair_attempted n_invalid=%d",
+                    len(invalid_tids),
+                )
+            else:
+                logger.warning(
+                    "translator_lang_repair_parse_failed n_invalid=%d",
+                    len(invalid_tids),
+                )
+
+        for tid in order_tids:
+            row0 = first_by_tid[tid]
+            t = row0.get("_tweet") or {"tweet_id": tid}
+            canonical = normalize_lang_detected(row0.get("lang_detected"))
+            if canonical is None:
+                logger.warning(
+                    "translator_lang_missing tweet_id=%s after_repair",
+                    tid,
+                )
+                out.append(_empty_pragmatics_row(t, failed=True))
+                continue
+            # Strip internal bookkeeping before finalize
+            clean = {k: v for k, v in row0.items() if k != "_tweet"}
+            clean["lang_detected"] = canonical
+            out.append(_finalize_pragmatics_row(t, clean, lang_canonical=canonical))
     return out
+
 
 
 # --- v1.8 (Unit 4): registry-row translation extension -----------------

@@ -228,9 +228,9 @@ def test_translate_batch_pragmatics_returns_four_prongs():
     def factory(t, locales):
         return {"results": [{
             "tweet_id": "t1",
-            "text_en": "Claude could never",
+            "text_en": "Claude could never pull this off",
             "literal_zh": "Claude 永远做不出",
-            "lang_detected": "fr",
+            "lang_detected": "other",
             "cn_equivalent": "Claude 不行",
             "annotation": "",
             "noop_en": False,
@@ -249,9 +249,9 @@ def test_translate_batch_pragmatics_returns_four_prongs():
     row = out[0]
     # Backward-compat columns populated for non-English, non-zh sources.
     assert row["tweet_id"] == "t1"
-    assert row["text_en"] == "Claude could never"
+    assert row["text_en"] == "Claude could never pull this off"
     assert row["text_zh_cn"] == "Claude 永远做不出"
-    assert row["lang_detected"] == "fr"
+    assert row["lang_detected"] == "other"
     # New prongs (no discourse_role).
     assert row["literal_zh"] == "Claude 永远做不出"
     assert row["cn_equivalent"] == "Claude 不行"
@@ -356,7 +356,7 @@ def test_translate_batch_pragmatics_backward_compat_columns():
             "tweet_id": "1",
             "text_en": "Claude is really good",
             "literal_zh": "Claude 真的很好",
-            "lang_detected": "fr",
+            "lang_detected": "other",
             "cn_equivalent": "太棒了",
             "annotation": "should be zeroed by fixed-dict match",
             "noop_en": False,
@@ -375,7 +375,7 @@ def test_translate_batch_pragmatics_backward_compat_columns():
     # for non-en / non-zh sources.
     assert row["text_en"] == "Claude is really good"
     assert row["text_zh_cn"] == "Claude 真的很好"
-    assert row["lang_detected"] == "fr"
+    assert row["lang_detected"] == "other"
     # No discourse_role field.
     assert "discourse_role" not in row
 
