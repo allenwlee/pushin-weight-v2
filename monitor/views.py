@@ -23,6 +23,8 @@ from django.db.models import Case, CharField, Count, Prefetch, Q, QuerySet, Valu
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from core.models import (
     Account,
@@ -1987,6 +1989,20 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
 
 
 
+def _safe_home_redirect(request: HttpRequest) -> str:
+    """Keep cookie-setting endpoints on the dashboard origin."""
+    referrer = request.META.get("HTTP_REFERER", "")
+    if url_has_allowed_host_and_scheme(
+        referrer,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return referrer
+    return "/"
+
+
+@login_required
+@require_POST
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     """POST /locale/<locale>/ — set locale cookie and redirect back."""
     normalized = _normalize_locale(locale)
@@ -1999,14 +2015,16 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
-    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response = redirect(_safe_home_redirect(request))
     response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
     request.session["_language"] = django_code
     return response
 
 
+@login_required
+@require_POST
 def set_window(request: HttpRequest, days: int) -> HttpResponse:
     """POST /window/<days>/ — set window cookie and redirect back."""
-    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response = redirect(_safe_home_redirect(request))
     response.set_cookie("home_window", str(days), max_age=365 * 24 * 3600)
     return response

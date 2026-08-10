@@ -58,3 +58,12 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
                 assert_data_shape(spec, self.fixture, rendered, locale=locale, viewport=VIEWPORT)
                 difference = first_authored_difference(spec, rendered, locale=locale, viewport=VIEWPORT, allowlist=allowlist)
                 self.assertIsNone(difference, difference.report(locale=locale, viewport=VIEWPORT, oracle_source=str(spec.source)) if difference else "")
+
+    def test_locale_and_window_setters_require_post_and_safe_redirects(self):
+        self.assertEqual(self.client.get("/locale/en/").status_code, 405)
+        locale = self.client.post("/locale/en/", HTTP_REFERER="https://example.invalid/")
+        self.assertEqual(locale.status_code, 302)
+        self.assertEqual(locale["Location"], "/")
+        window = self.client.post("/window/7/", HTTP_REFERER="http://127.0.0.1/")
+        self.assertEqual(window.status_code, 302)
+        self.assertEqual(window["Location"], "http://127.0.0.1/")
