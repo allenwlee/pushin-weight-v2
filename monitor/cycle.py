@@ -1891,38 +1891,24 @@ class CycleRunner:
                 dict(self._error_counts)
             )
 
-        # ---- Quote-tweet channel (v1 parity; ~24% of v1 volume) ----
-        # Runs after the main harvest so newly-attributed parents are in
-        # the DB. Never aborts the cycle — QT failures are degraded stats.
+        # ---- One-shot metrics refresh (plan 2026-08-10-002) ----
+        # Replaces continuous official/staff + daily QT recheck. Never
+        # aborts the cycle — refresh failures are degraded stats.
         if summary["status"] != "aborted":
             try:
-                from monitor.quote_tweets import run_quote_tweet_channel
+                from monitor.metrics_refresh import run_metrics_refresh
 
-                qt_out = run_quote_tweet_channel(
-                    self,
-                    api,
-                    index=index,
-                    brand_search_terms=search_terms,
-                    enabled_models=enabled_models,
-                )
-                summary.setdefault("quote_tweets", {}).update(qt_out)
-                # Count QT inserts toward cycle totals for dashboard parity
-                n_qt = int(qt_out.get("official_n_ingested") or 0) + int(
-                    qt_out.get("daily_n_ingested") or 0
-                )
-                if n_qt:
-                    self._posts_inserted += n_qt
-                    self._posts_attributed += n_qt
+                mr_out = run_metrics_refresh(api, self.cfg)
+                summary.setdefault("metrics_refresh", {}).update(mr_out)
+                if int(mr_out.get("n_refreshed") or 0):
                     logger.info(
-                        "CycleRunner.run: quote-tweet channel ingested %d "
-                        "(official=%s daily=%s)",
-                        n_qt,
-                        qt_out.get("official_n_ingested"),
-                        qt_out.get("daily_n_ingested"),
+                        "CycleRunner.run: metrics_refresh refreshed=%s due=%s",
+                        mr_out.get("n_refreshed"),
+                        mr_out.get("n_due"),
                     )
             except Exception as exc:
-                logger.warning("quote-tweet channel failed: %s", exc)
-                summary.setdefault("quote_tweets", {})["error"] = str(exc)
+                logger.warning("metrics_refresh channel failed: %s", exc)
+                summary.setdefault("metrics_refresh", {})["error"] = str(exc)
 
         # ---- Finalize ----
         summary["totals"]["n_results"] = self._posts_seen

@@ -553,3 +553,7 @@ review, still not load-bearing):
 
 Last reviewed: 2026-08-05
 
+## Update 2026-08-10 (plan 2026-08-10-002)
+
+Cycle no longer runs continuous QT capture. `GET /twitter/tweets` is used only for **one-shot metrics refresh** on posts older than `metrics_refresh.delay_hours` that have never been stamped (`metrics_refreshed_at` null). `GET /twitter/tweet/quotes` is not invoked from the harvest cycle.
+

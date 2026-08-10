@@ -111,6 +111,21 @@ class QuoteTweetConfig(BaseModel):
     daily_call_budget: int = Field(default=50, ge=0)
 
 
+
+class MetricsRefreshConfig(BaseModel):
+    """One-shot metrics re-fetch knobs (plan 2026-08-10-002).
+
+    After first ingest, each post is eligible for exactly one by-ID
+    metrics refresh once it is at least `delay_hours` old (by
+    `fetched_at`). Caps work per cycle so historical backlog drains
+    without a single-tick credit spike.
+    """
+
+    enabled: bool = True
+    delay_hours: float = Field(default=2.0, gt=0)
+    per_cycle_cap: int = Field(default=200, ge=1)
+
+
 class SearchConfig(BaseModel):
     """Search-cap knobs (U1, 2026-07-02). All optional with defaults;
     the main-loop search runs with no config.yaml entry.
@@ -185,6 +200,7 @@ class Config(BaseModel):
     apify_actor: str = "automation-lab/twitter-scraper"
     clustering: ClusteringConfig = ClusteringConfig()
     quote_tweets: QuoteTweetConfig = QuoteTweetConfig()
+    metrics_refresh: MetricsRefreshConfig = MetricsRefreshConfig()
     search: SearchConfig = SearchConfig()
     cycle: CycleConfig = CycleConfig()
     llm: LlmConfig = LlmConfig()

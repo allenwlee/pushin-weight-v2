@@ -181,26 +181,19 @@ def test_daily_marker_short_circuits(tmp_path, settings):
     assert out == {"daily_ran": False}
 
 
-def test_run_quote_tweet_channel_swallows_errors():
+def test_run_quote_tweet_channel_is_disabled_noop():
+    """AFTER plan 2026-08-10-002: channel is metrics-only noop (no QT regimes)."""
     runner = MagicMock()
     api = MagicMock()
-    with (
-        patch.object(qt, "staff_handles_set", return_value=set()),
-        patch.object(
-            qt, "capture_official_quote_tweets", side_effect=RuntimeError("boom")
-        ),
-        patch.object(
-            qt,
-            "capture_nonofficial_quote_tweets_daily",
-            return_value={"daily_ran": True},
-        ),
-    ):
-        out = qt.run_quote_tweet_channel(
-            runner,
-            api,
-            index=None,
-            brand_search_terms={},
-            enabled_models=["glm"],
-        )
-    assert "official_error" in out
-    assert out.get("daily_ran") is True
+    out = qt.run_quote_tweet_channel(
+        runner,
+        api,
+        index=None,
+        brand_search_terms={},
+        enabled_models=["glm"],
+    )
+    assert out.get("disabled") is True
+    assert out.get("official_n_ingested") == 0
+    assert out.get("daily_n_ingested") == 0
+    api.get_tweets_by_ids.assert_not_called()
+    api.get_quote_tweets.assert_not_called()

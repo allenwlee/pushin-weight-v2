@@ -416,6 +416,8 @@ class Post(models.Model):
     quoted_text = models.TextField(blank=True, null=True)
     last_quote_count_seen = models.IntegerField(blank=True, null=True)
     last_quote_fetched_at = models.DateTimeField(blank=True, null=True)
+    # One-shot metrics re-fetch stamp (plan 2026-08-10-002).
+    metrics_refreshed_at = models.DateTimeField(blank=True, null=True)
     created_at_epoch = models.BigIntegerField(blank=True, null=True)
 
     # --- § 1.2 TwitterAPI top-level tweet fields ---

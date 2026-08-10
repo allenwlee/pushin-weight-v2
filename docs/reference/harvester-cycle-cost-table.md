@@ -65,3 +65,12 @@ Per-call result counts are not currently logged at message-create level (`x_moni
 - `x_monitor/apify.py` — `SEARCH_PATH = /twitter/tweet/advanced_search` (the API callsite)
 - `x_monitor/run.py:958-978` — budget guard with the wrong `300 credits/page` constant
 - `config.yaml:65` — `daily_ceiling: 333` (read but not enforced)
+
+## Update 2026-08-10 (plan 2026-08-10-002)
+
+Continuous official/staff quote-count recheck (every 15 min × ~14 days via `/twitter/tweets`) is **removed**.
+
+**New steady-state cost:** each stored post gets **at most one** by-ID metrics re-fetch after `metrics_refresh.delay_hours` (default 2.0), capped per cycle by `metrics_refresh.per_cycle_cap` (default 200). Quote-body endpoint is not used on the cycle path.
+
+See `monitor/metrics_refresh.py` and `config.yaml` → `metrics_refresh:`.
+

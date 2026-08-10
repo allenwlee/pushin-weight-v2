@@ -401,36 +401,19 @@ def run_quote_tweet_channel(
     brand_search_terms: dict[str, str],
     enabled_models: list[str],
 ) -> dict[str, Any]:
-    """Run official + daily QT capture; never raises (callers log warnings)."""
-    cfg = load_quote_tweet_config()
-    staff = staff_handles_set(enabled_models)
-    out: dict[str, Any] = {"staff_handles": len(staff)}
-    try:
-        out.update(
-            capture_official_quote_tweets(
-                runner,
-                api,
-                index=index,
-                brand_search_terms=brand_search_terms,
-                staff_handles=staff,
-                cfg=cfg,
-            )
-        )
-    except Exception as exc:
-        logger.warning("official QT capture failed: %s", exc)
-        out["official_error"] = str(exc)
-    try:
-        out.update(
-            capture_nonofficial_quote_tweets_daily(
-                runner,
-                api,
-                index=index,
-                brand_search_terms=brand_search_terms,
-                staff_handles=staff,
-                cfg=cfg,
-            )
-        )
-    except Exception as exc:
-        logger.warning("daily QT capture failed: %s", exc)
-        out["daily_error"] = str(exc)
-    return out
+    """Deprecated no-op (plan 2026-08-10-002: metrics-only).
+
+    Continuous official (14d) and daily non-official QT regimes are
+    removed from the live cycle. Metrics re-fetch lives in
+    ``monitor.metrics_refresh.run_metrics_refresh``. Kept as a stub so
+    accidental callers do not resurrect credit burn.
+    """
+    return {
+        "disabled": True,
+        "reason": "metrics-only one-shot refresh (plan 2026-08-10-002)",
+        "official_n_tracked": 0,
+        "official_n_ingested": 0,
+        "daily_ran": False,
+        "daily_n_ingested": 0,
+    }
+

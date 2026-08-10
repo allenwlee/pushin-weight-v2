@@ -93,6 +93,15 @@ cycle:
   c1_max_pages: 8              # 150 / 20 per page
   max_truncation_walks: 5      # drain retries on truncated windows
 
+# One-shot metrics re-fetch (plan 2026-08-10-002). Each post is by-ID
+# refreshed exactly once after delay_hours from first fetched_at.
+# Replaces continuous official/staff QT recheck loop.
+metrics_refresh:
+  enabled: true
+  delay_hours: 2.0
+  per_cycle_cap: 200
+
+
 # LLM routing (plan 2026-08-01-002 U6). Defaults mirror the values
 # the v1 + v2 stacks used prior to this change; operators can
 # override per-env via X_MONITOR_<role>_MODEL without editing
