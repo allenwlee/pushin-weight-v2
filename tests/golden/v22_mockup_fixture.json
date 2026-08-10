@@ -1,0 +1,572 @@
+{
+  "chart": {
+    "empty": {
+      "message": "No activity in window",
+      "series": []
+    },
+    "series": [
+      {
+        "color": "#ec4899",
+        "name": "Kimi",
+        "points": [
+          [
+            0,
+            160
+          ],
+          [
+            30,
+            158
+          ],
+          [
+            60,
+            148
+          ],
+          [
+            90,
+            128
+          ],
+          [
+            120,
+            108
+          ],
+          [
+            150,
+            82
+          ],
+          [
+            180,
+            58
+          ],
+          [
+            210,
+            42
+          ],
+          [
+            240,
+            30
+          ],
+          [
+            270,
+            28
+          ],
+          [
+            300,
+            30
+          ],
+          [
+            330,
+            35
+          ],
+          [
+            360,
+            40
+          ]
+        ]
+      },
+      {
+        "color": "#10b981",
+        "name": "DeepSeek",
+        "points": [
+          [
+            0,
+            140
+          ],
+          [
+            30,
+            138
+          ],
+          [
+            60,
+            132
+          ],
+          [
+            90,
+            128
+          ],
+          [
+            120,
+            122
+          ],
+          [
+            150,
+            118
+          ],
+          [
+            180,
+            112
+          ],
+          [
+            210,
+            108
+          ],
+          [
+            240,
+            102
+          ],
+          [
+            270,
+            98
+          ],
+          [
+            300,
+            95
+          ],
+          [
+            330,
+            92
+          ],
+          [
+            360,
+            88
+          ]
+        ]
+      },
+      {
+        "color": "#3b82f6",
+        "name": "MiniMax",
+        "points": [
+          [
+            0,
+            110
+          ],
+          [
+            30,
+            108
+          ],
+          [
+            60,
+            105
+          ],
+          [
+            90,
+            102
+          ],
+          [
+            120,
+            100
+          ],
+          [
+            150,
+            98
+          ],
+          [
+            180,
+            95
+          ],
+          [
+            210,
+            92
+          ],
+          [
+            240,
+            90
+          ],
+          [
+            270,
+            88
+          ],
+          [
+            300,
+            85
+          ],
+          [
+            330,
+            82
+          ],
+          [
+            360,
+            80
+          ]
+        ]
+      },
+      {
+        "color": "#f97316",
+        "name": "Qwen",
+        "points": [
+          [
+            0,
+            100
+          ],
+          [
+            30,
+            102
+          ],
+          [
+            60,
+            98
+          ],
+          [
+            90,
+            102
+          ],
+          [
+            120,
+            108
+          ],
+          [
+            150,
+            112
+          ],
+          [
+            180,
+            115
+          ],
+          [
+            210,
+            112
+          ],
+          [
+            240,
+            115
+          ],
+          [
+            270,
+            110
+          ],
+          [
+            300,
+            108
+          ],
+          [
+            330,
+            105
+          ],
+          [
+            360,
+            102
+          ]
+        ]
+      },
+      {
+        "color": "#0ea5e9",
+        "name": "ERNIE",
+        "points": [
+          [
+            0,
+            130
+          ],
+          [
+            30,
+            128
+          ],
+          [
+            60,
+            124
+          ],
+          [
+            90,
+            118
+          ],
+          [
+            120,
+            114
+          ],
+          [
+            150,
+            108
+          ],
+          [
+            180,
+            100
+          ],
+          [
+            210,
+            92
+          ],
+          [
+            240,
+            84
+          ],
+          [
+            270,
+            80
+          ],
+          [
+            300,
+            74
+          ],
+          [
+            330,
+            70
+          ],
+          [
+            360,
+            66
+          ]
+        ]
+      }
+    ]
+  },
+  "chrome": {
+    "en": {
+      "btn_all": "all",
+      "btn_clear": "clear",
+      "feed_loading": "Loading…",
+      "feed_title": "Latest in window",
+      "headline_kicker": "Trending now",
+      "lens_closed": "Closed",
+      "lens_open": "Open",
+      "locale_aria": "Display language",
+      "pill_brands": "Brands",
+      "pill_discourse": "Discourse",
+      "pill_lang": "Lang",
+      "pill_nationalism": "Nationalism",
+      "pill_role": "Role",
+      "pill_sentiment": "Sentiment",
+      "pill_unsanctioned": "Unsanctioned",
+      "pulse_label": "Trending · 24h",
+      "pulse_updated": "· 23s ago",
+      "tz_local": "local",
+      "tz_title": "Toggle local ⇄ California time",
+      "window_aria": "Time-period selector"
+    },
+    "original": {
+      "btn_all": "all",
+      "btn_clear": "clear",
+      "feed_loading": "Loading…",
+      "feed_title": "Latest in window",
+      "headline_kicker": "Trending now",
+      "lens_closed": "Closed",
+      "lens_open": "Open",
+      "locale_aria": "Display language",
+      "pill_brands": "Brands",
+      "pill_discourse": "Discourse",
+      "pill_lang": "Lang",
+      "pill_nationalism": "Nationalism",
+      "pill_role": "Role",
+      "pill_sentiment": "Sentiment",
+      "pill_unsanctioned": "Unsanctioned",
+      "pulse_label": "Trending · 24h",
+      "pulse_updated": "· 23s ago",
+      "tz_local": "local",
+      "tz_title": "Toggle local ⇄ California time",
+      "window_aria": "Time-period selector"
+    },
+    "zh_cn": {
+      "btn_all": "全选",
+      "btn_clear": "清空",
+      "feed_loading": "加载中…",
+      "feed_title": "本窗口最新",
+      "headline_kicker": "正在热议",
+      "lens_closed": "闭源",
+      "lens_open": "开源",
+      "locale_aria": "显示语言",
+      "pill_brands": "品牌",
+      "pill_discourse": "话语",
+      "pill_lang": "语言",
+      "pill_nationalism": "民族主义",
+      "pill_role": "角色",
+      "pill_sentiment": "情绪",
+      "pill_unsanctioned": "未授权",
+      "pulse_label": "趋势 · 24h",
+      "pulse_updated": "· 23秒前",
+      "tz_local": "本地",
+      "tz_title": "切换 本地 ⇄ 加州时间",
+      "window_aria": "时间窗口"
+    }
+  },
+  "feed": {
+    "empty": {
+      "items": [],
+      "message": "No posts in this window"
+    },
+    "items": [
+      {
+        "handle": "@kimi_moonshot",
+        "offset_minutes": 12,
+        "post_types": [
+          "buzz_releases",
+          "hands_on_usage"
+        ],
+        "sentiments": [
+          "positive",
+          "mixed"
+        ],
+        "text": {
+          "en": "Kimi K3 open weights are out! Strong reasoning scores, MIT license. Try the 7B variant first.",
+          "original": "Kimi K3 open weights are out! Strong reasoning scores, MIT license. Try the 7B variant first.",
+          "synthesis": "月之暗面开源权重上线，推理表现亮眼，MIT 协议。建议先试 7B。",
+          "zh_cn": "Kimi K3 开源权重已发布！推理分数强，MIT 许可。先从 7B 变体试起。"
+        }
+      },
+      {
+        "handle": "@awnihannun",
+        "offset_minutes": 24,
+        "post_types": [
+          "performance_comparisons",
+          "feedback_questions"
+        ],
+        "sentiments": [
+          "negative"
+        ],
+        "text": {
+          "en": "Ran Kimi K3 on the standard reasoning eval — ahead of Qwen3 on math, behind DeepSeek-R1 on code.",
+          "original": "Ran Kimi K3 on the standard reasoning eval — ahead of Qwen3 on math, behind DeepSeek-R1 on code.",
+          "synthesis": "跑了一轮推理评测：数学超 Qwen3，代码仍落后 R1。",
+          "zh_cn": "在标准推理评测上跑了 Kimi K3——数学超 Qwen3，代码落后 DeepSeek-R1。"
+        }
+      },
+      {
+        "handle": "@rasbt",
+        "offset_minutes": 41,
+        "post_types": [
+          "buzz_releases",
+          "advertising_marketing",
+          "event_announcement"
+        ],
+        "sentiments": [
+          "positive",
+          "negative"
+        ],
+        "text": {
+          "en": "Quick distill: Kimi K3 is a 7B/14B/32B MoE family. MIT, ~3.5k context, no RLHF weights. Solid for self-host.",
+          "original": "Quick distill: Kimi K3 is a 7B/14B/32B MoE family. MIT, ~3.5k context, no RLHF weights. Solid for self-host.",
+          "synthesis": "一句话：7B/14B/32B MoE，MIT，自托管友好。",
+          "zh_cn": "速览：Kimi K3 是 7B/14B/32B MoE 家族。MIT，约 3.5k 上下文，无 RLHF 权重。适合自托管。"
+        }
+      }
+    ]
+  },
+  "filters": [
+    {
+      "group": "brands",
+      "label": "品牌",
+      "options": [
+        "DeepSeek",
+        "Qwen",
+        "Zhipu GLM",
+        "MiniMax AI",
+        "Meta Llama",
+        "Mistral",
+        "Xiaomi MiMo",
+        "ByteDance Doubao",
+        "01.AI Yi",
+        "Tencent Hunyuan",
+        "StepFun",
+        "Baidu ERNIE",
+        "Kuaishou KwaiYii",
+        "Upstage Solar",
+        "InclusionAI",
+        "ChatGLM",
+        "Claude",
+        "LG EXAONE",
+        "Gemini",
+        "Gemma",
+        "GPT",
+        "Grok",
+        "KwaiYii",
+        "Moonshot Kimi",
+        "NVIDIA NeMo",
+        "Sakana AI",
+        "Seed",
+        "SenseTime SenseChat",
+        "SenseNova",
+        "Step",
+        "Test",
+        "Wenxin / Wenxin",
+        "Anthropic",
+        "OpenAI",
+        "SpaceXAI",
+        "Google"
+      ]
+    },
+    {
+      "group": "discourse",
+      "label": "话语",
+      "options": [
+        "真实热度",
+        "讽刺",
+        "阴阳怪气",
+        "自嘲",
+        "自我安慰",
+        "恐惧不确定怀疑",
+        "蒸馏指控",
+        "AI垃圾批评",
+        "荒诞梗",
+        "广告营销"
+      ]
+    },
+    {
+      "group": "role",
+      "label": "角色",
+      "options": [
+        "官方",
+        "员工",
+        "社区",
+        "其他"
+      ]
+    },
+    {
+      "group": "lang",
+      "label": "语言",
+      "options": [
+        "English",
+        "简体中文",
+        "日本語",
+        "Español",
+        "Türkçe",
+        "Français",
+        "Português",
+        "한국어",
+        "Bahasa Indonesia",
+        "العربية",
+        "Polski",
+        "undetected",
+        "其他"
+      ]
+    },
+    {
+      "group": "sentiment",
+      "label": "情绪",
+      "options": [
+        "正面",
+        "负面",
+        "中性",
+        "混合"
+      ]
+    },
+    {
+      "group": "nationalism",
+      "label": "民族主义",
+      "options": [
+        "无",
+        "温和支持",
+        "支持",
+        "建设性批评",
+        "反对",
+        "混合",
+        "无",
+        "温和支持",
+        "支持",
+        "建设性批评",
+        "反对",
+        "混合"
+      ]
+    },
+    {
+      "group": "unsanctioned",
+      "label": "未授权",
+      "options": [
+        "仅显示标记帖"
+      ]
+    }
+  ],
+  "locale": "zh_cn",
+  "topbar": {
+    "locale_options": [
+      "en",
+      "zh_cn",
+      "original"
+    ],
+    "timezone": {
+      "active": "local",
+      "label": "本地"
+    },
+    "windows": [
+      "1",
+      "7",
+      "30",
+      "365"
+    ]
+  }
+}
