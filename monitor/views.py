@@ -23,6 +23,9 @@ from django.db.models import Case, CharField, Count, Prefetch, Q, QuerySet, Valu
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
 
 from core.models import (
     Account,
@@ -103,6 +106,7 @@ _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
     "zh-CN": "zh_cn",
     "zh_cn": "zh_cn",
+    "zh_hans": "zh_cn",
     "original": "__source__",
 }
 
@@ -170,11 +174,18 @@ def _normalize_locale(locale: str | None) -> str:
         return "zh_cn"
     if locale.casefold() == "original":
         return "original"
+    if locale.casefold() == "zh-hans":
+        return "zh_hans"
     for sup in SUPPORTED_LOCALES:
         if locale.casefold() == sup.casefold():
             return sup
     log.warning("unsupported display_locale %r; falling back to 'en'", locale)
     return "en"
+
+
+def _is_zh_locale(locale: str) -> bool:
+    """Whether a display-locale alias should render the Chinese v22 chrome."""
+    return locale in {"zh_cn", "zh-CN", "zh_hans"}
 
 
 def _pretty_followers(count: int | None) -> str:
@@ -238,7 +249,7 @@ def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     both fall through `en` (the source-text locale uses the original
     English-language label rows).
     """
-    if locale == "zh_cn":
+    if locale in {"zh_cn", "zh-CN", "zh_hans"}:
         return _ZHCN_LANG_CODES
     return _EN_LANG_CODES
 
@@ -1299,7 +1310,7 @@ def _build_brands_context() -> list[dict[str, Any]]:
     return brands
 
 
-@login_required
+@ensure_csrf_cookie
 def home(request: HttpRequest) -> HttpResponse:
     """GET / — multi-brand Pushin' Weight home page.
 
@@ -1335,6 +1346,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "applied_filters_json": json.dumps({}),
         "feed": {"rows": feed_rows, "next_cursor": None},
         "active_locale": locale,
+        "is_zh_chrome": _is_zh_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
@@ -1654,7 +1666,6 @@ def _paginate_feed(
     return rows, next_cursor, has_more
 
 
-@login_required
 def home_feed_json(request: HttpRequest) -> JsonResponse:
     """GET /feed/ — cursor-paginated feed for multi-brand home.
 
@@ -1812,7 +1823,6 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
 # ============================================================================
 
 
-@login_required
 def chart_json(request: HttpRequest) -> JsonResponse:
     """GET /chart/ — multi-brand chart data (JSON).
 
@@ -1826,12 +1836,12 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     return JsonResponse(payload)
 
 
-@login_required
 def chart_html(request: HttpRequest) -> HttpResponse:
     """GET /chart.html — multi-brand chart HTML partial for htmx swap.
 
-    Renders _home_chart.html with the data-home JSON payload so
-    pw-chart.js can read it from the canvas attribute.
+    Renders _home_chart.html with the data-home JSON payload. The public
+    root uses its authored SVG + legend shell; /internal explicitly requests
+    the legacy canvas renderer.
     """
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
@@ -1840,7 +1850,10 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "monitor/_home_chart.html",
-        {"payload": json.dumps(payload)},
+        {
+            "payload": json.dumps(payload),
+            "chart_renderer": "canvas" if request.GET.get("renderer") == "canvas" else "svg",
+        },
     )
 
 
@@ -1974,6 +1987,19 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
 
 
 
+def _safe_home_redirect(request: HttpRequest) -> str:
+    """Keep cookie-setting endpoints on the dashboard origin."""
+    referrer = request.META.get("HTTP_REFERER", "")
+    if url_has_allowed_host_and_scheme(
+        referrer,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return referrer
+    return "/"
+
+
+@require_POST
 def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
     """POST /locale/<locale>/ — set locale cookie and redirect back."""
     normalized = _normalize_locale(locale)
@@ -1986,14 +2012,15 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
-    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response = redirect(_safe_home_redirect(request))
     response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
     request.session["_language"] = django_code
     return response
 
 
+@require_POST
 def set_window(request: HttpRequest, days: int) -> HttpResponse:
     """POST /window/<days>/ — set window cookie and redirect back."""
-    response = redirect(request.META.get("HTTP_REFERER", "/"))
+    response = redirect(_safe_home_redirect(request))
     response.set_cookie("home_window", str(days), max_age=365 * 24 * 3600)
     return response

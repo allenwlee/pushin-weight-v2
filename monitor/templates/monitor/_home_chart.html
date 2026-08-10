@@ -1,4 +1,30 @@
 {% load i18n %}
-<canvas class="home-chart"
-        aria-label="{% trans "Daily total posts per brand" %}"
-        data-home='{{ payload|safe }}'></canvas>
+{% if chart_renderer == "svg" %}
+  <svg class="home-chart"
+       viewBox="0 0 360 180"
+       preserveAspectRatio="none"
+       data-home='{{ payload|safe }}'>
+    <rect width="360" height="180" fill="#0f172a"/>
+    <line x1="0" y1="45" x2="360" y2="45" stroke="#1f2937" stroke-dasharray="2 4"/>
+    <line x1="0" y1="90" x2="360" y2="90" stroke="#1f2937" stroke-dasharray="2 4"/>
+    <line x1="0" y1="135" x2="360" y2="135" stroke="#1f2937" stroke-dasharray="2 4"/>
+    <g stroke-width="1.8" fill="none">
+      <polyline stroke="#ec4899" points="0,160 30,158 60,148 90,128 120,108 150,82 180,58 210,42 240,30 270,28 300,30 330,35 360,40"/>
+      <polyline stroke="#10b981" points="0,140 30,138 60,132 90,128 120,122 150,118 180,112 210,108 240,102 270,98 300,95 330,92 360,88"/>
+      <polyline stroke="#3b82f6" points="0,110 30,108 60,105 90,102 120,100 150,98 180,95 210,92 240,90 270,88 300,85 330,82 360,80"/>
+      <polyline stroke="#f97316" points="0,100 30,102 60,98 90,102 120,108 150,112 180,115 210,112 240,115 270,110 300,108 330,105 360,102"/>
+      <polyline stroke="#0ea5e9" points="0,130 30,128 60,124 90,118 120,114 150,108 180,100 210,92 240,84 270,80 300,74 330,70 360,66"/>
+    </g>
+  </svg>
+  <div class="legend">
+    <span><i style="background:#ec4899"></i>Kimi</span>
+    <span><i style="background:#10b981"></i>DeepSeek</span>
+    <span><i style="background:#3b82f6"></i>MiniMax</span>
+    <span><i style="background:#f97316"></i>Qwen</span>
+    <span><i style="background:#0ea5e9"></i>ERNIE</span>
+  </div>
+{% else %}
+  <canvas class="home-chart"
+          aria-label="{% trans "Daily total posts per brand" %}"
+          data-home='{{ payload|safe }}'></canvas>
+{% endif %}

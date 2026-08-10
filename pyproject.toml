@@ -47,3 +47,8 @@ include = ["x_monitor*", "project", "core", "monitor"]
 testpaths = ["tests"]
 addopts = "-ra"
 DJANGO_SETTINGS_MODULE = "project.settings"
+
+[dependency-groups]
+dev = [
+    "playwright>=1.62.0",
+]

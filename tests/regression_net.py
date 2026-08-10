@@ -310,7 +310,7 @@ class RegressionNet:
             return
         default_html = r.text
         # Find the is-active window button — must be 1 (24h), not 7
-        m = re.search(r'<button[^>]*class="window-btn is-active"[^>]*data-pw-window-btn="(\d+)"', default_html)
+        m = re.search(r'<button[^>]*class="is-active"[^>]*data-pw-window-btn="(\d+)"', default_html)
         if m:
             active = int(m.group(1))
             self.assert_(
@@ -349,7 +349,7 @@ class RegressionNet:
             self.failures.append(("u2-cookie-http", f"GET with cookie failed: {e}"))
             return
         cookie_html = r7.text
-        m3 = re.search(r'<button[^>]*class="window-btn is-active"[^>]*data-pw-window-btn="(\d+)"', cookie_html)
+        m3 = re.search(r'<button[^>]*class="is-active"[^>]*data-pw-window-btn="(\d+)"', cookie_html)
         if m3:
             self.assert_(
                 "U2: home_window=7 cookie honored (returning user override)",
