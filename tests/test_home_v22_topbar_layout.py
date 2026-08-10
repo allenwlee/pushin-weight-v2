@@ -15,7 +15,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from datetime import datetime, timezone
 
-from django.test import Client, TestCase
+import pytest
+
+from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
+
+
+pytestmark = pytest.mark.requires_postgres
 
 
 FAKE_ROW = {
@@ -50,18 +55,8 @@ def _patches_active():
     ]
 
 
-class HomeV22TopbarLayoutTests(TestCase):
+class HomeV22TopbarLayoutTests(PostgreSQLV22TestCase):
     """Pins mockup-canon topbar layout (U6 locale+window combined nav)."""
-
-    def setUp(self):
-        self.client = Client(HTTP_HOST="127.0.0.1")
-        from django.contrib.auth import get_user_model
-        U = get_user_model()
-        try:
-            u = U.objects.get(email="allen@quantma.com")
-        except U.DoesNotExist:
-            self.skipTest("test user allen@quantma.com missing; skipping")
-        self.client.force_login(u)
 
     def _get_home(self):
         patches = _patches_active()
@@ -76,14 +71,23 @@ class HomeV22TopbarLayoutTests(TestCase):
         r = self._get_home()
         self.assertEqual(r.status_code, 200)
         body = r.content.decode("utf-8")
-        self.assertRegex(body, r'<header class="topbar[^"]*"[^>]*>\s*<div class="topbar-title-row">')
+        import re
+        assert_v22_selector_matches(
+            self,
+            int(bool(re.search(r'<header class="topbar[^"]*"[^>]*>\s*<div class="topbar-title-row">', body))),
+            selector="header.topbar > .topbar-title-row",
+            locale="en", viewport="desktop", oracle_source="v22-master L846-849",
+        )
 
     def test_app_name_lives_in_title_row(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
         # h1.app-name must be inside .topbar-title-row
-        self.assertRegex(body, r'<div class="topbar-title-row">.*?<h1 class="app-name".*?</h1>.*?</div>',
-                         "app-name must live inside .topbar-title-row per mockup L847")
+        import re
+        self.assertIsNotNone(
+            re.search(r'<div class="topbar-title-row">.*?<h1 class="app-name".*?</h1>.*?</div>', body, re.DOTALL),
+            "app-name must live inside .topbar-title-row per mockup L847",
+        )
 
     def test_locale_toggle_in_title_row(self):
         r = self._get_home()

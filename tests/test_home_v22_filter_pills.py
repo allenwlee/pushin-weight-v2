@@ -13,7 +13,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from datetime import datetime, timezone
 
-from django.test import Client, TestCase
+import pytest
+
+from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
+
+
+pytestmark = pytest.mark.requires_postgres
 
 
 FAKE_ROW = {
@@ -48,18 +53,8 @@ def _patches_active():
     ]
 
 
-class HomeV22FilterPillsTests(TestCase):
+class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
     """Pins mockup-canon U3 filter-pill surface on /."""
-
-    def setUp(self):
-        self.client = Client(HTTP_HOST="127.0.0.1")
-        from django.contrib.auth import get_user_model
-        U = get_user_model()
-        try:
-            u = U.objects.get(email="allen@quantma.com")
-        except U.DoesNotExist:
-            self.skipTest("test user allen@quantma.com missing; skipping")
-        self.client.force_login(u)
 
     def _get_home(self):
         patches = _patches_active()
@@ -73,7 +68,11 @@ class HomeV22FilterPillsTests(TestCase):
         r = self._get_home()
         self.assertEqual(r.status_code, 200)
         body = r.content.decode("utf-8")
-        self.assertIn('class="filter-bar-scroller"', body)
+        assert_v22_selector_matches(
+            self, body.count('class="filter-bar-scroller"'),
+            selector=".filter-bar-scroller", locale="en", viewport="desktop",
+            oracle_source="v22-master L914-1078",
+        )
 
     def test_brands_pill_has_open_closed_lens(self):
         r = self._get_home()

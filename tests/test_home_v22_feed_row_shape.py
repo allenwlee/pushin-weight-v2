@@ -17,7 +17,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from datetime import datetime, timezone
 
-from django.test import Client, TestCase
+import pytest
+
+from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
+
+
+pytestmark = pytest.mark.requires_postgres
 
 
 def _fake_row():
@@ -43,20 +48,8 @@ def _fake_row():
     }
 
 
-class HomeV22FeedRowShapeTests(TestCase):
+class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
     """Pins mockup-canon 2-column feed row shape on /."""
-
-    def setUp(self):
-        self.client = Client(HTTP_HOST="127.0.0.1")
-        # Bypass login_required via force_login with the dev test user.
-        # Skips gracefully if the user doesn't exist in the dev DB.
-        from django.contrib.auth import get_user_model
-        U = get_user_model()
-        try:
-            u = U.objects.get(email="allen@quantma.com")
-        except U.DoesNotExist:
-            self.skipTest("test user allen@quantma.com missing; skipping")
-        self.client.force_login(u)
 
     def _get_home(self):
         """Return rendered HTML of / with DB-free data path."""
@@ -93,8 +86,16 @@ class HomeV22FeedRowShapeTests(TestCase):
     def test_feed_row_outer_div_renders(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
-        self.assertIn('class="feed-row"', body)
-        self.assertIn('data-pw-feed-row', body)
+        assert_v22_selector_matches(
+            self, body.count('class="feed-row"'), selector=".feed-row",
+            locale="en", viewport="desktop",
+            oracle_source="v22-master feed row canon",
+        )
+        assert_v22_selector_matches(
+            self, body.count("data-pw-feed-row"), selector="[data-pw-feed-row]",
+            locale="en", viewport="desktop",
+            oracle_source="v22-master feed row canon",
+        )
 
     def test_feed_row_has_mockup_canon_2column_grid(self):
         r = self._get_home()

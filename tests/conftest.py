@@ -1,21 +1,9 @@
-"""Shared pytest fixtures and markers.
+"""Shared pytest markers and PostgreSQL verification reporting.
 
-Notably: `requires_postgres`, plus a session-end warning when it fired.
-
-The core models declare `db_collation="case_insensitive"` (a Postgres ICU
-collation) so Django cannot build a SQLite test database at all -- every
-`django_db` test in this repo errors on the shipped `.env`
-(`DATABASE_URL=sqlite:///data/django_dev.db`).
-
-Skipping those tests silently is the dangerous part.  The harvest regression
-nets exist because ~half of daily collection was lost with no error; a net
-that quietly does not run reproduces exactly that class of false confidence.
-So the skip is centralized here and announced in the terminal summary.
-
-To run the full suite:
-
-    createdb xmon_test          # once
-    DATABASE_URL=postgres://$(whoami)@localhost:5432/xmon_test pytest
+The v2 schema uses PostgreSQL-only features (notably ICU collations), so a
+SQLite run cannot exercise database-backed regression nets. Required tests
+are skipped centrally when PostgreSQL is absent, reported as incomplete, and
+made non-green rather than silently accepted.
 """
 
 from __future__ import annotations
@@ -30,77 +18,85 @@ def _database_url() -> str:
 
 
 def postgres_available() -> bool:
-    """True when DATABASE_URL points at PostgreSQL.
-
-    An unset DATABASE_URL is treated as NOT available: settings.py defaults to
-    Postgres, but the repo's committed .env overrides it with SQLite, so the
-    conservative reading of "unset" is "probably the SQLite dev default".
-    """
-    url = _database_url()
-    return url.startswith(("postgres://", "postgresql://"))
+    """Return whether Django has been configured with a PostgreSQL URL."""
+    return _database_url().startswith(("postgres://", "postgresql://"))
 
 
-requires_postgres = pytest.mark.skipif(
-    not postgres_available(),
-    reason=(
-        "needs PostgreSQL: core models use a Postgres ICU collation, so Django "
-        "cannot build a SQLite test database. Re-run with "
-        "DATABASE_URL=postgres://... to execute these tests."
-    ),
-)
+requires_postgres = pytest.mark.requires_postgres
 
 _SKIP_REASON = (
-    "needs PostgreSQL: core models use a Postgres ICU collation, so Django "
-    "cannot build a SQLite test database. Re-run with "
-    "DATABASE_URL=postgres://... to execute these tests."
+    "requires real PostgreSQL: this test is incomplete on SQLite because core "
+    "models use PostgreSQL ICU collations. Re-run with DATABASE_URL=postgres://..."
 )
-
-_SKIPPED_FOR_POSTGRES: list[str] = []
+_REQUIRED_POSTGRES_ITEMS: set[str] = set()
+_SKIPPED_REQUIRED_POSTGRES_ITEMS: set[str] = set()
 
 
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "requires_postgres: test needs a real PostgreSQL DATABASE_URL "
-        "(core models use a Postgres ICU collation).",
+        "requires_postgres: required verification that executes only against a "
+        "real PostgreSQL Django test database.",
     )
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip requires_postgres tests unless DATABASE_URL is PostgreSQL.
-
-    Also records how many were skipped so the terminal summary can shout about
-    it -- a silently-skipped regression net is how false confidence starts.
-    """
+    """Classify PostgreSQL-required tests before Django attempts SQLite setup."""
+    _REQUIRED_POSTGRES_ITEMS.clear()
+    _SKIPPED_REQUIRED_POSTGRES_ITEMS.clear()
+    _REQUIRED_POSTGRES_ITEMS.update(
+        item.nodeid for item in items if "requires_postgres" in item.keywords
+    )
     if postgres_available():
         return
+
     skip = pytest.mark.skip(reason=_SKIP_REASON)
     for item in items:
-        if "requires_postgres" in item.keywords:
+        if item.nodeid in _REQUIRED_POSTGRES_ITEMS:
             item.add_marker(skip)
-            _SKIPPED_FOR_POSTGRES.append(item.nodeid)
+            _SKIPPED_REQUIRED_POSTGRES_ITEMS.add(item.nodeid)
+
+
+def _required_postgres_report_counts(terminalreporter) -> tuple[int, int, int]:
+    """Return executed, skipped, and setup/call/teardown-error required counts."""
+    stats = terminalreporter.stats
+    skipped = {
+        report.nodeid
+        for report in stats.get("skipped", [])
+        if report.nodeid in _REQUIRED_POSTGRES_ITEMS
+    }
+    skipped.update(_SKIPPED_REQUIRED_POSTGRES_ITEMS)
+    errors = {
+        report.nodeid
+        for report in stats.get("error", [])
+        if report.nodeid in _REQUIRED_POSTGRES_ITEMS
+    }
+    return len(_REQUIRED_POSTGRES_ITEMS) - len(skipped), len(skipped), len(errors)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """A skipped required PostgreSQL net is incomplete verification, not green."""
+    terminalreporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if terminalreporter is None:
+        return
+    _executed, skipped, errors = _required_postgres_report_counts(terminalreporter)
+    if skipped or errors:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """Make a Postgres-only skip impossible to miss.
-
-    A silent skip is how a regression net rots: the suite stays green while the
-    checks that would catch a regression never execute.
-    """
-    n = len(_SKIPPED_FOR_POSTGRES)
-    if not n:
-        return
-    terminalreporter.write_sep("=", "PostgreSQL-only tests were SKIPPED", yellow=True)
+    """Always expose whether required PostgreSQL verification actually ran."""
+    executed, skipped, errors = _required_postgres_report_counts(terminalreporter)
+    terminalreporter.write_sep("=", "PostgreSQL required-verification status", yellow=True)
     terminalreporter.write_line(
-        f"{n} test(s) did not run because DATABASE_URL is not PostgreSQL "
-        f"(currently: {_database_url() or '<unset>'})."
+        f"required tests: executed={executed} skipped={skipped} errors={errors}"
     )
-    terminalreporter.write_line(
-        "These include the harvest cursor + surface regression nets. They "
-        "protect against a silent ~50% collection loss, so a green run WITHOUT "
-        "them is not a full verification."
-    )
-    terminalreporter.write_line(
-        "Run them with:  DATABASE_URL=postgres://$(whoami)@localhost:5432/"
-        "<db> pytest"
-    )
+    if skipped or errors:
+        terminalreporter.write_line(
+            "INCOMPLETE: required PostgreSQL verification did not fully pass; "
+            "this pytest run is intentionally non-green."
+        )
+        if skipped:
+            terminalreporter.write_line(
+                f"DATABASE_URL is {_database_url() or '<unset>'}; {_SKIP_REASON}"
+            )
