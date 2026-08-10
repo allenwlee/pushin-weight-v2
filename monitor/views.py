@@ -1830,8 +1830,9 @@ def chart_json(request: HttpRequest) -> JsonResponse:
 def chart_html(request: HttpRequest) -> HttpResponse:
     """GET /chart.html — multi-brand chart HTML partial for htmx swap.
 
-    Renders _home_chart.html with the data-home JSON payload so
-    pw-chart.js can read it from the canvas attribute.
+    Renders _home_chart.html with the data-home JSON payload. The public
+    root uses its authored SVG + legend shell; /internal explicitly requests
+    the legacy canvas renderer.
     """
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
@@ -1840,7 +1841,10 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "monitor/_home_chart.html",
-        {"payload": json.dumps(payload)},
+        {
+            "payload": json.dumps(payload),
+            "chart_renderer": "canvas" if request.GET.get("renderer") == "canvas" else "svg",
+        },
     )
 
 

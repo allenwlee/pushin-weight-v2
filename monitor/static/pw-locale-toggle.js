@@ -13,6 +13,81 @@
 (function () {
   'use strict';
 
+  // This is intentionally v22-scoped UI copy.  account.role and the
+  // unsanctioned taxonomy remain database-owned elsewhere; these labels only
+  // describe the authored chrome in the v22 shell.
+  var CHROME = {
+    zh_cn: {
+      locale_aria: '显示语言',
+      window_aria: '时间窗口',
+      pill_brands: '品牌',
+      pill_discourse: '话语',
+      pill_role: '角色',
+      pill_lang: '语言',
+      pill_sentiment: '情绪',
+      pill_nationalism: '民族主义',
+      pill_unsanctioned: '未授权',
+      tz_local: '本地',
+      tz_title: '切换 本地 ⇄ 加州时间'
+    },
+    en: {
+      locale_aria: 'Display language',
+      window_aria: 'Time-period selector',
+      pill_brands: 'Brands',
+      pill_discourse: 'Discourse',
+      pill_role: 'Role',
+      pill_lang: 'Lang',
+      pill_sentiment: 'Sentiment',
+      pill_nationalism: 'Nationalism',
+      pill_unsanctioned: 'Unsanctioned',
+      tz_local: 'local',
+      tz_title: 'Toggle local ⇄ California time'
+    }
+  };
+
+  function chromeLocale(locale) {
+    return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh-cn' ? 'zh_cn' : 'en';
+  }
+
+  function applyChrome(locale) {
+    var key = chromeLocale(locale);
+    var dict = CHROME[key];
+    var useZh = key === 'zh_cn';
+    document.body.setAttribute('data-pw-locale', locale);
+    document.documentElement.lang = useZh ? 'zh-CN' : 'en';
+
+    document.querySelectorAll('[data-i18n], [data-i18n-tz-local]').forEach(function (element) {
+      var key = element.getAttribute('data-i18n') || 'tz_local';
+      var text = dict[key];
+      if (text) element.textContent = text;
+    });
+
+    var localeNav = document.querySelector('.locale-toggle');
+    if (localeNav) {
+      localeNav.setAttribute('aria-label', dict.locale_aria);
+      localeNav.querySelectorAll('[data-pw-locale-btn]').forEach(function (button) {
+        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
+        button.classList.toggle('is-active', button.getAttribute('data-pw-locale-btn') === locale);
+      });
+    }
+
+    document.querySelectorAll('.window-toggle:not(.locale-toggle)').forEach(function (windowNav) {
+      windowNav.setAttribute('aria-label', dict.window_aria);
+      windowNav.querySelectorAll('[data-pw-window-btn]').forEach(function (button) {
+        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
+      });
+    });
+
+    var timezone = document.querySelector('[data-tz-widget]');
+    if (timezone) {
+      timezone.setAttribute('title', dict.tz_title);
+      if ((timezone.getAttribute('data-tz-active') || 'local') === 'local') {
+        timezone.setAttribute('aria-label', dict.tz_title);
+      }
+    }
+    document.dispatchEvent(new CustomEvent('pw:chrome-change', { detail: { locale: locale } }));
+  }
+
   // Read Django CSRF token from cookie (set by CsrfViewMiddleware).
   function getCSRFToken() {
     var name = 'csrftoken=';
@@ -49,6 +124,7 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         var locale = btn.getAttribute('data-pw-locale-btn');
+        applyChrome(locale);
         document.dispatchEvent(new CustomEvent('pw:locale-change', {
           detail: { locale: locale },
         }));
@@ -72,6 +148,7 @@
   }
 
   function init() {
+    applyChrome(document.body.getAttribute('data-pw-locale') || 'zh_cn');
     wireLocale();
     wireWindow();
   }
@@ -81,4 +158,5 @@
   } else {
     init();
   }
+  window.pwApplyChrome = applyChrome;
 })();

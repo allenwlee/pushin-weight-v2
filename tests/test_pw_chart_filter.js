@@ -52,7 +52,7 @@ FakeChart.getChart = function (canvas) {
   return fakeChartInstances.find(function (c) { return c.canvas === canvas; }) || null;
 };
 
-function makeSandbox(homeChartPresent, brandChartPresent) {
+function makeSandbox(rootChartPresent, brandChartPresent, legacyHomeChartPresent) {
   return {
     console: console,
     setTimeout: setTimeout,
@@ -72,9 +72,15 @@ function makeSandbox(homeChartPresent, brandChartPresent) {
         return true;
       },
       querySelectorAll() { return []; },
+      querySelector(sel) {
+        if (sel === '.home-chart-wrap[data-pw-chart]') {
+          return rootChartPresent ? makeElement(null, 'section') : null;
+        }
+        return null;
+      },
       body: { addEventListener() {} },
       getElementById(id) {
-        if (id === 'home-chart') return homeChartPresent ? makeElement(id, 'section') : null;
+        if (id === 'home-chart') return legacyHomeChartPresent ? makeElement(id, 'section') : null;
         if (id === 'brand-chart') return brandChartPresent ? makeElement(id, 'section') : null;
         return null;
       },
@@ -104,11 +110,11 @@ function assert(cond, label) {
 function resetListeners() { Object.keys(listeners).forEach(function (k) { delete listeners[k]; }); }
 
 const src = fs.readFileSync(
-  path.join(__dirname, '..', 'x_monitor', 'static', 'pw-chart.js'),
+  path.join(__dirname, '..', 'monitor', 'static', 'pw-chart.js'),
   'utf8'
 );
 
-// ---- Test 1: filter change with #home-chart present fires fetch ----
+// ---- Test 1: filter change with the root data marker fires fetch ----
 console.log('--- pw-chart.js subscribes to pw:filter-change ---');
 resetListeners();
 let sandbox = makeSandbox(true, false);
@@ -123,7 +129,7 @@ setTimeout(function () {
   assert(fetchCalls.length === 1, 'fetch was called once on filter change');
   if (fetchCalls[0]) {
     const url = fetchCalls[0].url;
-    assert(url.indexOf('/api/v1/home.chart.html') === 0, 'fetched the chart HTML endpoint');
+    assert(url.indexOf('/chart.html') === 0, 'fetched the chart HTML endpoint');
     assert(url.indexOf('filters=') > 0, 'filters query param present');
     assert(url.indexOf(encodeURIComponent(JSON.stringify({ brands: ['qwen'] }))) > 0,
       'filters JSON encodes the active brand list');
@@ -157,7 +163,7 @@ setTimeout(function () {
       setTimeout(function () {
         assert(fetchCalls.length === 1, 'fetch still fires (with empty filters {}) when pwFilter is missing');
 
-        // ---- Test 5 (H1 regression): no #home-chart → no fetch ----
+        // ---- Test 5 (H1 regression): no root region → no fetch ----
         console.log('--- H1: pw-chart no-ops when only #brand-chart exists ---');
         resetListeners();
         let h1Sandbox = makeSandbox(false, true);
@@ -166,12 +172,24 @@ setTimeout(function () {
         fetchCalls = [];
         h1Sandbox.document.dispatchEvent(new h1Sandbox.CustomEvent('pw:filter-change', { detail: {} }));
         setTimeout(function () {
-          assert(fetchCalls.length === 0, 'no fetch fires when #home-chart is absent (single-brand page)');
+          assert(fetchCalls.length === 0, 'no fetch fires when root chart marker is absent (single-brand page)');
 
-          console.log('');
-          console.log('--- summary ---');
-          console.log(passed + ' passed, ' + failed + ' failed');
-          process.exit(failed === 0 ? 0 : 1);
+          // ---- Test 6: /internal's legacy id remains supported ----
+          console.log('--- legacy /internal chart id remains supported ---');
+          resetListeners();
+          let internalSandbox = makeSandbox(false, false, true);
+          vm.createContext(internalSandbox);
+          vm.runInContext(src, internalSandbox, { filename: 'pw-chart-internal.js' });
+          fetchCalls = [];
+          internalSandbox.document.dispatchEvent(new internalSandbox.CustomEvent('pw:filter-change', { detail: {} }));
+          setTimeout(function () {
+            assert(fetchCalls.length === 1, 'legacy #home-chart still refetches on /internal/');
+
+            console.log('');
+            console.log('--- summary ---');
+            console.log(passed + ' passed, ' + failed + ' failed');
+            process.exit(failed === 0 ? 0 : 1);
+          }, 30);
         }, 30);
       }, 30);
     }, 30);
