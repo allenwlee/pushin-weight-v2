@@ -50,7 +50,7 @@
     <section class="home-chart-wrap" id="home-chart"
              hx-get="/chart.html"
              hx-trigger="load every 60s"
-             hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
+             hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {}), renderer: "canvas"}'
              hx-swap="innerHTML">
       {% include "monitor/_home_chart.html" %}
     </section>

@@ -9,7 +9,7 @@ const fs = require('fs');
 // Load the formatter by reading the file and stripping the IIFE wrapper.
 // (We can't require the file directly because it's wrapped in an IIFE.)
 const src = fs.readFileSync(
-  path.join(__dirname, '..', 'x_monitor', 'static', 'pw-feed.js'),
+  path.join(__dirname, '..', 'monitor', 'static', 'pw-feed.js'),
   'utf8'
 );
 
@@ -79,7 +79,7 @@ assertEq(formatLocalTooltip('2026-07-15T21:00:00+00:00').length > 0, true, 'ISO 
 // ---------------------------------------------------------------------------
 
 const feedSrc = fs.readFileSync(
-  path.join(__dirname, '..', 'x_monitor', 'static', 'pw-feed.js'),
+  path.join(__dirname, '..', 'monitor', 'static', 'pw-feed.js'),
   'utf8'
 );
 const bqMatch = feedSrc.match(/function buildQuery\([^)]*\)\s*\{[\s\S]*?\n  \}/m);
@@ -124,6 +124,12 @@ if (!bqMatch) {
   assertEq(out3.indexOf('cursor=2026-07-15T20') >= 0, true, 'buildQuery includes cursor');
   assertEq(out3.indexOf('order=asc') >= 0, true, 'buildQuery includes order=asc');
 }
+
+// v22 uses a data hook without a root id; legacy /internal still has #feed.
+const apostrophe = String.fromCharCode(39);
+const rootSelector = "return $(" + apostrophe + "[data-pw-feed]" + apostrophe + ") || $(" + apostrophe + "#feed" + apostrophe + ");";
+console.log("\n--- getFeedRoot selector migration ---");
+assertEq(feedSrc.includes(rootSelector), true, "getFeedRoot prefers data-pw-feed with #feed fallback");
 
 console.log('\n--- summary ---');
 console.log(passed + ' passed, ' + failed + ' failed');

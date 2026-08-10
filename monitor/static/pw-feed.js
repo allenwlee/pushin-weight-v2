@@ -28,7 +28,7 @@
   }
 
   function getFeedRoot() {
-    return $('section.feed[data-pw-feed]');
+    return $('[data-pw-feed]') || $('#feed');
   }
 
   function buildQuery(filters, opts) {
