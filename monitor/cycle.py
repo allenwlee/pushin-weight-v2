@@ -1930,4 +1930,12 @@ class CycleRunner:
             summary["totals"]["n_attributed"],
             summary["wall_clock_sec"],
         )
+        # Durable cycle summary for cost tooling (plan 2026-08-10-003).
+        # Never aborts the cycle if the write fails.
+        try:
+            from scripts.harvest_cost.emit import finalize_and_persist
+
+            finalize_and_persist(summary, api)
+        except Exception as exc:
+            logger.warning("cycle summary emit failed: %s", exc)
         return summary

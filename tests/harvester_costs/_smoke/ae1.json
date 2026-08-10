@@ -1,0 +1,15 @@
+{
+  "run_id": "20260810T063111_0000-db83da0c",
+  "finished_at": "2026-08-10T06:37:01+00:00",
+  "calls": [
+    {"call_id": "A", "n_results": 2, "status": "completed"},
+    {"call_id": "B1", "n_results": 63, "status": "completed"},
+    {"call_id": "B2", "n_results": 5, "status": "completed"},
+    {"call_id": "B3", "n_results": 4, "status": "completed"},
+    {"call_id": "C1", "n_results": 5, "status": "completed"},
+    {"call_id": "C2", "n_results": 4, "status": "completed"},
+    {"call_id": "C3", "n_results": 4, "status": "completed"}
+  ],
+  "metrics_refresh": {"n_due": 200, "n_refreshed": 174, "n_missing": 26},
+  "totals": {"n_results": 87, "n_inserted": 51, "n_calls_run": 7}
+}
