@@ -29,7 +29,7 @@ if command -v apt-get >/dev/null 2>&1; then
 fi
 python manage.py compilemessages
 
-python manage.py collectstatic --no-input
+python manage.py collectstatic --no-input --clear
 
 # Acquire the migration advisory lock on the same connection that
 # Django will use, then run migrate. The lock is automatically
