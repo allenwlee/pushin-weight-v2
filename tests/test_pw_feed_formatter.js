@@ -27,7 +27,7 @@ const tail = src.substring(idx);
 const Module = require('module');
 const sandbox = new Module('pw-feed-formatter');
 sandbox._compile(head + '\n' + tail + '\n', 'pw-feed.js');
-const { formatRelative, formatLocalTooltip } = sandbox.exports;
+const { formatRelative, formatLocalTooltip, enrichmentStatusHtml } = sandbox.exports;
 
 let passed = 0;
 let failed = 0;
@@ -66,6 +66,23 @@ console.log('\n--- formatLocalTooltip ---');
 assertEq(formatLocalTooltip(null), '', 'null input');
 assertEq(formatLocalTooltip('not a date'), '', 'invalid string');
 assertEq(formatLocalTooltip('2026-07-15T21:00:00+00:00').length > 0, true, 'ISO input: non-empty tooltip');
+
+console.log('\n--- enrichmentStatusHtml ---');
+assertEq(
+  enrichmentStatusHtml({ enrichment_status: 'pending', enrichment_status_label: 'enrichment pending' }),
+  '<span class="enrichment-status enrichment-status-pending" role="status">enrichment pending</span>',
+  'pending state is visible and accessible'
+);
+assertEq(
+  enrichmentStatusHtml({ enrichment_status: 'failed', enrichment_status_label: '<failed>' }),
+  '<span class="enrichment-status enrichment-status-failed" role="status">&lt;failed&gt;</span>',
+  'failed state escapes its accessible label'
+);
+assertEq(
+  enrichmentStatusHtml({ enrichment_status: 'succeeded', enrichment_status_label: 'done' }),
+  '',
+  'succeeded state clears the signal'
+);
 
 // (summary + process.exit moved to end after U4 buildQuery tests)
 

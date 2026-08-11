@@ -263,6 +263,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         super().setUp()
         self.fixture = fixture_from_oracle()
         seed_real_home_orm(self.fixture)
+        from core.models import Post, PostEnrichmentState
+
+        pending_post = Post.objects.order_by("-created_at").first()
+        self.assertIsNotNone(pending_post)
+        PostEnrichmentState.objects.create(post=pending_post)
         from django.contrib.auth import get_user_model
 
         self.browser_user = get_user_model().objects.create_user(
@@ -384,6 +389,22 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                             tz = page.locator("[data-tz-widget]")
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
+                            pending_row = page.locator(
+                                ".feed-row[data-enrichment-status='pending']"
+                            ).first
+                            pending_signal = pending_row.locator(
+                                ".enrichment-status-pending[role='status']"
+                            )
+                            self.assertEqual(pending_signal.count(), 1)
+                            self.assertTrue(pending_signal.is_visible())
+                            self.assertNotEqual((pending_signal.inner_text() or "").strip(), "")
+                            self.assertEqual(
+                                page.locator(
+                                    ".feed-row[data-enrichment-status='succeeded'] "
+                                    ".enrichment-status"
+                                ).count(),
+                                0,
+                            )
                             initial_feed_stamp = feed_stamp.text_content()
                             initial_time = tz.locator("[data-tz-time]").text_content()
                             self.assertRegex(initial_time or "", r"^\d{2}:\d{2}$")

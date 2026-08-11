@@ -95,7 +95,7 @@ def test_official_seeds_own_brand_without_text_and_never_calls_relevance():
         raise AssertionError("official author must bypass relevance")
 
     _, routed = _route(_runner(forbidden), _tweet("official"))
-    assert routed[4] == 0
+    assert routed[5] == 0
     assert Post.objects.filter(tweet_id="official").exists()
     assert set(PostBrand.objects.filter(post_id="official").values_list(
         "brand_id", flat=True
@@ -133,7 +133,7 @@ def test_staff_only_is_gated_then_seeded_on_keep():
 
     _, routed = _route(_runner(keep), _tweet("staff-keep"))
     assert len(calls) == 1
-    assert routed[4] == 0
+    assert routed[5] == 0
     assert PostBrand.objects.filter(
         post_id="staff-keep", brand_id="minimax"
     ).exists()
@@ -142,14 +142,14 @@ def test_staff_only_is_gated_then_seeded_on_keep():
 def test_staff_drop_is_not_persisted_and_fail_open_is_persisted():
     _seed_author(edges=[("minimax", "staff")])
     _, dropped = _route(_runner(lambda s, u: "DROP"), _tweet("staff-drop"))
-    assert dropped[4] == 1
+    assert dropped[5] == 1
     assert not Post.objects.filter(tweet_id="staff-drop").exists()
 
     def fail(system, user):
         raise TimeoutError("30 second bound")
 
     _, opened = _route(_runner(fail), _tweet("staff-open"))
-    assert opened[5]
+    assert opened[6]
     assert PostBrand.objects.filter(
         post_id="staff-open", brand_id="minimax"
     ).exists()
@@ -200,7 +200,7 @@ def test_staff_candidate_near_receipt_deadline_fails_open_without_llm():
         _runner(lambda s, u: calls.append(1) or "DROP"), item
     )
     assert calls == []
-    assert any("receipt_age_fail_open" in value for value in routed[5])
+    assert any("receipt_age_fail_open" in value for value in routed[6])
     assert Post.objects.filter(tweet_id="receipt-old").exists()
 
 

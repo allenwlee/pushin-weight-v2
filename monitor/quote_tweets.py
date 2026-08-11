@@ -45,7 +45,7 @@ class _Attributable(Protocol):
 
     def _persist_items(
         self, items: list[dict[str, Any]]
-    ) -> tuple[int, int, int]: ...
+    ) -> tuple[int, int, int, int]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ def ingest_quote_tweets(
     kept = [it for it in qt_items if not it.get("_unattributed")]
     if not kept:
         return 0
-    n_inserted, _n_attr, _n_failed = runner._persist_items(kept)
+    n_inserted, _n_updated, _n_attr, _n_failed = runner._persist_items(kept)
     return n_inserted
 
 
@@ -416,4 +416,3 @@ def run_quote_tweet_channel(
         "daily_ran": False,
         "daily_n_ingested": 0,
     }
-

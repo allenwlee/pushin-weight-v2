@@ -88,7 +88,7 @@ def harvest(monkeypatch):
             classmethod(lambda cls: api),
         )
         monkeypatch.setattr(
-            CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+            CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
         stats = CycleRunner(cycle_kind="scheduled").run()
         return api, stats

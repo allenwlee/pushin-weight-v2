@@ -111,9 +111,30 @@
     });
   }
 
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function enrichmentStatusHtml(row) {
+    var status = row.enrichment_status || 'succeeded';
+    if (status !== 'pending' && status !== 'failed') return '';
+    var label = row.enrichment_status_label || ('enrichment ' + status);
+    return '<span class="enrichment-status enrichment-status-' + status +
+      '" role="status">' + escapeHtml(label) + '</span>';
+  }
+
   // Exposed for unit tests (Node).
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { formatRelative: formatRelative, formatLocalTooltip: formatLocalTooltip };
+    module.exports = {
+      formatRelative: formatRelative,
+      formatLocalTooltip: formatLocalTooltip,
+      enrichmentStatusHtml: enrichmentStatusHtml,
+    };
     return;
   }
 
@@ -128,17 +149,9 @@
     div.setAttribute('data-nat-cn', row.nat_cn || '');
     div.setAttribute('data-nat-us', row.nat_us || '');
     div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
+    div.setAttribute('data-enrichment-status', row.enrichment_status || 'succeeded');
     div.innerHTML = renderRowHtml(row);
     return div;
-  }
-
-  function escapeHtml(s) {
-    if (s == null) return '';
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   // U3 helper: strip a leading "@" if present.
@@ -170,7 +183,7 @@
           '<div class="body">' +
             '<div class="head">' +
               '<span class="handle">' + handleHtml + '</span>' +
-              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span></span>' +
+              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + '</span>' +
             '</div>' +
             '<div class="text" data-text-cycle role="button" tabindex="0">' +
               escapeHtml((row.text_translated || row.text_en || row.text || '').toString().slice(0, 600)) +

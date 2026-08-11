@@ -42,6 +42,7 @@ def _make_post(tweet_id: str, created_at: str, like_count: int = 0, **kw) -> dic
         "brand_nicknames": [],
         "classifications_by_brand": {},
         "unsanctioned": False,
+        "enrichment_status": "succeeded",
         "account": {"handle": "@user", "role": None, "followers_count": 0},
     }
     d.update(kw)
@@ -308,6 +309,23 @@ class TestSerializeFeedRow:
         assert "text_translated" in row
         assert "classifications" in row
         assert "account" in row
+        assert row["enrichment_status"] == "succeeded"
+
+    @pytest.mark.parametrize(
+        ("locale", "expected_label"),
+        (("en", "enrichment pending"), ("zh_cn", "补充处理中")),
+    )
+    def test_includes_localized_pending_enrichment_state(self, locale, expected_label):
+        post = _make_post(
+            "100",
+            "2026-07-20T10:00:00+00:00",
+            enrichment_status="pending",
+        )
+
+        row = _serialize_feed_row(post, locale)
+
+        assert row["enrichment_status"] == "pending"
+        assert row["enrichment_status_label"] == expected_label
 
     def test_includes_brands_and_nicknames(self):
         post = _make_post(
@@ -407,6 +425,32 @@ class TestFeedViewIntegration:
         assert "has_more" in data
         assert "applied_filters" in data
         assert "locale" in data
+
+    def test_feed_returns_durable_enrichment_state(self, client, django_user_model):
+        from django.utils import timezone
+
+        from core.models import Post, PostEnrichmentState
+
+        user = django_user_model.objects.create_user(
+            username="enrichment-user", password="pass",
+        )
+        post = Post.objects.create(
+            tweet_id="enrichment-pending",
+            text="pending post",
+            created_at=timezone.now(),
+        )
+        PostEnrichmentState.objects.create(post=post)
+        client.force_login(user)
+
+        response = client.get("/feed/")
+
+        assert response.status_code == 200
+        row = next(
+            item for item in response.json()["rows"]
+            if item["tweet_id"] == post.tweet_id
+        )
+        assert row["enrichment_status"] == "pending"
+        assert row["enrichment_status_label"] == "enrichment pending"
 
     def test_feed_requires_login(self, client):
         resp = client.get("/feed/")

@@ -199,6 +199,16 @@ class ListMembershipConfig(BaseModel):
     request_timeout_seconds: int = Field(default=30, ge=1)
 
 
+class EnrichmentConfig(BaseModel):
+    """Bounded durable translation/classification queue."""
+
+    claim_per_cycle: int = Field(default=20, ge=1)
+    max_attempts: int = Field(default=8, ge=1)
+    max_age_hours: int = Field(default=24, ge=1)
+    claim_ttl_seconds: int = Field(default=180, ge=1)
+    attempt_budget_seconds: int = Field(default=90, ge=1)
+
+
 class HarvestConfig(BaseModel):
     """Bounded recovery and one-deadline scheduling contract."""
 
@@ -208,6 +218,7 @@ class HarvestConfig(BaseModel):
     relevancy_timeout_seconds: int = Field(default=30, ge=1)
     backlog: BacklogConfig = BacklogConfig()
     list_membership: ListMembershipConfig = ListMembershipConfig()
+    enrichment: EnrichmentConfig = EnrichmentConfig()
 
     @model_validator(mode="after")
     def _validate_deadline_budget(self) -> HarvestConfig:

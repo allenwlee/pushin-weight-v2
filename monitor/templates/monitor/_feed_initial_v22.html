@@ -17,6 +17,7 @@
        data-nat-cn="{{ row.nat_cn|default:'' }}"
        data-nat-us="{{ row.nat_us|default:'' }}"
        data-unsanctioned="{{ row.unsanctioned|yesno:'1,' }}"
+       data-enrichment-status="{{ row.enrichment_status|default:'succeeded' }}"
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
@@ -32,7 +33,11 @@
                 {% else %}@unknown{% endif %}
               </span>
             {% endwith %}
-            <span class="meta">· {{ row.meta_text|default:'' }} <span class="ts-abs">{{ row.ts_abs_text|default:'' }}</span></span>
+            <span class="meta">· {{ row.meta_text|default:'' }} <span class="ts-abs">{{ row.ts_abs_text|default:'' }}</span>
+              {% if row.enrichment_status == 'pending' or row.enrichment_status == 'failed' %}
+                <span class="enrichment-status enrichment-status-{{ row.enrichment_status }}" role="status">{{ row.enrichment_status_label }}</span>
+              {% endif %}
+            </span>
           </div>
           <div class="text" data-text-cycle role="button" tabindex="0">
             {% if active_locale == 'zh_cn' %}

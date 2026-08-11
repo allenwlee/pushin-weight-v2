@@ -39,6 +39,7 @@ from core.models import (
     PostBrand,
     PostBrandDiscourse,
     PostBrandSignal,
+    PostEnrichmentState,
     PostTypeLabel,
     PostUnsanctionedFlag,
     SentimentLabel,
@@ -616,6 +617,28 @@ def _feed_tint_class(sentiment_keys: list[str]) -> str:
     return "tint-neutral"
 
 
+def _enrichment_status(
+    translation_status: str | None,
+    classification_status: str | None,
+) -> str:
+    """Collapse the two durable stages into one additive feed state."""
+    statuses = {translation_status, classification_status}
+    if PostEnrichmentState.Status.FAILED in statuses:
+        return PostEnrichmentState.Status.FAILED
+    if statuses == {PostEnrichmentState.Status.SUCCEEDED}:
+        return PostEnrichmentState.Status.SUCCEEDED
+    return PostEnrichmentState.Status.PENDING
+
+
+def _enrichment_status_label(status: str, locale: str) -> str:
+    """Return compact accessible copy without changing the feed layout."""
+    if status == PostEnrichmentState.Status.PENDING:
+        return "补充处理中" if locale == "zh_cn" else "enrichment pending"
+    if status == PostEnrichmentState.Status.FAILED:
+        return "补充失败" if locale == "zh_cn" else "enrichment failed"
+    return ""
+
+
 def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = None) -> dict[str, Any]:
     """Serialize a Post ORM instance to the JSON wire shape for the feed.
 
@@ -707,6 +730,11 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
     created_at_raw = post.created_at.isoformat() if post.created_at else None
     created_at_iso = created_at_raw
     unsanctioned = enriched.get("unsanctioned", False) if enriched else False
+    enrichment_status = (
+        enriched.get("enrichment_status", PostEnrichmentState.Status.SUCCEEDED)
+        if enriched
+        else PostEnrichmentState.Status.SUCCEEDED
+    )
 
     # iter 14 (U5): mockup-canon signal keys + relative/abs stamps.
     sent_keys, type_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
@@ -741,6 +769,10 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
         "brand_nicknames": brand_nicknames,
         "classifications": classifications,
         "unsanctioned": unsanctioned,
+        "enrichment_status": enrichment_status,
+        "enrichment_status_label": _enrichment_status_label(
+            enrichment_status, locale
+        ),
         "account": account_wire,
         # iter 14 (U5 feed row structure) — mockup-canon shape for .feed-row
         "sentiment_keys": sent_keys,
@@ -760,8 +792,8 @@ def _enrich_posts_with_classifications(
 ) -> list[dict[str, Any]]:
     """Enrich a Post QuerySet with per-brand classifications and unsanctioned flags.
 
-    Does bulk queries for PostBrandSignal, PostBrandDiscourse, PostUnsanctionedFlag,
-    and BrandAccount to avoid N+1.
+    Does bulk queries for PostBrandSignal, PostBrandDiscourse,
+    PostUnsanctionedFlag, PostEnrichmentState, and BrandAccount to avoid N+1.
 
     Returns a list of dicts with the denormalized shape expected by serializers
     (_post_matches_filter, serialize_feed_page, etc.).
@@ -796,6 +828,15 @@ def _enrich_posts_with_classifications(
             post_id__in=tweet_ids,
         ).values_list("post_id", flat=True)
     )
+
+    enrichment_by_tweet = {
+        state["post_id"]: _enrichment_status(
+            state["translation_status"], state["classification_status"]
+        )
+        for state in PostEnrichmentState.objects.filter(
+            post_id__in=tweet_ids
+        ).values("post_id", "translation_status", "classification_status")
+    }
 
     # Account roles for the brand
     role_map: dict[str, str] = {}
@@ -891,6 +932,10 @@ def _enrich_posts_with_classifications(
             "us_nationalism": None,
             "role_key": role_map.get(post.author_id) if post.author_id else None,
             "unsanctioned": tid in flag_tweet_ids,
+            # Legacy rows predate the durable ledger and were already enriched.
+            "enrichment_status": enrichment_by_tweet.get(
+                tid, PostEnrichmentState.Status.SUCCEEDED
+            ),
             "brand_nicknames": [],
             "brands": [],
             "classifications_by_brand": {},
@@ -1585,6 +1630,13 @@ def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
         "brand_nicknames": post.get("brand_nicknames", []),
         "classifications": classifications,
         "unsanctioned": post.get("unsanctioned", False),
+        "enrichment_status": post.get(
+            "enrichment_status", PostEnrichmentState.Status.SUCCEEDED
+        ),
+        "enrichment_status_label": _enrichment_status_label(
+            post.get("enrichment_status", PostEnrichmentState.Status.SUCCEEDED),
+            locale,
+        ),
         "account": post.get("account", {}),
     }
 

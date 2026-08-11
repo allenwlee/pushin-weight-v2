@@ -30,12 +30,15 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone as django_timezone
 
 from core.models import (
     Account,
@@ -48,6 +51,7 @@ from core.models import (
     PostBrand,
     PostBrandMention,
     PostBrandSignal,
+    PostEnrichmentState,
     PostTypeKey,
     SentimentKey,
 )
@@ -111,6 +115,159 @@ _BRAND_ALIASES: dict[str, str] = {
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+@dataclass(frozen=True)
+class EnrichmentClaimBatch:
+    states: tuple[PostEnrichmentState, ...]
+    quarantined: int = 0
+
+
+def _claim_enrichment_states(
+    *,
+    cfg: Any,
+    run_id: str,
+    now: datetime | None = None,
+) -> EnrichmentClaimBatch:
+    """Claim a bounded oldest-first enrichment batch on PostgreSQL.
+
+    Active leases are excluded, expired leases are recoverable, and attempt/
+    age exhaustion becomes an explicit failed state instead of an immortal
+    pending row.  ``skip_locked`` lets a second writer avoid rows currently
+    owned by another transaction even though the outer writer lock normally
+    serializes production entrypoints.
+    """
+
+    now = now or django_timezone.now()
+    age_cutoff = now - timedelta(hours=cfg.max_age_hours)
+    due = (
+        Q(translation_status=PostEnrichmentState.Status.PENDING)
+        | Q(classification_status=PostEnrichmentState.Status.PENDING)
+    ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
+    claimed: list[PostEnrichmentState] = []
+    quarantined = 0
+
+    with transaction.atomic():
+        candidates = list(
+            PostEnrichmentState.objects.select_for_update(skip_locked=True)
+            .select_related("post")
+            .filter(due)
+            .order_by("created_at", "post_id")[: cfg.claim_per_cycle]
+        )
+        for state in candidates:
+            age_exhausted = state.created_at <= age_cutoff
+            for prefix in ("translation", "classification"):
+                status_name = f"{prefix}_status"
+                attempts_name = f"{prefix}_attempts"
+                if getattr(state, status_name) != PostEnrichmentState.Status.PENDING:
+                    continue
+                error_code = ""
+                if age_exhausted:
+                    error_code = "age_exhausted"
+                elif getattr(state, attempts_name) >= cfg.max_attempts:
+                    error_code = "attempts_exhausted"
+                if error_code:
+                    setattr(state, status_name, PostEnrichmentState.Status.FAILED)
+                    setattr(state, f"{prefix}_error_code", error_code)
+
+            if (
+                state.translation_status == PostEnrichmentState.Status.FAILED
+                and state.classification_status == PostEnrichmentState.Status.FAILED
+            ):
+                quarantined += 1
+                state.claim_owner = ""
+                state.claim_run_id = ""
+                state.claimed_at = None
+                state.claim_expires_at = None
+                state.save()
+                continue
+
+            state.claim_owner = f"harvester:{run_id}"[:128]
+            state.claim_run_id = str(run_id)[:128]
+            state.claimed_at = now
+            state.claim_expires_at = now + timedelta(seconds=cfg.claim_ttl_seconds)
+            for prefix in ("translation", "classification"):
+                if (
+                    getattr(state, f"{prefix}_status")
+                    != PostEnrichmentState.Status.PENDING
+                ):
+                    continue
+                attempts_name = f"{prefix}_attempts"
+                first_name = f"{prefix}_first_attempt_at"
+                setattr(state, attempts_name, getattr(state, attempts_name) + 1)
+                if getattr(state, first_name) is None:
+                    setattr(state, first_name, now)
+                setattr(state, f"{prefix}_last_attempt_at", now)
+            state.save()
+            claimed.append(state)
+
+    return EnrichmentClaimBatch(states=tuple(claimed), quarantined=quarantined)
+
+
+def _release_enrichment_claim(post_id: str, *, run_id: str) -> bool:
+    return bool(
+        PostEnrichmentState.objects.filter(
+            post_id=post_id,
+            claim_run_id=str(run_id)[:128],
+        ).update(
+            claim_owner="",
+            claim_run_id="",
+            claimed_at=None,
+            claim_expires_at=None,
+        )
+    )
+
+
+def _finish_enrichment_stage(
+    *,
+    post_ids: list[str],
+    run_id: str,
+    stage: str,
+    succeeded_ids: set[str],
+    error_code: str,
+    cfg: Any,
+    now: datetime | None = None,
+) -> int:
+    """Resolve one claimed stage and return new terminal failures."""
+
+    if stage not in {"translation", "classification"}:
+        raise ValueError(f"unknown enrichment stage: {stage}")
+    now = now or django_timezone.now()
+    age_cutoff = now - timedelta(hours=cfg.max_age_hours)
+    failed = 0
+    with transaction.atomic():
+        states = list(
+            PostEnrichmentState.objects.select_for_update()
+            .filter(post_id__in=post_ids, claim_run_id=str(run_id)[:128])
+            .order_by("post_id")
+        )
+        for state in states:
+            status_name = f"{stage}_status"
+            if getattr(state, status_name) != PostEnrichmentState.Status.PENDING:
+                continue
+            next_name = f"{stage}_next_attempt_at"
+            error_name = f"{stage}_error_code"
+            if str(state.post_id) in succeeded_ids:
+                setattr(state, status_name, PostEnrichmentState.Status.SUCCEEDED)
+                setattr(state, next_name, None)
+                setattr(state, error_name, "")
+            else:
+                exhausted = getattr(state, f"{stage}_attempts") >= cfg.max_attempts
+                aged = state.created_at <= age_cutoff
+                if exhausted or aged:
+                    setattr(state, status_name, PostEnrichmentState.Status.FAILED)
+                    setattr(
+                        state,
+                        error_name,
+                        "age_exhausted" if aged else "attempts_exhausted",
+                    )
+                    setattr(state, next_name, None)
+                    failed += 1
+                else:
+                    setattr(state, next_name, now)
+                    setattr(state, error_name, str(error_code or "stage_failed")[:128])
+            state.save(update_fields=[status_name, next_name, error_name, "updated_at"])
+    return failed
 
 
 # ============================================================================
@@ -557,10 +714,12 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
     return acc
 
 
-def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | None:
+def _upsert_post(
+    raw: dict[str, Any], account: Account | None = None
+) -> tuple[Post | None, bool]:
     """Create or update a Post row from a normalized tweet dict.
 
-    Returns the Post instance or None if the tweet has no id.
+    Returns ``(Post, created)`` or ``(None, False)`` when the tweet has no id.
 
     Posts.raw denormalization (U3): writes both the typed columns (per
     `docs/plans/2026-07-27-004-…`) AND the `raw` JSONField for one release
@@ -570,7 +729,7 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
     """
     tweet_id = str(raw.get("id") or raw.get("tweet_id") or "")
     if not tweet_id:
-        return None
+        return None, False
     defaults: dict[str, Any] = {}
     if account is not None:
         defaults["author"] = account
@@ -721,10 +880,10 @@ def _upsert_post(raw: dict[str, Any], account: Account | None = None) -> Post | 
         if val is not None:
             defaults[col] = val
 
-    post, _created = Post.objects.update_or_create(
+    post, created = Post.objects.update_or_create(
         tweet_id=tweet_id, defaults=defaults
     )
-    return post
+    return post, created
 
 
 def _persist_attribution(
@@ -883,6 +1042,8 @@ class CycleRunner:
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
         self._posts_inserted: int = 0
+        self._posts_updated: int = 0
+        self._posts_persist_failed: int = 0
         self._posts_attributed: int = 0
         self._api_calls: int = 0
         self._errors: list[str] = []
@@ -894,6 +1055,10 @@ class CycleRunner:
         self._error_counts: dict[str, int] = {
             "translator_batch_failed": 0,
             "classifier_batch_failed": 0,
+            "translator_unavailable": 0,
+            "classifier_unavailable": 0,
+            "classifier_flags_invalid": 0,
+            "enrichment_quarantined": 0,
         }
 
     # ------------------------------------------------------------------
@@ -1292,16 +1457,16 @@ class CycleRunner:
 
     def _route_and_persist(
         self, call: PlannedCall, items: list[dict[str, Any]]
-    ) -> tuple[list[dict[str, Any]], int, int, int, int, list[str]]:
+    ) -> tuple[list[dict[str, Any]], int, int, int, int, int, list[str]]:
         """Persist non-gated posts before any staff relevance request."""
 
         if call.call_id != "A":
-            inserted, attributed, failed = self._persist_items(items)
-            return items, inserted, attributed, failed, 0, []
+            inserted, updated, attributed, failed = self._persist_items(items)
+            return items, inserted, updated, attributed, failed, 0, []
 
         nongated = [item for item in items if not item.get("_call_a_staff_candidate")]
         staff = [item for item in items if item.get("_call_a_staff_candidate")]
-        inserted, attributed, failed = self._persist_items(nongated)
+        inserted, updated, attributed, failed = self._persist_items(nongated)
         kept = list(nongated)
         drops = 0
         degraded: list[str] = []
@@ -1314,12 +1479,15 @@ class CycleRunner:
             drops += candidate_drops
             degraded.extend(candidate_degraded)
             if accepted:
-                n_inserted, n_attributed, n_failed = self._persist_items(accepted)
+                n_inserted, n_updated, n_attributed, n_failed = (
+                    self._persist_items(accepted)
+                )
                 inserted += n_inserted
+                updated += n_updated
                 attributed += n_attributed
                 failed += n_failed
                 kept.extend(accepted)
-        return kept, inserted, attributed, failed, drops, degraded
+        return kept, inserted, updated, attributed, failed, drops, degraded
 
     def _attribute_items(
         self,
@@ -1392,13 +1560,13 @@ class CycleRunner:
     def _persist_items(
         self,
         items: list[dict[str, Any]],
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         """Persist attributed items via Django ORM.
 
         For each item: upsert Account → upsert Post → persist attribution
         (PostBrand + PostBrandMention + PostBrandSignal).
 
-        Returns (n_inserted, n_attributed, n_failed).  `n_failed` matters for
+        Returns (n_inserted, n_updated, n_attributed, n_failed).  `n_failed` matters for
         the cursor: a per-item transaction that rolled back means that tweet
         was NOT stored, so the caller must not advance past its window. Losing
         the count would make the failure permanent, because the overlap only
@@ -1406,6 +1574,7 @@ class CycleRunner:
         duplicates of writes that already succeeded.
         """
         n_inserted = 0
+        n_updated = 0
         n_attributed = 0
         n_failed = 0
         for it in items:
@@ -1414,10 +1583,14 @@ class CycleRunner:
             try:
                 with transaction.atomic():
                     account = _upsert_account(it)
-                    post = _upsert_post(it, account=account)
+                    post, created = _upsert_post(it, account=account)
                     if post is None:
                         continue
-                    n_inserted += 1
+                    if created:
+                        n_inserted += 1
+                    else:
+                        n_updated += 1
+                    PostEnrichmentState.objects.get_or_create(post=post)
                     brand_ids: list[str] = list(it.get("brand_ids") or [])
                     mentions: list[MentionRow] = list(it.get("mentions") or [])
                     classifications: dict = it.get("classifications") or {}
@@ -1430,7 +1603,7 @@ class CycleRunner:
                 tid = str(it.get("id") or it.get("tweet_id") or "?")
                 logger.warning("_persist_items: failed for tweet_id=%s: %s", tid, exc)
                 self._errors.append(f"persist.{tid}: {exc}")
-        return n_inserted, n_attributed, n_failed
+        return n_inserted, n_updated, n_attributed, n_failed
 
     # ------------------------------------------------------------------
     # Step 5: Post-fetch (translate + classify)
@@ -1439,8 +1612,11 @@ class CycleRunner:
     def _run_post_fetch(
         self,
         kept_posts: list[dict[str, Any]],
-    ) -> dict[str, int]:
-        """Run translation + classification on the cycle's kept posts.
+        *,
+        run_id: str = "post-fetch",
+        deadline: Any | None = None,
+    ) -> dict[str, Any]:
+        """Drain a bounded durable translation/classification claim batch.
 
         Stage 1 (translate): calls translate_batch_pragmatics to produce
         text_en / text_zh_cn / lang_detected for each post.
@@ -1461,9 +1637,42 @@ class CycleRunner:
             "n_discourse": 0,
             "n_nationalism": 0,
             "n_failed_translate": 0,
+            "n_enrichment_claimed": 0,
+            "n_enrichment_pending": 0,
+            "n_enrichment_failed": 0,
+            "n_enrichment_succeeded": 0,
+            "n_enrichment_quarantined": 0,
+            "n_enrichment_deferred": 0,
+            "n_translator_unavailable": 0,
+            "n_classifier_unavailable": 0,
+            "n_unsanctioned_persisted": 0,
+            "n_unsanctioned_cleared": 0,
+            "flag_dead_letters": [],
         }
 
-        if not kept_posts:
+        enrichment_cfg = self.cfg.harvest.enrichment
+        if deadline is not None and not deadline.can_start(
+            enrichment_cfg.attempt_budget_seconds
+        ):
+            counters["n_enrichment_deferred"] = PostEnrichmentState.objects.filter(
+                Q(translation_status=PostEnrichmentState.Status.PENDING)
+                | Q(classification_status=PostEnrichmentState.Status.PENDING)
+            ).count()
+            return counters
+
+        claim_batch = _claim_enrichment_states(
+            cfg=enrichment_cfg,
+            run_id=run_id,
+        )
+        claimed_states = list(claim_batch.states)
+        counters["n_enrichment_claimed"] = len(claimed_states)
+        counters["n_enrichment_quarantined"] = claim_batch.quarantined
+        if claim_batch.quarantined:
+            self._error_counts["enrichment_quarantined"] += claim_batch.quarantined
+            self._errors.append(
+                f"post_fetch.enrichment_quarantined:{claim_batch.quarantined}"
+            )
+        if not claimed_states:
             return counters
 
         # Build separate translator + classifier clients.
@@ -1482,19 +1691,15 @@ class CycleRunner:
 
         translator_client = build_translator_client_from_env(self.cfg)
         classifier_client = build_anthropic_client_from_env(self.cfg)
-        if translator_client is None and classifier_client is None:
-            logger.warning(
-                "_run_post_fetch: no LLM client available — "
-                "skipping translate/classify"
-            )
-            return counters
-
-        # Normalize kept_posts to v1 format: {tweet_id, text, brand_ids}
+        # Normalize claimed Django rows to v1 format. ``kept_posts`` remains
+        # in the signature for caller compatibility; durable state is the
+        # queue authority so retries survive later cycles and processes.
         tweets: list[dict[str, Any]] = []
-        for it in kept_posts:
-            tid = str(it.get("id") or it.get("tweet_id") or "")
-            text = it.get("text") or ""
-            brand_ids = it.get("brand_ids") or []
+        for state in claimed_states:
+            post = state.post
+            tid = str(post.pk)
+            text = post.text or ""
+            brand_ids = list(post.brands.values_list("brand_id", flat=True))
             if tid and text:
                 tweets.append({
                     "tweet_id": tid,
@@ -1503,6 +1708,8 @@ class CycleRunner:
                 })
 
         if not tweets:
+            for state in claimed_states:
+                _release_enrichment_claim(state.pk, run_id=run_id)
             return counters
 
         # Build brand_registry from Brand model
@@ -1523,12 +1730,17 @@ class CycleRunner:
         # ---- Stage 1: translate ----
         from x_monitor.translator import translate_batch_pragmatics
 
+        claimed_post_ids = [str(state.pk) for state in claimed_states]
+        translation_succeeded: set[str] = set()
         if translator_client is None:
             logger.warning(
                 "_run_post_fetch: no translator client (ANTHROPIC_BASE_URL "
                 "+ MINIMAX_API_TOKEN not set) — skipping translate; "
                 "classifier stage will run if its client is available"
             )
+            self._error_counts["translator_unavailable"] += 1
+            self._errors.append("post_fetch.translator_unavailable")
+            counters["n_translator_unavailable"] = 1
             translation_rows = []
         else:
             try:
@@ -1589,35 +1801,57 @@ class CycleRunner:
                     text_zh_cn=text_zh_cn,
                     lang_detected=lang_detected or None,
                 )
+                if not r.get("translation_failed") and lang_detected:
+                    translation_succeeded.add(str(tid))
             counters["n_translated"] = len(translation_rows)
             counters["n_failed_translate"] = sum(
                 1 for r in translation_rows if r.get("translation_failed")
             )
+
+        newly_failed = _finish_enrichment_stage(
+            post_ids=claimed_post_ids,
+            run_id=run_id,
+            stage="translation",
+            succeeded_ids=translation_succeeded,
+            error_code=(
+                "translator_unavailable"
+                if translator_client is None
+                else "translation_incomplete"
+            ),
+            cfg=enrichment_cfg,
+        )
+        counters["n_enrichment_quarantined"] += newly_failed
 
         # ---- Stage 2: classify ----
         from x_monitor.attribution import classify_batch_pragmatics_full
 
         pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
 
-        try:
-            if classifier_client is None:
-                logger.warning(
-                    "_run_post_fetch: no classifier client — skipping classify"
+        results: list[dict[str, Any]] = []
+        classification_error_code = "classification_incomplete"
+        if classifier_client is None:
+            logger.warning("_run_post_fetch: no classifier client — skipping classify")
+            self._error_counts["classifier_unavailable"] += 1
+            self._errors.append("post_fetch.classifier_unavailable")
+            counters["n_classifier_unavailable"] = 1
+            classification_error_code = "classifier_unavailable"
+        else:
+            try:
+                results = classify_batch_pragmatics_full(
+                    tweets,
+                    brand_registry,
+                    classifier_client,
+                    on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
+                        "classifier_batch_failed",
+                        self._error_counts["classifier_batch_failed"] + 1,
+                    ),
                 )
-                return counters
-            results = classify_batch_pragmatics_full(
-                tweets,
-                brand_registry,
-                classifier_client,
-                on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
-                    "classifier_batch_failed",
-                    self._error_counts["classifier_batch_failed"] + 1,
-                ),
-            )
-        except Exception as exc:
-            logger.warning("_run_post_fetch: classify failed: %s", exc, exc_info=True)
-            self._error_counts["classifier_batch_failed"] += 1
-            return counters
+            except Exception as exc:
+                logger.warning(
+                    "_run_post_fetch: classify failed: %s", exc, exc_info=True
+                )
+                self._error_counts["classifier_batch_failed"] += 1
+                classification_error_code = "classifier_exception"
 
         # Persist classifications with guardrails
         from core.models import (
@@ -1631,9 +1865,34 @@ class CycleRunner:
             settings, "X_MONITOR_CLASSIFY_BATCH_SIZE", 20
         )
 
+        from monitor.unsanctioned_flags import persist_classifier_flags
+
+        classification_succeeded: set[str] = set()
         for i, (tweet, result) in enumerate(zip(tweets, results)):
             tid = tweet["tweet_id"]
-            by_brand = result.get("by_brand") or {}
+            by_brand = (
+                (result.get("by_brand") or {})
+                if isinstance(result, dict)
+                else {}
+            )
+
+            flag_result = persist_classifier_flags(
+                post_id=tid,
+                classifier_result=result,
+                run_id=run_id,
+            )
+            if flag_result.outcome in {"persisted", "cleared"}:
+                classification_succeeded.add(tid)
+                counters[
+                    "n_unsanctioned_persisted"
+                    if flag_result.outcome == "persisted"
+                    else "n_unsanctioned_cleared"
+                ] += 1
+            if flag_result.degraded:
+                self._error_counts["classifier_flags_invalid"] += 1
+                self._errors.append(f"post_fetch.classifier_flags_invalid:{tid}")
+                if flag_result.dead_letter is not None:
+                    counters["flag_dead_letters"].append(flag_result.dead_letter)
 
             for brand_id, cls in by_brand.items():
                 post_type = cls.get("post_type")
@@ -1723,6 +1982,41 @@ class CycleRunner:
             elif (i + 1) % _CLASSIFY_BATCH_SIZE == 0:
                 self._llm_call_count += 1
 
+        newly_failed += _finish_enrichment_stage(
+            post_ids=claimed_post_ids,
+            run_id=run_id,
+            stage="classification",
+            succeeded_ids=classification_succeeded,
+            error_code=classification_error_code,
+            cfg=enrichment_cfg,
+        )
+        for state in claimed_states:
+            _release_enrichment_claim(state.pk, run_id=run_id)
+
+        resolved_states = list(
+            PostEnrichmentState.objects.filter(post_id__in=claimed_post_ids)
+        )
+        counters["n_enrichment_succeeded"] = sum(
+            1
+            for state in resolved_states
+            if state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+            and state.classification_status == PostEnrichmentState.Status.SUCCEEDED
+        )
+        counters["n_enrichment_failed"] = sum(
+            1
+            for state in resolved_states
+            if state.translation_status == PostEnrichmentState.Status.FAILED
+            or state.classification_status == PostEnrichmentState.Status.FAILED
+        )
+        counters["n_enrichment_pending"] = len(resolved_states) - (
+            counters["n_enrichment_succeeded"] + counters["n_enrichment_failed"]
+        )
+        counters["n_enrichment_quarantined"] = (
+            claim_batch.quarantined + counters["n_enrichment_failed"]
+        )
+        if newly_failed:
+            self._error_counts["enrichment_quarantined"] += newly_failed
+            self._errors.append(f"post_fetch.enrichment_quarantined:{newly_failed}")
         return counters
 
     def _replay_backlog(
@@ -1837,13 +2131,19 @@ class CycleRunner:
                     (
                         kept,
                         inserted,
+                        updated,
                         attributed,
                         persist_failed,
                         llm_drops,
                         relevancy_degraded,
                     ) = self._route_and_persist(call, kept)
                     self._posts_inserted += inserted
+                    self._posts_updated += updated
+                    self._posts_persist_failed += persist_failed
                     self._posts_attributed += attributed
+                    report["n_inserted"] = inserted
+                    report["n_updated"] = updated
+                    report["n_persist_failed"] = persist_failed
                     existing_ids = {
                         str(item.get("id") or item.get("tweet_id") or "")
                         for item in kept_all
@@ -1914,6 +2214,7 @@ class CycleRunner:
         index, search_terms = _build_brand_index(enabled_models)
         search_terms = {**search_terms, **_load_brand_search_terms()}
         kept_all: list[dict[str, Any]] = []
+        deadline = self.cfg.harvest.start_deadline()
         reports = self._replay_backlog(
             calls=calls,
             api=api,
@@ -1921,11 +2222,15 @@ class CycleRunner:
             search_terms=search_terms,
             kept_all=kept_all,
             run_id=run_id,
-            deadline=self.cfg.harvest.start_deadline(),
+            deadline=deadline,
             include_quarantined=include_quarantined,
             quarantined_only=include_quarantined,
         )
-        post_fetch = self._run_post_fetch(kept_all) if kept_all else {}
+        post_fetch = self._run_post_fetch(
+            kept_all,
+            run_id=run_id,
+            deadline=deadline,
+        )
         return {
             "run_id": run_id,
             "status": "completed" if not self._errors else "degraded",
@@ -1965,6 +2270,8 @@ class CycleRunner:
                 "n_calls_run": 0,
                 "n_results": 0,
                 "n_inserted": 0,
+                "n_updated": 0,
+                "n_persist_failed": 0,
                 "n_attributed": 0,
                 "n_classifications_written": 0,
             },
@@ -2238,6 +2545,7 @@ class CycleRunner:
             (
                 kept,
                 n_inserted,
+                n_updated,
                 _n_attributed,
                 n_persist_failed,
                 llm_drop_count,
@@ -2257,7 +2565,10 @@ class CycleRunner:
             call_entry["keep_rate"] = round(len(kept) / nr, 4) if nr > 0 else 0.0
 
             self._posts_inserted += n_inserted
+            self._posts_updated += n_updated
+            self._posts_persist_failed += n_persist_failed
             call_entry["n_inserted"] = n_inserted
+            call_entry["n_updated"] = n_updated
             call_entry["n_persist_failed"] = n_persist_failed
 
             # Accumulate for post-fetch
@@ -2362,6 +2673,30 @@ class CycleRunner:
             <= self.cfg.harvest.tip_sweep_target_seconds
         )
 
+        # ---- Bounded post-fetch queue: immediately after all live tips ----
+        if summary["status"] != "aborted":
+            pf_counters = self._run_post_fetch(
+                kept_all,
+                run_id=run_id,
+                deadline=deadline,
+            )
+            summary.setdefault("post_fetch", {}).update(pf_counters)
+            if pf_counters.get("n_translator_unavailable"):
+                summary["degraded"]["translator_unavailable"] = True
+            if pf_counters.get("n_classifier_unavailable"):
+                summary["degraded"]["classifier_unavailable"] = True
+            if pf_counters.get("n_enrichment_quarantined"):
+                summary["degraded"]["enrichment_quarantined"] = int(
+                    pf_counters["n_enrichment_quarantined"]
+                )
+            if pf_counters.get("flag_dead_letters"):
+                summary["degraded"]["classifier_flag_dead_letters"] = list(
+                    pf_counters["flag_dead_letters"]
+                )
+            summary.setdefault("n_errors_by_type", {}).update(
+                dict(self._error_counts)
+            )
+
         if self.cycle_kind == "scheduled":
             if list_id is not None:
                 reconciliation = run_due_reconciliation(
@@ -2393,18 +2728,6 @@ class CycleRunner:
                 deadline=deadline,
             )
 
-        # ---- Post-fetch: translate + classify ----
-        if kept_all and summary["status"] != "aborted":
-            pf_counters = self._run_post_fetch(kept_all)
-            summary.setdefault("post_fetch", {}).update(pf_counters)
-            # Plan 2026-08-01-002 U4: surface typed error counters so
-            # the dashboard (or operator grep) can flag silent-failure
-            # modes (translator_batch_failed > 0 for 3 cycles in a row
-            # = lang_detected regression in production).
-            summary.setdefault("n_errors_by_type", {}).update(
-                dict(self._error_counts)
-            )
-
         # ---- One-shot metrics refresh (plan 2026-08-10-002) ----
         # Replaces continuous official/staff + daily QT recheck. Never
         # aborts the cycle — refresh failures are degraded stats.
@@ -2427,6 +2750,8 @@ class CycleRunner:
         # ---- Finalize ----
         summary["totals"]["n_results"] = self._posts_seen
         summary["totals"]["n_inserted"] = self._posts_inserted
+        summary["totals"]["n_updated"] = self._posts_updated
+        summary["totals"]["n_persist_failed"] = self._posts_persist_failed
         summary["totals"]["n_attributed"] = self._posts_attributed
 
         if summary["status"] == "running":

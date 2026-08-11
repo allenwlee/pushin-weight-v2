@@ -31,7 +31,7 @@ def test_ingest_attaches_parent_text_when_quoted_missing():
         return 1
 
     runner._attribute_items.side_effect = _attr
-    runner._persist_items.return_value = (1, 1, 0)
+    runner._persist_items.return_value = (1, 0, 1, 0)
 
     items = [
         {
@@ -129,7 +129,7 @@ def test_official_capture_fetches_when_delta_met():
         return len(items)
 
     runner._attribute_items.side_effect = _attr
-    runner._persist_items.return_value = (1, 1, 0)
+    runner._persist_items.return_value = (1, 0, 1, 0)
     api = MagicMock()
     api.get_tweets_by_ids.return_value = {"P1": {"quote_count": 12}}
     api.get_quote_tweets.return_value = [

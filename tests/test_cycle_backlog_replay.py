@@ -97,7 +97,7 @@ def test_successful_replay_uses_persist_core_and_retires_claim(monkeypatch):
 
     def persist(items):
         persisted.extend(items)
-        return 1, 1, 0
+        return 1, 0, 1, 0
 
     monkeypatch.setattr(runner, "_persist_items", persist)
     reports = runner._replay_backlog(

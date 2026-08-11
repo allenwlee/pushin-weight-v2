@@ -86,7 +86,7 @@ def wired(monkeypatch):
             classmethod(lambda cls: api),
         )
         monkeypatch.setattr(
-            CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+            CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
         for key, val in (settings_over or {}).items():
             monkeypatch.setattr(cycle_mod.settings, key, val, raising=False)
@@ -201,7 +201,7 @@ def test_one_failing_call_does_not_block_the_others(wired):
             monkeypatch_target, "from_env", classmethod(lambda cls: api)
         )
         mp.setattr(
-            CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+            CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
         CycleRunner(cycle_kind="scheduled").run()
 
@@ -380,6 +380,31 @@ def test_clean_persist_still_advances_the_cursor(wired):
     )
 
 
+def test_repeat_sighting_reports_update_not_insert(wired):
+    """R22: the production cycle must preserve Django's created boolean.
+
+    A repeated tweet is useful work because mutable engagement and author
+    fields are refreshed, but it is not a new database insert.  Counting it
+    as inserted makes the operator summary overstate freshness and hides the
+    exact fetch-to-insert gap this pipeline is meant to explain.
+    """
+    from core.models import Brand, Post
+
+    Brand.objects.get_or_create(nickname="deepseek")
+    call = _planned()
+    tweet = _tweet("repeat")
+    tweet["text"] = "DeepSeek just shipped a new model"
+
+    _, first = wired(calls=[call], results=[tweet])
+    _, second = wired(calls=[call], results=[tweet])
+
+    assert Post.objects.filter(tweet_id="repeat").count() == 1
+    assert first["totals"]["n_inserted"] == 1
+    assert first["totals"]["n_updated"] == 0
+    assert second["totals"]["n_inserted"] == 0
+    assert second["totals"]["n_updated"] == 1
+
+
 def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeypatch):
     """A capped live window moves its unsearched tail to durable ownership.
 
@@ -419,7 +444,7 @@ def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeyp
         cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
     )
     monkeypatch.setattr(
-        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+        CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
     )
     stats = CycleRunner(cycle_kind="scheduled").run()
 
@@ -471,7 +496,7 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
         cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
     )
     monkeypatch.setattr(
-        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+        CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
     )
     stats = CycleRunner(cycle_kind="scheduled").run()
 
@@ -503,7 +528,7 @@ def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
         cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: CaptureApi())
     )
     monkeypatch.setattr(
-        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+        CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
     )
     monkeypatch.setattr(
         cycle_mod.settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50, raising=False
@@ -541,7 +566,7 @@ def test_truncated_empty_result_transfers_full_interval(wired, monkeypatch):
         cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
     )
     monkeypatch.setattr(
-        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+        CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
     )
     stats = CycleRunner(cycle_kind="scheduled").run()
 
@@ -578,7 +603,7 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
         cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
     )
     monkeypatch.setattr(
-        CycleRunner, "_run_post_fetch", lambda self, items: {}, raising=False
+        CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
     )
     CycleRunner(cycle_kind="scheduled").run()
 

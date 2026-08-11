@@ -52,6 +52,9 @@ def attach_metrics(call_entry: dict) -> dict:
     call_entry["keep_rate"] = compute_keep_rate(nr, nk)
     call_entry["not_include_drops"] = 0
     call_entry["llm_drops"] = 0
+    call_entry.setdefault("n_inserted", 0)
+    call_entry.setdefault("n_updated", 0)
+    call_entry.setdefault("n_persist_failed", 0)
     return call_entry
 
 
@@ -107,6 +110,16 @@ def test_attach_metrics_zero_results():
     attach_metrics(entry)
     assert entry["fetch_n"] == 0
     assert entry["keep_rate"] == 0.0
+
+
+def test_attach_metrics_includes_truthful_persistence_counter_shape():
+    entry = {"call_id": "C1", "n_results": 1, "n_kept": 1}
+
+    attach_metrics(entry)
+
+    assert entry["n_inserted"] == 0
+    assert entry["n_updated"] == 0
+    assert entry["n_persist_failed"] == 0
 
 
 def test_spike_detection_shape():

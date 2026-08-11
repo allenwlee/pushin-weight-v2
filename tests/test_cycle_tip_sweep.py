@@ -56,7 +56,11 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
     monkeypatch.setattr(cycle_mod, "_build_brand_index", lambda models: (None, {}))
     monkeypatch.setattr(cycle_mod, "_load_brand_search_terms", lambda: {})
     monkeypatch.setattr(cycle_mod, "_advance_cursor", lambda *a, **k: True)
-    monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda self, items: {})
+    def post_fetch(self, items, **kwargs):
+        events.append("post_fetch")
+        return {}
+
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", post_fetch)
     monkeypatch.setattr(CycleRunner, "_replay_backlog", lambda self, **kwargs: [])
 
     def observe(**kwargs):
@@ -84,7 +88,7 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
 
     def persist(self, items):
         events.append(f"persist:{items[0]['id']}")
-        return len(items), len(items), 0
+        return len(items), 0, len(items), 0
 
     monkeypatch.setattr(CycleRunner, "_attribute_items", attribute)
     monkeypatch.setattr(CycleRunner, "_persist_items", persist)
@@ -103,7 +107,7 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
         if call_id == "A":
             expected.append("observe:A")
         expected.append(f"persist:{call_id}")
-    expected.append("reconcile")
+    expected.extend(["post_fetch", "reconcile"])
     assert events == expected
     assert result["totals"]["n_calls_run"] == 7
     assert result["tip_sweep_within_target"] is True
