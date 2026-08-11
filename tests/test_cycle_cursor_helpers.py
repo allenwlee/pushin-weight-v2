@@ -23,18 +23,18 @@ import pytest
 
 from monitor import cycle as cycle_mod
 from monitor.cycle import (
-    _CURSOR_OVERLAP,
-    _MAX_LOOKBACK,
     _NULL_BUCKET_SENTINEL,
     _advance_cursor,
     _cursor_key,
     _read_cursor_since,
 )
+from x_monitor.config import CycleConfig
 from x_monitor.query_plan import PlannedCall
 
-
-
 NOW = datetime(2026, 7, 27, 12, 0, 0, tzinfo=timezone.utc)
+_CYCLE_DEFAULTS = CycleConfig()
+_CURSOR_OVERLAP = timedelta(seconds=_CYCLE_DEFAULTS.cursor_overlap_seconds)
+_MAX_LOOKBACK = timedelta(hours=_CYCLE_DEFAULTS.max_lookback_hours)
 
 
 def _call(call_id: str = "B1", *, brand_id: str = "minimax", bucket=None):
@@ -104,7 +104,7 @@ def test_fresh_cursor_uses_overlap_not_the_floor(fake_cursor):
     This is the steady-state path: if the floor won here, every cycle would
     re-sweep the whole lookback window and the cursor would be pointless.
     """
-    cursor = NOW - timedelta(minutes=15)
+    cursor = NOW - timedelta(minutes=10)
     fake_cursor(row=_FakeRow(cursor))
     assert _read_cursor_since(_call(), now=NOW) == cursor - _CURSOR_OVERLAP
 
@@ -376,8 +376,10 @@ def test_x_query_specs_must_have_distinct_call_id_placeholders():
     load_config; this asserts it fires.
     """
     from pathlib import Path
-    from x_monitor.config import load_config
+
     import yaml as _yaml
+
+    from x_monitor.config import load_config
 
     bad = {
         "search": {"max_results": 50, "max_pages": 5, "max_per_page": 20},

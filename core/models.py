@@ -1289,14 +1289,15 @@ class HarvestBacklogWindowManager(models.Manager):
         now=None,
         call_identity: dict[str, str] | None = None,
         include_quarantined: bool = False,
+        only_quarantined: bool = False,
     ):
         """Claim one due interval with PostgreSQL skip-locked semantics."""
 
         now = now or timezone.now()
         with transaction.atomic():
             self.recover_expired_claims(now=now)
-            states = ["pending"]
-            if include_quarantined:
+            states = ["quarantined"] if only_quarantined else ["pending"]
+            if include_quarantined and not only_quarantined:
                 states.append("quarantined")
             candidates = self.select_for_update(skip_locked=True).filter(
                 state__in=states

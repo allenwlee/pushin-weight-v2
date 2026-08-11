@@ -15,11 +15,10 @@ from x_monitor.apify import (
     TwitterApiClient,
     TwitterApiRateLimitError,
     TwitterApiServerError,
+    _normalize_article,
     _normalize_follower,
     _normalize_tweet,
-    _normalize_article,
 )
-
 
 # --- error mapping --------------------------------------------------------
 
@@ -600,8 +599,8 @@ class TestWalkSearch:
 
     def test_stops_at_max_pages_defensively(self):
         client = self._client()
-        # Always signal has_next_page=True with a fresh cursor so the loop
-        # would run forever without the max_pages cap.
+        # Characterization: an underfilled final page can still advertise a
+        # continuation, so max_pages exhaustion is unfinished coverage.
         def infinite_pages(*args, **kwargs):
             return {
                 "tweets": [_tweet("1")],
@@ -613,10 +612,39 @@ class TestWalkSearch:
             out, truncated = client._walk_search("from:x", max_results=500, max_pages=3)
         # max_pages=3 means at most 3 calls to _get, even though pages never
         # run out. Should return 3 tweets (1 per page) without spinning.
-        # truncated=False: we exited via max_pages exhaustion, not mid-page
-        # cap with has_more (the loop ends with return out, False).
         assert len(out) == 3
         assert mock_get.call_count == 3
+        assert truncated is True
+
+    def test_page_iterator_is_lazy_and_stamps_exact_page_receipt(self):
+        client = self._client()
+        page1 = {
+            "tweets": [_tweet("first")],
+            "has_next_page": True,
+            "next_cursor": "deep",
+        }
+        page2 = {
+            "tweets": [_tweet("second")],
+            "has_next_page": False,
+        }
+
+        with patch.object(client, "_get", side_effect=[page1, page2]) as mock_get:
+            pages = client.run_search_pages("from:x", max_results=20)
+            first = next(pages)
+            assert mock_get.call_count == 1
+            second = next(pages)
+
+        assert mock_get.call_count == 2
+        assert first.page_number == 1
+        assert first.has_more is True
+        assert second.page_number == 2
+        assert second.has_more is False
+        assert first.items[0]["_api_received_at"] == first.received_at.isoformat()
+        assert (
+            first.items[0]["_api_received_monotonic"]
+            == first.received_monotonic
+        )
+        assert second.items[0]["_api_received_at"] == second.received_at.isoformat()
 
     def test_returns_empty_on_empty_response(self):
         client = self._client()

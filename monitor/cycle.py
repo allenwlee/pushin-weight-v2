@@ -31,11 +31,10 @@ import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from django.conf import settings
-from pathlib import Path
-from x_monitor.config import Config, load_config
 from django.db import transaction
 
 from core.models import (
@@ -44,6 +43,7 @@ from core.models import (
     BrandKeyword,
     BrandSearchTerm,
     CallState,
+    HarvestBacklogWindow,
     Post,
     PostBrand,
     PostBrandMention,
@@ -51,6 +51,7 @@ from core.models import (
     PostTypeKey,
     SentimentKey,
 )
+from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
 
 # x_monitor imports — reuse existing pipeline modules.
 # These have no import-time side effects; they don't touch Store or
@@ -67,7 +68,7 @@ from x_monitor.attribution import (
     attribute_to_brands,
     compile_keyword_index,
 )
-from x_monitor.config import KNOWN_MODELS
+from x_monitor.config import KNOWN_MODELS, Config, CycleConfig, load_config
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 
@@ -140,6 +141,7 @@ def _now_iso() -> str:
 # two never address different rows.  Mirrors v1's _NULL_BUCKET_SENTINEL
 # (x_monitor/store.py:455-459).
 _NULL_BUCKET_SENTINEL = ""
+_DEFAULT_CYCLE_CONFIG = CycleConfig()
 
 
 
@@ -256,7 +258,9 @@ def _cursor_key(call: PlannedCall) -> dict[str, str]:
     }
 
 
-def _read_cursor_since(call: PlannedCall, *, now: datetime, cfg: Config) -> datetime:
+def _read_cursor_since(
+    call: PlannedCall, *, now: datetime, cfg: Config | None = None
+) -> datetime:
     """Resolve the `since_time` floor for one call, clamped to cfg.cycle.max_lookback.
 
     Returns an aware UTC datetime, always.  Four cases:
@@ -272,8 +276,9 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime, cfg: Config) -> date
     losing the (now, prior) span. Clamping since to (now - overlap) bounds
     the damage to a one-cycle re-fetch, which dedup absorbs.
     """
-    floor = now - timedelta(hours=cfg.cycle.max_lookback_hours)
-    ceiling = now - timedelta(seconds=cfg.cycle.cursor_overlap_seconds)
+    cycle_cfg = cfg.cycle if cfg is not None else _DEFAULT_CYCLE_CONFIG
+    floor = now - timedelta(hours=cycle_cfg.max_lookback_hours)
+    ceiling = now - timedelta(seconds=cycle_cfg.cursor_overlap_seconds)
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
         if row is None or row.last_completed_at is None:
@@ -307,7 +312,7 @@ def _read_cursor_since(call: PlannedCall, *, now: datetime, cfg: Config) -> date
                 prior - now,
             )
             return ceiling
-        return max(prior - timedelta(seconds=cfg.cycle.cursor_overlap_seconds), floor)
+        return max(prior - timedelta(seconds=cycle_cfg.cursor_overlap_seconds), floor)
     except Exception as exc:
         logger.warning(
             "_read_cursor_since: cursor read failed for call_id=%s: %s; "
@@ -938,7 +943,13 @@ class CycleRunner:
         return int(since_dt.timestamp()), int(now.timestamp()), True
 
     def _fetch_tweets(
-        self, call: PlannedCall, api: TwitterApiClient, *, window: tuple[int, int]
+        self,
+        call: PlannedCall,
+        api: TwitterApiClient,
+        *,
+        window: tuple[int, int],
+        tip_only: bool = False,
+        deadline: Any | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """Fetch tweets for one PlannedCall via TwitterAPI.io.
 
@@ -967,15 +978,37 @@ class CycleRunner:
         limit_per_call = getattr(settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", None)
         max_pages = getattr(settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", None)
         max_per_page_cfg = getattr(settings, "X_MONITOR_CYCLE_MAX_PER_PAGE", None)
-        max_results_cap = int(limit_per_call) if limit_per_call is not None else 50
-        max_pages_cap = int(max_pages) if max_pages is not None else 5
-        # Per-page request size (post-2026-07-31 wiring from
-        # config.yaml::search.max_per_page). Falls back to 20 if unset.
-        max_per_page_cap = int(max_per_page_cfg) if max_per_page_cfg is not None else 20
-        # C1 needs a higher ceiling (see self.cfg.cycle.c1_max_results docstring).
-        if call.call_id == "C1":
-            max_results_cap = max(max_results_cap, self.cfg.cycle.c1_max_results)
-            max_pages_cap = max(max_pages_cap, self.cfg.cycle.c1_max_pages)
+        max_results_cap = (
+            int(limit_per_call)
+            if limit_per_call is not None
+            else self.cfg.search.max_results
+        )
+        max_pages_cap = (
+            int(max_pages) if max_pages is not None else self.cfg.search.max_pages
+        )
+        max_per_page_cap = (
+            int(max_per_page_cfg)
+            if max_per_page_cfg is not None
+            else self.cfg.search.max_per_page
+        )
+        if tip_only:
+            # Scheduled delivery is breadth-first: admit one fresh page for
+            # every logical call before bounded backlog/deep-page work starts.
+            max_results_cap = min(max_results_cap, max_per_page_cap)
+            max_pages_cap = 1
+        if deadline is not None:
+            request_envelope = (
+                float(getattr(api, "timeout_s", 60))
+                * (int(getattr(api, "max_retries", 2)) + 1)
+                + 8.0
+            )
+            page_budget = int(deadline.remaining() // request_envelope)
+            if page_budget < 1:
+                return [], "truncated"
+            max_pages_cap = min(max_pages_cap, page_budget)
+            max_results_cap = min(
+                max_results_cap, max_pages_cap * max_per_page_cap
+            )
         since_time, until_time = window
 
         logger.info(
@@ -1024,7 +1057,12 @@ class CycleRunner:
         cur_until = until_time
         still_truncated = False
 
-        for walk in range(self.cfg.cycle.max_truncation_walks):
+        max_walks = (
+            1
+            if tip_only or deadline is not None
+            else self.cfg.cycle.max_truncation_walks
+        )
+        for walk in range(max_walks):
             try:
                 items, truncated = api.run_search(
                     call.query_string,
@@ -1112,7 +1150,7 @@ class CycleRunner:
                 "total=%d window=[%s,%s] -> walk until=%s (%.1f min left)",
                 call.call_id,
                 walk + 1,
-                self.cfg.cycle.max_truncation_walks,
+                max_walks,
                 new_on_pass,
                 len(all_items),
                 since_time,
@@ -1128,7 +1166,7 @@ class CycleRunner:
                 "_fetch_tweets: call_id=%s still truncated after %d walks; "
                 "total_items=%d — caller must hold cursor",
                 call.call_id,
-                self.cfg.cycle.max_truncation_walks,
+                max_walks,
                 len(all_items),
             )
 
@@ -1430,6 +1468,8 @@ class CycleRunner:
         # Persist classifications with guardrails
         from core.models import (
             PostBrandDiscourse as PBDiscourse,
+        )
+        from core.models import (
             PostBrandSignal as PBSignal,
         )
 
@@ -1531,6 +1571,192 @@ class CycleRunner:
 
         return counters
 
+    def _replay_backlog(
+        self,
+        *,
+        calls: list[PlannedCall],
+        api: TwitterApiClient,
+        index: Any,
+        search_terms: dict[str, str],
+        kept_all: list[dict[str, Any]],
+        run_id: str,
+        deadline: Any,
+        include_quarantined: bool = False,
+        quarantined_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Replay a bounded number of oldest pending residual windows."""
+
+        by_identity = {
+            tuple(sorted(_cursor_key(call).items())): call for call in calls
+        }
+        reports: list[dict[str, Any]] = []
+        request_envelope = (
+            float(getattr(api, "timeout_s", 60))
+            * (int(getattr(api, "max_retries", 2)) + 1)
+            + 8.0
+        )
+        backlog_cfg = self.cfg.harvest.backlog
+
+        for _ in range(backlog_cfg.replays_per_cycle):
+            if not deadline.can_start(request_envelope):
+                reports.append({"status": "deadline_exhausted"})
+                break
+            claim = HarvestBacklogWindow.objects.claim_next(
+                owner=f"cycle:{run_id}",
+                run_id=run_id,
+                claim_expires_at=datetime.now(timezone.utc)
+                + timedelta(seconds=max(int(request_envelope * 2), 60)),
+                include_quarantined=include_quarantined,
+                only_quarantined=quarantined_only,
+            )
+            if claim is None:
+                break
+
+            identity = {
+                field: getattr(claim, field)
+                for field in ("brand_id", "call_id", "call_kind", "bucket", "query_id")
+            }
+            call = by_identity.get(tuple(sorted(identity.items())))
+            report: dict[str, Any] = {
+                "window_id": claim.pk,
+                "call_id": claim.call_id,
+                "attempt": claim.attempts,
+                "status": "error",
+            }
+            try:
+                if call is None:
+                    report["status"] = return_claim(
+                        claim.pk,
+                        reason="planned_call_missing",
+                        max_attempts=backlog_cfg.max_attempts,
+                        max_age_hours=backlog_cfg.max_age_hours,
+                    )
+                    reports.append(report)
+                    continue
+
+                items, outcome = self._fetch_tweets(
+                    call,
+                    api,
+                    window=(
+                        int(claim.remaining_since.timestamp()),
+                        int(claim.remaining_until.timestamp()),
+                    ),
+                    deadline=deadline,
+                )
+                persist_failed = 0
+                kept: list[dict[str, Any]] = []
+                if items:
+                    self._posts_seen += len(items)
+                    self._attribute_items(items, index, search_terms)
+                    kept = [item for item in items if not item.get("_unattributed")]
+                    terms = [term.lower() for term in (call.not_include or []) if term]
+                    if terms:
+                        kept = [
+                            item
+                            for item in kept
+                            if not _matches_any_term(
+                                item.get("text") or "",
+                                item.get("quoted_text") or "",
+                                terms,
+                            )
+                        ]
+                    if self._relevancy_llm_call is not None:
+                        kept = _apply_relevancy_gate(
+                            kept,
+                            call_id=call.call_id,
+                            llm_call=self._relevancy_llm_call,
+                        )
+                    inserted, attributed, persist_failed = self._persist_items(kept)
+                    self._posts_inserted += inserted
+                    self._posts_attributed += attributed
+                    existing_ids = {
+                        str(item.get("id") or item.get("tweet_id") or "")
+                        for item in kept_all
+                    }
+                    for item in kept:
+                        tweet_id = str(item.get("id") or item.get("tweet_id") or "")
+                        if tweet_id and tweet_id not in existing_ids:
+                            kept_all.append(item)
+                            existing_ids.add(tweet_id)
+                    report.update(
+                        n_results=len(items),
+                        n_kept=len(kept),
+                        n_inserted=inserted,
+                    )
+
+                if outcome in {"error", "length_cap_exceeded"} or persist_failed:
+                    report["status"] = return_claim(
+                        claim.pk,
+                        reason=(
+                            "persist_incomplete" if persist_failed else outcome
+                        ),
+                        max_attempts=backlog_cfg.max_attempts,
+                        max_age_hours=backlog_cfg.max_age_hours,
+                    )
+                elif outcome == "ok":
+                    report["status"] = (
+                        "completed" if finish_claim(claim.pk) else "ownership_changed"
+                    )
+                else:
+                    epochs = [
+                        epoch
+                        for item in items
+                        if (epoch := _item_created_epoch(item)) is not None
+                    ]
+                    narrowed_until = (
+                        datetime.fromtimestamp(min(epochs) + 1, tz=timezone.utc)
+                        if epochs
+                        else None
+                    )
+                    report["status"] = return_claim(
+                        claim.pk,
+                        reason="replay_truncated",
+                        max_attempts=backlog_cfg.max_attempts,
+                        max_age_hours=backlog_cfg.max_age_hours,
+                        remaining_until=narrowed_until,
+                    )
+            except Exception as exc:
+                logger.warning("backlog replay failed for window=%s: %s", claim.pk, exc)
+                report["status"] = return_claim(
+                    claim.pk,
+                    reason="replay_exception",
+                    max_attempts=backlog_cfg.max_attempts,
+                    max_age_hours=backlog_cfg.max_age_hours,
+                )
+                self._errors.append(f"backlog.{claim.call_id}: {exc}")
+            reports.append(report)
+        return reports
+
+    def replay_backlog_only(self, *, include_quarantined: bool = False) -> dict[str, Any]:
+        """Run explicit recovery without reading or advancing live cursors."""
+
+        run_id = f"backlog-{uuid.uuid4().hex[:12]}"
+        calls = self._plan_calls()
+        api = TwitterApiClient.from_env()
+        enabled_models = _resolve_enabled_models(self.cfg, None)
+        index, search_terms = _build_brand_index(enabled_models)
+        search_terms = {**search_terms, **_load_brand_search_terms()}
+        kept_all: list[dict[str, Any]] = []
+        reports = self._replay_backlog(
+            calls=calls,
+            api=api,
+            index=index,
+            search_terms=search_terms,
+            kept_all=kept_all,
+            run_id=run_id,
+            deadline=self.cfg.harvest.start_deadline(),
+            include_quarantined=include_quarantined,
+            quarantined_only=include_quarantined,
+        )
+        post_fetch = self._run_post_fetch(kept_all) if kept_all else {}
+        return {
+            "run_id": run_id,
+            "status": "completed" if not self._errors else "degraded",
+            "backlog_replays": reports,
+            "post_fetch": post_fetch,
+            "errors": list(self._errors),
+        }
+
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
@@ -1546,6 +1772,7 @@ class CycleRunner:
         )
         started_at = _now_iso()
         t0 = time.monotonic()
+        deadline = self.cfg.harvest.start_deadline()
 
         summary: dict[str, Any] = {
             "run_id": run_id,
@@ -1696,7 +1923,10 @@ class CycleRunner:
 
             # Fetch
             items, outcome = self._fetch_tweets(
-                call, api, window=(since_epoch, until_epoch)
+                call,
+                api,
+                window=(since_epoch, until_epoch),
+                tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
             )
             # Hard failures: no items to keep, hold cursor, move on.
             # "truncated" is NOT a hard failure -- items were retrieved and
@@ -1725,16 +1955,45 @@ class CycleRunner:
                                 until_epoch, tz=timezone.utc
                             ),
                         )
-                    call_entry["status"] = "no_results"
+                        if not call_entry["cursor_advanced"]:
+                            self._errors.append(
+                                f"cursor.{call.call_id}: successful empty sweep "
+                                "could not advance"
+                            )
+                            call_entry["status"] = "cursor_write_failed"
+                        else:
+                            call_entry["status"] = "no_results"
+                    else:
+                        call_entry["cursor_advanced"] = False
+                        call_entry["status"] = "no_results"
                 else:
-                    # truncated with zero items -- hold cursor (R2)
-                    logger.warning(
-                        "run: call_id=%s outcome=truncated with 0 items -- "
-                        "holding cursor",
-                        call.call_id,
-                    )
-                    call_entry["status"] = "truncated"
-                    call_entry["cursor_advanced"] = False
+                    if cursor_owned:
+                        transfer = transfer_truncated_coverage(
+                            call_identity=_cursor_key(call),
+                            original_since=since_epoch,
+                            original_until=until_epoch,
+                            oldest_seen_at=None,
+                            reason_code="truncated_without_parseable_oldest",
+                            pending_limit=self.cfg.harvest.backlog.pending_per_call,
+                            quarantined_limit=(
+                                self.cfg.harvest.backlog.quarantined_per_call
+                            ),
+                        )
+                        call_entry["coverage_transfer"] = transfer.outcome
+                        call_entry["cursor_advanced"] = transfer.cursor_advanced
+                        call_entry["backlog_window_id"] = transfer.backlog_window_id
+                        call_entry["status"] = (
+                            "truncated_replay_queued"
+                            if transfer.outcome == "transferred"
+                            else transfer.outcome
+                        )
+                        if not transfer.cursor_advanced:
+                            self._errors.append(
+                                f"coverage.{call.call_id}: {transfer.outcome}"
+                            )
+                    else:
+                        call_entry["status"] = "truncated"
+                        call_entry["cursor_advanced"] = False
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
                 continue
@@ -1743,7 +2002,7 @@ class CycleRunner:
             self._posts_seen += len(items)
 
             # Attribute
-            classified = self._attribute_items(items, index, search_terms)
+            self._attribute_items(items, index, search_terms)
 
             # Drop unattributed items
             kept = [it for it in items if not it.get("_unattributed")]
@@ -1819,19 +2078,7 @@ class CycleRunner:
                     kept_all.append(k)
                     seen_ids.add(tid)
 
-            if outcome == "truncated":
-                call_entry["status"] = "truncated"
-                call_entry["cursor_advanced"] = False
-                logger.warning(
-                    "run: holding cursor for call_id=%s -- window TRUNCATED "
-                    "after n_results=%d n_kept=%d n_inserted=%d; re-sweep "
-                    "next cycle (items were persisted)",
-                    call.call_id,
-                    len(items),
-                    len(kept),
-                    n_inserted,
-                )
-            elif n_persist_failed:
+            if n_persist_failed:
                 call_entry["status"] = "persist_incomplete"
                 call_entry["cursor_advanced"] = False
                 logger.warning(
@@ -1841,6 +2088,46 @@ class CycleRunner:
                     n_persist_failed,
                     len(kept),
                 )
+            elif outcome == "truncated":
+                if cursor_owned:
+                    epochs = [
+                        epoch
+                        for item in items
+                        if (epoch := _item_created_epoch(item)) is not None
+                    ]
+                    oldest_seen_at = (
+                        datetime.fromtimestamp(min(epochs), tz=timezone.utc)
+                        if epochs
+                        else None
+                    )
+                    transfer = transfer_truncated_coverage(
+                        call_identity=_cursor_key(call),
+                        original_since=since_epoch,
+                        original_until=until_epoch,
+                        oldest_seen_at=oldest_seen_at,
+                        reason_code=(
+                            "page_cap" if epochs else "invalid_oldest_created_at"
+                        ),
+                        pending_limit=self.cfg.harvest.backlog.pending_per_call,
+                        quarantined_limit=(
+                            self.cfg.harvest.backlog.quarantined_per_call
+                        ),
+                    )
+                    call_entry["coverage_transfer"] = transfer.outcome
+                    call_entry["cursor_advanced"] = transfer.cursor_advanced
+                    call_entry["backlog_window_id"] = transfer.backlog_window_id
+                    call_entry["status"] = (
+                        "truncated_replay_queued"
+                        if transfer.outcome == "transferred"
+                        else transfer.outcome
+                    )
+                    if not transfer.cursor_advanced:
+                        self._errors.append(
+                            f"coverage.{call.call_id}: {transfer.outcome}"
+                        )
+                else:
+                    call_entry["status"] = "truncated"
+                    call_entry["cursor_advanced"] = False
             else:
                 call_entry["status"] = "completed"
                 # Advance only when fetch AND attribute AND persist all
@@ -1852,6 +2139,11 @@ class CycleRunner:
                             until_epoch, tz=timezone.utc
                         ),
                     )
+                    if not call_entry["cursor_advanced"]:
+                        call_entry["status"] = "cursor_write_failed"
+                        self._errors.append(
+                            f"cursor.{call.call_id}: completed sweep could not advance"
+                        )
             call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
 
             # U7 anomaly metrics (plan 2026-07-30-002 U7): per-call
@@ -1878,6 +2170,23 @@ class CycleRunner:
             tr["keep_rate_min"] = round(min(rates), 4) if rates else 0.0
             tr["keep_rate_mean"] = round(sum(rates) / len(rates), 4) if rates else 0.0
             tr["keep_rate_max"] = round(max(rates), 4) if rates else 0.0
+
+        summary["tip_sweep_wall_clock_sec"] = round(time.monotonic() - t0, 3)
+        summary["tip_sweep_within_target"] = (
+            summary["tip_sweep_wall_clock_sec"]
+            <= self.cfg.harvest.tip_sweep_target_seconds
+        )
+
+        if self.cycle_kind == "scheduled":
+            summary["backlog_replays"] = self._replay_backlog(
+                calls=calls,
+                api=api,
+                index=index,
+                search_terms=search_terms,
+                kept_all=kept_all,
+                run_id=run_id,
+                deadline=deadline,
+            )
 
         # ---- Post-fetch: translate + classify ----
         if kept_all and summary["status"] != "aborted":

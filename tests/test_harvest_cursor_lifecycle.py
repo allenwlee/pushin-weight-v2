@@ -27,13 +27,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from monitor import cycle as cycle_mod
-from monitor.cycle import CycleRunner, _CURSOR_OVERLAP, _MAX_LOOKBACK
+from monitor.cycle import CycleRunner
 from x_monitor.apify import TwitterApiRateLimitError, TwitterApiServerError
+from x_monitor.config import CycleConfig
 from x_monitor.query_plan import PlannedCall
 
-
-
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+_CYCLE_DEFAULTS = CycleConfig()
+_CURSOR_OVERLAP = timedelta(seconds=_CYCLE_DEFAULTS.cursor_overlap_seconds)
+_MAX_LOOKBACK = timedelta(hours=_CYCLE_DEFAULTS.max_lookback_hours)
 
 
 def _call(call_id: str = "B1", brand_id: str = "minimax") -> PlannedCall:
@@ -51,7 +53,7 @@ def _tweet(tid: str):
     return {
         "id": tid,
         "author_id": f"a{tid}",
-        "author_handle": "someone",
+        "author_handle": f"user_{tid}",
         "text": "alpha release is great",
         "lang": "en",
         "created_at": "Sat Jul 25 12:00:00 +0000 2026",
@@ -302,9 +304,10 @@ def test_overlapping_windows_do_not_double_insert(harvest):
     """Documents why the overlap in KTD1 is safe: the same tweet re-delivered
     in the overlap is discarded by tweet_id dedup, so cycles can afford to
     re-request the boundary."""
-    from core.models import Post
+    from core.models import Brand, Post
 
     call = [_call("B1", "deepseek")]
+    Brand.objects.get_or_create(nickname="deepseek")
     dup = _tweet("dup-1")
     # Must mention a real seeded brand token, else attribution drops it and
     # nothing is ever persisted (making the dedup assertion vacuous).

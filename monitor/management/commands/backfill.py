@@ -101,8 +101,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(
-            "--since", type=str, required=True,
+            "--since", type=str, required=False,
             help="Lower bound (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS, UTC).",
+        )
+        parser.add_argument(
+            "--quarantined",
+            action="store_true",
+            help="Replay bounded quarantined intervals without advancing live cursors.",
         )
         parser.add_argument(
             "--until", type=str, default=None,
@@ -176,6 +181,10 @@ class Command(BaseCommand):
             return self._handle(*args, **options)
 
     def _handle(self, *args, **options) -> None:
+        if options["quarantined"]:
+            return self._handle_quarantined(options)
+        if not options.get("since"):
+            raise CommandError("--since is required unless --quarantined is used")
         since_epoch = _parse_iso(options["since"])
         until_epoch = (
             _parse_iso(options["until"])
@@ -281,8 +290,6 @@ class Command(BaseCommand):
             return
 
         batch = pending[: options["batch_size"]]
-        remaining = pending[options["batch_size"] :]
-
         self.stdout.write(
             f"Backfill {since_label} → {until_label}  "
             f"({gap_hours:.1f}h, ~{est_total} posts expected, "
@@ -297,7 +304,6 @@ class Command(BaseCommand):
             return
 
         # --- execute batch ---
-        from monitor.cycle import CycleRunner
         from x_monitor.relevancy import build_binary_relevancy_llm_call
 
         # U6 runtime wire-in: same as run_cycle — build the Anthropic
@@ -380,3 +386,34 @@ class Command(BaseCommand):
                 f"Batch done. {len(remaining_after)} calls remaining. "
                 f"Run again to continue. State: {state_file}"
             )
+
+    def _handle_quarantined(self, options) -> None:
+        """Replay only quarantined ledger rows; never touch live cursors."""
+
+        from core.models import HarvestBacklogWindow
+
+        count = HarvestBacklogWindow.objects.filter(state="quarantined").count()
+        if options["dry_run"] or options["status"]:
+            self.stdout.write(f"Quarantined harvest intervals: {count}")
+            return
+        if count == 0:
+            self.stdout.write("No quarantined harvest intervals to replay.")
+            return
+
+        from monitor.cycle import CycleRunner
+
+        cfg = load_config(Path("config.yaml"))
+        stats = CycleRunner(
+            cfg=cfg,
+            dry_run=False,
+            cycle_kind="backfill",
+            _max_llm_calls=options.get("max_llm_calls"),
+        ).replay_backlog_only(include_quarantined=True)
+        completed = sum(
+            report.get("status") == "completed"
+            for report in stats.get("backlog_replays", [])
+        )
+        self.stdout.write(
+            f"Quarantined replay finished: {completed} completed; "
+            f"status={stats['status']}"
+        )

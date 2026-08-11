@@ -39,8 +39,6 @@ from monitor import cycle as cycle_mod
 from monitor.cycle import CycleRunner
 from x_monitor.query_plan import PlannedCall
 
-
-
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 # The six calls a real cycle fires.
@@ -100,7 +98,7 @@ def cycle(monkeypatch):
         monkeypatch.setattr(
             cycle_mod,
             "plan_calls_for_cycle",
-            lambda: list(calls if calls is not None else _full_cycle_plan()),
+            lambda cfg=None: list(calls if calls is not None else _full_cycle_plan()),
         )
         monkeypatch.setattr(
             cycle_mod.TwitterApiClient,

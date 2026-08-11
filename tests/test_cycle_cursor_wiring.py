@@ -28,8 +28,6 @@ from monitor.cycle import CycleRunner, _cursor_key
 from x_monitor.apify import TwitterApiAuthError, TwitterApiRateLimitError
 from x_monitor.query_plan import PlannedCall
 
-
-
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
@@ -59,11 +57,11 @@ class FakeApi:
         return list(self._results), False  # (items, truncated)
 
 
-def _tweet(tid: str = "1", handle: str = "someone"):
+def _tweet(tid: str = "1", handle: str | None = None):
     return {
         "id": tid,
         "author_id": f"a{tid}",
-        "author_handle": handle,
+        "author_handle": handle or f"user_{tid}",
         "text": "alpha release is great",
         "lang": "en",
         "created_at": "Sat Jul 25 12:00:00 +0000 2026",
@@ -382,8 +380,8 @@ def test_clean_persist_still_advances_the_cursor(wired):
     )
 
 
-def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
-    """A window that hits the per-call ceiling must NOT advance the cursor.
+def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeypatch):
+    """A capped live window moves its unsearched tail to durable ownership.
 
     TwitterAPI.io answers advanced_search with up to max_results per call. If
     the window contains more tweets than the cap, truncated=True. Advancing
@@ -391,7 +389,7 @@ def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
     returned must still be eligible for persist (see sibling test); this
     test pins the hold-cursor half of the contract.
     """
-    from core.models import Brand, CallState
+    from core.models import Brand, CallState, HarvestBacklogWindow
 
     Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
@@ -402,7 +400,7 @@ def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
 
         def run_search(self, query, **kwargs):
             self.calls.append({"query": query, **kwargs})
-            n = int(kwargs.get("max_results") or 50)
+            n = min(int(kwargs.get("max_results") or 50), 5)
             until = int(kwargs.get("until_time") or 0)
             base = until - 3600 if until else 1_753_430_400
             return [
@@ -426,17 +424,13 @@ def test_truncated_window_does_not_advance_cursor(wired, monkeypatch):
     stats = CycleRunner(cycle_kind="scheduled").run()
 
     entry = [c for c in stats["calls"] if c["call_id"] == "B1"][-1]
-    assert entry["status"] == "truncated", (
-        f"expected truncated status, got {entry['status']!r}"
+    assert entry["status"] == "truncated_replay_queued", (
+        f"expected queued residual, got {entry['status']!r}"
     )
-    assert entry.get("cursor_advanced") is False
-    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
-        "cursor advanced past a truncated window -- older tweets in that "
-        "window would never be re-queried"
-    )
-    assert len(api.calls) >= 2, (
-        f"expected truncation walks, only {len(api.calls)} run_search call(s)"
-    )
+    assert entry.get("cursor_advanced") is True
+    assert CallState.objects.filter(**_cursor_key(call)).exists()
+    assert HarvestBacklogWindow.objects.filter(**_cursor_key(call)).count() == 1
+    assert api.calls, "the live tip was never requested"
 
 
 def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
@@ -482,7 +476,7 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
     stats = CycleRunner(cycle_kind="scheduled").run()
 
     entry = [c for c in stats["calls"] if c["call_id"] == "B1"][-1]
-    assert entry["status"] == "truncated"
+    assert entry["status"] == "truncated_replay_queued"
     assert entry["n_inserted"] >= 1, (
         f"truncated path must persist attributable items; n_inserted="
         f"{entry.get('n_inserted')}"
@@ -490,13 +484,11 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
     assert Post.objects.filter(tweet_id__startswith="keep-").exists(), (
         "no posts persisted on truncated outcome"
     )
-    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
-        "cursor must still be held when truncated"
-    )
+    assert CallState.objects.filter(**_cursor_key(call)).exists()
 
 
-def test_c1_uses_raised_result_ceiling(wired, monkeypatch):
-    """C1 must request at least _C1_MAX_RESULTS so the tip can drain."""
+def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
+    """C1 must not silently override the shared search-budget contract."""
     call = _planned(call_id="C1", brand_id="mimo")
     seen = {}
 
@@ -520,18 +512,18 @@ def test_c1_uses_raised_result_ceiling(wired, monkeypatch):
         cycle_mod.settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", 5, raising=False
     )
     CycleRunner(cycle_kind="scheduled").run()
-    assert seen["max_results"] >= cycle_mod._C1_MAX_RESULTS, seen
-    assert seen["max_pages"] >= cycle_mod._C1_MAX_PAGES, seen
+    assert seen["max_results"] == 20, seen
+    assert seen["max_pages"] == 1, seen
 
 
-def test_truncated_with_empty_attribution_still_holds_cursor(wired, monkeypatch):
-    """Truncation that returns 0 attributable items must also hold the cursor.
+def test_truncated_empty_result_transfers_full_interval(wired, monkeypatch):
+    """A truncated empty result preserves the full interval in the ledger.
 
     The non-truncation empty case advances (KTD5); the truncated empty case
     must NOT, for the same reason: 51st-and-older tweets exist but were not
     in this call's response.
     """
-    from core.models import CallState
+    from core.models import CallState, HarvestBacklogWindow
 
     call = _planned()
 
@@ -554,12 +546,12 @@ def test_truncated_with_empty_attribution_still_holds_cursor(wired, monkeypatch)
     stats = CycleRunner(cycle_kind="scheduled").run()
 
     entry = [c for c in stats["calls"] if c["call_id"] == "B1"][-1]
-    assert entry["status"] == "truncated", (
-        f"expected truncated status, got {entry['status']!r}"
+    assert entry["status"] == "truncated_replay_queued", (
+        f"expected queued residual, got {entry['status']!r}"
     )
-    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
-        "cursor advanced despite a truncated result"
-    )
+    assert entry["cursor_advanced"] is True
+    assert CallState.objects.filter(**_cursor_key(call)).exists()
+    assert HarvestBacklogWindow.objects.filter(**_cursor_key(call)).count() == 1
 
 
 def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):

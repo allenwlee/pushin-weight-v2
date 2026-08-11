@@ -15,7 +15,9 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -62,6 +64,18 @@ class TwitterApiRateLimitError(RuntimeError):
 
 class TwitterApiServerError(RuntimeError):
     """Raised on HTTP 5xx."""
+
+
+@dataclass(frozen=True)
+class SearchPage:
+    """One received search page with truthful continuation and receipt clocks."""
+
+    items: list[dict[str, Any]]
+    page_number: int
+    has_more: bool
+    next_cursor: str | None
+    received_at: datetime
+    received_monotonic: float
 
 
 @dataclass
@@ -227,7 +241,7 @@ class TwitterApiClient:
 
     # --- public surface (mirrors the old ApifyClient) --------------------
 
-    def _walk_search(
+    def _iter_search_pages(
         self,
         query: str,
         max_results: int,
@@ -235,36 +249,18 @@ class TwitterApiClient:
         max_pages: int = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Paginate advanced_search via next_cursor.
+    ) -> Iterator[SearchPage]:
+        """Yield normalized pages without fetching the next page early."""
 
-        Returns (items, truncated). `truncated` is True when the cap
-        kicked in AND the API still has more pages -- meaning we hit the
-        per-call ceiling before exhausting the window. The caller needs
-        this signal: advancing the cursor past a truncated window would
-        lose the 51st-and-older tweets forever, because the next cycle's
-        floor is (prior - 1min) and tweet_id dedup cannot recover what
-        was never stored.
-
-        TwitterAPI.io caps each response at `max_per_page` tweets (the
-        platform caps it at 20; we clamp to whatever the caller passes).
-        Signals more results via `has_next_page` + `next_cursor`. We follow
-        the cursor until either the user's max_results ceiling is hit or
-        has_next_page is false. The defensive max_pages cap (default 5)
-        guards against a runaway cursor draining the credit budget — at
-        `max_per_page` tweets/page × max_pages pages = the per-call ceiling.
-        """
-        out: list[dict[str, Any]] = []
+        n_returned = 0
         cursor: str | None = None
-        for _ in range(max_pages):
-            if len(out) >= max_results:
-                # We hit the cap on a previous iteration; the API still
-                # has more, so the result is truncated.
-                return out, True
+        for page_number in range(1, max(1, max_pages) + 1):
+            if n_returned >= max_results:
+                return
             params: dict[str, Any] = {
                 "query": query,
                 "queryType": "Latest",
-                "limit": min(max_per_page, max_results - len(out)),
+                "limit": min(max_per_page, max_results - n_returned),
             }
             # NB: do NOT add a URL-side time-filter param here — TwitterAPI.io
             # silently drops unknown URL params on advanced_search. The time
@@ -275,20 +271,107 @@ class TwitterApiClient:
             if cursor:
                 params["cursor"] = cursor
             data = self._get(SEARCH_PATH, params)
+            received_at = datetime.now(timezone.utc)
+            received_monotonic = time.monotonic()
             tweets = data.get("tweets") or data.get("data") or []
-            for t in tweets:
-                out.append(_normalize_tweet(t))
-                if len(out) >= max_results:
-                    has_more = bool(data.get("has_next_page")) and bool(
-                        data.get("next_cursor")
-                    )
-                    return out, has_more
-            if not data.get("has_next_page"):
-                break
-            cursor = data.get("next_cursor")
-            if not cursor:
-                break
-        return out, False
+            remaining = max_results - n_returned
+            page_items: list[dict[str, Any]] = []
+            for raw in tweets[:remaining]:
+                item = _normalize_tweet(raw)
+                item["_api_received_at"] = received_at.isoformat()
+                item["_api_received_monotonic"] = received_monotonic
+                page_items.append(item)
+            n_returned += len(page_items)
+
+            next_cursor = data.get("next_cursor") or None
+            continuation = bool(data.get("has_next_page")) and bool(next_cursor)
+            clipped = len(tweets) > len(page_items)
+            yield SearchPage(
+                items=page_items,
+                page_number=page_number,
+                has_more=continuation or clipped,
+                next_cursor=next_cursor,
+                received_at=received_at,
+                received_monotonic=received_monotonic,
+            )
+
+            if n_returned >= max_results or not continuation:
+                return
+            cursor = next_cursor
+
+    def _walk_search(
+        self,
+        query: str,
+        max_results: int,
+        *,
+        max_pages: int = 5,
+        max_per_page: int = 20,
+        since_time: int | None = None,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Aggregate page-wise progress for compatibility with older callers."""
+
+        out: list[dict[str, Any]] = []
+        truncated = False
+        for page in self._iter_search_pages(
+            query,
+            max_results,
+            max_pages=max_pages,
+            max_per_page=max_per_page,
+            since_time=since_time,
+        ):
+            out.extend(page.items)
+            truncated = page.has_more
+        return out, truncated
+
+    @staticmethod
+    def _effective_search_query(
+        query: str,
+        *,
+        since: str | None,
+        since_time: int | None,
+        until_time: int | None,
+    ) -> str:
+        effective_query = query
+        if since and "since:" not in query and since_time is None:
+            effective_query = f"{query} since:{since}"
+        if since_time is not None:
+            if "since_time:" not in effective_query:
+                effective_query = f"{effective_query} since_time:{int(since_time)}"
+            if "until_time:" not in effective_query:
+                upper = (
+                    int(until_time)
+                    if until_time is not None
+                    else int(time.time())
+                )
+                effective_query = f"{effective_query} until_time:{upper}"
+        return effective_query
+
+    def run_search_pages(
+        self,
+        query: str,
+        max_results: int = 50,
+        since: str | None = None,
+        *,
+        max_pages: int = 5,
+        max_per_page: int = 20,
+        since_time: int | None = None,
+        until_time: int | None = None,
+    ) -> Iterator[SearchPage]:
+        """Yield first/deep pages lazily so callers can sweep every tip first."""
+
+        effective_query = self._effective_search_query(
+            query,
+            since=since,
+            since_time=since_time,
+            until_time=until_time,
+        )
+        return self._iter_search_pages(
+            effective_query,
+            max_results,
+            max_pages=max_pages,
+            max_per_page=max_per_page,
+            since_time=since_time,
+        )
 
     def run_search(
         self,
@@ -339,29 +422,12 @@ class TwitterApiClient:
         truncated is True when the per-call cap kicked in before the
         window was exhausted (see _walk_search).
         """
-        effective_query = query
-        # Only inject `since:` when `since_time` is NOT provided.
-        # When both are present, TwitterAPI.io's parser silently drops
-        # results (522 chars → over cap; the two time operators
-        # conflict). `since_time:` already gives sub-day precision;
-        # `since:` is a weaker date-only floor that adds nothing when
-        # `since_time:` is active.
-        if since and "since:" not in query and since_time is None:
-            effective_query = f"{query} since:{since}"
-        if since_time is not None:
-            # Inline operator — the only form TwitterAPI.io honors.
-            # Idempotent: if the caller already injected it, leave it alone.
-            if "since_time:" not in effective_query:
-                effective_query = f"{effective_query} since_time:{int(since_time)}"
-            # Always inject the matching upper bound too. TwitterAPI.io's
-            # working pattern uses both bounds: `since_time:<floor>
-            # until_time:<now>`. The upper bound is "now" — every x-monitor
-            # call wants everything up through the moment of the cycle.
-            # The `until_time:` operator is exclusive; that's the desired
-            # semantics here (don't include posts at second N+1).
-            if "until_time:" not in effective_query:
-                upper = int(until_time) if until_time is not None else int(time.time())
-                effective_query = f"{effective_query} until_time:{upper}"
+        effective_query = self._effective_search_query(
+            query,
+            since=since,
+            since_time=since_time,
+            until_time=until_time,
+        )
         return self._walk_search(
             effective_query,
             max_results,
