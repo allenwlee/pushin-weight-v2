@@ -1,4 +1,3 @@
-// {{AGENT_ATTRIBUTION}}
 // x_monitor/static/pw-brand-chart.js
 // Pushin' Weight (走个量) single-brand stacked-area chart with 6 tabs
 // (U7 of feat/pushin-weight-home-pages, 2026-07-06).

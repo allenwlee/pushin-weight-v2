@@ -26,6 +26,7 @@ from core.models import (
     PostBrandDiscourse,
     PostBrandSignal,
     PostTypeKey,
+    PostUnsanctionedFlag,
     SentimentKey,
 )
 from tests.mockup_spec import build_fixture
@@ -60,6 +61,13 @@ def seed_real_home_orm(fixture: dict) -> None:
             display_name_zh_cn=name,
             accent_color=color,
         )
+    Brand.objects.create(
+        nickname="anthropic",
+        display_name="Anthropic",
+        display_name_en="Anthropic",
+        display_name_zh_cn="Anthropic",
+        accent_color="#d97706",
+    )
     for key in {key for row in fixture["feed"]["items"] for key in row["post_types"]}:
         PostTypeKey.objects.create(key=key)
     for key in {key for row in fixture["feed"]["items"] for key in row["sentiments"]}:
@@ -104,6 +112,179 @@ def seed_real_home_orm(fixture: dict) -> None:
             china_nationalism_id="pro",
             us_nationalism_id="mild_pro",
         )
+
+
+def seed_v22_metadata_regression_orm() -> dict[str, object]:
+    """Seed 51 eligible rows plus one flagged row for anonymous V22 feed tests."""
+    brands = {}
+    for nickname, name, color in V22_FIXTURE_BRANDS:
+        brand, _ = Brand.objects.get_or_create(
+            nickname=nickname,
+            defaults={
+                "display_name": name,
+                "display_name_en": name,
+                "display_name_zh_cn": name,
+                "accent_color": color,
+            },
+        )
+        brands[nickname] = brand
+    for key in ("buzz_releases", "hands_on_usage", "feedback_questions"):
+        PostTypeKey.objects.get_or_create(key=key)
+    for key in ("positive", "negative", "mixed", "neutral"):
+        SentimentKey.objects.get_or_create(key=key)
+    DiscourseKey.objects.get_or_create(key="genuine_hype")
+    for key in ("none", "mild_pro", "pro"):
+        NationalismKey.objects.get_or_create(key=key)
+
+    now = timezone.now()
+    replacement_id = "v22-metadata-replacement"
+    page_two_id = "v22-metadata-page-two"
+    brand_scope_id = "v22-metadata-brand-scope"
+    for index in range(52):
+        tweet_id = (
+            replacement_id
+            if index == 0
+            else page_two_id
+            if index == 51
+            else brand_scope_id
+            if index == 2
+            else f"v22-metadata-{index:03d}"
+        )
+        account = Account.objects.create(
+            author_id=f"v22-metadata-account-{index:03d}",
+            handle=f"v22metadata{index:03d}",
+            followers_count=12_800 - index,
+        )
+        post = Post.objects.create(
+            tweet_id=tweet_id,
+            author=account,
+            author_handle=account.handle,
+            text=f"Original metadata fixture post {index}",
+            text_en=f"English metadata fixture post {index}",
+            text_zh_cn=f"中文元数据样本 {index}",
+            lang_detected="en",
+            created_at=now - timedelta(minutes=index),
+            like_count=1200 - index,
+            retweet_count=30 + index,
+            reply_count=5 + index,
+        )
+        primary = brands["moonshot_kimi"]
+        PostBrand.objects.create(post=post, brand=primary)
+        if index == 0:
+            PostBrandSignal.objects.create(
+                post=post, brand=primary, post_type_id="buzz_releases", sentiment_id="positive"
+            )
+            secondary = brands["deepseek"]
+            PostBrand.objects.create(post=post, brand=secondary)
+            PostBrandSignal.objects.create(
+                post=post, brand=secondary, post_type_id="hands_on_usage", sentiment_id="mixed"
+            )
+            discourse_brand = secondary
+        elif index == 51:
+            PostBrandSignal.objects.create(
+                post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="negative"
+            )
+            secondary = brands["deepseek"]
+            PostBrand.objects.create(post=post, brand=secondary)
+            PostBrandSignal.objects.create(
+                post=post, brand=secondary, post_type_id="hands_on_usage", sentiment_id="mixed"
+            )
+            discourse_brand = secondary
+        elif index == 2:
+            PostBrandSignal.objects.create(
+                post=post,
+                brand=primary,
+                post_type_id="feedback_questions",
+                sentiment_id="negative",
+            )
+            secondary = brands["minimax"]
+            PostBrand.objects.create(post=post, brand=secondary)
+            PostBrandSignal.objects.create(
+                post=post,
+                brand=secondary,
+                post_type_id="hands_on_usage",
+                sentiment_id="positive",
+            )
+            discourse_brand = primary
+        else:
+            PostBrandSignal.objects.create(
+                post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="positive"
+            )
+            discourse_brand = primary
+        PostBrandDiscourse.objects.create(
+            post=post,
+            brand=discourse_brand,
+            discourse_id="genuine_hype",
+            act_id=1,
+            china_nationalism_id="pro",
+            us_nationalism_id="mild_pro",
+        )
+        if index == 1:
+            PostUnsanctionedFlag.objects.create(post=post, flags="marketing_spam")
+
+    # Pulse-only rows are flagged so the ordinary feed remains the same 52-row
+    # metadata fixture while the market-wide pulse sees the exact AE11 matrix.
+    # Keep every timestamp comfortably inside its bucket: boundary behavior is
+    # pinned separately by the clock-frozen server aggregation test.
+    pulse_specs = (
+        ("pulse_up", "Pulse Up", "脉冲上升", 6, 4),
+        ("pulse_down", "Pulse Down", "脉冲下降", 2, 4),
+        ("pulse_flat", "Pulse Flat", "脉冲持平", 4, 4),
+        ("pulse_new", "Pulse New", "脉冲新", 3, 0),
+        ("pulse_absent", "Pulse Absent", "脉冲无", 0, 0),
+    )
+    pulse_now = timezone.now()
+    pulse_serial = 0
+    for nickname, display_en, display_zh, current, prior in pulse_specs:
+        brand = Brand.objects.create(
+            nickname=nickname,
+            display_name=display_en,
+            display_name_en=display_en,
+            display_name_zh_cn=display_zh,
+            accent_color="#7c3aed",
+        )
+        for bucket, count in (("current", current), ("prior", prior)):
+            for index in range(count):
+                age = (
+                    timedelta(hours=1, minutes=index)
+                    if bucket == "current"
+                    else timedelta(hours=25, minutes=index)
+                )
+                post = Post.objects.create(
+                    tweet_id=f"v22-pulse-{pulse_serial:03d}",
+                    created_at=pulse_now - age,
+                )
+                PostBrand.objects.create(post=post, brand=brand)
+                PostUnsanctionedFlag.objects.create(post=post, flags="browser_pulse_fixture")
+                pulse_serial += 1
+    return {
+        "replacement_id": replacement_id,
+        "page_two_id": page_two_id,
+        "brand_scope_id": brand_scope_id,
+        "pulse_expectations": {
+            "order": [
+                "moonshot_kimi",
+                "pulse_up",
+                "pulse_flat",
+                "pulse_new",
+                "deepseek",
+                "pulse_down",
+                "minimax",
+            ],
+            "details": {
+                "pulse_up": {
+                    "text": "50%", "glyph": "▲", "aria": "Pulse Up, up 50 percent",
+                },
+                "pulse_down": {
+                    "text": "50%", "glyph": "▼", "aria": "Pulse Down, down 50 percent",
+                },
+                "pulse_flat": {
+                    "text": "0%", "glyph": "→", "aria": "Pulse Flat, flat 0 percent",
+                },
+                "pulse_new": {"text": "NEW", "glyph": "", "aria": "Pulse New, NEW"},
+            },
+        },
+    }
 
 
 class PostgreSQLV22TestCase(TestCase):

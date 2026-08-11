@@ -18,6 +18,12 @@ SOURCE_ROOT = REPO_ROOT / "monitor" / "static"
 HOME_TEMPLATE = REPO_ROOT / "monitor" / "templates" / "monitor" / "home.html"
 STATIC_TAG = re.compile(r"{%\s*static\s+['\"](?P<asset>[^'\"]+)['\"]\s*%}")
 REGRESSION_TARGETS = ("pw-feed.js", "pw-chart.js", "pw-filter-store.js")
+PRODUCTION_STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 
 def _home_static_assets() -> tuple[str, ...]:
@@ -85,7 +91,11 @@ class CollectedStaticProvenanceTests(SimpleTestCase):
             orphan = static_root / "retired-static-output.js"
             orphan.write_bytes(b"must not survive a clean collection")
 
-            with override_settings(DEBUG=False, STATIC_ROOT=static_root):
+            with override_settings(
+                DEBUG=False,
+                STATIC_ROOT=static_root,
+                STORAGES=PRODUCTION_STORAGES,
+            ):
                 call_command("collectstatic", interactive=False, verbosity=0, clear=True)
 
                 self.assertFalse(orphan.exists(), "clean collection left stale destination output")

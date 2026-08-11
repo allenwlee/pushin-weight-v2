@@ -13,6 +13,7 @@ import pytest
 from monitor.views import (
     _decode_cursor,
     _encode_cursor,
+    _feed_tint_class,
     _paginate_feed,
     _post_passes_cursor,
     _serialize_feed_row,
@@ -328,7 +329,47 @@ class TestSerializeFeedRow:
         )
         row = _serialize_feed_row(post, "en")
         assert "deepseek" in row["classifications"]
-        assert row["classifications"]["deepseek"]["discourse"] == ["genuine_hype"]
+        assert row["classifications"]["deepseek"]["discourse"] == [
+            {"key": "genuine_hype", "label": "genuine_hype"},
+        ]
+
+    def test_v22_display_contract_includes_signal_and_tint_fields(self):
+        """Refresh JSON must carry the same V22 fields consumed by pw-feed."""
+        post = _make_post(
+            "100", "2026-07-20T10:00:00+00:00",
+            classifications_by_brand={
+                "kimi": {
+                    "discourse": ["genuine_hype"],
+                    "post_types": ["buzz_releases"],
+                    "sentiments": ["positive"],
+                    "cn_nationalism": "pro",
+                    "us_nationalism": "mild_pro",
+                },
+                "deepseek": {
+                    "discourse": [],
+                    "post_types": ["hands_on_usage"],
+                    "sentiments": ["mixed"],
+                    "cn_nationalism": None,
+                    "us_nationalism": None,
+                },
+            },
+            account={
+                "handle": "@user", "role": None, "followers_count": 12_800,
+                "followers_pretty": "12.8k",
+            },
+        )
+
+        row = _serialize_feed_row(post, "en")
+
+        assert row["sentiment_keys"] == ["positive", "mixed"]
+        assert row["post_type_keys"] == ["buzz_releases", "hands_on_usage"]
+        assert row["nat_cn"] == "pro"
+        assert row["nat_us"] == "mild_pro"
+        assert row["tint_class"] == "tint-pos-mixed"
+        assert "meta_text" in row
+        assert "ts_abs_text" in row
+        assert row["avatar_initials"] == "US"
+        assert row["engagement_pretty"]["followers"] == "12.8k"
 
     def test_text_translated_uses_locale(self):
         post = _make_post("100", "2026-07-20T10:00:00+00:00")
@@ -338,13 +379,108 @@ class TestSerializeFeedRow:
         assert row["text_translated"] == "English text"
         assert row["is_translated"] is True
 
-    def test_text_untranslated_falls_back_to_original(self):
+    def test_text_untranslated_remains_null_so_missing_data_is_visible(self):
         post = _make_post("100", "2026-07-20T10:00:00+00:00")
         post["text_en"] = None
         post["text"] = "Original text"
         row = _serialize_feed_row(post, "en")
-        assert row["text_translated"] == "Original text"
+        assert row["text_translated"] is None
         assert row["is_translated"] is False
+
+    @pytest.mark.parametrize(
+        ("sentiments", "expected"),
+        [
+            ([], "tint-neutral"),
+            (["neutral"], "tint-neutral"),
+            (["positive"], "tint-positive"),
+            (["negative"], "tint-negative"),
+            (["mixed"], "tint-mixed"),
+            (["positive", "negative"], "tint-pos-neg"),
+            (["positive", "mixed"], "tint-pos-mixed"),
+            (["negative", "mixed"], "tint-neg-mixed"),
+            (["positive", "negative", "mixed"], "tint-pos-neg-mixed"),
+            (["positive", "positive"], "tint-positive"),
+        ],
+    )
+    def test_server_tint_matrix_is_deterministic(self, sentiments, expected):
+        assert _feed_tint_class(sentiments) == expected
+
+    def test_active_brand_scope_narrows_display_only(self):
+        post = _make_post(
+            "scope-100",
+            "2026-07-20T10:00:00+00:00",
+            brands=[
+                {"nickname": "minimax"},
+                {"nickname": "moonshot_kimi"},
+            ],
+            brand_nicknames=["minimax", "moonshot_kimi"],
+            classifications_by_brand={
+                "minimax": {
+                    "discourse": ["genuine_hype"],
+                    "post_types": ["hands_on_usage"],
+                    "sentiments": ["positive", "positive"],
+                    "cn_nationalism": None,
+                    "us_nationalism": None,
+                },
+                "moonshot_kimi": {
+                    "discourse": [],
+                    "post_types": ["buzz_releases"],
+                    "sentiments": ["negative"],
+                    "cn_nationalism": "pro",
+                    "us_nationalism": "mild_pro",
+                },
+            },
+        )
+
+        all_brands = _serialize_feed_row(post, "en", active_brand_scope="__all__")
+        minimax = _serialize_feed_row(post, "en", active_brand_scope=["minimax"])
+        kimi = _serialize_feed_row(post, "en", active_brand_scope=["moonshot_kimi"])
+
+        assert all_brands["sentiment_keys"] == ["positive", "negative"]
+        assert all_brands["tint_class"] == "tint-pos-neg"
+        assert minimax["sentiment_keys"] == ["positive"]
+        assert minimax["tint_class"] == "tint-positive"
+        assert kimi["sentiment_keys"] == ["negative"]
+        assert kimi["tint_class"] == "tint-negative"
+        assert minimax["classifications"] == all_brands["classifications"]
+        assert kimi["classifications"] == all_brands["classifications"]
+
+    def test_raw_metadata_and_tint_are_locale_invariant(self):
+        post = _make_post(
+            "locale-100",
+            "2026-07-20T10:00:00+00:00",
+            text="Original",
+            text_en="English",
+            text_zh_cn="中文",
+            brand_nicknames=["minimax"],
+            classifications_by_brand={
+                "minimax": {
+                    "discourse": ["genuine_hype"],
+                    "post_types": ["hands_on_usage"],
+                    "sentiments": ["positive"],
+                    "cn_nationalism": "pro",
+                    "us_nationalism": "mild_pro",
+                },
+            },
+        )
+
+        rows = {
+            locale: _serialize_feed_row(post, locale, active_brand_scope="__all__")
+            for locale in ("zh_cn", "zh_hans", "en", "original")
+        }
+        invariant = {
+            locale: {
+                "sentiment_keys": row["sentiment_keys"],
+                "post_type_keys": row["post_type_keys"],
+                "nat_cn": row["nat_cn"],
+                "nat_us": row["nat_us"],
+                "tint_class": row["tint_class"],
+                "discourse_key": row["classifications"]["minimax"]["discourse"][0]["key"],
+            }
+            for locale, row in rows.items()
+        }
+        assert len({repr(value) for value in invariant.values()}) == 1
+        assert invariant["en"]["discourse_key"] == "genuine_hype"
 
 
 # ============================================================================
@@ -408,9 +544,25 @@ class TestFeedViewIntegration:
         assert "applied_filters" in data
         assert "locale" in data
 
-    def test_feed_requires_login(self, client):
+    def test_feed_is_public_for_the_anonymous_home(self, client):
         resp = client.get("/feed/")
-        assert resp.status_code == 302  # redirect to login
+        assert resp.status_code == 200
+
+    def test_home_internal_canvas_chart_is_not_owned_by_htmx(self, client, django_user_model):
+        user = django_user_model.objects.create_user(
+            username="internal-chart-user", password="pass",
+        )
+        client.force_login(user)
+        resp = client.get("/internal/")
+        assert resp.status_code == 200
+        html = resp.content.decode("utf-8")
+        chart_start = html.index('<section class="home-chart-wrap" id="home-chart"')
+        chart_end = html.index("</section>", chart_start)
+        chart_region = html[chart_start:chart_end]
+        assert "hx-get" not in chart_region
+        assert "hx-trigger" not in chart_region
+        assert "hx-swap" not in chart_region
+        assert '<canvas class="home-chart"' in chart_region
 
     def test_feed_accepts_sort_params(self, client, django_user_model):
         user = django_user_model.objects.create_user(

@@ -75,21 +75,30 @@
     </div>
   </header>
 
-  <section class="pulse-bar-wrap" aria-label="{% trans 'Trending models' %}">
+  <section class="pulse-bar-wrap" aria-label="{% trans 'Trending models' %}" data-pw-pulse-shell>
     <div class="pulse-bar-head">
       <strong>{% trans "脉冲" %}</strong>
       <span class="muted">{% trans "窗口内热度" %}</span>
     </div>
-    <div class="pulse-bar" role="list">
-      {% for brand in brands|slice:":8" %}
-        <button type="button" class="pulse-chip" role="listitem" style="--chip-color:{{ brand.accent_color }}">
-          <span class="pulse-chip-name">{{ brand.display_name }}</span>
-          <span class="delta {{ brand.pct_class }}">{{ brand.pct_change }}%</span>
-        </button>
+    <div class="pulse-bar" role="list" data-pw-pulse data-pw-window="{{ pulse.window_days }}" data-pw-computed-at="{{ pulse.computed_at }}">
+      {% for entry in pulse.entries %}
+        <li>
+          <button type="button" class="pulse-chip" data-pw-pulse-entry="{{ entry.nickname }}" aria-pressed="false"
+                  aria-label="{% if is_zh_chrome %}{{ entry.display_name_zh_cn }}，{% if entry.status == 'new' %}新{% elif entry.direction == 'up' %}上升 {{ entry.delta_magnitude }}%{% elif entry.direction == 'down' %}下降 {{ entry.delta_magnitude }}%{% else %}持平 {{ entry.delta_magnitude }}%{% endif %}{% else %}{{ entry.display_name_en }}, {% if entry.status == 'new' %}NEW{% else %}{{ entry.direction }} {{ entry.delta_magnitude }} percent{% endif %}{% endif %}"
+                  style="--chip-color:{{ entry.accent_color }}">
+            <span class="pulse-chip-name">{% if is_zh_chrome %}{{ entry.display_name_zh_cn }}{% else %}{{ entry.display_name_en }}{% endif %}</span>
+            {% if entry.status == "new" %}
+              <span class="delta new">{% if is_zh_chrome %}新{% else %}NEW{% endif %}</span>
+            {% else %}
+              <span class="delta {{ entry.direction }}">{{ entry.delta_magnitude }}%</span>
+            {% endif %}
+          </button>
+        </li>
       {% empty %}
-        <span class="muted">{% trans "no brands" %}</span>
+        <li class="muted">{% if is_zh_chrome %}本窗口暂无脉冲数据{% else %}No pulse data in this window{% endif %}</li>
       {% endfor %}
     </div>
+    <span class="pulse-state muted" data-pw-pulse-status hidden></span>
   </section>
 
   <nav class="filter-bar" aria-label="Filter groups">
@@ -227,12 +236,14 @@
 
   <div class="desktop-grid">
     <div class="desktop-col-main">
-      <section class="home-chart-wrap" data-pw-chart
-               hx-get="/chart.html"
-               hx-trigger="load every 60s"
-               hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
-               hx-swap="innerHTML">
-        {% include "monitor/_home_chart.html" with chart_renderer="svg" %}
+      <section class="home-chart-wrap" data-pw-chart data-pw-locale="{{ active_locale }}"
+               data-pw-chart-empty-text="{% if is_zh_chrome %}本窗口暂无图表数据{% else %}No chart data in this window{% endif %}"
+               data-pw-chart-error-text="{% if is_zh_chrome %}图表刷新失败，显示上次结果{% else %}Chart refresh failed; showing last result{% endif %}"
+               data-pw-pulse-empty-text="{% if is_zh_chrome %}本窗口暂无脉冲数据{% else %}No pulse data in this window{% endif %}"
+               data-pw-pulse-error-text="{% if is_zh_chrome %}脉冲刷新失败，显示上次结果{% else %}Pulse refresh failed; showing last result{% endif %}"
+               data-pw-pulse-new-text="{% if is_zh_chrome %}新{% else %}NEW{% endif %}">
+        {% include "monitor/_home_chart.html" %}
+        <div class="legend" data-pw-chart-legend></div>
       </section>
 
       <div class="headline-strip" role="region" aria-label="{% trans 'Top voices' %}">
@@ -253,7 +264,10 @@
     </div>
 
     <div class="desktop-col-feed">
-      <section class="feed-strip" data-pw-feed data-pw-locale="{{ active_locale }}">
+      <section class="feed-strip" data-pw-feed data-pw-locale="{{ active_locale }}"
+               data-pw-empty-text="{% trans 'no posts in window' %}"
+               data-pw-loading-text="{% trans 'loading more…' %}"
+               data-pw-error-text="{% if is_zh_chrome %}信息流刷新失败，显示上次结果{% else %}Feed refresh failed; showing last result{% endif %}">
         <h3 data-i18n="feed_title">{% if is_zh_chrome %}本窗口最新{% else %}Latest in window{% endif %}</h3>
         <div class="feed-scroll" id="feed-scroll" data-feed-scroll data-pw-feed-scroll>
           <div class="feed-rows" id="feed-rows" data-feed-rows data-pw-feed-body>

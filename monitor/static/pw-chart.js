@@ -1,54 +1,15 @@
-// {{AGENT_ATTRIBUTION}}
-// x_monitor/static/pw-chart.js
-// Pushin' Weight (走个量) multi-brand home chart (U7 of
-// feat/pushin-weight-home-pages, 2026-07-06).
-//
-// Architecture (mirrors combined-chart.js):
-// - One Chart.js instance per .home-chart canvas.
-// - One total line per enabled brand, in the brand's accent color.
-// - On `pw:filter-change` (U3, 2026-07-16), re-fetches
-//   /api/v1/home.chart.html with the new filters in the query, swaps
-//   the chart region innerHTML, and re-renders the new canvas.
-// - On htmx:afterSwap of the chart region, destroys any prior instance
-//   and re-binds to the new canvas.
+// Shared multi-brand home Chart.js and pulse lifecycle.
 
 (function () {
   'use strict';
 
-  // The root route must stay structurally faithful to the authored mockup,
-  // which has no chart-region ID. Scope the public chart runtime to an
-  // implementation-only data marker instead. /internal retains its legacy
-  // ID as a fallback while it keeps its separate legacy shell.
   var HOME_CHART_REGION_SELECTOR = '.home-chart-wrap[data-pw-chart]';
+  var REFRESH_INTERVAL_MS = 60000;
+  var REQUEST_TIMEOUT_MS = 12000;
+  var generation = 0;
+  var activeController = null;
 
-  function getHomeChartRegion() {
-    return document.querySelector(HOME_CHART_REGION_SELECTOR) ||
-      document.getElementById('home-chart');
-  }
-
-  function isHomeChartRegion(region) {
-    return Boolean(region && region.matches &&
-      region.matches(HOME_CHART_REGION_SELECTOR));
-  }
-
-  function readPayload(canvas) {
-    var raw = canvas.getAttribute('data-home') || '{}';
-    try { return JSON.parse(raw); }
-    catch (e) { return null; }
-  }
-
-  function readColorsFromCss() {
-    return {
-      '--pt-buzz-releases': getComputedStyle(document.documentElement)
-        .getPropertyValue('--pt-buzz-releases').trim(),
-      '--pt-hands-on-usage': getComputedStyle(document.documentElement)
-        .getPropertyValue('--pt-hands-on-usage').trim(),
-    };
-  }
-
-  var SVG_NS = 'http://www.w3.org/2000/svg';
-  var MOCKUP_BRAND_ORDER = ['moonshot_kimi', 'deepseek', 'minimax', 'qwen', 'ernie'];
-  var MOCKUP_BRAND_NAMES = {
+  var BRAND_NAMES = {
     moonshot_kimi: 'Kimi',
     deepseek: 'DeepSeek',
     minimax: 'MiniMax',
@@ -56,105 +17,62 @@
     ernie: 'ERNIE',
   };
 
-  function isSvgChart(chart) {
-    return Boolean(chart && chart.tagName && chart.tagName.toLowerCase() === 'svg');
+  function getHomeChartRegion() {
+    return document.querySelector(HOME_CHART_REGION_SELECTOR) ||
+      document.getElementById('home-chart');
+  }
+
+  function isPublicHomeRegion(region) {
+    return Boolean(region && region.matches && region.matches(HOME_CHART_REGION_SELECTOR));
   }
 
   function chartIn(region) {
-    if (!region) return null;
-    return region.querySelector('canvas.home-chart') || region.querySelector('svg.home-chart');
+    return region ? region.querySelector('canvas.home-chart') : null;
   }
 
-  function orderedBrands(series) {
-    return Object.keys(series).sort(function (a, b) {
-      var aIndex = MOCKUP_BRAND_ORDER.indexOf(a);
-      var bIndex = MOCKUP_BRAND_ORDER.indexOf(b);
-      if (aIndex === -1) aIndex = MOCKUP_BRAND_ORDER.length;
-      if (bIndex === -1) bIndex = MOCKUP_BRAND_ORDER.length;
-      return aIndex === bIndex ? a.localeCompare(b) : aIndex - bIndex;
+  function readPayload(canvas) {
+    if (!canvas) return null;
+    try { return JSON.parse(canvas.getAttribute('data-home') || '{}'); }
+    catch (error) { return null; }
+  }
+
+  function isObject(value) {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+  }
+
+  function validPayload(payload) {
+    if (!isObject(payload) || !Array.isArray(payload.days) ||
+        !isObject(payload.series) || !isObject(payload.totals) ||
+        !isObject(payload.pulse) || !Array.isArray(payload.pulse.entries)) return false;
+    if (Number(payload.window_days) !== Number(payload.pulse.window_days)) return false;
+    if (!payload.computed_at || payload.computed_at !== payload.pulse.computed_at) return false;
+    return Object.keys(payload.series).every(function (brand) {
+      return Array.isArray(payload.series[brand]);
     });
   }
 
-  function svgElement(name, attrs) {
-    var node = document.createElementNS(SVG_NS, name);
-    Object.keys(attrs).forEach(function (key) { node.setAttribute(key, attrs[key]); });
-    return node;
+  function colorVarFor(discourseKey) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue('--bar-' + discourseKey).trim() || '#9ca3af';
   }
 
-  function renderSvgLegend(svg, brands, colors) {
-    var legend = svg.parentNode && svg.parentNode.querySelector('.legend');
-    if (!legend) return;
-    legend.innerHTML = brands.map(function (brand) {
-      var label = MOCKUP_BRAND_NAMES[brand] || brand;
-      var color = colors[brand] || '#9ca3af';
-      return '<span><i style="background:' + color + '"></i>' + label + '</span>';
-    }).join('');
-  }
-
-  function renderSvg(svg) {
-    var payload = readPayload(svg);
-    if (!payload || !document.createElementNS) return;
-    var series = payload.series || {};
-    var colors = payload.colors || {};
-    var brands = orderedBrands(series);
-    var max = 1;
-    brands.forEach(function (brand) {
-      (series[brand] || []).forEach(function (value) { max = Math.max(max, Number(value) || 0); });
-    });
-
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-    svg.appendChild(svgElement('rect', { width: '360', height: '180', fill: '#0f172a' }));
-    [45, 90, 135].forEach(function (y) {
-      svg.appendChild(svgElement('line', {
-        x1: '0', y1: String(y), x2: '360', y2: String(y),
-        stroke: '#1f2937', 'stroke-dasharray': '2 4',
-      }));
-    });
-    var paths = svgElement('g', { 'stroke-width': '1.8', fill: 'none' });
-    brands.forEach(function (brand) {
-      var values = series[brand] || [];
-      var lastIndex = Math.max(values.length - 1, 1);
-      var points = values.map(function (value, index) {
-        var x = (360 * index / lastIndex).toFixed(2);
-        var y = (160 - ((Number(value) || 0) / max * 140)).toFixed(2);
-        return x + ',' + y;
-      });
-      if (points.length) {
-        paths.appendChild(svgElement('polyline', {
-          stroke: colors[brand] || '#9ca3af', points: points.join(' '),
-        }));
-      }
-    });
-    svg.appendChild(paths);
-    renderSvgLegend(svg, brands, colors);
-  }
-
-  function renderOne(chartElement) {
-    if (isSvgChart(chartElement)) {
-      renderSvg(chartElement);
-      return;
-    }
-    var canvas = chartElement;
+  function renderOne(canvas) {
     var payload = readPayload(canvas);
-    if (!payload) return;
-    var days = payload.days || [];
+    if (!validPayload(payload)) return null;
+    var days = payload.days;
     var granularity = payload.granularity || 'day';
-    var series = payload.series || {};
+    var series = payload.series;
     var colors = payload.colors || {};
     var stacked = payload.stacked || {};
     var brandList = Object.keys(series);
-
     var prior = Chart.getChart(canvas);
     if (prior) prior.destroy();
 
     var datasets = [];
-    brandList.forEach(function (brand) {
+    brandList.forEach(function (brand, brandIndex) {
       var stroke = colors[brand] || '#9ca3af';
-      // For minute granularity, convert 0→NaN so spanGaps skips the
-      // baseline — the line connects non-zero dots directly without
-      // dropping to zero between events.
       var totalData = granularity === 'minute'
-        ? series[brand].map(function(v) { return v === 0 ? NaN : v; })
+        ? series[brand].map(function (value) { return value === 0 ? NaN : value; })
         : series[brand];
       datasets.push({
         label: brand + ' (total)',
@@ -164,36 +82,33 @@
         backgroundColor: stroke,
         borderWidth: 2,
         pointRadius: granularity === 'minute' ? 1.5 : 0,
-        tension: granularity === 'minute' ? 0.3 : 0.0,
+        tension: granularity === 'minute' ? 0.3 : 0,
         fill: false,
-        _brandIndex: brandList.indexOf(brand),
+        _brandIndex: brandIndex,
         _isTotalLine: true,
       });
-      // Per-discourse overlay datasets (mirrors combined-chart.js D3
-      // pattern). All hidden by default; hover reveals them.
-      var brandStacked = stacked[brand] || {};
-      Object.keys(brandStacked).forEach(function (dk) {
-        var stackedData = granularity === 'minute'
-          ? brandStacked[dk].map(function(v) { return v === 0 ? NaN : v; })
-          : brandStacked[dk];
+      Object.keys(stacked[brand] || {}).forEach(function (discourseKey) {
+        var values = stacked[brand][discourseKey];
         datasets.push({
-          label: brand + ' ' + dk,
-          data: stackedData,
+          label: brand + ' ' + discourseKey,
+          data: granularity === 'minute'
+            ? values.map(function (value) { return value === 0 ? NaN : value; })
+            : values,
           type: 'line',
           borderColor: 'transparent',
-          backgroundColor: colorVarFor(dk),
+          backgroundColor: colorVarFor(discourseKey),
           borderWidth: 0,
           pointRadius: granularity === 'minute' ? 1.5 : 0,
-          tension: granularity === 'minute' ? 0.3 : 0.0,
-          fill: datasets.length === 0 ? 'origin' : '-1',
+          tension: granularity === 'minute' ? 0.3 : 0,
+          fill: '-1',
           hidden: true,
+          _brandIndex: brandIndex,
           _isTotalLine: false,
-          _brandIndex: brandList.indexOf(brand),
         });
       });
     });
 
-    var chart = new Chart(canvas, {
+    return new Chart(canvas, {
       type: 'line',
       data: { labels: days, datasets: datasets },
       options: {
@@ -207,13 +122,11 @@
             enabled: true,
             mode: 'index',
             intersect: false,
-            filter: function (tooltipItem) {
-              return tooltipItem.dataset._isTotalLine === true;
-            },
+            filter: function (item) { return item.dataset._isTotalLine === true; },
             callbacks: {
-              label: function (ctx) {
-                var v = ctx.parsed.y;
-                return ctx.dataset.label + ': ' + v + (v === 1 ? ' post' : ' posts');
+              label: function (context) {
+                var value = context.parsed.y;
+                return context.dataset.label + ': ' + value + (value === 1 ? ' post' : ' posts');
               },
             },
           },
@@ -222,107 +135,221 @@
           x: {
             type: 'category',
             labels: days,
-            ticks: granularity === 'minute' ? {
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: 7,
-              callback: function (value, index) {
-                var label = this.getLabelForValue(value);
-                var d = new Date(label);
-                if (isNaN(d.getTime())) return label;
-                if (index === this.chart.data.labels.length - 1) return 'now';
-                if (d.getMinutes() === 0) {
-                  var h = String(d.getHours());
-                  return h.length < 2 ? '0' + h + ':00' : h + ':00';
-                }
-                return '';
-              },
-            } : {
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: 6,
-            },
+            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
             grid: { display: false },
           },
           y: {
             beginAtZero: true,
-            title: {
-              display: true,
-              text: granularity === 'minute' ? 'posts / 5min' : 'posts / day',
-            },
+            title: { display: true, text: granularity === 'minute' ? 'posts / 5min' : 'posts / day' },
             ticks: { precision: 0 },
           },
         },
-        // U4: hover-isolate removed (plan § Net D — `hoveredBrandIndex` must be
-        // absent or inert). Callback kept as a no-op so Chart.js does not error.
-        onHover: function (event, activeElements, c) {
-          // no-op: all brand lines stay visible on hover
-        },
+        onHover: function () {},
       },
     });
-    return chart;
   }
 
-  // Map a discourse key to its CSS-var color (existing --bar-* tokens).
-  function colorVarFor(discourseKey) {
-    var v = '--bar-' + discourseKey.replace(/-/g, '-');
-    return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#9ca3af';
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  function renderAll() {
-    var charts = document.querySelectorAll('canvas.home-chart, svg.home-chart');
-    for (var i = 0; i < charts.length; i++) {
-      try { renderOne(charts[i]); }
-      catch (e) { console.warn('pw-chart: render failed', e); }
+  function isZhLocale(locale) {
+    return ['zh_cn', 'zh-cn', 'zh_hans', 'zh-hans'].indexOf(String(locale || '').toLowerCase()) !== -1;
+  }
+
+  function renderLegend(region, payload) {
+    var legend = region.querySelector('[data-pw-chart-legend]');
+    if (!legend && isPublicHomeRegion(region) && document.createElement && region.appendChild) {
+      legend = document.createElement('div');
+      legend.className = 'legend';
+      legend.setAttribute('data-pw-chart-legend', '');
+      region.appendChild(legend);
+    }
+    if (!legend) return;
+    legend.innerHTML = Object.keys(payload.series).map(function (brand) {
+      return '<span><i style="background:' + escapeHtml((payload.colors || {})[brand] || '#9ca3af') + '"></i>' +
+        escapeHtml(BRAND_NAMES[brand] || brand) + '</span>';
+    }).join('');
+  }
+
+  function renderPulse(region, pulse) {
+    var bar = document.querySelector('[data-pw-pulse]');
+    if (!bar) return;
+    var zh = isZhLocale(region.getAttribute('data-pw-locale'));
+    var newText = region.getAttribute('data-pw-pulse-new-text') || 'NEW';
+    var filters = activeFilters();
+    var selectedBrand = Array.isArray(filters.brands) && filters.brands.length === 1
+      ? filters.brands[0]
+      : null;
+    bar.innerHTML = pulse.entries.map(function (entry) {
+      var name = zh
+        ? (entry.display_name_zh_cn || entry.display_name || entry.nickname)
+        : (entry.display_name_en || entry.display_name || entry.nickname);
+      var trend;
+      var accessibleTrend;
+      if (entry.status === 'new') {
+        trend = '<span class="delta new">' + escapeHtml(newText) + '</span>';
+        accessibleTrend = newText;
+      } else {
+        var direction = ['up', 'down', 'flat'].indexOf(entry.direction) === -1 ? 'flat' : entry.direction;
+        var magnitude = Math.abs(Number(entry.delta_percent) || 0);
+        trend = '<span class="delta ' + direction + '">' + magnitude + '%</span>';
+        var localizedDirection = zh
+          ? { up: '上升', down: '下降', flat: '持平' }[direction]
+          : direction;
+        accessibleTrend = localizedDirection + ' ' + magnitude + (zh ? '%' : ' percent');
+      }
+      return '<li><button type="button" class="pulse-chip" data-pw-pulse-entry="' +
+        escapeHtml(entry.nickname) + '" aria-label="' + escapeHtml(name + ', ' + accessibleTrend) +
+        '" aria-pressed="' + (selectedBrand === entry.nickname ? 'true' : 'false') +
+        '" style="--chip-color:' + escapeHtml(entry.accent_color || '#9ca3af') + '">' +
+        '<span class="pulse-chip-name">' + escapeHtml(name) + '</span>' + trend + '</button></li>';
+    }).join('');
+    bar.setAttribute('data-pw-window', String(pulse.window_days));
+    bar.setAttribute('data-pw-computed-at', pulse.computed_at);
+  }
+
+  function setStatus(node, text, visible) {
+    if (!node) return;
+    node.textContent = visible ? text : '';
+    node.hidden = !visible;
+  }
+
+  function payloadIsEmpty(payload) {
+    return Object.keys(payload.totals).reduce(function (sum, brand) {
+      return sum + (Number(payload.totals[brand]) || 0);
+    }, 0) === 0;
+  }
+
+  function updateProjectionStates(region, payload) {
+    setStatus(
+      region.querySelector('[data-pw-chart-status]'),
+      region.getAttribute('data-pw-chart-empty-text') || 'No chart data in this window',
+      payloadIsEmpty(payload)
+    );
+    setStatus(
+      document.querySelector('[data-pw-pulse-status]'),
+      region.getAttribute('data-pw-pulse-empty-text') || 'No pulse data in this window',
+      payload.pulse.entries.length === 0
+    );
+    region.setAttribute('data-pw-refresh-failed', 'false');
+    var bar = document.querySelector('[data-pw-pulse]');
+    if (bar) bar.setAttribute('data-pw-refresh-failed', 'false');
+  }
+
+  function showRefreshFailure(region) {
+    setStatus(
+      region.querySelector('[data-pw-chart-status]'),
+      region.getAttribute('data-pw-chart-error-text') || 'Chart refresh failed; showing last result',
+      true
+    );
+    setStatus(
+      document.querySelector('[data-pw-pulse-status]'),
+      region.getAttribute('data-pw-pulse-error-text') || 'Pulse refresh failed; showing last result',
+      true
+    );
+    region.setAttribute('data-pw-refresh-failed', 'true');
+    var bar = document.querySelector('[data-pw-pulse]');
+    if (bar) bar.setAttribute('data-pw-refresh-failed', 'true');
+  }
+
+  function payloadFromFragment(html) {
+    var parsed = new DOMParser().parseFromString(html, 'text/html');
+    return readPayload(parsed.querySelector('canvas.home-chart'));
+  }
+
+  function commitFragment(region, html, payload) {
+    var priorCanvas = chartIn(region);
+    var priorChart = priorCanvas ? Chart.getChart(priorCanvas) : null;
+    if (priorChart) priorChart.destroy();
+    region.innerHTML = html;
+    var canvas = chartIn(region);
+    if (!canvas) throw new Error('chart fragment omitted canvas');
+    renderOne(canvas);
+    renderLegend(region, payload);
+    renderPulse(region, payload.pulse);
+    updateProjectionStates(region, payload);
+  }
+
+  function activeFilters() {
+    return window.pwFilter && window.pwFilter.get ? window.pwFilter.get() : {};
+  }
+
+  function filtersForEvent(event) {
+    var filters = event && event.detail && event.detail.filters;
+    return isObject(filters) ? filters : activeFilters();
+  }
+
+  function requestChart(event) {
+    var region = getHomeChartRegion();
+    if (!region) return Promise.resolve(false);
+    var requestGeneration = ++generation;
+    if (activeController) activeController.abort();
+    activeController = typeof AbortController === 'function' ? new AbortController() : null;
+    var timeout = setTimeout(function () {
+      if (activeController && requestGeneration === generation) activeController.abort();
+    }, REQUEST_TIMEOUT_MS);
+    var filters = filtersForEvent(event);
+    var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters)) +
+      '&window=' + encodeURIComponent(filters.window || 1);
+    return fetch(url, {
+      credentials: 'same-origin',
+      signal: activeController ? activeController.signal : undefined,
+    }).then(function (response) {
+      if (!response.ok) throw new Error('chart response status was not OK');
+      return response.text();
+    }).then(function (html) {
+      if (requestGeneration !== generation) return false;
+      var payload = payloadFromFragment(html);
+      if (!validPayload(payload)) throw new Error('chart response payload was malformed');
+      if (requestGeneration !== generation) return false;
+      commitFragment(region, html, payload);
+      return true;
+    }).catch(function (error) {
+      if (requestGeneration === generation && (!error || error.name !== 'AbortError')) {
+        showRefreshFailure(region);
+        console.warn('pw-chart: refresh failed', error);
+      }
+      return false;
+    }).then(function (result) {
+      clearTimeout(timeout);
+      return result;
+    });
+  }
+
+  function disableHtmxRefresh(region) {
+    ['hx-get', 'hx-trigger', 'hx-vals', 'hx-swap'].forEach(function (name) {
+      region.removeAttribute(name);
+    });
+  }
+
+  function boot() {
+    var region = getHomeChartRegion();
+    if (region) {
+      disableHtmxRefresh(region);
+      var canvas = chartIn(region);
+      var payload = readPayload(canvas);
+      if (validPayload(payload)) {
+        renderOne(canvas);
+        renderLegend(region, payload);
+        renderPulse(region, payload.pulse);
+        updateProjectionStates(region, payload);
+      }
+      setInterval(requestChart, REFRESH_INTERVAL_MS);
     }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderAll);
+    document.addEventListener('DOMContentLoaded', boot);
   } else {
-    renderAll();
+    boot();
   }
 
-  // Re-bind on htmx swaps of the root chart region, plus the legacy
-  // /internal and single-brand regions that still use IDs.
-  document.body.addEventListener('htmx:afterSwap', function (evt) {
-    if (!evt.target) return;
-    if (isHomeChartRegion(evt.target) || evt.target.id === 'home-chart' || evt.target.id === 'brand-chart') {
-      var chart = chartIn(evt.target);
-      if (chart) {
-        try { renderOne(chart); }
-        catch (e) { console.warn('pw-chart: post-swap render failed', e); }
-      }
-    }
-  });
-
-  // U3 (2026-07-16): react to control-panel filter changes. Re-fetch
-  // the chart fragment with the active filters in the query, swap the
-  // region innerHTML, and re-render the canvas. Simple and correct;
-  // htmx's `every Ns` poll carries the same filter via `hx-vals` so
-  // both paths converge on the same payload.
-  //
-  // Scoped to the multi-brand page: this module owns the root chart's
-  // mockup-safe data marker (or /internal's legacy `#home-chart` fallback).
-  // The single-brand page (`/brand_home.html.j2`) loads pw-brand-chart.js
-  // for `#brand-chart`, so we no-op there.
-  function refetchChartWithFilters() {
-    var region = getHomeChartRegion();
-    if (!region) return;
-    var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
-    var renderer = region.id === 'home-chart' ? '&renderer=canvas' : '';
-    var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters)) + renderer;
-    fetch(url, { credentials: 'same-origin' })
-      .then(function (r) { return r.text(); })
-      .then(function (html) {
-        region.innerHTML = html;
-        var chart = chartIn(region);
-        if (chart) {
-          try { renderOne(chart); }
-          catch (e) { console.warn('pw-chart: post-filter render failed', e); }
-        }
-      })
-      .catch(function (e) { console.warn('pw-chart: filter refetch failed', e); });
-  }
-  document.addEventListener('pw:filter-change', refetchChartWithFilters);
+  document.addEventListener('pw:filter-change', requestChart);
+  document.addEventListener('pw:locale-change', requestChart);
 })();

@@ -13,6 +13,20 @@ import os
 import pytest
 
 
+PYTEST_STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+
+@pytest.fixture(autouse=True)
+def _use_finder_backed_staticfiles_storage(settings):
+    """Keep ordinary tests independent of collected production manifests."""
+    settings.STORAGES = PYTEST_STORAGES
+
+
 def _database_url() -> str:
     return os.environ.get("DATABASE_URL", "")
 

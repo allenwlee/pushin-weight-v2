@@ -13,13 +13,17 @@ from __future__ import annotations
 
 import json
 import logging
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from threading import Lock
+from time import monotonic
 from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Case, CharField, Count, Prefetch, Q, QuerySet, Value, When
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
@@ -41,6 +45,7 @@ from core.models import (
     PostBrandSignal,
     PostTypeLabel,
     PostUnsanctionedFlag,
+    SentimentKey,
     SentimentLabel,
 )
 
@@ -154,6 +159,12 @@ _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
     "other": "other",
 }
 
+# Presentation-only V22 lens. Brand has no open/closed schema field, and these
+# four settled provider nicknames are the authored closed-model tier.
+_HOME_CLOSED_BRAND_NICKNAMES = frozenset({
+    "anthropic", "openai", "spacexai", "google",
+})
+
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
 HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
 HOME_WINDOW_DEFAULT_BEFORE: int = 7  # pinned for Net B regression (BEFORE value, not used in code)
@@ -161,6 +172,10 @@ HOME_WINDOW_COOKIE: str = "home_window"
 
 FEED_HARD_CAP: int = 500
 FEED_DEFAULT_LIMIT: int = 50
+
+_HOME_PULSE_CACHE_TTL_SECONDS = 60.0
+_HOME_PULSE_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
+_HOME_PULSE_CACHE_LOCK = Lock()
 
 
 # ============================================================================
@@ -616,7 +631,61 @@ def _feed_tint_class(sentiment_keys: list[str]) -> str:
     return "tint-neutral"
 
 
-def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = None) -> dict[str, Any]:
+def _v22_feed_display_fields(
+    classifications: dict[str, dict[str, Any]],
+    *,
+    active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
+    created_at: Any,
+    account: dict[str, Any],
+    like_count: int | None = None,
+    retweet_count: int | None = None,
+    reply_count: int | None = None,
+    author_handle: str | None = None,
+) -> dict[str, Any]:
+    """Build the V22 display fields shared by SSR and feed-refresh rows."""
+    _, post_type_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
+    if active_brand_scope in (None, "__all__"):
+        sentiment_classifications = classifications
+    else:
+        selected_brands = (
+            {active_brand_scope}
+            if isinstance(active_brand_scope, str)
+            else set(active_brand_scope)
+        )
+        sentiment_classifications = {
+            nickname: classification
+            for nickname, classification in classifications.items()
+            if nickname in selected_brands
+        }
+    sentiment_keys, _, _, _ = _feed_signal_keys(sentiment_classifications)
+    handle = account.get("handle") or author_handle or ""
+    followers_count = account.get("followers_count") or 0
+    return {
+        "sentiment_keys": sentiment_keys,
+        "post_type_keys": post_type_keys,
+        "nat_cn": nat_cn,
+        "nat_us": nat_us,
+        "tint_class": _feed_tint_class(sentiment_keys),
+        "meta_text": _feed_relative_age(created_at),
+        "ts_abs_text": _feed_abs_stamp(created_at),
+        "avatar_initials": _avatar_initials(handle),
+        "avatar_color": _avatar_color(handle),
+        "engagement_pretty": _engagement_pretty(
+            followers_count,
+            like_count or 0,
+            retweet_count or 0,
+            reply_count or 0,
+        ),
+    }
+
+
+def _post_to_wire(
+    post: Post,
+    locale: str,
+    enriched: dict[str, Any] | None = None,
+    *,
+    active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
+) -> dict[str, Any]:
     """Serialize a Post ORM instance to the JSON wire shape for the feed.
 
     Mirrors x_monitor/dashboard.py:_feed_row_to_wire.
@@ -708,11 +777,16 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
     created_at_iso = created_at_raw
     unsanctioned = enriched.get("unsanctioned", False) if enriched else False
 
-    # iter 14 (U5): mockup-canon signal keys + relative/abs stamps.
-    sent_keys, type_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
-    tint_class = _feed_tint_class(sent_keys)
-    rel_age = _feed_relative_age(post.created_at)
-    abs_stamp = _feed_abs_stamp(post.created_at)
+    display_fields = _v22_feed_display_fields(
+        classifications,
+        active_brand_scope=active_brand_scope,
+        created_at=post.created_at,
+        account=account_wire,
+        like_count=post.like_count,
+        retweet_count=post.retweet_count,
+        reply_count=post.reply_count,
+        author_handle=post.author_handle,
+    )
 
     return {
         "tweet_id": post.tweet_id,
@@ -729,27 +803,12 @@ def _post_to_wire(post: Post, locale: str, enriched: dict[str, Any] | None = Non
         "retweet_count": post.retweet_count or 0,
         "reply_count": post.reply_count or 0,
         "quote_count": post.quote_count or 0,
-        "avatar_initials": _avatar_initials(account_wire.get("handle", "") or post.author_handle or ""),
-        "avatar_color": _avatar_color(account_wire.get("handle", "") or post.author_handle or ""),
-        "engagement_pretty": _engagement_pretty(
-            account_wire.get("followers_count", 0),
-            post.like_count or 0,
-            post.retweet_count or 0,
-            post.reply_count or 0,
-        ),
         "brands": brands_wire,
         "brand_nicknames": brand_nicknames,
         "classifications": classifications,
         "unsanctioned": unsanctioned,
         "account": account_wire,
-        # iter 14 (U5 feed row structure) — mockup-canon shape for .feed-row
-        "sentiment_keys": sent_keys,
-        "post_type_keys": type_keys,
-        "nat_cn": nat_cn,
-        "nat_us": nat_us,
-        "tint_class": tint_class,
-        "meta_text": rel_age,
-        "ts_abs_text": abs_stamp,
+        **display_fields,
     }
 
 
@@ -797,15 +856,26 @@ def _enrich_posts_with_classifications(
         ).values_list("post_id", flat=True)
     )
 
-    # Account roles for the brand
-    role_map: dict[str, str] = {}
-    if brand_nickname:
+    # Account roles for the brands represented by this page.  A public feed
+    # can contain several brands, so role matching must retain the
+    # brand/account pair instead of choosing one arbitrary role per account.
+    author_ids = {p.author_id for p in posts if p.author_id}
+    post_brand_ids = {
+        pb.brand_id
+        for post in posts
+        for pb in post.brands.all()
+    }
+    role_map: dict[tuple[str, str], str | None] = {}
+    if author_ids and post_brand_ids:
         ba_qs = BrandAccount.objects.filter(
-            brand_id=brand_nickname,
+            account_id__in=author_ids,
+            brand_id__in=post_brand_ids,
         ).select_related("role")
+        if brand_nickname:
+            ba_qs = ba_qs.filter(brand_id=brand_nickname)
         for ba in ba_qs:
             if ba.account_id:
-                role_map[ba.account_id] = ba.role.key if ba.role_id else None
+                role_map[(ba.brand_id, ba.account_id)] = ba.role.key if ba.role_id else None
 
     # Index by tweet_id
     signals_by_tweet: dict[str, dict[str, dict[str, list[str]]]] = {}
@@ -878,6 +948,8 @@ def _enrich_posts_with_classifications(
             "text_en": post.text_en,
             "text_zh_cn": post.text_zh_cn,
             "like_count": post.like_count or 0,
+            "retweet_count": post.retweet_count or 0,
+            "reply_count": post.reply_count or 0,
             "lang_detected": post.lang_detected,
             "author_handle": post.author_handle,
             "author_id": post.author_id,
@@ -889,16 +961,17 @@ def _enrich_posts_with_classifications(
             "sentiments": [],
             "cn_nationalism": None,
             "us_nationalism": None,
-            "role_key": role_map.get(post.author_id) if post.author_id else None,
+            "role_keys": [],
+            "role_key": None,
             "unsanctioned": tid in flag_tweet_ids,
             "brand_nicknames": [],
             "brands": [],
             "classifications_by_brand": {},
             "account": {
                 "handle": post.author.handle if post.author else (post.author_handle or "@unknown"),
-                "role": role_map.get(post.author_id) if post.author_id else None,
-                "role_key": role_map.get(post.author_id) if post.author_id else None,
-                "role_label": role_map.get(post.author_id) or "",
+                "role": None,
+                "role_key": None,
+                "role_label": "",
                 "followers_count": post.author.followers_count if post.author else 0,
                 "followers_pretty": _pretty_followers(post.author.followers_count if post.author else 0),
             },
@@ -949,6 +1022,15 @@ def _enrich_posts_with_classifications(
 
             row["classifications_by_brand"][nick] = cls_data
 
+            role_key = role_map.get((pb.brand_id, post.author_id)) if post.author_id else None
+            if role_key and role_key not in row["role_keys"]:
+                row["role_keys"].append(role_key)
+
+        row["role_key"] = next(iter(row["role_keys"]), None)
+        row["account"]["role"] = row["role_key"]
+        row["account"]["role_key"] = row["role_key"]
+        row["account"]["role_label"] = row["role_key"] or ""
+
         row["label_cache_by_locale"] = label_cache_by_locale
         result.append(row)
 
@@ -972,7 +1054,10 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
         except (ValueError, TypeError):
             log.warning("malformed filters JSON; ignoring")
     out: dict[str, Any] = {}
-    for key in ("discourse", "post_types", "role", "lang", "cn_nationalism", "us_nationalism"):
+    for key in (
+        "brands", "discourse", "post_types", "role", "lang", "sentiment",
+        "cn_nationalism", "us_nationalism",
+    ):
         v = request.GET.get(key)
         if v:
             out[key] = [s for s in v.split(",") if s]
@@ -982,14 +1067,49 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
     return out
 
 
+_HOME_MULTI_VALUE_FILTERS: tuple[str, ...] = (
+    "brands", "discourse", "post_types", "role", "lang", "sentiment",
+    "cn_nationalism", "us_nationalism",
+)
+
+
+def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize stable machine keys without treating an empty list as all."""
+    source = filters if isinstance(filters, dict) else {}
+    normalized: dict[str, Any] = {}
+    for key in _HOME_MULTI_VALUE_FILTERS:
+        if key not in source:
+            continue
+        value = source[key]
+        if value == "__all__":
+            normalized[key] = "__all__"
+            continue
+        if not isinstance(value, (list, tuple, set)):
+            value = [value] if value not in (None, "") else []
+        normalized[key] = list(dict.fromkeys(str(item) for item in value if item not in (None, "")))
+    mode = source.get("unsanctioned", "off")
+    normalized["unsanctioned"] = mode if mode in {"off", "only", "any"} else "off"
+    if "window" in source:
+        try:
+            window = int(source["window"])
+        except (TypeError, ValueError):
+            window = HOME_WINDOW_DEFAULT
+        normalized["window"] = window if window in ALLOWED_HOME_WINDOWS else HOME_WINDOW_DEFAULT
+    return normalized
+
+
 def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     """Return True when a single post satisfies the active control-panel filters.
 
     Ported from x_monitor/dashboard.py:_post_matches_filter.
     """
+    filters = _normalize_home_filters(filters)
+
     # Brands
     brands = filters.get("brands")
     if brands is not None and brands != "__all__":
+        if not brands:
+            return False
         post_brands = post.get("brand_nicknames") or []
         if not any(b in brands for b in post_brands):
             return False
@@ -997,56 +1117,71 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     # Discourse
     discourse = filters.get("discourse")
     if discourse is not None and discourse != "__all__":
-        if not discourse:  # empty list means no filter active
-            pass
-        else:
-            post_disc = post.get("discourse") or []
-            if post_disc and not any(d in discourse for d in post_disc):
-                return False
+        if not discourse:
+            return False
+        post_disc = post.get("discourse") or []
+        if not any(d in discourse for d in post_disc):
+            return False
 
     # Post types
     post_types = filters.get("post_types")
     if post_types is not None and post_types != "__all__":
         if not post_types:
-            pass
-        else:
-            post_pts = post.get("post_types") or []
-            if post_pts and not any(p in post_types for p in post_pts):
-                return False
+            return False
+        post_pts = post.get("post_types") or []
+        if not any(p in post_types for p in post_pts):
+            return False
+
+    # Sentiment
+    sentiment = filters.get("sentiment")
+    if sentiment is not None and sentiment != "__all__":
+        if not sentiment:
+            return False
+        post_sentiments = post.get("sentiments") or post.get("sentiment_keys") or []
+        if not any(value in sentiment for value in post_sentiments):
+            return False
 
     # Role
     role = filters.get("role")
     if role is not None and role != "__all__":
         if not role:
-            pass
+            return False
         else:
-            post_role = post.get("role_key")
-            if post_role is None or post_role not in _DASHBOARD_ROLE_FILTER_KEYS[:3]:
+            post_roles = post.get("role_keys")
+            if post_roles is None:
+                post_roles = [post.get("role_key")] if post.get("role_key") else []
+            known_post_roles = {
+                value for value in post_roles
+                if value in _DASHBOARD_ROLE_FILTER_KEYS[:3]
+            }
+            if not known_post_roles:
                 if "other" not in role:
                     return False
-            else:
-                if post_role not in role:
-                    return False
+            elif not any(value in role for value in known_post_roles):
+                return False
 
     # Nationalism axes
     for axis in ("cn_nationalism", "us_nationalism"):
         active = filters.get(axis)
         if active is not None and active != "__all__":
             if not active:
-                pass
+                return False
             else:
                 post_key = post.get(axis)
-                if post_key is not None and post_key not in active:
+                if not post_key:
+                    if "none" not in active:
+                        return False
+                elif post_key not in active:
                     return False
 
     # Lang
     lang = filters.get("lang")
     if lang is not None and lang != "__all__":
         if not lang:
-            pass
+            return False
         else:
             post_lang = post.get("lang_detected")
-            if post_lang is None:
+            if not post_lang:
                 if "undetected" not in lang:
                     return False
             elif post_lang in _DASHBOARD_LANG_FILTER_KEYS:
@@ -1067,6 +1202,101 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     return True
 
 
+def _filter_home_posts_queryset(
+    window_days: int,
+    normalized_filters: dict[str, Any],
+    *,
+    now: datetime,
+) -> QuerySet:
+    """Return the bounded, set-based Post queryset shared by chart aggregation."""
+    queryset = Post.objects.filter(
+        created_at__gte=now - timedelta(days=window_days),
+        created_at__lt=now,
+    )
+
+    relation_filters = {
+        "brands": "brands__brand_id__in",
+        "discourse": "discourse_signals__discourse_id__in",
+        "post_types": "signals__post_type_id__in",
+        "sentiment": "signals__sentiment_id__in",
+        "lang": "lang_detected__in",
+    }
+    for axis, lookup in relation_filters.items():
+        active = normalized_filters.get(axis)
+        if active is None or active == "__all__":
+            continue
+        if not active:
+            return queryset.none()
+        if axis == "lang":
+            known = [value for value in active if value not in {"other", "undetected"}]
+            condition = Q(lang_detected__in=known)
+            if "undetected" in active:
+                condition |= Q(lang_detected__isnull=True) | Q(lang_detected="")
+            if "other" in active:
+                condition |= (
+                    ~Q(lang_detected__in=_DASHBOARD_LANG_FILTER_KEYS)
+                    & ~Q(lang_detected="")
+                    & Q(lang_detected__isnull=False)
+                )
+            queryset = queryset.filter(condition)
+        else:
+            queryset = queryset.filter(**{lookup: active})
+
+    for axis, field_name in (
+        ("cn_nationalism", "china_nationalism_id"),
+        ("us_nationalism", "us_nationalism_id"),
+    ):
+        active = normalized_filters.get(axis)
+        if active is None or active == "__all__":
+            continue
+        if not active:
+            return queryset.none()
+        relation_lookup = f"discourse_signals__{field_name}__in"
+        condition = Q(**{relation_lookup: active})
+        if "none" in active:
+            condition |= Q(**{f"discourse_signals__{field_name}__isnull": True})
+        queryset = queryset.filter(condition)
+
+    active_roles = normalized_filters.get("role")
+    if active_roles is not None and active_roles != "__all__":
+        if not active_roles:
+            return queryset.none()
+        known_roles = _DASHBOARD_ROLE_FILTER_KEYS[:3]
+        selected_known = [role for role in active_roles if role in known_roles]
+        role_scope = normalized_filters.get("brands")
+        role_scope_filter = {}
+        if role_scope not in (None, "__all__"):
+            role_scope_filter["brand_id__in"] = role_scope
+        role_post_filter = {"brand__posts__post__tweet_id": OuterRef("tweet_id")}
+        has_known_role = BrandAccount.objects.filter(
+            account_id=OuterRef("author_id"),
+            role_id__in=known_roles,
+            **role_scope_filter,
+            **role_post_filter,
+        )
+        has_selected_role = BrandAccount.objects.filter(
+            account_id=OuterRef("author_id"),
+            role_id__in=selected_known,
+            **role_scope_filter,
+            **role_post_filter,
+        )
+        queryset = queryset.annotate(
+            _has_known_role=Exists(has_known_role),
+            _has_selected_role=Exists(has_selected_role),
+        )
+        role_condition = Q(_has_selected_role=True)
+        if "other" in active_roles:
+            role_condition |= Q(_has_known_role=False)
+        queryset = queryset.filter(role_condition)
+
+    unsanctioned = normalized_filters.get("unsanctioned", "off")
+    if unsanctioned == "off":
+        queryset = queryset.filter(unsanctioned_flags__isnull=True)
+    elif unsanctioned == "only":
+        queryset = queryset.filter(unsanctioned_flags__isnull=False)
+    return queryset.distinct()
+
+
 # ============================================================================
 # Chart serialization (simplified — stub for progressive enhancement)
 # ============================================================================
@@ -1075,16 +1305,22 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
 def _build_home_chart_payload(
     window_days: int,
     filters: dict[str, Any],
+    *,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build multi-brand chart payload dict — shared by chart_json and chart_html.
 
-    Uses PostBrand aggregation for day-level windows, and per-post bucketing
-    for the 1d minute window. Returns the full payload dict (not rendered HTML).
+    Both granularities aggregate a bounded, normalized Post subquery. The pulse
+    projection shares the same timestamp so a client can commit both atomically.
     """
-    from django.db.models import Count
-    from django.db.models.functions import TruncDate
+    from django.db.models.functions import TruncDate, TruncMinute
 
-    now = django_timezone.now()
+    if window_days not in ALLOWED_HOME_WINDOWS:
+        window_days = HOME_WINDOW_DEFAULT
+    requested_at = now or django_timezone.now()
+    pulse = _build_home_pulse_payload(window_days, now=requested_at)
+    now = datetime.fromisoformat(pulse["computed_at"])
+    normalized_filters = _normalize_home_filters(filters)
 
     # Get enabled brands
     brand_nicknames = list(
@@ -1094,7 +1330,7 @@ def _build_home_chart_payload(
     )
 
     # Brand narrowing from filter
-    brands_filter = filters.get("brands")
+    brands_filter = normalized_filters.get("brands")
     if brands_filter is not None and brands_filter != "__all__":
         brand_nicknames = [b for b in brand_nicknames if b in brands_filter]
 
@@ -1107,34 +1343,46 @@ def _build_home_chart_payload(
         brand: {} for brand in brand_nicknames
     }
 
+    eligible_posts = _filter_home_posts_queryset(
+        window_days,
+        normalized_filters,
+        now=now,
+    ).values("tweet_id")
+    links = PostBrand.objects.filter(
+        brand_id__in=brand_nicknames,
+        post_id__in=Subquery(eligible_posts),
+    )
+
     if window_days == 1:
         # Minute granularity: 288 5-minute buckets, oldest-first labels
         granularity = "minute"
         bucket_count = 288
+        cutoff = now - timedelta(days=1)
         days: list[str] = [
-            (now - timedelta(minutes=i)).isoformat()
-            for i in range(bucket_count - 1, -1, -1)
+            (cutoff + timedelta(minutes=5 * i)).isoformat()
+            for i in range(bucket_count)
         ]
         series: dict[str, list[int]] = {
             brand: [0] * bucket_count for brand in brand_nicknames
         }
-
-        cutoff = now - timedelta(days=1)
-        for brand in brand_nicknames:
-            posts = _get_feed_posts(
-                window_days=1,
-                brand_nickname=brand,
-                limit=FEED_HARD_CAP,
-            )
-            for p in posts:
-                if not p.created_at:
-                    continue
-                minutes_ago = int((now - p.created_at).total_seconds() // 60)
-                if minutes_ago < 0 or minutes_ago >= 1440:
-                    continue
-                idx = bucket_count - 1 - (minutes_ago // 5)
-                series[brand][idx] += 1
-                totals[brand] += 1
+        aggregate_rows = (
+            links.annotate(bucket=TruncMinute("post__created_at"))
+            .values("brand_id", "bucket")
+            .annotate(count=Count("pk"))
+            .order_by("bucket", "brand_id")
+        )
+        for row in aggregate_rows:
+            bucket = row["bucket"]
+            if bucket is None:
+                continue
+            # The queryset applies the exact cutoff before TruncMinute.  A
+            # post in the first partial minute truncates just before cutoff,
+            # so map that one eligible bucket to the first chart bucket.
+            index = max(0, int((bucket - cutoff).total_seconds() // 300))
+            brand = row["brand_id"]
+            if brand in series and 0 <= index < bucket_count:
+                series[brand][index] += row["count"]
+                totals[brand] += row["count"]
     else:
         # Day granularity (oldest-first labels)
         granularity = "day"
@@ -1147,21 +1395,16 @@ def _build_home_chart_payload(
             brand: [0] * window_days for brand in brand_nicknames
         }
 
-        cutoff = now - timedelta(days=window_days)
         agg_rows = (
-            PostBrand.objects
-            .filter(
-                brand__nickname__in=brand_nicknames,
-                post__created_at__gte=cutoff,
-            )
+            links
             .annotate(day=TruncDate("post__created_at"))
-            .values("brand__nickname", "day")
+            .values("brand_id", "day")
             .annotate(count=Count("pk"))
-            .order_by("day")
+            .order_by("day", "brand_id")
         )
 
         for row in agg_rows:
-            brand = row["brand__nickname"]
+            brand = row["brand_id"]
             day_str = row["day"].isoformat() if row["day"] else None
             count = row["count"]
             if brand in series and day_str in day_index:
@@ -1169,6 +1412,7 @@ def _build_home_chart_payload(
                 series[brand][idx] += count
                 totals[brand] += count
 
+    computed_at = pulse["computed_at"]
     return {
         "days": days,
         "series": series,
@@ -1177,7 +1421,9 @@ def _build_home_chart_payload(
         "granularity": granularity,
         "stacked": stacked,
         "window_days": window_days,
-        "fetched_at": now.isoformat(),
+        "computed_at": computed_at,
+        "fetched_at": computed_at,
+        "pulse": pulse,
     }
 
 
@@ -1186,36 +1432,98 @@ def _build_home_chart_payload(
 # ============================================================================
 
 
-def _compute_brand_deltas() -> dict[str, dict[str, int]]:
-    """Return per-brand post counts for the last 60 min and prior 60-120 min.
+def _round_pulse_percent(current: int, prior: int) -> int | None:
+    """Return a signed whole percent using decimal half-away-from-zero."""
+    if prior == 0:
+        return None
+    value = (Decimal(current - prior) * Decimal(100)) / Decimal(prior)
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
-    Used by _build_brands_context to render the trending %change arrow.
-    Single aggregation query against PostBrand joined to Post.
-    """
-    now = django_timezone.now()
-    window_end = now
-    window_mid = now - timedelta(minutes=60)
-    window_start = now - timedelta(minutes=120)
 
-    # Count post-brand links whose post falls in [now-60m, now) and [now-120m, now-60m).
-    counts = (
-        PostBrand.objects
-        .filter(post__created_at__gte=window_start)
-        .annotate(bucket=(
-            Case(
-                When(post__created_at__gte=window_mid, then=Value("recent")),
-                default=Value("prior"),
-                output_field=CharField(),
+def _clear_home_pulse_cache() -> None:
+    """Clear the bounded per-worker cache (used by deterministic tests)."""
+    with _HOME_PULSE_CACHE_LOCK:
+        _HOME_PULSE_CACHE.clear()
+
+
+def _build_home_pulse_payload(
+    window_days: int,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Aggregate current/prior equal windows in one query and rank the top eight."""
+    if window_days not in ALLOWED_HOME_WINDOWS:
+        window_days = HOME_WINDOW_DEFAULT
+    now = now or django_timezone.now()
+    cache_now = monotonic()
+    with _HOME_PULSE_CACHE_LOCK:
+        cached = _HOME_PULSE_CACHE.get(window_days)
+        if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
+            return deepcopy(cached[1])
+
+        midpoint = now - timedelta(days=window_days)
+        start = now - timedelta(days=window_days * 2)
+        rows = list(
+            PostBrand.objects
+            .filter(
+                brand__is_sentinel=False,
+                post__created_at__gte=start,
+                post__created_at__lt=now,
             )
+            .values(
+                "brand_id",
+                "brand__display_name",
+                "brand__display_name_en",
+                "brand__display_name_zh_cn",
+                "brand__accent_color",
+            )
+            .annotate(
+                current_count=Count(
+                    "post",
+                    filter=Q(post__created_at__gte=midpoint, post__created_at__lt=now),
+                ),
+                prior_count=Count(
+                    "post",
+                    filter=Q(post__created_at__gte=start, post__created_at__lt=midpoint),
+                ),
+            )
+        )
+        entries: list[dict[str, Any]] = []
+        for row in rows:
+            current = row["current_count"] or 0
+            prior = row["prior_count"] or 0
+            if current == 0 and prior == 0:
+                continue
+            delta = _round_pulse_percent(current, prior)
+            is_new = prior == 0 and current > 0
+            direction = None if is_new else "up" if delta > 0 else "down" if delta < 0 else "flat"
+            nickname = row["brand_id"]
+            entries.append({
+                "nickname": nickname,
+                "display_name": row["brand__display_name"] or MODEL_DISPLAY_NAMES.get(nickname, nickname),
+                "display_name_en": row["brand__display_name_en"] or row["brand__display_name"] or MODEL_DISPLAY_NAMES.get(nickname, nickname),
+                "display_name_zh_cn": row["brand__display_name_zh_cn"] or row["brand__display_name"] or MODEL_DISPLAY_NAMES.get(nickname, nickname),
+                "accent_color": row["brand__accent_color"] or MODEL_ACCENT_COLORS.get(nickname, "#9ca3af"),
+                "current_count": current,
+                "prior_count": prior,
+                "delta_percent": delta,
+                "delta_magnitude": abs(delta) if delta is not None else None,
+                "status": "new" if is_new else "numeric",
+                "direction": direction,
+            })
+        entries.sort(key=lambda entry: (
+            -entry["current_count"],
+            0 if entry["status"] == "new" else 1,
+            -(entry["delta_percent"] if entry["delta_percent"] is not None else 0),
+            entry["nickname"].casefold(),
         ))
-        .values("brand__nickname", "bucket")
-        .annotate(n=Count("post"))
-    )
-    out: dict[str, dict[str, int]] = {}
-    for row in counts:
-        nick = row["brand__nickname"]
-        out.setdefault(nick, {"recent": 0, "prior": 0})[row["bucket"]] = row["n"]
-    return out
+        payload = {
+            "window_days": window_days,
+            "computed_at": now.isoformat(),
+            "entries": entries[:8],
+        }
+        _HOME_PULSE_CACHE[window_days] = (cache_now, payload)
+        return deepcopy(payload)
 
 
 def _multi_top_voices(window_days: int, limit: int = 3) -> list[dict[str, Any]]:
@@ -1263,10 +1571,8 @@ def _build_brands_context() -> list[dict[str, Any]]:
     Brands are ordered by post volume (descending) for the top 15,
     then alphabetically for any remaining brands.
 
-    Also attaches recent/prior deltas (per-brand post counts in the last
-    60 min vs prior 60-120 min) so the trending pill can render an arrow
-    + percentage. pct_arrow is one of "up", "down", "flat"; pct_class is
-    the CSS modifier matching the v22-master mockup (delta.up/.down/.flat).
+    Pulse values are intentionally absent here; they live in the chart payload
+    so initial and refreshed chart/pulse projections share one timestamp.
     """
     _BRAND_ORDER = [
         "deepseek", "qwen", "glm", "minimax", "llama", "mistral",
@@ -1275,39 +1581,27 @@ def _build_brands_context() -> list[dict[str, Any]]:
     ]
     _order_map = {nick: i for i, nick in enumerate(_BRAND_ORDER)}
 
-    deltas = _compute_brand_deltas()
-
     brand_qs = Brand.objects.filter(is_sentinel=False)
     brands = []
     for b in brand_qs:
-        recent = deltas.get(b.nickname, {}).get("recent", 0)
-        prior = deltas.get(b.nickname, {}).get("prior", 0)
-        if prior > 0:
-            pct = round((recent - prior) / prior * 100)
-        elif recent > 0:
-            pct = 100  # no prior window, all new = +100%
-        else:
-            pct = 0
-        if pct > 0:
-            arrow, cls = "up", "up"
-        elif pct < 0:
-            arrow, cls = "down", "down"
-        else:
-            arrow, cls = "flat", "flat"
         brands.append({
             "nickname": b.nickname,
             "display_name": b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
             "accent_color": b.accent_color or MODEL_ACCENT_COLORS.get(b.nickname, "#9ca3af"),
             "display_name_en": b.display_name_en or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
             "display_name_zh_cn": b.display_name_zh_cn or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
-            "recent_count": recent,
-            "prior_count": prior,
-            "pct_change": pct,
-            "pct_arrow": arrow,
-            "pct_class": cls,
         })
     brands.sort(key=lambda b: (_order_map.get(b["nickname"], 999), b["nickname"]))
     return brands
+
+
+def _partition_home_brands(
+    brands: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split the V22 brand lens without inventing a persistence field."""
+    closed = [brand for brand in brands if brand["nickname"] in _HOME_CLOSED_BRAND_NICKNAMES]
+    open_ = [brand for brand in brands if brand["nickname"] not in _HOME_CLOSED_BRAND_NICKNAMES]
+    return open_, closed
 
 
 @ensure_csrf_cookie
@@ -1322,28 +1616,44 @@ def home(request: HttpRequest) -> HttpResponse:
     # Pre-merged brand data for template iteration
     brands_data = _build_brands_context()
     brand_nicknames = [b["nickname"] for b in brands_data]
+    open_brands, closed_brands = _partition_home_brands(brands_data)
+    initial_filters = {
+        "brands": [brand["nickname"] for brand in open_brands],
+        "window": window_days,
+    }
 
     # Get recent posts with brand associations for feed
     feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
     enriched = _enrich_posts_with_classifications(feed_posts)
     enriched_map = {e["tweet_id"]: e for e in enriched}
+    matching_ids = {
+        post["tweet_id"] for post in enriched
+        if _post_matches_filter(post, initial_filters)
+    }
     feed_rows = [
-        _post_to_wire(p, locale, enriched_map.get(p.tweet_id))
-        for p in feed_posts
+        _post_to_wire(
+            p,
+            locale,
+            enriched_map.get(p.tweet_id),
+            active_brand_scope=initial_filters["brands"],
+        )
+        for p in feed_posts if p.tweet_id in matching_ids
     ]
 
     # Initial chart payload so the canvas renders on first load (no placeholder flash)
-    initial_chart_payload = _build_home_chart_payload(window_days, {})
-    initial_chart_payload["applied_filters"] = {}
+    initial_chart_payload = _build_home_chart_payload(window_days, initial_filters)
+    initial_chart_payload["applied_filters"] = initial_filters
 
     top_voices = _multi_top_voices(window_days=window_days, limit=3)
 
     context = {
         "brands": brands_data,
+        "open_brands": open_brands,
+        "closed_brands": closed_brands,
         "top_voices": top_voices,
         "brand_count": len(brands_data),
         "brand_nicknames_json": json.dumps(brand_nicknames),
-        "applied_filters_json": json.dumps({}),
+        "applied_filters_json": json.dumps(initial_filters),
         "feed": {"rows": feed_rows, "next_cursor": None},
         "active_locale": locale,
         "is_zh_chrome": _is_zh_locale(locale),
@@ -1356,7 +1666,9 @@ def home(request: HttpRequest) -> HttpResponse:
         "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
         "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
+        "sentiment_keys": list(SentimentKey.objects.order_by("key").values_list("key", flat=True)),
         "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
+        "pulse": initial_chart_payload["pulse"],
         "payload": json.dumps(initial_chart_payload),
     }
     return render(request, "monitor/home.html", context)
@@ -1411,6 +1723,7 @@ def home_internal(request: HttpRequest) -> HttpResponse:
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
         "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
         "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
+        "pulse": initial_chart_payload["pulse"],
         "payload": json.dumps(initial_chart_payload),
     }
     return render(request, "monitor/home_internal.html", context)
@@ -1526,7 +1839,12 @@ def _post_passes_cursor(
         return (p_iso, p_tweet) > (cur_iso, cur_tweet)
 
 
-def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
+def _serialize_feed_row(
+    post: dict[str, Any],
+    locale: str,
+    *,
+    active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
+) -> dict[str, Any]:
     '''Serialize one enriched post dict to the feed wire shape.
 
     The enriched dict comes from _enrich_posts_with_classifications and
@@ -1569,6 +1887,17 @@ def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
             "role_label": cls.get("role_label"),
         }
 
+    display_fields = _v22_feed_display_fields(
+        classifications,
+        active_brand_scope=active_brand_scope,
+        created_at=post.get("created_at"),
+        account=post.get("account") or {},
+        like_count=post.get("like_count"),
+        retweet_count=post.get("retweet_count"),
+        reply_count=post.get("reply_count"),
+        author_handle=post.get("author_handle"),
+    )
+
     return {
         "tweet_id": post["tweet_id"],
         "created_at": post.get("created_at"),
@@ -1581,11 +1910,14 @@ def _serialize_feed_row(post: dict[str, Any], locale: str) -> dict[str, Any]:
         "text_en": post.get("text_en"),
         "text_zh_cn": post.get("text_zh_cn"),
         "like_count": post.get("like_count", 0),
+        "retweet_count": post.get("retweet_count", 0),
+        "reply_count": post.get("reply_count", 0),
         "brands": post.get("brands", []),
         "brand_nicknames": post.get("brand_nicknames", []),
         "classifications": classifications,
         "unsanctioned": post.get("unsanctioned", False),
         "account": post.get("account", {}),
+        **display_fields,
     }
 
 
@@ -1731,7 +2063,15 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
         offset=offset,
     )
 
-    rows = [_serialize_feed_row(p, locale) for p in page]
+    normalized_filters = _normalize_home_filters(filters)
+    rows = [
+        _serialize_feed_row(
+            post,
+            locale,
+            active_brand_scope=normalized_filters.get("brands", "__all__"),
+        )
+        for post in page
+    ]
 
     return JsonResponse({
         "rows": rows,
@@ -1807,7 +2147,15 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
         offset=offset,
     )
 
-    rows = [_serialize_feed_row(p, locale) for p in page]
+    normalized_filters = _normalize_home_filters(filters)
+    rows = [
+        _serialize_feed_row(
+            post,
+            locale,
+            active_brand_scope=normalized_filters.get("brands", "__all__"),
+        )
+        for post in page
+    ]
 
     return JsonResponse({
         "rows": rows,
@@ -1839,9 +2187,7 @@ def chart_json(request: HttpRequest) -> JsonResponse:
 def chart_html(request: HttpRequest) -> HttpResponse:
     """GET /chart.html — multi-brand chart HTML partial for htmx swap.
 
-    Renders _home_chart.html with the data-home JSON payload. The public
-    root uses its authored SVG + legend shell; /internal explicitly requests
-    the legacy canvas renderer.
+    Renders the same canvas contract used by both public and legacy home.
     """
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
@@ -1852,7 +2198,6 @@ def chart_html(request: HttpRequest) -> HttpResponse:
         "monitor/_home_chart.html",
         {
             "payload": json.dumps(payload),
-            "chart_renderer": "canvas" if request.GET.get("renderer") == "canvas" else "svg",
         },
     )
 

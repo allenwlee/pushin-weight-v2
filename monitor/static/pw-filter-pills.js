@@ -1,9 +1,4 @@
-// {{AGENT_ATTRIBUTION}}
-// x_monitor/static/pw-filter-pills.js
-// Pushin' Weight (走个量) filter-pill behavior (U3 of v22 plan).
-//
-// Ported from docs/ideation/mockups/06-tier1-composed.v22-master.html L1244-1530
-// (mockup-canon canonical implementation).
+// Pushin' Weight (走个量) filter-pill behavior.
 //
 // Behavior:
 //   - Drag-to-scroll on .filter-bar-scroller (horizontal, 6px threshold).
@@ -77,6 +72,12 @@
         dot.classList.toggle("is-default", !changed);
       }
     });
+  }
+
+  function commitToolbarGroup(boxes) {
+    if (!boxes.length || !window.pwFilter || !window.pwFilter.syncFromControls) return;
+    var group = boxes[0].getAttribute('data-pw-filter-group');
+    if (group) window.pwFilter.syncFromControls(group);
   }
 
   // --- Drag-to-scroll the pill row (click+drag / touch) ---
@@ -192,6 +193,7 @@
     var on = action === "all";
     boxes.forEach(function (b) { b.checked = on; });
     refreshDots();
+    commitToolbarGroup(boxes);
     e.preventDefault();
   });
 
@@ -254,6 +256,7 @@
     boxes.forEach(function (b) { b.checked = on; });
     refreshDots();
     updateLensCounts(dd);
+    commitToolbarGroup(boxes);
     e.preventDefault();
     e.stopPropagation();
   }, true);
@@ -264,5 +267,6 @@
     bar.querySelectorAll(".filter-dropdown[data-idea=b]").forEach(updateLensCounts);
   };
 
+  document.addEventListener('pw:filter-change', refreshDots);
   refreshDots();
 })();

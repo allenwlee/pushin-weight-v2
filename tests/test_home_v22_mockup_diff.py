@@ -60,6 +60,45 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
                 difference = first_authored_difference(spec, rendered, locale=locale, viewport=VIEWPORT, allowlist=allowlist)
                 self.assertIsNone(difference, difference.report(locale=locale, viewport=VIEWPORT, oracle_source=str(spec.source)) if difference else "")
 
+    def test_chart_runtime_projections_do_not_hide_unknown_shell_children(self):
+        """Only the live chart, its legend, and status may differ from the mockup."""
+        spec = load_spec()
+        rendered = self._render("en")
+
+        known_projection = first_authored_difference(
+            spec,
+            rendered,
+            locale="en",
+            viewport=VIEWPORT,
+            allowlist=[],
+        )
+        self.assertIsNone(
+            known_projection,
+            known_projection.report(
+                locale="en",
+                viewport=VIEWPORT,
+                oracle_source=str(spec.source),
+            ) if known_projection else "",
+        )
+
+        marker = '<section class="home-chart-wrap"'
+        self.assertIn(marker, rendered)
+        mutated = rendered.replace(
+            marker,
+            '<section class="home-chart-wrap"><aside class="unknown-shell-child"></aside></section><section class="home-chart-wrap"',
+            1,
+        )
+        difference = first_authored_difference(
+            spec,
+            mutated,
+            locale="en",
+            viewport=VIEWPORT,
+            allowlist=[],
+        )
+        self.assertIsNotNone(difference)
+        self.assertEqual(difference.region, "chart")
+        self.assertEqual(difference.category, "ordered-children")
+
     def test_locale_and_window_setters_require_post_and_safe_redirects(self):
         self.assertEqual(self.client.get("/locale/en/").status_code, 405)
         locale = self.client.post("/locale/en/", HTTP_REFERER="https://example.invalid/")
@@ -82,17 +121,29 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
 
     def test_chart_partial_has_no_execution_comment_or_rendered_note(self):
         """Regression pin: chart implementation notes must never reach users."""
-        chart_partial = (
-            Path(__file__).resolve().parents[1]
-            / "monitor/templates/monitor/_home_chart.html"
+        repo_root = Path(__file__).resolve().parents[1]
+        product_sources = (
+            repo_root / "monitor/templates/monitor/home.html",
+            repo_root / "monitor/templates/monitor/home_internal.html",
+            repo_root / "monitor/templates/monitor/_home_chart.html",
+            repo_root / "monitor/static/pw-chart.js",
+            repo_root / "monitor/static/pw-brand-chart.js",
         )
-        source = chart_partial.read_text(encoding="utf-8")
-        self.assertNotIn(
-            "{#",
-            source,
-            "Public chart markup must not contain Django execution comments.",
-        )
+        for source_path in product_sources:
+            with self.subTest(source=str(source_path.relative_to(repo_root))):
+                source = source_path.read_text(encoding="utf-8")
+                self.assertNotIn("{{AGENT_ATTRIBUTION}}", source)
+                if source_path.name == "_home_chart.html":
+                    self.assertNotIn(
+                        "{#",
+                        source,
+                        "Public chart markup must not contain Django execution comments.",
+                    )
 
         rendered = self._render("en")
-        self.assertNotIn("The root shell retains the authored mockup", rendered)
-        self.assertNotIn("pw-chart.js redraws these fallback paths", rendered)
+        internal = self.client.get("/internal/")
+        self.assertEqual(internal.status_code, 200)
+        for output in (rendered, internal.content.decode("utf-8")):
+            self.assertNotIn("{{AGENT_ATTRIBUTION}}", output)
+            self.assertNotIn("The root shell retains the authored mockup", output)
+            self.assertNotIn("pw-chart.js redraws these fallback paths", output)

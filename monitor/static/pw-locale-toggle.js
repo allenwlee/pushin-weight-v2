@@ -1,12 +1,10 @@
-// {{AGENT_ATTRIBUTION}}
-// x_monitor/static/pw-locale-toggle.js
 // Pushin' Weight (走个量) topbar locale + window toggle hooks
 //
 // - Locale buttons (data-pw-locale-btn) POST to
 //   /locale/<locale>, then reload (cheap; the route
 //   redirects back with 303).
-// - Window buttons (data-pw-window-btn) POST to
-//   /window/<n>, same reload pattern.
+// - Legacy window buttons POST to /window/<n>; the public V22 filter store
+//   owns window state without a reload.
 // - Emits `pw:locale-change` and `pw:window-change` for the chart
 //   module to react (KTD10).
 
@@ -150,7 +148,9 @@
   function init() {
     applyChrome(document.body.getAttribute('data-pw-locale') || 'zh_cn');
     wireLocale();
-    wireWindow();
+    // The V22 filter store owns public window changes so both consumers use
+    // one event without a reload. Legacy pages retain their POST/cookie flow.
+    if (!document.querySelector('.filter-bar')) wireWindow();
   }
 
   if (document.readyState === 'loading') {

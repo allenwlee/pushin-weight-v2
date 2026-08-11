@@ -48,17 +48,39 @@ def _fake_row():
     }
 
 
+def _fake_chart_payload():
+    computed_at = datetime.now(timezone.utc).isoformat()
+    return {
+        "days": [],
+        "series": {},
+        "colors": {},
+        "totals": {},
+        "granularity": "day",
+        "stacked": True,
+        "window_days": 1,
+        "fetched_at": computed_at,
+        "computed_at": computed_at,
+        "applied_filters": {},
+        "pulse": {
+            "window_days": 1,
+            "computed_at": computed_at,
+            "entries": [],
+        },
+    }
+
+
 class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
     """Pins mockup-canon 2-column feed row shape on /."""
 
     def _get_home(self):
         """Return rendered HTML of / with DB-free data path."""
         fake = _fake_row()
+        brands = [{**fake["brands"][0], "accent_color": "#ec4899"}]
         patches = {
             "monitor.views._get_feed_posts": [SimpleNamespace(tweet_id="1")],
-            "monitor.views._enrich_posts_with_classifications": [],
-            "monitor.views._build_brands_context": [],
-            "monitor.views._build_home_chart_payload": {"days": [], "series": {}, "colors": {}, "totals": {}, "granularity": "day", "stacked": True, "window_days": 1, "fetched_at": datetime.now(timezone.utc).isoformat(), "applied_filters": {}},
+            "monitor.views._enrich_posts_with_classifications": [fake],
+            "monitor.views._build_brands_context": brands,
+            "monitor.views._build_home_chart_payload": _fake_chart_payload(),
             "monitor.views._multi_top_voices": [],
             "monitor.views._post_to_wire": fake,
         }
@@ -140,7 +162,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
             patch("monitor.views._get_feed_posts", return_value=[SimpleNamespace(tweet_id="1")]),
             patch("monitor.views._enrich_posts_with_classifications", return_value=[]),
             patch("monitor.views._build_brands_context", return_value=[]),
-            patch("monitor.views._build_home_chart_payload", return_value={"days": [], "series": {}, "colors": {}, "totals": {}, "granularity": "day", "stacked": True, "window_days": 1, "fetched_at": datetime.now(timezone.utc).isoformat(), "applied_filters": {}}),
+            patch("monitor.views._build_home_chart_payload", return_value=_fake_chart_payload()),
             patch("monitor.views._multi_top_voices", return_value=[]),
             patch("monitor.views._post_to_wire", return_value=fake),
         ]

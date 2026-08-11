@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Authenticated deployment smoke check for the v22 homepage.
+"""Credential-free deployment smoke check for the v22 homepage.
 
-The operator supplies a deployed root URL and a monitored account's cookie at
-runtime.  Neither value is persisted or echoed by this script.
+The operator supplies a deployed root URL at runtime.  An optional monitored
+account cookie enables a distinct authenticated ``/internal/`` check.  Neither
+value is persisted or echoed by this script.
 
 Usage:
+  V22_SMOKE_URL=https://pushinweight-web.onrender.com/ \\
+  python scripts/smoke_v22_homepage.py
+
+Optional authenticated check:
   V22_SMOKE_URL=https://pushinweight-web.onrender.com/ \\
   V22_SMOKE_COOKIE='sessionid=...' \\
   python scripts/smoke_v22_homepage.py
@@ -249,7 +254,7 @@ def _browser_timezone_check(
 
 
 def _print_results(passes: list[str], failures: list[str], skipped: list[str]) -> None:
-    print("v22 authenticated homepage smoke")
+    print("v22 homepage smoke")
     for item in passes:
         print(f"PASS  {item}")
     for item in failures:
@@ -271,9 +276,6 @@ def main(argv: list[str] | None = None) -> int:
         failures.append(f"missing {URL_ENV}; no request was sent")
     elif not _valid_root_url(page_url):
         failures.append(f"invalid {URL_ENV}; use an http(s) root URL")
-    if not cookie_header:
-        failures.append(f"missing {COOKIE_ENV}; no request was sent")
-
     cookies: list[dict[str, str]] = []
     if cookie_header:
         try:
@@ -288,16 +290,16 @@ def main(argv: list[str] | None = None) -> int:
     root = _fetch(page_url, cookie_header, args.timeout)
     if root.status != 200:
         detail = "request could not be completed" if root.status is None else f"returned {root.status}"
-        failures.append(f"authenticated root {detail}; verify the monitored login cookie")
+        failures.append(f"public root {detail}")
         _print_results(passes, failures, skipped)
         return 1
-    passes.append("authenticated root -> 200")
+    passes.append("public root -> 200")
 
     missing_hooks = missing_shell_hooks(root.body)
     if missing_hooks:
-        failures.append("authenticated root missing shell hooks: " + ", ".join(missing_hooks))
+        failures.append("public root missing shell hooks: " + ", ".join(missing_hooks))
     else:
-        passes.append("authenticated root contains required shell entry hooks")
+        passes.append("public root contains required shell entry hooks")
 
     assets = required_asset_urls(root.body, root.final_url)
     for name in REQUIRED_ASSETS:
@@ -322,6 +324,17 @@ def main(argv: list[str] | None = None) -> int:
         (passes if ok else failures).append(message)
     else:
         skipped.append("timezone runtime check (re-run with --browser or V22_SMOKE_BROWSER=1)")
+
+    if cookie_header:
+        internal = _fetch(urljoin(root.final_url, "/internal/"), cookie_header, args.timeout)
+        if internal.status == 200:
+            passes.append("authenticated /internal/ -> 200")
+        elif internal.status is None:
+            failures.append("authenticated /internal/ request could not be completed")
+        else:
+            failures.append(f"authenticated /internal/ -> {internal.status} (expected 200)")
+    else:
+        skipped.append(f"authenticated /internal/ check (set {COOKIE_ENV} to enable)")
 
     _print_results(passes, failures, skipped)
     return 1 if failures else 0
