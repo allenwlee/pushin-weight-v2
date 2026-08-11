@@ -8,12 +8,13 @@ just wires the cycle loop to Celery + Django.
 """
 
 from __future__ import annotations
-from pathlib import Path
-from x_monitor.config import load_config
 
 import logging
+from pathlib import Path
 
 from celery import shared_task
+
+from x_monitor.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,28 @@ def run_cycle(self, dry_run: bool = False) -> dict:
 
     Returns a stats dict that Celery stores in the result backend.
     """
+    if dry_run:
+        return _execute_cycle(dry_run=True)
+
+    from monitor.run_lock import harvest_writer_lock
+
+    with harvest_writer_lock(
+        execution_mode="live",
+        entrypoint="celery.run_cycle",
+    ) as lease:
+        if not lease.acquired:
+            contention = lease.contention.as_dict() if lease.contention else {}
+            logger.warning("monitor run_cycle skipped: %s", contention)
+            return {
+                "status": "skipped",
+                "degraded": {"writer_lock": contention},
+                "calls": [],
+                "totals": {"n_calls_planned": 0, "n_calls_run": 0},
+            }
+        return _execute_cycle(dry_run=False)
+
+
+def _execute_cycle(*, dry_run: bool) -> dict:
     from monitor.cycle import CycleRunner
 
     logger.info("monitor run_cycle starting (dry_run=%s)", dry_run)

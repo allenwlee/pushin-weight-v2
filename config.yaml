@@ -93,6 +93,26 @@ cycle:
   c1_max_pages: 8              # 150 / 20 per page
   max_truncation_walks: 5      # drain retries on truncated windows
 
+# Near-real-time harvester budgets and bounded recovery defaults.
+# One 13-minute monotonic deadline leaves a two-minute reserve before the
+# next 15-minute slot; all later fetch/enrichment/replay consumers share it.
+harvest:
+  run_deadline_seconds: 780
+  next_slot_reserve_seconds: 120
+  tip_sweep_target_seconds: 120
+  relevancy_timeout_seconds: 30
+  backlog:
+    pending_per_call: 8
+    quarantined_per_call: 4
+    max_attempts: 8
+    max_age_hours: 24
+    replays_per_cycle: 2
+  list_membership:
+    page_size: 20
+    max_pages: 100
+    reconcile_interval_hours: 6
+    request_timeout_seconds: 30
+
 # One-shot metrics re-fetch (plan 2026-08-10-002). Each post is by-ID
 # refreshed exactly once after delay_hours from first fetched_at.
 # Replaces continuous official/staff QT recheck loop.

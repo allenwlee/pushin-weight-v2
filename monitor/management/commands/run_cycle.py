@@ -16,9 +16,9 @@ untouched. Modeled on pushin_weight/crawler/management/commands/run_cycle.py.
 """
 
 from __future__ import annotations
-from pathlib import Path
 
 import json
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -71,6 +71,32 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
+        # The Celery task owns the lock for enqueued work. Dry runs are
+        # read-only planning and intentionally do not contend with writers.
+        if options["enqueue"] or options["dry_run"]:
+            return self._handle(*args, **options)
+
+        from monitor.run_lock import harvest_writer_lock
+
+        with harvest_writer_lock(
+            execution_mode="live",
+            entrypoint="management.run_cycle",
+        ) as lease:
+            if not lease.acquired:
+                payload = lease.contention.as_dict() if lease.contention else {}
+                if options["as_json"]:
+                    self.stdout.write(json.dumps({"status": "skipped", **payload}))
+                else:
+                    self.stderr.write(
+                        self.style.WARNING(
+                            "Cycle skipped: shared harvest writer lock is held "
+                            f"({payload.get('owner_context', 'unknown owner')})."
+                        )
+                    )
+                return None
+            return self._handle(*args, **options)
+
+    def _handle(self, *args, **options) -> None:
         # Stash operator-supplied filters in Django settings so cycle.py
         # can read them without us having to change its constructor. This
         # pattern keeps the cross-cutting "operator wants a bounded cycle"

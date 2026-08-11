@@ -28,8 +28,12 @@ Conventions:
 
 from __future__ import annotations
 
-from django.db import models
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import Literal
 
+from django.db import models, transaction
+from django.utils import timezone
 
 # ============================================================================
 # Enum-family lookup tables (i18n-friendly)
@@ -363,6 +367,54 @@ class Account(models.Model):
         return f"@{self.handle}"
 
 
+class TwitterListMembership(models.Model):
+    """Durable membership snapshot keyed by Twitter list and account."""
+
+    list_id = models.BigIntegerField()
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name="twitter_list_memberships",
+        db_column="author_id",
+        to_field="author_id",
+    )
+    active = models.BooleanField(default=True)
+    first_seen_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    last_complete_reconciliation_at = models.DateTimeField(blank=True, null=True)
+    source = models.CharField(max_length=32)
+    source_run_id = models.CharField(max_length=128, blank=True, default="")
+
+    class Meta:
+        db_table = "twitter_list_memberships"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["list_id", "account"],
+                name="uq_twitter_list_membership",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_tlm_seen_order",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(last_complete_reconciliation_at__isnull=True)
+                    | models.Q(
+                        last_complete_reconciliation_at__gte=models.F(
+                            "first_seen_at"
+                        )
+                    )
+                ),
+                name="ck_tlm_reconciled_order",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["list_id", "active"], name="idx_tlm_list_active"
+            ),
+        ]
+
+
 # ============================================================================
 # Posts
 # ============================================================================
@@ -491,6 +543,62 @@ class Post(models.Model):
 
     def __str__(self) -> str:
         return self.tweet_id
+
+
+class PostEnrichmentState(models.Model):
+    """Payload-free, replayable translation and classification state."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    post = models.OneToOneField(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="enrichment_state",
+        db_column="post_id",
+        to_field="tweet_id",
+        primary_key=True,
+    )
+    translation_status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    translation_attempts = models.PositiveSmallIntegerField(default=0)
+    translation_first_attempt_at = models.DateTimeField(blank=True, null=True)
+    translation_last_attempt_at = models.DateTimeField(blank=True, null=True)
+    translation_next_attempt_at = models.DateTimeField(blank=True, null=True)
+    translation_error_code = models.CharField(max_length=128, blank=True, default="")
+    classification_status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    classification_attempts = models.PositiveSmallIntegerField(default=0)
+    classification_first_attempt_at = models.DateTimeField(blank=True, null=True)
+    classification_last_attempt_at = models.DateTimeField(blank=True, null=True)
+    classification_next_attempt_at = models.DateTimeField(blank=True, null=True)
+    classification_error_code = models.CharField(
+        max_length=128, blank=True, default=""
+    )
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_run_id = models.CharField(max_length=128, blank=True, default="")
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    claim_expires_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "post_enrichment_states"
+        indexes = [
+            models.Index(
+                fields=["translation_status", "translation_next_attempt_at"],
+                name="idx_pes_translation_due",
+            ),
+            models.Index(
+                fields=["classification_status", "classification_next_attempt_at"],
+                name="idx_pes_classify_due",
+            ),
+            models.Index(fields=["claim_expires_at"], name="idx_pes_claim_expiry"),
+        ]
 
 
 # ============================================================================
@@ -998,6 +1106,315 @@ class CallState(models.Model):
                 fields=["last_completed_at"],
                 name="idx_call_state_completed_at",
             ),
+        ]
+
+
+@dataclass(frozen=True)
+class BacklogNormalizationResult:
+    """Durable ownership result consumed by the later cursor-transfer unit."""
+
+    outcome: Literal[
+        "created", "duplicate", "coalesced", "capacity_refused"
+    ]
+    ownership_recorded: bool
+    window_id: int | None
+    merged_count: int = 0
+
+
+class HarvestBacklogWindowManager(models.Manager):
+    _IDENTITY_FIELDS = frozenset(
+        {"brand_id", "call_id", "call_kind", "bucket", "query_id"}
+    )
+
+    def normalize_residual(
+        self,
+        *,
+        call_identity: dict[str, str],
+        original_since,
+        original_until,
+        remaining_since,
+        remaining_until,
+        reason_code: str,
+        pending_limit: int,
+        quarantined_limit: int,
+        state: str = "pending",
+    ) -> BacklogNormalizationResult:
+        """Record a bounded residual without transferring cursor ownership.
+
+        The CallState lock serializes capacity checks and interval normalization
+        for one complete call identity. The caller remains responsible for
+        updating CallState in the surrounding transaction.
+        """
+
+        if set(call_identity) != self._IDENTITY_FIELDS:
+            raise ValueError("call_identity must contain the full call identity")
+
+        with transaction.atomic():
+            call_state = (
+                CallState.objects.select_for_update()
+                .filter(**call_identity)
+                .first()
+            )
+            if call_state is None:
+                raise ValueError("CallState must exist before recording a residual")
+
+            if original_since >= original_until:
+                raise ValueError("original interval must be increasing")
+            if remaining_since >= remaining_until:
+                raise ValueError("remaining interval must be increasing")
+            if (
+                remaining_since < original_since
+                or remaining_until > original_until
+            ):
+                raise ValueError("remaining interval must be within original bounds")
+            if state not in {"pending", "quarantined"}:
+                raise ValueError("new residual state must be pending or quarantined")
+            if pending_limit <= 0 or quarantined_limit <= 0:
+                raise ValueError("backlog row ceilings must be positive")
+
+            identity_rows = self.select_for_update().filter(**call_identity)
+            exact = identity_rows.filter(
+                remaining_since=remaining_since,
+                remaining_until=remaining_until,
+            ).first()
+            if exact is not None:
+                if exact.state == state:
+                    return BacklogNormalizationResult(
+                        outcome="duplicate",
+                        ownership_recorded=True,
+                        window_id=exact.pk,
+                    )
+                return BacklogNormalizationResult(
+                    outcome="capacity_refused",
+                    ownership_recorded=False,
+                    window_id=None,
+                )
+
+            if state in {"pending", "quarantined"}:
+                merged_since = remaining_since
+                merged_until = remaining_until
+                candidates = {}
+                while True:
+                    adjacent = identity_rows.filter(
+                        state=state,
+                        remaining_since__lte=merged_until + timedelta(seconds=1),
+                        remaining_until__gte=merged_since - timedelta(seconds=1),
+                    ).exclude(pk__in=candidates)
+                    additions = list(adjacent.order_by("first_seen_at", "pk"))
+                    if not additions:
+                        break
+                    for candidate in additions:
+                        candidates[candidate.pk] = candidate
+                        merged_since = min(merged_since, candidate.remaining_since)
+                        merged_until = max(merged_until, candidate.remaining_until)
+
+                if candidates:
+                    windows = list(candidates.values())
+                    keeper = windows[0]
+                    secondary_ids = [window.pk for window in windows[1:]]
+                    if secondary_ids:
+                        self.filter(pk__in=secondary_ids).delete()
+                    keeper.original_since = min(
+                        original_since,
+                        *(window.original_since for window in windows),
+                    )
+                    keeper.original_until = max(
+                        original_until,
+                        *(window.original_until for window in windows),
+                    )
+                    keeper.remaining_since = merged_since
+                    keeper.remaining_until = merged_until
+                    keeper.save(
+                        update_fields=[
+                            "original_since",
+                            "original_until",
+                            "remaining_since",
+                            "remaining_until",
+                            "last_seen_at",
+                        ]
+                    )
+                    return BacklogNormalizationResult(
+                        outcome="coalesced",
+                        ownership_recorded=True,
+                        window_id=keeper.pk,
+                        merged_count=len(windows) + 1,
+                    )
+
+            if state == "pending":
+                limit = pending_limit
+                capacity_states = ["pending", "claimed"]
+            else:
+                limit = quarantined_limit
+                capacity_states = ["quarantined"]
+            if identity_rows.filter(state__in=capacity_states).count() >= limit:
+                return BacklogNormalizationResult(
+                    outcome="capacity_refused",
+                    ownership_recorded=False,
+                    window_id=None,
+                )
+
+            window = self.create(
+                **call_identity,
+                original_since=original_since,
+                original_until=original_until,
+                remaining_since=remaining_since,
+                remaining_until=remaining_until,
+                state=state,
+                reason_code=reason_code,
+            )
+            return BacklogNormalizationResult(
+                outcome="created",
+                ownership_recorded=True,
+                window_id=window.pk,
+            )
+
+    def recover_expired_claims(self, *, now=None) -> int:
+        now = now or timezone.now()
+        return self.filter(
+            state="claimed", claim_expires_at__lte=now
+        ).update(
+            state="pending",
+            claim_owner="",
+            claim_run_id="",
+            claimed_at=None,
+            claim_expires_at=None,
+        )
+
+    def claim_next(
+        self,
+        *,
+        owner: str,
+        run_id: str,
+        claim_expires_at,
+        now=None,
+        call_identity: dict[str, str] | None = None,
+        include_quarantined: bool = False,
+    ):
+        """Claim one due interval with PostgreSQL skip-locked semantics."""
+
+        now = now or timezone.now()
+        with transaction.atomic():
+            self.recover_expired_claims(now=now)
+            states = ["pending"]
+            if include_quarantined:
+                states.append("quarantined")
+            candidates = self.select_for_update(skip_locked=True).filter(
+                state__in=states
+            ).filter(
+                models.Q(next_attempt_at__isnull=True)
+                | models.Q(next_attempt_at__lte=now)
+            )
+            if call_identity:
+                candidates = candidates.filter(**call_identity)
+            window = candidates.order_by("first_seen_at", "remaining_since", "pk").first()
+            if window is None:
+                return None
+            window.state = "claimed"
+            window.attempts += 1
+            window.claim_owner = owner[:128]
+            window.claim_run_id = run_id[:128]
+            window.claimed_at = now
+            window.claim_expires_at = claim_expires_at
+            window.save(
+                update_fields=[
+                    "state",
+                    "attempts",
+                    "claim_owner",
+                    "claim_run_id",
+                    "claimed_at",
+                    "claim_expires_at",
+                    "last_seen_at",
+                ]
+            )
+            return window
+
+
+class HarvestBacklogWindow(models.Model):
+    """Bounded recall-debt metadata; tweet/provider payloads never live here."""
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CLAIMED = "claimed", "Claimed"
+        QUARANTINED = "quarantined", "Quarantined"
+        WAIVED = "waived", "Waived"
+
+    brand_id = models.TextField()
+    call_id = models.TextField()
+    call_kind = models.TextField()
+    bucket = models.TextField(blank=True, default="")
+    query_id = models.TextField()
+    original_since = models.DateTimeField()
+    original_until = models.DateTimeField()
+    remaining_since = models.DateTimeField()
+    remaining_until = models.DateTimeField()
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.PENDING
+    )
+    reason_code = models.CharField(max_length=64)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_run_id = models.CharField(max_length=128, blank=True, default="")
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    claim_expires_at = models.DateTimeField(blank=True, null=True)
+    quarantine_reason = models.CharField(max_length=128, blank=True, default="")
+    quarantined_at = models.DateTimeField(blank=True, null=True)
+    waiver_reason = models.CharField(max_length=128, blank=True, default="")
+    waived_at = models.DateTimeField(blank=True, null=True)
+
+    objects = HarvestBacklogWindowManager()
+
+    class Meta:
+        db_table = "harvest_backlog_windows"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(original_since__lt=models.F("original_until")),
+                name="ck_hbw_original_interval",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(remaining_since__lt=models.F("remaining_until")),
+                name="ck_hbw_remaining_interval",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(remaining_since__gte=models.F("original_since")),
+                name="ck_hbw_remaining_start",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(remaining_until__lte=models.F("original_until")),
+                name="ck_hbw_remaining_end",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "brand_id",
+                    "call_id",
+                    "call_kind",
+                    "bucket",
+                    "query_id",
+                    "remaining_since",
+                    "remaining_until",
+                ],
+                name="uq_hbw_call_remaining",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "brand_id",
+                    "call_id",
+                    "call_kind",
+                    "bucket",
+                    "query_id",
+                    "state",
+                    "remaining_since",
+                ],
+                name="idx_hbw_call_state_since",
+            ),
+            models.Index(
+                fields=["state", "next_attempt_at"], name="idx_hbw_state_due"
+            ),
+            models.Index(fields=["claim_expires_at"], name="idx_hbw_claim_expiry"),
         ]
 
 

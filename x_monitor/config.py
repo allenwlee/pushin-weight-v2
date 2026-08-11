@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -11,7 +14,6 @@ import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .query_plan import XQuerySpec
-
 
 # Canonical model registry — adding a model here is the only "code change" needed.
 # The data/queries/<brand_id>.yaml and data/accounts/<brand_id>.yaml files
@@ -162,6 +164,80 @@ class CycleConfig(BaseModel):
     max_truncation_walks: int = Field(default=5, ge=1)
 
 
+@dataclass(frozen=True)
+class MonotonicDeadline:
+    """One cycle-wide budget shared by every scheduled consumer."""
+
+    started_at: float
+    deadline_at: float
+    tip_target_at: float
+
+    def remaining(self, *, monotonic: Callable[[], float] = time.monotonic) -> float:
+        return max(self.deadline_at - monotonic(), 0.0)
+
+    def can_start(
+        self,
+        worst_case_seconds: float,
+        *,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> bool:
+        return worst_case_seconds <= self.remaining(monotonic=monotonic)
+
+
+class BacklogConfig(BaseModel):
+    pending_per_call: int = Field(default=8, ge=1)
+    quarantined_per_call: int = Field(default=4, ge=1)
+    max_attempts: int = Field(default=8, ge=1)
+    max_age_hours: int = Field(default=24, ge=1)
+    replays_per_cycle: int = Field(default=2, ge=1)
+
+
+class ListMembershipConfig(BaseModel):
+    page_size: int = Field(default=20, ge=1)
+    max_pages: int = Field(default=100, ge=1)
+    reconcile_interval_hours: int = Field(default=6, ge=1)
+    request_timeout_seconds: int = Field(default=30, ge=1)
+
+
+class HarvestConfig(BaseModel):
+    """Bounded recovery and one-deadline scheduling contract."""
+
+    run_deadline_seconds: int = Field(default=13 * 60, ge=1)
+    next_slot_reserve_seconds: int = Field(default=2 * 60, ge=1)
+    tip_sweep_target_seconds: int = Field(default=120, ge=1)
+    relevancy_timeout_seconds: int = Field(default=30, ge=1)
+    backlog: BacklogConfig = BacklogConfig()
+    list_membership: ListMembershipConfig = ListMembershipConfig()
+
+    @model_validator(mode="after")
+    def _validate_deadline_budget(self) -> HarvestConfig:
+        if self.run_deadline_seconds + self.next_slot_reserve_seconds > 15 * 60:
+            raise ValueError(
+                "run_deadline_seconds + next_slot_reserve_seconds must fit "
+                "inside the 15-minute schedule"
+            )
+        if self.tip_sweep_target_seconds > self.run_deadline_seconds:
+            raise ValueError(
+                "tip_sweep_target_seconds must not exceed run_deadline_seconds"
+            )
+        if self.relevancy_timeout_seconds > self.tip_sweep_target_seconds:
+            raise ValueError(
+                "relevancy_timeout_seconds must not exceed "
+                "tip_sweep_target_seconds"
+            )
+        return self
+
+    def start_deadline(
+        self, *, monotonic: Callable[[], float] = time.monotonic
+    ) -> MonotonicDeadline:
+        started_at = monotonic()
+        return MonotonicDeadline(
+            started_at=started_at,
+            deadline_at=started_at + self.run_deadline_seconds,
+            tip_target_at=started_at + self.tip_sweep_target_seconds,
+        )
+
+
 class LlmConfig(BaseModel):
     """LLM model-name configuration (plan 2026-08-01-002 U1).
 
@@ -203,6 +279,7 @@ class Config(BaseModel):
     metrics_refresh: MetricsRefreshConfig = MetricsRefreshConfig()
     search: SearchConfig = SearchConfig()
     cycle: CycleConfig = CycleConfig()
+    harvest: HarvestConfig = HarvestConfig()
     llm: LlmConfig = LlmConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)

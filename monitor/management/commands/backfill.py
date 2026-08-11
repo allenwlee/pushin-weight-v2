@@ -30,10 +30,11 @@ import json
 import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
-from x_monitor.config import load_config
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+
+from x_monitor.config import load_config
 
 # Estimated daily post volume across all brands — from Jul 21 baseline.
 _EST_DAILY_POSTS = 2_350
@@ -64,7 +65,6 @@ def _parse_iso(ts: str) -> int:
 
 
 def _state_path(since_epoch: int, until_epoch: int) -> Path:
-    _STATE_DIR.mkdir(parents=True, exist_ok=True)
     return _STATE_DIR / f"{since_epoch}-{until_epoch}.json"
 
 
@@ -75,6 +75,7 @@ def _load_state(state_file: Path) -> dict | None:
 
 
 def _save_state(state_file: Path, state: dict) -> None:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(json.dumps(state, indent=2, default=str))
 
 
@@ -149,6 +150,32 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
+        # Status and dry-run are read-only. Every explicit write-capable
+        # historical run holds the same PostgreSQL lock as live harvesting.
+        if options["status"] or options["dry_run"]:
+            return self._handle(*args, **options)
+
+        from monitor.run_lock import harvest_writer_lock
+
+        with harvest_writer_lock(
+            execution_mode="backfill",
+            entrypoint="management.backfill",
+        ) as lease:
+            if not lease.acquired:
+                owner = (
+                    lease.contention.owner_context
+                    if lease.contention is not None
+                    else "unknown owner"
+                )
+                self.stderr.write(
+                    self.style.WARNING(
+                        f"Backfill skipped: shared harvest writer lock is held ({owner})."
+                    )
+                )
+                return None
+            return self._handle(*args, **options)
+
+    def _handle(self, *args, **options) -> None:
         since_epoch = _parse_iso(options["since"])
         until_epoch = (
             _parse_iso(options["until"])
@@ -182,8 +209,11 @@ class Command(BaseCommand):
 
         # --- state management ---
         if options["reset"]:
-            state_file.unlink(missing_ok=True)
-            self.stdout.write("State reset.")
+            if options["dry_run"]:
+                self.stdout.write("Would reset state (dry run; no file changed).")
+            else:
+                state_file.unlink(missing_ok=True)
+                self.stdout.write("State reset.")
 
         max_results, max_pages, est_total = _compute_params(
             since_epoch, until_epoch, options["safety_margin"]
@@ -236,7 +266,8 @@ class Command(BaseCommand):
                 "runs": [],
                 "finished": False,
             }
-            _save_state(state_file, state)
+            if not options["dry_run"]:
+                _save_state(state_file, state)
 
         if not pending:
             self.stdout.write(
@@ -245,7 +276,8 @@ class Command(BaseCommand):
                 )
             )
             state["finished"] = True
-            _save_state(state_file, state)
+            if not options["dry_run"]:
+                _save_state(state_file, state)
             return
 
         batch = pending[: options["batch_size"]]
@@ -293,7 +325,7 @@ class Command(BaseCommand):
                 cfg = load_config(Path("config.yaml"))
                 runner = CycleRunner(cfg=cfg, 
                     dry_run=False,
-                    cycle_kind="manual",
+                    cycle_kind="backfill",
                     _backfill_call_ids=[call_id],
                     _max_llm_calls=options.get("max_llm_calls"),
                     _relevancy_llm_call=relevancy_llm_call,
