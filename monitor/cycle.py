@@ -52,7 +52,11 @@ from core.models import (
     SentimentKey,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
-from monitor.list_membership import observe_call_a_authors, run_due_reconciliation
+from monitor.list_membership import (
+    observe_call_a_authors,
+    resolve_call_a_author_contexts,
+    run_due_reconciliation,
+)
 
 # x_monitor imports — reuse existing pipeline modules.
 # These have no import-time side effects; they don't touch Store or
@@ -1176,6 +1180,147 @@ class CycleRunner:
         return all_items, "ok"
 
 
+    def _prepare_call_a_roles(
+        self, items: list[dict[str, Any]], *, list_id: int
+    ) -> list[str]:
+        contexts, degraded = resolve_call_a_author_contexts(
+            list_id=list_id, items=items
+        )
+        for item in items:
+            author_id = str(item.get("author_id") or "")
+            context = contexts.get(author_id)
+            if context is None:
+                continue
+            item["_author_membership_source"] = context.membership_source
+            item["_author_membership_run_id"] = context.membership_run_id
+            item["_author_membership_reconciled_at"] = (
+                context.last_complete_reconciliation_at.isoformat()
+                if context.last_complete_reconciliation_at
+                else ""
+            )
+            if context.official_brands:
+                # Official precedence: seed only official brands and bypass
+                # relevance even if this author is staff for another brand.
+                item["_author_seed_brands"] = list(context.official_brands)
+                item["_author_staff_brands"] = []
+                item["_call_a_staff_candidate"] = False
+            elif context.staff_brands:
+                item["_author_seed_brands"] = []
+                item["_author_staff_brands"] = list(context.staff_brands)
+                item["_call_a_staff_candidate"] = True
+        return degraded
+
+    @staticmethod
+    def _seed_author_brands(
+        item: dict[str, Any], *, brands: list[str], role: str
+    ) -> None:
+        if not brands:
+            return
+        tweet_id = str(item.get("id") or item.get("tweet_id") or "")
+        created_at = str(item.get("created_at") or _now_iso())
+        author_id = str(item.get("author_id") or "")
+        source = str(item.get("_author_membership_source") or "unknown")
+        source_run_id = str(item.get("_author_membership_run_id") or "")
+        mentions: list[MentionRow] = list(item.get("mentions") or [])
+        brand_ids: list[str] = list(item.get("brand_ids") or [])
+        mention_keys = {(mention.brand_id, mention.source) for mention in mentions}
+        for brand_id in brands:
+            if (brand_id, "author_account") not in mention_keys:
+                mentions.append(
+                    MentionRow(
+                        post_id=tweet_id,
+                        brand_id=brand_id,
+                        source="author_account",
+                        raw_token=(
+                            f"author_id={author_id};role={role};membership={source};"
+                            f"run={source_run_id}"
+                        ),
+                        mentioned_at=created_at,
+                    )
+                )
+            if brand_id not in brand_ids:
+                brand_ids.append(brand_id)
+        item["mentions"] = mentions
+        item["brand_ids"] = brand_ids
+        item["brand_id"] = brand_ids[0]
+        item["_unattributed"] = False
+
+    def _gate_call_a_staff_items(
+        self, items: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], int, list[str]]:
+        from x_monitor.relevancy import call_binary_relevancy_llm
+
+        kept: list[dict[str, Any]] = []
+        drops = 0
+        degraded: list[str] = []
+        for item in items:
+            brands = list(item.get("_author_staff_brands") or [])
+            tweet_id = str(item.get("id") or item.get("tweet_id") or "?")
+            receipt = item.get("_api_received_monotonic")
+            receipt_age = (
+                time.monotonic() - float(receipt) if receipt is not None else 0.0
+            )
+            keep = True
+            if receipt_age >= 105:
+                degraded.append(f"receipt_age_fail_open:{tweet_id}")
+            elif self._relevancy_llm_call is None:
+                degraded.append(f"relevancy_unavailable:{tweet_id}")
+            else:
+                started = time.monotonic()
+                try:
+                    verdict = call_binary_relevancy_llm(
+                        post_text=item.get("text") or "",
+                        call_id="A",
+                        brand_hints=",".join(brands),
+                        llm_call=self._relevancy_llm_call,
+                    )
+                    elapsed = time.monotonic() - started
+                    if elapsed > self.cfg.harvest.relevancy_timeout_seconds:
+                        degraded.append(f"relevancy_timeout_fail_open:{tweet_id}")
+                    else:
+                        keep = verdict.decision != "DROP"
+                        if verdict.parse_failed:
+                            degraded.append(f"relevancy_parse_fail_open:{tweet_id}")
+                except Exception as exc:
+                    degraded.append(f"relevancy_error_fail_open:{tweet_id}:{exc}")
+            if not keep:
+                drops += 1
+                continue
+            self._seed_author_brands(item, brands=brands, role="staff")
+            kept.append(item)
+        return kept, drops, degraded
+
+    def _route_and_persist(
+        self, call: PlannedCall, items: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], int, int, int, int, list[str]]:
+        """Persist non-gated posts before any staff relevance request."""
+
+        if call.call_id != "A":
+            inserted, attributed, failed = self._persist_items(items)
+            return items, inserted, attributed, failed, 0, []
+
+        nongated = [item for item in items if not item.get("_call_a_staff_candidate")]
+        staff = [item for item in items if item.get("_call_a_staff_candidate")]
+        inserted, attributed, failed = self._persist_items(nongated)
+        kept = list(nongated)
+        drops = 0
+        degraded: list[str] = []
+        # One ID-keyed unit at a time keeps the already-accepted prefix durable
+        # even if a later relevance call times out or returns malformed output.
+        for candidate in staff:
+            accepted, candidate_drops, candidate_degraded = (
+                self._gate_call_a_staff_items([candidate])
+            )
+            drops += candidate_drops
+            degraded.extend(candidate_degraded)
+            if accepted:
+                n_inserted, n_attributed, n_failed = self._persist_items(accepted)
+                inserted += n_inserted
+                attributed += n_attributed
+                failed += n_failed
+                kept.extend(accepted)
+        return kept, inserted, attributed, failed, drops, degraded
+
     def _attribute_items(
         self,
         items: list[dict[str, Any]],
@@ -1208,6 +1353,14 @@ class CycleRunner:
                     brand_search_terms=brand_search_terms,
                 )
             )
+            it["mentions"] = mentions
+            it["brand_ids"] = []
+            self._seed_author_brands(
+                it,
+                brands=list(it.get("_author_seed_brands") or []),
+                role="official",
+            )
+            mentions = list(it.get("mentions") or mentions)
             brand_ids: list[str] = []
             seen_brand: set[str] = set()
             for m in mentions:
@@ -1648,8 +1801,28 @@ class CycleRunner:
                 kept: list[dict[str, Any]] = []
                 if items:
                     self._posts_seen += len(items)
+                    list_id = _resolve_x_monitor_list_id(self.cfg)
+                    if call.call_id == "A" and list_id is not None:
+                        observation = observe_call_a_authors(
+                            list_id=int(list_id),
+                            items=items,
+                            run_id=run_id,
+                        )
+                        role_degraded = self._prepare_call_a_roles(
+                            items, list_id=int(list_id)
+                        )
+                        report["membership_run_id"] = run_id
+                        report["role_degraded"] = [
+                            *observation.degraded,
+                            *role_degraded,
+                        ]
                     self._attribute_items(items, index, search_terms)
-                    kept = [item for item in items if not item.get("_unattributed")]
+                    kept = [
+                        item
+                        for item in items
+                        if not item.get("_unattributed")
+                        or item.get("_call_a_staff_candidate")
+                    ]
                     terms = [term.lower() for term in (call.not_include or []) if term]
                     if terms:
                         kept = [
@@ -1661,13 +1834,14 @@ class CycleRunner:
                                 terms,
                             )
                         ]
-                    if self._relevancy_llm_call is not None:
-                        kept = _apply_relevancy_gate(
-                            kept,
-                            call_id=call.call_id,
-                            llm_call=self._relevancy_llm_call,
-                        )
-                    inserted, attributed, persist_failed = self._persist_items(kept)
+                    (
+                        kept,
+                        inserted,
+                        attributed,
+                        persist_failed,
+                        llm_drops,
+                        relevancy_degraded,
+                    ) = self._route_and_persist(call, kept)
                     self._posts_inserted += inserted
                     self._posts_attributed += attributed
                     existing_ids = {
@@ -1683,6 +1857,8 @@ class CycleRunner:
                         n_results=len(items),
                         n_kept=len(kept),
                         n_inserted=inserted,
+                        llm_drops=llm_drops,
+                        relevancy_degraded=relevancy_degraded,
                     )
 
                 if outcome in {"error", "length_cap_exceeded"} or persist_failed:
@@ -1945,6 +2121,12 @@ class CycleRunner:
                     summary["degraded"]["list_membership_observation"] = list(
                         observation.degraded
                     )
+                role_degraded = self._prepare_call_a_roles(
+                    items, list_id=int(list_id)
+                )
+                if role_degraded:
+                    call_entry["author_role_degraded"] = role_degraded
+                    summary["degraded"]["call_a_author_roles"] = role_degraded
             # Hard failures: no items to keep, hold cursor, move on.
             # "truncated" is NOT a hard failure -- items were retrieved and
             # must be persisted; only the cursor advance is withheld so the
@@ -2021,8 +2203,14 @@ class CycleRunner:
             # Attribute
             self._attribute_items(items, index, search_terms)
 
-            # Drop unattributed items
-            kept = [it for it in items if not it.get("_unattributed")]
+            # Staff-only Call A candidates may have no body keyword yet; keep
+            # them until the bounded relevance decision can seed author brands.
+            kept = [
+                it
+                for it in items
+                if not it.get("_unattributed")
+                or it.get("_call_a_staff_candidate")
+            ]
             self._posts_attributed += len(kept)
             call_entry["n_kept"] = len(kept)
 
@@ -2047,39 +2235,27 @@ class CycleRunner:
             call_entry["not_include_drops"] = ni_drop_count
             self._posts_attributed -= ni_drop_count  # adjust attributed count
 
-            # U6 runtime wire-in: binary LLM relevancy gate (R19a +
-            # x_monitor/relevancy.py). Fires only when:
-            #   - call_id is C1/C2/C3, OR
-            #   - per-item brand_id (set by _attribute_items) names a
-            #     C-tier brand (mimo/moonshot_kimi/yi/llama/ernie/upstage
-            #     /doubao/sensechat/kuaishou).
-            # The gate's llm_call dependency is injected by the wire-in
-            # (see CycleRunner.__init__ — defaults to None → KEEP).
-            # llm_drops counter surfaces in call_entry.
-            if self._relevancy_llm_call is not None:
-                kept = _apply_relevancy_gate(
-                    kept,
-                    call_id=call.call_id,
-                    llm_call=self._relevancy_llm_call,
+            (
+                kept,
+                n_inserted,
+                _n_attributed,
+                n_persist_failed,
+                llm_drop_count,
+                relevancy_degraded,
+            ) = self._route_and_persist(call, kept)
+            call_entry["llm_drops"] = llm_drop_count
+            if relevancy_degraded:
+                call_entry["relevancy_degraded"] = relevancy_degraded
+                summary["degraded"].setdefault("relevancy", []).extend(
+                    relevancy_degraded
                 )
-                llm_drop_count = (
-                    call_entry.get("n_kept", 0)
-                    - len(kept)
-                    - ni_drop_count
-                )
-            else:
-                llm_drop_count = 0
-            call_entry["llm_drops"] = max(llm_drop_count, 0)
+            self._posts_attributed -= llm_drop_count
             # Re-derive n_kept after both gates
             call_entry["n_kept"] = len(kept)
             # Update U7 keep_rate with post-gate counts
             nr = call_entry.get("n_results", 0)
             call_entry["keep_rate"] = round(len(kept) / nr, 4) if nr > 0 else 0.0
 
-            # Persist -- including on truncated outcomes. Dropping the page
-            # was the C1 deadlock: every cycle re-fetched the same tip, never
-            # stored it, never advanced.
-            n_inserted, n_attributed, n_persist_failed = self._persist_items(kept)
             self._posts_inserted += n_inserted
             call_entry["n_inserted"] = n_inserted
             call_entry["n_persist_failed"] = n_persist_failed
@@ -2163,18 +2339,10 @@ class CycleRunner:
                         )
             call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
 
-            # U7 anomaly metrics (plan 2026-07-30-002 U7): per-call
-            # fetch_n + keep_rate. not_include_drops and llm_drops are
-            # placeholders that count toward 0 until the U5 ban path
-            # and U6 LLM gate are wired into the runtime (follow-up
-            # work; this unit pins the shape so future wire-ins
-            # populate the same fields).
             call_entry["fetch_n"] = call_entry.get("n_results", 0)
             nr = call_entry["fetch_n"]
             nk = call_entry.get("n_kept", 0)
             call_entry["keep_rate"] = round(nk / nr, 4) if nr > 0 else 0.0
-            call_entry["not_include_drops"] = 0  # wire-in placeholder
-            call_entry["llm_drops"] = 0           # wire-in placeholder
 
             summary["calls"].append(call_entry)
             summary["totals"]["n_calls_run"] += 1

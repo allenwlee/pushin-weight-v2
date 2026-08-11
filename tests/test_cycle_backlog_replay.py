@@ -5,8 +5,17 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from core.models import HarvestBacklogWindow
+from core.models import (
+    Account,
+    Brand,
+    BrandAccount,
+    HarvestBacklogWindow,
+    PostBrand,
+    Role,
+    TwitterListMembership,
+)
 from monitor.cycle import CycleRunner, _cursor_key
+from x_monitor.attribution import compile_keyword_index
 from x_monitor.config import BacklogConfig, Config, HarvestConfig
 from x_monitor.query_plan import PlannedCall
 
@@ -167,3 +176,62 @@ def test_explicit_quarantine_claim_skips_older_pending_window():
     assert claimed.pk == quarantined.pk
     pending.refresh_from_db()
     assert pending.state == "pending"
+
+
+def test_call_a_replay_uses_current_membership_role_and_records_run(monkeypatch):
+    call = PlannedCall(
+        call_id="A",
+        call_kind="list",
+        brand_id="*",
+        bucket=None,
+        query_string="(list:42)",
+        query_length=9,
+    )
+    _window(call)
+    brand = Brand.objects.create(nickname="minimax")
+    role = Role.objects.create(key="official")
+    account = Account.objects.create(author_id="official", handle="official")
+    BrandAccount.objects.create(brand=brand, account=account, role=role)
+    TwitterListMembership.objects.create(
+        list_id=42,
+        account=account,
+        active=True,
+        source="snapshot",
+        source_run_id="snapshot-old",
+    )
+    runner = CycleRunner(
+        cfg=Config(
+            enabled_models=["minimax"],
+            daily_ceiling=100,
+            x_monitor_list_id=42,
+        ),
+        cycle_kind="scheduled",
+    )
+    monkeypatch.setattr(
+        runner,
+        "_fetch_tweets",
+        lambda *a, **k: ([{
+            "id": "replayed-official",
+            "author_id": "official",
+            "author_handle": "official",
+            "text": "off topic",
+            "created_at": timezone.now().isoformat(),
+        }], "ok"),
+    )
+
+    reports = runner._replay_backlog(
+        calls=[call],
+        api=Api(),
+        index=compile_keyword_index([]),
+        search_terms={},
+        kept_all=[],
+        run_id="replay-run",
+        deadline=Deadline(),
+    )
+
+    assert reports[0]["status"] == "completed"
+    assert PostBrand.objects.filter(
+        post_id="replayed-official", brand_id="minimax"
+    ).exists()
+    membership = TwitterListMembership.objects.get(list_id=42, account=account)
+    assert membership.source_run_id == "replay-run"

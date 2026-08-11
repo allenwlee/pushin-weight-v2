@@ -64,108 +64,19 @@ def test_apply_relevancy_gate_no_op_when_llm_call_is_none():
     assert out == items
 
 
-def test_apply_relevancy_gate_skips_a_call():
-    """Call A bypasses the gate (handled by should_apply_binary_gate)."""
-    items = [{"text": "anything", "brand_id": "*"}]
+@pytest.mark.parametrize("call_id", ["A", "B1", "B2", "B3", "C1", "C2", "C3"])
+def test_legacy_generic_gate_never_calls_llm(call_id):
+    """Role-free routing cannot authorize relevance; U12 resolves staff first."""
+    items = [{"text": "anything", "brand_id": "moonshot_kimi"}]
+    called = []
 
-    def always_drop(system, user):
+    def recording_drop(system, user):
+        called.append(user)
         return "DROP"
 
-    out = _apply_relevancy_gate(items, call_id="A", llm_call=always_drop)
-    # The gate's `should_apply_binary_gate` returns False for A → no LLM call.
+    out = _apply_relevancy_gate(items, call_id=call_id, llm_call=recording_drop)
     assert out == items
-
-
-def test_apply_relevancy_gate_drops_on_llm_drop():
-    items = [
-        {"text": "Kimi wins F1 race", "brand_id": "moonshot_kimi"},
-        {"text": "real Kimi 2.5 release", "brand_id": "moonshot_kimi"},
-    ]
-
-    def drop_first_only(system, user):
-        # Drop if "F1" in the post text; KEEP otherwise.
-        if "F1" in user:
-            return "DROP\nF1 hijack"
-        return "KEEP"
-
-    out = _apply_relevancy_gate(items, call_id="C1", llm_call=drop_first_only)
-    assert len(out) == 1
-    assert out[0]["text"] == "real Kimi 2.5 release"
-
-
-def test_apply_relevancy_gate_keeps_on_llm_keep():
-    items = [{"text": "Kimi 2.5 release", "brand_id": "moonshot_kimi"}]
-
-    def always_keep(system, user):
-        return "KEEP"
-
-    out = _apply_relevancy_gate(items, call_id="C1", llm_call=always_keep)
-    assert len(out) == 1
-
-
-def test_apply_relevancy_gate_keep_on_parse_failure():
-    """Parse failure → keep bias (multilingual, per R19a)."""
-    items = [{"text": "weird stuff", "brand_id": "mimo"}]
-
-    def malformed(system, user):
-        return "I think this is fine"
-
-    out = _apply_relevancy_gate(items, call_id="C1", llm_call=malformed)
-    assert len(out) == 1
-
-
-def test_apply_relevancy_gate_b_call_with_c_tier_brand_fires():
-    """B-call that routes to a C-tier brand (e.g., moonshot_kimi) still
-    triggers the gate — plan R19."""
-    items = [{"text": "F1 race winner", "brand_id": "moonshot_kimi"}]
-
-    called = []
-
-    def recording_drop(system, user):
-        called.append(user)
-        return "DROP"
-
-    _apply_relevancy_gate(
-        items, call_id="B1", llm_call=recording_drop
-    )
-    assert len(called) == 1, "B1 with moonshot_kimi brand must fire the gate"
-
-
-def test_apply_relevancy_gate_b_call_pure_brand_skipped():
-    """B-call routed to a pure brand (e.g., deepseek) does NOT fire."""
-    items = [{"text": "DeepSeek-V3 release", "brand_id": "deepseek"}]
-
-    called = []
-
-    def recording_drop(system, user):
-        called.append(user)
-        return "DROP"
-
-    out = _apply_relevancy_gate(
-        items, call_id="B1", llm_call=recording_drop
-    )
-    assert out == items  # unchanged
-    assert len(called) == 0, "Pure brand B-call must not fire the gate"
-
-
-def test_apply_relevancy_gate_no_brand_id_still_fires_on_c_call():
-    """An item with empty brand_id routed through a C-path call STILL
-    triggers the gate — the gate fires on call_id alone (R19). This
-    is intentional: the bare-co C specs admit everyday language that
-    the LLM needs to filter."""
-    items = [{"text": "everyday English", "brand_id": ""}]
-
-    called = []
-
-    def recording_drop(system, user):
-        called.append(user)
-        return "DROP"
-
-    out = _apply_relevancy_gate(
-        items, call_id="C1", llm_call=recording_drop
-    )
-    assert out == []  # dropped
-    assert len(called) == 1
+    assert called == []
 
 
 # --- PlannedCall.not_include propagation ------------------------------------

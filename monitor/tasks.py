@@ -48,12 +48,26 @@ def run_cycle(self, dry_run: bool = False) -> dict:
 
 def _execute_cycle(*, dry_run: bool) -> dict:
     from monitor.cycle import CycleRunner
+    from x_monitor.relevancy import build_binary_relevancy_llm_call
 
     logger.info("monitor run_cycle starting (dry_run=%s)", dry_run)
     cfg = load_config(Path("config.yaml"))
-    runner = CycleRunner(cfg=cfg, 
+    relevancy_client = None
+    try:
+        from x_monitor.reattribute import build_anthropic_client_from_env
+
+        relevancy_client = build_anthropic_client_from_env(cfg)
+    except Exception as exc:
+        logger.warning("failed to build relevancy client: %s", exc)
+    relevancy_llm_call = build_binary_relevancy_llm_call(
+        client=relevancy_client,
+        model=cfg.llm.relevancy_model,
+        timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
+    )
+    runner = CycleRunner(cfg=cfg,
         dry_run=dry_run,
         cycle_kind="scheduled",
+        _relevancy_llm_call=relevancy_llm_call,
     )
     try:
         stats = runner.run()

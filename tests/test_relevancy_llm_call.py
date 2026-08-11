@@ -83,6 +83,15 @@ def test_llm_call_respects_custom_model():
     assert fake.calls[0]["model"] == "claude-sonnet-4-6"
 
 
+def test_llm_call_passes_configured_timeout():
+    fake = FakeAnthropicClient()
+    llm_call = build_binary_relevancy_llm_call(
+        client=fake, timeout_seconds=17
+    )
+    llm_call("sys", "user")
+    assert fake.calls[0]["timeout"] == 17
+
+
 def test_llm_call_passes_max_tokens():
     """max_tokens is small (gate output is one KEEP/DROP + optional reason)."""
     fake = FakeAnthropicClient()

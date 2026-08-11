@@ -49,7 +49,9 @@ logger = logging.getLogger(__name__)
 # --- Type aliases --------------------------------------------------------
 
 
-Source = Literal["user_mention", "hashtag", "body_keyword", "search_term"]
+Source = Literal[
+    "author_account", "user_mention", "hashtag", "body_keyword", "search_term"
+]
 
 
 # Alias for tests / external callers that prefer the explicit type name.
@@ -62,6 +64,7 @@ SourceType = Source
 # brand signals (someone typed the handle or hashtag). Mixed signals
 # take the MAX confidence across contributing sources.
 BRAND_SOURCE_PRIORITY: dict[Source, float] = {
+    "author_account": 1.0,
     "user_mention":  1.0,
     "hashtag":       0.9,
     "body_keyword":  0.7,
@@ -148,6 +151,10 @@ def validate_raw_token(source: Source, raw_token: str) -> None:
                 f"body_keyword raw_token must not have surrounding "
                 f"whitespace; got {raw_token!r}"
             )
+    elif source == "author_account":
+        # Stable author ID plus membership/role provenance, assembled by
+        # monitor.cycle after current list membership and role resolution.
+        pass
     elif source == "search_term":
         # R6: when no search keyword matches the registry, the
         # extractor still emits a sentinel MentionRow with

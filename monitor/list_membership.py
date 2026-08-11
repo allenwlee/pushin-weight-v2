@@ -10,7 +10,12 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from core.models import Account, TwitterListMembership, TwitterListSyncState
+from core.models import (
+    Account,
+    BrandAccount,
+    TwitterListMembership,
+    TwitterListSyncState,
+)
 from x_monitor.apify import ListMembersSnapshot, TwitterApiClient
 from x_monitor.config import Config
 
@@ -24,6 +29,16 @@ class MembershipResult:
     snapshot_id: str | None = None
     completed_at: datetime | None = None
     degraded: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class AuthorRoleContext:
+    author_id: str
+    official_brands: tuple[str, ...]
+    staff_brands: tuple[str, ...]
+    membership_source: str
+    membership_run_id: str
+    last_complete_reconciliation_at: datetime | None
 
 
 def _upsert_account(
@@ -152,6 +167,59 @@ def reconciliation_due(
     return state is None or state.last_complete_at <= now - timedelta(
         hours=interval_hours
     )
+
+
+def resolve_call_a_author_contexts(
+    *, list_id: int, items: list[dict[str, Any]]
+) -> tuple[dict[str, AuthorRoleContext], list[str]]:
+    """Resolve only current active membership and current canonical role edges."""
+
+    author_ids = {
+        str(item.get("author_id") or "").strip()
+        for item in items
+        if str(item.get("author_id") or "").strip()
+    }
+    memberships = {
+        row.account_id: row
+        for row in TwitterListMembership.objects.filter(
+            list_id=list_id,
+            active=True,
+            account_id__in=author_ids,
+        )
+    }
+    edges_by_author: dict[str, list[BrandAccount]] = {}
+    for edge in BrandAccount.objects.filter(
+        account_id__in=memberships
+    ).select_related("role"):
+        edges_by_author.setdefault(edge.account_id, []).append(edge)
+
+    contexts: dict[str, AuthorRoleContext] = {}
+    degraded: list[str] = []
+    for author_id, membership in memberships.items():
+        official: set[str] = set()
+        staff: set[str] = set()
+        for edge in edges_by_author.get(author_id, []):
+            if edge.role_id == "official":
+                official.add(edge.brand_id)
+            elif edge.role_id == "staff":
+                staff.add(edge.brand_id)
+            else:
+                degraded.append(f"unsupported_role:{author_id}:{edge.role_id}")
+        if not official and not staff:
+            degraded.append(f"missing_brand_role:{author_id}")
+        contexts[author_id] = AuthorRoleContext(
+            author_id=author_id,
+            official_brands=tuple(sorted(official)),
+            staff_brands=tuple(sorted(staff)),
+            membership_source=membership.source,
+            membership_run_id=membership.source_run_id,
+            last_complete_reconciliation_at=(
+                membership.last_complete_reconciliation_at
+            ),
+        )
+    for author_id in author_ids - memberships.keys():
+        degraded.append(f"inactive_or_unknown_member:{author_id}")
+    return contexts, degraded
 
 
 def reconcile_complete_snapshot(

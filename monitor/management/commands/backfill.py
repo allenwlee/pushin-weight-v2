@@ -319,6 +319,8 @@ class Command(BaseCommand):
             pass
         relevancy_llm_call = build_binary_relevancy_llm_call(
             client=relevancy_client,
+            model=cfg.llm.relevancy_model,
+            timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
         )
 
         for i, call_id in enumerate(batch):

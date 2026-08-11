@@ -1,4 +1,4 @@
-"""Binary LLM relevancy gate for C-path / C-brand posts.
+"""Binary LLM relevancy gate for staff authors returned by Call A.
 
 Plan: docs/plans/2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md
 Unit U6 (KTD6).
@@ -23,7 +23,6 @@ See R19a for the prompt source-of-truth.
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 
 # ---------------------------------------------------------------------------
 # R19a — Source-of-truth prompt constants
@@ -152,34 +151,19 @@ def parse_binary_relevancy(response: str) -> BinaryRelevancyVerdict:
 # ---------------------------------------------------------------------------
 
 
-# KTD6 — only C* sources and C-tier brand attributions fire the gate.
-# A* (Call A — curated X-list) and B* (handle-only / bare keywords)
-# bypass; those are already operator-curated.
-GATED_CALL_IDS: frozenset[str] = frozenset({"C1", "C2", "C3"})
+GATED_CALL_IDS: frozenset[str] = frozenset({"A"})
 
 
 def should_apply_binary_gate(
     *,
     call_id: str,
     brand_hints: str,
+    author_role: str | None = None,
 ) -> bool:
-    """Returns True if the gate should fire for this (call_id, brand_hints).
+    """Only a current staff-only Call A author requires relevance."""
 
-    Rules (per plan body R19 + U6):
-      - call_id in GATED_CALL_IDS (C1/C2/C3)
-      - OR brand_hints names a C-tier brand (mimo, moonshot_kimi, yi,
-        llama, ernie, upstage, doubao, sensechat, kuaishou) — fires
-        even when the call_id is B* if attribution routes the post to
-        a C-tier brand.
-    """
-    if call_id in GATED_CALL_IDS:
-        return True
-    c_tier_brands = {
-        "mimo", "moonshot_kimi", "yi", "llama", "ernie", "upstage",
-        "doubao", "sensechat", "kuaishou",
-    }
-    hinted = {b.strip().lower() for b in brand_hints.split(",") if b.strip()}
-    return bool(hinted & c_tier_brands)
+    del brand_hints  # brand tier never grants or triggers this gate
+    return call_id == "A" and author_role == "staff"
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +218,7 @@ def build_binary_relevancy_llm_call(
     client=None,
     model: str = DEFAULT_RELEVANCY_MODEL,
     max_tokens: int = 32,
+    timeout_seconds: int = 30,
 ):
     """Construct an `llm_call(system, user) -> str` factory for the
     binary relevancy gate, wired to the project's existing
@@ -260,6 +245,7 @@ def build_binary_relevancy_llm_call(
             "max_tokens": max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": user}],
+            "timeout": timeout_seconds,
         }
         result = client.messages_create(**kwargs)
         # Anthropic SDK returns {"content": [{"text": "...", ...}]} —

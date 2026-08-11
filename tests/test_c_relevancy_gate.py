@@ -1,4 +1,4 @@
-"""U6 tests - C-only binary LLM relevancy gate.
+"""Binary relevance parser and current Call A staff-only routing contract.
 
 Plan: docs/plans/2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md
 Unit U6 (KTD6).
@@ -8,25 +8,21 @@ WHY THIS FILE EXISTS
 The binary relevancy gate must:
   1. Parse KEEP/DROP correctly (case-insensitive, first-line protocol).
   2. Apply keep bias on parse failure (multilingual keep bias per R19a).
-  3. Fire only for C-path / C-tier brand attribution (not A/B).
+  3. Fire only for current staff-only Call A authors (never B/C).
   4. Carry the R19a system + user prompt as module constants (source of
      truth for the LLM call site).
 """
 
 from __future__ import annotations
 
-import pytest
-
 from x_monitor.relevancy import (
     BINARY_RELEVANCY_SYSTEM,
-    BinaryRelevancyVerdict,
     GATED_CALL_IDS,
     binary_relevancy_user_template,
     call_binary_relevancy_llm,
     parse_binary_relevancy,
     should_apply_binary_gate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Prompt constants (R19a)
@@ -113,32 +109,29 @@ def test_parse_whitespace_tolerated():
 # ---------------------------------------------------------------------------
 
 
-def test_gate_fires_for_c_call_ids():
+def test_gate_skips_all_non_a_call_ids():
     for cid in ("C1", "C2", "C3"):
-        assert should_apply_binary_gate(call_id=cid, brand_hints="")
-        assert should_apply_binary_gate(call_id=cid, brand_hints="kimi")
+        assert not should_apply_binary_gate(
+            call_id=cid, brand_hints="kimi", author_role="staff"
+        )
+    for cid in ("B1", "B2", "B3"):
+        assert not should_apply_binary_gate(
+            call_id=cid, brand_hints="mimo", author_role="staff"
+        )
 
 
-def test_gate_skips_a_call():
-    assert not should_apply_binary_gate(call_id="A", brand_hints="")
-
-
-def test_gate_skips_b_calls_without_c_brand():
-    assert not should_apply_binary_gate(call_id="B1", brand_hints="")
-    assert not should_apply_binary_gate(call_id="B2", brand_hints="deepseek_ai")
-
-
-def test_gate_fires_for_b_calls_with_c_brand_attribution():
-    """A B-call post that routes to a C-tier brand (e.g., B1's wide-net
-    match attribution points at the moonshot_kimi brand) still goes
-    through the gate. brand_hints carries the canonical brand_id."""
-    assert should_apply_binary_gate(call_id="B1", brand_hints="moonshot_kimi")
-    assert should_apply_binary_gate(call_id="B2", brand_hints="mimo,llama")
-    assert should_apply_binary_gate(call_id="B3", brand_hints="ernie")
+def test_gate_fires_only_for_call_a_staff():
+    assert should_apply_binary_gate(
+        call_id="A", brand_hints="minimax", author_role="staff"
+    )
+    assert not should_apply_binary_gate(
+        call_id="A", brand_hints="minimax", author_role="official"
+    )
+    assert not should_apply_binary_gate(call_id="A", brand_hints="minimax")
 
 
 def test_gated_call_ids_constant():
-    assert GATED_CALL_IDS == frozenset({"C1", "C2", "C3"})
+    assert GATED_CALL_IDS == frozenset({"A"})
 
 
 # ---------------------------------------------------------------------------
