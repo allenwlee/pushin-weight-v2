@@ -1,18 +1,19 @@
 ---
 name: avoiding-recurring-mistakes
 description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of 257 real user prompts across 12 sessions (Jul 2026), with amendments on 2026-08-05 (cursor vs insert gap, pause-resume protocol).
+latest_update: 2026-08-10
 ---
 
 # Avoiding Recurring Mistakes — pushin-weight-v2 (x-monitor)
 
 A correction log distilled from real friction. Each section is named after the mistake pattern, shows a representative correction prompt, and gives a concrete "do this" rule. Apply these rules whenever the trigger condition is met, **before** you start editing code.
 
-If a rule conflicts with `AGENTS.md` / `CLAUDE.md` / `CONCEPTS.md`, follow those repo docs first — this skill is the *recurring-friction* layer on top.
+If a rule conflicts with `AGENTS.md` / `CLAUDE.md` / `CONCEPTS.md`, follow those repo docs first — this skill is the *recurring-friction* layer on top. Future sessions: Integrate durable corrections into the applicable M-rule and Quick reference, retaining only concise current guidance.
 
 ## When this skill triggers
 
 Any work in this repo. Especially:
-- harvest / cycle / backfiller / classifier code changes
+- harvest / cycle / backfiller / classifier code changes — also load `.claude/skills/change-harvester/SKILL.md` before editing those surfaces
 - Django migrations (`core/migrations/`), schema edits (`core/models.py`)
 - prod DB queries via Render CLI
 - i18n catalog / locale strings
@@ -108,27 +109,23 @@ From repo memory: `feedback_worktree_hygiene_x_monitoring.md` (worktrees at `rep
 
 ## M5 — Verification in the plan, not after the plan
 
-**Pattern the user kept correcting.** Agent shipped a unit, then user asked "what's the latest post in the prod db" / "is the web version pulling from production db" / "why isn't prod db showing new cols" — these are verification questions that should have been part of the unit's Definition of Done.
+**Pattern the user kept correcting.** Completion evidence missed real behavior, leaving production and visible-UI regressions.
 
 **Representative correction.**
-> "what's the latest post in the prod db right now" (asked after migration shipped)
-> "why isn't prod db showing new cols" (asked after columns added)
-> "is the web version pulling from production db?" (asked after deploy)
-> "what is the rate of posts ingested into db? are we back to 7/19-7/21 rates?"
-> "first check the backfiller and see if it's working properly"
+> "it is rendered. that is a comment but it is visible on the page"
 
-**Rule.** Every plan / every unit MUST end with explicit verification lines:
+**Rule.** Every plan / every unit MUST name the risk-specific proof:
 
 ```
 Definition of Done:
   - Migration applies cleanly on a fresh DB
   - Production DB shows new cols / rows after migrate (query: …)
   - Harvest pipeline writes to prod DB (query: SELECT count(*) FROM posts_raw …)
-  - Web UI reflects the change (Playwright screenshot of /path)
+  - Public UI: browser route after DOM replacement; assert required/forbidden text, not screenshot/regex alone
   - Rate metric returns to baseline (query: …)
 ```
 
-Verification queries against prod go through Render CLI, NOT direct psql to the prod host — see `reference_pushinweight_prod_db_via_render_cli.md`.
+Public templates/static assets contain product content only; put implementation notes in plans/docs. For UI, trace URL → view → template → static assets → runtime endpoint and assert rendered output/DOM; source/structural/screenshot checks complement it. Prod queries go through Render CLI, not direct psql — see `reference_pushinweight_prod_db_via_render_cli.md`.
 
 ---
 
@@ -304,7 +301,7 @@ curl -X POST -H "Authorization: Bearer $RND_KEY" \
 #         "https://api.render.com/v1/services/$SVC_ID" | grep suspended
 ```
 
-The full procedure is in `docs/operations/pause-and-resume-harvest-cron.md`. **Important caveats from prior incidents (2026-07-30):** the API `POST /suspend` with `{"suspend":"no"}` returns HTTP 200 but does NOT clear the suspended state. Resume is sometimes dashboard-only. Verify with `GET /v1/services/$SVC_ID` — `"suspended": null` means running, `"suspended": "suspended"` means still paused.
+The full procedure is in `docs/operations/pause-and-resume-harvest-cron.md`. For the end-to-end harvest change contract (scope, reproduce, regression pins, post-deploy DoD), see `.claude/skills/change-harvester/SKILL.md`. **Important caveats from prior incidents (2026-07-30):** the API `POST /suspend` with `{"suspend":"no"}` returns HTTP 200 but does NOT clear the suspended state. Resume is sometimes dashboard-only. Verify with `GET /v1/services/$SVC_ID` — `"suspended": null` means running, `"suspended": "suspended"` means still paused.
 
 **Why halt first:**
 - The cron fires every 15 min. If left running during diagnosis, the harvester may overwrite the very state you're trying to inspect (cursor rows, `last_completed_at`, `INSERT OR IGNORE` semantics).
@@ -405,7 +402,7 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 | M2 | Volunteering commit/push/merge | End the turn with literal answer; don't offer extras |
 | M3 | Scope ambiguity | Repeat keep/revert list back BEFORE acting |
 | M4 | Parallel-session collision | `git fetch` + check `feat/*` branches before merging |
-| M5 | Verification as retrofit | Every unit's DoD names the verification query |
+| M5 | Verification as retrofit | Name risk-specific proof; public UI needs real rendered route/DOM evidence |
 | M6 | False choice | Recommend the right option; don't ask permission for the obvious |
 | M7 | Re-inventing harvest/cycle | Refactor shared code; don't write parallel pipelines |
 | M8 | Missing rate/concurrency guards | Name the LLM/DB guards in the plan body |

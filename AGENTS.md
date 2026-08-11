@@ -10,6 +10,17 @@ locale-visible copy, or visual regression, read and follow
 `.claude/skills/fix-ui/SKILL.md`. This applies to every agent working in this
 repository, including Claude Code and Codex.
 
+## Harvester changes
+
+Before changing harvest/cycle behavior (CycleRunner, `run_cycle`, backfill,
+harvest policy, A/B/C TwitterAPI calls, cursors, metrics refresh, translator
+or classifier post-fetch, Render harvest cron, credit burn, or
+fetch-vs-insert anomalies), read and follow
+`.claude/skills/change-harvester/SKILL.md` **and**
+`.claude/skills/avoiding-recurring-mistakes/SKILL.md` (especially M7, M8,
+M12, M17, M18). This applies to every agent working in this repository,
+including Claude Code and Codex.
+
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules
 
