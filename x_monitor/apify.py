@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 TWITTERAPI_BASE = "https://api.twitterapi.io"
 SEARCH_PATH = "/twitter/tweet/advanced_search"
 FOLLOWERS_PATH = "/twitter/user/followers"
+LIST_MEMBERS_PATH = "/twitter/list/members"
 # Per docs TwitterAPI.io caps each advanced_search response at 20 tweets.
 # We paginate via next_cursor to retrieve up to max_results. The per-page
 # cap is now passed in by the caller (SearchConfig.max_per_page, default
@@ -78,6 +79,16 @@ class SearchPage:
     received_monotonic: float
 
 
+@dataclass(frozen=True)
+class ListMembersSnapshot:
+    """A validated list-members walk; incomplete snapshots are never applied."""
+
+    members: list[dict[str, Any]]
+    complete: bool
+    pages_fetched: int
+    reason: str | None = None
+
+
 @dataclass
 class TwitterApiClient:
     """REST client for TwitterAPI.io.
@@ -112,7 +123,13 @@ class TwitterApiClient:
             "Accept": "application/json",
         }
 
-    def _get(self, path: str, params: dict[str, Any]) -> Any:
+    def _get(
+        self,
+        path: str,
+        params: dict[str, Any],
+        *,
+        timeout_s: int | None = None,
+    ) -> Any:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
         t0 = time.monotonic()
@@ -124,7 +141,7 @@ class TwitterApiClient:
                     url,
                     params=params,
                     headers=self._headers(),
-                    timeout=self.timeout_s,
+                    timeout=timeout_s or self.timeout_s,
                 )
             except requests.RequestException as e:
                 last_exc = e
@@ -434,6 +451,115 @@ class TwitterApiClient:
             max_pages=max_pages,
             max_per_page=max_per_page,
             since_time=since_time,
+        )
+
+    def run_list_members(
+        self,
+        list_id: int | str,
+        *,
+        max_pages: int = 100,
+        page_size: int = 20,
+        deadline: Any | None = None,
+        request_timeout_seconds: int | None = None,
+    ) -> ListMembersSnapshot:
+        """Return a complete, identity-safe snapshot of one Twitter list."""
+
+        members: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        cursor: str | None = None
+        request_envelope = float(request_timeout_seconds or self.timeout_s) * (
+            self.max_retries + 1
+        ) + 8.0
+
+        for page_number in range(1, max(1, max_pages) + 1):
+            if deadline is not None and not deadline.can_start(request_envelope):
+                return ListMembersSnapshot(
+                    members=members,
+                    complete=False,
+                    pages_fetched=page_number - 1,
+                    reason="deadline_exhausted",
+                )
+            params: dict[str, Any] = {
+                "list_id": str(list_id),
+                "page_size": min(max(int(page_size), 1), 20),
+            }
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get(
+                LIST_MEMBERS_PATH,
+                params,
+                timeout_s=request_timeout_seconds,
+            )
+            raw_members = data.get("members")
+            if not isinstance(raw_members, list):
+                return ListMembersSnapshot(
+                    members=members,
+                    complete=False,
+                    pages_fetched=page_number,
+                    reason="malformed_members",
+                )
+
+            for raw in raw_members:
+                if not isinstance(raw, dict):
+                    return ListMembersSnapshot(
+                        members=members,
+                        complete=False,
+                        pages_fetched=page_number,
+                        reason="malformed_member",
+                    )
+                member_id = str(
+                    raw.get("id") or raw.get("id_str") or raw.get("rest_id") or ""
+                ).strip()
+                if not member_id or member_id in seen_ids:
+                    return ListMembersSnapshot(
+                        members=members,
+                        complete=False,
+                        pages_fetched=page_number,
+                        reason=("duplicate_member_id" if member_id else "missing_member_id"),
+                    )
+                seen_ids.add(member_id)
+                members.append(
+                    {
+                        "author_id": member_id,
+                        "handle": (
+                            raw.get("userName")
+                            or raw.get("username")
+                            or raw.get("screen_name")
+                            or None
+                        ),
+                        "display_name": raw.get("name") or None,
+                    }
+                )
+
+            has_next = data.get("has_next_page")
+            next_cursor = data.get("next_cursor") or None
+            if not isinstance(has_next, bool) or has_next != bool(next_cursor):
+                return ListMembersSnapshot(
+                    members=members,
+                    complete=False,
+                    pages_fetched=page_number,
+                    reason="inconsistent_continuation",
+                )
+            if has_next and not raw_members:
+                return ListMembersSnapshot(
+                    members=members,
+                    complete=False,
+                    pages_fetched=page_number,
+                    reason="empty_continuation_page",
+                )
+            if not has_next:
+                return ListMembersSnapshot(
+                    members=members,
+                    complete=True,
+                    pages_fetched=page_number,
+                )
+            cursor = next_cursor
+
+        return ListMembersSnapshot(
+            members=members,
+            complete=False,
+            pages_fetched=max(1, max_pages),
+            reason="page_cap",
         )
 
     def get_quote_tweets(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -58,6 +59,24 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
     monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda self, items: {})
     monkeypatch.setattr(CycleRunner, "_replay_backlog", lambda self, **kwargs: [])
 
+    def observe(**kwargs):
+        events.append("observe:A")
+        return SimpleNamespace(status="observed", observed=1, degraded=[])
+
+    def reconcile(**kwargs):
+        events.append("reconcile")
+        return SimpleNamespace(
+            status="completed",
+            observed=0,
+            activated=0,
+            deactivated=0,
+            snapshot_id="snapshot",
+            degraded=[],
+        )
+
+    monkeypatch.setattr(cycle_mod, "observe_call_a_authors", observe)
+    monkeypatch.setattr(cycle_mod, "run_due_reconciliation", reconcile)
+
     def attribute(self, items, index, search_terms):
         for item in items:
             item["_unattributed"] = False
@@ -73,12 +92,18 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
     cfg = Config(
         enabled_models=["deepseek"],
         daily_ceiling=100,
+        x_monitor_list_id=42,
         search=SearchConfig(max_results=100, max_pages=5, max_per_page=20),
     )
     result = CycleRunner(cfg=cfg, cycle_kind="scheduled").run()
 
-    assert events == [event for call_id in call_ids for event in (
-        f"fetch:{call_id}", f"persist:{call_id}"
-    )]
+    expected = []
+    for call_id in call_ids:
+        expected.append(f"fetch:{call_id}")
+        if call_id == "A":
+            expected.append("observe:A")
+        expected.append(f"persist:{call_id}")
+    expected.append("reconcile")
+    assert events == expected
     assert result["totals"]["n_calls_run"] == 7
     assert result["tip_sweep_within_target"] is True

@@ -52,6 +52,7 @@ from core.models import (
     SentimentKey,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
+from monitor.list_membership import observe_call_a_authors, run_due_reconciliation
 
 # x_monitor imports — reuse existing pipeline modules.
 # These have no import-time side effects; they don't touch Store or
@@ -1894,6 +1895,7 @@ class CycleRunner:
         # Merge DB-loaded brand_search_terms into the index-derived map
         db_search_terms = _load_brand_search_terms()
         search_terms = {**search_terms, **db_search_terms}
+        list_id = _resolve_x_monitor_list_id(self.cfg)
 
         kept_all: list[dict[str, Any]] = []
 
@@ -1928,6 +1930,21 @@ class CycleRunner:
                 window=(since_epoch, until_epoch),
                 tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
             )
+            if call.call_id == "A" and list_id is not None and items:
+                observation = observe_call_a_authors(
+                    list_id=int(list_id),
+                    items=items,
+                    run_id=run_id,
+                )
+                call_entry["list_membership_observation"] = {
+                    "status": observation.status,
+                    "observed": observation.observed,
+                    "degraded": list(observation.degraded),
+                }
+                if observation.degraded:
+                    summary["degraded"]["list_membership_observation"] = list(
+                        observation.degraded
+                    )
             # Hard failures: no items to keep, hold cursor, move on.
             # "truncated" is NOT a hard failure -- items were retrieved and
             # must be persisted; only the cursor advance is withheld so the
@@ -2178,6 +2195,26 @@ class CycleRunner:
         )
 
         if self.cycle_kind == "scheduled":
+            if list_id is not None:
+                reconciliation = run_due_reconciliation(
+                    api=api,
+                    cfg=self.cfg,
+                    list_id=int(list_id),
+                    deadline=deadline,
+                    run_id=run_id,
+                )
+                summary["list_membership_reconciliation"] = {
+                    "status": reconciliation.status,
+                    "observed": reconciliation.observed,
+                    "activated": reconciliation.activated,
+                    "deactivated": reconciliation.deactivated,
+                    "snapshot_id": reconciliation.snapshot_id,
+                    "degraded": list(reconciliation.degraded),
+                }
+                if reconciliation.status in {"incomplete", "deferred"}:
+                    summary["degraded"]["list_membership_reconciliation"] = list(
+                        reconciliation.degraded
+                    )
             summary["backlog_replays"] = self._replay_backlog(
                 calls=calls,
                 api=api,

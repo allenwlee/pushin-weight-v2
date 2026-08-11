@@ -698,7 +698,6 @@ class TestRunSearch:
 
     def test_passes_since_only_when_caller_didnt(self):
         client = self._client()
-        page = {"tweets": [_tweet("1")], "has_next_page": False}
         with patch.object(client, "_walk_search", return_value=([], False)) as mock_walk:
             client.run_search("from:x", since="2026-06-01")
             # Caller passed since= and query lacked `since:` => should append.
@@ -841,3 +840,91 @@ def test_get_tweets_by_ids_chunks_long_list():
         out = client.get_tweets_by_ids(ids)
     assert mg.call_count == 3  # 50 + 50 + 25
     assert set(out.keys()) == set(ids)
+
+
+class TestListMembers:
+    def test_complete_multi_page_snapshot_uses_stable_ids_and_cursor(self):
+        client = TwitterApiClient(api_key="x", max_retries=0)
+        pages = [
+            {
+                "members": [{"id": "1", "userName": "old_handle"}],
+                "has_next_page": True,
+                "next_cursor": "next-1",
+            },
+            {
+                "members": [{"id": "2", "userName": "second"}],
+                "has_next_page": False,
+                "next_cursor": None,
+            },
+        ]
+        with patch.object(client, "_get", side_effect=pages) as get:
+            snapshot = client.run_list_members("42")
+
+        assert snapshot.complete is True
+        assert [member["author_id"] for member in snapshot.members] == ["1", "2"]
+        assert get.call_args_list[1].args[1]["cursor"] == "next-1"
+        assert get.call_args_list[0].args[1]["list_id"] == "42"
+
+    @pytest.mark.parametrize(
+        ("page", "reason"),
+        [
+            ({"members": [], "has_next_page": True, "next_cursor": "x"},
+             "empty_continuation_page"),
+            ({"members": [{"id": "1"}], "has_next_page": True},
+             "inconsistent_continuation"),
+            ({"members": [{"userName": "no-id"}], "has_next_page": False},
+             "missing_member_id"),
+            ({"members": "wrong", "has_next_page": False},
+             "malformed_members"),
+        ],
+    )
+    def test_rejects_partial_or_malformed_snapshot(self, page, reason):
+        client = TwitterApiClient(api_key="x", max_retries=0)
+        with patch.object(client, "_get", return_value=page):
+            snapshot = client.run_list_members("42")
+        assert snapshot.complete is False
+        assert snapshot.reason == reason
+
+    def test_duplicate_id_and_page_cap_are_incomplete(self):
+        client = TwitterApiClient(api_key="x", max_retries=0)
+        duplicate_pages = [
+            {"members": [{"id": "1"}], "has_next_page": True, "next_cursor": "x"},
+            {"members": [{"id": "1"}], "has_next_page": False, "next_cursor": None},
+        ]
+        with patch.object(client, "_get", side_effect=duplicate_pages):
+            duplicate = client.run_list_members("42")
+        assert duplicate.reason == "duplicate_member_id"
+
+        continuing = {
+            "members": [{"id": "2"}],
+            "has_next_page": True,
+            "next_cursor": "more",
+        }
+        with patch.object(client, "_get", return_value=continuing):
+            capped = client.run_list_members("42", max_pages=1)
+        assert capped.complete is False
+        assert capped.reason == "page_cap"
+
+    def test_deadline_defers_without_starting_request(self):
+        class Deadline:
+            @staticmethod
+            def can_start(seconds):
+                return False
+
+        client = TwitterApiClient(api_key="x", max_retries=0)
+        with patch.object(client, "_get") as get:
+            snapshot = client.run_list_members("42", deadline=Deadline())
+        assert snapshot.reason == "deadline_exhausted"
+        get.assert_not_called()
+
+    def test_list_members_uses_configured_request_timeout(self):
+        client = TwitterApiClient(api_key="x", max_retries=0, timeout_s=60)
+        body = {"members": [], "has_next_page": False, "next_cursor": None}
+        with patch.object(
+            requests, "get", return_value=_mock_response(200, body)
+        ) as get:
+            snapshot = client.run_list_members(
+                "42", request_timeout_seconds=7
+            )
+        assert snapshot.complete is True
+        assert get.call_args.kwargs["timeout"] == 7

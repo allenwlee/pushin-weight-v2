@@ -415,6 +415,17 @@ class TwitterListMembership(models.Model):
         ]
 
 
+class TwitterListSyncState(models.Model):
+    """Completion marker kept separately so even empty lists are rate-limited."""
+
+    list_id = models.BigIntegerField(primary_key=True)
+    snapshot_id = models.CharField(max_length=128)
+    last_complete_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "twitter_list_sync_state"
+
+
 # ============================================================================
 # Posts
 # ============================================================================
