@@ -74,3 +74,23 @@ def test_emit_module_present():
     text = src.read_text(encoding="utf-8")
     assert "persist_cycle_summary" in text
     assert "finalize_and_persist" in text
+
+
+def test_cost_tool_prices_the_versioned_envelope():
+    from monitor.harvest_summary import build_summary_envelope
+
+    envelope = build_summary_envelope(
+        {
+            "run_id": "envelope-run",
+            "finished_at": "2026-08-10T06:37:01+00:00",
+            "calls": [{"call_id": "B1", "n_results": 4, "status": "completed"}],
+            "totals": {"n_results": 4, "n_calls_run": 1},
+        },
+        service_id="cron-1",
+        deploy_sha="abc123",
+    )
+    rates = load_pricing(repo_root=REPO)
+    cycle = cost_cycle_from_summary(envelope, rates)
+    assert cycle.run_id == "envelope-run"
+    assert cycle.lines[0].label == "B1"
+    assert cycle.lines[0].n_results == 4

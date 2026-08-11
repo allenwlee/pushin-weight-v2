@@ -297,6 +297,7 @@ class TwitterApiClient:
                 item = _normalize_tweet(raw)
                 item["_api_received_at"] = received_at.isoformat()
                 item["_api_received_monotonic"] = received_monotonic
+                item["_api_page_number"] = page_number
                 page_items.append(item)
             n_returned += len(page_items)
 

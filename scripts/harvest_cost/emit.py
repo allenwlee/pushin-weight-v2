@@ -7,8 +7,16 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+
+from monitor.harvest_summary import (
+    build_summary_envelope,
+    redact_http_log,
+    redacted_summary_payload,
+    serialize_summary_envelope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +30,17 @@ def default_runs_dir(repo_root: Path | None = None) -> Path:
 
 
 def attach_http_log(summary: dict[str, Any], api: Any) -> None:
-    """Copy TwitterApiClient._request_log into summary['http_log'] if present."""
+    """Copy only safe request metrics into ``summary['http_log']``.
+
+    Query parameters and provider response bodies are intentionally omitted;
+    the canonical Render envelope has no need for them and they are an easy
+    route for credentials or post text to leak into durable evidence.
+    """
     try:
         log = getattr(api, "_request_log", None)
         if log is None:
             return
-        summary["http_log"] = list(log)
+        summary["http_log"] = redact_http_log(log)
     except Exception as exc:  # never break harvest
         logger.warning("cycle_summary_emit: attach_http_log failed: %s", exc)
 
@@ -35,19 +48,22 @@ def attach_http_log(summary: dict[str, Any], api: Any) -> None:
 def persist_cycle_summary(
     summary: Mapping[str, Any],
     *,
+    envelope: Mapping[str, Any] | None = None,
     runs_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> Path | None:
     """Write summary JSON to data/runs/<run_id>.json. Returns path or None on failure."""
     try:
-        run_id = str(summary.get("run_id") or "unknown")
+        envelope = envelope or build_summary_envelope(summary)
+        persisted_summary = redacted_summary_payload(summary, envelope)
+        run_id = str(persisted_summary.get("run_id") or "unknown")
         # sanitize path segment
         safe_id = "".join(c if c.isalnum() or c in "-_." else "_" for c in run_id)
         base = runs_dir if runs_dir is not None else default_runs_dir(repo_root)
         base.mkdir(parents=True, exist_ok=True)
         path = base / f"{safe_id}.json"
         path.write_text(
-            json.dumps(summary, indent=2, ensure_ascii=False, default=str),
+            json.dumps(persisted_summary, indent=2, ensure_ascii=False, default=str),
             encoding="utf-8",
         )
         # latest pointer (best-effort)
@@ -82,4 +98,15 @@ def finalize_and_persist(
     """Attach http_log when possible and persist. Never raises."""
     if api is not None:
         attach_http_log(summary, api)
-    return persist_cycle_summary(summary, runs_dir=runs_dir, repo_root=repo_root)
+    envelope: Mapping[str, Any] | None = None
+    try:
+        envelope = build_summary_envelope(summary)
+        logger.info(serialize_summary_envelope(envelope))
+    except Exception as exc:
+        logger.warning("cycle_summary_emit: canonical envelope failed: %s", exc)
+    return persist_cycle_summary(
+        summary,
+        envelope=envelope,
+        runs_dir=runs_dir,
+        repo_root=repo_root,
+    )

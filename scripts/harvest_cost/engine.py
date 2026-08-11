@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from .pricing import PricingRates
 
@@ -89,6 +90,15 @@ def cost_cycle_from_summary(
     residual_label: str = "A+B2+B3+C1+C2+C3 residual",
 ) -> CycleCost:
     """Build CycleCost from a CycleRunner (or compatible) summary dict."""
+    source_summary = summary
+    if (
+        isinstance(summary.get("summary"), Mapping)
+        and summary.get("schema_version")
+        and summary.get("hash")
+    ):
+        summary = summary["summary"]
+        if "run_id" not in summary and source_summary.get("run_id"):
+            summary = {**summary, "run_id": source_summary["run_id"]}
     run_id = str(summary.get("run_id") or summary.get("id") or "unknown")
     finished = summary.get("finished_at") or summary.get("started_at")
     finished_s = str(finished) if finished else None
@@ -186,7 +196,9 @@ def cost_cycle_from_summary(
         run_id=run_id,
         finished_at=finished_s,
         lines=lines,
-        raw_summary=summary,
+        # Keep the versioned envelope available to callers that need
+        # provenance/hash context while pricing its redacted inner summary.
+        raw_summary=source_summary,
     )
 
 

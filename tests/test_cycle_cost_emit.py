@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from monitor.harvest_summary import HARVEST_SUMMARY_PREFIX
 from scripts.harvest_cost.emit import (
     attach_http_log,
     finalize_and_persist,
@@ -56,6 +57,44 @@ def test_finalize_and_persist(tmp_path: Path):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert "http_log" in data
     assert data["http_log"][0]["n_results"] == 1
+
+
+def test_finalize_logs_one_canonical_redacted_envelope(tmp_path: Path, caplog):
+    summary = {
+        "run_id": "emit-1",
+        "status": "completed",
+        "calls": [{"call_id": "A", "n_results": 1}],
+        "totals": {"n_results": 1, "n_calls_run": 1},
+    }
+    with caplog.at_level("INFO"):
+        path = finalize_and_persist(summary, runs_dir=tmp_path)
+
+    assert path is not None
+    lines = [record.message for record in caplog.records if HARVEST_SUMMARY_PREFIX in record.message]
+    assert len(lines) == 1
+    assert lines[0].startswith(HARVEST_SUMMARY_PREFIX)
+
+
+def test_persisted_summary_drops_raw_errors_and_query_payloads(tmp_path: Path):
+    summary = {
+        "run_id": "emit-redacted",
+        "status": "degraded",
+        "calls": [{
+            "call_id": "A",
+            "n_results": 1,
+            "query_string": "postgresql://user:password@example/db",
+            "relevancy_degraded": ["provider body: secret-value"],
+        }],
+        "errors": ["Authorization: Bearer fake-token"],
+        "degraded": {"provider": "postgresql://user:password@example/db"},
+        "totals": {"n_results": 1, "n_calls_run": 1},
+    }
+    path = finalize_and_persist(summary, runs_dir=tmp_path)
+    assert path is not None
+    text = path.read_text(encoding="utf-8")
+    assert "postgresql://" not in text
+    assert "fake-token" not in text
+    assert "provider body" not in text
 
 
 def test_cycle_py_calls_finalize_and_persist():

@@ -56,6 +56,7 @@ from core.models import (
     SentimentKey,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
+from monitor.harvest_summary import summarize_latency
 from monitor.list_membership import (
     observe_call_a_authors,
     resolve_call_a_author_contexts,
@@ -1018,6 +1019,8 @@ class CycleRunner:
         _backfill_call_ids: list[str] | None = None,
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
+        _clock=None,
+        _monotonic=None,
     ) -> None:
         # Single config source-of-truth (plan 2026-08-01-001). When None,
         # load from config.yaml at the repo root. Tests pass a pre-built
@@ -1038,6 +1041,10 @@ class CycleRunner:
         # x_monitor/relevancy.py). Default None → gate is a no-op (KEEP).
         # Production wire-in passes an anthropic_messages_call function.
         self._relevancy_llm_call = _relevancy_llm_call
+        # U14 keeps server-owned clocks injectable for deterministic latency
+        # proof. Production defaults remain the wall/monotonic clocks.
+        self._clock = _clock or (lambda: datetime.now(timezone.utc))
+        self._monotonic = _monotonic or time.monotonic
         self._llm_call_count: int = 0
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
@@ -1046,6 +1053,7 @@ class CycleRunner:
         self._posts_persist_failed: int = 0
         self._posts_attributed: int = 0
         self._api_calls: int = 0
+        self._latency_observations: list[dict[str, Any]] = []
         self._errors: list[str] = []
         # Plan 2026-08-01-002 U4: typed counters surfaced via --json
         # n_errors_by_type. Each key represents a class of tolerated error
@@ -1060,6 +1068,96 @@ class CycleRunner:
             "classifier_flags_invalid": 0,
             "enrichment_quarantined": 0,
         }
+
+    def _wall_now(self) -> datetime:
+        """Return the server-owned wall clock used by U14 evidence."""
+
+        value = self._clock()
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def _now_iso(self) -> str:
+        return self._wall_now().isoformat(timespec="seconds")
+
+    def _record_latency_observations(self, items: list[dict[str, Any]]) -> None:
+        for item in items:
+            tweet_id = str(item.get("id") or item.get("tweet_id") or "")
+            received = item.get("_api_received_at")
+            committed = item.get("_db_committed_at")
+            if tweet_id and received and committed:
+                self._latency_observations.append(
+                    {
+                        "tweet_id": tweet_id,
+                        "api_received_at": received,
+                        "db_committed_at": committed,
+                    }
+                )
+
+    @staticmethod
+    def _page_receipt_timing(
+        items: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], str | None, float | None]:
+        seen: set[tuple[int, str]] = set()
+        rows: list[dict[str, Any]] = []
+        receipt_monos: list[float] = []
+        for item in items:
+            received = item.get("_api_received_at")
+            page = item.get("_api_page_number")
+            if not received or page is None:
+                continue
+            try:
+                page_number = int(page)
+            except (TypeError, ValueError):
+                continue
+            key = (page_number, str(received))
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({"page_number": page_number, "received_at": str(received)})
+            if item.get("_api_received_monotonic") is not None:
+                try:
+                    receipt_monos.append(float(item["_api_received_monotonic"]))
+                except (TypeError, ValueError):
+                    pass
+        rows = sorted(rows, key=lambda row: (row["page_number"], row["received_at"]))
+        first_received = rows[0]["received_at"] if rows else None
+        first_mono = min(receipt_monos) if receipt_monos else None
+        return rows, first_received, first_mono
+
+    def _finish_summary(
+        self,
+        summary: dict[str, Any],
+        *,
+        started_monotonic: float,
+        api: Any | None = None,
+    ) -> dict[str, Any]:
+        """Apply the final server-owned clocks and emit one canonical record."""
+
+        if summary["status"] == "running":
+            summary["status"] = "completed" if not self._errors else "degraded"
+        summary["finished_at"] = self._now_iso()
+        summary["wall_clock_sec"] = round(self._monotonic() - started_monotonic, 3)
+        summary["errors"] = list(self._errors)
+        summary.setdefault("latency", {}).update(
+            summarize_latency(self._latency_observations)
+        )
+        if api is not None or not self.dry_run:
+            try:
+                from scripts.harvest_cost.emit import finalize_and_persist
+
+                emitted = finalize_and_persist(summary, api)
+                if emitted is None:
+                    summary["degraded"]["report_emit_failed"] = 1
+                    self._errors.append("report_emit_failed")
+            except Exception as exc:
+                logger.warning("cycle summary emit failed: %s", exc)
+                summary["degraded"]["report_emit_failed"] = 1
+                self._errors.append("report_emit_failed")
+            if self._errors and summary["status"] == "completed":
+                summary["status"] = "degraded"
+            summary["errors"] = list(self._errors)
+        return summary
 
     # ------------------------------------------------------------------
     # Step 1: Plan
@@ -1226,6 +1324,7 @@ class CycleRunner:
         seen_ids: set[str] = set()
         cur_until = until_time
         still_truncated = False
+        page_offset = 0
 
         max_walks = (
             1
@@ -1261,9 +1360,26 @@ class CycleRunner:
                 self._errors.append(f"fetch.{call.call_id}: {exc}")
                 return all_items, ("error" if not all_items else "truncated")
 
+            response_wall = self._wall_now()
+            response_mono = self._monotonic()
             self._api_calls += 1
             new_on_pass = 0
+            max_observed_page = 0
+            fallback_received_at = response_wall.isoformat()
             for it in items or []:
+                # The concrete client stamps the exact page receipt. Fakes
+                # and compatibility clients do not, so preserve a server-
+                # owned response clock rather than falling back to X.created_at.
+                if "_api_received_at" not in it:
+                    it["_api_received_at"] = fallback_received_at
+                it.setdefault("_api_received_monotonic", response_mono)
+                try:
+                    local_page = max(1, int(it.get("_api_page_number", 1)))
+                except (TypeError, ValueError):
+                    local_page = 1
+                page_number = page_offset + local_page
+                it["_api_page_number"] = page_number
+                max_observed_page = max(max_observed_page, local_page)
                 tid = str(it.get("id") or it.get("tweet_id") or "")
                 if tid and tid in seen_ids:
                     continue
@@ -1271,6 +1387,8 @@ class CycleRunner:
                     seen_ids.add(tid)
                 all_items.append(it)
                 new_on_pass += 1
+
+            page_offset += max_observed_page or 1
 
             if not truncated:
                 still_truncated = False
@@ -1423,7 +1541,7 @@ class CycleRunner:
             tweet_id = str(item.get("id") or item.get("tweet_id") or "?")
             receipt = item.get("_api_received_monotonic")
             receipt_age = (
-                time.monotonic() - float(receipt) if receipt is not None else 0.0
+                self._monotonic() - float(receipt) if receipt is not None else 0.0
             )
             keep = True
             if receipt_age >= 105:
@@ -1431,7 +1549,7 @@ class CycleRunner:
             elif self._relevancy_llm_call is None:
                 degraded.append(f"relevancy_unavailable:{tweet_id}")
             else:
-                started = time.monotonic()
+                started = self._monotonic()
                 try:
                     verdict = call_binary_relevancy_llm(
                         post_text=item.get("text") or "",
@@ -1439,7 +1557,7 @@ class CycleRunner:
                         brand_hints=",".join(brands),
                         llm_call=self._relevancy_llm_call,
                     )
-                    elapsed = time.monotonic() - started
+                    elapsed = self._monotonic() - started
                     if elapsed > self.cfg.harvest.relevancy_timeout_seconds:
                         degraded.append(f"relevancy_timeout_fail_open:{tweet_id}")
                     else:
@@ -1598,6 +1716,10 @@ class CycleRunner:
                         post, brand_ids, mentions, classifications
                     )
                     n_attributed += n_attr
+                # The timestamp is taken after the atomic block exits: this
+                # is the server-owned commit boundary, including duplicate
+                # updates. It is intentionally not Post.fetched_at.
+                it["_db_committed_at"] = self._wall_now().isoformat()
             except Exception as exc:
                 n_failed += 1
                 tid = str(it.get("id") or it.get("tweet_id") or "?")
@@ -2031,6 +2153,7 @@ class CycleRunner:
         deadline: Any,
         include_quarantined: bool = False,
         quarantined_only: bool = False,
+        cycle_started_monotonic: float | None = None,
     ) -> list[dict[str, Any]]:
         """Replay a bounded number of oldest pending residual windows."""
 
@@ -2038,6 +2161,11 @@ class CycleRunner:
             tuple(sorted(_cursor_key(call).items())): call for call in calls
         }
         reports: list[dict[str, Any]] = []
+        cycle_started_monotonic = (
+            self._monotonic()
+            if cycle_started_monotonic is None
+            else cycle_started_monotonic
+        )
         request_envelope = (
             float(getattr(api, "timeout_s", 60))
             * (int(getattr(api, "max_retries", 2)) + 1)
@@ -2070,7 +2198,11 @@ class CycleRunner:
                 "call_id": claim.call_id,
                 "attempt": claim.attempts,
                 "status": "error",
+                "execution_kind": "backlog_replay",
+                "replay": True,
+                "request_started_at": self._wall_now().isoformat(),
             }
+            replay_started = self._monotonic()
             try:
                 if call is None:
                     report["status"] = return_claim(
@@ -2091,6 +2223,22 @@ class CycleRunner:
                     ),
                     deadline=deadline,
                 )
+                replay_finished = self._monotonic()
+                replay_page_receipts, first_page_received_at, first_page_mono = (
+                    self._page_receipt_timing(items)
+                )
+                if replay_page_receipts:
+                    report["page_receipts"] = replay_page_receipts
+                    report["first_page_received_at"] = first_page_received_at
+                    first_page_mono = first_page_mono or replay_finished
+                    report["cycle_start_to_first_page_ms"] = max(
+                        0, round((first_page_mono - cycle_started_monotonic) * 1000)
+                    )
+                else:
+                    report["first_page_received_at"] = self._wall_now().isoformat()
+                    report["cycle_start_to_first_page_ms"] = max(
+                        0, round((replay_finished - cycle_started_monotonic) * 1000)
+                    )
                 persist_failed = 0
                 kept: list[dict[str, Any]] = []
                 if items:
@@ -2141,6 +2289,7 @@ class CycleRunner:
                     self._posts_updated += updated
                     self._posts_persist_failed += persist_failed
                     self._posts_attributed += attributed
+                    self._record_latency_observations(kept)
                     report["n_inserted"] = inserted
                     report["n_updated"] = updated
                     report["n_persist_failed"] = persist_failed
@@ -2160,6 +2309,7 @@ class CycleRunner:
                         llm_drops=llm_drops,
                         relevancy_degraded=relevancy_degraded,
                     )
+                    report["n_attributed"] = attributed
 
                 if outcome in {"error", "length_cap_exceeded"} or persist_failed:
                     report["status"] = return_claim(
@@ -2201,6 +2351,7 @@ class CycleRunner:
                     max_age_hours=backlog_cfg.max_age_hours,
                 )
                 self._errors.append(f"backlog.{claim.call_id}: {exc}")
+            report["wall_clock_ms"] = round((self._monotonic() - replay_started) * 1000)
             reports.append(report)
         return reports
 
@@ -2214,6 +2365,7 @@ class CycleRunner:
         index, search_terms = _build_brand_index(enabled_models)
         search_terms = {**search_terms, **_load_brand_search_terms()}
         kept_all: list[dict[str, Any]] = []
+        replay_started_monotonic = self._monotonic()
         deadline = self.cfg.harvest.start_deadline()
         reports = self._replay_backlog(
             calls=calls,
@@ -2225,6 +2377,7 @@ class CycleRunner:
             deadline=deadline,
             include_quarantined=include_quarantined,
             quarantined_only=include_quarantined,
+            cycle_started_monotonic=replay_started_monotonic,
         )
         post_fetch = self._run_post_fetch(
             kept_all,
@@ -2248,12 +2401,14 @@ class CycleRunner:
 
         Returns a run summary dict (compatible with LATEST.json shape).
         """
+        cycle_started_wall = self._wall_now()
+        cycle_started_at = cycle_started_wall.isoformat(timespec="seconds")
+        t0 = self._monotonic()
         run_id = (
-            f"{_now_iso().replace(':', '').replace('+', '_').replace('-', '')}"
+            f"{cycle_started_at.replace(':', '').replace('+', '_').replace('-', '')}"
             f"-{uuid.uuid4().hex[:8]}"
         )
-        started_at = _now_iso()
-        t0 = time.monotonic()
+        started_at = cycle_started_at
         deadline = self.cfg.harvest.start_deadline()
 
         summary: dict[str, Any] = {
@@ -2264,7 +2419,10 @@ class CycleRunner:
             "cycle_kind": self.cycle_kind,
             "dry_run": self.dry_run,
             "degraded": {},
+            "planned_calls": [],
             "calls": [],
+            "backlog_replays": [],
+            "latency": {"cycle_started_at": cycle_started_at},
             "totals": {
                 "n_calls_planned": 0,
                 "n_calls_run": 0,
@@ -2285,10 +2443,7 @@ class CycleRunner:
             logger.exception("CycleRunner.run: plan_calls failed: %s", exc)
             summary["status"] = "aborted"
             summary["degraded"]["plan"] = str(exc)
-            summary["finished_at"] = _now_iso()
-            summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-            summary["errors"] = self._errors
-            return summary
+            return self._finish_summary(summary, started_monotonic=t0)
 
         summary["totals"]["n_calls_planned"] = len(calls)
 
@@ -2301,46 +2456,35 @@ class CycleRunner:
                 summary["degraded"]["backfill"] = (
                     "No matching calls in requested batch — may already be done."
                 )
-                summary["finished_at"] = _now_iso()
-                summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-                summary["errors"] = self._errors
-                return summary
+                return self._finish_summary(summary, started_monotonic=t0)
 
         if not calls:
             summary["status"] = "degraded"
             summary["degraded"]["no_calls"] = (
                 "No calls planned — check X_MONITOR_LIST_ID in settings"
             )
-            summary["finished_at"] = _now_iso()
-            summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-            summary["errors"] = self._errors
-            return summary
+            return self._finish_summary(summary, started_monotonic=t0)
 
-        # Record planned calls in summary
+        # Record planned metadata separately. ``calls`` is reserved for one
+        # row per executed live call; conflating these two lists previously
+        # made cost reports double-count planned rows.
         for call in calls:
-            summary["calls"].append({
+            summary["planned_calls"].append({
                 "call_id": call.call_id,
                 "call_kind": call.call_kind,
                 "brand_id": call.brand_id,
                 "bucket": call.bucket,
                 "query_length": call.query_length,
-                "status": "dry_run" if self.dry_run else "planned",
-                "query_string": (
-                    call.query_string if self.dry_run else "[redacted]"
-                ),
             })
 
         # ---- Dry-run: stop here ----
         if self.dry_run:
             summary["status"] = "completed"
-            summary["finished_at"] = _now_iso()
-            summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-            summary["errors"] = self._errors
             logger.info(
-                "CycleRunner.run (dry-run): %d calls planned in %.2fs",
-                len(calls), summary["wall_clock_sec"],
+                "CycleRunner.run (dry-run): %d calls planned",
+                len(calls),
             )
-            return summary
+            return self._finish_summary(summary, started_monotonic=t0)
 
         # ---- Live run: fetch + attribute + persist ----
         # Check skip_fetch flag
@@ -2349,10 +2493,7 @@ class CycleRunner:
         if skip_fetch:
             logger.info("CycleRunner.run: --skip-fetch active; plan only.")
             summary["status"] = "completed"
-            summary["finished_at"] = _now_iso()
-            summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-            summary["errors"] = self._errors
-            return summary
+            return self._finish_summary(summary, started_monotonic=t0)
 
         # Build TwitterAPI client from environment
         try:
@@ -2361,10 +2502,7 @@ class CycleRunner:
             logger.error("CycleRunner.run: cannot create API client: %s", exc)
             summary["status"] = "aborted"
             summary["degraded"]["api_client"] = str(exc)
-            summary["finished_at"] = _now_iso()
-            summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-            summary["errors"] = self._errors
-            return summary
+            return self._finish_summary(summary, started_monotonic=t0)
 
         # Load enabled models and build keyword index once per cycle
         brand_filter_str = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
@@ -2381,9 +2519,11 @@ class CycleRunner:
         list_id = _resolve_x_monitor_list_id(self.cfg)
 
         kept_all: list[dict[str, Any]] = []
+        first_page_max_ms = 0
 
         for call in calls:
-            call_t0 = time.monotonic()
+            call_t0 = self._monotonic()
+            request_started_at = self._wall_now().isoformat()
             call_entry: dict[str, Any] = {
                 "call_id": call.call_id,
                 "call_kind": call.call_kind,
@@ -2391,15 +2531,20 @@ class CycleRunner:
                 "bucket": call.bucket,
                 "query_length": call.query_length,
                 "status": "error",
+                "execution_kind": "live",
+                "replay": False,
                 "n_results": 0,
                 "n_kept": 0,
                 "n_inserted": 0,
+                "n_updated": 0,
+                "n_persist_failed": 0,
+                "request_started_at": request_started_at,
             }
 
             # Resolve this call's time window from its cursor (or the
             # operator-supplied override) BEFORE fetching, so the value we
             # later store is exactly the upper bound we queried.
-            call_now = datetime.now(timezone.utc)
+            call_now = self._wall_now()
             since_epoch, until_epoch, cursor_owned = self._resolve_window(
                 call, now=call_now
             )
@@ -2412,6 +2557,29 @@ class CycleRunner:
                 api,
                 window=(since_epoch, until_epoch),
                 tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
+            )
+            fetch_finished_mono = self._monotonic()
+            fetch_finished_wall = self._wall_now()
+            page_receipts, first_page_received_at, first_page_mono = (
+                self._page_receipt_timing(items)
+            )
+            if page_receipts:
+                call_entry["page_receipts"] = page_receipts
+                first_page_mono = first_page_mono or fetch_finished_mono
+            else:
+                # Empty responses have no tweet carrying the receipt clock;
+                # the response return is the server-owned page receipt.
+                first_page_received_at = fetch_finished_wall.isoformat()
+                first_page_mono = fetch_finished_mono
+                call_entry["page_receipts"] = [
+                    {"page_number": 1, "received_at": first_page_received_at}
+                ]
+            call_entry["first_page_received_at"] = first_page_received_at
+            call_entry["cycle_start_to_first_page_ms"] = max(
+                0, round((first_page_mono - t0) * 1000)
+            )
+            first_page_max_ms = max(
+                first_page_max_ms, call_entry["cycle_start_to_first_page_ms"]
             )
             if call.call_id == "A" and list_id is not None and items:
                 observation = observe_call_a_authors(
@@ -2446,6 +2614,8 @@ class CycleRunner:
                 )
                 call_entry["status"] = outcome
                 call_entry["cursor_advanced"] = False
+                call_entry["fetch_n"] = call_entry.get("n_results", 0)
+                call_entry["wall_clock_ms"] = round((self._monotonic() - call_t0) * 1000)
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
                 continue
@@ -2500,6 +2670,8 @@ class CycleRunner:
                     else:
                         call_entry["status"] = "truncated"
                         call_entry["cursor_advanced"] = False
+                call_entry["fetch_n"] = call_entry.get("n_results", 0)
+                call_entry["wall_clock_ms"] = round((self._monotonic() - call_t0) * 1000)
                 summary["calls"].append(call_entry)
                 summary["totals"]["n_calls_run"] += 1
                 continue
@@ -2567,9 +2739,11 @@ class CycleRunner:
             self._posts_inserted += n_inserted
             self._posts_updated += n_updated
             self._posts_persist_failed += n_persist_failed
+            self._record_latency_observations(kept)
             call_entry["n_inserted"] = n_inserted
             call_entry["n_updated"] = n_updated
             call_entry["n_persist_failed"] = n_persist_failed
+            call_entry["n_attributed"] = _n_attributed
 
             # Accumulate for post-fetch
             seen_ids: set[str] = {
@@ -2648,7 +2822,8 @@ class CycleRunner:
                         self._errors.append(
                             f"cursor.{call.call_id}: completed sweep could not advance"
                         )
-            call_entry["wall_clock_sec"] = round(time.monotonic() - call_t0, 3)
+            call_entry["wall_clock_sec"] = round(self._monotonic() - call_t0, 3)
+            call_entry["wall_clock_ms"] = round(call_entry["wall_clock_sec"] * 1000)
 
             call_entry["fetch_n"] = call_entry.get("n_results", 0)
             nr = call_entry["fetch_n"]
@@ -2667,19 +2842,39 @@ class CycleRunner:
             tr["keep_rate_mean"] = round(sum(rates) / len(rates), 4) if rates else 0.0
             tr["keep_rate_max"] = round(max(rates), 4) if rates else 0.0
 
-        summary["tip_sweep_wall_clock_sec"] = round(time.monotonic() - t0, 3)
+        summary["tip_sweep_wall_clock_sec"] = round(self._monotonic() - t0, 3)
+        tip_sweep_target_ms = int(self.cfg.harvest.tip_sweep_target_seconds * 1000)
         summary["tip_sweep_within_target"] = (
-            summary["tip_sweep_wall_clock_sec"]
-            <= self.cfg.harvest.tip_sweep_target_seconds
+            first_page_max_ms <= tip_sweep_target_ms
         )
+        summary["latency"]["tip_sweep_wall_clock_ms"] = round(
+            summary["tip_sweep_wall_clock_sec"] * 1000
+        )
+        summary["latency"]["tip_sweep_first_page_max_ms"] = max(
+            first_page_max_ms, 0
+        )
+        summary["latency"]["tip_sweep_target_ms"] = tip_sweep_target_ms
+        summary["latency"]["tip_sweep_within_target"] = bool(
+            summary["tip_sweep_within_target"]
+        )
+        if not summary["tip_sweep_within_target"]:
+            summary["degraded"]["tip_sweep_first_page_timeout"] = 1
+            self._errors.append("tip_sweep_first_page_timeout")
 
         # ---- Bounded post-fetch queue: immediately after all live tips ----
         if summary["status"] != "aborted":
+            post_fetch_started = self._monotonic()
             pf_counters = self._run_post_fetch(
                 kept_all,
                 run_id=run_id,
                 deadline=deadline,
             )
+            post_fetch_completed_at = self._wall_now().isoformat()
+            pf_counters["completed_at"] = post_fetch_completed_at
+            pf_counters["wall_clock_ms"] = round(
+                (self._monotonic() - post_fetch_started) * 1000
+            )
+            summary["latency"]["post_fetch_completed_at"] = post_fetch_completed_at
             summary.setdefault("post_fetch", {}).update(pf_counters)
             if pf_counters.get("n_translator_unavailable"):
                 summary["degraded"]["translator_unavailable"] = True
@@ -2726,6 +2921,7 @@ class CycleRunner:
                 kept_all=kept_all,
                 run_id=run_id,
                 deadline=deadline,
+                cycle_started_monotonic=t0,
             )
 
         # ---- One-shot metrics refresh (plan 2026-08-10-002) ----
@@ -2754,11 +2950,7 @@ class CycleRunner:
         summary["totals"]["n_persist_failed"] = self._posts_persist_failed
         summary["totals"]["n_attributed"] = self._posts_attributed
 
-        if summary["status"] == "running":
-            summary["status"] = "completed" if not self._errors else "degraded"
-        summary["finished_at"] = _now_iso()
-        summary["wall_clock_sec"] = round(time.monotonic() - t0, 3)
-        summary["errors"] = self._errors
+        summary = self._finish_summary(summary, started_monotonic=t0, api=api)
 
         logger.info(
             "CycleRunner.run: %d calls, %d posts seen, %d inserted, "
@@ -2769,12 +2961,4 @@ class CycleRunner:
             summary["totals"]["n_attributed"],
             summary["wall_clock_sec"],
         )
-        # Durable cycle summary for cost tooling (plan 2026-08-10-003).
-        # Never aborts the cycle if the write fails.
-        try:
-            from scripts.harvest_cost.emit import finalize_and_persist
-
-            finalize_and_persist(summary, api)
-        except Exception as exc:
-            logger.warning("cycle summary emit failed: %s", exc)
         return summary

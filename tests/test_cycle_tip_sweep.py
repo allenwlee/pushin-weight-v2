@@ -111,3 +111,8 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
     assert events == expected
     assert result["totals"]["n_calls_run"] == 7
     assert result["tip_sweep_within_target"] is True
+    assert [row["call_id"] for row in result["planned_calls"]] == call_ids
+    assert [row["call_id"] for row in result["calls"]] == call_ids
+    assert all(row["execution_kind"] == "live" for row in result["calls"])
+    assert all(row["replay"] is False for row in result["calls"])
+    assert len(result["calls"]) == len(result["planned_calls"])
