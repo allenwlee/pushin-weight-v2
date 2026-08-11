@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from core.models import SentimentKey
+from monitor.views import _post_matches_filter
 from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
 
 
@@ -39,14 +41,57 @@ FAKE_ROW = {
     "account": {"handle": "@kimi_moonshot", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
 }
 
-CHART_PAYLOAD = {"days": [], "series": {}, "colors": {}, "totals": {}, "granularity": "day", "stacked": True, "window_days": 1, "fetched_at": datetime.now(timezone.utc).isoformat(), "applied_filters": {}}
+COMPUTED_AT = datetime.now(timezone.utc).isoformat()
+CHART_PAYLOAD = {
+    "days": [],
+    "series": {},
+    "colors": {},
+    "totals": {},
+    "granularity": "day",
+    "stacked": {},
+    "window_days": 1,
+    "computed_at": COMPUTED_AT,
+    "pulse": {
+        "window_days": 1,
+        "computed_at": COMPUTED_AT,
+        "entries": [{
+            "nickname": "qwen",
+            "display_name": "Qwen",
+            "display_name_en": "Qwen",
+            "display_name_zh_cn": "Qwen",
+            "accent_color": "#f97316",
+            "status": "numeric",
+            "direction": "up",
+            "delta_percent": 50,
+            "delta_magnitude": 50,
+        }],
+    },
+    "applied_filters": {},
+}
+
+BRAND_CONTEXT = [
+    {
+        "nickname": "qwen",
+        "display_name": "Qwen",
+        "display_name_en": "Qwen",
+        "display_name_zh_cn": "Qwen",
+        "accent_color": "#f97316",
+    },
+    {
+        "nickname": "anthropic",
+        "display_name": "Anthropic",
+        "display_name_en": "Anthropic",
+        "display_name_zh_cn": "Anthropic",
+        "accent_color": "#d97706",
+    },
+]
 
 
 def _patches_active():
     return [
         patch("monitor.views._get_feed_posts", return_value=[SimpleNamespace(tweet_id="1")]),
         patch("monitor.views._enrich_posts_with_classifications", return_value=[]),
-        patch("monitor.views._build_brands_context", return_value=[]),
+        patch("monitor.views._build_brands_context", return_value=BRAND_CONTEXT),
         patch("monitor.views._build_home_chart_payload", return_value=CHART_PAYLOAD),
         patch("monitor.views._multi_top_voices", return_value=[]),
         patch("monitor.views._post_to_wire", return_value=FAKE_ROW),
@@ -55,6 +100,12 @@ def _patches_active():
 
 class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
     """Pins mockup-canon U3 filter-pill surface on /."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        SentimentKey.objects.create(key="positive")
+        SentimentKey.objects.create(key="mixed")
 
     def _get_home(self):
         patches = _patches_active()
@@ -128,3 +179,84 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         for group in ("brands", "discourse", "role", "lang", "sentiment", "nationalism", "unsanctioned"):
             self.assertIn(f'data-group="{group}"', body,
                           f"filter-pill for {group} missing")
+
+    def test_fixture_backed_brand_lenses_and_sentiment_grid_are_populated(self):
+        body = self._get_home().content.decode("utf-8")
+        open_grid = body.split('data-tier-grid="open"', 1)[1].split('data-tier-grid="closed"', 1)[0]
+        closed_grid = body.split('data-tier-grid="closed"', 1)[1].split('</div>', 1)[0]
+        sentiment_grid = body.split('data-group="sentiment"', 1)[1].split('data-group="nationalism"', 1)[0]
+        self.assertIn('value="qwen"', open_grid)
+        self.assertIn('value="anthropic"', closed_grid)
+        self.assertIn('value="positive"', sentiment_grid)
+        self.assertIn('value="mixed"', sentiment_grid)
+
+    def test_pulse_uses_list_items_around_native_toggle_buttons(self):
+        body = self._get_home().content.decode("utf-8")
+        pulse = body.split('data-pw-pulse ', 1)[1].split('</section>', 1)[0]
+        self.assertIn('<li', pulse)
+        self.assertIn('data-pw-pulse-entry="qwen"', pulse)
+        self.assertIn('aria-pressed="false"', pulse)
+        self.assertIn('aria-label="Qwen, up 50 percent"', pulse)
+        self.assertNotRegex(pulse, r'<button[^>]+role="listitem"')
+
+    def test_filter_matrix_missing_values_match_only_explicit_buckets(self):
+        sample = {
+            "brand_nicknames": ["qwen"],
+            "discourse": ["genuine_hype"],
+            "post_types": ["buzz_releases"],
+            "sentiments": ["positive"],
+            "role_key": None,
+            "lang_detected": "",
+            "cn_nationalism": "",
+            "us_nationalism": None,
+            "unsanctioned": False,
+        }
+        self.assertTrue(_post_matches_filter(sample, {"role": ["other"]}))
+        self.assertTrue(_post_matches_filter(sample, {"lang": ["undetected"]}))
+        self.assertTrue(_post_matches_filter(sample, {"cn_nationalism": ["none"]}))
+        self.assertTrue(_post_matches_filter(sample, {"us_nationalism": ["none"]}))
+        self.assertFalse(_post_matches_filter(sample, {"lang": ["en"]}))
+        self.assertFalse(_post_matches_filter(sample, {"sentiment": []}))
+        self.assertTrue(_post_matches_filter({**sample, "unsanctioned": True}, {"unsanctioned": "any"}))
+
+    def test_filter_matrix_all_partial_empty_or_within_and_across_axes(self):
+        sample = {
+            "brand_nicknames": ["qwen", "deepseek"],
+            "discourse": ["genuine_hype"],
+            "post_types": ["buzz_releases"],
+            "sentiments": ["mixed"],
+            "role_key": "official",
+            "lang_detected": "en",
+            "cn_nationalism": "pro",
+            "us_nationalism": "mild_pro",
+            "unsanctioned": False,
+        }
+        matrix = {
+            "brands": ("qwen", "anthropic"),
+            "discourse": ("genuine_hype", "sarcasm"),
+            "post_types": ("buzz_releases", "hands_on_usage"),
+            "sentiment": ("mixed", "positive"),
+            "role": ("official", "staff"),
+            "lang": ("en", "ja"),
+            "cn_nationalism": ("pro", "anti"),
+            "us_nationalism": ("mild_pro", "anti"),
+        }
+        for axis, (matching, nonmatching) in matrix.items():
+            with self.subTest(axis=axis, shape="all"):
+                self.assertTrue(_post_matches_filter(sample, {axis: "__all__"}))
+            with self.subTest(axis=axis, shape="or"):
+                self.assertTrue(_post_matches_filter(sample, {axis: [nonmatching, matching]}))
+            with self.subTest(axis=axis, shape="partial-miss"):
+                self.assertFalse(_post_matches_filter(sample, {axis: [nonmatching]}))
+            with self.subTest(axis=axis, shape="empty"):
+                self.assertFalse(_post_matches_filter(sample, {axis: []}))
+
+        self.assertTrue(_post_matches_filter(sample, {
+            "brands": ["qwen"], "sentiment": ["mixed"], "lang": ["en"],
+        }))
+        self.assertFalse(_post_matches_filter(sample, {
+            "brands": ["qwen"], "sentiment": ["positive"], "lang": ["en"],
+        }))
+        self.assertTrue(_post_matches_filter(sample, {"unsanctioned": "off"}))
+        self.assertFalse(_post_matches_filter(sample, {"unsanctioned": "only"}))
+        self.assertTrue(_post_matches_filter(sample, {"unsanctioned": "any"}))

@@ -40,6 +40,9 @@ data/_qt_daily_marker
 # Worktree-only runtime files (NOT committed, NOT shared with main)
 run_dashboard*.py
 
+# Django collectstatic output (rebuilt from monitor/static during deploy)
+/staticfiles/
+
 # Python
 __pycache__/
 *.pyc

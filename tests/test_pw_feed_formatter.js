@@ -27,7 +27,15 @@ const tail = src.substring(idx);
 const Module = require('module');
 const sandbox = new Module('pw-feed-formatter');
 sandbox._compile(head + '\n' + tail + '\n', 'pw-feed.js');
-const { formatRelative, formatLocalTooltip, enrichmentStatusHtml } = sandbox.exports;
+const {
+  createRequestGate,
+  formatRelative,
+  formatLocalTooltip,
+  enrichmentStatusHtml,
+  hydrateRows,
+  replaceRows,
+  isFeedPayload,
+} = sandbox.exports;
 
 let passed = 0;
 let failed = 0;
@@ -67,7 +75,7 @@ assertEq(formatLocalTooltip(null), '', 'null input');
 assertEq(formatLocalTooltip('not a date'), '', 'invalid string');
 assertEq(formatLocalTooltip('2026-07-15T21:00:00+00:00').length > 0, true, 'ISO input: non-empty tooltip');
 
-console.log('\n--- enrichmentStatusHtml ---');
+console.log('\\n--- enrichmentStatusHtml ---');
 assertEq(
   enrichmentStatusHtml({ enrichment_status: 'pending', enrichment_status_label: 'enrichment pending' }),
   '<span class="enrichment-status enrichment-status-pending" role="status">enrichment pending</span>',
@@ -121,6 +129,7 @@ if (!bqMatch) {
   assertEq(out1.indexOf('cursor=null') < 0, true, 'buildQuery omits null cursor');
   assertEq(out1.indexOf('limit=50') >= 0, true, 'buildQuery includes limit');
   assertEq(out1.indexOf('sort=created_at') >= 0, true, 'buildQuery includes sort');
+  assertEq(out1.indexOf('window=1') >= 0, true, 'buildQuery includes the active window');
 
   console.log('\n--- buildQuery handles empty filters ---');
   const out2 = buildQuery(
@@ -136,10 +145,17 @@ if (!bqMatch) {
   console.log('\n--- buildQuery forwards cursor, order ---');
   const out3 = buildQuery(
     { brands: ['minimax'] },
-    { cursor: '2026-07-15T20:00:00+00:00|tweet1', sort: 'created_at', order: 'asc', limit: 25 }
+    {
+      cursor: '2026-07-15T20:00:00+00:00|tweet1',
+      sort: 'created_at',
+      order: 'asc',
+      limit: 25,
+      locale: 'zh_hans',
+    }
   );
   assertEq(out3.indexOf('cursor=2026-07-15T20') >= 0, true, 'buildQuery includes cursor');
   assertEq(out3.indexOf('order=asc') >= 0, true, 'buildQuery includes order=asc');
+  assertEq(out3.indexOf('locale=zh_hans') >= 0, true, 'buildQuery includes locale snapshot');
 }
 
 // v22 uses a data hook without a root id; legacy /internal still has #feed.
@@ -147,6 +163,118 @@ const apostrophe = String.fromCharCode(39);
 const rootSelector = "return $(" + apostrophe + "[data-pw-feed]" + apostrophe + ") || $(" + apostrophe + "#feed" + apostrophe + ");";
 console.log("\n--- getFeedRoot selector migration ---");
 assertEq(feedSrc.includes(rootSelector), true, "getFeedRoot prefers data-pw-feed with #feed fallback");
+
+// ---------------------------------------------------------------------------
+// V22 feed metadata: the server owns tint selection.  The browser only paints
+// marker glyphs from raw attributes, even when those attributes intentionally
+// disagree with the server-provided tint class.
+// ---------------------------------------------------------------------------
+
+function classList(initial) {
+  const values = new Set(initial || []);
+  return {
+    add: (name) => values.add(name),
+    remove: (name) => values.delete(name),
+    has: (name) => values.has(name),
+  };
+}
+
+function markerRow(attrs, serverTint) {
+  const shell = { className: 'feed-row-shell ' + serverTint };
+  const sentiment = { textContent: '' };
+  const postType = { textContent: '' };
+  const nationalism = { textContent: '', innerHTML: '', classList: classList() };
+  const unsanctioned = { textContent: '', classList: classList() };
+  const nodes = {
+    '.feed-row-shell': shell,
+    '[data-sig-sentiment]': sentiment,
+    '[data-sig-post-type]': postType,
+    '[data-sig-nat]': nationalism,
+    '[data-sig-unsanctioned]': unsanctioned,
+  };
+  return {
+    shell,
+    sentiment,
+    getAttribute: (name) => attrs[name] || '',
+    querySelector: (selector) => nodes[selector] || null,
+    querySelectorAll: () => [],
+  };
+}
+
+console.log('\n--- server-owned tint and marker hydration ---');
+const serverTintRow = markerRow(
+  {
+    'data-sentiments': 'negative',
+    'data-post-types': 'buzz_releases',
+    'data-nat-cn': 'mild_pro',
+    'data-unsanctioned': '1',
+  },
+  'tint-pos-mixed'
+);
+hydrateRows([serverTintRow]);
+assertEq(
+  serverTintRow.shell.className.includes('tint-pos-mixed'),
+  true,
+  'hydrateRows preserves the server-owned tint when raw sentiments differ'
+);
+assertEq(serverTintRow.sentiment.textContent, '🙁', 'hydrateRows still hydrates sentiment marker glyphs');
+
+console.log('\n--- valid empty and malformed payload handling ---');
+const feedRoot = { getAttribute: (name) => name === 'data-pw-empty-text' ? 'no posts in window' : '' };
+global.document = { querySelector: (selector) => selector === '[data-pw-feed]' ? feedRoot : null };
+const emptyBody = { innerHTML: 'existing classified row' };
+replaceRows(emptyBody, []);
+assertEq(
+  emptyBody.innerHTML.includes('no posts in window'),
+  true,
+  'a valid empty payload renders the localized empty state'
+);
+assertEq(isFeedPayload({ rows: [] }), true, 'an empty rows array is a valid feed payload');
+assertEq(isFeedPayload({ rows: null }), false, 'a malformed rows value is rejected before replacement');
+assertEq(isFeedPayload({ rows: [null] }), false, 'a null row is rejected before hydration');
+assertEq(
+  isFeedPayload({ rows: [{ tweet_id: 'optional-only' }], next_cursor: null }),
+  true,
+  'optional row data remains valid'
+);
+assertEq(
+  isFeedPayload({ rows: [], next_cursor: { stale: true } }),
+  false,
+  'a malformed cursor cannot corrupt pagination state'
+);
+
+console.log('\n--- latest-request gate and timeout cancellation ---');
+const controllers = [];
+const timers = [];
+const clearedTimers = [];
+const gate = createRequestGate({
+  createController: () => {
+    const controller = {
+      signal: {},
+      aborted: false,
+      abort() { this.aborted = true; },
+    };
+    controllers.push(controller);
+    return controller;
+  },
+  setTimer: (fn) => {
+    timers.push(fn);
+    return timers.length;
+  },
+  clearTimer: (id) => clearedTimers.push(id),
+});
+const oldTicket = gate.start(15000);
+const newTicket = gate.start(15000);
+assertEq(controllers[0].aborted, true, 'starting a newer request aborts the older request');
+assertEq(gate.isCurrent(oldTicket), false, 'older request token becomes stale');
+assertEq(gate.isCurrent(newTicket), true, 'latest request token may commit');
+assertEq(gate.finish(oldTicket), false, 'stale completion cannot release latest request state');
+assertEq(gate.isCurrent(newTicket), true, 'stale completion leaves the latest request active');
+timers[1]();
+assertEq(controllers[1].aborted, true, 'timeout aborts the current request');
+assertEq(gate.finish(newTicket), true, 'current completion releases request state');
+assertEq(gate.isCurrent(newTicket), false, 'finished request cannot commit again');
+assertEq(clearedTimers.includes(2), true, 'finishing clears the active timeout');
 
 console.log('\n--- summary ---');
 console.log(passed + ' passed, ' + failed + ' failed');

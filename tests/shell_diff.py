@@ -132,6 +132,16 @@ def _children(node: dict[str, Any]) -> list[dict[str, Any]]:
     return [child for child in node.get("children", []) if child.get("tag") != "#text" or child.get("text")]
 
 
+def _is_direct_chart_runtime_projection(node: dict[str, Any]) -> bool:
+    """Identify only the documented data-derived children of the chart shell."""
+    tag = node.get("tag")
+    return (
+        (tag in {"canvas", "svg"} and _has_class(node, "home-chart"))
+        or (tag == "div" and _has_class(node, "legend"))
+        or (tag == "p" and _has_class(node, "chart-state"))
+    )
+
+
 def _compare_nodes(expected: dict[str, Any], actual: dict[str, Any], *, region: str, selector: str, path: str) -> Difference | None:
     if expected["tag"] != actual["tag"]:
         return Difference(region, selector, "tag", path, expected["tag"], actual["tag"])
@@ -149,6 +159,19 @@ def _compare_nodes(expected: dict[str, Any], actual: dict[str, Any], *, region: 
     if _is_data_area(expected) or _is_data_area(actual):
         return None
     expected_children, actual_children = _children(expected), _children(actual)
+    if region == "chart" and path == "section.home-chart-wrap":
+        # The mockup authors a static SVG and legend. Production deliberately
+        # projects those data-derived children as a live Chart.js canvas,
+        # payload legend, and transient status. The surrounding section stays
+        # strict, and any unrecognized direct child still fails below.
+        expected_children = [
+            child for child in expected_children
+            if not _is_direct_chart_runtime_projection(child)
+        ]
+        actual_children = [
+            child for child in actual_children
+            if not _is_direct_chart_runtime_projection(child)
+        ]
     if len(expected_children) != len(actual_children):
         return Difference(region, selector, "ordered-children", path, len(expected_children), len(actual_children))
     for index, (expected_child, actual_child) in enumerate(zip(expected_children, actual_children)):
@@ -221,9 +244,9 @@ def assert_data_shape(spec: MockupSpec, fixture: dict[str, Any], rendered_html: 
     expected_count = len(fixture["feed"]["items"])
     if len(rows) != expected_count:
         raise AssertionError(f"v22 data-shape mismatch: selector='.feed-row'; expected_count={expected_count}; actual_count={len(rows)}; locale={locale!r}; viewport={viewport!r}; oracle_source={str(spec.source)!r}")
-    chart = select_one(rendered, selector="svg.home-chart", locale=locale, viewport=viewport, oracle_source=str(spec.source))
+    chart = select_one(rendered, selector="canvas.home-chart", locale=locale, viewport=viewport, oracle_source=str(spec.source))
     payload = json.loads(chart["attrs"].get("data-home", "{}"))
     expected_series = len(fixture["chart"]["series"])
     actual_series = len(payload.get("series", {}))
     if actual_series != expected_series:
-        raise AssertionError(f"v22 data-shape mismatch: selector='svg.home-chart'; expected_series={expected_series}; actual_series={actual_series}; locale={locale!r}; viewport={viewport!r}; oracle_source={str(spec.source)!r}")
+        raise AssertionError(f"v22 data-shape mismatch: selector='canvas.home-chart'; expected_series={expected_series}; actual_series={actual_series}; locale={locale!r}; viewport={viewport!r}; oracle_source={str(spec.source)!r}")
