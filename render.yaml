@@ -66,6 +66,11 @@ services:
           type: keyvalue
           name: pushinweight-headlines-broker
           property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
       - key: X_MONITOR_HEADLINE_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
@@ -97,6 +102,11 @@ services:
           name: pushinweight-db-shadow
           property: connectionString
       - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
         fromService:
           type: keyvalue
           name: pushinweight-headlines-broker
