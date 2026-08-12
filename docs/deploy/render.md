@@ -1,6 +1,6 @@
 # Render runbook — Pushin Weight v2
 
-Last verified against the Render account and Blueprint: 2026-08-12.
+Last verified against the Render account and Blueprint: 2026-08-13.
 
 ## Deployed reality
 
@@ -11,6 +11,8 @@ Production harvesting is synchronous and has one scheduler:
 | `pushinweight-web` | Django/Gunicorn dashboard |
 | `pushinweight-harvest` | Render cron, `*/15 * * * *`, `python manage.py run_cycle` |
 | `pushinweight-db-shadow` | PostgreSQL used by the deployed web/cron services |
+| `pushinweight-headlines-broker` | Available owned Key Value broker for `trend-narratives` |
+| `pushinweight-headlines` | Desired dedicated queue-only worker; must be present before activation |
 | legacy `pushinweight-worker` | Suspended; old SHA; do not reactivate |
 | legacy `pushinweight-beat` | Suspended; old SHA; do not reactivate |
 
@@ -20,14 +22,16 @@ must have exactly one active harvest scheduler and zero active beat services.
 
 ## V22 shared trend narrative candidate
 
-The additive `render.yaml` candidate declares:
+The additive `render.yaml` declares the desired topology:
 
 | Resource | Purpose |
 |---|---|
 | `pushinweight-headlines-broker` | Owned persistent/no-eviction Key Value broker |
 | `pushinweight-headlines` | Dedicated Celery worker consuming only `trend-narratives`, concurrency/prefetch one |
 
-The candidate Blueprint validates locally, but it has **not** been applied.
+The web and harvest services are deployed from the feature revision and the
+broker is available. The dedicated worker must still be reconciled into the
+live inventory before any enqueue/provider/serving control is enabled.
 Provisioning paid services, changing Render resources, migrations on shared
 data, provider calls, and deployment require separate authorization.
 
@@ -52,9 +56,12 @@ These controls are independent and fail closed:
 `X_MONITOR_HEADLINE_API_KEY` belongs only on the headline worker. Do not add it
 to web or the harvest cron and do not reuse translator/classifier routing.
 Record `X_MONITOR_HEADLINE_CONTROL_REVISION` with every control change.
-`DATABASE_URL` is intentionally `sync: false` in the Blueprint: release owners
-must inject the same managed PostgreSQL credential into web, cron, and worker
-without committing it to source control.
+`DATABASE_URL` is declared with `fromDatabase: pushinweight-db-shadow` for web,
+cron, and worker. The existing Render services may retain their prior
+environment value after a Blueprint sync, so the release owner must verify the
+resolved database identity on every service after sync and manually inject the
+same managed credential through Render if a service did not update. Never
+commit a connection string to source control.
 
 The direct Anthropic route is pinned to
 `https://api.anthropic.com` + `claude-haiku-4-5-20251001`. MiniMax is a
@@ -89,9 +96,11 @@ Stop at any failed gate. Record timestamp, deployed SHA, service ID, operator,
 observer, and control revision.
 
 1. Deploy additive migration and code with all three controls off. Verify web
-   fallback, baseline harvest call count, one active cron, and zero beat.
-2. Provision the owned broker and headline-only worker. Do not touch the two
-   suspended legacy services.
+   fallback, baseline harvest call count, one active cron, zero beat, and all
+   three services resolve to `pushinweight-db-shadow`.
+2. Reconcile the owned broker and headline-only worker. Do not touch the two
+   suspended legacy services. If the worker is absent, stop before enabling
+   enqueueing.
 3. Send one safe provider-free task. Verify only `trend-narratives` is consumed,
    concurrency/prefetch are one, and the queue returns to zero.
 4. Enable enqueue on the cron while provider remains off. One real harvest must
@@ -128,3 +137,9 @@ DATABASE_URL=postgresql://fuchitalee@localhost/pushinweight_test \
 node tests/test_pw_chart_filter.js
 python manage.py check --deploy
 ```
+
+The Blueprint validation must show `pushinweight-db-shadow` as the existing
+database resource and must not plan creation of `pushinweight-db`. After a
+sync, verify the database host/resource identity on `pushinweight-web`,
+`pushinweight-harvest`, and `pushinweight-headlines`; a successful deploy alone
+does not prove that an existing service refreshed its environment.

@@ -34,7 +34,9 @@ services:
       - key: X_MONITOR_LIST_ID
         value: "2067062923525275922"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED
         value: "False"
       - fromGroup: pushinweight-secrets
@@ -56,7 +58,9 @@ services:
       - key: DEBUG
         value: "False"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -89,7 +93,9 @@ services:
       - key: X_MONITOR_LIST_ID
         value: "2067062923525275922"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -100,10 +106,6 @@ services:
       - fromGroup: pushinweight-secrets
 
 databases:
-  # --------------------------------------------------------------------------
-  # Managed PostgreSQL
-  # --------------------------------------------------------------------------
-  - name: pushinweight-db
-    plan: free
-    databaseName: pushinweight
-    user: pushinweight
+  # Existing production authority. Naming it here matches the resource instead
+  # of provisioning the never-created `pushinweight-db` candidate.
+  - name: pushinweight-db-shadow
