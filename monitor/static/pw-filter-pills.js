@@ -26,6 +26,7 @@
   if (!bar) return;
   var scroller = bar.querySelector(".filter-bar-scroller");
   var pills = Array.prototype.slice.call(bar.querySelectorAll(".filter-pill"));
+  var touchFallbackTimer = null;
 
   // --- Panel aligns to filter-bar (same width as topbar / pulse / chart cards) ---
   function placeDropdown(pill) {
@@ -57,6 +58,17 @@
       placeDropdown(pill);
       requestAnimationFrame(function () { placeDropdown(pill); });
     });
+  }
+
+  function togglePill(pill) {
+    if (pill.classList.contains("is-open")) closeAll();
+    else openPill(pill);
+  }
+
+  function cancelTouchFallback() {
+    if (touchFallbackTimer == null) return;
+    window.clearTimeout(touchFallbackTimer);
+    touchFallbackTimer = null;
   }
 
   function refreshDots() {
@@ -135,6 +147,23 @@
 
     scroller.addEventListener("pointerup", endDrag);
     scroller.addEventListener("pointercancel", endDrag);
+
+    // Chrome on physical iOS can finish a stationary touch in this scrolling
+    // strip without emitting the synthetic click. Wait briefly so normal
+    // clicks retain authority, then activate only if no click arrived.
+    scroller.addEventListener("touchend", function (e) {
+      var t = e.target;
+      if (!t || !t.closest || t.closest(".filter-dropdown")) return;
+      if (drag.moved || drag._justFinishedDrag) return;
+      var pill = t.closest(".filter-pill");
+      if (!pill || !bar.contains(pill)) return;
+      cancelTouchFallback();
+      touchFallbackTimer = window.setTimeout(function () {
+        touchFallbackTimer = null;
+        drag.pressPill = null;
+        togglePill(pill);
+      }, 80);
+    }, { passive: true });
   }
 
   // iOS WebKit can omit the synthetic click when a tap lands on inert chrome.
@@ -150,6 +179,7 @@
 
   // --- Open / close: semantic click, after drag cancellation settles ---
   document.addEventListener("click", function (e) {
+    cancelTouchFallback();
     var t = e.target;
     if (!t || !t.closest) return;
     if (drag._justFinishedDrag) {
@@ -170,8 +200,7 @@
     drag.pressPill = null;
 
     if (pill && bar.contains(pill) && !(t.closest && t.closest(".filter-dropdown"))) {
-      if (pill.classList.contains("is-open")) closeAll();
-      else openPill(pill);
+      togglePill(pill);
       return;
     }
     if (!t.closest(".filter-bar") && !t.closest(".filter-dropdown")) {
@@ -185,8 +214,7 @@
     if (!pill || !bar.contains(pill)) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      if (pill.classList.contains("is-open")) closeAll();
-      else openPill(pill);
+      togglePill(pill);
     } else if (e.key === "Escape") {
       closeAll();
       pill.focus();

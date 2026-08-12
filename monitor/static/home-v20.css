@@ -997,17 +997,25 @@ body.desktop-shell .desktop-grid .feed-strip {
   min-width: 0;
 }
 .topbar-title-row .locale-toggle {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 72%;
   margin: 0;
+  overflow: hidden;
 }
 .topbar-title-row .locale-toggle button {
   display: inline-flex;
+  flex: 1 1 0;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   height: 28px;
   line-height: 1;
   padding: 0 10px;
   box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 body.desktop-shell .topbar-title-row .locale-toggle { font-size: 12px; }
 body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; font-size: 12px; height: auto; }

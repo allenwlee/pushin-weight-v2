@@ -332,8 +332,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_mobile_click_activation_opens_brand_dropdown(self) -> None:
-        """A semantic mobile click opens a visible, durable Brands menu."""
+    def test_mobile_touchend_fallback_opens_brand_dropdown(self) -> None:
+        """An iOS touch with no synthetic click still opens Brands."""
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -358,7 +358,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     pill = page.locator('[data-group="brands"]')
                     dropdown = pill.locator(".filter-dropdown")
 
-                    pill.dispatch_event("click")
+                    pill.dispatch_event("touchend")
+                    page.wait_for_timeout(150)
 
                     self.assertEqual(pill.get_attribute("aria-expanded"), "true")
                     self.assertTrue(dropdown.is_visible())
@@ -376,6 +377,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     page.locator("h1.app-name").dispatch_event("pointerdown")
                     self.assertEqual(pill.get_attribute("aria-expanded"), "false")
                     self.assertFalse(dropdown.is_visible())
+
+                    pill.dispatch_event("click")
+                    self.assertEqual(pill.get_attribute("aria-expanded"), "true")
+                    self.assertTrue(dropdown.is_visible())
                     self.assertEqual(console_errors, [])
                     self.assertEqual(page_errors, [])
                 finally:
@@ -390,8 +395,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             try:
                 for locale in ("en", "zh_hans"):
                     with self.subTest(locale=locale):
-                        context = browser.new_context(
+                        device = {
                             **playwright.devices["iPhone 13"],
+                            "viewport": {"width": 320, "height": 844},
+                        }
+                        context = browser.new_context(
+                            **device,
                             timezone_id="Asia/Tokyo",
                         )
                         _freeze_clock(context)
@@ -400,6 +409,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             page.goto(
                                 f"{self.live_server_url}/?locale={locale}",
                                 wait_until="networkidle",
+                            )
+                            page.add_style_tag(
+                                content="""
+                                  body.desktop-shell .topbar-title-row .locale-toggle button {
+                                    font-size: 26px !important;
+                                  }
+                                """
                             )
                             boxes = page.evaluate(
                                 """() => {
