@@ -1430,6 +1430,293 @@ class HarvestBacklogWindow(models.Model):
         ]
 
 
+# ============================================================================
+# Trend narrative publication + outbound-call ledger
+# ============================================================================
+
+
+class TrendNarrativeVersion(models.Model):
+    """One durable attempt/version for a shared fixed-window headline.
+
+    The table is intentionally both the publication cache and the outbound
+    call ledger.  A source cycle can consume at most one irreversible provider
+    slot per window, while a valid current row remains servable across later
+    failures.
+    """
+
+    class Status(models.TextChoices):
+        CHECKED = "checked", "Checked"
+        SUPPRESSED = "suppressed", "Suppressed"
+        GENERATING = "generating", "Generating"
+        ABANDONED = "abandoned", "Abandoned"
+        FAILED = "failed", "Failed"
+        PUBLISHED = "published", "Published"
+        SUPERSEDED = "superseded", "Superseded"
+
+    source_cycle_id = models.CharField(max_length=128)
+    window_days = models.PositiveSmallIntegerField()
+    status = models.CharField(max_length=16, choices=Status.choices)
+    semantic_fingerprint = models.CharField(max_length=64, blank=True, default="")
+    publication_epoch = models.PositiveIntegerField(default=1)
+    is_current = models.BooleanField(default=False)
+
+    facts_as_of = models.DateTimeField()
+    generation_facts = models.JSONField(blank=True, null=True)
+    latest_checked_source_cycle_id = models.CharField(
+        max_length=128, blank=True, default=""
+    )
+    latest_checked_as_of = models.DateTimeField(blank=True, null=True)
+    latest_checked_at = models.DateTimeField(blank=True, null=True)
+    latest_checked_facts = models.JSONField(blank=True, null=True)
+    narrative_type = models.CharField(max_length=32, blank=True, default="")
+    coverage_state = models.CharField(max_length=32, blank=True, default="")
+
+    primary_brand = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
+        db_column="primary_brand_id",
+        to_field="nickname",
+    )
+    secondary_brand = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
+        db_column="secondary_brand_id",
+        to_field="nickname",
+    )
+    primary_brand_key = models.CharField(max_length=64, blank=True, default="")
+    primary_brand_name_en = models.TextField(blank=True, default="")
+    primary_brand_name_zh_hans = models.TextField(blank=True, default="")
+    secondary_brand_key = models.CharField(max_length=64, blank=True, default="")
+    secondary_brand_name_en = models.TextField(blank=True, default="")
+    secondary_brand_name_zh_hans = models.TextField(blank=True, default="")
+
+    body_en = models.TextField(blank=True, default="")
+    body_zh_hans = models.TextField(blank=True, default="")
+    output_hash = models.CharField(max_length=64, blank=True, default="")
+    prompt_version = models.CharField(max_length=64, blank=True, default="")
+    provider = models.CharField(max_length=32, blank=True, default="")
+    provider_host = models.CharField(max_length=255, blank=True, default="")
+    model_name = models.CharField(max_length=128, blank=True, default="")
+
+    call_slot_consumed = models.BooleanField(default=False)
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_fence = models.PositiveIntegerField(default=0)
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    claim_expires_at = models.DateTimeField(blank=True, null=True)
+    transport_started_at = models.DateTimeField(blank=True, null=True)
+    transport_completed_at = models.DateTimeField(blank=True, null=True)
+    generated_at = models.DateTimeField(blank=True, null=True)
+    published_at = models.DateTimeField(blank=True, null=True)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    error_code = models.CharField(max_length=64, blank=True, default="")
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    latency_ms = models.PositiveIntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "trend_narrative_versions"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_cycle_id", "window_days"],
+                name="uq_tnv_source_window",
+            ),
+            models.UniqueConstraint(
+                fields=["window_days"],
+                condition=models.Q(is_current=True),
+                name="uq_tnv_current_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_days__in=[1, 7, 30, 365]),
+                name="ck_tnv_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "checked",
+                        "suppressed",
+                        "generating",
+                        "abandoned",
+                        "failed",
+                        "published",
+                        "superseded",
+                    ]
+                ),
+                name="ck_tnv_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_current=False)
+                    | models.Q(status="published")
+                ),
+                name="ck_tnv_current_published",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        call_slot_consumed=False,
+                        status__in=["checked", "suppressed"],
+                    )
+                    | models.Q(
+                        call_slot_consumed=True,
+                        status__in=[
+                            "generating",
+                            "abandoned",
+                            "failed",
+                            "published",
+                            "superseded",
+                        ],
+                    )
+                ),
+                name="ck_tnv_slot_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        call_slot_consumed=False,
+                        claim_owner="",
+                        claim_fence=0,
+                        claimed_at__isnull=True,
+                        claim_expires_at__isnull=True,
+                    )
+                    | models.Q(
+                        call_slot_consumed=True,
+                        claim_owner__gt="",
+                        claim_fence__gt=0,
+                        claimed_at__isnull=False,
+                        claim_expires_at__isnull=False,
+                    )
+                ),
+                name="ck_tnv_claim_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(claimed_at__isnull=True)
+                    | models.Q(claim_expires_at__gt=models.F("claimed_at"))
+                ),
+                name="ck_tnv_claim_order",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status__in=["failed", "abandoned"])
+                    | models.Q(error_code__gt="")
+                ),
+                name="ck_tnv_terminal_error",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status__in=["published", "superseded"],
+                        body_en__gt="",
+                        body_zh_hans__gt="",
+                        output_hash__gt="",
+                        primary_brand_key__gt="",
+                        primary_brand_name_en__gt="",
+                        primary_brand_name_zh_hans__gt="",
+                        generated_at__isnull=False,
+                        published_at__isnull=False,
+                    )
+                    | models.Q(
+                        status__in=[
+                            "checked",
+                            "suppressed",
+                            "generating",
+                            "abandoned",
+                            "failed",
+                        ],
+                        body_en="",
+                        body_zh_hans="",
+                        output_hash="",
+                        generated_at__isnull=True,
+                        published_at__isnull=True,
+                    )
+                ),
+                name="ck_tnv_output_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(transport_started_at__isnull=True)
+                    | models.Q(
+                        call_slot_consumed=True,
+                        transport_started_at__gte=models.F("claimed_at"),
+                    )
+                ),
+                name="ck_tnv_transport_start",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(transport_completed_at__isnull=True)
+                    | models.Q(
+                        transport_started_at__isnull=False,
+                        transport_completed_at__gte=models.F(
+                            "transport_started_at"
+                        ),
+                    )
+                ),
+                name="ck_tnv_transport_finish",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(generated_at__isnull=True)
+                    | models.Q(
+                        transport_completed_at__isnull=False,
+                        generated_at__gte=models.F("transport_completed_at"),
+                    )
+                ),
+                name="ck_tnv_generated_order",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(published_at__isnull=True)
+                    | models.Q(published_at__gte=models.F("generated_at"))
+                ),
+                name="ck_tnv_published_order",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        latest_checked_source_cycle_id="",
+                        latest_checked_as_of__isnull=True,
+                        latest_checked_at__isnull=True,
+                        latest_checked_facts__isnull=True,
+                    )
+                    | models.Q(
+                        latest_checked_source_cycle_id__gt="",
+                        latest_checked_as_of__isnull=False,
+                        latest_checked_at__isnull=False,
+                        latest_checked_facts__isnull=False,
+                    )
+                ),
+                name="ck_tnv_check_shape",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["window_days", "semantic_fingerprint"],
+                name="idx_tnv_window_fingerprint",
+            ),
+            models.Index(
+                fields=["window_days", "facts_as_of"],
+                name="idx_tnv_window_facts",
+            ),
+            models.Index(
+                fields=["status", "next_attempt_at"],
+                name="idx_tnv_status_retry",
+            ),
+            models.Index(
+                fields=["window_days", "-created_at"],
+                name="idx_tnv_window_created",
+            ),
+        ]
+
+
 class AppliedConfigSnapshot(models.Model):
     artifact = models.TextField(primary_key=True)
     content_hash = models.TextField()

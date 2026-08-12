@@ -12,7 +12,6 @@ WhiteNoise for static in production.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import environ
@@ -205,12 +204,16 @@ CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 min hard cap per cycle
+# Exceed the headline task's 12-minute hard limit so a worker loss can safely
+# redeliver the envelope after its irreversible per-window slots are visible.
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60}
 
-# Beat schedule: harvest runs every 15 minutes (mirrors launchd cadence)
-CELERY_BEAT_SCHEDULE = {
-    "monitor-run-cycle": {
-        "task": "monitor.tasks.run_cycle",
-        "schedule": 15 * 60.0,  # 15 min
+# Render cron is the only production scheduler. Keep beat empty so a future
+# worker cannot silently create a second 15-minute harvest scheduler.
+CELERY_BEAT_SCHEDULE = {}
+CELERY_TASK_ROUTES = {
+    "monitor.tasks.refresh_trend_narratives": {
+        "queue": "trend-narratives",
     },
 }
 

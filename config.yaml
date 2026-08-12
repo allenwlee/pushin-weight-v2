@@ -141,6 +141,38 @@ llm:
   relevancy_model: "claude-haiku-4-5"
   signal_model: "claude-haiku-4-5"
 
+# Shared V22 trend-narrative generation. This role never inherits the
+# translator/classifier route. The three rollout controls remain fail-closed
+# unless their service-specific environment variables explicitly enable them.
+headline_narrative:
+  provider: "anthropic"
+  base_url: "https://api.anthropic.com"
+  model: "claude-haiku-4-5-20251001"
+  timeout_seconds: 45
+  prompt_version: "headline-v1"
+  publication_epoch: 1
+  cadence_minutes: {1: 30, 7: 60, 30: 360, 365: 1440}
+  stale_minutes: {1: 60, 7: 120, 30: 720, 365: 2880}
+  min_posts: 20
+  min_authors: 10
+  contested_ratio: "0.80"
+  minimum_coverage: "0.75"
+  surging_ratio: "1.50"
+  rising_ratio: "1.15"
+  steady_ratio: "0.85"
+  call_cap: 4
+  max_body_en_chars: 240
+  max_body_zh_hans_chars: 120
+  task_expiry_seconds: 1800
+  lease_seconds: 90
+  backoff_minutes: [15, 30, 60, 120]
+  retention_days: 90
+  retention_rows_per_window: 20
+  serving_enabled: null
+  enqueue_enabled: null
+  provider_calls_enabled: null
+  control_revision: null
+
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.
 query_rot_streak_threshold: 3

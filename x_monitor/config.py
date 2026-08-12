@@ -7,6 +7,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
@@ -281,6 +282,83 @@ class LlmConfig(BaseModel):
     )
 
 
+class HeadlineNarrativeConfig(BaseModel):
+    """Cost-bounded role configuration for shared V22 trend narratives."""
+
+    provider: Literal["anthropic", "minimax"] = "anthropic"
+    base_url: str = "https://api.anthropic.com"
+    model: str = "claude-haiku-4-5-20251001"
+    timeout_seconds: int = Field(default=45, ge=5, le=120)
+    prompt_version: str = Field(default="headline-v1", min_length=1, max_length=64)
+    publication_epoch: int = Field(default=1, ge=1)
+    cadence_minutes: dict[int, int] = Field(
+        default_factory=lambda: {1: 30, 7: 60, 30: 360, 365: 1440}
+    )
+    stale_minutes: dict[int, int] = Field(
+        default_factory=lambda: {1: 60, 7: 120, 30: 720, 365: 2880}
+    )
+    min_posts: int = Field(default=20, ge=1)
+    min_authors: int = Field(default=10, ge=1)
+    contested_ratio: Decimal = Field(default=Decimal("0.80"), ge=0, le=1)
+    minimum_coverage: Decimal = Field(default=Decimal("0.75"), ge=0, le=1)
+    surging_ratio: Decimal = Field(default=Decimal("1.50"), ge=0)
+    rising_ratio: Decimal = Field(default=Decimal("1.15"), ge=0)
+    steady_ratio: Decimal = Field(default=Decimal("0.85"), ge=0)
+    call_cap: Literal[4] = 4
+    max_body_en_chars: int = Field(default=240, ge=80, le=500)
+    max_body_zh_hans_chars: int = Field(default=120, ge=40, le=300)
+    task_expiry_seconds: int = Field(default=1800, ge=60, le=3600)
+    lease_seconds: int = Field(default=90, ge=30, le=300)
+    backoff_minutes: list[int] = Field(
+        default_factory=lambda: [15, 30, 60, 120], min_length=1
+    )
+    retention_days: int = Field(default=90, ge=1)
+    retention_rows_per_window: int = Field(default=20, ge=1)
+    serving_enabled: bool = False
+    enqueue_enabled: bool = False
+    provider_calls_enabled: bool = False
+    control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_headline_route_and_cadence(self) -> HeadlineNarrativeConfig:
+        routes = {
+            "anthropic": (
+                "https://api.anthropic.com",
+                "claude-haiku-4-5-20251001",
+            ),
+            "minimax": (
+                "https://api.minimax.io/anthropic",
+                "MiniMax-M3",
+            ),
+        }
+        required_url, required_model = routes[self.provider]
+        if self.base_url != required_url or self.model != required_model:
+            raise ValueError(
+                "headline provider, exact base_url, and evaluated model must match"
+            )
+        windows = {1, 7, 30, 365}
+        if set(self.cadence_minutes) != windows:
+            raise ValueError("headline cadences must cover 1, 7, 30, and 365 days")
+        if set(self.stale_minutes) != windows:
+            raise ValueError("headline stale limits must cover all fixed windows")
+        if any(
+            self.stale_minutes[window] != self.cadence_minutes[window] * 2
+            for window in windows
+        ):
+            raise ValueError("headline stale limits must be twice each cadence")
+        if not (
+            self.surging_ratio >= self.rising_ratio >= self.steady_ratio
+        ):
+            raise ValueError("headline momentum ratios must descend")
+        if self.lease_seconds <= self.timeout_seconds:
+            raise ValueError("headline lease must exceed provider timeout")
+        if any(delay < 1 or delay > 120 for delay in self.backoff_minutes):
+            raise ValueError("headline backoff must stay within a two-hour cap")
+        if self.backoff_minutes != sorted(self.backoff_minutes):
+            raise ValueError("headline backoff must be monotonically increasing")
+        return self
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
@@ -292,6 +370,7 @@ class Config(BaseModel):
     cycle: CycleConfig = CycleConfig()
     harvest: HarvestConfig = HarvestConfig()
     llm: LlmConfig = LlmConfig()
+    headline_narrative: HeadlineNarrativeConfig = HeadlineNarrativeConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))
@@ -509,6 +588,39 @@ def load_config(path: Path) -> Config:
         }
         merged_llm = {**env_llm_overrides, **raw_llm_filtered}  # yaml wins over env (non-null only)
         raw = {**raw, "llm": merged_llm}
+    raw_headline = (
+        raw.get("headline_narrative", {})
+        if isinstance(raw.get("headline_narrative"), dict)
+        else {}
+    )
+    headline_env_names = {
+        "provider": "X_MONITOR_HEADLINE_PROVIDER",
+        "base_url": "X_MONITOR_HEADLINE_BASE_URL",
+        "model": "X_MONITOR_HEADLINE_MODEL",
+        "timeout_seconds": "X_MONITOR_HEADLINE_TIMEOUT_SECONDS",
+        "prompt_version": "X_MONITOR_HEADLINE_PROMPT_VERSION",
+        "publication_epoch": "X_MONITOR_HEADLINE_PUBLICATION_EPOCH",
+        "serving_enabled": "X_MONITOR_HEADLINE_SERVING_ENABLED",
+        "enqueue_enabled": "X_MONITOR_HEADLINE_ENQUEUE_ENABLED",
+        "provider_calls_enabled": "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED",
+        "control_revision": "X_MONITOR_HEADLINE_CONTROL_REVISION",
+    }
+    env_headline_overrides = {
+        field: os.environ[env_name]
+        for field, env_name in headline_env_names.items()
+        if env_name in os.environ
+    }
+    raw_headline_filtered = {
+        key: value for key, value in raw_headline.items() if value is not None
+    }
+    if raw_headline or env_headline_overrides:
+        raw = {
+            **raw,
+            "headline_narrative": {
+                **env_headline_overrides,
+                **raw_headline_filtered,
+            },
+        }
     try:
         return Config.model_validate(raw)
     except ValidationError:

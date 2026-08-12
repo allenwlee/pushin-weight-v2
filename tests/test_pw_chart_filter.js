@@ -23,6 +23,7 @@ function assert(condition, label) {
 }
 
 function payload(windowDays, count, pulseName) {
+  const computedAt = '2026-08-11T12:00:00+00:00';
   return {
     days: ['2026-08-11T00:00:00+00:00'],
     series: { qwen: [count] },
@@ -31,10 +32,10 @@ function payload(windowDays, count, pulseName) {
     totals: { qwen: count },
     granularity: 'minute',
     window_days: windowDays,
-    computed_at: '2026-08-11T12:00:00+00:00',
+    computed_at: computedAt,
     pulse: {
       window_days: windowDays,
-      computed_at: '2026-08-11T12:00:00+00:00',
+      computed_at: computedAt,
       entries: pulseName ? [{
         nickname: pulseName,
         display_name: pulseName,
@@ -47,6 +48,28 @@ function payload(windowDays, count, pulseName) {
         status: 'numeric',
         direction: 'up',
       }] : [],
+    },
+    trend_narrative: {
+      schema_version: 1,
+      window_days: windowDays,
+      computed_at: computedAt,
+      state: 'available',
+      state_label: 'Available',
+      body: (pulseName || 'No trend') + ' leads attention.',
+      primary_brand: pulseName ? {
+        key: pulseName,
+        display_name: pulseName,
+        url: '/brands/' + pulseName + '/',
+      } : null,
+      generated_at: computedAt,
+      checked_at: computedAt,
+      facts_as_of: computedAt,
+      coverage_state: 'sufficient',
+    },
+    top_voices: {
+      window_days: windowDays,
+      computed_at: computedAt,
+      entries: pulseName ? [{ handle: pulseName, voice_star: count }] : [],
     },
   };
 }
@@ -87,7 +110,7 @@ function makeRegion(data, isLegacy) {
     status,
     removed: [],
     matches(selector) { return !isLegacy && selector === '.home-chart-wrap[data-pw-chart]'; },
-    getAttribute(name) { return attrs[name] || null; },
+    getAttribute(name) { return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null; },
     setAttribute(name, value) { attrs[name] = String(value); },
     removeAttribute(name) { this.removed.push(name); },
     querySelector(selector) {
@@ -115,6 +138,48 @@ function makePulseBar() {
   };
 }
 
+function makeNode() {
+  const attrs = {};
+  return {
+    children: [],
+    hidden: true,
+    textContent: '',
+    className: '',
+    tagName: 'SPAN',
+    href: '',
+    target: '',
+    rel: '',
+    parentNode: null,
+    get firstChild() { return this.children[0] || null; },
+    appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+    removeChild(child) { this.children = this.children.filter((item) => item !== child); },
+    insertBefore(child) { return this.appendChild(child); },
+    getAttribute(name) { return attrs[name] || null; },
+    setAttribute(name, value) { attrs[name] = String(value); },
+  };
+}
+
+function makeHeadline() {
+  const root = makeNode();
+  const bodyParent = makeNode();
+  const body = makeNode();
+  const state = makeNode();
+  const voices = makeNode();
+  const status = makeNode();
+  body.parentNode = bodyParent;
+  root.querySelector = function (selector) {
+    if (selector === '[data-pw-headline-body]') return body;
+    if (selector === '[data-pw-headline-state]') return state;
+    if (selector === '[data-pw-headline-brand]') {
+      return bodyParent.children.find((node) =>
+        node.getAttribute('data-pw-headline-brand') !== null) || null;
+    }
+    if (selector === '[data-pw-headline-voice-entries]') return voices;
+    return null;
+  };
+  return { root, body, state, voices, status };
+}
+
 function response(data, ok = true) {
   return Promise.resolve({
     ok,
@@ -135,6 +200,7 @@ function makeSandbox(options = {}) {
   const region = makeRegion(initial, Boolean(options.legacy));
   const pulseBar = makePulseBar();
   const pulseStatus = { hidden: true, textContent: '' };
+  const headline = makeHeadline();
   const legend = { innerHTML: '' };
   const fetchCalls = [];
   const fetchQueue = [];
@@ -181,7 +247,14 @@ function makeSandbox(options = {}) {
       if (selector === '[data-pw-pulse]') return options.noRoot || options.legacy ? null : pulseBar;
       if (selector === '[data-pw-pulse-status]') return options.noRoot || options.legacy ? null : pulseStatus;
       if (selector === '[data-pw-chart-legend]') return options.noRoot || options.legacy ? null : legend;
+      if (selector === '[data-pw-headline]') return options.noRoot || options.legacy ? null : headline.root;
+      if (selector === '[data-pw-headline-status]') return options.noRoot || options.legacy ? null : headline.status;
       return null;
+    },
+    createElement(tagName) {
+      const node = makeNode();
+      node.tagName = String(tagName || 'span').toUpperCase();
+      return node;
     },
     getElementById(id) { return options.legacy && id === 'home-chart' ? region : null; },
     body: { addEventListener() {} },
@@ -215,7 +288,7 @@ function makeSandbox(options = {}) {
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: 'pw-chart.js' });
   return {
-    sandbox, document, region, pulseBar, pulseStatus, legend, fetchCalls,
+    sandbox, document, region, pulseBar, pulseStatus, headline, legend, fetchCalls,
     fetchQueue, charts, intervals,
     setFilters(value) { filters = value; },
   };
@@ -234,6 +307,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
 
   console.log('--- filter request + timed refresh ownership ---');
   const base = makeSandbox();
+  const focusedBrand = base.headline.root.querySelector('[data-pw-headline-brand]');
   base.fetchQueue.push(response(payload(7, 4, 'qwen')));
   base.setFilters({ brands: ['stale'], sentiment: ['positive'], window: 1 });
   const eventFilters = { brands: ['qwen'], sentiment: ['mixed'], window: 7 };
@@ -250,6 +324,10 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(!base.fetchCalls[0].url.includes('renderer='), 'request has no renderer parameter');
   assert(base.region.currentPayload.window_days === 7, 'chart commits the returned window');
   assert(base.pulseBar.getAttribute('data-pw-window') === '7', 'pulse commits the same window atomically');
+  assert(base.headline.root.getAttribute('data-pw-window') === '7', 'headline commits the same window atomically');
+  assert(base.headline.body.textContent.includes('qwen'), 'headline commits the matching narrative body');
+  assert(base.headline.root.querySelector('[data-pw-headline-brand]') === focusedBrand,
+    'refresh reconciles the brand anchor in place so keyboard focus can survive');
   assert(base.charts[0].destroyed, 'replacing a chart fragment destroys the detached Chart.js instance');
   assert(base.intervals.length === 1 && base.intervals[0].ms === 60000,
     'pw-chart owns one 60-second refresh timer');
@@ -271,6 +349,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   await flush();
   assert(race.region.currentPayload.window_days === 7, 'older chart response cannot overwrite newer state');
   assert(race.pulseBar.getAttribute('data-pw-window') === '7', 'older pulse response cannot overwrite newer state');
+  assert(race.headline.root.getAttribute('data-pw-window') === '7', 'older headline response cannot overwrite newer state');
   assert(race.pulseBar.innerHTML.includes('new') && !race.pulseBar.innerHTML.includes('old'),
     'chart and pulse values come from the winning response only');
 
@@ -278,15 +357,19 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   const recovery = makeSandbox();
   const originalHtml = recovery.region.innerHTML;
   const originalPulse = recovery.pulseBar.innerHTML;
+  const originalHeadline = recovery.headline.body.textContent;
   recovery.fetchQueue.push(response('server error', false));
   recovery.document.dispatchEvent(new recovery.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
   await flush();
   assert(recovery.region.innerHTML === originalHtml, 'non-OK response preserves last-good chart');
   assert(recovery.pulseBar.innerHTML === originalPulse, 'non-OK response preserves last-good pulse');
+  assert(recovery.headline.body.textContent === originalHeadline, 'non-OK response preserves last-good headline');
   assert(recovery.region.status.textContent === 'Chart refresh failed' && !recovery.region.status.hidden,
     'failure exposes localized non-blocking chart state');
   assert(recovery.pulseStatus.textContent === 'Pulse refresh failed' && !recovery.pulseStatus.hidden,
     'failure exposes localized non-blocking pulse state');
+  assert(recovery.headline.status.textContent.includes('Trend summary refresh failed') && !recovery.headline.status.hidden,
+    'failure exposes localized non-blocking headline state');
   recovery.fetchQueue.push(response(payload(30, 3, 'retry')));
   recovery.document.dispatchEvent(new recovery.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
   await flush();
@@ -306,6 +389,13 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   empty.document.dispatchEvent(new empty.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
   await flush();
   assert(empty.region.innerHTML === emptyHtml, 'malformed payload preserves last-good empty projection');
+  const malformedChild = payload(7, 9, 'broken');
+  malformedChild.top_voices.entries = [null];
+  empty.fetchQueue.push(response(malformedChild));
+  empty.document.dispatchEvent(new empty.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
+  await flush();
+  assert(empty.region.innerHTML === emptyHtml,
+    'malformed nested projection preserves the complete last-good projection');
 
   console.log('--- /internal fallback keeps one canvas lifecycle ---');
   const internal = makeSandbox({ legacy: true });

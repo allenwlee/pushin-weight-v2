@@ -166,6 +166,12 @@ class Command(BaseCommand):
         )
         stats = runner.run()
 
+        from monitor.trend_narrative_dispatch import (
+            dispatch_harvest_completion,
+        )
+
+        dispatch_harvest_completion(stats, dry_run=options["dry_run"])
+
         if options["as_json"]:
             self.stdout.write(json.dumps(stats, indent=2, default=str))
         else:

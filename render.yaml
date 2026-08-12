@@ -3,6 +3,16 @@
 
 services:
   # --------------------------------------------------------------------------
+  # Dedicated broker for the headline-only queue. This does not schedule work.
+  # --------------------------------------------------------------------------
+  - type: keyvalue
+    name: pushinweight-headlines-broker
+    plan: starter
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+
+  # --------------------------------------------------------------------------
   # Django web service
   # --------------------------------------------------------------------------
   - type: web
@@ -24,14 +34,46 @@ services:
       - key: X_MONITOR_LIST_ID
         value: "2067062923525275922"
       - key: DATABASE_URL
-        value: 'postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow'
+        sync: false
+      - key: X_MONITOR_HEADLINE_SERVING_ENABLED
+        value: "False"
       - fromGroup: pushinweight-secrets
 
-cronJobs:
+  # --------------------------------------------------------------------------
+  # Queue-isolated trend-narrative worker. Render cron remains the scheduler.
+  # --------------------------------------------------------------------------
+  - type: worker
+    name: pushinweight-headlines
+    runtime: python
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: >-
+      celery -A project worker -l INFO -Q trend-narratives --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_HEADLINE_API_KEY
+        sync: false
+      - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
+        value: "False"
+      - key: X_MONITOR_HEADLINE_CONTROL_REVISION
+        value: off-v1
+
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
   # --------------------------------------------------------------------------
-  - name: pushinweight-harvest
+  - type: cron
+    name: pushinweight-harvest
     runtime: python
     plan: starter
     schedule: "*/15 * * * *"
@@ -47,7 +89,14 @@ cronJobs:
       - key: X_MONITOR_LIST_ID
         value: "2067062923525275922"
       - key: DATABASE_URL
-        value: 'postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow'
+        sync: false
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
+        value: "False"
       - fromGroup: pushinweight-secrets
 
 databases:

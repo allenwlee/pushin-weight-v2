@@ -176,6 +176,9 @@ FEED_DEFAULT_LIMIT: int = 50
 
 _HOME_PULSE_CACHE_TTL_SECONDS = 60.0
 _HOME_PULSE_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
+_HOME_TOP_VOICES_CACHE: dict[
+    tuple[int, int], tuple[float, list[dict[str, Any]]]
+] = {}
 _HOME_PULSE_CACHE_LOCK = Lock()
 
 
@@ -1352,6 +1355,7 @@ def _build_home_chart_payload(
     filters: dict[str, Any],
     *,
     now: datetime | None = None,
+    locale: str = "en",
 ) -> dict[str, Any]:
     """Build multi-brand chart payload dict — shared by chart_json and chart_html.
 
@@ -1458,6 +1462,23 @@ def _build_home_chart_payload(
                 totals[brand] += count
 
     computed_at = pulse["computed_at"]
+    from monitor.trend_narrative_projection import project_trend_narrative
+
+    trend_narrative = project_trend_narrative(
+        window_days,
+        locale=locale,
+        now=now,
+        computed_at=computed_at,
+    )
+    top_voices = {
+        "window_days": window_days,
+        "computed_at": computed_at,
+        "entries": _multi_top_voices(
+            window_days=window_days,
+            limit=3,
+            now=now,
+        ),
+    }
     return {
         "days": days,
         "series": series,
@@ -1469,6 +1490,8 @@ def _build_home_chart_payload(
         "computed_at": computed_at,
         "fetched_at": computed_at,
         "pulse": pulse,
+        "trend_narrative": trend_narrative,
+        "top_voices": top_voices,
     }
 
 
@@ -1486,9 +1509,10 @@ def _round_pulse_percent(current: int, prior: int) -> int | None:
 
 
 def _clear_home_pulse_cache() -> None:
-    """Clear the bounded per-worker cache (used by deterministic tests)."""
+    """Clear bounded shared home projections (used by deterministic tests)."""
     with _HOME_PULSE_CACHE_LOCK:
         _HOME_PULSE_CACHE.clear()
+        _HOME_TOP_VOICES_CACHE.clear()
 
 
 def _build_home_pulse_payload(
@@ -1571,7 +1595,12 @@ def _build_home_pulse_payload(
         return deepcopy(payload)
 
 
-def _multi_top_voices(window_days: int, limit: int = 3) -> list[dict[str, Any]]:
+def _multi_top_voices(
+    window_days: int,
+    limit: int = 3,
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
     """Return top N voice authors in the current window.
 
     Each entry has handle, voice_star (displayed as ☆ N), mention_count,
@@ -1580,7 +1609,15 @@ def _multi_top_voices(window_days: int, limit: int = 3) -> list[dict[str, Any]]:
     voice_score = mention_count * log10(followers_count + 10)
     """
     import math
-    cutoff = django_timezone.now() - timedelta(days=window_days)
+
+    cache_key = (window_days, limit)
+    cache_now = monotonic()
+    with _HOME_PULSE_CACHE_LOCK:
+        cached = _HOME_TOP_VOICES_CACHE.get(cache_key)
+        if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
+            return deepcopy(cached[1])
+
+    cutoff = (now or django_timezone.now()) - timedelta(days=window_days)
     qs = (
         Post.objects.filter(created_at__gte=cutoff, author__isnull=False)
         .values("author__handle", "author__author_id", "author__followers_count")
@@ -1604,7 +1641,10 @@ def _multi_top_voices(window_days: int, limit: int = 3) -> list[dict[str, Any]]:
             "followers_count": followers,
         })
     out.sort(key=lambda v: (-v["voice_score"], -v["followers_count"]))
-    return out[:limit]
+    result = out[:limit]
+    with _HOME_PULSE_CACHE_LOCK:
+        _HOME_TOP_VOICES_CACHE[cache_key] = (cache_now, result)
+    return deepcopy(result)
 
 
 def _build_brands_context() -> list[dict[str, Any]]:
@@ -1686,16 +1726,19 @@ def home(request: HttpRequest) -> HttpResponse:
     ]
 
     # Initial chart payload so the canvas renders on first load (no placeholder flash)
-    initial_chart_payload = _build_home_chart_payload(window_days, initial_filters)
+    initial_chart_payload = _build_home_chart_payload(
+        window_days,
+        initial_filters,
+        locale=locale,
+    )
     initial_chart_payload["applied_filters"] = initial_filters
-
-    top_voices = _multi_top_voices(window_days=window_days, limit=3)
 
     context = {
         "brands": brands_data,
         "open_brands": open_brands,
         "closed_brands": closed_brands,
-        "top_voices": top_voices,
+        "top_voices": initial_chart_payload["top_voices"]["entries"],
+        "trend_narrative": initial_chart_payload["trend_narrative"],
         "brand_count": len(brands_data),
         "brand_nicknames_json": json.dumps(brand_nicknames),
         "applied_filters_json": json.dumps(initial_filters),
@@ -2231,7 +2274,8 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     """
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
-    payload = _build_home_chart_payload(window_days, filters)
+    locale = _resolve_locale(request)
+    payload = _build_home_chart_payload(window_days, filters, locale=locale)
     payload["applied_filters"] = filters
     return JsonResponse(payload)
 
@@ -2242,8 +2286,9 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     Renders the same canvas contract used by both public and legacy home.
     """
     window_days = _resolve_home_window(request)
+    locale = _resolve_locale(request)
     filters = _parse_filters_from_request(request)
-    payload = _build_home_chart_payload(window_days, filters)
+    payload = _build_home_chart_payload(window_days, filters, locale=locale)
     payload["applied_filters"] = filters
     return render(
         request,

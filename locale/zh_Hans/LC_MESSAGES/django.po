@@ -133,3 +133,27 @@ msgstr "· 24h heat"
 
 msgid "本窗口最新"
 msgstr "Latest in window"
+
+msgid "Trend summary"
+msgstr "趋势摘要"
+
+msgid "Trend summary is unavailable."
+msgstr "趋势摘要暂不可用。"
+
+msgid "Trend summary is warming up for this window."
+msgstr "该时段的趋势摘要正在准备中。"
+
+msgid "Trend summary refresh failed; showing last result"
+msgstr "趋势摘要刷新失败，显示上次结果"
+
+msgid "Available"
+msgstr "可用"
+
+msgid "Stale"
+msgstr "已过期"
+
+msgid "Warming up"
+msgstr "准备中"
+
+msgid "Disabled"
+msgstr "已停用"
