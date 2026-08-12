@@ -102,7 +102,9 @@ services:
           name: pushinweight-headlines-broker
           property: connectionString
       - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
-        value: "False"
+        value: "True"
+      - key: X_MONITOR_HEADLINE_CONTROL_REVISION
+        value: enqueue-v1
       - fromGroup: pushinweight-secrets
 
 databases:
