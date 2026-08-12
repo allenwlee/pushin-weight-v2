@@ -162,7 +162,7 @@ def generate_trend_narrative(
     """Make exactly one provider request and accept both locales or neither."""
     _validate_fact_input(facts)
     expected_brands = _expected_brands(facts)
-    credential = api_key or os.environ.get("X_MONITOR_HEADLINE_API_KEY")
+    credential = api_key or _resolve_provider_credential(config)
     if not credential:
         raise HeadlineGenerationError("headline_credential_unavailable")
     factory = client_factory or _anthropic_client
@@ -218,6 +218,17 @@ def _anthropic_client(**kwargs):
     import anthropic
 
     return anthropic.Anthropic(**kwargs)
+
+
+def _resolve_provider_credential(config: HeadlineNarrativeConfig) -> str | None:
+    """Resolve the credential for the pinned headline provider route."""
+    if config.provider == "deepseek":
+        return os.environ.get("DEEPSEEK_API_KEY") or os.environ.get(
+            "DEEPSEEK_API_TOKEN"
+        )
+    if config.provider == "minimax":
+        return os.environ.get("MINIMAX_API_TOKEN")
+    return os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_KEY")
 
 
 def _request_payload(

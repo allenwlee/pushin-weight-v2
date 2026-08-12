@@ -71,7 +71,9 @@ services:
           type: keyvalue
           name: pushinweight-headlines-broker
           property: connectionString
-      - key: X_MONITOR_HEADLINE_API_KEY
+      # Same DSV4 credential as translation/classification, scoped to this
+      # worker instead of linking the broad pushinweight-secrets group.
+      - key: DEEPSEEK_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
         value: "False"

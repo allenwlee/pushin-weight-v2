@@ -47,14 +47,16 @@ celery -A project worker -l INFO -Q trend-narratives --concurrency=1 \
 
 These controls are independent and fail closed:
 
-| Service | Variable | Initial value |
+| Service | Variable | Current staged value |
 |---|---|---|
 | web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `False` |
-| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `False` |
+| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` (`enqueue-v1`) |
 | headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `False` |
 
-`X_MONITOR_HEADLINE_API_KEY` belongs only on the headline worker. Do not add it
-to web or the harvest cron and do not reuse translator/classifier routing.
+`DEEPSEEK_API_KEY` must be present on the headline worker. Its value is the
+same DeepSeek V4 credential used by translation/classification, but it remains
+a worker-scoped Render secret; do not attach the broad `pushinweight-secrets`
+group to the worker.
 Record `X_MONITOR_HEADLINE_CONTROL_REVISION` with every control change.
 `DATABASE_URL` is declared with `fromDatabase: pushinweight-db-shadow` for web,
 cron, and worker. The existing Render services may retain their prior
@@ -63,8 +65,10 @@ resolved database identity on every service after sync and manually inject the
 same managed credential through Render if a service did not update. Never
 commit a connection string to source control.
 
-The direct Anthropic route is pinned to
-`https://api.anthropic.com` + `claude-haiku-4-5-20251001`. MiniMax is a
+The headline route is pinned to DeepSeek V4 via
+`https://api.deepseek.com/anthropic` + `deepseek-v4-pro`, matching the
+translation/classification route. Anthropic is a separate explicit route using
+`https://api.anthropic.com` + `claude-haiku-4-5-20251001`; MiniMax is a
 separate explicit/evaluated route using
 `https://api.minimax.io/anthropic` + `MiniMax-M3`; legacy M3 model names and
 the deprecated endpoint are rejected.

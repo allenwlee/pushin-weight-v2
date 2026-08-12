@@ -285,9 +285,9 @@ class LlmConfig(BaseModel):
 class HeadlineNarrativeConfig(BaseModel):
     """Cost-bounded role configuration for shared V22 trend narratives."""
 
-    provider: Literal["anthropic", "minimax"] = "anthropic"
-    base_url: str = "https://api.anthropic.com"
-    model: str = "claude-haiku-4-5-20251001"
+    provider: Literal["anthropic", "deepseek", "minimax"] = "deepseek"
+    base_url: str = "https://api.deepseek.com/anthropic"
+    model: str = "deepseek-v4-pro"
     timeout_seconds: int = Field(default=45, ge=5, le=120)
     prompt_version: str = Field(default="headline-v1", min_length=1, max_length=64)
     publication_epoch: int = Field(default=1, ge=1)
@@ -325,6 +325,10 @@ class HeadlineNarrativeConfig(BaseModel):
             "anthropic": (
                 "https://api.anthropic.com",
                 "claude-haiku-4-5-20251001",
+            ),
+            "deepseek": (
+                "https://api.deepseek.com/anthropic",
+                "deepseek-v4-pro",
             ),
             "minimax": (
                 "https://api.minimax.io/anthropic",

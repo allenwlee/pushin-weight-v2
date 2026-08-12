@@ -100,9 +100,9 @@ class _FakeClient:
 def test_headline_config_defaults_are_pinned_and_fail_closed():
     config = HeadlineNarrativeConfig()
 
-    assert config.provider == "anthropic"
-    assert config.base_url == "https://api.anthropic.com"
-    assert config.model == "claude-haiku-4-5-20251001"
+    assert config.provider == "deepseek"
+    assert config.base_url == "https://api.deepseek.com/anthropic"
+    assert config.model == "deepseek-v4-pro"
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
     assert config.stale_minutes == {1: 60, 7: 120, 30: 720, 365: 2880}
     assert config.call_cap == 4
@@ -123,7 +123,7 @@ def test_headline_config_yaml_non_null_wins_and_null_permits_env(
 enabled_models: [minimax]
 daily_ceiling: 100
 headline_narrative:
-  model: claude-haiku-4-5-20251001
+  model: deepseek-v4-pro
   timeout_seconds: null
 """,
         encoding="utf-8",
@@ -131,7 +131,7 @@ headline_narrative:
 
     config = load_config(path).headline_narrative
 
-    assert config.model == "claude-haiku-4-5-20251001"
+    assert config.model == "deepseek-v4-pro"
     assert config.timeout_seconds == 33
 
 
@@ -159,22 +159,47 @@ def test_real_boundary_explicitly_pins_route_model_timeout_and_zero_retries(
     assert constructors == [
         {
             "api_key": "headline-secret",
-            "base_url": "https://api.anthropic.com",
+            "base_url": "https://api.deepseek.com/anthropic",
             "timeout": 41.0,
             "max_retries": 0,
         }
     ]
     assert len(client.messages.calls) == 1
     call = client.messages.calls[0]
-    assert call["model"] == "claude-haiku-4-5-20251001"
+    assert call["model"] == "deepseek-v4-pro"
     assert call["temperature"] == 0
     assert call["max_tokens"] == 320
     assert "raw_text" not in json.dumps(call)
     assert result.body_zh_hans.startswith("讨论热度")
-    assert result.provider_host == "api.anthropic.com"
+    assert result.provider_host == "api.deepseek.com"
     assert result.input_tokens == 120
     assert result.output_tokens == 52
     assert result.latency_ms == 250
+
+
+def test_deepseek_route_uses_shared_dsv4_credential(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "dsv4-secret")
+    constructors: list[dict] = []
+    client = _FakeClient(_valid_payload())
+
+    def factory(**kwargs):
+        constructors.append(kwargs)
+        return client
+
+    generate_trend_narrative(
+        _facts(),
+        HeadlineNarrativeConfig(),
+        client_factory=factory,
+    )
+
+    assert constructors == [
+        {
+            "api_key": "dsv4-secret",
+            "base_url": "https://api.deepseek.com/anthropic",
+            "timeout": 45.0,
+            "max_retries": 0,
+        }
+    ]
 
 
 def test_aggregate_only_guard_rejects_nested_raw_text_before_client_creation():
