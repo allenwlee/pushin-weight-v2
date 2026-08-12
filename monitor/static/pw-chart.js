@@ -270,7 +270,13 @@
       }));
       if (voices.getAttribute('data-pw-voice-signature') !== signature) {
         clearChildren(voices);
-        topVoices.entries.forEach(function (entry) {
+        topVoices.entries.forEach(function (entry, index) {
+          if (index > 0) {
+            var separator = document.createElement('span');
+            separator.className = 'voice-separator';
+            separator.textContent = ', ';
+            voices.appendChild(separator);
+          }
           var link = document.createElement('a');
           link.className = 'voice-chip';
           link.href = 'https://x.com/' + String(entry.handle || '').replace(/^@/, '');

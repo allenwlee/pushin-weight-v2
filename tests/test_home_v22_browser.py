@@ -529,6 +529,76 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         refreshed_legend.locator("span").count(),
                         len(projection["chart"]["series"]),
                     )
+                    voice_shape = page.evaluate(
+                        """() => {
+                          const root = document.querySelector('[data-pw-headline-voice-entries]');
+                          const children = [...(root?.children || [])];
+                          const links = children.filter((node) => node.matches('a.voice-chip'));
+                          const separators = children.filter((node) => node.matches('span.voice-separator'));
+                          return {
+                            links: links.length,
+                            separators: separators.length,
+                            adjacentLinks: children.some((node, index) =>
+                              node.matches('a.voice-chip') && children[index + 1]?.matches('a.voice-chip')
+                            ),
+                          };
+                        }"""
+                    )
+                    self.assertEqual(
+                        voice_shape["separators"],
+                        max(voice_shape["links"] - 1, 0),
+                        "client refresh preserves readable Top Voices separators",
+                    )
+                    self.assertFalse(
+                        voice_shape["adjacentLinks"],
+                        "client refresh never concatenates adjacent voice links",
+                    )
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_top_voices_refresh_keeps_separator_parity_on_mobile(self) -> None:
+        """Client-rendered Top Voices remain readable at the narrow V22 width."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(viewport=VIEWPORTS["mobile"], timezone_id="Asia/Tokyo")
+                _freeze_clock(context)
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    page.wait_for_function("() => window.pwFilter")
+                    with page.expect_response(lambda response: "/chart.html?" in response.url) as response_info:
+                        page.locator("[data-pw-window-btn='7']").click()
+                    self.assertEqual(response_info.value.status, 200)
+                    page.wait_for_function(
+                        "() => document.querySelector('[data-pw-headline-voice-entries]')"
+                    )
+                    voice_shape = page.evaluate(
+                        """() => {
+                          const root = document.querySelector('[data-pw-headline-voice-entries]');
+                          const children = [...(root?.children || [])];
+                          const links = children.filter((node) => node.matches('a.voice-chip'));
+                          const separators = children.filter((node) => node.matches('span.voice-separator'));
+                          const box = root?.getBoundingClientRect();
+                          return {
+                            links: links.length,
+                            separators: separators.length,
+                            adjacentLinks: children.some((node, index) =>
+                              node.matches('a.voice-chip') && children[index + 1]?.matches('a.voice-chip')
+                            ),
+                            width: box?.width || 0,
+                            height: box?.height || 0,
+                            overflow: document.documentElement.scrollWidth > innerWidth,
+                          };
+                        }"""
+                    )
+                    self.assertEqual(voice_shape["separators"], max(voice_shape["links"] - 1, 0))
+                    self.assertFalse(voice_shape["adjacentLinks"])
+                    self.assertGreater(voice_shape["width"], 0)
+                    self.assertGreater(voice_shape["height"], 0)
+                    self.assertFalse(voice_shape["overflow"])
                 finally:
                     context.close()
             finally:

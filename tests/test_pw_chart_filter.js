@@ -308,7 +308,13 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   console.log('--- filter request + timed refresh ownership ---');
   const base = makeSandbox();
   const focusedBrand = base.headline.root.querySelector('[data-pw-headline-brand]');
-  base.fetchQueue.push(response(payload(7, 4, 'qwen')));
+  const refreshedPayload = payload(7, 4, 'qwen');
+  refreshedPayload.top_voices.entries = [
+    { handle: 'first', voice_star: 4 },
+    { handle: 'second', voice_star: 3 },
+    { handle: 'third', voice_star: 2 },
+  ];
+  base.fetchQueue.push(response(refreshedPayload));
   base.setFilters({ brands: ['stale'], sentiment: ['positive'], window: 1 });
   const eventFilters = { brands: ['qwen'], sentiment: ['mixed'], window: 7 };
   base.document.dispatchEvent(new base.sandbox.CustomEvent('pw:filter-change', {
@@ -328,6 +334,15 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(base.headline.body.textContent.includes('qwen'), 'headline commits the matching narrative body');
   assert(base.headline.root.querySelector('[data-pw-headline-brand]') === focusedBrand,
     'refresh reconciles the brand anchor in place so keyboard focus can survive');
+  const refreshedVoiceNodes = base.headline.voices.children;
+  assert(refreshedVoiceNodes.length === 5,
+    'refresh inserts one separator sibling between each pair of voice links');
+  assert(refreshedVoiceNodes.filter((node) => node.tagName === 'A').length === 3,
+    'refresh keeps every voice as a separate link');
+  assert(refreshedVoiceNodes.filter((node) => node.className === 'voice-separator').length === 2,
+    'voice separators are non-link siblings');
+  assert(refreshedVoiceNodes[1].textContent === ', ' && refreshedVoiceNodes[3].textContent === ', ',
+    'voice separators preserve readable punctuation and spacing');
   assert(base.charts[0].destroyed, 'replacing a chart fragment destroys the detached Chart.js instance');
   assert(base.intervals.length === 1 && base.intervals[0].ms === 60000,
     'pw-chart owns one 60-second refresh timer');
