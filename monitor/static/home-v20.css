@@ -992,7 +992,7 @@ body.desktop-shell .desktop-grid .feed-strip {
   min-width: 0;
 }
 .topbar-title-row .app-name {
-  flex: 1 1 auto;
+  flex: 1 1 0 !important;
   width: auto !important;
   min-width: 0;
 }

@@ -2,8 +2,8 @@
 //
 // Behavior:
 //   - Drag-to-scroll on .filter-bar-scroller (horizontal, 6px threshold).
-//   - Single open-state authority per pill (`is-open` class, set on pointerup
-//     so a drag does not toggle a pill open).
+//   - Single open-state authority per pill (`is-open` class, set on click
+//     after the drag controller has had a chance to suppress activation).
 //   - Dropdown geometry aligned to filter-bar box (not viewport).
 //   - Segmented lens (Brands Open/Closed, Nationalism US/CN) with per-tier
 //     counts + scoped all/clear buttons (data-dd-scope="visible").
@@ -81,7 +81,8 @@
   }
 
   // --- Drag-to-scroll the pill row (click+drag / touch) ---
-  // Open/close is deferred to pointerup so a drag does not toggle a pill.
+  // Open/close is deferred to click so a drag does not toggle a pill and
+  // touch browsers can use their semantic activation event.
   var drag = {
     active: false, moved: false, startX: 0, scrollLeft: 0,
     pointerId: null, pressPill: null,
@@ -98,6 +99,7 @@
       drag.startX = e.clientX;
       drag.scrollLeft = scroller.scrollLeft;
       drag.pointerId = e.pointerId;
+      drag._justFinishedDrag = false;
       var el = document.elementFromPoint(e.clientX, e.clientY);
       drag.pressPill = (el && el.closest) ? el.closest(".filter-pill") : null;
       if (!drag.pressPill && e.target.closest) {
@@ -135,11 +137,22 @@
     scroller.addEventListener("pointercancel", endDrag);
   }
 
-  // --- Open / close: pointerup so drag can cancel the open ---
-  document.addEventListener("pointerup", function (e) {
+  // iOS WebKit can omit the synthetic click when a tap lands on inert chrome.
+  // Close on the earlier pointer signal, while keeping pill activation on the
+  // semantic click so opening never exposes dropdown controls beneath the tap.
+  document.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!t || !t.closest) return;
-    if (drag.moved || drag._justFinishedDrag) {
+    if (!t.closest(".filter-bar") && !t.closest(".filter-dropdown")) {
+      closeAll();
+    }
+  }, true);
+
+  // --- Open / close: semantic click, after drag cancellation settles ---
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (drag._justFinishedDrag) {
       drag.moved = false;
       drag._justFinishedDrag = false;
       drag.pressPill = null;

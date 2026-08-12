@@ -332,6 +332,111 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_mobile_click_activation_opens_brand_dropdown(self) -> None:
+        """A semantic mobile click opens a visible, durable Brands menu."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    **playwright.devices["iPhone 13"],
+                    timezone_id="Asia/Tokyo",
+                )
+                _freeze_clock(context)
+                page = context.new_page()
+                console_errors: list[str] = []
+                page_errors: list[str] = []
+                page.on(
+                    "console",
+                    lambda message: console_errors.append(message.text)
+                    if message.type == "error"
+                    else None,
+                )
+                page.on("pageerror", lambda error: page_errors.append(str(error)))
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    page.wait_for_function("() => window.pwFilter")
+                    pill = page.locator('[data-group="brands"]')
+                    dropdown = pill.locator(".filter-dropdown")
+
+                    pill.dispatch_event("click")
+
+                    self.assertEqual(pill.get_attribute("aria-expanded"), "true")
+                    self.assertTrue(dropdown.is_visible())
+                    box = dropdown.bounding_box()
+                    self.assertIsNotNone(box)
+                    self.assertGreater(box["width"], 0)
+                    self.assertGreater(box["height"], 0)
+                    self.assertGreaterEqual(box["x"], 0)
+                    self.assertLessEqual(box["x"] + box["width"], VIEWPORTS["mobile"]["width"] + 1)
+
+                    pill.locator('[data-lens="closed"]').click()
+                    self.assertEqual(pill.get_attribute("aria-expanded"), "true")
+                    self.assertTrue(dropdown.is_visible())
+
+                    page.locator("h1.app-name").dispatch_event("pointerdown")
+                    self.assertEqual(pill.get_attribute("aria-expanded"), "false")
+                    self.assertFalse(dropdown.is_visible())
+                    self.assertEqual(console_errors, [])
+                    self.assertEqual(page_errors, [])
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_mobile_locale_toggle_stays_inside_title_row(self) -> None:
+        """Locale controls stay within their containing title row on mobile."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale in ("en", "zh_hans"):
+                    with self.subTest(locale=locale):
+                        context = browser.new_context(
+                            **playwright.devices["iPhone 13"],
+                            timezone_id="Asia/Tokyo",
+                        )
+                        _freeze_clock(context)
+                        page = context.new_page()
+                        try:
+                            page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            boxes = page.evaluate(
+                                """() => {
+                                  const row = document.querySelector('.topbar-title-row').getBoundingClientRect();
+                                  const appName = document.querySelector('h1.app-name').getBoundingClientRect();
+                                  const locale = document.querySelector('.locale-toggle').getBoundingClientRect();
+                                  return {
+                                    row: {left: row.left, right: row.right, width: row.width},
+                                    appName: {left: appName.left, right: appName.right, width: appName.width},
+                                    locale: {left: locale.left, right: locale.right, width: locale.width},
+                                    viewport: innerWidth,
+                                  };
+                                }"""
+                            )
+                            self.assertGreater(boxes["appName"]["width"], 0)
+                            self.assertGreaterEqual(
+                                boxes["appName"]["left"],
+                                boxes["row"]["left"] - 0.5,
+                            )
+                            self.assertGreater(boxes["locale"]["width"], 0)
+                            self.assertGreaterEqual(
+                                boxes["locale"]["left"],
+                                boxes["row"]["left"] - 0.5,
+                            )
+                            self.assertLessEqual(
+                                boxes["locale"]["right"],
+                                boxes["row"]["right"] + 0.5,
+                            )
+                            self.assertLessEqual(
+                                boxes["locale"]["right"],
+                                boxes["viewport"] + 0.5,
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_anonymous_chart_is_live_canvas_and_window_refetch_is_atomic(self) -> None:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
