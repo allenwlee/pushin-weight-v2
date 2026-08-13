@@ -29,12 +29,11 @@ The additive `render.yaml` declares the desired topology:
 | `pushinweight-headlines-broker` | Owned persistent/no-eviction Key Value broker |
 | `pushinweight-headlines` | Dedicated Celery worker consuming only `trend-narratives`, concurrency/prefetch one |
 
-The web, harvest, and headline services currently run the pre-expansion
-revision `4626dd0`; the broker and dedicated worker are present. The checked-in
-Blueprint stages the analytical/schema-two revision with all three controls
-off under control revision `v22-analytical-off-v1`. Provisioning paid services,
-changing Render resources, migrations on shared data, provider calls, and
-deployment require separate authorization.
+The web, harvest, and headline services run the analytical/schema-two
+revision; the broker and dedicated worker are present. After the staged
+production canary and browser proof, the checked-in Blueprint keeps all three
+controls live under control revision `v22-analytical-live-v1`. Disable the
+relevant control first when following the rollback matrix below.
 
 The worker command intentionally omits beat and consumes no default/harvest
 queue:
@@ -48,11 +47,11 @@ celery -A project worker -l INFO -Q trend-narratives --concurrency=1 \
 
 These controls are independent and fail closed:
 
-| Service | Variable | Next-deploy staged value |
+| Service | Variable | Blueprint value after production proof |
 |---|---|---|
-| web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `False` |
-| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `False` |
-| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `False` |
+| web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `True` |
+| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` |
+| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `True` |
 
 The read-only pre-rollout inventory found the prior revision live with serving,
 enqueueing, and worker provider calls enabled under separate old control

@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 
-def test_headline_blueprint_is_queue_isolated_and_stages_all_controls_off():
+def test_headline_blueprint_is_queue_isolated_and_keeps_proven_controls_live():
     blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
     services = {service["name"]: service for service in blueprint["services"]}
 
@@ -46,9 +46,9 @@ def test_headline_blueprint_is_queue_isolated_and_stages_all_controls_off():
             for entry in services[service_name]["envVars"]
             if "key" in entry
         }
-        assert environment[control] == "False"
+        assert environment[control] == "True"
         assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"] == (
-            "v22-analytical-off-v1"
+            "v22-analytical-live-v1"
         )
         database = next(
             entry["fromDatabase"]["name"]

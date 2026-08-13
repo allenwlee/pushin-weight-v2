@@ -655,10 +655,10 @@ projection is committed.
 | Queue | `trend-narratives` |
 | Worker | concurrency 1, prefetch 1, no gossip/mingle |
 | Broker | dedicated persistent/no-eviction Render Key Value service |
-| `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | false in Blueprint |
-| `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | false in Blueprint |
-| `X_MONITOR_HEADLINE_SERVING_ENABLED` | false in Blueprint |
-| `X_MONITOR_HEADLINE_CONTROL_REVISION` | `v22-analytical-off-v1` in Blueprint |
+| `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | true in Blueprint after production proof |
+| `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | true in Blueprint after production proof |
+| `X_MONITOR_HEADLINE_SERVING_ENABLED` | true in Blueprint after production proof |
+| `X_MONITOR_HEADLINE_CONTROL_REVISION` | `v22-analytical-live-v1` in Blueprint |
 
 The controls are service-specific: harvest owns enqueue, the headline worker
 owns provider permission, and web owns serving. `config.yaml` uses `null` for

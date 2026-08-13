@@ -38,9 +38,9 @@ services:
           name: pushinweight-db-shadow
           property: connectionString
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED
-        value: "False"
+        value: "True"
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-analytical-off-v1
+        value: v22-analytical-live-v1
       - fromGroup: pushinweight-secrets
 
   # --------------------------------------------------------------------------
@@ -78,9 +78,9 @@ services:
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
-        value: "False"
+        value: "True"
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-analytical-off-v1
+        value: v22-analytical-live-v1
 
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
@@ -116,9 +116,9 @@ services:
           name: pushinweight-headlines-broker
           property: connectionString
       - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
-        value: "False"
+        value: "True"
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-analytical-off-v1
+        value: v22-analytical-live-v1
       - fromGroup: pushinweight-secrets
 
 databases:
