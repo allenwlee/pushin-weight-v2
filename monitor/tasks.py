@@ -1,7 +1,8 @@
 """Celery tasks for monitor.
 
-`run_cycle` is the main entry point — invoked by Celery beat on a
-schedule or on-demand via `python manage.py run_cycle --async`.
+`run_cycle` is the main entry point — invoked by the Render cron or on-demand
+via `python manage.py run_cycle --async`. Celery beat is intentionally not a
+production scheduler.
 
 The actual cycle logic lives in `monitor.cycle.CycleRunner`; this file
 just wires the cycle loop to Celery + Django.
@@ -17,6 +18,40 @@ from celery import shared_task
 from x_monitor.config import load_config
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task(
+    name="monitor.tasks.refresh_trend_narratives",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=11 * 60,
+    time_limit=12 * 60,
+)
+def refresh_trend_narratives(
+    envelope: dict[str, object],
+) -> dict[str, object]:
+    """Consume one committed harvest envelope on the headline-only queue."""
+    from monitor.trend_narrative_queue import coalesce_envelope
+    from monitor.trend_narrative_tasks import (
+        process_trend_narrative_envelope,
+    )
+
+    newest = coalesce_envelope(envelope)
+    if newest is None:
+        return {
+            "status": "superseded_source",
+            "source_cycle_id": envelope.get("source_cycle_id", ""),
+            "slots_consumed": 0,
+            "transport_started": 0,
+            "published": 0,
+            "failed": 0,
+            "errors": [],
+        }
+    return process_trend_narrative_envelope(newest)
 
 
 @shared_task(name="monitor.tasks.run_cycle", bind=True, max_retries=2)
@@ -71,6 +106,11 @@ def _execute_cycle(*, dry_run: bool) -> dict:
     )
     try:
         stats = runner.run()
+        from monitor.trend_narrative_dispatch import (
+            dispatch_harvest_completion,
+        )
+
+        dispatch_harvest_completion(stats, dry_run=dry_run)
         logger.info("monitor run_cycle complete: %s", stats.get("status"))
         return stats
     except Exception as exc:

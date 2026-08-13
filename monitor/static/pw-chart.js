@@ -43,9 +43,39 @@
   function validPayload(payload) {
     if (!isObject(payload) || !Array.isArray(payload.days) ||
         !isObject(payload.series) || !isObject(payload.totals) ||
-        !isObject(payload.pulse) || !Array.isArray(payload.pulse.entries)) return false;
-    if (Number(payload.window_days) !== Number(payload.pulse.window_days)) return false;
-    if (!payload.computed_at || payload.computed_at !== payload.pulse.computed_at) return false;
+        !isObject(payload.pulse) || !Array.isArray(payload.pulse.entries) ||
+        !isObject(payload.trend_narrative) ||
+        ![1, 2].includes(Number(payload.trend_narrative.schema_version)) ||
+        typeof payload.trend_narrative.body !== 'string' ||
+        (payload.trend_narrative.body_remainder !== undefined &&
+         typeof payload.trend_narrative.body_remainder !== 'string') ||
+        typeof payload.trend_narrative.state_label !== 'string' ||
+        !isObject(payload.top_voices) || !Array.isArray(payload.top_voices.entries)) return false;
+    if ([payload.pulse, payload.trend_narrative, payload.top_voices].some(function (projection) {
+      return Number(payload.window_days) !== Number(projection.window_days) ||
+        payload.computed_at !== projection.computed_at;
+    })) return false;
+    if (!payload.computed_at) return false;
+    if (!payload.pulse.entries.every(function (entry) {
+      return isObject(entry) && typeof entry.nickname === 'string';
+    })) return false;
+    if (!payload.top_voices.entries.every(function (entry) {
+      return isObject(entry) && typeof entry.handle === 'string' &&
+        Number.isFinite(Number(entry.voice_star));
+    })) return false;
+    if (payload.trend_narrative.primary_brand !== null &&
+        payload.trend_narrative.primary_brand !== undefined &&
+        (!isObject(payload.trend_narrative.primary_brand) ||
+         typeof payload.trend_narrative.primary_brand.key !== 'string' ||
+         typeof payload.trend_narrative.primary_brand.display_name !== 'string')) return false;
+    var observations = payload.trend_narrative.observations;
+    if (observations === undefined && Number(payload.trend_narrative.schema_version) === 1) {
+      observations = [];
+    }
+    if (!Array.isArray(observations) || observations.length > 2 ||
+        !observations.every(function (observation) {
+          return typeof observation === 'string' && observation.trim().length > 0;
+        })) return false;
     return Object.keys(payload.series).every(function (brand) {
       return Array.isArray(payload.series[brand]);
     });
@@ -214,6 +244,81 @@
     bar.setAttribute('data-pw-computed-at', pulse.computed_at);
   }
 
+  function clearChildren(node) {
+    if (!node) return;
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function renderHeadline(narrative, topVoices) {
+    var strip = document.querySelector('[data-pw-headline]');
+    if (!strip) return;
+    var body = strip.querySelector('[data-pw-headline-body]');
+    var state = strip.querySelector('[data-pw-headline-state]');
+    var oldBrand = strip.querySelector('[data-pw-headline-brand]');
+    if (narrative.primary_brand) {
+      var desiredTag = narrative.primary_brand.url ? 'A' : 'SPAN';
+      var brand = oldBrand && oldBrand.tagName === desiredTag
+        ? oldBrand
+        : document.createElement(desiredTag.toLowerCase());
+      brand.className = 'brand';
+      brand.setAttribute('data-pw-headline-brand', '');
+      brand.textContent = narrative.primary_brand.display_name || narrative.primary_brand.key;
+      if (narrative.primary_brand.url) brand.setAttribute('href', narrative.primary_brand.url);
+      if (brand !== oldBrand && body && body.parentNode) {
+        if (oldBrand && oldBrand.parentNode) oldBrand.parentNode.removeChild(oldBrand);
+        body.parentNode.insertBefore(brand, body);
+      }
+    } else if (oldBrand && oldBrand.parentNode) {
+      oldBrand.parentNode.removeChild(oldBrand);
+    }
+    if (body) body.textContent = narrative.body_remainder || narrative.body;
+    if (state) state.textContent = narrative.state_label;
+    var observations = strip.querySelector('[data-pw-headline-observations]');
+    if (observations) {
+      clearChildren(observations);
+      (narrative.observations || []).forEach(function (observation) {
+        var item = document.createElement('li');
+        item.textContent = observation;
+        observations.appendChild(item);
+      });
+      observations.hidden = !narrative.observations || narrative.observations.length === 0;
+    }
+    var voices = strip.querySelector('[data-pw-headline-voice-entries]');
+    if (voices) {
+      var signature = JSON.stringify(topVoices.entries.map(function (entry) {
+        return [entry.handle, entry.voice_star];
+      }));
+      if (voices.getAttribute('data-pw-voice-signature') !== signature) {
+        clearChildren(voices);
+        if (topVoices.entries.length === 0) {
+          var emptyVoices = document.createElement('span');
+          emptyVoices.className = 'muted';
+          emptyVoices.textContent = voices.getAttribute('data-pw-empty-text') || '';
+          voices.appendChild(emptyVoices);
+        }
+        topVoices.entries.forEach(function (entry, index) {
+          if (index > 0) {
+            var separator = document.createElement('span');
+            separator.className = 'voice-separator';
+            separator.textContent = ', ';
+            voices.appendChild(separator);
+          }
+          var link = document.createElement('a');
+          link.className = 'voice-chip';
+          link.href = 'https://x.com/' + String(entry.handle || '').replace(/^@/, '');
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = '@' + String(entry.handle || '').replace(/^@/, '') + ' (☆ ' + entry.voice_star + ')';
+          voices.appendChild(link);
+        });
+        voices.setAttribute('data-pw-voice-signature', signature);
+      }
+    }
+    strip.setAttribute('data-pw-window', String(narrative.window_days));
+    strip.setAttribute('data-pw-computed-at', narrative.computed_at);
+    strip.setAttribute('data-pw-state', narrative.state);
+  }
+
   function setStatus(node, text, visible) {
     if (!node) return;
     node.textContent = visible ? text : '';
@@ -237,15 +342,23 @@
       region.getAttribute('data-pw-pulse-empty-text') || 'No pulse data in this window',
       payload.pulse.entries.length === 0
     );
+    setStatus(document.querySelector('[data-pw-headline-status]'), '', false);
     region.setAttribute('data-pw-refresh-failed', 'false');
     var bar = document.querySelector('[data-pw-pulse]');
     if (bar) bar.setAttribute('data-pw-refresh-failed', 'false');
+    var headline = document.querySelector('[data-pw-headline]');
+    if (headline) headline.setAttribute('data-pw-refresh-failed', 'false');
   }
 
   function showRefreshFailure(region) {
     setStatus(
       region.querySelector('[data-pw-chart-status]'),
       region.getAttribute('data-pw-chart-error-text') || 'Chart refresh failed; showing last result',
+      true
+    );
+    setStatus(
+      document.querySelector('[data-pw-headline-status]'),
+      region.getAttribute('data-pw-headline-error-text') || 'Trend summary refresh failed; showing last result',
       true
     );
     setStatus(
@@ -256,6 +369,8 @@
     region.setAttribute('data-pw-refresh-failed', 'true');
     var bar = document.querySelector('[data-pw-pulse]');
     if (bar) bar.setAttribute('data-pw-refresh-failed', 'true');
+    var headline = document.querySelector('[data-pw-headline]');
+    if (headline) headline.setAttribute('data-pw-refresh-failed', 'true');
   }
 
   function payloadFromFragment(html) {
@@ -266,18 +381,60 @@
   function commitFragment(region, html, payload) {
     var priorCanvas = chartIn(region);
     var priorChart = priorCanvas ? Chart.getChart(priorCanvas) : null;
-    if (priorChart) priorChart.destroy();
-    region.innerHTML = html;
-    var canvas = chartIn(region);
-    if (!canvas) throw new Error('chart fragment omitted canvas');
-    renderOne(canvas);
-    renderLegend(region, payload);
-    renderPulse(region, payload.pulse);
-    updateProjectionStates(region, payload);
+    var priorPayload = readPayload(priorCanvas);
+    var priorRegionHtml = region.innerHTML;
+    var priorPulse = document.querySelector('[data-pw-pulse]');
+    var priorPulseHtml = priorPulse && priorPulse.innerHTML;
+    var priorHeadline = document.querySelector('[data-pw-headline]');
+    var priorHeadlineHtml = priorHeadline && priorHeadline.outerHTML;
+    var priorRefreshState = region.getAttribute('data-pw-refresh-failed');
+    try {
+      if (priorChart) priorChart.destroy();
+      region.innerHTML = html;
+      var canvas = chartIn(region);
+      if (!canvas) throw new Error('chart fragment omitted canvas');
+      renderOne(canvas);
+      renderLegend(region, payload);
+      renderPulse(region, payload.pulse);
+      renderHeadline(payload.trend_narrative, payload.top_voices);
+      updateProjectionStates(region, payload);
+    } catch (error) {
+      // A valid response must replace all four projections together. Restore
+      // every projection if a renderer or DOM operation fails mid-commit.
+      try {
+        region.innerHTML = priorRegionHtml;
+        if (priorPayload && chartIn(region)) {
+          renderOne(chartIn(region));
+          renderLegend(region, priorPayload);
+        }
+        var restoredPulse = document.querySelector('[data-pw-pulse]');
+        if (restoredPulse && priorPulseHtml !== undefined) {
+          restoredPulse.innerHTML = priorPulseHtml;
+        }
+        var currentHeadline = document.querySelector('[data-pw-headline]');
+        if (priorHeadlineHtml && currentHeadline && currentHeadline.outerHTML !== undefined) {
+          currentHeadline.outerHTML = priorHeadlineHtml;
+        }
+        if (priorRefreshState !== null) {
+          region.setAttribute('data-pw-refresh-failed', priorRefreshState);
+        }
+      } catch (restoreError) {
+        // The request failure path still exposes a status if restoration is
+        // impossible in a degraded DOM.
+      }
+      throw error;
+    }
   }
 
   function activeFilters() {
     return window.pwFilter && window.pwFilter.get ? window.pwFilter.get() : {};
+  }
+
+  function currentLocale(region) {
+    var bodyLocale = document.body && typeof document.body.getAttribute === 'function'
+      ? document.body.getAttribute('data-pw-locale')
+      : '';
+    return bodyLocale || region.getAttribute('data-pw-locale') || 'en';
   }
 
   function filtersForEvent(event) {
@@ -296,7 +453,8 @@
     }, REQUEST_TIMEOUT_MS);
     var filters = filtersForEvent(event);
     var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters)) +
-      '&window=' + encodeURIComponent(filters.window || 1);
+      '&window=' + encodeURIComponent(filters.window || 1) +
+      '&locale=' + encodeURIComponent(currentLocale(region));
     return fetch(url, {
       credentials: 'same-origin',
       signal: activeController ? activeController.signal : undefined,
@@ -338,6 +496,7 @@
         renderOne(canvas);
         renderLegend(region, payload);
         renderPulse(region, payload.pulse);
+        renderHeadline(payload.trend_narrative, payload.top_voices);
         updateProjectionStates(region, payload);
       }
       setInterval(requestChart, REFRESH_INTERVAL_MS);

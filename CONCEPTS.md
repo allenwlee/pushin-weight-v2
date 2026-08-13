@@ -81,6 +81,49 @@ The endpoint the translator pipeline calls for the message-translate stage. Set 
 
 *Avoid:* `translator_endpoint` — the canonical name is base URL, matching the Anthropic SDK's `base_url` parameter.
 
+## Trend narratives
+
+Vocabulary for the shared V22 headline generated after eligible committed
+harvest cycles. The detailed behavioral contract is in
+`docs/reference/headline-trend-narratives.md`.
+
+### Trend analysis snapshot
+
+The immutable, bounded PostgreSQL result for one fixed window and fact cutoff.
+It contains deterministic candidate rankings, complete coarse/fine series,
+coverage, exceptional episodes, and selected evidence. It is persisted in
+`TrendNarrative.generation_facts`; only a smaller provider projection crosses
+the LLM boundary.
+
+### Measured candidate
+
+A database brand/full-window or brand/episode identity whose volume,
+engagement, and metadata facts were computed from post-brand associations. One
+or two measured candidates may be reported, and their candidate IDs must come
+from the persisted snapshot.
+
+### Evidence-only entity
+
+One optional secondary company, brand, product, model, or organization directly
+named by at least two independent evidence excerpts but not measured as a trend
+candidate. Until entity discovery/resolution is implemented, an off-list name
+is persisted as an unresolved subject and must never be described as having a
+measured trend.
+
+### Narrative slot
+
+The irreversible outbound-call entitlement reserved for one
+`(source_cycle_id, window_days)` ledger row before network transport starts.
+Logical task delivery, a consumed slot, transport start, transport completion,
+and valid publication are distinct events; there can be at most one slot per
+source-cycle/window and four per envelope.
+
+### Last-good narrative
+
+The one current published `TrendNarrative` for a window. Failed, suppressed,
+disabled, stale, or superseded attempts do not erase it; the public projection
+continues to serve it unless serving itself is disabled.
+
 ## x-monitor deployment
 
 Vocabulary scoped to the launchd-based deployment story — the two LaunchAgents, the pause sentinel, and the in-process lockfile that prevents overlapping cycles.

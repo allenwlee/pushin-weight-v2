@@ -241,26 +241,52 @@
                data-pw-chart-error-text="{% if is_zh_chrome %}图表刷新失败，显示上次结果{% else %}Chart refresh failed; showing last result{% endif %}"
                data-pw-pulse-empty-text="{% if is_zh_chrome %}本窗口暂无脉冲数据{% else %}No pulse data in this window{% endif %}"
                data-pw-pulse-error-text="{% if is_zh_chrome %}脉冲刷新失败，显示上次结果{% else %}Pulse refresh failed; showing last result{% endif %}"
-               data-pw-pulse-new-text="{% if is_zh_chrome %}新{% else %}NEW{% endif %}">
+               data-pw-pulse-new-text="{% if is_zh_chrome %}新{% else %}NEW{% endif %}"
+               data-pw-headline-error-text="{% trans 'Trend summary refresh failed; showing last result' %}">
         {% include "monitor/_home_chart.html" %}
         <div class="legend" data-pw-chart-legend></div>
       </section>
 
-      <div class="headline-strip" role="region" aria-label="{% trans 'Top voices' %}">
-        <span class="pulse"></span>
-        <span class="headline-label">{% trans "Top voices" %}</span>
-        <span class="headline-meta muted">☆ {% trans "by followers" %}</span>
-        <span class="headline-voices">
-          {% for voice in top_voices %}
-            <a class="voice-chip" href="https://x.com/{{ voice.handle|cut:'@' }}" target="_blank" rel="noopener noreferrer">
-              <span class="voice-handle">@{{ voice.handle }}</span>
-              <span class="voice-star">(☆ {{ voice.voice_star }})</span>
-            </a>{% if not forloop.last %}, {% endif %}
-          {% empty %}
-            <span class="muted">{% trans "no top voices this period" %}</span>
+      <section class="headline-strip" role="region" aria-label="{% trans 'Trend summary' %}"
+               data-pw-headline data-pw-window="{{ trend_narrative.window_days }}"
+               data-pw-computed-at="{{ trend_narrative.computed_at }}">
+        <div class="kicker">
+          <span class="pulse" aria-hidden="true"></span>
+          <span>{% trans "Trend summary" %}</span>
+          <span class="headline-state" data-pw-headline-state>{{ trend_narrative.state_label }}</span>
+        </div>
+        <div class="body">
+          {% if trend_narrative.primary_brand %}
+            {% if trend_narrative.primary_brand.url %}
+              <a class="brand" data-pw-headline-brand href="{{ trend_narrative.primary_brand.url }}">{{ trend_narrative.primary_brand.display_name }}</a>
+            {% else %}
+              <span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>
+            {% endif %}
+          {% endif %}
+          <span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
+        </div>
+        <ul class="headline-observations" data-pw-headline-observations{% if not trend_narrative.observations %} hidden{% endif %}>
+          {% for observation in trend_narrative.observations %}
+            <li>{{ observation }}</li>
           {% endfor %}
-        </span>
-      </div>
+        </ul>
+        <p class="headline-status muted" data-pw-headline-status hidden></p>
+        <div class="headline-voices" data-pw-headline-voices>
+          <span class="headline-label">{% trans "Top voices" %}</span>
+          <span class="headline-meta muted">☆ {% trans "by followers" %}</span>
+          <span class="headline-voice-entries" data-pw-headline-voice-entries
+                data-pw-empty-text="{% trans 'no top voices this period' %}">
+            {% for voice in top_voices %}
+              <a class="voice-chip" href="https://x.com/{{ voice.handle|cut:'@' }}" target="_blank" rel="noopener noreferrer">
+                <span class="voice-handle">@{{ voice.handle }}</span>
+                <span class="voice-star">(☆ {{ voice.voice_star }})</span>
+              </a>{% if not forloop.last %}, {% endif %}
+            {% empty %}
+              <span class="muted">{% trans "no top voices this period" %}</span>
+            {% endfor %}
+          </span>
+        </div>
+      </section>
     </div>
 
     <div class="desktop-col-feed">

@@ -436,7 +436,6 @@
     border: 1px solid #7c3aed;
     border-radius: 10px;
     padding: 10px 12px;
-    cursor: pointer;
     position: relative;
   }
   .headline-strip .kicker {
@@ -467,9 +466,35 @@
     color: white;
     font-weight: 500;
   }
+  .headline-strip .body > * + * { margin-left: 5px; }
+  .headline-strip .body .brand {
+    text-decoration: none;
+    border-radius: 4px;
+  }
+  .headline-strip .body a.brand:hover,
+  .headline-strip .body a.brand:focus-visible {
+    color: #fff;
+    text-decoration: underline;
+  }
+  .headline-strip .headline-state {
+    margin-left: auto;
+    color: #a78bfa;
+    font-size: 8px;
+  }
+  .headline-strip[data-pw-state="stale"] .headline-state { color: #fbbf24; }
+  .headline-status { margin: 5px 0 0; font-size: 10px; }
   .headline-strip .body .brand { color: #fbcfe8; font-weight: 600; }
   .headline-strip .body .delta { color: #86efac; font-weight: 700; }
   .headline-strip .body .voice { color: #ddd6fe; font-weight: 400; }
+  .headline-observations {
+    margin: 7px 0 0;
+    padding-left: 17px;
+    color: #ddd6fe;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .headline-observations[hidden] { display: none; }
+  .headline-observations li + li { margin-top: 3px; }
 
   /* 6. Feed — scrollable body (infinite within strip); 4/5 post + 1/5 meta */
   .feed-strip {
@@ -943,12 +968,13 @@ body.desktop-shell .desktop-grid .feed-strip {
 
 /* v22 iter 4: top voices body */
 .headline-voices {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-left: 8px;
+  margin-top: 7px;
   font-size: 11px;
   color: var(--muted);
+  align-items: center;
 }
 .headline-voices .voice-chip {
   display: inline-flex;

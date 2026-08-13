@@ -176,7 +176,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             "us_nationalism": ["mild_pro"],
             "unsanctioned": "off",
         }
-        with self.assertNumQueries(3):
+        # Pulse, brand inventory, chart aggregate, and the co-timestamped
+        # Top Voices projection. A disabled narrative performs no DB read.
+        with self.assertNumQueries(4):
             payload = _build_home_chart_payload(1, active, now=ANCHOR)
         self.assertEqual(payload["totals"], {"up": 1})
         self.assertEqual(payload["computed_at"], payload["pulse"]["computed_at"])

@@ -31,9 +31,11 @@ There is one production stack: v2.
 
 - **Web:** Django + gunicorn + WhiteNoise on Render, behind Google OAuth
   (URL: `https://pushinweight-web.onrender.com`).
-- **Harvest:** Celery beat + worker on Render (15-min interval).
-- **DB:** Managed PostgreSQL on Render (Render-internal `DATABASE_URL`
-  via the `xmonitor-db` service). The v1 SQLite file at
+- **Harvest:** One Render cron runs `python manage.py run_cycle` every 15
+  minutes. Celery beat is not a production scheduler.
+- **Headline worker:** A dedicated queue-only Celery worker and owned broker
+  are additive candidate resources; they never run harvesting or beat.
+- **DB:** Managed PostgreSQL on Render (service-scoped `DATABASE_URL`). The v1 SQLite file at
   `data/x_monitoring.db` is read-only historical state; do not write to
   it. The local `data/django_dev.db` is a dev-only SQLite; never point
   prod at it.
@@ -80,14 +82,16 @@ python manage.py check --deploy
 
 ## Render deploy
 
-Deployment is via Render Blueprint (`render.yaml`). On push to the
-Render-connected branch, Render auto-provisions:
+Deployment candidates are described by `render.yaml`; applying a Blueprint is
+an explicit release action. The current topology is:
 
-- `xmonitor-web` (gunicorn + Django)
-- `xmonitor-worker` (Celery worker)
-- `xmonitor-beat` (Celery scheduler)
-- `xmonitor-db` (managed PostgreSQL)
-- `xmonitor-redis` (managed Redis)
+- `pushinweight-web` (gunicorn + Django)
+- `pushinweight-harvest` (the only scheduler, a 15-minute Render cron)
+- managed PostgreSQL
+- suspended legacy worker and beat services that must not be reactivated
+
+The V22 headline candidate adds only `pushinweight-headlines` (a queue-isolated
+worker) and `pushinweight-headlines-broker`; it does not add beat.
 
 Full runbook: `docs/deploy/render.md`.
 

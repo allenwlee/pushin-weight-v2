@@ -186,9 +186,9 @@
     scroller.addEventListener("pointerup", endDrag);
     scroller.addEventListener("pointercancel", endDrag);
 
-    // Chrome on physical iOS can finish a stationary touch in this scrolling
-    // strip without emitting the synthetic click. Wait briefly so normal
-    // clicks retain authority, then activate only if no click arrived.
+    // Physical iOS can finish a stationary touch without emitting the
+    // synthetic click. Give the normal click a short chance, then activate
+    // only when no click arrived.
     scroller.addEventListener("touchend", function (e) {
       var t = e.target;
       if (!t || !t.closest || t.closest(".filter-dropdown")) return;

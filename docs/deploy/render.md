@@ -1,246 +1,165 @@
-# Render Runbook -- x-monitor v2 (Django + PostgreSQL)
+# Render runbook — Pushin Weight v2
 
-Last updated: 2026-07-22
+Last verified against the Render account and Blueprint: 2026-08-13.
 
-Deploys the v2 Django stack to Render with managed PostgreSQL, Redis,
-Celery workers, and Google OAuth.
+## Deployed reality
 
-## Prerequisites
+Production harvesting is synchronous and has one scheduler:
 
-- A Render account with a connected GitHub/GitLab repo
-- Access to the repo at `pushin-weight-v2`
-- Google Cloud Console project for OAuth credentials
-- TwitterAPI.io API key (same as v1)
-- Anthropic API key (same as v1)
+| Resource | Current role |
+|---|---|
+| `pushinweight-web` | Django/Gunicorn dashboard |
+| `pushinweight-harvest` | Render cron, `*/15 * * * *`, `python manage.py run_cycle` |
+| `pushinweight-db-shadow` | PostgreSQL used by the deployed web/cron services |
+| `pushinweight-headlines-broker` | Available owned Key Value broker for `trend-narratives` |
+| `pushinweight-headlines` | Active queue-only worker for `trend-narratives`, concurrency/prefetch one |
+| legacy `pushinweight-worker` | Suspended; old SHA; do not reactivate |
+| legacy `pushinweight-beat` | Suspended; old SHA; do not reactivate |
 
-## Architecture
+`monitor/tasks.py` and old documentation previously implied that Celery beat
+scheduled harvesting. It does not. Render cron is authoritative; production
+must have exactly one active harvest scheduler and zero active beat services.
 
-Six Render resources provisioned from `render.yaml` (Blueprint):
+## V22 shared trend narrative candidate
 
-| Resource | Type | Purpose |
+The additive `render.yaml` declares the desired topology:
+
+| Resource | Purpose |
+|---|---|
+| `pushinweight-headlines-broker` | Owned persistent/no-eviction Key Value broker |
+| `pushinweight-headlines` | Dedicated Celery worker consuming only `trend-narratives`, concurrency/prefetch one |
+
+The web, harvest, and headline services run the analytical/schema-two
+revision; the broker and dedicated worker are present. After the staged
+production canary and browser proof, the checked-in Blueprint keeps all three
+controls live under control revision `v22-analytical-live-v1`. Disable the
+relevant control first when following the rollback matrix below.
+
+The worker command intentionally omits beat and consumes no default/harvest
+queue:
+
+```text
+celery -A project worker -l INFO -Q trend-narratives --concurrency=1 \
+  --prefetch-multiplier=1 --without-gossip --without-mingle
+```
+
+## Controls and credentials
+
+These controls are independent and fail closed:
+
+| Service | Variable | Blueprint value after production proof |
 |---|---|---|
-| `xmonitor-web` | Web service (`starter`) | gunicorn + Django, serves dashboard |
-| `xmonitor-worker` | Worker (`starter`) | Celery worker, runs harvest cycles |
-| `xmonitor-beat` | Worker (`starter`) | Celery beat scheduler, 15-min cadence |
-| `xmonitor-db` | Managed PostgreSQL (`starter`) | Production database |
-| `xmonitor-redis` | Managed Redis (`starter`) | Celery broker + result backend |
-| `xmonitor-secrets` | Env group | API keys (Google, Twitter, Anthropic) |
+| web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `True` |
+| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` |
+| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `True` |
 
-## Step 1: Google OAuth credentials
+The read-only pre-rollout inventory found the prior revision live with serving,
+enqueueing, and worker provider calls enabled under separate old control
+revisions. Do not deploy the schema-two code while inheriting those values.
+Before deployment, verify the resolved service environment will take the
+checked-in all-off values; if Render preserves an old per-service override,
+set that control to `False` before the build starts.
 
-Before deploying, create OAuth credentials in the Google Cloud Console:
+`DEEPSEEK_API_KEY` must be present on the headline worker. Its value is the
+same DeepSeek V4 credential used by translation/classification, but it remains
+a worker-scoped Render secret; do not attach the broad `pushinweight-secrets`
+group to the worker.
+Record `X_MONITOR_HEADLINE_CONTROL_REVISION` with every control change.
+`DATABASE_URL` is declared with `fromDatabase: pushinweight-db-shadow` for web,
+cron, and worker. The existing Render services may retain their prior
+environment value after a Blueprint sync, so the release owner must verify the
+resolved database identity on every service after sync and manually inject the
+same managed credential through Render if a service did not update. Never
+commit a connection string to source control.
 
-1. Go to https://console.cloud.google.com/apis/credentials
-2. Create a new OAuth 2.0 Client ID (Web application)
-3. Add authorized redirect URIs:
-   - `http://localhost:8000/accounts/google/login/callback/` (local dev)
-   - `https://xmonitor-web.onrender.com/accounts/google/login/callback/` (prod)
-     _Replace the hostname with whatever Render assigns if not using a custom domain._
-4. Note the **Client ID** and **Client Secret**
+The headline route is pinned to DeepSeek V4 via
+`https://api.deepseek.com/anthropic` + `deepseek-v4-pro`, matching the
+translation/classification route. Anthropic is a separate explicit route using
+`https://api.anthropic.com` + `claude-haiku-4-5-20251001`; MiniMax is a
+separate explicit/evaluated route using
+`https://api.minimax.io/anthropic` + `MiniMax-M3`; legacy M3 model names and
+the deprecated endpoint are rejected.
 
-## Step 2: Create the secrets env group in Render
+## Cost and freshness contract
 
-1. Go to Render Dashboard > Env Groups
-2. Create a new env group named `xmonitor-secrets`
-3. Add these variables:
+- One successful refresh can make zero to four physical requests: at most one
+  for each fixed `1/7/30/365d` window.
+- SDK retries, Celery automatic retries, public regeneration, arbitrary filter
+  narratives, and repair calls are disabled.
+- Cadences are 30 minutes, 1 hour, 6 hours, and 24 hours respectively. Stale
+  limits are twice those intervals.
+- Semantically unchanged bucket-coordinate/timestamp drift advances the
+  durable checked tuple with zero version and zero provider request. A changed
+  analytical vector, candidate, evidence set, prompt, model route, or
+  publication epoch is generation-relevant.
+- Browser loads, locale/filter changes, the 60-second refresh, and repeated
+  window switching read PostgreSQL only.
+- A failed or invalid output never replaces current copy.
 
-| Key | Value |
-|---|---|
-| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
-| `TWITTERAPI_IO_API_KEY` | Same key used by v1 (from `~/.env.secrets`) |
-| `ANTHROPIC_API_KEY` | Same key used by v1 (from `~/.env.secrets`) |
-| `ANTHROPIC_BASE_URL` | Optional -- set if using a gateway proxy |
-
-## Step 3: Deploy via Blueprint
-
-The `render.yaml` at the repo root defines the full service topology.
-
-1. In Render Dashboard, go to **Blueprints**
-2. Click **New Blueprint Instance**
-3. Connect the repo and select the branch (e.g., `main`)
-4. Render auto-detects `render.yaml` and provisions:
-   - Managed PostgreSQL (`xmonitor-db`, plan: starter)
-   - Managed Redis (`xmonitor-redis`, plan: starter)
-   - Web service (`xmonitor-web`)
-   - Worker (`xmonitor-worker`)
-   - Beat scheduler (`xmonitor-beat`)
-5. The first build runs `build.sh` which:
-   - Installs Python deps (`pip install -e ".[dev]"`)
-   - Collects static files (`manage.py collectstatic --noinput`)
-   - Applies migrations (`manage.py migrate --noinput`)
-
-### What `build.sh` does
+Inspect state without calling the provider:
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-pip install -e ".[dev]"
-python manage.py collectstatic --noinput
-python manage.py migrate --noinput
+python manage.py headline_status
+python manage.py headline_status --json
 ```
 
-The `--noinput` flag on `collectstatic` and `migrate` ensures the build
-doesn't block on prompts. Render runs `build.sh` on every deploy.
+## Ordered activation gates
 
-## Step 4: First-deploy setup
+Stop at any failed gate. Record timestamp, deployed SHA, service ID, operator,
+observer, and control revision.
 
-After the first successful deploy, run these one-time setup commands:
+1. Disable all three controls on the currently deployed revision and drain the
+   headline queue. Capture the pre-migration ledger count/ID/current-row SQL
+   from the baseline investigation.
+2. Deploy the additive migration and code with all three controls still off.
+   Verify the physical `trend_narratives` parent, writable
+   `trend_narrative_versions` compatibility view, normalized subject table,
+   row/ID/no-rewrite invariants, legacy web fallback, baseline harvest call
+   count, one active cron, zero beat, and all three services resolving to
+   `pushinweight-db-shadow`.
+3. Reconcile the owned broker and headline-only worker. Do not touch the two
+   suspended legacy services. If the worker is absent, stop before enabling
+   enqueueing.
+4. Send one safe provider-free task. Verify only `trend-narratives` is consumed,
+   concurrency/prefetch are one, and the queue returns to zero.
+5. Enable enqueue on the cron while provider remains off. One real harvest must
+   yield four suppressed/no-slot rows and zero HTTP attempts.
+6. Empty the queue. Enable provider calls for one canary. Verify `0..4` slots,
+   HTTP starts never exceed slots, valid bilingual rows publish independently,
+   normalized subjects and claim links are valid, and harvest external calls
+   remain at baseline.
+7. Review all four locales/windows in a real browser. Enable serving only after
+   content, freshness, link, mobile geometry, and accessibility checks pass.
+8. Observe +1h, +6h, and +24h. Queue depth must return to zero, oldest message
+   stay below 30 minutes, and no source cycle may exceed four slots.
 
-### 4a. Shell into the web service
+## Rollback matrix
 
-In Render Dashboard > `xmonitor-web` > Shell:
+| Incident | First action | Preserve |
+|---|---|---|
+| Cost, provider, or queue | Disable provider calls; verify worker revision; disable enqueue | Last-good database rows and serving |
+| Bad content | Disable serving and provider calls | Harvester and rows |
+| UI regression | Disable serving only | Worker evidence and rows |
+| Worker/broker outage | Disable enqueue; pause dedicated worker if needed | Web and harvester |
+
+Never remove the expanded parent/subject tables or compatibility view during
+operational rollback. Do not delete rows or reactivate legacy worker/beat
+resources. Browser traffic must remain incapable of generating work.
+
+## Validation commands
+
+Use disposable PostgreSQL only for tests; never aim pytest at shared data.
 
 ```bash
-# Seed the curated base layer (brands, companies, roles, accounts)
-python manage.py load_seed
-
-# Seed i18n taxonomy labels (post_type, sentiment, discourse, etc.)
-python manage.py seed_i18n_labels
-
-# Verify
-python manage.py run_cycle --dry-run --limit-per-call 5
+render blueprints validate render.yaml
+DATABASE_URL=postgresql://fuchitalee@localhost/pushinweight_test \
+  .venv/bin/pytest tests/test_trend_narrative_*.py --reuse-db -q
+node tests/test_pw_chart_filter.js
+python manage.py check --deploy
 ```
 
-### 4b. Create a superuser (optional)
-
-```bash
-python manage.py createsuperuser
-```
-
-This gives access to `/admin/` for manual data inspection.
-
-### 4c. Verify OAuth login
-
-1. Visit `https://xmonitor-web.onrender.com/accounts/login/`
-2. Click "Google" to sign in
-3. On first login, a Django User + SocialAccount is created
-4. You are redirected to the multi-brand home page
-
-### 4d. Verify dashboard routes
-
-After login, confirm these pages render:
-
-| Route | Description |
-|---|---|
-| `/` | Multi-brand home |
-| `/<company>/<brand>/` | Single-brand home (e.g., `/alibaba/qwen/`) |
-| `/_/<brand>/` | Single-brand home for brands without a company entry |
-| `/api/v1/home.chart.json` | Multi-brand chart JSON |
-| `/api/v1/home.feed.json` | Paginated feed JSON |
-
-## Step 5: Set ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS
-
-After the first deploy, Render assigns a hostname like
-`xmonitor-web.onrender.com`. Update the env vars on the web service:
-
-1. In Render Dashboard > `xmonitor-web` > Environment
-2. Set or update:
-
-```
-ALLOWED_HOSTS=.onrender.com
-CSRF_TRUSTED_ORIGINS=https://xmonitor-web.onrender.com
-```
-
-`render.yaml` already includes `.onrender.com` in `ALLOWED_HOSTS`, but
-if using a custom domain, add it here.
-
-## Step 6: Verify Celery harvest
-
-The beat scheduler runs the harvest cycle every 15 minutes.
-
-### 6a. Check beat is scheduling
-
-In Render Dashboard > `xmonitor-beat` > Logs, look for:
-
-```
-Scheduler: Sending due task monitor-run-cycle (monitor.tasks.run_cycle)
-```
-
-### 6b. Check worker is executing
-
-In Render Dashboard > `xmonitor-worker` > Logs, look for:
-
-```
-Task monitor.tasks.run_cycle[...] received
-Cycle ...: completed (N calls planned, M run, K inserted)
-```
-
-### 6c. Trigger a manual cycle
-
-In Render Dashboard > `xmonitor-web` > Shell:
-
-```bash
-# Run one cycle directly (synchronous)
-python manage.py run_cycle --limit-per-call 20
-
-# Enqueue via Celery
-python manage.py run_cycle --async
-```
-
-## Step 7: Production hardening checklist
-
-- [ ] **DEBUG** is `False` on the web service (render.yaml sets this)
-- [ ] **DJANGO_SECRET_KEY** is auto-generated by Render (`generateValue: true`)
-- [ ] **DATABASE_URL** is pointing to `xmonitor-db` (set via `fromDatabase`)
-- [ ] **ALLOWED_HOSTS** includes the Render hostname
-- [ ] **CSRF_TRUSTED_ORIGINS** includes the Render hostname with `https://`
-- [ ] Google OAuth redirect URIs match the deployed hostname
-- [ ] `xmonitor-secrets` env group has all four API keys populated
-- [ ] `manage.py check --deploy` exits clean (run from web shell)
-
-## Local dev against Render PG
-
-To connect a local Django dev server to the Render PostgreSQL instance
-(for debugging or manual data inspection):
-
-1. In Render Dashboard > `xmonitor-db` > Info, find the **External Connection** URL
-2. Set it in your local `.env`:
-
-```
-DATABASE_URL=postgres://xmonitor:<password>@<host>:5432/xmonitor
-```
-
-3. Run locally as normal:
-
-```bash
-python manage.py runserver
-```
-
-**Security:** Render's external connections are IP-whitelisted. Add your
-local IP in Render Dashboard > `xmonitor-db` > Settings.
-
-## Troubleshooting
-
-**Build fails with "could not translate host name".**
-The `DATABASE_URL` or `CELERY_BROKER_URL` is not yet provisioned. Ensure
-the PostgreSQL and Redis instances are created before the web service
-builds. Blueprint handles this ordering automatically.
-
-**OAuth redirect_uri_mismatch.**
-The redirect URI in Google Cloud Console doesn't match the Render hostname.
-Update both the Google Cloud Console entry and the Render env var
-`CSRF_TRUSTED_ORIGINS`.
-
-**Celery worker can't connect to Redis.**
-Check that `xmonitor-redis` is running and the `CELERY_BROKER_URL` env
-var on the worker service matches the Redis connection string. Blueprint
-sets this via `fromDatabase`.
-
-**Migrations pending but not applied.**
-Shell into `xmonitor-web` and run:
-```bash
-python manage.py migrate --noinput
-```
-
-**Static files not served.**
-Ensure `collectstatic` ran during build. If not, run from web shell:
-```bash
-python manage.py collectstatic --noinput
-```
-WhiteNoise serves from `STATIC_ROOT` (`staticfiles/`).
-
-**Cycle run returns 0 inserted.**
-Check that `TWITTERAPI_IO_API_KEY` is set in the `xmonitor-secrets` env
-group and is not expired. Verify with a manual `--dry-run` to confirm
-the API key works.
+The Blueprint validation must show `pushinweight-db-shadow` as the existing
+database resource and must not plan creation of `pushinweight-db`. After a
+sync, verify the database host/resource identity on `pushinweight-web`,
+`pushinweight-harvest`, and `pushinweight-headlines`; a successful deploy alone
+does not prove that an existing service refreshed its environment.
