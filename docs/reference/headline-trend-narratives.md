@@ -370,6 +370,7 @@ The first subject must be a measured candidate. A second subject may be a distin
 | System | The literal prompt above |
 | Messages | One user message containing the canonical packet |
 | Temperature | `0` |
+| Thinking mode | explicitly disabled so reasoning cannot consume the bounded JSON output budget |
 | Max output tokens | `1600` |
 | Timeout | `45` seconds by default |
 | SDK retries | `0` |

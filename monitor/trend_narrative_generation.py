@@ -584,6 +584,11 @@ def _request_payload(
         "model": config.model,
         "max_tokens": 1_600,
         "temperature": 0,
+        # DeepSeek V4 defaults to thinking mode, whose reasoning tokens share
+        # this bounded output budget.  A closed JSON transformation needs the
+        # final content block, not hidden chain-of-thought; disabling thinking
+        # prevents a valid HTTP 200 from exhausting the budget before JSON.
+        "thinking": {"type": "disabled"},
         "system": HEADLINE_SYSTEM_PROMPT_V2,
         "messages": [{"role": "user", "content": user}],
     }

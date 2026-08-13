@@ -376,6 +376,7 @@ def test_real_boundary_pins_dsv4_route_and_sends_bounded_analysis_packet(
     assert call["model"] == "deepseek-v4-pro"
     assert call["temperature"] == 0
     assert call["max_tokens"] == 1_600
+    assert call["thinking"] == {"type": "disabled"}
     assert call["system"] == HEADLINE_SYSTEM_PROMPT_V2
     assert "coarse_series" in call["messages"][0]["content"]
     assert "OffListModel appeared beside MiniMax" in call["messages"][0]["content"]
