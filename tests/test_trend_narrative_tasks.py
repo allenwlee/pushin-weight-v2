@@ -190,6 +190,42 @@ def test_provider_disabled_consumes_envelope_with_zero_reservations(monkeypatch)
     assert TrendNarrativeVersion.objects.filter(status="suppressed").count() == 4
 
 
+def test_provider_enable_fills_cold_cache_without_waiting_for_cadence(monkeypatch):
+    disabled = HeadlineNarrativeConfig(provider_calls_enabled=False)
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._load_config",
+        lambda: disabled,
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_fact_packet",
+        lambda window_days, *, as_of, thresholds, earliest_at: _facts(
+            window_days, as_of=as_of
+        ),
+    )
+    process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    still_disabled_at = NOW + timedelta(seconds=30)
+    still_disabled = process_trend_narrative_envelope(
+        _envelope("cycle-b", completed_at=still_disabled_at),
+        now=still_disabled_at,
+    )
+
+    assert still_disabled["not_due"] == 4
+    assert TrendNarrativeVersion.objects.count() == 4
+
+    _config, calls = _enable(monkeypatch)
+    later = NOW + timedelta(minutes=1)
+    result = process_trend_narrative_envelope(
+        _envelope("cycle-c", completed_at=later),
+        now=later,
+    )
+
+    assert result["slots_consumed"] == 4
+    assert result["published"] == 4
+    assert result["not_due"] == 0
+    assert calls == [1, 7, 30, 365]
+
+
 def test_one_window_failure_does_not_discard_other_publications(monkeypatch):
     _config, calls = _enable(monkeypatch, fail_window=7)
 

@@ -15,7 +15,6 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from monitor.trend_narrative_facts import canonical_fact_json
 from x_monitor.config import HeadlineNarrativeConfig
 
 _NARRATIVE_TYPES = (
@@ -41,6 +40,12 @@ class HeadlineGenerationError(ValueError):
         super().__init__(code)
         self.code = code[:64]
         self.transport_completed = transport_completed
+
+
+class _OutputContractError(ValueError):
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
 
 
 class _GenerationOutput(BaseModel):
@@ -130,9 +135,7 @@ def _semantic_fact_projection(facts: dict[str, Any]) -> dict[str, Any]:
         return {
             "key": str(value["key"]),
             "name_en": str(value.get("display_name_en") or value["key"]),
-            "name_zh_hans": str(
-                value.get("display_name_zh_hans") or value["key"]
-            ),
+            "name_zh_hans": str(value.get("display_name_zh_hans") or value["key"]),
         }
 
     return {
@@ -180,14 +183,33 @@ def generate_trend_narrative(
         raise HeadlineGenerationError("headline_provider_request_failed") from exc
     elapsed_ms = max(0, round((monotonic() - started) * 1000))
     try:
-        raw = _normalize_json_envelope(_message_text(message))
-        parsed = json.loads(raw)
-        output = _GenerationOutput.model_validate(parsed)
-        _validate_output(output, facts, expected_brands, config)
-    except (json.JSONDecodeError, TypeError, ValueError, ValidationError):
+        raw = _message_text(message)
+    except ValueError:
         raise HeadlineGenerationError(
-            "headline_output_invalid", transport_completed=True
+            "headline_output_text_missing", transport_completed=True
         ) from None
+    try:
+        raw = _normalize_json_envelope(raw)
+    except ValueError:
+        raise HeadlineGenerationError(
+            "headline_output_envelope_invalid", transport_completed=True
+        ) from None
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        raise HeadlineGenerationError(
+            "headline_output_json_invalid", transport_completed=True
+        ) from None
+    try:
+        output = _GenerationOutput.model_validate(parsed)
+    except ValidationError:
+        raise HeadlineGenerationError(
+            "headline_output_schema_invalid", transport_completed=True
+        ) from None
+    try:
+        _validate_output(output, facts, expected_brands, config)
+    except _OutputContractError as exc:
+        raise HeadlineGenerationError(exc.code, transport_completed=True) from None
 
     canonical_output = json.dumps(
         output.model_dump(),
@@ -239,16 +261,26 @@ def _request_payload(
     brand_contract = [brand["key"] for brand in expected_brands]
     system = (
         "You write a concise market-trend headline from a closed aggregate fact "
-        "packet. Return one JSON object only with body_en, body_zh_hans, "
-        "narrative_type, and mentioned_brand_keys. Write natural English and "
-        "Simplified Chinese in one sentence each. Mention exactly the supplied "
-        "brands and narrative type. Do not use digits, URLs, markup, causal "
-        "claims, or facts outside the packet."
+        "packet. Return raw JSON with exactly four keys: body_en, body_zh_hans, "
+        "narrative_type, and mentioned_brand_keys. Do not add a code fence or "
+        "any other key. Write natural English and Simplified Chinese in one "
+        "sentence each. Mention exactly the supplied brands and narrative type. "
+        "Do not use digits, URLs, markup, causal claims, or facts outside the "
+        "packet."
     )
+    output_contract = {
+        "body_en": "one English sentence",
+        "body_zh_hans": "one Simplified Chinese sentence",
+        "narrative_type": facts["narrative_type"],
+        "mentioned_brand_keys": brand_contract,
+    }
     user = (
-        f"Expected narrative type: {facts['narrative_type']}\n"
-        f"Expected brand keys: {json.dumps(brand_contract)}\n"
-        f"Aggregate facts: {canonical_fact_json(facts)}"
+        "Required output contract: "
+        f"{json.dumps(output_contract, ensure_ascii=False, separators=(',', ':'))}\n"
+        "Allowed brand identities: "
+        f"{json.dumps(expected_brands, ensure_ascii=False, separators=(',', ':'))}\n"
+        "Aggregate semantic facts: "
+        f"{json.dumps(_provider_fact_projection(facts), ensure_ascii=False, sort_keys=True, separators=(',', ':'))}"
     )
     return {
         "model": config.model,
@@ -268,6 +300,18 @@ def _message_text(message: Any) -> str:
     if not parts:
         raise ValueError("provider returned no text block")
     return "".join(parts).strip()
+
+
+def _provider_fact_projection(facts: dict[str, Any]) -> dict[str, Any]:
+    semantic = _semantic_fact_projection(facts)
+    return {
+        "narrative_type": semantic["narrative_type"],
+        "coverage_state": semantic["coverage_state"],
+        "primary_brand": semantic["primary_brand"],
+        "secondary_brand": semantic["secondary_brand"],
+        "earlier_leader": semantic["earlier_leader"],
+        "momentum": semantic["momentum"],
+    }
 
 
 def _normalize_json_envelope(raw: str) -> str:
@@ -345,14 +389,14 @@ def _validate_output(
     config: HeadlineNarrativeConfig,
 ) -> None:
     if output.narrative_type != facts["narrative_type"]:
-        raise ValueError("declared narrative type does not match facts")
+        raise _OutputContractError("headline_output_type_mismatch")
     expected_keys = [brand["key"] for brand in expected_brands]
     if output.mentioned_brand_keys != expected_keys:
-        raise ValueError("declared brand keys do not match facts")
+        raise _OutputContractError("headline_output_brand_keys_mismatch")
     if len(output.body_en) > config.max_body_en_chars:
-        raise ValueError("English body exceeds configured maximum")
+        raise _OutputContractError("headline_output_en_too_long")
     if len(output.body_zh_hans) > config.max_body_zh_hans_chars:
-        raise ValueError("Chinese body exceeds configured maximum")
+        raise _OutputContractError("headline_output_zh_too_long")
     english_names: set[str] = set()
     chinese_names: set[str] = set()
     for brand in expected_brands:
@@ -360,17 +404,18 @@ def _validate_output(
         brand_chinese_names = {brand["key"], brand["name_zh_hans"]}
         english_names.update(brand_english_names)
         chinese_names.update(brand_chinese_names)
-        if not any(_mentions_brand(output.body_en, name) for name in brand_english_names):
-            raise ValueError("English body omits a supplied brand")
         if not any(
-            _mentions_brand(output.body_zh_hans, name)
-            for name in brand_chinese_names
+            _mentions_brand(output.body_en, name) for name in brand_english_names
         ):
-            raise ValueError("Chinese body omits a supplied brand")
+            raise _OutputContractError("headline_output_en_brand_missing")
+        if not any(
+            _mentions_brand(output.body_zh_hans, name) for name in brand_chinese_names
+        ):
+            raise _OutputContractError("headline_output_zh_brand_missing")
     if _has_unsupported_digits(output.body_en, english_names):
-        raise ValueError("English body contains digits outside a supplied brand")
+        raise _OutputContractError("headline_output_en_digits")
     if _has_unsupported_digits(output.body_zh_hans, chinese_names):
-        raise ValueError("Chinese body contains digits outside a supplied brand")
+        raise _OutputContractError("headline_output_zh_digits")
     _reject_unsupported_brand_tokens(output.body_en, english_names)
     _reject_unsupported_brand_tokens(output.body_zh_hans, chinese_names)
 
@@ -436,6 +481,6 @@ def _reject_unsupported_brand_tokens(
     for token in re.findall(r"(?<![A-Za-z])[A-Za-z][A-Za-z0-9.-]*", remainder):
         folded = token.casefold().rstrip(".")
         if folded in _COMMON_BRAND_ALIASES:
-            raise ValueError("body contains an unsupported brand")
+            raise _OutputContractError("headline_output_extra_brand")
         if re.search(r"[a-z][A-Z]", token):
-            raise ValueError("body contains an unsupported brand")
+            raise _OutputContractError("headline_output_extra_brand")

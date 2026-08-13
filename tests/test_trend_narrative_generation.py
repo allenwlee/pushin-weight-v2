@@ -169,7 +169,11 @@ def test_real_boundary_explicitly_pins_route_model_timeout_and_zero_retries(
     assert call["model"] == "deepseek-v4-pro"
     assert call["temperature"] == 0
     assert call["max_tokens"] == 320
-    assert "raw_text" not in json.dumps(call)
+    serialized_call = json.dumps(call)
+    assert "raw_text" not in serialized_call
+    assert "recent_posts" not in serialized_call
+    assert "earlier_posts" not in serialized_call
+    assert "as_of" not in serialized_call
     assert result.body_zh_hans.startswith("讨论热度")
     assert result.provider_host == "api.deepseek.com"
     assert result.input_tokens == 120
@@ -355,6 +359,22 @@ def test_code_fence_does_not_permit_trailing_prose():
         )
 
     assert len(client.messages.calls) == 1
+
+
+def test_invalid_output_reports_a_safe_specific_category():
+    payload = _valid_payload()
+    payload["body_en"] = "MiniMax has 30 posts and leads DeepSeek."
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        generate_trend_narrative(
+            _facts(),
+            HeadlineNarrativeConfig(),
+            api_key="headline-secret",
+            client_factory=lambda **_kwargs: _FakeClient(payload),
+        )
+
+    assert captured.value.code == "headline_output_en_digits"
+    assert captured.value.transport_completed
 
 
 def test_extra_output_fields_are_rejected_without_repair_call():

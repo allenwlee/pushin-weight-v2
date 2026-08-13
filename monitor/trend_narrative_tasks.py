@@ -78,20 +78,23 @@ def process_trend_narrative_envelope(
         if rows.filter(facts_as_of__gte=facts_as_of).exists():
             stats["outdated"] += 1
             continue
-        latest = (
-            rows.exclude(
-                status__in=[
-                    TrendNarrativeVersion.Status.FAILED,
-                    TrendNarrativeVersion.Status.ABANDONED,
-                ]
-            )
-            .exclude(
-                status=TrendNarrativeVersion.Status.SUPPRESSED,
-                error_code="provider_backoff",
-            )
-            .order_by("-latest_checked_at", "-created_at", "-pk")
-            .first()
+        cadence_rows = rows.exclude(
+            status__in=[
+                TrendNarrativeVersion.Status.FAILED,
+                TrendNarrativeVersion.Status.ABANDONED,
+            ]
+        ).exclude(
+            status=TrendNarrativeVersion.Status.SUPPRESSED,
+            error_code="provider_backoff",
         )
+        if config.provider_calls_enabled:
+            cadence_rows = cadence_rows.exclude(
+                status=TrendNarrativeVersion.Status.SUPPRESSED,
+                error_code="provider_calls_disabled",
+            )
+        latest = cadence_rows.order_by(
+            "-latest_checked_at", "-created_at", "-pk"
+        ).first()
         last_activity = None
         if latest is not None:
             last_activity = latest.latest_checked_at or latest.created_at
