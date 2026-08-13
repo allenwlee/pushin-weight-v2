@@ -1,0 +1,112 @@
+{
+  "schema_version": "trend-narrative-co-dominance-eval/v1",
+  "selection_rule": "Select one measured candidate when one story is clearly the most analytically important. Select two measured candidates when both independently show extraordinary movement in this window. Do not force a second candidate, and do not suppress a second extraordinary candidate merely because another candidate ranks first.",
+  "cases": [
+    {
+      "id": "two-strong-same-family",
+      "coverage": {"selected": 1.0, "prior": 1.0},
+      "candidates": [
+        {
+          "candidate_id": "minimax:full_window",
+          "brand_key": "minimax",
+          "families": ["volume"],
+          "current_posts": 2800,
+          "prior_posts": 800,
+          "current_authors": 1800,
+          "prior_authors": 620
+        },
+        {
+          "candidate_id": "deepseek:full_window",
+          "brand_key": "deepseek",
+          "families": ["volume"],
+          "current_posts": 2600,
+          "prior_posts": 700,
+          "current_authors": 1700,
+          "prior_authors": 540
+        }
+      ],
+      "expected_selected_candidate_ids": [
+        "minimax:full_window",
+        "deepseek:full_window"
+      ]
+    },
+    {
+      "id": "two-strong-different-families",
+      "coverage": {"selected": 1.0, "prior": 1.0},
+      "candidates": [
+        {
+          "candidate_id": "minimax:full_window",
+          "brand_key": "minimax",
+          "families": ["volume", "engagement"],
+          "current_posts": 2500,
+          "prior_posts": 700,
+          "engagement_intensity_change_pct": 140
+        },
+        {
+          "candidate_id": "deepseek:full_window",
+          "brand_key": "deepseek",
+          "families": ["nationalism"],
+          "current_posts": 1900,
+          "prior_posts": 1700,
+          "pro_china_share_change_pp": 28,
+          "market_pro_china_share_change_pp": 2
+        }
+      ],
+      "expected_selected_candidate_ids": [
+        "minimax:full_window",
+        "deepseek:full_window"
+      ]
+    },
+    {
+      "id": "one-strong-one-notable",
+      "coverage": {"selected": 1.0, "prior": 1.0},
+      "candidates": [
+        {
+          "candidate_id": "minimax:full_window",
+          "brand_key": "minimax",
+          "families": ["volume"],
+          "current_posts": 2500,
+          "prior_posts": 700,
+          "current_authors": 1700,
+          "prior_authors": 520
+        },
+        {
+          "candidate_id": "qwen:full_window",
+          "brand_key": "qwen",
+          "families": ["sentiment"],
+          "current_posts": 1100,
+          "prior_posts": 950,
+          "positive_share_change_pp": 6
+        }
+      ],
+      "expected_selected_candidate_ids": ["minimax:full_window"]
+    },
+    {
+      "id": "two-strong-low-comparison-coverage",
+      "coverage": {"selected": 0.82, "prior": 0.55},
+      "comparison_claims_allowed": false,
+      "candidates": [
+        {
+          "candidate_id": "minimax:episode-07",
+          "brand_key": "minimax",
+          "families": ["volume"],
+          "selected_posts": 1700,
+          "selected_authors": 1200,
+          "peak_to_median": 8.0
+        },
+        {
+          "candidate_id": "deepseek:episode-04",
+          "brand_key": "deepseek",
+          "families": ["discourse"],
+          "selected_posts": 1500,
+          "selected_authors": 1100,
+          "discourse_share_change_pp": 31
+        }
+      ],
+      "expected_selected_candidate_ids": [
+        "minimax:episode-07",
+        "deepseek:episode-04"
+      ]
+    }
+  ]
+}

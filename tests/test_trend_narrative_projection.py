@@ -8,8 +8,9 @@ from html import unescape
 
 import pytest
 
-from core.models import Brand
+from core.models import Brand, TrendNarrativeSubject
 from monitor.trend_narrative_lifecycle import (
+    mark_transport_completed,
     mark_transport_started,
     publish_generation,
     reserve_generation,
@@ -27,7 +28,11 @@ def _config(*, enabled: bool = True) -> HeadlineNarrativeConfig:
     return HeadlineNarrativeConfig(serving_enabled=enabled)
 
 
-def _publish(window_days: int = 1):
+def _publish(
+    window_days: int = 1,
+    *,
+    coverage_state: str = "sufficient",
+):
     brand = Brand.objects.create(
         nickname="minimax",
         display_name="MiniMax",
@@ -35,19 +40,35 @@ def _publish(window_days: int = 1):
         display_name_zh_cn="MiniMax",
     )
     facts = {
-        "schema_version": 1,
+        "snapshot_schema_version": 1,
         "window_days": window_days,
         "as_of": NOW.isoformat().replace("+00:00", "Z"),
-        "coverage": {"state": "sufficient", "ratio": "1.000000"},
-        "narrative_type": "leader",
-        "primary_brand": {
+        "coverage": {
+            "selected": {
+                "state": coverage_state,
+                "ratio": "0.500000" if coverage_state == "limited" else "1.000000",
+                "earliest_at": "2025-10-01T00:00:00+00:00",
+            },
+            "prior": {
+                "state": "limited",
+                "ratio": "0.000000",
+                "earliest_at": "2025-10-01T00:00:00+00:00",
+            },
+        },
+        "candidates": [
+            {
+                "candidate_id": "minimax:full_window",
+                "brand_key": brand.pk,
+                "display_name_en": "MiniMax",
+                "display_name_zh_cn": "MiniMax",
+                "evidence": [],
+            }
+        ],
+        "legacy_primary_brand": {
             "key": brand.pk,
             "display_name_en": "MiniMax",
-            "display_name_zh_hans": "MiniMax",
+            "display_name_zh_cn": "MiniMax",
         },
-        "secondary_brand": None,
-        "earlier_leader": None,
-        "momentum": "rising",
     }
     row = reserve_generation(
         source_cycle_id="cycle-a",
@@ -59,10 +80,11 @@ def _publish(window_days: int = 1):
         prompt_version="headline-v1",
         provider="anthropic",
         provider_host="api.anthropic.com",
-        model_name="claude-haiku-4-5-20251001",
+        llm_model_name="claude-haiku-4-5-20251001",
         owner="worker-a",
         now=NOW,
         lease_seconds=90,
+        output_schema_version=2,
     )
     assert row is not None
     assert mark_transport_started(
@@ -71,17 +93,53 @@ def _publish(window_days: int = 1):
         fence=row.claim_fence,
         now=NOW,
     )
+    assert mark_transport_completed(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW + timedelta(milliseconds=500),
+    )
     assert publish_generation(
         row.pk,
         owner="worker-a",
         fence=row.claim_fence,
         body_en="MiniMax leads attention across the market.",
-        body_zh_hans="当前市场讨论中，MiniMax 更受关注。",
+        body_zh_cn="MiniMax 当前在市场讨论中更受关注。",
         output_hash="b" * 64,
         input_tokens=100,
         output_tokens=40,
         latency_ms=200,
         now=NOW + timedelta(seconds=1),
+        observations_en=["Attention rises and then holds."],
+        observations_zh_cn=["讨论热度上升后保持稳定。"],
+        selected_candidate_ids=["minimax:full_window"],
+        claims=[
+            {
+                "observation_index": -1,
+                "candidate_ids": ["minimax:full_window"],
+                "families": ["volume"],
+                "evidence_ids": [],
+            },
+            {
+                "observation_index": 0,
+                "candidate_ids": ["minimax:full_window"],
+                "families": ["volume"],
+                "evidence_ids": [],
+            }
+        ],
+        subjects=[
+            {
+                "position": 0,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "canonical_key_snapshot": "minimax",
+                "name_en_snapshot": "MiniMax",
+                "name_zh_cn_snapshot": "MiniMax",
+                "candidate_id": "minimax:full_window",
+                "evidence_ids": [],
+            }
+        ],
     )
     row.refresh_from_db()
     return row
@@ -92,9 +150,9 @@ def _publish(window_days: int = 1):
     [
         ("en", "MiniMax leads attention across the market."),
         ("original", "MiniMax leads attention across the market."),
-        ("zh_cn", "当前市场讨论中，MiniMax 更受关注。"),
-        ("zh-CN", "当前市场讨论中，MiniMax 更受关注。"),
-        ("zh_hans", "当前市场讨论中，MiniMax 更受关注。"),
+        ("zh_cn", "MiniMax 当前在市场讨论中更受关注。"),
+        ("zh-CN", "MiniMax 当前在市场讨论中更受关注。"),
+        ("zh_hans", "MiniMax 当前在市场讨论中更受关注。"),
     ],
 )
 def test_available_projection_selects_locale_and_public_brand_link(locale, expected):
@@ -107,18 +165,31 @@ def test_available_projection_selects_locale_and_public_brand_link(locale, expec
         config=_config(),
     )
 
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["window_days"] == 1
     assert payload["state"] == "available"
     assert payload["state_label"] == (
         "可用" if locale in {"zh_cn", "zh-CN", "zh_hans"} else "Available"
     )
     assert payload["body"] == expected
-    assert payload["primary_brand"] == {
-        "key": "minimax",
-        "display_name": "MiniMax",
-        "url": "/brands/minimax/",
-    }
+    assert payload["body_remainder"] == expected.removeprefix("MiniMax ")
+    assert payload["observations"] == (
+        ["讨论热度上升后保持稳定。"]
+        if locale in {"zh_cn", "zh-CN", "zh_hans"}
+        else ["Attention rises and then holds."]
+    )
+    assert payload["subjects"] == [
+        {
+            "position": 0,
+            "support_type": "measured_candidate",
+            "entity_type": "brand",
+            "identity_type": "brand",
+            "key": "minimax",
+            "display_name": "MiniMax",
+            "url": "/brands/minimax/",
+        }
+    ]
+    assert payload["primary_brand"] == payload["subjects"][0]
     assert payload["generated_at"] == row.generated_at.isoformat()
     assert "provider" not in payload
     assert "error" not in payload
@@ -143,6 +214,141 @@ def test_stale_uses_last_good_body_and_deleted_brand_loses_only_link():
     assert payload["primary_brand"]["url"] is None
 
 
+def test_analytical_limited_coverage_adds_dated_qualifier():
+    row = _publish(365, coverage_state="limited")
+
+    payload = project_trend_narrative(
+        365,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert row.coverage_state == "limited"
+    assert payload["coverage_state"] == "limited"
+    assert payload["body"].endswith(
+        "Based on available data since 2025-10-01."
+    )
+
+
+def test_schema_one_projection_uses_both_legacy_subject_snapshots():
+    primary = Brand.objects.create(
+        nickname="minimax",
+        display_name="MiniMax",
+        display_name_en="MiniMax",
+        display_name_zh_cn="MiniMax",
+    )
+    secondary = Brand.objects.create(
+        nickname="deepseek",
+        display_name="DeepSeek",
+        display_name_en="DeepSeek",
+        display_name_zh_cn="DeepSeek",
+    )
+    facts = {
+        "schema_version": 1,
+        "window_days": 1,
+        "as_of": NOW.isoformat(),
+        "coverage": {"state": "sufficient", "ratio": "1.000000"},
+        "primary_brand": {
+            "key": primary.pk,
+            "display_name_en": "MiniMax",
+            "display_name_zh_hans": "MiniMax",
+        },
+        "secondary_brand": {
+            "key": secondary.pk,
+            "display_name_en": "DeepSeek",
+            "display_name_zh_hans": "DeepSeek",
+        },
+    }
+    row = reserve_generation(
+        source_cycle_id="legacy-two-subjects",
+        window_days=1,
+        facts_as_of=NOW,
+        semantic_fingerprint="c" * 64,
+        generation_facts=facts,
+        publication_epoch=1,
+        prompt_version="headline-v1",
+        provider="anthropic",
+        provider_host="api.anthropic.com",
+        llm_model_name="claude-haiku-4-5-20251001",
+        owner="worker-a",
+        now=NOW,
+        lease_seconds=90,
+        output_schema_version=1,
+    )
+    assert row is not None
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    assert mark_transport_completed(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW + timedelta(milliseconds=500),
+    )
+    assert publish_generation(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        body_en="MiniMax and DeepSeek share attention.",
+        body_zh_cn="MiniMax 与 DeepSeek 共同受到关注。",
+        output_hash="d" * 64,
+        input_tokens=100,
+        output_tokens=40,
+        latency_ms=200,
+        now=NOW + timedelta(seconds=1),
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert [subject["key"] for subject in payload["subjects"]] == [
+        "minimax",
+        "deepseek",
+    ]
+
+
+def test_projection_exposes_two_safe_subjects_without_claim_or_evidence_data():
+    row = _publish()
+    TrendNarrativeSubject.objects.create(
+        trend_narrative=row,
+        position=1,
+        support_type="evidence_only",
+        entity_type="model",
+        identity_type="unresolved",
+        observed_name="OffListModel",
+        name_en_snapshot="OffListModel",
+        name_zh_cn_snapshot="OffListModel",
+        evidence_ids=["private_evidence_id"],
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert payload["subjects"][1] == {
+        "position": 1,
+        "support_type": "evidence_only",
+        "entity_type": "model",
+        "identity_type": "unresolved",
+        "key": "OffListModel",
+        "display_name": "OffListModel",
+        "url": None,
+    }
+    assert "private_evidence_id" not in json.dumps(payload["subjects"])
+    assert "claims" not in payload
+
+
 @pytest.mark.parametrize(
     ("locale", "phrase"),
     [
@@ -162,6 +368,7 @@ def test_cold_fallback_is_localized_and_readable(locale, phrase):
     assert payload["state"] == "unavailable"
     assert payload["state_label"] == ("准备中" if locale == "zh_cn" else "Warming up")
     assert phrase in payload["body"]
+    assert payload["observations"] == []
     assert payload["primary_brand"] is None
 
 
@@ -177,6 +384,7 @@ def test_serving_control_off_returns_disabled_copy_even_with_current_row():
 
     assert payload["state"] == "disabled"
     assert payload["state_label"] == "Disabled"
+    assert payload["observations"] == []
     assert payload["primary_brand"] is None
     assert "unavailable" in payload["body"].lower()
 

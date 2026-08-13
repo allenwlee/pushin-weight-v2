@@ -6,9 +6,10 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from billiard.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 
-from core.models import TrendNarrativeVersion
+from core.models import Brand, TrendNarrative, TrendNarrativeSubject
 from monitor.tasks import refresh_trend_narratives
 from monitor.trend_narrative_tasks import process_trend_narrative_envelope
 from x_monitor.config import HeadlineNarrativeConfig
@@ -32,52 +33,136 @@ def _envelope(
     }
 
 
-def _facts(window_days: int, *, as_of: datetime, changed: bool = False) -> dict:
+def _snapshot(window_days: int, *, as_of: datetime, changed: bool = False) -> dict:
     brand = "qwen" if changed else "minimax"
+    candidate_id = f"{brand}:full_window"
     return {
-        "schema_version": 1,
+        "snapshot_schema_version": 1,
         "window_days": window_days,
         "as_of": as_of.isoformat().replace("+00:00", "Z"),
-        "window_start": (as_of - timedelta(days=window_days))
-        .isoformat()
-        .replace("+00:00", "Z"),
-        "midpoint": (as_of - timedelta(days=window_days / 2))
-        .isoformat()
-        .replace("+00:00", "Z"),
         "coverage": {
-            "state": "sufficient",
-            "ratio": "1.000000",
-            "earliest_at": "2025-01-15T00:00:00Z",
+            "selected": {
+                "state": "sufficient",
+                "ratio": "1.000000",
+                "earliest_at": "2025-08-12T12:00:00+00:00",
+            },
+            "prior": {
+                "state": "sufficient",
+                "ratio": "1.000000",
+                "earliest_at": "2025-08-12T12:00:00+00:00",
+            },
         },
+        "comparison_allowed": True,
         "thresholds": {"min_posts": 20, "min_authors": 10},
-        "narrative_type": "leader",
-        "primary_brand": {
-            "key": brand,
-            "display_name_en": brand.title(),
-            "display_name_zh_hans": brand.title(),
-            "recent_posts": 25,
-            "recent_authors": 12,
-            "earlier_posts": 20,
-            "earlier_authors": 10,
+        "series_axis": {
+            "coarse": {
+                "bucket_count": 2,
+                "bucket_seconds": 10_800,
+                "starts": ["start-one", "start-two"],
+                "ends": ["end-one", "end-two"],
+            },
+            "fine": {
+                "bucket_count": 0,
+                "bucket_seconds": 900,
+                "starts": [],
+                "ends": [],
+            },
         },
-        "secondary_brand": None,
-        "earlier_leader": None,
-        "momentum": "rising",
+        "selection": {"candidate_count": 1},
+        "candidates": [
+            {
+                "candidate_id": candidate_id,
+                "source_candidate_id": candidate_id,
+                "brand_key": brand,
+                "display_name_en": brand.title(),
+                "display_name_zh_cn": brand.title(),
+                "kind": "full_window",
+                "start_at": "window-start",
+                "end_at": "window-end",
+                "signals": [{"family": "volume", "rank": 1}],
+                "family_facts": {"volume": {"selected_posts": 25}},
+                "episodes": [],
+                "series": {
+                    "coarse": {
+                        "post_counts": [20, 25],
+                        "author_counts": [10, 12],
+                        "engagement": {
+                            "eligible_counts": [20, 25],
+                            "missing_counts": [0, 0],
+                            "coverage_ratios": ["1.000000", "1.000000"],
+                            "likes": [40, 50],
+                            "reposts": [10, 12],
+                            "quotes": [4, 5],
+                            "replies": [2, 3],
+                            "interactions": [56, 70],
+                            "intensities": ["2.800000", "2.800000"],
+                            "concentrations": ["0.200000", "0.200000"],
+                            "post_kinds": {},
+                        },
+                    },
+                    "fine": {},
+                },
+                "evidence_support": {
+                    "official_source_count": 0,
+                    "distinct_author_group_count": 0,
+                    "distinct_source_cluster_count": 0,
+                    "event_claim_may_be_supported": False,
+                    "evidence_only_entity_may_be_supported": False,
+                },
+                "evidence": [],
+            }
+        ],
     }
 
 
-def _result(facts: dict, config: HeadlineNarrativeConfig):
+def _result(snapshot: dict, config: HeadlineNarrativeConfig):
     from monitor.trend_narrative_generation import generation_fingerprint
 
-    brand = facts["primary_brand"]["display_name_en"]
+    candidate = snapshot["candidates"][0]
+    brand = candidate["display_name_en"]
+    candidate_id = candidate["candidate_id"]
     return SimpleNamespace(
+        output_schema_version=2,
         body_en=f"{brand} leads attention across the market.",
-        body_zh_hans=f"当前市场讨论中，{brand} 更受关注。",
+        body_zh_cn=f"当前市场讨论中，{brand} 更受关注。",
+        observations_en=("Attention rises and then holds.",),
+        observations_zh_cn=("讨论热度上升后保持稳定。",),
+        selected_candidate_ids=(candidate_id,),
+        subjects=(
+            {
+                "position": 0,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "observed_name": "",
+                "canonical_key_snapshot": candidate["brand_key"],
+                "name_en_snapshot": brand,
+                "name_zh_cn_snapshot": brand,
+                "candidate_id": candidate_id,
+                "evidence_ids": [],
+            },
+        ),
+        claims=(
+            {
+                "observation_index": -1,
+                "candidate_ids": [candidate_id],
+                "families": ["volume"],
+                "evidence_ids": [],
+                "event_anchor": "",
+            },
+            {
+                "observation_index": 0,
+                "candidate_ids": [candidate_id],
+                "families": ["volume"],
+                "evidence_ids": [],
+                "event_anchor": "",
+            },
+        ),
         output_hash="b" * 64,
         input_tokens=100,
         output_tokens=40,
         latency_ms=200,
-        semantic_fingerprint=generation_fingerprint(facts, config),
+        semantic_fingerprint=generation_fingerprint(snapshot, config),
     )
 
 
@@ -85,25 +170,34 @@ def _enable(monkeypatch, *, fail_window: int | None = None, changed=None):
     config = HeadlineNarrativeConfig(provider_calls_enabled=True)
     calls: list[int] = []
     changed = changed or set()
+    for nickname in ("minimax", "qwen"):
+        Brand.objects.update_or_create(
+            nickname=nickname,
+            defaults={
+                "display_name": nickname.title(),
+                "display_name_en": nickname.title(),
+                "display_name_zh_cn": nickname.title(),
+            },
+        )
 
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks._load_config",
         lambda: config,
     )
     monkeypatch.setattr(
-        "monitor.trend_narrative_tasks.build_trend_fact_packet",
-        lambda window_days, *, as_of, thresholds, earliest_at: _facts(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        lambda window_days, *, as_of, thresholds: _snapshot(
             window_days,
             as_of=as_of,
             changed=window_days in changed,
         ),
     )
 
-    def generate(facts, active_config):
-        calls.append(facts["window_days"])
-        if facts["window_days"] == fail_window:
+    def generate(snapshot, active_config):
+        calls.append(snapshot["window_days"])
+        if snapshot["window_days"] == fail_window:
             raise RuntimeError("fixture provider outage")
-        return _result(facts, active_config)
+        return _result(snapshot, active_config)
 
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks.generate_trend_narrative",
@@ -115,11 +209,6 @@ def _enable(monkeypatch, *, fail_window: int | None = None, changed=None):
 def test_cold_refresh_makes_exactly_four_calls_and_duplicate_makes_zero(
     monkeypatch,
 ):
-    coverage_queries: list[datetime] = []
-    monkeypatch.setattr(
-        "monitor.trend_narrative_tasks.earliest_trend_fact_at",
-        lambda *, as_of: coverage_queries.append(as_of) or NOW - timedelta(days=365),
-    )
     _config, calls = _enable(monkeypatch)
 
     first = process_trend_narrative_envelope(_envelope(), now=NOW)
@@ -129,8 +218,13 @@ def test_cold_refresh_makes_exactly_four_calls_and_duplicate_makes_zero(
     assert first["published"] == 4
     assert duplicate["slots_consumed"] == 0
     assert calls == [1, 7, 30, 365]
-    assert coverage_queries == [NOW]
-    assert TrendNarrativeVersion.objects.filter(call_slot_consumed=True).count() == 4
+    assert TrendNarrative.objects.filter(call_slot_consumed=True).count() == 4
+    assert TrendNarrative.objects.filter(output_schema_version=2).count() == 4
+    assert TrendNarrativeSubject.objects.count() == 4
+    one_day = TrendNarrative.objects.get(window_days=1, is_current=True)
+    assert one_day.body_zh_cn == one_day.body_zh_hans
+    assert one_day.llm_model_name == one_day.model_name == "deepseek-v4-pro"
+    assert one_day.selected_candidate_ids == ["minimax:full_window"]
 
 
 def test_same_semantics_after_due_cadence_advances_checks_with_zero_calls(
@@ -149,7 +243,7 @@ def test_same_semantics_after_due_cadence_advances_checks_with_zero_calls(
     assert result["slots_consumed"] == 0
     assert result["checks_advanced"] == 4
     assert calls == []
-    assert TrendNarrativeVersion.objects.count() == 4
+    assert TrendNarrative.objects.count() == 4
 
 
 def test_only_changed_window_calls_provider_when_all_windows_are_due(monkeypatch):
@@ -166,7 +260,7 @@ def test_only_changed_window_calls_provider_when_all_windows_are_due(monkeypatch
 
     assert result["slots_consumed"] == 1
     assert result["published"] == 1
-    assert TrendNarrativeVersion.objects.filter(call_slot_consumed=True).count() == 5
+    assert TrendNarrative.objects.filter(call_slot_consumed=True).count() == 5
 
 
 def test_provider_disabled_consumes_envelope_with_zero_reservations(monkeypatch):
@@ -176,8 +270,8 @@ def test_provider_disabled_consumes_envelope_with_zero_reservations(monkeypatch)
         lambda: config,
     )
     monkeypatch.setattr(
-        "monitor.trend_narrative_tasks.build_trend_fact_packet",
-        lambda window_days, *, as_of, thresholds, earliest_at: _facts(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        lambda window_days, *, as_of, thresholds: _snapshot(
             window_days, as_of=as_of
         ),
     )
@@ -186,8 +280,122 @@ def test_provider_disabled_consumes_envelope_with_zero_reservations(monkeypatch)
 
     assert result["slots_consumed"] == 0
     assert result["suppressed"] == 4
-    assert not TrendNarrativeVersion.objects.filter(call_slot_consumed=True).exists()
-    assert TrendNarrativeVersion.objects.filter(status="suppressed").count() == 4
+    assert not TrendNarrative.objects.filter(call_slot_consumed=True).exists()
+    assert TrendNarrative.objects.filter(status="suppressed").count() == 4
+
+
+def test_provider_disable_after_envelope_start_consumes_zero_slots(monkeypatch):
+    enabled = HeadlineNarrativeConfig(
+        provider_calls_enabled=True,
+        control_revision="enabled-v1",
+    )
+    disabled = enabled.model_copy(
+        update={
+            "provider_calls_enabled": False,
+            "control_revision": "disabled-v2",
+        }
+    )
+    active = {"config": enabled}
+    generation_calls: list[int] = []
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._load_config",
+        lambda: active["config"],
+    )
+
+    def build(window_days, *, as_of, thresholds):
+        active["config"] = disabled
+        return _snapshot(window_days, as_of=as_of)
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        build,
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.generate_trend_narrative",
+        lambda snapshot, config: generation_calls.append(snapshot["window_days"]),
+    )
+
+    result = process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert result["control_revision"] == "disabled-v2"
+    assert result["slots_consumed"] == 0
+    assert result["transport_started"] == 0
+    assert result["suppressed"] == 4
+    assert generation_calls == []
+    assert not TrendNarrative.objects.filter(call_slot_consumed=True).exists()
+    assert set(
+        TrendNarrative.objects.values_list("error_code", flat=True)
+    ) == {"provider_calls_disabled"}
+
+
+def test_snapshot_soft_timeout_stops_before_later_windows(monkeypatch):
+    config = HeadlineNarrativeConfig(provider_calls_enabled=True)
+    attempted_windows: list[int] = []
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._load_config",
+        lambda: config,
+    )
+
+    def timeout(window_days, *, as_of, thresholds):
+        attempted_windows.append(window_days)
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        timeout,
+    )
+
+    with pytest.raises(SoftTimeLimitExceeded):
+        process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert attempted_windows == [1]
+    assert not TrendNarrative.objects.exists()
+
+
+def test_generation_soft_timeout_stops_before_later_windows(monkeypatch):
+    _config, _calls = _enable(monkeypatch)
+
+    def timeout(snapshot, config):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.generate_trend_narrative",
+        timeout,
+    )
+
+    with pytest.raises(SoftTimeLimitExceeded):
+        process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert TrendNarrative.objects.count() == 1
+    attempt = TrendNarrative.objects.get()
+    assert attempt.window_days == 1
+    assert attempt.call_slot_consumed
+    assert attempt.transport_started_at is not None
+    assert attempt.transport_completed_at is None
+
+
+def test_post_response_failure_records_transport_completion(monkeypatch):
+    _config, _calls = _enable(monkeypatch)
+
+    def mismatch(snapshot, config):
+        generated = _result(snapshot, config)
+        generated.semantic_fingerprint = "f" * 64
+        return generated
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.generate_trend_narrative",
+        mismatch,
+    )
+
+    result = process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert result["slots_consumed"] == 4
+    assert result["failed"] == 4
+    assert result["published"] == 0
+    assert not TrendNarrative.objects.filter(
+        transport_completed_at__isnull=True
+    ).exists()
 
 
 def test_provider_enable_fills_cold_cache_without_waiting_for_cadence(monkeypatch):
@@ -197,8 +405,8 @@ def test_provider_enable_fills_cold_cache_without_waiting_for_cadence(monkeypatc
         lambda: disabled,
     )
     monkeypatch.setattr(
-        "monitor.trend_narrative_tasks.build_trend_fact_packet",
-        lambda window_days, *, as_of, thresholds, earliest_at: _facts(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        lambda window_days, *, as_of, thresholds: _snapshot(
             window_days, as_of=as_of
         ),
     )
@@ -211,7 +419,7 @@ def test_provider_enable_fills_cold_cache_without_waiting_for_cadence(monkeypatc
     )
 
     assert still_disabled["not_due"] == 4
-    assert TrendNarrativeVersion.objects.count() == 4
+    assert TrendNarrative.objects.count() == 4
 
     _config, calls = _enable(monkeypatch)
     later = NOW + timedelta(minutes=1)
@@ -235,18 +443,73 @@ def test_one_window_failure_does_not_discard_other_publications(monkeypatch):
     assert result["published"] == 3
     assert result["failed"] == 1
     assert calls == [1, 7, 30, 365]
-    assert TrendNarrativeVersion.objects.filter(status="failed").count() == 1
-    assert TrendNarrativeVersion.objects.filter(is_current=True).count() == 3
+    assert TrendNarrative.objects.filter(status="failed").count() == 1
+    assert TrendNarrative.objects.filter(is_current=True).count() == 3
 
 
-def test_failure_backoff_retries_at_boundary_without_waiting_full_cadence(
+def test_one_snapshot_failure_does_not_discard_other_publications(monkeypatch):
+    _config, calls = _enable(monkeypatch)
+    normal_builder = __import__(
+        "monitor.trend_narrative_tasks",
+        fromlist=["build_trend_analysis_snapshot"],
+    ).build_trend_analysis_snapshot
+
+    def build(window_days, *, as_of, thresholds):
+        if window_days == 7:
+            raise RuntimeError("fixture snapshot failure")
+        return normal_builder(window_days, as_of=as_of, thresholds=thresholds)
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        build,
+    )
+
+    result = process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert result["slots_consumed"] == 3
+    assert result["published"] == 3
+    assert result["failed"] == 1
+    assert result["errors"] == ["7d:snapshot_failed"]
+    assert calls == [1, 30, 365]
+    failure = TrendNarrative.objects.get(window_days=7)
+    assert failure.status == TrendNarrative.Status.SUPPRESSED
+    assert failure.error_code == "snapshot_failed"
+    assert failure.call_slot_consumed is False
+    assert failure.latest_checked_facts["failure_stage"] == "snapshot"
+
+
+def test_empty_candidate_snapshot_records_no_call_and_skips_provider(monkeypatch):
+    config, calls = _enable(monkeypatch)
+
+    def empty_snapshot(window_days, *, as_of, thresholds):
+        snapshot = _snapshot(window_days, as_of=as_of)
+        snapshot["candidates"] = []
+        snapshot["selection"]["candidate_count"] = 0
+        return snapshot
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        empty_snapshot,
+    )
+
+    result = process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert config.provider_calls_enabled
+    assert result["slots_consumed"] == 0
+    assert result["suppressed"] == 4
+    assert calls == []
+    assert TrendNarrative.objects.filter(status="checked").count() == 4
+
+
+def test_failure_backoff_retries_at_window_cadence_boundary(
     monkeypatch,
 ):
     config, calls = _enable(monkeypatch, fail_window=365)
     first = process_trend_narrative_envelope(_envelope(), now=NOW)
     calls.clear()
 
-    before = NOW + timedelta(minutes=config.backoff_minutes[0] - 1)
+    cadence_minutes = config.cadence_minutes[365]
+    before = NOW + timedelta(minutes=cadence_minutes - 1)
     blocked = process_trend_narrative_envelope(
         _envelope("cycle-b", completed_at=before),
         now=before,
@@ -255,7 +518,7 @@ def test_failure_backoff_retries_at_boundary_without_waiting_full_cadence(
     assert blocked["suppressed"] == 1
     assert calls == []
 
-    boundary = NOW + timedelta(minutes=config.backoff_minutes[0])
+    boundary = NOW + timedelta(minutes=cadence_minutes)
     _enable(monkeypatch)
     retried = process_trend_narrative_envelope(
         _envelope("cycle-c", completed_at=boundary),
@@ -265,6 +528,47 @@ def test_failure_backoff_retries_at_boundary_without_waiting_full_cadence(
     assert first["failed"] == 1
     assert retried["slots_consumed"] == 1
     assert retried["published"] == 1
+
+
+def test_consecutive_failure_counter_drives_bounded_backoff(monkeypatch):
+    config, _calls = _enable(monkeypatch, fail_window=365)
+    process_trend_narrative_envelope(_envelope(), now=NOW)
+    first = TrendNarrative.objects.get(window_days=365, status="failed")
+    assert first.consecutive_failures == 1
+
+    second_at = NOW + timedelta(minutes=config.cadence_minutes[365])
+    process_trend_narrative_envelope(
+        _envelope("cycle-b", completed_at=second_at),
+        now=second_at,
+    )
+    second = TrendNarrative.objects.filter(
+        window_days=365,
+        status="failed",
+    ).latest("pk")
+
+    assert second.consecutive_failures == 2
+    assert second.next_attempt_at == second_at + timedelta(
+        minutes=config.stale_minutes[365]
+    )
+
+
+@pytest.mark.parametrize(
+    ("window_days", "expected_first_delay"),
+    [(1, 30), (7, 60), (30, 360), (365, 1440)],
+)
+def test_first_failure_waits_one_window_cadence(
+    monkeypatch,
+    window_days,
+    expected_first_delay,
+):
+    _config, _calls = _enable(monkeypatch, fail_window=window_days)
+
+    process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    failure = TrendNarrative.objects.get(window_days=window_days, status="failed")
+    assert failure.next_attempt_at == NOW + timedelta(
+        minutes=expected_first_delay
+    )
 
 
 def test_each_sequential_call_receives_a_fresh_lease_clock(monkeypatch):
@@ -294,7 +598,7 @@ def test_each_sequential_call_receives_a_fresh_lease_clock(monkeypatch):
     assert result["published"] == 4
     assert result["failed"] == 0
     claimed_at = list(
-        TrendNarrativeVersion.objects.order_by("window_days").values_list(
+        TrendNarrative.objects.order_by("window_days").values_list(
             "claimed_at", flat=True
         )
     )

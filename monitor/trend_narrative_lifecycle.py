@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any
 
 from django.db import IntegrityError, connection, transaction
+from django.db.models import Q, QuerySet
 
-from core.models import Brand, TrendNarrativeVersion
+from core.models import Brand, Product, TrendNarrative, TrendNarrativeSubject
+from monitor.trend_narrative_coverage import selected_coverage_state
 
 _ADVISORY_LOCK_NAMESPACE = 1_926_082_021
 _TERMINAL_STATUSES = (
-    TrendNarrativeVersion.Status.CHECKED,
-    TrendNarrativeVersion.Status.SUPPRESSED,
-    TrendNarrativeVersion.Status.ABANDONED,
-    TrendNarrativeVersion.Status.FAILED,
-    TrendNarrativeVersion.Status.PUBLISHED,
-    TrendNarrativeVersion.Status.SUPERSEDED,
+    TrendNarrative.Status.CHECKED,
+    TrendNarrative.Status.SUPPRESSED,
+    TrendNarrative.Status.ABANDONED,
+    TrendNarrative.Status.FAILED,
+    TrendNarrative.Status.PUBLISHED,
+    TrendNarrative.Status.SUPERSEDED,
 )
 
 
@@ -30,11 +33,11 @@ def record_no_call_check(
     checked_at,
     status: str,
     reason_code: str = "",
-) -> TrendNarrativeVersion | None:
+) -> TrendNarrative | None:
     """Record a due check that intentionally consumed no provider slot."""
     allowed = {
-        TrendNarrativeVersion.Status.CHECKED,
-        TrendNarrativeVersion.Status.SUPPRESSED,
+        TrendNarrative.Status.CHECKED,
+        TrendNarrative.Status.SUPPRESSED,
     }
     if status not in allowed:
         raise ValueError("no-call rows must be checked or suppressed")
@@ -42,7 +45,7 @@ def record_no_call_check(
     secondary = _brand_snapshot(facts.get("secondary_brand"))
     try:
         with transaction.atomic():
-            return TrendNarrativeVersion.objects.create(
+            return TrendNarrative.objects.create(
                 source_cycle_id=source_cycle_id,
                 window_days=window_days,
                 status=status,
@@ -53,19 +56,19 @@ def record_no_call_check(
                 latest_checked_at=checked_at,
                 latest_checked_facts=facts,
                 narrative_type=str(facts.get("narrative_type") or ""),
-                coverage_state=str((facts.get("coverage") or {}).get("state") or ""),
+                coverage_state=selected_coverage_state(facts),
                 primary_brand=primary["brand"],
                 primary_brand_key=primary["key"],
                 primary_brand_name_en=primary["name_en"],
-                primary_brand_name_zh_hans=primary["name_zh_hans"],
+                primary_brand_name_zh_hans=primary["name_zh_cn"],
                 secondary_brand=secondary["brand"],
                 secondary_brand_key=secondary["key"],
                 secondary_brand_name_en=secondary["name_en"],
-                secondary_brand_name_zh_hans=secondary["name_zh_hans"],
+                secondary_brand_name_zh_hans=secondary["name_zh_cn"],
                 error_code=reason_code[:64],
             )
     except IntegrityError:
-        if TrendNarrativeVersion.objects.filter(
+        if TrendNarrative.objects.filter(
             source_cycle_id=source_cycle_id,
             window_days=window_days,
         ).exists():
@@ -84,11 +87,12 @@ def reserve_generation(
     prompt_version: str,
     provider: str,
     provider_host: str,
-    model_name: str,
+    llm_model_name: str,
     owner: str,
     now,
     lease_seconds: int,
-) -> TrendNarrativeVersion | None:
+    output_schema_version: int = 1,
+) -> TrendNarrative | None:
     """Irreversibly consume one call slot for a source-cycle/window pair.
 
     A duplicate returns ``None``. It never reclaims or reopens the existing
@@ -100,30 +104,30 @@ def reserve_generation(
     secondary = _brand_snapshot(generation_facts.get("secondary_brand"))
     try:
         with transaction.atomic():
-            return TrendNarrativeVersion.objects.create(
+            return TrendNarrative.objects.create(
                 source_cycle_id=source_cycle_id,
                 window_days=window_days,
-                status=TrendNarrativeVersion.Status.GENERATING,
+                status=TrendNarrative.Status.GENERATING,
                 semantic_fingerprint=semantic_fingerprint,
                 publication_epoch=publication_epoch,
                 facts_as_of=facts_as_of,
                 generation_facts=generation_facts,
+                output_schema_version=output_schema_version,
                 narrative_type=str(generation_facts.get("narrative_type") or ""),
-                coverage_state=str(
-                    (generation_facts.get("coverage") or {}).get("state") or ""
-                ),
+                coverage_state=selected_coverage_state(generation_facts),
                 primary_brand=primary["brand"],
                 primary_brand_key=primary["key"],
                 primary_brand_name_en=primary["name_en"],
-                primary_brand_name_zh_hans=primary["name_zh_hans"],
+                primary_brand_name_zh_hans=primary["name_zh_cn"],
                 secondary_brand=secondary["brand"],
                 secondary_brand_key=secondary["key"],
                 secondary_brand_name_en=secondary["name_en"],
-                secondary_brand_name_zh_hans=secondary["name_zh_hans"],
+                secondary_brand_name_zh_hans=secondary["name_zh_cn"],
                 prompt_version=prompt_version,
                 provider=provider,
                 provider_host=provider_host,
-                model_name=model_name,
+                model_name=llm_model_name,
+                llm_model_name=llm_model_name,
                 call_slot_consumed=True,
                 claim_owner=owner[:128],
                 claim_fence=1,
@@ -131,7 +135,7 @@ def reserve_generation(
                 claim_expires_at=now + timedelta(seconds=lease_seconds),
             )
     except IntegrityError:
-        if TrendNarrativeVersion.objects.filter(
+        if TrendNarrative.objects.filter(
             source_cycle_id=source_cycle_id,
             window_days=window_days,
         ).exists():
@@ -188,38 +192,102 @@ def fail_generation(
     error_code: str,
     now,
     next_attempt_at=None,
+    consecutive_failures: int = 1,
 ) -> bool:
-    if not error_code:
-        raise ValueError("error_code is required")
+    if not error_code or consecutive_failures < 1:
+        raise ValueError("error_code and a positive failure count are required")
     with transaction.atomic():
         row = _locked_attempt(attempt_id)
-        if row.status == TrendNarrativeVersion.Status.FAILED:
+        if row.status == TrendNarrative.Status.FAILED:
             return row.claim_owner == owner and row.claim_fence == fence
         if not _owns_generating(row, owner=owner, fence=fence, now=now):
             return False
-        row.status = TrendNarrativeVersion.Status.FAILED
+        row.status = TrendNarrative.Status.FAILED
         row.error_code = error_code[:64]
         row.next_attempt_at = next_attempt_at
+        row.consecutive_failures = consecutive_failures
         row.save(
             update_fields=[
                 "status",
                 "error_code",
                 "next_attempt_at",
+                "consecutive_failures",
                 "updated_at",
             ]
         )
         return True
 
 
-def abandon_expired_attempts(*, now) -> int:
-    return TrendNarrativeVersion.objects.filter(
-        status=TrendNarrativeVersion.Status.GENERATING,
-        claim_expires_at__lte=now,
-    ).update(
-        status=TrendNarrativeVersion.Status.ABANDONED,
-        error_code="lease_expired",
-        next_attempt_at=None,
+def next_failure_backoff(
+    failures: QuerySet[TrendNarrative],
+    *,
+    window_days: int,
+    now,
+    cadence_minutes: Mapping[int, int],
+    stale_minutes: Mapping[int, int],
+) -> tuple[int, Any]:
+    """Return the durable count and bounded retry time for one fingerprint."""
+    latest_failure = failures.order_by("-created_at", "-pk").first()
+    previous_failures = (
+        latest_failure.consecutive_failures
+        if latest_failure and latest_failure.consecutive_failures
+        else failures.count()
     )
+    consecutive_failures = previous_failures + 1
+    delay_minutes = cadence_minutes[window_days]
+    for _ in range(consecutive_failures - 1):
+        delay_minutes = min(delay_minutes * 2, stale_minutes[window_days])
+        if delay_minutes == stale_minutes[window_days]:
+            break
+    return consecutive_failures, now + timedelta(minutes=delay_minutes)
+
+
+def abandon_expired_attempts(
+    *,
+    now,
+    cadence_minutes: Mapping[int, int],
+    stale_minutes: Mapping[int, int],
+) -> int:
+    """Abandon expired leases without erasing same-fingerprint backoff."""
+    with transaction.atomic():
+        expired = list(
+            TrendNarrative.objects.select_for_update()
+            .filter(
+                status=TrendNarrative.Status.GENERATING,
+                claim_expires_at__lte=now,
+            )
+            .order_by("claim_expires_at", "pk")
+        )
+        for row in expired:
+            prior_failures = TrendNarrative.objects.filter(
+                window_days=row.window_days,
+                semantic_fingerprint=row.semantic_fingerprint,
+                status__in=[
+                    TrendNarrative.Status.FAILED,
+                    TrendNarrative.Status.ABANDONED,
+                ],
+            ).exclude(pk=row.pk)
+            failures, next_attempt_at = next_failure_backoff(
+                prior_failures,
+                window_days=row.window_days,
+                now=now,
+                cadence_minutes=cadence_minutes,
+                stale_minutes=stale_minutes,
+            )
+            row.status = TrendNarrative.Status.ABANDONED
+            row.error_code = "lease_expired"
+            row.consecutive_failures = failures
+            row.next_attempt_at = next_attempt_at
+            row.save(
+                update_fields=[
+                    "status",
+                    "error_code",
+                    "consecutive_failures",
+                    "next_attempt_at",
+                    "updated_at",
+                ]
+            )
+        return len(expired)
 
 
 def publish_generation(
@@ -228,12 +296,17 @@ def publish_generation(
     owner: str,
     fence: int,
     body_en: str,
-    body_zh_hans: str,
+    body_zh_cn: str,
     output_hash: str,
     input_tokens: int,
     output_tokens: int,
     latency_ms: int,
     now,
+    observations_en: Sequence[str] = (),
+    observations_zh_cn: Sequence[str] = (),
+    selected_candidate_ids: Sequence[str] = (),
+    claims: Sequence[Mapping[str, Any]] = (),
+    subjects: Sequence[Mapping[str, Any]] = (),
 ) -> bool:
     """Publish if this attempt strictly outranks the current row.
 
@@ -245,17 +318,26 @@ def publish_generation(
         _lock_window(row.window_days)
         row.refresh_from_db()
         if row.status in (
-            TrendNarrativeVersion.Status.PUBLISHED,
-            TrendNarrativeVersion.Status.SUPERSEDED,
+            TrendNarrative.Status.PUBLISHED,
+            TrendNarrative.Status.SUPERSEDED,
         ):
             return row.is_current
         if not _owns_generating(row, owner=owner, fence=fence, now=now):
             return False
-        if row.transport_started_at is None:
+        if row.transport_started_at is None or row.transport_completed_at is None:
             return False
 
+        publication = _validate_publication_payload(
+            row,
+            observations_en=observations_en,
+            observations_zh_cn=observations_zh_cn,
+            selected_candidate_ids=selected_candidate_ids,
+            claims=claims,
+            subjects=subjects,
+        )
+
         current = (
-            TrendNarrativeVersion.objects.select_for_update()
+            TrendNarrative.objects.select_for_update()
             .filter(window_days=row.window_days, is_current=True)
             .exclude(pk=row.pk)
             .first()
@@ -263,19 +345,26 @@ def publish_generation(
         wins = current is None or _publication_key(row) > _publication_key(current)
         if wins and current is not None:
             current.is_current = False
-            current.status = TrendNarrativeVersion.Status.SUPERSEDED
+            current.status = TrendNarrative.Status.SUPERSEDED
             current.save(update_fields=["is_current", "status", "updated_at"])
 
         row.status = (
-            TrendNarrativeVersion.Status.PUBLISHED
+            TrendNarrative.Status.PUBLISHED
             if wins
-            else TrendNarrativeVersion.Status.SUPERSEDED
+            else TrendNarrative.Status.SUPERSEDED
         )
         row.is_current = wins
         row.body_en = body_en
-        row.body_zh_hans = body_zh_hans
+        row.body_zh_cn = body_zh_cn
+        row.body_zh_hans = body_zh_cn
+        row.observations_en = publication["observations_en"]
+        row.observations_zh_cn = publication["observations_zh_cn"]
+        row.selected_candidate_ids = publication["selected_candidate_ids"]
+        row.claims = publication["claims"]
+        if publication["subjects"]:
+            _write_subjects(row, publication["subjects"])
+            _write_legacy_subject_snapshots(row, publication["subjects"])
         row.output_hash = output_hash
-        row.transport_completed_at = now
         row.generated_at = now
         row.published_at = now
         row.input_tokens = input_tokens
@@ -292,9 +381,21 @@ def publish_generation(
                 "status",
                 "is_current",
                 "body_en",
+                "body_zh_cn",
                 "body_zh_hans",
+                "observations_en",
+                "observations_zh_cn",
+                "selected_candidate_ids",
+                "claims",
+                "primary_brand",
+                "primary_brand_key",
+                "primary_brand_name_en",
+                "primary_brand_name_zh_hans",
+                "secondary_brand",
+                "secondary_brand_key",
+                "secondary_brand_name_en",
+                "secondary_brand_name_zh_hans",
                 "output_hash",
-                "transport_completed_at",
                 "generated_at",
                 "published_at",
                 "input_tokens",
@@ -325,7 +426,7 @@ def advance_current_check(
     with transaction.atomic():
         _lock_window(window_days)
         row = (
-            TrendNarrativeVersion.objects.select_for_update()
+            TrendNarrative.objects.select_for_update()
             .filter(
                 window_days=window_days,
                 is_current=True,
@@ -369,7 +470,7 @@ def prune_narrative_history(
         for window_days in (1, 7, 30, 365):
             _lock_window(window_days)
             protected = set(
-                TrendNarrativeVersion.objects.filter(
+                TrendNarrative.objects.filter(
                     window_days=window_days,
                     status__in=_TERMINAL_STATUSES,
                 )
@@ -377,13 +478,13 @@ def prune_narrative_history(
                 .values_list("pk", flat=True)[:keep_per_window]
             )
             current_ids = set(
-                TrendNarrativeVersion.objects.filter(
+                TrendNarrative.objects.filter(
                     window_days=window_days,
                     is_current=True,
                 ).values_list("pk", flat=True)
             )
             protected.update(current_ids)
-            count, _ = TrendNarrativeVersion.objects.filter(
+            count, _ = TrendNarrative.objects.filter(
                 window_days=window_days,
                 status__in=_TERMINAL_STATUSES,
                 created_at__lt=cutoff,
@@ -400,23 +501,286 @@ def _brand_snapshot(value: object) -> dict[str, Any]:
         "brand": Brand.objects.filter(pk=key).first() if key else None,
         "key": key,
         "name_en": str(snapshot.get("display_name_en") or ""),
-        "name_zh_hans": str(snapshot.get("display_name_zh_hans") or ""),
+        "name_zh_cn": str(
+            snapshot.get("display_name_zh_cn")
+            or snapshot.get("display_name_zh_hans")
+            or ""
+        ),
     }
 
 
-def _locked_attempt(attempt_id: int) -> TrendNarrativeVersion:
-    return TrendNarrativeVersion.objects.select_for_update().get(pk=attempt_id)
+def _validate_publication_payload(
+    row: TrendNarrative,
+    *,
+    observations_en: Sequence[str],
+    observations_zh_cn: Sequence[str],
+    selected_candidate_ids: Sequence[str],
+    claims: Sequence[Mapping[str, Any]],
+    subjects: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    payload = {
+        "observations_en": list(observations_en),
+        "observations_zh_cn": list(observations_zh_cn),
+        "selected_candidate_ids": list(selected_candidate_ids),
+        "claims": [dict(claim) for claim in claims],
+        "subjects": [dict(subject) for subject in subjects],
+    }
+    if row.output_schema_version == 1:
+        if any(payload.values()):
+            raise ValueError("schema-1 publications cannot contain schema-2 output")
+        return payload
+    if row.output_schema_version != 2:
+        raise ValueError("unsupported trend narrative output schema")
+    payload["subjects"] = _resolve_evidence_subject_identities(
+        payload["subjects"]
+    )
+    if len(payload["observations_en"]) != len(payload["observations_zh_cn"]):
+        raise ValueError("schema-2 observations must be bilingual")
+    if len(payload["observations_en"]) > 2:
+        raise ValueError("schema-2 supports at most two observations")
+    if len(payload["claims"]) != len(payload["observations_en"]) + 1 or [
+        claim.get("observation_index") for claim in payload["claims"]
+    ] != [-1, *range(len(payload["observations_en"]))]:
+        raise ValueError("schema-2 claims must cover headline then observations")
+    if len(payload["selected_candidate_ids"]) not in {1, 2} or len(
+        set(payload["selected_candidate_ids"])
+    ) != len(payload["selected_candidate_ids"]):
+        raise ValueError("schema-2 candidate selection must contain one or two IDs")
+    candidates = {
+        str(candidate.get("candidate_id") or ""): candidate
+        for candidate in (row.generation_facts or {}).get("candidates", [])
+        if isinstance(candidate, Mapping) and candidate.get("candidate_id")
+    }
+    if not candidates or any(
+        candidate_id not in candidates
+        for candidate_id in payload["selected_candidate_ids"]
+    ):
+        raise ValueError("selected candidates must exist in generation facts")
+    if len(payload["subjects"]) not in {1, 2}:
+        raise ValueError("schema-2 publications require one or two subjects")
+    positions = [subject.get("position") for subject in payload["subjects"]]
+    if positions != list(range(len(payload["subjects"]))):
+        raise ValueError("subject positions must be contiguous and ordered")
+    measured = [
+        subject
+        for subject in payload["subjects"]
+        if subject.get("support_type")
+        == TrendNarrativeSubject.SupportType.MEASURED_CANDIDATE
+    ]
+    evidence_only = [
+        subject
+        for subject in payload["subjects"]
+        if subject.get("support_type")
+        == TrendNarrativeSubject.SupportType.EVIDENCE_ONLY
+    ]
+    if payload["subjects"][0].get("support_type") != (
+        TrendNarrativeSubject.SupportType.MEASURED_CANDIDATE
+    ):
+        raise ValueError("the primary subject must be a measured candidate")
+    measured_ids = [str(subject.get("candidate_id") or "") for subject in measured]
+    if measured_ids != payload["selected_candidate_ids"]:
+        raise ValueError("measured subjects must match selected candidates")
+    evidence_owners: dict[str, set[str]] = {}
+    for candidate_id, candidate in candidates.items():
+        for evidence in candidate.get("evidence", []):
+            if isinstance(evidence, Mapping) and evidence.get("evidence_id"):
+                evidence_owners.setdefault(
+                    str(evidence["evidence_id"]), set()
+                ).add(candidate_id)
+    selected_ids = set(payload["selected_candidate_ids"])
+    for claim in payload["claims"]:
+        claim_candidate_ids = set(
+            claim.get("candidate_ids") or payload["selected_candidate_ids"]
+        )
+        for evidence_id in claim.get("evidence_ids") or []:
+            owners = evidence_owners.get(str(evidence_id))
+            if not owners or not owners.intersection(claim_candidate_ids):
+                raise ValueError("claim evidence must belong to its candidates")
+    for subject in evidence_only:
+        evidence_ids = list(subject.get("evidence_ids") or [])
+        if not evidence_ids or any(
+            not evidence_owners.get(str(evidence_id), set()).intersection(
+                selected_ids
+            )
+            for evidence_id in evidence_ids
+        ):
+            raise ValueError(
+                "evidence-only subjects require selected-candidate evidence"
+            )
+    if len(measured) == 2:
+        measured_keys = [
+            str(subject.get("canonical_key_snapshot") or "")
+            for subject in measured
+        ]
+        if not all(measured_keys) or len(set(measured_keys)) != 2:
+            raise ValueError("two measured subjects must have distinct identities")
+    elif len(measured) != 1 or len(evidence_only) > 1:
+        raise ValueError("invalid measured/evidence-only subject combination")
+    return payload
+
+
+def _write_subjects(
+    row: TrendNarrative,
+    subjects: Sequence[Mapping[str, Any]],
+) -> None:
+    if row.subjects.exists():
+        raise ValueError("published subjects are immutable")
+    records = []
+    for subject in subjects:
+        identity_type = str(subject.get("identity_type") or "")
+        canonical_key = str(subject.get("canonical_key_snapshot") or "")
+        brand = (
+            Brand.objects.filter(pk=canonical_key).first()
+            if identity_type == TrendNarrativeSubject.IdentityType.BRAND
+            and canonical_key
+            else None
+        )
+        product = None
+        if identity_type == TrendNarrativeSubject.IdentityType.PRODUCT:
+            product_id = subject.get("product_id")
+            if product_id is not None:
+                product = Product.objects.filter(pk=product_id).first()
+            if product is None and canonical_key:
+                product = Product.objects.filter(repo_id=canonical_key).first()
+        if (
+            identity_type == TrendNarrativeSubject.IdentityType.BRAND
+            and brand is None
+        ):
+            raise ValueError("known brand subjects require an existing brand")
+        if (
+            identity_type == TrendNarrativeSubject.IdentityType.PRODUCT
+            and product is None
+        ):
+            raise ValueError("known product subjects require an existing product")
+        records.append(
+            TrendNarrativeSubject(
+                trend_narrative=row,
+                position=subject.get("position"),
+                support_type=subject.get("support_type"),
+                entity_type=subject.get("entity_type"),
+                identity_type=identity_type,
+                brand=brand,
+                product=product,
+                observed_name=str(subject.get("observed_name") or ""),
+                canonical_key_snapshot=canonical_key,
+                name_en_snapshot=str(subject.get("name_en_snapshot") or ""),
+                name_zh_cn_snapshot=str(
+                    subject.get("name_zh_cn_snapshot") or ""
+                ),
+                candidate_id=str(subject.get("candidate_id") or ""),
+                evidence_ids=list(subject.get("evidence_ids") or []),
+            )
+        )
+    TrendNarrativeSubject.objects.bulk_create(records)
+
+
+def _resolve_evidence_subject_identities(
+    subjects: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Resolve exact unique Brand/Product names without creating catalog rows."""
+    resolved: list[dict[str, Any]] = []
+    for source in subjects:
+        subject = dict(source)
+        if (
+            subject.get("support_type")
+            != TrendNarrativeSubject.SupportType.EVIDENCE_ONLY
+            or subject.get("identity_type")
+            != TrendNarrativeSubject.IdentityType.UNRESOLVED
+        ):
+            resolved.append(subject)
+            continue
+        observed_name = str(subject.get("observed_name") or "")
+        brands = list(
+            Brand.objects.filter(
+                Q(nickname__iexact=observed_name)
+                | Q(display_name__iexact=observed_name)
+                | Q(display_name_en__iexact=observed_name)
+                | Q(display_name_zh_cn__iexact=observed_name)
+            )
+            .distinct()
+            .order_by("nickname")[:2]
+        )
+        products = list(
+            Product.objects.filter(
+                Q(repo_id__iexact=observed_name)
+                | Q(display_name__iexact=observed_name)
+            )
+            .distinct()
+            .order_by("repo_id")[:2]
+        )
+        if len(brands) == 1 and not products:
+            brand = brands[0]
+            name_en = brand.display_name_en or brand.display_name or brand.nickname
+            subject.update(
+                identity_type=TrendNarrativeSubject.IdentityType.BRAND,
+                observed_name="",
+                canonical_key_snapshot=brand.nickname,
+                name_en_snapshot=name_en,
+                name_zh_cn_snapshot=brand.display_name_zh_cn or name_en,
+            )
+        elif len(products) == 1 and not brands:
+            product = products[0]
+            name = product.display_name or product.repo_id
+            subject.update(
+                identity_type=TrendNarrativeSubject.IdentityType.PRODUCT,
+                product_id=product.pk,
+                observed_name="",
+                canonical_key_snapshot=product.repo_id,
+                name_en_snapshot=name,
+                name_zh_cn_snapshot=name,
+            )
+        resolved.append(subject)
+    return resolved
+
+
+def _write_legacy_subject_snapshots(
+    row: TrendNarrative,
+    subjects: Sequence[Mapping[str, Any]],
+) -> None:
+    primary = subjects[0]
+    row.primary_brand = _subject_brand(primary)
+    row.primary_brand_key = str(primary.get("canonical_key_snapshot") or "")[:64]
+    row.primary_brand_name_en = str(primary.get("name_en_snapshot") or "")
+    row.primary_brand_name_zh_hans = str(
+        primary.get("name_zh_cn_snapshot") or ""
+    )
+    secondary = subjects[1] if len(subjects) == 2 else None
+    row.secondary_brand = _subject_brand(secondary)
+    row.secondary_brand_key = (
+        str(secondary.get("canonical_key_snapshot") or "")[:64]
+        if secondary
+        else ""
+    )
+    row.secondary_brand_name_en = (
+        str(secondary.get("name_en_snapshot") or "") if secondary else ""
+    )
+    row.secondary_brand_name_zh_hans = (
+        str(secondary.get("name_zh_cn_snapshot") or "") if secondary else ""
+    )
+
+
+def _subject_brand(subject: Mapping[str, Any] | None) -> Brand | None:
+    if not subject or subject.get("identity_type") != (
+        TrendNarrativeSubject.IdentityType.BRAND
+    ):
+        return None
+    key = str(subject.get("canonical_key_snapshot") or "")
+    return Brand.objects.filter(pk=key).first() if key else None
+
+
+def _locked_attempt(attempt_id: int) -> TrendNarrative:
+    return TrendNarrative.objects.select_for_update().get(pk=attempt_id)
 
 
 def _owns_generating(
-    row: TrendNarrativeVersion,
+    row: TrendNarrative,
     *,
     owner: str,
     fence: int,
     now,
 ) -> bool:
     return (
-        row.status == TrendNarrativeVersion.Status.GENERATING
+        row.status == TrendNarrative.Status.GENERATING
         and row.call_slot_consumed
         and row.claim_owner == owner
         and row.claim_fence == fence
@@ -425,7 +789,7 @@ def _owns_generating(
     )
 
 
-def _publication_key(row: TrendNarrativeVersion) -> tuple[int, Any]:
+def _publication_key(row: TrendNarrative) -> tuple[int, Any]:
     return (row.publication_epoch, row.facts_as_of)
 
 

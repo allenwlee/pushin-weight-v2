@@ -8,7 +8,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import TrendNarrativeVersion
+from core.models import TrendNarrative
 from monitor.trend_narrative_projection import trend_narrative_state
 from x_monitor.config import load_config
 
@@ -24,12 +24,16 @@ class Command(BaseCommand):
         now = timezone.now()
         windows = []
         for window_days in (1, 7, 30, 365):
-            current = TrendNarrativeVersion.objects.filter(
-                window_days=window_days,
-                is_current=True,
-            ).first()
+            current = (
+                TrendNarrative.objects.filter(
+                    window_days=window_days,
+                    is_current=True,
+                )
+                .prefetch_related("subjects")
+                .first()
+            )
             latest = (
-                TrendNarrativeVersion.objects.filter(window_days=window_days)
+                TrendNarrative.objects.filter(window_days=window_days)
                 .order_by("-created_at", "-pk")
                 .first()
             )
@@ -56,6 +60,13 @@ class Command(BaseCommand):
                         current.latest_checked_source_cycle_id if current else None
                     ),
                     "latest_status": latest.status if latest else None,
+                    "output_schema_version": (
+                        current.output_schema_version if current else None
+                    ),
+                    "selected_candidate_ids": (
+                        current.selected_candidate_ids if current else []
+                    ),
+                    "subjects": _safe_subjects(current),
                     "call_slot_consumed": (
                         latest.call_slot_consumed if latest else False
                     ),
@@ -75,10 +86,15 @@ class Command(BaseCommand):
                         latest.published_at if latest else None
                     ),
                     "next_attempt_at": _iso(latest.next_attempt_at if latest else None),
+                    "consecutive_failures": (
+                        latest.consecutive_failures if latest else 0
+                    ),
                     "error_code": latest.error_code if latest else "",
                     "provider": latest.provider if latest else config.provider,
                     "provider_host": (latest.provider_host if latest else "configured"),
-                    "model": latest.model_name if latest else config.model,
+                    "model": (
+                        latest.resolved_llm_model_name if latest else config.model
+                    ),
                     "prompt_version": (
                         latest.prompt_version if latest else config.prompt_version
                     ),
@@ -112,14 +128,33 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"{row['window_days']}d {row['state']} "
                 f"status={row['latest_status'] or '-'} "
+                f"schema={row['output_schema_version'] or '-'} "
+                f"subjects={len(row['subjects'])} "
                 f"source={row['current_source_cycle_id'] or '-'} "
                 f"checked={row['checked_at'] or '-'} "
                 f"slot={int(row['call_slot_consumed'])} "
                 f"transport={int(row['transport_started'])}/{int(row['transport_completed'])} "
                 f"claim={row['claim_owner'] or '-'}:{row['claim_fence']} "
+                f"failures={row['consecutive_failures']} "
                 f"error={row['error_code'] or '-'}"
             )
 
 
 def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def _safe_subjects(narrative: TrendNarrative | None) -> list[dict[str, object]]:
+    """Expose identity/support diagnostics without private evidence IDs."""
+    if narrative is None:
+        return []
+    return [
+        {
+            "position": subject.position,
+            "support_type": subject.support_type,
+            "entity_type": subject.entity_type,
+            "identity_type": subject.identity_type,
+            "key": subject.canonical_key_snapshot or None,
+        }
+        for subject in narrative.subjects.all()
+    ]

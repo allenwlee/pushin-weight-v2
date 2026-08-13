@@ -467,6 +467,15 @@
   .headline-strip .body .brand { color: #fbcfe8; font-weight: 600; }
   .headline-strip .body .delta { color: #86efac; font-weight: 700; }
   .headline-strip .body .voice { color: #ddd6fe; font-weight: 400; }
+  .headline-observations {
+    margin: 7px 0 0;
+    padding-left: 17px;
+    color: #ddd6fe;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .headline-observations[hidden] { display: none; }
+  .headline-observations li + li { margin-top: 3px; }
 
   /* 6. Feed — scrollable body (infinite within strip); 4/5 post + 1/5 meta */
   .feed-strip {

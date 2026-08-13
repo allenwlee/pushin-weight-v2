@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from billiard.exceptions import SoftTimeLimitExceeded
 from django.utils import timezone
 
-from core.models import TrendNarrativeVersion
+from core.models import TrendNarrative
+from monitor.trend_narrative_candidates import build_trend_analysis_snapshot
 from monitor.trend_narrative_facts import (
     ALLOWED_TREND_WINDOWS,
     TrendFactThresholds,
-    build_trend_fact_packet,
-    earliest_trend_fact_at,
 )
 from monitor.trend_narrative_generation import (
     HeadlineGenerationError,
@@ -28,6 +29,7 @@ from monitor.trend_narrative_lifecycle import (
     fail_generation,
     mark_transport_completed,
     mark_transport_started,
+    next_failure_backoff,
     prune_narrative_history,
     publish_generation,
     record_no_call_check,
@@ -67,29 +69,31 @@ def process_trend_narrative_envelope(
         stats["status"] = "expired"
         return stats
 
-    abandon_expired_attempts(now=processed_at)
+    abandon_expired_attempts(
+        now=processed_at,
+        cadence_minutes=config.cadence_minutes,
+        stale_minutes=config.stale_minutes,
+    )
     thresholds = _thresholds(config)
-    earliest_at = None
-    earliest_loaded = False
     for window_days in sorted(ALLOWED_TREND_WINDOWS):
         if stats["slots_consumed"] >= config.call_cap:
             break
-        rows = TrendNarrativeVersion.objects.filter(window_days=window_days)
+        rows = TrendNarrative.objects.filter(window_days=window_days)
         if rows.filter(facts_as_of__gte=facts_as_of).exists():
             stats["outdated"] += 1
             continue
         cadence_rows = rows.exclude(
             status__in=[
-                TrendNarrativeVersion.Status.FAILED,
-                TrendNarrativeVersion.Status.ABANDONED,
+                TrendNarrative.Status.FAILED,
+                TrendNarrative.Status.ABANDONED,
             ]
         ).exclude(
-            status=TrendNarrativeVersion.Status.SUPPRESSED,
+            status=TrendNarrative.Status.SUPPRESSED,
             error_code="provider_backoff",
         )
         if config.provider_calls_enabled:
             cadence_rows = cadence_rows.exclude(
-                status=TrendNarrativeVersion.Status.SUPPRESSED,
+                status=TrendNarrative.Status.SUPPRESSED,
                 error_code="provider_calls_disabled",
             )
         latest = cadence_rows.order_by(
@@ -103,18 +107,50 @@ def process_trend_narrative_envelope(
             stats["not_due"] += 1
             continue
 
-        if not earliest_loaded:
-            earliest_at = earliest_trend_fact_at(as_of=facts_as_of)
-            earliest_loaded = True
-        facts = build_trend_fact_packet(
-            window_days,
-            as_of=facts_as_of,
-            thresholds=thresholds,
-            earliest_at=earliest_at,
-        )
+        try:
+            snapshot = build_trend_analysis_snapshot(
+                window_days,
+                as_of=facts_as_of,
+                thresholds=thresholds,
+            )
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "trend snapshot failed for %sd source=%s error_type=%s",
+                window_days,
+                source_cycle_id,
+                type(exc).__name__,
+            )
+            stats["failed"] += 1
+            stats["errors"].append(f"{window_days}d:snapshot_failed")
+            failure_facts = {
+                "snapshot_schema_version": 1,
+                "window_days": window_days,
+                "as_of": facts_as_of.isoformat(),
+                "failure_stage": "snapshot",
+                "candidates": [],
+            }
+            failure_fingerprint = hashlib.sha256(
+                (
+                    "snapshot-failure-v1:"
+                    f"{window_days}:{type(exc).__name__}"
+                ).encode()
+            ).hexdigest()
+            _record_no_call(
+                source_cycle_id=source_cycle_id,
+                window_days=window_days,
+                facts_as_of=facts_as_of,
+                fingerprint=failure_fingerprint,
+                facts=failure_facts,
+                processed_at=processed_at,
+                status=TrendNarrative.Status.SUPPRESSED,
+                reason="snapshot_failed",
+            )
+            continue
         active_config = _load_config()
         stats["control_revision"] = active_config.control_revision
-        fingerprint = generation_fingerprint(facts, active_config)
+        fingerprint = generation_fingerprint(snapshot, active_config)
         current = rows.filter(is_current=True).first()
         if current is not None and current.semantic_fingerprint == fingerprint:
             if advance_current_check(
@@ -123,20 +159,20 @@ def process_trend_narrative_envelope(
                 source_cycle_id=source_cycle_id,
                 checked_as_of=facts_as_of,
                 checked_at=processed_at,
-                facts=facts,
+                facts=snapshot,
             ):
                 stats["checks_advanced"] += 1
             continue
 
-        if facts["narrative_type"] == "insufficient_data":
+        if not snapshot["candidates"]:
             _record_no_call(
                 source_cycle_id=source_cycle_id,
                 window_days=window_days,
                 facts_as_of=facts_as_of,
                 fingerprint=fingerprint,
-                facts=facts,
+                facts=snapshot,
                 processed_at=processed_at,
-                status=TrendNarrativeVersion.Status.CHECKED,
+                status=TrendNarrative.Status.CHECKED,
                 reason="insufficient_data",
             )
             stats["suppressed"] += 1
@@ -147,20 +183,20 @@ def process_trend_narrative_envelope(
                 window_days=window_days,
                 facts_as_of=facts_as_of,
                 fingerprint=fingerprint,
-                facts=facts,
+                facts=snapshot,
                 processed_at=processed_at,
-                status=TrendNarrativeVersion.Status.SUPPRESSED,
+                status=TrendNarrative.Status.SUPPRESSED,
                 reason="provider_calls_disabled",
             )
             stats["suppressed"] += 1
             continue
 
-        failures = TrendNarrativeVersion.objects.filter(
+        failures = TrendNarrative.objects.filter(
             window_days=window_days,
             semantic_fingerprint=fingerprint,
             status__in=[
-                TrendNarrativeVersion.Status.FAILED,
-                TrendNarrativeVersion.Status.ABANDONED,
+                TrendNarrative.Status.FAILED,
+                TrendNarrative.Status.ABANDONED,
             ],
         )
         latest_failure = failures.order_by("-created_at", "-pk").first()
@@ -174,9 +210,9 @@ def process_trend_narrative_envelope(
                 window_days=window_days,
                 facts_as_of=facts_as_of,
                 fingerprint=fingerprint,
-                facts=facts,
+                facts=snapshot,
                 processed_at=processed_at,
-                status=TrendNarrativeVersion.Status.SUPPRESSED,
+                status=TrendNarrative.Status.SUPPRESSED,
                 reason="provider_backoff",
             )
             stats["suppressed"] += 1
@@ -189,15 +225,16 @@ def process_trend_narrative_envelope(
             window_days=window_days,
             facts_as_of=facts_as_of,
             semantic_fingerprint=fingerprint,
-            generation_facts=facts,
+            generation_facts=snapshot,
             publication_epoch=active_config.publication_epoch,
             prompt_version=active_config.prompt_version,
             provider=active_config.provider,
             provider_host=urlsplit(active_config.base_url).hostname or "",
-            model_name=active_config.model,
+            llm_model_name=active_config.model,
             owner=owner,
             now=attempt_started_at,
             lease_seconds=active_config.lease_seconds,
+            output_schema_version=2,
         )
         if attempt is None:
             continue
@@ -213,7 +250,13 @@ def process_trend_narrative_envelope(
             continue
         stats["transport_started"] += 1
         try:
-            generated = generate_trend_narrative(facts, active_config)
+            generated = generate_trend_narrative(snapshot, active_config)
+            mark_transport_completed(
+                attempt.pk,
+                owner=owner,
+                fence=attempt.claim_fence,
+                now=(now or clock()),
+            )
             if generated.semantic_fingerprint != fingerprint:
                 raise ValueError("generation fingerprint mismatch")
             published = publish_generation(
@@ -221,12 +264,17 @@ def process_trend_narrative_envelope(
                 owner=owner,
                 fence=attempt.claim_fence,
                 body_en=generated.body_en,
-                body_zh_hans=generated.body_zh_hans,
+                body_zh_cn=generated.body_zh_cn,
                 output_hash=generated.output_hash,
                 input_tokens=generated.input_tokens,
                 output_tokens=generated.output_tokens,
                 latency_ms=generated.latency_ms,
                 now=now or clock(),
+                observations_en=generated.observations_en,
+                observations_zh_cn=generated.observations_zh_cn,
+                selected_candidate_ids=generated.selected_candidate_ids,
+                claims=generated.claims,
+                subjects=generated.subjects,
             )
             if published:
                 stats["published"] += 1
@@ -257,6 +305,8 @@ def process_trend_narrative_envelope(
             )
             stats["failed"] += 1
             stats["errors"].append(f"{window_days}d:generation_failed")
+        except SoftTimeLimitExceeded:
+            raise
         # Fail closed for unexpected provider/SDK/runtime errors while keeping
         # the consumed slot terminal and logging only the safe exception type.
         except Exception as exc:  # noqa: BLE001
@@ -311,16 +361,21 @@ def _record_no_call(
 def _record_failure(
     *, attempt, owner, failures, config, processed_at, error_code: str
 ) -> None:
-    failure_count = failures.count()
-    delay_index = min(failure_count, len(config.backoff_minutes) - 1)
+    consecutive_failures, next_attempt_at = next_failure_backoff(
+        failures,
+        window_days=attempt.window_days,
+        now=processed_at,
+        cadence_minutes=config.cadence_minutes,
+        stale_minutes=config.stale_minutes,
+    )
     fail_generation(
         attempt.pk,
         owner=owner,
         fence=attempt.claim_fence,
         error_code=error_code,
         now=processed_at,
-        next_attempt_at=processed_at
-        + timedelta(minutes=config.backoff_minutes[delay_index]),
+        consecutive_failures=consecutive_failures,
+        next_attempt_at=next_attempt_at,
     )
 
 
@@ -337,6 +392,7 @@ def _thresholds(config: HeadlineNarrativeConfig) -> TrendFactThresholds:
         surging_ratio=config.surging_ratio,
         rising_ratio=config.rising_ratio,
         steady_ratio=config.steady_ratio,
+        episode_peak_ratio=config.episode_peak_ratio,
     )
 
 

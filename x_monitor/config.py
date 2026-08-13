@@ -289,8 +289,12 @@ class HeadlineNarrativeConfig(BaseModel):
     base_url: str = "https://api.deepseek.com/anthropic"
     model: str = "deepseek-v4-pro"
     timeout_seconds: int = Field(default=45, ge=5, le=120)
-    prompt_version: str = Field(default="headline-v1", min_length=1, max_length=64)
-    publication_epoch: int = Field(default=1, ge=1)
+    prompt_version: str = Field(
+        default="headline-v4-analytical",
+        min_length=1,
+        max_length=64,
+    )
+    publication_epoch: int = Field(default=4, ge=1)
     cadence_minutes: dict[int, int] = Field(
         default_factory=lambda: {1: 30, 7: 60, 30: 360, 365: 1440}
     )
@@ -304,14 +308,13 @@ class HeadlineNarrativeConfig(BaseModel):
     surging_ratio: Decimal = Field(default=Decimal("1.50"), ge=0)
     rising_ratio: Decimal = Field(default=Decimal("1.15"), ge=0)
     steady_ratio: Decimal = Field(default=Decimal("0.85"), ge=0)
+    episode_peak_ratio: Decimal = Field(default=Decimal("3.0"), ge=1)
+    fingerprint_band_percent: Literal[5] = 5
     call_cap: Literal[4] = 4
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
-    max_body_zh_hans_chars: int = Field(default=120, ge=40, le=300)
+    max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
     task_expiry_seconds: int = Field(default=1800, ge=60, le=3600)
     lease_seconds: int = Field(default=90, ge=30, le=300)
-    backoff_minutes: list[int] = Field(
-        default_factory=lambda: [15, 30, 60, 120], min_length=1
-    )
     retention_days: int = Field(default=90, ge=1)
     retention_rows_per_window: int = Field(default=20, ge=1)
     serving_enabled: bool = False
@@ -356,10 +359,6 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline momentum ratios must descend")
         if self.lease_seconds <= self.timeout_seconds:
             raise ValueError("headline lease must exceed provider timeout")
-        if any(delay < 1 or delay > 120 for delay in self.backoff_minutes):
-            raise ValueError("headline backoff must stay within a two-hour cap")
-        if self.backoff_minutes != sorted(self.backoff_minutes):
-            raise ValueError("headline backoff must be monotonically increasing")
         return self
 
 

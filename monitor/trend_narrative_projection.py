@@ -11,7 +11,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext, override
 
-from core.models import TrendNarrativeVersion
+from core.models import TrendNarrative
+from monitor.trend_narrative_coverage import selected_coverage
 from x_monitor.config import HeadlineNarrativeConfig, load_config
 
 _ZH_LOCALES = frozenset({"zh_cn", "zh-cn", "zh_hans", "zh-hans"})
@@ -32,13 +33,17 @@ def project_trend_narrative(
     requested_at = now or timezone.now()
     response_timestamp = computed_at or requested_at.isoformat()
     is_zh = str(locale).casefold() in _ZH_LOCALES
+    fallback_body = _fallback_body(is_zh=is_zh, disabled=False)
     base = {
-        "schema_version": 1,
+        "schema_version": 2,
         "window_days": window_days,
         "computed_at": response_timestamp,
         "state": "unavailable",
         "state_label": _state_label("unavailable", is_zh=is_zh),
-        "body": _fallback_body(is_zh=is_zh, disabled=False),
+        "body": fallback_body,
+        "body_remainder": fallback_body,
+        "observations": [],
+        "subjects": [],
         "primary_brand": None,
         "generated_at": None,
         "checked_at": None,
@@ -51,14 +56,16 @@ def project_trend_narrative(
             "state": "disabled",
             "state_label": _state_label("disabled", is_zh=is_zh),
             "body": _fallback_body(is_zh=is_zh, disabled=True),
+            "body_remainder": _fallback_body(is_zh=is_zh, disabled=True),
         }
     current = (
-        TrendNarrativeVersion.objects.filter(
+        TrendNarrative.objects.filter(
             window_days=window_days,
             is_current=True,
-            status=TrendNarrativeVersion.Status.PUBLISHED,
+            status=TrendNarrative.Status.PUBLISHED,
         )
         .select_related("primary_brand")
+        .prefetch_related("subjects")
         .first()
     )
     if current is None:
@@ -69,26 +76,27 @@ def project_trend_narrative(
         config=active_config,
         now=requested_at,
     )
-    display_name = (
-        current.primary_brand_name_zh_hans if is_zh else current.primary_brand_name_en
+    body = current.resolved_body_zh_cn if is_zh else current.body_en
+    observations = _public_observations(
+        current.observations_zh_cn if is_zh else current.observations_en
     )
-    body = current.body_zh_hans if is_zh else current.body_en
     if current.coverage_state == "limited":
         body = f"{body} {_coverage_context(current, is_zh=is_zh)}"
+    subjects = _subject_projection(current, is_zh=is_zh)
+    primary_brand = subjects[0] if subjects else None
+    body_remainder = _body_remainder(
+        body,
+        primary_brand["display_name"] if primary_brand else "",
+    )
     return {
         **base,
         "state": state,
         "state_label": _state_label(state, is_zh=is_zh),
         "body": body,
-        "primary_brand": {
-            "key": current.primary_brand_key,
-            "display_name": display_name,
-            "url": (
-                reverse("brand_home", args=[current.primary_brand_key])
-                if current.primary_brand_id is not None
-                else None
-            ),
-        },
+        "body_remainder": body_remainder,
+        "observations": observations,
+        "subjects": subjects,
+        "primary_brand": primary_brand,
         "generated_at": _iso(current.generated_at),
         "checked_at": _iso(checked_at),
         "facts_as_of": _iso(current.facts_as_of),
@@ -97,7 +105,7 @@ def project_trend_narrative(
 
 
 def trend_narrative_state(
-    current: TrendNarrativeVersion | None,
+    current: TrendNarrative | None,
     *,
     window_days: int,
     config: HeadlineNarrativeConfig,
@@ -138,8 +146,8 @@ def _fallback_body(*, is_zh: bool, disabled: bool) -> str:
     )
 
 
-def _coverage_context(current: TrendNarrativeVersion, *, is_zh: bool) -> str:
-    coverage = (current.generation_facts or {}).get("coverage") or {}
+def _coverage_context(current: TrendNarrative, *, is_zh: bool) -> str:
+    coverage = selected_coverage(current.generation_facts)
     raw_earliest = coverage.get("earliest_at")
     try:
         earliest = datetime.fromisoformat(str(raw_earliest))
@@ -162,3 +170,82 @@ def _state_label(state: str, *, is_zh: bool) -> str:
     }
     with override("zh-hans" if is_zh else "en"):
         return gettext(labels[state])
+
+
+def _subject_projection(
+    current: TrendNarrative,
+    *,
+    is_zh: bool,
+) -> list[dict[str, Any]]:
+    subjects = list(current.subjects.all())
+    if not subjects:
+        legacy = [
+            (
+                current.primary_brand_id,
+                current.primary_brand_key,
+                current.primary_brand_name_en,
+                current.primary_brand_name_zh_hans,
+            ),
+            (
+                current.secondary_brand_id,
+                current.secondary_brand_key,
+                current.secondary_brand_name_en,
+                current.secondary_brand_name_zh_hans,
+            ),
+        ]
+        return [
+            {
+                "position": position,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "key": key,
+                "display_name": name_zh_cn if is_zh else name_en,
+                "url": (
+                    reverse("brand_home", args=[key])
+                    if brand_id is not None
+                    else None
+                ),
+            }
+            for position, (brand_id, key, name_en, name_zh_cn) in enumerate(legacy)
+            if key and name_en and name_zh_cn
+        ]
+    return [
+        {
+            "position": subject.position,
+            "support_type": subject.support_type,
+            "entity_type": subject.entity_type,
+            "identity_type": subject.identity_type,
+            "key": (
+                subject.canonical_key_snapshot or subject.observed_name
+            ),
+            "display_name": (
+                subject.name_zh_cn_snapshot
+                if is_zh
+                else subject.name_en_snapshot
+            ),
+            "url": (
+                reverse("brand_home", args=[subject.canonical_key_snapshot])
+                if subject.brand_id is not None
+                else None
+            ),
+        }
+        for subject in subjects
+    ]
+
+
+def _body_remainder(body: str, leading_name: str) -> str:
+    if not leading_name or not body.casefold().startswith(leading_name.casefold()):
+        return body
+    boundary = body[len(leading_name) : len(leading_name) + 1]
+    if boundary and boundary.isalnum():
+        return body
+    return body[len(leading_name) :].lstrip()
+
+
+def _public_observations(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()][
+        :2
+    ]

@@ -14,10 +14,11 @@ import shutil
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import pytest
@@ -599,6 +600,225 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertGreater(voice_shape["width"], 0)
                     self.assertGreater(voice_shape["height"], 0)
                     self.assertFalse(voice_shape["overflow"])
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_schema_two_headline_renders_two_subjects_without_duplicate_anchor(
+        self,
+    ) -> None:
+        """The real V22 template composes its anchor and body exactly once."""
+        from core.models import Brand
+        from monitor.trend_narrative_lifecycle import (
+            mark_transport_completed,
+            mark_transport_started,
+            publish_generation,
+            reserve_generation,
+        )
+        from x_monitor.config import HeadlineNarrativeConfig
+
+        as_of = datetime.now(UTC)
+        for key, name in (("minimax", "MiniMax"), ("deepseek", "DeepSeek")):
+            Brand.objects.update_or_create(
+                nickname=key,
+                defaults={
+                    "display_name": name,
+                    "display_name_en": name,
+                    "display_name_zh_cn": name,
+                },
+            )
+        candidate_ids = ["minimax:full_window", "deepseek:episode:one"]
+        snapshot = {
+            "snapshot_schema_version": 1,
+            "window_days": 1,
+            "as_of": as_of.isoformat(),
+            "coverage": {"state": "sufficient", "ratio": "1.000000"},
+            "candidates": [
+                {"candidate_id": candidate_id, "evidence": []}
+                for candidate_id in candidate_ids
+            ],
+        }
+        row = reserve_generation(
+            source_cycle_id="browser-schema-two",
+            window_days=1,
+            facts_as_of=as_of,
+            semantic_fingerprint="e" * 64,
+            generation_facts=snapshot,
+            publication_epoch=4,
+            prompt_version="headline-v4-analytical",
+            provider="deepseek",
+            provider_host="api.deepseek.com",
+            llm_model_name="deepseek-v4-pro",
+            owner="browser-worker",
+            now=as_of,
+            lease_seconds=90,
+            output_schema_version=2,
+        )
+        self.assertIsNotNone(row)
+        self.assertTrue(
+            mark_transport_started(
+                row.pk,
+                owner="browser-worker",
+                fence=row.claim_fence,
+                now=as_of,
+            )
+        )
+        self.assertTrue(
+            mark_transport_completed(
+                row.pk,
+                owner="browser-worker",
+                fence=row.claim_fence,
+                now=as_of + timedelta(milliseconds=500),
+            )
+        )
+        subjects = [
+            {
+                "position": position,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "canonical_key_snapshot": key,
+                "name_en_snapshot": name,
+                "name_zh_cn_snapshot": name,
+                "candidate_id": candidate_ids[position],
+                "evidence_ids": [],
+            }
+            for position, (key, name) in enumerate(
+                (("minimax", "MiniMax"), ("deepseek", "DeepSeek"))
+            )
+        ]
+        self.assertTrue(
+            publish_generation(
+                row.pk,
+                owner="browser-worker",
+                fence=row.claim_fence,
+                body_en=(
+                    "MiniMax and DeepSeek both break into unusually sustained attention."
+                ),
+                body_zh_cn="MiniMax 与 DeepSeek 均进入异常且持续的高关注状态。",
+                output_hash="f" * 64,
+                input_tokens=100,
+                output_tokens=40,
+                latency_ms=200,
+                now=as_of + timedelta(seconds=1),
+                observations_en=["Both trajectories rise and then hold."],
+                observations_zh_cn=["两条走势均在上升后保持稳定。"],
+                selected_candidate_ids=candidate_ids,
+                claims=[
+                    {
+                        "observation_index": -1,
+                        "candidate_ids": candidate_ids,
+                        "families": ["volume"],
+                        "evidence_ids": [],
+                    },
+                    {
+                        "observation_index": 0,
+                        "candidate_ids": candidate_ids,
+                        "families": ["volume"],
+                        "evidence_ids": [],
+                    }
+                ],
+                subjects=subjects,
+            )
+        )
+
+        config = HeadlineNarrativeConfig(serving_enabled=True)
+        with (
+            patch(
+                "monitor.trend_narrative_projection._load_config",
+                return_value=config,
+            ),
+            sync_playwright() as playwright,
+        ):
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport=VIEWPORTS["desktop"],
+                    timezone_id="Asia/Tokyo",
+                )
+                _freeze_clock(context)
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    headline_body = page.locator("[data-pw-headline] .body")
+                    rendered = " ".join(headline_body.inner_text().split())
+                    self.assertEqual(rendered.count("MiniMax"), 1)
+                    self.assertEqual(rendered.count("DeepSeek"), 1)
+                    self.assertEqual(
+                        headline_body.locator("[data-pw-headline-brand]").count(),
+                        1,
+                    )
+                    self.assertEqual(
+                        headline_body.locator("[data-pw-headline-brand]").get_attribute(
+                            "href"
+                        ),
+                        "/brands/minimax/",
+                    )
+                    observations = page.locator(
+                        "[data-pw-headline-observations] > li"
+                    )
+                    self.assertEqual(observations.count(), 1)
+                    self.assertEqual(
+                        observations.first.inner_text(),
+                        "Both trajectories rise and then hold.",
+                    )
+                    observation_shape = observations.first.bounding_box()
+                    self.assertIsNotNone(observation_shape)
+                    self.assertGreater(observation_shape["width"], 0)
+                    self.assertGreater(observation_shape["height"], 0)
+                    payload = page.evaluate(
+                        """() => JSON.parse(
+                          document.querySelector('canvas.home-chart').dataset.home
+                        ).trend_narrative"""
+                    )
+                    self.assertEqual(payload["schema_version"], 2)
+                    self.assertEqual(len(payload["subjects"]), 2)
+                    self.assertEqual(
+                        payload["observations"],
+                        ["Both trajectories rise and then hold."],
+                    )
+                    self.assertNotIn("claims", payload)
+                    self.assertNotIn("evidence_ids", json.dumps(payload))
+                    page.evaluate(
+                        """() => {
+                          const list = document.querySelector('[data-pw-headline-observations]');
+                          list.firstElementChild.textContent = 'stale browser copy';
+                        }"""
+                    )
+                    page.locator('[data-group="sentiment"]').press("Enter")
+                    with page.expect_response(
+                        lambda response: "/chart.html?" in response.url
+                    ) as chart_info:
+                        page.locator(
+                            '[data-group="sentiment"] input[value="positive"]'
+                        ).uncheck()
+                    self.assertIn(
+                        "Both trajectories rise and then hold.",
+                        chart_info.value.text(),
+                    )
+                    page.wait_for_function(
+                        """() => document.querySelector(
+                          '[data-pw-headline-observations] > li'
+                        ).textContent === 'Both trajectories rise and then hold.'"""
+                    )
+
+                    page.goto(
+                        f"{self.live_server_url}/?locale=zh_hans",
+                        wait_until="networkidle",
+                    )
+                    zh_observations = page.locator(
+                        "[data-pw-headline-observations] > li"
+                    )
+                    self.assertEqual(zh_observations.count(), 1)
+                    self.assertEqual(
+                        zh_observations.first.inner_text(),
+                        "两条走势均在上升后保持稳定。",
+                    )
+                    zh_shape = zh_observations.first.bounding_box()
+                    self.assertIsNotNone(zh_shape)
+                    self.assertGreater(zh_shape["width"], 0)
+                    self.assertGreater(zh_shape["height"], 0)
                 finally:
                     context.close()
             finally:

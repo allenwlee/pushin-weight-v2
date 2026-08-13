@@ -45,8 +45,10 @@
         !isObject(payload.series) || !isObject(payload.totals) ||
         !isObject(payload.pulse) || !Array.isArray(payload.pulse.entries) ||
         !isObject(payload.trend_narrative) ||
-        Number(payload.trend_narrative.schema_version) !== 1 ||
+        ![1, 2].includes(Number(payload.trend_narrative.schema_version)) ||
         typeof payload.trend_narrative.body !== 'string' ||
+        (payload.trend_narrative.body_remainder !== undefined &&
+         typeof payload.trend_narrative.body_remainder !== 'string') ||
         typeof payload.trend_narrative.state_label !== 'string' ||
         !isObject(payload.top_voices) || !Array.isArray(payload.top_voices.entries)) return false;
     if ([payload.pulse, payload.trend_narrative, payload.top_voices].some(function (projection) {
@@ -66,6 +68,14 @@
         (!isObject(payload.trend_narrative.primary_brand) ||
          typeof payload.trend_narrative.primary_brand.key !== 'string' ||
          typeof payload.trend_narrative.primary_brand.display_name !== 'string')) return false;
+    var observations = payload.trend_narrative.observations;
+    if (observations === undefined && Number(payload.trend_narrative.schema_version) === 1) {
+      observations = [];
+    }
+    if (!Array.isArray(observations) || observations.length > 2 ||
+        !observations.every(function (observation) {
+          return typeof observation === 'string' && observation.trim().length > 0;
+        })) return false;
     return Object.keys(payload.series).every(function (brand) {
       return Array.isArray(payload.series[brand]);
     });
@@ -261,8 +271,18 @@
     } else if (oldBrand && oldBrand.parentNode) {
       oldBrand.parentNode.removeChild(oldBrand);
     }
-    if (body) body.textContent = narrative.body;
+    if (body) body.textContent = narrative.body_remainder || narrative.body;
     if (state) state.textContent = narrative.state_label;
+    var observations = strip.querySelector('[data-pw-headline-observations]');
+    if (observations) {
+      clearChildren(observations);
+      (narrative.observations || []).forEach(function (observation) {
+        var item = document.createElement('li');
+        item.textContent = observation;
+        observations.appendChild(item);
+      });
+      observations.hidden = !narrative.observations || narrative.observations.length === 0;
+    }
     var voices = strip.querySelector('[data-pw-headline-voice-entries]');
     if (voices) {
       var signature = JSON.stringify(topVoices.entries.map(function (entry) {
@@ -270,6 +290,12 @@
       }));
       if (voices.getAttribute('data-pw-voice-signature') !== signature) {
         clearChildren(voices);
+        if (topVoices.entries.length === 0) {
+          var emptyVoices = document.createElement('span');
+          emptyVoices.className = 'muted';
+          emptyVoices.textContent = voices.getAttribute('data-pw-empty-text') || '';
+          voices.appendChild(emptyVoices);
+        }
         topVoices.entries.forEach(function (entry, index) {
           if (index > 0) {
             var separator = document.createElement('span');
@@ -404,6 +430,13 @@
     return window.pwFilter && window.pwFilter.get ? window.pwFilter.get() : {};
   }
 
+  function currentLocale(region) {
+    var bodyLocale = document.body && typeof document.body.getAttribute === 'function'
+      ? document.body.getAttribute('data-pw-locale')
+      : '';
+    return bodyLocale || region.getAttribute('data-pw-locale') || 'en';
+  }
+
   function filtersForEvent(event) {
     var filters = event && event.detail && event.detail.filters;
     return isObject(filters) ? filters : activeFilters();
@@ -420,7 +453,8 @@
     }, REQUEST_TIMEOUT_MS);
     var filters = filtersForEvent(event);
     var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters)) +
-      '&window=' + encodeURIComponent(filters.window || 1);
+      '&window=' + encodeURIComponent(filters.window || 1) +
+      '&locale=' + encodeURIComponent(currentLocale(region));
     return fetch(url, {
       credentials: 'same-origin',
       signal: activeController ? activeController.signal : undefined,

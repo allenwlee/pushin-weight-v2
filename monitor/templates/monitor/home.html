@@ -263,13 +263,19 @@
               <span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>
             {% endif %}
           {% endif %}
-          <span data-pw-headline-body>{{ trend_narrative.body }}</span>
+          <span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
         </div>
+        <ul class="headline-observations" data-pw-headline-observations{% if not trend_narrative.observations %} hidden{% endif %}>
+          {% for observation in trend_narrative.observations %}
+            <li>{{ observation }}</li>
+          {% endfor %}
+        </ul>
         <p class="headline-status muted" data-pw-headline-status hidden></p>
         <div class="headline-voices" data-pw-headline-voices>
           <span class="headline-label">{% trans "Top voices" %}</span>
           <span class="headline-meta muted">☆ {% trans "by followers" %}</span>
-          <span class="headline-voice-entries" data-pw-headline-voice-entries>
+          <span class="headline-voice-entries" data-pw-headline-voice-entries
+                data-pw-empty-text="{% trans 'no top voices this period' %}">
             {% for voice in top_voices %}
               <a class="voice-chip" href="https://x.com/{{ voice.handle|cut:'@' }}" target="_blank" rel="noopener noreferrer">
                 <span class="voice-handle">@{{ voice.handle }}</span>

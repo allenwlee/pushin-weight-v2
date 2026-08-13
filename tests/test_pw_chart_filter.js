@@ -50,12 +50,26 @@ function payload(windowDays, count, pulseName) {
       }] : [],
     },
     trend_narrative: {
-      schema_version: 1,
+      schema_version: 2,
       window_days: windowDays,
       computed_at: computedAt,
       state: 'available',
       state_label: 'Available',
       body: (pulseName || 'No trend') + ' leads attention.',
+      body_remainder: 'leads attention.',
+      observations: pulseName ? [
+        'Attention rises and then holds.',
+        'Engagement remains elevated.',
+      ] : [],
+      subjects: pulseName ? [{
+        position: 0,
+        support_type: 'measured_candidate',
+        entity_type: 'brand',
+        identity_type: 'brand',
+        key: pulseName,
+        display_name: pulseName,
+        url: '/brands/' + pulseName + '/',
+      }] : [],
       primary_brand: pulseName ? {
         key: pulseName,
         display_name: pulseName,
@@ -133,7 +147,9 @@ function makePulseBar() {
   const attrs = {};
   return {
     innerHTML: '',
-    getAttribute(name) { return attrs[name] || null; },
+    getAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
+    },
     setAttribute(name, value) { attrs[name] = String(value); },
   };
 }
@@ -154,7 +170,9 @@ function makeNode() {
     appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
     removeChild(child) { this.children = this.children.filter((item) => item !== child); },
     insertBefore(child) { return this.appendChild(child); },
-    getAttribute(name) { return attrs[name] || null; },
+    getAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
+    },
     setAttribute(name, value) { attrs[name] = String(value); },
   };
 }
@@ -165,6 +183,8 @@ function makeHeadline() {
   const body = makeNode();
   const state = makeNode();
   const voices = makeNode();
+  voices.setAttribute('data-pw-empty-text', 'no top voices this period');
+  const observations = makeNode();
   const status = makeNode();
   body.parentNode = bodyParent;
   root.querySelector = function (selector) {
@@ -175,9 +195,10 @@ function makeHeadline() {
         node.getAttribute('data-pw-headline-brand') !== null) || null;
     }
     if (selector === '[data-pw-headline-voice-entries]') return voices;
+    if (selector === '[data-pw-headline-observations]') return observations;
     return null;
   };
-  return { root, body, state, voices, status };
+  return { root, body, state, voices, observations, status };
 }
 
 function response(data, ok = true) {
@@ -327,13 +348,23 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(JSON.stringify(JSON.parse(baseQuery.get('filters'))) === JSON.stringify(eventFilters),
     'chart serializes the immutable event filter snapshot, not a divergent DOM read');
   assert(baseQuery.get('window') === '7', 'chart sends the active window explicitly');
+  assert(baseQuery.get('locale') === 'en', 'chart sends the active locale explicitly');
   assert(!base.fetchCalls[0].url.includes('renderer='), 'request has no renderer parameter');
   assert(base.region.currentPayload.window_days === 7, 'chart commits the returned window');
   assert(base.pulseBar.getAttribute('data-pw-window') === '7', 'pulse commits the same window atomically');
   assert(base.headline.root.getAttribute('data-pw-window') === '7', 'headline commits the same window atomically');
-  assert(base.headline.body.textContent.includes('qwen'), 'headline commits the matching narrative body');
+  assert(base.headline.body.textContent === 'leads attention.',
+    'headline commits the matching narrative body remainder without duplicating its anchor');
+  assert(base.headline.root.querySelector('[data-pw-headline-brand]').textContent === 'qwen',
+    'headline commits the matching primary subject anchor');
   assert(base.headline.root.querySelector('[data-pw-headline-brand]') === focusedBrand,
     'refresh reconciles the brand anchor in place so keyboard focus can survive');
+  assert(base.headline.observations.children.length === 2 &&
+    base.headline.observations.children[0].textContent === 'Attention rises and then holds.' &&
+    base.headline.observations.children[1].textContent === 'Engagement remains elevated.',
+    'headline commits both analytical observations from the matching response');
+  assert(!base.headline.observations.hidden,
+    'headline exposes its observation list when observations are present');
   const refreshedVoiceNodes = base.headline.voices.children;
   assert(refreshedVoiceNodes.length === 5,
     'refresh inserts one separator sibling between each pair of voice links');
@@ -399,6 +430,17 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'valid empty chart renders localized no-data state');
   assert(empty.pulseStatus.textContent === 'No pulse data' && !empty.pulseStatus.hidden,
     'valid empty pulse renders localized no-data state');
+  assert(empty.headline.voices.children.length === 1 &&
+    empty.headline.voices.children[0].className === 'muted' &&
+    empty.headline.voices.children[0].textContent === 'no top voices this period',
+    'valid empty voices render the localized SSR-equivalent fallback');
+  assert(empty.headline.observations.children.length === 0 && empty.headline.observations.hidden,
+    'valid empty narrative hides an empty observation list');
+  empty.fetchQueue.push(response(payload(1, 0, null)));
+  empty.document.dispatchEvent(new empty.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
+  await flush();
+  assert(empty.headline.voices.children.length === 1,
+    'repeated empty refresh does not duplicate the Top Voices fallback');
   const emptyHtml = empty.region.innerHTML;
   empty.fetchQueue.push(response('<canvas class="home-chart" data-home=\'{"bad":true}\'></canvas>'));
   empty.document.dispatchEvent(new empty.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
@@ -411,6 +453,27 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   await flush();
   assert(empty.region.innerHTML === emptyHtml,
     'malformed nested projection preserves the complete last-good projection');
+  const priorObservationText = base.headline.observations.children.map((node) => node.textContent).join('|');
+  const malformedObservations = payload(30, 8, 'bad-observations');
+  malformedObservations.trend_narrative.observations = ['valid', 42];
+  base.fetchQueue.push(response(malformedObservations));
+  base.document.dispatchEvent(new base.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
+  await flush();
+  assert(base.region.currentPayload.window_days === 7 &&
+    base.headline.observations.children.map((node) => node.textContent).join('|') === priorObservationText,
+    'malformed observations preserve every last-good projection');
+
+  console.log('--- schema-one headline fallback remains compatible ---');
+  const schemaOne = makeSandbox();
+  const legacyPayload = payload(7, 3, 'legacy');
+  legacyPayload.trend_narrative.schema_version = 1;
+  delete legacyPayload.trend_narrative.body_remainder;
+  delete legacyPayload.trend_narrative.observations;
+  schemaOne.fetchQueue.push(response(legacyPayload));
+  schemaOne.document.dispatchEvent(new schemaOne.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
+  await flush();
+  assert(schemaOne.headline.body.textContent === legacyPayload.trend_narrative.body,
+    'schema-one narrative without body_remainder renders its full body');
 
   console.log('--- /internal fallback keeps one canvas lifecycle ---');
   const internal = makeSandbox({ legacy: true });

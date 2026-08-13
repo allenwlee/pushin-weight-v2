@@ -8,11 +8,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from django.db import IntegrityError, close_old_connections, transaction
 
-from core.models import Brand, TrendNarrativeVersion
+from core.models import Brand, Product, TrendNarrative, TrendNarrativeSubject
 from monitor.trend_narrative_lifecycle import (
     abandon_expired_attempts,
     advance_current_check,
     fail_generation,
+    mark_transport_completed,
     mark_transport_started,
     prune_narrative_history,
     publish_generation,
@@ -72,29 +73,48 @@ def _reserve(
     epoch: int = 1,
     owner: str = "worker-a",
     lease_seconds: int = 1_200,
-) -> TrendNarrativeVersion:
+    output_schema_version: int = 1,
+    generation_facts: dict | None = None,
+) -> TrendNarrative:
     brand = Brand.objects.filter(pk="minimax").first() or _brand()
     row = reserve_generation(
         source_cycle_id=source_cycle_id,
         window_days=window_days,
         facts_as_of=facts_as_of,
         semantic_fingerprint=fingerprint,
-        generation_facts=_facts(brand, as_of=facts_as_of),
+        generation_facts=(
+            generation_facts or _facts(brand, as_of=facts_as_of)
+        ),
         publication_epoch=epoch,
         prompt_version="headline-v1",
         provider="anthropic",
         provider_host="api.anthropic.com",
-        model_name="claude-haiku-4-5-20251001",
+        llm_model_name="claude-haiku-4-5-20251001",
         owner=owner,
         now=NOW,
         lease_seconds=lease_seconds,
+        output_schema_version=output_schema_version,
     )
     assert row is not None
     return row
 
 
+def _complete_transport(
+    row: TrendNarrative,
+    *,
+    owner: str = "worker-a",
+    now: datetime = NOW + timedelta(milliseconds=500),
+) -> None:
+    assert mark_transport_completed(
+        row.pk,
+        owner=owner,
+        fence=row.claim_fence,
+        now=now,
+    )
+
+
 def _publish(
-    row: TrendNarrativeVersion,
+    row: TrendNarrative,
     *,
     owner: str = "worker-a",
     body_suffix: str = "",
@@ -107,12 +127,13 @@ def _publish(
         now=NOW,
     )
     assert started
+    _complete_transport(row, owner=owner)
     return publish_generation(
         row.pk,
         owner=owner,
         fence=row.claim_fence,
         body_en=f"MiniMax leads attention{body_suffix}.",
-        body_zh_hans=f"MiniMax 引领关注{body_suffix}。",
+        body_zh_cn=f"MiniMax 引领关注{body_suffix}。",
         output_hash=("b" if not body_suffix else "c") * 64,
         input_tokens=100,
         output_tokens=40,
@@ -133,16 +154,16 @@ def test_reservation_consumes_one_irreversible_slot_per_source_and_window():
         prompt_version="headline-v1",
         provider="anthropic",
         provider_host="api.anthropic.com",
-        model_name="claude-haiku-4-5-20251001",
+        llm_model_name="claude-haiku-4-5-20251001",
         owner="worker-b",
         now=NOW,
         lease_seconds=60,
     )
 
     assert duplicate is None
-    assert TrendNarrativeVersion.objects.count() == 1
+    assert TrendNarrative.objects.count() == 1
     first.refresh_from_db()
-    assert first.status == TrendNarrativeVersion.Status.GENERATING
+    assert first.status == TrendNarrative.Status.GENERATING
     assert first.call_slot_consumed is True
     assert first.claim_fence == 1
 
@@ -162,7 +183,7 @@ def test_failed_same_fingerprint_later_cycle_gets_one_new_slot():
 
     assert second.pk != first.pk
     assert (
-        TrendNarrativeVersion.objects.filter(
+        TrendNarrative.objects.filter(
             semantic_fingerprint="a" * 64,
             call_slot_consumed=True,
         ).count()
@@ -170,13 +191,49 @@ def test_failed_same_fingerprint_later_cycle_gets_one_new_slot():
     )
 
 
+def test_publication_requires_a_completed_transport_marker():
+    row = _reserve()
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+
+    assert not publish_generation(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        body_en="MiniMax leads attention.",
+        body_zh_cn="MiniMax 引领关注。",
+        output_hash="f" * 64,
+        input_tokens=1,
+        output_tokens=1,
+        latency_ms=1,
+        now=NOW + timedelta(seconds=1),
+    )
+
+    row.refresh_from_db()
+    assert row.status == TrendNarrative.Status.GENERATING
+    assert row.transport_completed_at is None
+
+
 def test_expired_lease_is_abandoned_and_never_reopened_for_same_cycle():
     row = _reserve(lease_seconds=60)
 
-    assert abandon_expired_attempts(now=NOW + timedelta(minutes=2)) == 1
+    assert (
+        abandon_expired_attempts(
+            now=NOW + timedelta(minutes=2),
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
     row.refresh_from_db()
-    assert row.status == TrendNarrativeVersion.Status.ABANDONED
+    assert row.status == TrendNarrative.Status.ABANDONED
     assert row.call_slot_consumed is True
+    assert row.consecutive_failures == 1
+    assert row.next_attempt_at == NOW + timedelta(minutes=32)
     assert not mark_transport_started(
         row.pk,
         owner="worker-a",
@@ -184,7 +241,35 @@ def test_expired_lease_is_abandoned_and_never_reopened_for_same_cycle():
         now=NOW + timedelta(minutes=2),
     )
     assert not _publish_late(row)
-    assert TrendNarrativeVersion.objects.count() == 1
+    assert TrendNarrative.objects.count() == 1
+
+
+def test_repeated_expired_leases_escalate_same_fingerprint_backoff():
+    first = _reserve(lease_seconds=60)
+    first_expired_at = NOW + timedelta(minutes=2)
+    assert abandon_expired_attempts(
+        now=first_expired_at,
+        cadence_minutes={1: 30},
+        stale_minutes={1: 60},
+    ) == 1
+
+    second = _reserve(
+        source_cycle_id="cycle-b",
+        owner="worker-b",
+        lease_seconds=60,
+    )
+    second_expired_at = NOW + timedelta(minutes=3)
+    assert abandon_expired_attempts(
+        now=second_expired_at,
+        cadence_minutes={1: 30},
+        stale_minutes={1: 60},
+    ) == 1
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.consecutive_failures == 1
+    assert second.consecutive_failures == 2
+    assert second.next_attempt_at == second_expired_at + timedelta(minutes=60)
 
 
 def test_expired_worker_cannot_publish_before_cleanup_marks_abandoned():
@@ -198,17 +283,17 @@ def test_expired_worker_cannot_publish_before_cleanup_marks_abandoned():
 
     assert not _publish_late(row)
     row.refresh_from_db()
-    assert row.status == TrendNarrativeVersion.Status.GENERATING
+    assert row.status == TrendNarrative.Status.GENERATING
     assert row.is_current is False
 
 
-def _publish_late(row: TrendNarrativeVersion) -> bool:
+def _publish_late(row: TrendNarrative) -> bool:
     return publish_generation(
         row.pk,
         owner="worker-a",
         fence=row.claim_fence,
         body_en="Late English body.",
-        body_zh_hans="迟到的中文内容。",
+        body_zh_cn="迟到的中文内容。",
         output_hash="d" * 64,
         input_tokens=1,
         output_tokens=1,
@@ -224,16 +309,424 @@ def test_publish_is_idempotent_and_only_one_current_row_exists():
     assert _publish_late(row)
     row.refresh_from_db()
 
-    assert row.status == TrendNarrativeVersion.Status.PUBLISHED
+    assert row.status == TrendNarrative.Status.PUBLISHED
     assert row.is_current is True
     assert row.body_en == "MiniMax leads attention."
+    assert row.body_zh_cn == "MiniMax 引领关注。"
+    assert row.body_zh_hans == row.body_zh_cn
+    assert row.llm_model_name == "claude-haiku-4-5-20251001"
+    assert row.model_name == row.llm_model_name
     assert (
-        TrendNarrativeVersion.objects.filter(
+        TrendNarrative.objects.filter(
             window_days=1,
             is_current=True,
         ).count()
         == 1
     )
+
+
+def test_schema_two_publication_persists_two_measured_subjects_atomically():
+    second = _brand("deepseek")
+    snapshot = {
+        **_facts(Brand.objects.filter(pk="minimax").first() or _brand()),
+        "candidates": [
+            {
+                "candidate_id": "minimax:full_window",
+                "evidence": [{"evidence_id": "e_minimax"}],
+            },
+            {
+                "candidate_id": "deepseek:episode:1",
+                "evidence": [{"evidence_id": "e_deepseek"}],
+            },
+        ],
+    }
+    row = _reserve(
+        output_schema_version=2,
+        generation_facts=snapshot,
+    )
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+    subjects = [
+        {
+            "position": 0,
+            "support_type": "measured_candidate",
+            "entity_type": "brand",
+            "identity_type": "brand",
+            "canonical_key_snapshot": "minimax",
+            "name_en_snapshot": "Minimax",
+            "name_zh_cn_snapshot": "中minimax",
+            "candidate_id": "minimax:full_window",
+            "evidence_ids": [],
+        },
+        {
+            "position": 1,
+            "support_type": "measured_candidate",
+            "entity_type": "brand",
+            "identity_type": "brand",
+            "canonical_key_snapshot": second.pk,
+            "name_en_snapshot": "Deepseek",
+            "name_zh_cn_snapshot": "中deepseek",
+            "candidate_id": "deepseek:episode:1",
+            "evidence_ids": [],
+        },
+    ]
+
+    assert publish_generation(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        body_en="MiniMax and DeepSeek are drawing exceptional attention.",
+        body_zh_cn="MiniMax 与 DeepSeek 正获得异常高的关注。",
+        output_hash="a" * 64,
+        input_tokens=100,
+        output_tokens=40,
+        latency_ms=250,
+        now=NOW + timedelta(seconds=1),
+        observations_en=["Both brands accelerated across the measured window."],
+        observations_zh_cn=["两个品牌在测量时段内均呈加速走势。"],
+        selected_candidate_ids=[
+            "minimax:full_window",
+            "deepseek:episode:1",
+        ],
+        claims=[
+            {"observation_index": -1, "family": "volume"},
+            {"observation_index": 0, "family": "volume"},
+        ],
+        subjects=subjects,
+    )
+
+    row.refresh_from_db()
+    assert row.output_schema_version == 2
+    assert row.selected_candidate_ids == [
+        "minimax:full_window",
+        "deepseek:episode:1",
+    ]
+    assert row.observations_zh_cn == ["两个品牌在测量时段内均呈加速走势。"]
+    assert list(
+        row.subjects.values_list(
+            "position", "support_type", "canonical_key_snapshot"
+        )
+    ) == [
+        (0, "measured_candidate", "minimax"),
+        (1, "measured_candidate", "deepseek"),
+    ]
+    assert row.primary_brand_id == "minimax"
+    assert row.secondary_brand_id == "deepseek"
+
+
+def test_schema_two_allows_one_measured_and_one_unresolved_evidence_subject():
+    snapshot = {
+        **_facts(Brand.objects.filter(pk="minimax").first() or _brand()),
+        "candidates": [
+            {
+                "candidate_id": "minimax:full_window",
+                "evidence": [{"evidence_id": "e_offlist_model"}],
+            }
+        ],
+    }
+    row = _reserve(
+        output_schema_version=2,
+        generation_facts=snapshot,
+    )
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+
+    assert publish_generation(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        body_en="MiniMax rose as discussion connected it with OffListModel.",
+        body_zh_cn="MiniMax 热度上升，讨论同时提及 OffListModel。",
+        output_hash="b" * 64,
+        input_tokens=100,
+        output_tokens=40,
+        latency_ms=250,
+        now=NOW + timedelta(seconds=1),
+        observations_en=["The evidence also names an unresolved model."],
+        observations_zh_cn=["相关证据还提及一个尚未解析的模型。"],
+        selected_candidate_ids=["minimax:full_window"],
+        claims=[
+            {"observation_index": -1, "evidence_ids": ["e_offlist_model"]},
+            {"observation_index": 0, "evidence_ids": ["e_offlist_model"]},
+        ],
+        subjects=[
+            {
+                "position": 0,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "canonical_key_snapshot": "minimax",
+                "name_en_snapshot": "Minimax",
+                "name_zh_cn_snapshot": "中minimax",
+                "candidate_id": "minimax:full_window",
+                "evidence_ids": [],
+            },
+            {
+                "position": 1,
+                "support_type": "evidence_only",
+                "entity_type": "model",
+                "identity_type": "unresolved",
+                "observed_name": "OffListModel",
+                "canonical_key_snapshot": "",
+                "name_en_snapshot": "OffListModel",
+                "name_zh_cn_snapshot": "OffListModel",
+                "candidate_id": "",
+                "evidence_ids": ["e_offlist_model"],
+            },
+        ],
+    )
+
+    unresolved = row.subjects.get(position=1)
+    assert unresolved.identity_type == TrendNarrativeSubject.IdentityType.UNRESOLVED
+    assert unresolved.brand_id is None
+    assert unresolved.product_id is None
+    assert unresolved.observed_name == "OffListModel"
+    assert not Brand.objects.filter(nickname="OffListModel").exists()
+
+
+@pytest.mark.parametrize("identity", ["brand", "product", "ambiguous"])
+def test_evidence_subject_resolves_one_exact_existing_identity(identity):
+    if identity in {"brand", "ambiguous"}:
+        Brand.objects.create(
+            nickname="offlist",
+            display_name="OffListModel",
+            display_name_en="OffListModel",
+            display_name_zh_cn="OffListModel",
+        )
+    if identity in {"product", "ambiguous"}:
+        Product.objects.create(
+            repo_id="vendor/OffListModel",
+            display_name="OffListModel",
+        )
+    snapshot = {
+        **_facts(Brand.objects.filter(pk="minimax").first() or _brand()),
+        "candidates": [
+            {
+                "candidate_id": "minimax:full_window",
+                "evidence": [
+                    {"evidence_id": "e_one"},
+                    {"evidence_id": "e_two"},
+                ],
+            }
+        ],
+    }
+    row = _reserve(output_schema_version=2, generation_facts=snapshot)
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+
+    assert publish_generation(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        body_en="MiniMax rose as discussion mentioned OffListModel.",
+        body_zh_cn="MiniMax 热度上升，讨论同时提及 OffListModel。",
+        output_hash="9" * 64,
+        input_tokens=100,
+        output_tokens=40,
+        latency_ms=250,
+        now=NOW + timedelta(seconds=1),
+        selected_candidate_ids=["minimax:full_window"],
+        claims=[
+            {
+                "observation_index": -1,
+                "candidate_ids": ["minimax:full_window"],
+                "families": ["evidence"],
+                "evidence_ids": ["e_one", "e_two"],
+            }
+        ],
+        subjects=[
+            {
+                "position": 0,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "canonical_key_snapshot": "minimax",
+                "name_en_snapshot": "Minimax",
+                "name_zh_cn_snapshot": "中minimax",
+                "candidate_id": "minimax:full_window",
+                "evidence_ids": [],
+            },
+            {
+                "position": 1,
+                "support_type": "evidence_only",
+                "entity_type": "model",
+                "identity_type": "unresolved",
+                "observed_name": "OffListModel",
+                "canonical_key_snapshot": "",
+                "name_en_snapshot": "OffListModel",
+                "name_zh_cn_snapshot": "OffListModel",
+                "candidate_id": "",
+                "evidence_ids": ["e_one", "e_two"],
+            },
+        ],
+    )
+
+    subject = row.subjects.get(position=1)
+    expected_identity = "unresolved" if identity == "ambiguous" else identity
+    assert subject.identity_type == expected_identity
+    assert subject.observed_name == (
+        "OffListModel" if identity == "ambiguous" else ""
+    )
+    assert subject.canonical_key_snapshot == {
+        "brand": "offlist",
+        "product": "vendor/OffListModel",
+        "ambiguous": "",
+    }[identity]
+    assert bool(subject.brand_id) is (identity == "brand")
+    assert bool(subject.product_id) is (identity == "product")
+
+
+def test_invalid_schema_two_subjects_roll_back_the_whole_publication():
+    snapshot = {
+        **_facts(Brand.objects.filter(pk="minimax").first() or _brand()),
+        "candidates": [
+            {"candidate_id": "minimax:full_window", "evidence": []}
+        ],
+    }
+    row = _reserve(
+        output_schema_version=2,
+        generation_facts=snapshot,
+    )
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+
+    with pytest.raises(ValueError, match="selected candidates"):
+        publish_generation(
+            row.pk,
+            owner="worker-a",
+            fence=row.claim_fence,
+            body_en="Unsupported publication body.",
+            body_zh_cn="不受支持的发布内容。",
+            output_hash="c" * 64,
+            input_tokens=1,
+            output_tokens=1,
+            latency_ms=1,
+            now=NOW + timedelta(seconds=1),
+            observations_en=["Unsupported."],
+            observations_zh_cn=["不受支持。"],
+            selected_candidate_ids=["not-in-snapshot"],
+            claims=[
+                {
+                    "observation_index": -1,
+                    "candidate_ids": ["not-in-snapshot"],
+                    "families": ["volume"],
+                    "evidence_ids": [],
+                },
+                {
+                    "observation_index": 0,
+                    "candidate_ids": ["not-in-snapshot"],
+                    "families": ["volume"],
+                    "evidence_ids": [],
+                }
+            ],
+            subjects=[
+                {
+                    "position": 0,
+                    "support_type": "measured_candidate",
+                    "entity_type": "brand",
+                    "identity_type": "brand",
+                    "canonical_key_snapshot": "minimax",
+                    "name_en_snapshot": "Minimax",
+                    "name_zh_cn_snapshot": "中minimax",
+                    "candidate_id": "not-in-snapshot",
+                    "evidence_ids": [],
+                }
+            ],
+        )
+
+    row.refresh_from_db()
+    assert row.status == TrendNarrative.Status.GENERATING
+    assert row.body_en == ""
+    assert not row.subjects.exists()
+
+
+def test_schema_two_rejects_cross_candidate_evidence_at_publication_boundary():
+    snapshot = {
+        **_facts(Brand.objects.filter(pk="minimax").first() or _brand()),
+        "candidates": [
+            {"candidate_id": "minimax:full_window", "evidence": []},
+            {
+                "candidate_id": "deepseek:full_window",
+                "evidence": [{"evidence_id": "e_deepseek"}],
+            },
+        ],
+    }
+    row = _reserve(output_schema_version=2, generation_facts=snapshot)
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+
+    with pytest.raises(ValueError, match="claim evidence"):
+        publish_generation(
+            row.pk,
+            owner="worker-a",
+            fence=row.claim_fence,
+            body_en="MiniMax rose while evidence described another candidate.",
+            body_zh_cn="MiniMax 热度上升，但证据描述的是另一个候选对象。",
+            output_hash="e" * 64,
+            input_tokens=1,
+            output_tokens=1,
+            latency_ms=1,
+            now=NOW + timedelta(seconds=1),
+            observations_en=["Unrelated evidence was attached."],
+            observations_zh_cn=["附加了无关证据。"],
+            selected_candidate_ids=["minimax:full_window"],
+            claims=[
+                {
+                    "observation_index": -1,
+                    "candidate_ids": ["minimax:full_window"],
+                    "families": ["evidence"],
+                    "evidence_ids": ["e_deepseek"],
+                },
+                {
+                    "observation_index": 0,
+                    "candidate_ids": ["minimax:full_window"],
+                    "families": ["evidence"],
+                    "evidence_ids": ["e_deepseek"],
+                }
+            ],
+            subjects=[
+                {
+                    "position": 0,
+                    "support_type": "measured_candidate",
+                    "entity_type": "brand",
+                    "identity_type": "brand",
+                    "canonical_key_snapshot": "minimax",
+                    "name_en_snapshot": "Minimax",
+                    "name_zh_cn_snapshot": "中minimax",
+                    "candidate_id": "minimax:full_window",
+                    "evidence_ids": [],
+                }
+            ],
+        )
+
+    row.refresh_from_db()
+    assert row.status == TrendNarrative.Status.GENERATING
+    assert not row.is_current
 
 
 def test_newer_facts_replace_current_and_older_or_old_epoch_cannot_regress():
@@ -286,9 +779,9 @@ def test_newer_facts_replace_current_and_older_or_old_epoch_cannot_regress():
     stale.refresh_from_db()
     rollback.refresh_from_db()
     assert newer.is_current is True
-    assert first.status == TrendNarrativeVersion.Status.SUPERSEDED
-    assert stale.status == TrendNarrativeVersion.Status.SUPERSEDED
-    assert rollback.status == TrendNarrativeVersion.Status.SUPERSEDED
+    assert first.status == TrendNarrative.Status.SUPERSEDED
+    assert stale.status == TrendNarrative.Status.SUPERSEDED
+    assert rollback.status == TrendNarrative.Status.SUPERSEDED
 
 
 def test_higher_epoch_can_replace_newer_facts_and_rollback_epoch_cannot():
@@ -330,12 +823,17 @@ def test_concurrent_cold_publish_serializes_and_newer_facts_win():
                 fence=fence,
                 now=NOW,
             )
+            _complete_transport(
+                TrendNarrative.objects.get(pk=row_id),
+                owner=owner,
+                now=NOW + timedelta(minutes=15),
+            )
             return publish_generation(
                 row_id,
                 owner=owner,
                 fence=fence,
                 body_en="MiniMax leads attention.",
-                body_zh_hans="MiniMax 引领关注。",
+                body_zh_cn="MiniMax 引领关注。",
                 output_hash=f"{row_id:064x}",
                 input_tokens=10,
                 output_tokens=5,
@@ -357,10 +855,10 @@ def test_concurrent_cold_publish_serializes_and_newer_facts_win():
         )
 
     assert sum(results) in {1, 2}
-    current = TrendNarrativeVersion.objects.get(window_days=1, is_current=True)
+    current = TrendNarrative.objects.get(window_days=1, is_current=True)
     assert current.pk == newer.pk
     assert (
-        TrendNarrativeVersion.objects.filter(window_days=1, is_current=True).count()
+        TrendNarrative.objects.filter(window_days=1, is_current=True).count()
         == 1
     )
 
@@ -368,7 +866,7 @@ def test_concurrent_cold_publish_serializes_and_newer_facts_win():
 def test_same_fingerprint_advances_only_strictly_newer_complete_check_tuple():
     current = _reserve()
     assert _publish(current)
-    before_count = TrendNarrativeVersion.objects.count()
+    before_count = TrendNarrative.objects.count()
 
     assert advance_current_check(
         window_days=1,
@@ -388,7 +886,7 @@ def test_same_fingerprint_advances_only_strictly_newer_complete_check_tuple():
     )
 
     current.refresh_from_db()
-    assert TrendNarrativeVersion.objects.count() == before_count
+    assert TrendNarrative.objects.count() == before_count
     assert current.latest_checked_source_cycle_id == "cycle-b"
     assert current.latest_checked_as_of == NOW + timedelta(minutes=15)
     assert current.latest_checked_facts["as_of"] == "2026-08-12T12:15:00Z"
@@ -411,28 +909,28 @@ def test_brand_snapshot_survives_brand_deletion():
 @pytest.mark.parametrize("window_days", [0, 2, 14, 366])
 def test_database_rejects_illegal_windows(window_days: int):
     with transaction.atomic(), pytest.raises(IntegrityError):
-        TrendNarrativeVersion.objects.create(
+        TrendNarrative.objects.create(
             source_cycle_id=f"invalid-{window_days}",
             window_days=window_days,
-            status=TrendNarrativeVersion.Status.CHECKED,
+            status=TrendNarrative.Status.CHECKED,
             facts_as_of=NOW,
         )
 
 
 def test_database_rejects_invalid_current_and_generation_shapes():
     with transaction.atomic(), pytest.raises(IntegrityError):
-        TrendNarrativeVersion.objects.create(
+        TrendNarrative.objects.create(
             source_cycle_id="bad-current",
             window_days=1,
-            status=TrendNarrativeVersion.Status.CHECKED,
+            status=TrendNarrative.Status.CHECKED,
             is_current=True,
             facts_as_of=NOW,
         )
     with transaction.atomic(), pytest.raises(IntegrityError):
-        TrendNarrativeVersion.objects.create(
+        TrendNarrative.objects.create(
             source_cycle_id="bad-generating",
             window_days=1,
-            status=TrendNarrativeVersion.Status.GENERATING,
+            status=TrendNarrative.Status.GENERATING,
             facts_as_of=NOW,
         )
 
@@ -456,7 +954,7 @@ def test_retention_keeps_current_generating_recent_and_newest_twenty():
             now=NOW - timedelta(days=100, minutes=index),
         )
         old_ids.append(row.pk)
-        TrendNarrativeVersion.objects.filter(pk=row.pk).update(
+        TrendNarrative.objects.filter(pk=row.pk).update(
             created_at=NOW - timedelta(days=100, minutes=index)
         )
     recent = _reserve(source_cycle_id="recent", fingerprint="8" * 64)
@@ -467,15 +965,15 @@ def test_retention_keeps_current_generating_recent_and_newest_twenty():
         error_code="fixture_failure",
         now=NOW - timedelta(days=5),
     )
-    TrendNarrativeVersion.objects.filter(pk=recent.pk).update(
+    TrendNarrative.objects.filter(pk=recent.pk).update(
         created_at=NOW - timedelta(days=5)
     )
 
     removed = prune_narrative_history(now=NOW)
 
     assert removed == 7
-    assert TrendNarrativeVersion.objects.filter(pk=current.pk).exists()
-    assert TrendNarrativeVersion.objects.filter(pk=generating.pk).exists()
-    assert TrendNarrativeVersion.objects.filter(pk=recent.pk).exists()
-    assert TrendNarrativeVersion.objects.filter(pk__in=old_ids).count() == 18
+    assert TrendNarrative.objects.filter(pk=current.pk).exists()
+    assert TrendNarrative.objects.filter(pk=generating.pk).exists()
+    assert TrendNarrative.objects.filter(pk=recent.pk).exists()
+    assert TrendNarrative.objects.filter(pk__in=old_ids).count() == 18
     assert prune_narrative_history(now=NOW) == 0

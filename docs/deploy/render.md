@@ -12,7 +12,7 @@ Production harvesting is synchronous and has one scheduler:
 | `pushinweight-harvest` | Render cron, `*/15 * * * *`, `python manage.py run_cycle` |
 | `pushinweight-db-shadow` | PostgreSQL used by the deployed web/cron services |
 | `pushinweight-headlines-broker` | Available owned Key Value broker for `trend-narratives` |
-| `pushinweight-headlines` | Desired dedicated queue-only worker; must be present before activation |
+| `pushinweight-headlines` | Active queue-only worker for `trend-narratives`, concurrency/prefetch one |
 | legacy `pushinweight-worker` | Suspended; old SHA; do not reactivate |
 | legacy `pushinweight-beat` | Suspended; old SHA; do not reactivate |
 
@@ -29,11 +29,12 @@ The additive `render.yaml` declares the desired topology:
 | `pushinweight-headlines-broker` | Owned persistent/no-eviction Key Value broker |
 | `pushinweight-headlines` | Dedicated Celery worker consuming only `trend-narratives`, concurrency/prefetch one |
 
-The web and harvest services are deployed from the feature revision and the
-broker is available. The dedicated worker must still be reconciled into the
-live inventory before any enqueue/provider/serving control is enabled.
-Provisioning paid services, changing Render resources, migrations on shared
-data, provider calls, and deployment require separate authorization.
+The web, harvest, and headline services currently run the pre-expansion
+revision `4626dd0`; the broker and dedicated worker are present. The checked-in
+Blueprint stages the analytical/schema-two revision with all three controls
+off under control revision `v22-analytical-off-v1`. Provisioning paid services,
+changing Render resources, migrations on shared data, provider calls, and
+deployment require separate authorization.
 
 The worker command intentionally omits beat and consumes no default/harvest
 queue:
@@ -47,11 +48,18 @@ celery -A project worker -l INFO -Q trend-narratives --concurrency=1 \
 
 These controls are independent and fail closed:
 
-| Service | Variable | Current staged value |
+| Service | Variable | Next-deploy staged value |
 |---|---|---|
 | web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `False` |
-| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` (`enqueue-v1`) |
-| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `True` (`dsv4-canary-v1`) |
+| harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `False` |
+| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `False` |
+
+The read-only pre-rollout inventory found the prior revision live with serving,
+enqueueing, and worker provider calls enabled under separate old control
+revisions. Do not deploy the schema-two code while inheriting those values.
+Before deployment, verify the resolved service environment will take the
+checked-in all-off values; if Render preserves an old per-service override,
+set that control to `False` before the build starts.
 
 `DEEPSEEK_API_KEY` must be present on the headline worker. Its value is the
 same DeepSeek V4 credential used by translation/classification, but it remains
@@ -81,8 +89,10 @@ the deprecated endpoint are rejected.
   narratives, and repair calls are disabled.
 - Cadences are 30 minutes, 1 hour, 6 hours, and 24 hours respectively. Stale
   limits are twice those intervals.
-- Semantically unchanged count/timestamp drift advances the durable checked
-  tuple with zero version and zero provider request.
+- Semantically unchanged bucket-coordinate/timestamp drift advances the
+  durable checked tuple with zero version and zero provider request. A changed
+  analytical vector, candidate, evidence set, prompt, model route, or
+  publication epoch is generation-relevant.
 - Browser loads, locale/filter changes, the 60-second refresh, and repeated
   window switching read PostgreSQL only.
 - A failed or invalid output never replaces current copy.
@@ -99,22 +109,29 @@ python manage.py headline_status --json
 Stop at any failed gate. Record timestamp, deployed SHA, service ID, operator,
 observer, and control revision.
 
-1. Deploy additive migration and code with all three controls off. Verify web
-   fallback, baseline harvest call count, one active cron, zero beat, and all
-   three services resolve to `pushinweight-db-shadow`.
-2. Reconcile the owned broker and headline-only worker. Do not touch the two
+1. Disable all three controls on the currently deployed revision and drain the
+   headline queue. Capture the pre-migration ledger count/ID/current-row SQL
+   from the baseline investigation.
+2. Deploy the additive migration and code with all three controls still off.
+   Verify the physical `trend_narratives` parent, writable
+   `trend_narrative_versions` compatibility view, normalized subject table,
+   row/ID/no-rewrite invariants, legacy web fallback, baseline harvest call
+   count, one active cron, zero beat, and all three services resolving to
+   `pushinweight-db-shadow`.
+3. Reconcile the owned broker and headline-only worker. Do not touch the two
    suspended legacy services. If the worker is absent, stop before enabling
    enqueueing.
-3. Send one safe provider-free task. Verify only `trend-narratives` is consumed,
+4. Send one safe provider-free task. Verify only `trend-narratives` is consumed,
    concurrency/prefetch are one, and the queue returns to zero.
-4. Enable enqueue on the cron while provider remains off. One real harvest must
+5. Enable enqueue on the cron while provider remains off. One real harvest must
    yield four suppressed/no-slot rows and zero HTTP attempts.
-5. Empty the queue. Enable provider calls for one canary. Verify `0..4` slots,
+6. Empty the queue. Enable provider calls for one canary. Verify `0..4` slots,
    HTTP starts never exceed slots, valid bilingual rows publish independently,
-   and harvest external calls remain at baseline.
-6. Review all four locales/windows in a real browser. Enable serving only after
+   normalized subjects and claim links are valid, and harvest external calls
+   remain at baseline.
+7. Review all four locales/windows in a real browser. Enable serving only after
    content, freshness, link, mobile geometry, and accessibility checks pass.
-7. Observe +1h, +6h, and +24h. Queue depth must return to zero, oldest message
+8. Observe +1h, +6h, and +24h. Queue depth must return to zero, oldest message
    stay below 30 minutes, and no source cycle may exceed four slots.
 
 ## Rollback matrix
@@ -126,9 +143,9 @@ observer, and control revision.
 | UI regression | Disable serving only | Worker evidence and rows |
 | Worker/broker outage | Disable enqueue; pause dedicated worker if needed | Web and harvester |
 
-Never remove the additive table during rollback. Do not delete rows or
-reactivate legacy worker/beat resources. Browser traffic must remain incapable
-of generating work.
+Never remove the expanded parent/subject tables or compatibility view during
+operational rollback. Do not delete rows or reactivate legacy worker/beat
+resources. Browser traffic must remain incapable of generating work.
 
 ## Validation commands
 
