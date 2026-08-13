@@ -88,17 +88,35 @@
     min-height: 28px;
   }
   .topbar-controls .window-toggle {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
     margin: 0;
   }
+  .topbar-controls .window-toggle button {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .topbar-controls .tz-pill {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 44%;
     margin-left: auto;
     height: 28px;
     box-sizing: border-box;
     padding: 0 10px;
     display: inline-flex;
     align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .topbar-controls .tz-pill > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .topbar-controls .window-toggle button {
     display: inline-flex;
@@ -296,6 +314,7 @@
     box-sizing: border-box;
   }
   .filter-pill.is-open > .filter-dropdown { display: block; }
+  .filter-dropdown.is-portaled { display: block; }
 
   .filter-dropdown .dd-toolbar {
     display: flex;
@@ -1004,11 +1023,10 @@ body.desktop-shell .desktop-grid .feed-strip {
   overflow: hidden;
 }
 .topbar-title-row .locale-toggle button {
-  display: inline-flex;
+  display: block;
   flex: 1 1 0;
   min-width: 0;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
   height: 28px;
   line-height: 1;
   padding: 0 10px;

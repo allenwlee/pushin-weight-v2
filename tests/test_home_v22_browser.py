@@ -356,12 +356,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
                     page.wait_for_function("() => window.pwFilter")
                     pill = page.locator('[data-group="brands"]')
-                    dropdown = pill.locator(".filter-dropdown")
 
                     pill.dispatch_event("touchend")
                     page.wait_for_timeout(150)
 
                     self.assertEqual(pill.get_attribute("aria-expanded"), "true")
+                    dropdown = page.locator("body > .filter-dropdown.is-portaled")
+                    self.assertEqual(dropdown.count(), 1)
                     self.assertTrue(dropdown.is_visible())
                     box = dropdown.bounding_box()
                     self.assertIsNotNone(box)
@@ -370,7 +371,14 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertGreaterEqual(box["x"], 0)
                     self.assertLessEqual(box["x"] + box["width"], VIEWPORTS["mobile"]["width"] + 1)
 
-                    pill.locator('[data-lens="closed"]').click()
+                    # A physical iOS tap may activate through the fallback and
+                    # still deliver a delayed synthetic click. That click must
+                    # not close the menu that the fallback just opened.
+                    pill.dispatch_event("click")
+                    self.assertEqual(pill.get_attribute("aria-expanded"), "true")
+                    self.assertTrue(dropdown.is_visible())
+
+                    dropdown.locator('[data-lens="closed"]').click()
                     self.assertEqual(pill.get_attribute("aria-expanded"), "true")
                     self.assertTrue(dropdown.is_visible())
 
@@ -419,13 +427,30 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             boxes = page.evaluate(
                                 """() => {
+                                  const rectFor = (element) => {
+                                    const rect = element.getBoundingClientRect();
+                                    return {left: rect.left, right: rect.right, width: rect.width, height: rect.height};
+                                  };
                                   const row = document.querySelector('.topbar-title-row').getBoundingClientRect();
                                   const appName = document.querySelector('h1.app-name').getBoundingClientRect();
                                   const locale = document.querySelector('.locale-toggle').getBoundingClientRect();
+                                  const topbar = document.querySelector('.topbar').getBoundingClientRect();
+                                  const controls = document.querySelector('.topbar-controls');
+                                  const timeWindow = controls.querySelector('.window-toggle');
+                                  const timezone = controls.querySelector('.tz-pill');
                                   return {
                                     row: {left: row.left, right: row.right, width: row.width},
                                     appName: {left: appName.left, right: appName.right, width: appName.width},
                                     locale: {left: locale.left, right: locale.right, width: locale.width},
+                                    topbar: {left: topbar.left, right: topbar.right},
+                                    controls: rectFor(controls),
+                                    timeWindow: rectFor(timeWindow),
+                                    timezone: rectFor(timezone),
+                                    localeLabels: [...document.querySelectorAll('.locale-toggle button')].map((button) => ({
+                                      button: rectFor(button),
+                                      overflow: getComputedStyle(button).overflow,
+                                      textOverflow: getComputedStyle(button).textOverflow,
+                                    })),
                                     viewport: innerWidth,
                                   };
                                 }"""
@@ -448,6 +473,24 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 boxes["locale"]["right"],
                                 boxes["viewport"] + 0.5,
                             )
+                            for control_name in ("controls", "timeWindow", "timezone"):
+                                self.assertGreater(boxes[control_name]["width"], 0)
+                                self.assertGreaterEqual(
+                                    boxes[control_name]["left"],
+                                    boxes["topbar"]["left"] - 0.5,
+                                )
+                                self.assertLessEqual(
+                                    boxes[control_name]["right"],
+                                    boxes["topbar"]["right"] + 0.5,
+                                )
+                                self.assertLessEqual(
+                                    boxes[control_name]["right"],
+                                    boxes["viewport"] + 0.5,
+                                )
+                            for label in boxes["localeLabels"]:
+                                self.assertGreater(label["button"]["width"], 0)
+                                self.assertEqual(label["overflow"], "hidden")
+                                self.assertEqual(label["textOverflow"], "ellipsis")
                         finally:
                             context.close()
             finally:
@@ -604,8 +647,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                     unsanctioned_pill = page.locator('[data-group="unsanctioned"]')
                     unsanctioned_pill.press("Enter")
-                    unsanctioned = page.locator(
-                        '[data-group="unsanctioned"] input[data-pw-filter-group="unsanctioned"]'
+                    dropdown = page.locator("body > .filter-dropdown.is-portaled")
+                    unsanctioned = dropdown.locator(
+                        'input[data-pw-filter-group="unsanctioned"]'
                     )
                     self.assertFalse(unsanctioned.is_checked())
                     feed_response, chart_response = act(unsanctioned.check)
@@ -624,7 +668,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                     brands_pill = page.locator('[data-group="brands"]')
                     brands_pill.press("Enter")
-                    dropdown = brands_pill.locator(".filter-dropdown")
                     self.assertTrue(dropdown.is_visible())
                     box = dropdown.bounding_box()
                     self.assertIsNotNone(box)
@@ -633,11 +676,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertGreaterEqual(box["x"], 0)
                     self.assertLessEqual(box["x"] + box["width"], VIEWPORTS["desktop"]["width"] + 1)
 
-                    open_grid = brands_pill.locator('[data-tier-grid="open"]')
-                    act(brands_pill.locator('[data-dd-action="clear"][data-dd-scope="visible"]').click)
+                    open_grid = dropdown.locator('[data-tier-grid="open"]')
+                    act(dropdown.locator('[data-dd-action="clear"][data-dd-scope="visible"]').click)
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), [])
                     self.assertEqual(open_grid.locator('input:checked').count(), 0)
-                    act(brands_pill.locator('[data-dd-action="all"][data-dd-scope="visible"]').click)
+                    act(dropdown.locator('[data-dd-action="all"][data-dd-scope="visible"]').click)
                     open_selection = page.evaluate("() => window.pwFilter.get().brands")
                     self.assertIsInstance(open_selection, list)
                     self.assertIn("qwen", open_selection)
@@ -646,17 +689,17 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                     nationalism_pill = page.locator('[data-group="nationalism"]')
                     nationalism_pill.press("Enter")
-                    nationalism_pill.locator('[data-lens="cn"]').click()
-                    act(nationalism_pill.locator('[data-dd-action="clear"][data-dd-scope="visible"]').click)
+                    dropdown.locator('[data-lens="cn"]').click()
+                    act(dropdown.locator('[data-dd-action="clear"][data-dd-scope="visible"]').click)
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().cn_nationalism"), [])
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().us_nationalism"), "__all__")
-                    act(nationalism_pill.locator('[data-dd-action="all"][data-dd-scope="visible"]').click)
+                    act(dropdown.locator('[data-dd-action="all"][data-dd-scope="visible"]').click)
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().cn_nationalism"), "__all__")
                     nationalism_pill.press("Escape")
 
                     sentiment_pill = page.locator('[data-group="sentiment"]')
                     sentiment_pill.press("Enter")
-                    positive = sentiment_pill.locator('input[value="positive"]')
+                    positive = dropdown.locator('input[value="positive"]')
                     self.assertTrue(positive.is_checked())
                     feed_response, _ = act(positive.uncheck)
                     filters, window = request_state(feed_response.url)

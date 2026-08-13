@@ -27,10 +27,25 @@
   var scroller = bar.querySelector(".filter-bar-scroller");
   var pills = Array.prototype.slice.call(bar.querySelectorAll(".filter-pill"));
   var touchFallbackTimer = null;
+  var suppressedClickPill = null;
+  var suppressedClickTimer = null;
+
+  function dropdownFor(pill) {
+    return pill._pwDropdown || pill.querySelector(".filter-dropdown");
+  }
+
+  function restoreDropdown(pill) {
+    var dd = dropdownFor(pill);
+    if (!dd || !dd._pwOriginalParent) return;
+    dd.classList.remove("is-portaled");
+    dd._pwOriginalParent.insertBefore(dd, dd._pwOriginalNextSibling);
+    delete dd._pwOriginalParent;
+    delete dd._pwOriginalNextSibling;
+  }
 
   // --- Panel aligns to filter-bar (same width as topbar / pulse / chart cards) ---
   function placeDropdown(pill) {
-    var dd = pill.querySelector(".filter-dropdown");
+    var dd = dropdownFor(pill);
     if (!dd) return;
     var barR = bar.getBoundingClientRect();
     dd.style.top = Math.round(barR.bottom + 2) + "px";
@@ -47,11 +62,21 @@
     pills.forEach(function (p) {
       p.classList.remove("is-open");
       setExpanded(p, false);
+      restoreDropdown(p);
     });
   }
 
   function openPill(pill) {
     closeAll();
+    var dd = dropdownFor(pill);
+    if (dd && dd.parentNode !== document.body) {
+      dd._pwOriginalParent = dd.parentNode;
+      dd._pwOriginalNextSibling = dd.nextSibling;
+      dd._pwOwner = pill;
+      pill._pwDropdown = dd;
+      dd.classList.add("is-portaled");
+      document.body.appendChild(dd);
+    }
     pill.classList.add("is-open");
     setExpanded(pill, true);
     requestAnimationFrame(function () {
@@ -71,9 +96,22 @@
     touchFallbackTimer = null;
   }
 
+  function clearSuppressedClick() {
+    if (suppressedClickTimer != null) window.clearTimeout(suppressedClickTimer);
+    suppressedClickTimer = null;
+    suppressedClickPill = null;
+  }
+
+  function suppressFallbackClick(pill) {
+    clearSuppressedClick();
+    suppressedClickPill = pill;
+    suppressedClickTimer = window.setTimeout(clearSuppressedClick, 500);
+  }
+
   function refreshDots() {
     pills.forEach(function (p) {
-      var boxes = p.querySelectorAll(".filter-dropdown input[type=checkbox]");
+      var dd = dropdownFor(p);
+      var boxes = dd ? dd.querySelectorAll("input[type=checkbox]") : [];
       var changed = false;
       boxes.forEach(function (b) {
         if (b.checked !== b.defaultChecked) changed = true;
@@ -162,6 +200,10 @@
         touchFallbackTimer = null;
         drag.pressPill = null;
         togglePill(pill);
+        // A delayed synthetic click can still follow the fallback activation.
+        // Consume that click so one physical tap cannot toggle twice. A new
+        // pointerdown on this pill clears the guard for a later tap.
+        suppressFallbackClick(pill);
       }, 80);
     }, { passive: true });
   }
@@ -172,6 +214,10 @@
   document.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!t || !t.closest) return;
+    var pill = t.closest(".filter-pill");
+    if (pill && pill === suppressedClickPill && !t.closest(".filter-dropdown")) {
+      clearSuppressedClick();
+    }
     if (!t.closest(".filter-bar") && !t.closest(".filter-dropdown")) {
       closeAll();
     }
@@ -182,6 +228,12 @@
     cancelTouchFallback();
     var t = e.target;
     if (!t || !t.closest) return;
+    var clickedPill = t.closest(".filter-pill");
+    if (suppressedClickPill && clickedPill === suppressedClickPill && !t.closest(".filter-dropdown")) {
+      clearSuppressedClick();
+      drag.pressPill = null;
+      return;
+    }
     if (drag._justFinishedDrag) {
       drag.moved = false;
       drag._justFinishedDrag = false;
@@ -190,7 +242,7 @@
     }
     var dd = t.closest(".filter-dropdown");
     if (dd) {
-      var owner = dd.closest(".filter-pill");
+      var owner = dd._pwOwner || dd.closest(".filter-pill");
       if (owner && owner.classList.contains("is-open")) return;
     }
     var pill = drag.pressPill;
@@ -222,7 +274,7 @@
   });
 
   // Flat-group toolbar (Lang, etc.): all / clear on all boxes in that dropdown
-  bar.addEventListener("click", function (e) {
+  document.addEventListener("click", function (e) {
     var btn = e.target.closest ? e.target.closest("[data-dd-action]") : null;
     if (!btn) return;
     if (btn.hasAttribute("data-dd-scope")) return; // handled by lens scoped handlers
@@ -265,7 +317,7 @@
     });
   }
 
-  bar.addEventListener("click", function (e) {
+  document.addEventListener("click", function (e) {
     var tab = e.target.closest ? e.target.closest("[data-lens]") : null;
     if (!tab || tab.closest(".dd-segment") == null) return;
     var dd = tab.closest(".filter-dropdown");
@@ -283,7 +335,7 @@
   });
 
   // Scoped all/clear: only currently visible lens tier
-  bar.addEventListener("click", function (e) {
+  document.addEventListener("click", function (e) {
     var btn = e.target.closest ? e.target.closest("[data-dd-action][data-dd-scope=visible]") : null;
     if (!btn) return;
     var dd = btn.closest(".filter-dropdown");
@@ -305,7 +357,10 @@
   var _refreshDotsLens = refreshDots;
   refreshDots = function () {
     _refreshDotsLens();
-    bar.querySelectorAll(".filter-dropdown[data-idea=b]").forEach(updateLensCounts);
+    pills.forEach(function (pill) {
+      var dd = dropdownFor(pill);
+      if (dd && dd.getAttribute("data-idea") === "b") updateLensCounts(dd);
+    });
   };
 
   document.addEventListener('pw:filter-change', refreshDots);

@@ -56,8 +56,10 @@
   }
 
   function controlsForGroup(panel, group) {
+    // Filter dropdowns are portaled to body while open, so the active
+    // controls may no longer be descendants of the filter bar.
     return Array.prototype.slice.call(
-      panel.querySelectorAll('[data-pw-filter-group="' + group + '"]')
+      document.querySelectorAll('[data-pw-filter-group="' + group + '"]')
     );
   }
 
