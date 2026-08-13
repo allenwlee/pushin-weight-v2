@@ -76,9 +76,9 @@ services:
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
-        value: "False"
+        value: "True"
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: off-v1
+        value: dsv4-canary-v1
 
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)

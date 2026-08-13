@@ -51,7 +51,7 @@ These controls are independent and fail closed:
 |---|---|---|
 | web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `False` |
 | harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` (`enqueue-v1`) |
-| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `False` |
+| headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `True` (`dsv4-canary-v1`) |
 
 `DEEPSEEK_API_KEY` must be present on the headline worker. Its value is the
 same DeepSeek V4 credential used by translation/classification, but it remains
