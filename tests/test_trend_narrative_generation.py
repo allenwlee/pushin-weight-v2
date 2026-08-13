@@ -327,6 +327,36 @@ def test_refusal_or_non_json_fails_after_one_request(payload):
     assert len(client.messages.calls) == 1
 
 
+def test_deepseek_json_code_fence_is_normalized_before_strict_validation():
+    payload = json.dumps(_valid_payload(), ensure_ascii=False)
+    client = _FakeClient(f"```json\n{payload}\n```")
+
+    result = generate_trend_narrative(
+        _facts(),
+        HeadlineNarrativeConfig(),
+        api_key="headline-secret",
+        client_factory=lambda **_kwargs: client,
+    )
+
+    assert result.body_en == _valid_payload()["body_en"]
+    assert len(client.messages.calls) == 1
+
+
+def test_code_fence_does_not_permit_trailing_prose():
+    payload = json.dumps(_valid_payload(), ensure_ascii=False)
+    client = _FakeClient(f"```json\n{payload}\n```\nextra prose")
+
+    with pytest.raises(HeadlineGenerationError):
+        generate_trend_narrative(
+            _facts(),
+            HeadlineNarrativeConfig(),
+            api_key="headline-secret",
+            client_factory=lambda **_kwargs: client,
+        )
+
+    assert len(client.messages.calls) == 1
+
+
 def test_extra_output_fields_are_rejected_without_repair_call():
     payload = {**_valid_payload(), "explanation": "untrusted extra prose"}
     client = _FakeClient(payload)

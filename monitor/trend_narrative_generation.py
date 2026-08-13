@@ -180,7 +180,7 @@ def generate_trend_narrative(
         raise HeadlineGenerationError("headline_provider_request_failed") from exc
     elapsed_ms = max(0, round((monotonic() - started) * 1000))
     try:
-        raw = _message_text(message)
+        raw = _normalize_json_envelope(_message_text(message))
         parsed = json.loads(raw)
         output = _GenerationOutput.model_validate(parsed)
         _validate_output(output, facts, expected_brands, config)
@@ -268,6 +268,21 @@ def _message_text(message: Any) -> str:
     if not parts:
         raise ValueError("provider returned no text block")
     return "".join(parts).strip()
+
+
+def _normalize_json_envelope(raw: str) -> str:
+    """Unwrap one complete JSON code fence while keeping parsing strict."""
+    stripped = raw.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if (
+        len(lines) < 3
+        or lines[0].strip().casefold() not in {"```", "```json"}
+        or lines[-1].strip() != "```"
+    ):
+        raise ValueError("invalid JSON code fence")
+    return "\n".join(lines[1:-1]).strip()
 
 
 def _validate_fact_input(facts: dict[str, Any]) -> None:
