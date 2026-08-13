@@ -290,11 +290,11 @@ class HeadlineNarrativeConfig(BaseModel):
     model: str = "deepseek-v4-pro"
     timeout_seconds: int = Field(default=45, ge=5, le=120)
     prompt_version: str = Field(
-        default="headline-v4-analytical",
+        default="headline-v5-analytical",
         min_length=1,
         max_length=64,
     )
-    publication_epoch: int = Field(default=4, ge=1)
+    publication_epoch: int = Field(default=5, ge=1)
     cadence_minutes: dict[int, int] = Field(
         default_factory=lambda: {1: 30, 7: 60, 30: 360, 365: 1440}
     )

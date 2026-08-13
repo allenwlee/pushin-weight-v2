@@ -311,8 +311,8 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
-    assert config.prompt_version == "headline-v4-analytical"
-    assert config.publication_epoch == 4
+    assert config.prompt_version == "headline-v5-analytical"
+    assert config.publication_epoch == 5
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
     assert config.call_cap == 4
@@ -887,7 +887,7 @@ def test_generation_fingerprint_changes_with_analysis_route_prompt_and_epoch():
 
     assert generation_fingerprint(
         snapshot,
-        baseline.model_copy(update={"publication_epoch": 5}),
+        baseline.model_copy(update={"publication_epoch": 6}),
     ) != fingerprint
     minimax = HeadlineNarrativeConfig(
         provider="minimax",
