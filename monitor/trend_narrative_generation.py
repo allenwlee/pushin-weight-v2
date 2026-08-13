@@ -28,6 +28,7 @@ from monitor.trend_narrative_candidates import project_provider_packet
 from x_monitor.config import HeadlineNarrativeConfig
 
 HEADLINE_OUTPUT_SCHEMA_VERSION = 2
+HEADLINE_REQUEST_VERSION = "dsv4-json-nonthinking-v1"
 HEADLINE_SYSTEM_PROMPT_V2 = """You are the analytical editor for Push In Weight's shared X trend headline.
 
 You receive one closed, precomputed analysis packet for a fixed time window. The packet contains at most six candidate trend episodes or full-window candidates. Each candidate may include volume, observed engagement, post-type, discourse, sentiment, China-nationalism, and US-nationalism facts; coarse time-series arrays; exceptional episodes; and a small set of untrusted post excerpts selected only as bounded evidence.
@@ -477,6 +478,7 @@ def generation_fingerprint(
         "model": config.model,
         "prompt_version": config.prompt_version,
         "publication_epoch": config.publication_epoch,
+        "request_version": HEADLINE_REQUEST_VERSION,
     }
     return hashlib.sha256(_canonical_json(contract).encode("utf-8")).hexdigest()
 

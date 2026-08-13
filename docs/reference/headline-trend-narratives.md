@@ -371,6 +371,7 @@ The first subject must be a measured candidate. A second subject may be a distin
 | Messages | One user message containing the canonical packet |
 | Temperature | `0` |
 | Thinking mode | explicitly disabled so reasoning cannot consume the bounded JSON output budget |
+| Request version | `dsv4-json-nonthinking-v1`; included in the semantic fingerprint |
 | Max output tokens | `1600` |
 | Timeout | `45` seconds by default |
 | SDK retries | `0` |
@@ -442,8 +443,9 @@ is no partial publication and no fallback to an unvalidated response.
 
 The SHA-256 generation fingerprint covers output schema version, analytically
 meaningful provider-packet values, provider, base URL, model, prompt version,
-and publication epoch. It deliberately removes rolling `as_of`, earliest
-coverage dates, bucket coordinates, and candidate interval coordinates. Exact
+provider-request version, and publication epoch. It deliberately removes
+rolling `as_of`, earliest coverage dates, bucket coordinates, and candidate
+interval coordinates. Exact
 coarse values become bucket-share bands rounded to the configured five
 percentage-point increment; evidence text becomes a normalized digest while
 its source-support metadata remains. Small movement within one band therefore

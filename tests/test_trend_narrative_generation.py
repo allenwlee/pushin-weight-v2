@@ -11,6 +11,7 @@ import pytest
 from billiard.exceptions import SoftTimeLimitExceeded
 from pydantic import ValidationError
 
+import monitor.trend_narrative_generation as trend_generation
 from monitor.trend_narrative_generation import (
     HEADLINE_OUTPUT_SCHEMA_VERSION,
     HEADLINE_SYSTEM_PROMPT_V2,
@@ -894,6 +895,20 @@ def test_generation_fingerprint_changes_with_analysis_route_prompt_and_epoch():
         model="MiniMax-M3",
     )
     assert generation_fingerprint(snapshot, minimax) != fingerprint
+
+
+def test_generation_fingerprint_changes_with_provider_request_version(monkeypatch):
+    snapshot = _snapshot()
+    config = HeadlineNarrativeConfig()
+    fingerprint = generation_fingerprint(snapshot, config)
+
+    monkeypatch.setattr(
+        trend_generation,
+        "HEADLINE_REQUEST_VERSION",
+        "dsv4-json-nonthinking-v2",
+    )
+
+    assert generation_fingerprint(snapshot, config) != fingerprint
 
 
 def test_generation_fingerprint_uses_material_five_point_shape_bands():
