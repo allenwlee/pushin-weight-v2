@@ -6,12 +6,7 @@ Ollija is PushinWeight’s release-control system. It guides one developer throu
 the path from a code change to a reviewed staging release and, finally, a
 production release.
 
-It is named after the Korean expression **올리자** (“let’s put it up” or “the
-person who puts it up”). The name reflects its job: make the next safe change
-clear, record what was actually reviewed, and prevent an accidental production
-change.
-
-The Hangul spelling is **올리자** (*ollija*). It comes from **올리다** (*ollida*,
+It is named after the Korean expression **올리자** (*ollija*). It comes from **올리다** (*ollida*,
 “to raise,” “upload,” “put online,” or “deploy”) plus **-자** (*-ja*, the
 hortative ending meaning “let’s”). Korean software teams commonly use **올리다**
 for putting a server, container, build, or feature into service. The name also
