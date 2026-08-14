@@ -16,6 +16,8 @@ from pathlib import Path
 
 import environ
 
+from project.staging import validate_staging_environment
+
 # ============================================================================
 # Paths
 # ============================================================================
@@ -188,12 +190,23 @@ ACCOUNT_EMAIL_VERIFICATION = "optional"  # "mandatory" for stricter
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 
-# Google OAuth provider
+# Google OAuth provider. The staging profile validates these as staging-owned
+# values and never falls back to a production environment group.
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")
+validate_staging_environment(
+    enabled=OLLIJA_STAGING_MODE,
+    django_secret_key=SECRET_KEY,
+    google_client_id=GOOGLE_CLIENT_ID,
+    google_client_secret=GOOGLE_CLIENT_SECRET,
+    allowed_emails=OLLIJA_STAGING_ALLOWED_EMAILS,
+)
+
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
-            "client_id": env("GOOGLE_CLIENT_ID", default=""),
-            "secret": env("GOOGLE_CLIENT_SECRET", default=""),
+            "client_id": GOOGLE_CLIENT_ID,
+            "secret": GOOGLE_CLIENT_SECRET,
         },
         "SCOPE": [
             "profile",

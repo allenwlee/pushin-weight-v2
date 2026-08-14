@@ -2,6 +2,13 @@
 
 Last verified against the Render account and Blueprint: 2026-08-14.
 
+The isolated owner-review stack is defined separately in
+`render-staging.yaml`. It contains one web service and one PostgreSQL database
+on branch `staging`; it must never be merged into this production Blueprint or
+share production resource names, database bindings, secret groups, workers,
+cron jobs, brokers, or provider credentials. Setup and verification are in
+`docs/operations/ollija.md`.
+
 ## Deployed reality
 
 Production harvesting is synchronous and has one scheduler:

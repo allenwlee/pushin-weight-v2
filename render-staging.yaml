@@ -1,0 +1,59 @@
+# Render Blueprint — PushinWeight owner-only staging
+# This stack intentionally contains one web service and one PostgreSQL database.
+
+services:
+  - type: web
+    name: pushinweight-staging-web
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: gunicorn project.wsgi:application --log-file -
+    healthCheckPath: /accounts/login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: pushinweight-staging-web.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://pushinweight-staging-web.onrender.com
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: OLLIJA_STAGING_MODE
+        value: "True"
+      - key: OLLIJA_STAGING_ALLOWED_EMAILS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: XMONITOR_DRY_RUN
+        value: "True"
+      - key: X_MONITOR_HEADLINE_SERVING_ENABLED
+        value: "False"
+      - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
+        value: "False"
+      - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
+        value: "False"
+
+databases:
+  - name: pushinweight-staging-db
+    databaseName: pushinweight_staging
+    user: pushinweight_staging
+    region: oregon
+    plan: basic-256mb
+    postgresMajorVersion: "18"
+    # External direct PostgreSQL is needed only for guarded snapshot refreshes
+    # from fuchitalee. Credentials remain random and are never logged.
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: ollija guarded refresh

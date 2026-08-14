@@ -101,6 +101,59 @@ guarded refresh; activation will retain the prior binding again. Removal of old
 logical databases is a separate, fingerprinted maintenance action and must
 never use a name glob or unresolved shell variable.
 
+## One-time hosted staging setup
+
+The stable hosted environment is defined by `render-staging.yaml`, linked to
+the permanent `staging` branch, and named `pushinweight-staging`. During the
+one-time Render Blueprint setup select:
+
+- repository: `allenwlee/pushin-weight-v2`
+- branch: `staging`
+- Blueprint path: `render-staging.yaml`
+- create all resources as new
+
+Before deploying the Blueprint, create one Google OAuth **Web application**
+client used only by staging/local review. Configure these authorized origins:
+
+```text
+https://pushinweight-staging-web.onrender.com
+https://fuchitalee.tail65bd38.ts.net
+```
+
+Configure these authorized redirect URIs:
+
+```text
+https://pushinweight-staging-web.onrender.com/accounts/google/login/callback/
+https://fuchitalee.tail65bd38.ts.net/accounts/google/login/callback/
+```
+
+At the Blueprint secret prompts, set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` from that new client and set
+`OLLIJA_STAGING_ALLOWED_EMAILS` to the owner's normalized Google email. Render
+generates `DJANGO_SECRET_KEY`. Do not attach `pushinweight-secrets`.
+
+### Hosted staging go/no-go
+
+Go only when all of the following are true:
+
+- `render blueprints validate render-staging.yaml` and `render.yaml` both pass.
+- Live inventory contains exactly one staging web and one staging PostgreSQL
+  resource, with no staging worker, cron, broker, or production resource ID.
+- The deployed branch/SHA exactly matches the frozen candidate on `staging`.
+- The staging database marker says `staging/active`; its posts, brands, and
+  published trend-narrative counts match the refresh receipt; auth/session,
+  queue, and environment-state counts are zero.
+- Anonymous product routes redirect to staging login, the allowlisted owner can
+  enter, and an authenticated non-owner receives 403.
+- Provider controls are all false and the live service has no Twitter,
+  DeepSeek, Anthropic, Celery, Redis, or production environment-group keys.
+
+If build or boot fails, leave production untouched, keep the prior staging
+database binding, and correct the `staging` candidate. If a hosted restore
+fails before first activation, the marker remains `building`; do not bind or
+serve that database. Replace/retry the isolated staging target from the last
+validated scrubbed snapshot. Never copy staging data back to production.
+
 ## Credential and environment rules
 
 - Production-derived raw data stays on `fuchitalee` or the isolated hosted
