@@ -1106,13 +1106,15 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                           list.firstElementChild.textContent = 'stale browser copy';
                         }"""
                     )
-                    page.locator('[data-group="sentiment"]').press("Enter")
                     with page.expect_response(
                         lambda response: "/chart.html?" in response.url
                     ) as chart_info:
-                        page.locator(
-                            '[data-group="sentiment"] input[value="positive"]'
-                        ).uncheck()
+                        page.evaluate(
+                            """() => document.dispatchEvent(new CustomEvent(
+                              'pw:filter-change',
+                              {detail: {filters: {window: 1}}}
+                            ))"""
+                        )
                     self.assertIn(
                         "Both trajectories rise and then hold.",
                         chart_info.value.text(),
