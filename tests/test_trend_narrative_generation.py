@@ -407,8 +407,8 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
-    assert config.prompt_version == "headline-v6-why-first"
-    assert config.publication_epoch == 6
+    assert config.prompt_version == "headline-v7-why-first-schema-bounds"
+    assert config.publication_epoch == 7
     assert config.materiality_policy_version == "pending-live-review-v1"
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
@@ -505,6 +505,16 @@ def test_literal_prompt_requires_why_first_mix_context_and_two_winners():
         HEADLINE_SYSTEM_PROMPT_V3
     )
     assert "evidence-only entity" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "subjects is an array of objects, never names or strings" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
+    assert 'event_anchor is always a string: use ""' in HEADLINE_SYSTEM_PROMPT_V3
+    assert "evidence_ids contains at most four representative IDs" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
+    assert "quantitative_fact_ids contains at most eight IDs" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
 
 
 def test_current_reference_literal_prompt_matches_active_contract_exactly():
@@ -1186,7 +1196,7 @@ def test_generation_fingerprint_changes_with_analysis_route_prompt_and_epoch():
 
     assert generation_fingerprint(
         snapshot,
-        baseline.model_copy(update={"publication_epoch": 7}),
+        baseline.model_copy(update={"publication_epoch": 8}),
     ) != fingerprint
     assert generation_fingerprint(
         snapshot,

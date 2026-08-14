@@ -290,11 +290,11 @@ class HeadlineNarrativeConfig(BaseModel):
     model: str = "deepseek-v4-pro"
     timeout_seconds: int = Field(default=45, ge=5, le=120)
     prompt_version: str = Field(
-        default="headline-v6-why-first",
+        default="headline-v7-why-first-schema-bounds",
         min_length=1,
         max_length=64,
     )
-    publication_epoch: int = Field(default=6, ge=1)
+    publication_epoch: int = Field(default=7, ge=1)
     materiality_policy_version: str = Field(
         default="pending-live-review-v1",
         min_length=1,
