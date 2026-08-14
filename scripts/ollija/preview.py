@@ -137,7 +137,6 @@ def build_preview_plan(
 
 def port_is_available(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             probe.bind((host, port))
         except OSError:
@@ -245,6 +244,9 @@ def _wait_until_ready(url: str, process: subprocess.Popen, timeout: float = 20) 
         try:
             with urllib.request.urlopen(f"{url}/accounts/login/", timeout=2) as response:
                 if response.status < 500:
+                    time.sleep(0.1)
+                    if process.poll() is not None:
+                        raise PreviewError("preview_process_exited")
                     return
         except (urllib.error.URLError, TimeoutError):
             time.sleep(0.25)
@@ -296,13 +298,16 @@ def start_preview(config: ProjectConfig, plan: PreviewPlan) -> PreviewRuntime:
     serve_started = False
     try:
         _wait_until_ready(plan.local_url, process)
-        served = subprocess.run(
-            ["tailscale", "serve", "--bg", "--yes", str(plan.port)],
-            text=True,
-            capture_output=True,
-            timeout=20,
-            check=False,
-        )
+        try:
+            served = subprocess.run(
+                ["tailscale", "serve", "--bg", "--yes", str(plan.port)],
+                text=True,
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise PreviewError("preview_tailnet_serve_timeout") from exc
         if served.returncode != 0:
             raise PreviewError("preview_tailnet_serve_failed")
         serve_started = True

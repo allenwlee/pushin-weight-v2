@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from django.test import RequestFactory, override_settings
 from project.middleware import StagingOwnerOnlyMiddleware
 from scripts.ollija.config import load_project_config
 from scripts.ollija.database import DatabaseFingerprint, safety_policy_from_config
-from scripts.ollija.preview import PreviewError, build_preview_plan
+from scripts.ollija.preview import PreviewError, build_preview_plan, port_is_available
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -80,7 +81,7 @@ def test_preview_plan_is_private_and_disables_provider_work() -> None:
         tailscale_dns_name="fuchitalee.example.ts.net.",
     )
 
-    assert plan.local_url == "http://127.0.0.1:8000"
+    assert plan.local_url == "http://127.0.0.1:8011"
     assert plan.private_url == "https://fuchitalee.example.ts.net"
     assert plan.environment["OLLIJA_STAGING_MODE"] == "True"
     assert plan.environment["XMONITOR_DRY_RUN"] == "True"
@@ -89,6 +90,15 @@ def test_preview_plan_is_private_and_disables_provider_work() -> None:
     assert plan.environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"] == "False"
     assert "TWITTERAPI_IO_API_KEY" in plan.removed_environment_keys
     assert "DEEPSEEK_API_KEY" in plan.removed_environment_keys
+
+
+def test_real_port_probe_rejects_an_existing_listener() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+
+        assert port_is_available("127.0.0.1", port) is False
 
 
 def _response(_request):

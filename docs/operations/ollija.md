@@ -65,7 +65,7 @@ Start the active snapshot with:
 ./bin/ollija preview
 ```
 
-The preview binds Django to `127.0.0.1:8000`, then exposes that loopback server
+The preview binds Django to `127.0.0.1:8011`, then exposes that loopback server
 through private Tailscale Serve HTTPS. It refuses SQLite, production database
 identities, a non-active staging marker, an occupied port, the wrong MagicDNS
 host, or a pre-existing Tailscale Serve configuration. It removes provider
