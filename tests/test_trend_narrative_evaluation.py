@@ -49,9 +49,26 @@ def _manifest(**overrides) -> EvaluationManifest:
 
 
 def _valid_payload() -> dict:
+    quiet_call = next(
+        call
+        for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+        if call.scenario_id == "pair-01" and call.sweep == "pairwise"
+    )
+    quiet_packet = project_provider_packet(build_synthetic_snapshot(quiet_call))
+    volume_fact = next(
+        fact
+        for fact in quiet_packet["candidates"][0]["quantitative_facts"]
+        if fact["family"] == "volume" and fact["metric"] == "change_pct"
+    )
     return {
-        "body_en": "DeepSeek conversation showed the clearest sustained shift in this window.",
-        "body_zh_cn": "DeepSeek 在这一时段呈现出最清晰且持续的讨论变化。",
+        "body_en": (
+            "DeepSeek conversation showed the clearest sustained shift in this "
+            f"window, with post volume up {volume_fact['display_en']}."
+        ),
+        "body_zh_cn": (
+            "DeepSeek 在这一时段呈现出最清晰且持续的讨论变化，帖子量上升"
+            f"{volume_fact['display_zh_cn']}。"
+        ),
         "observations_en": [],
         "observations_zh_cn": [],
         "selected_candidate_ids": ["deepseek:full_window"],
@@ -70,7 +87,7 @@ def _valid_payload() -> dict:
                 "candidate_ids": ["deepseek:full_window"],
                 "families": ["volume"],
                 "evidence_ids": [],
-                "quantitative_fact_ids": [],
+                "quantitative_fact_ids": [volume_fact["fact_id"]],
                 "event_anchor": "",
                 "explanation_type": "aggregate_trajectory",
                 "evidence_confidence": "aggregate_only",
@@ -198,33 +215,68 @@ def test_synthetic_evidence_ids_are_unique_across_candidates():
     assert lead_ids.isdisjoint(comparison_ids)
 
 
-def test_suppressed_comparison_fixture_does_not_leak_change_values():
+def test_every_evaluation_call_supplies_percentage_change_facts():
+    calls = build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+
+    for call in calls:
+        snapshot = build_synthetic_snapshot(call)
+        packet = project_provider_packet(snapshot)
+        lead_facts = packet["candidates"][0]["quantitative_facts"]
+
+        assert snapshot["comparison_allowed"] is True
+        assert lead_facts
+        assert any(
+            fact["unit"] in {"percent", "percentage_points"}
+            and "change" in fact["metric"]
+            for fact in lead_facts
+        )
+
+
+def test_low_data_quality_is_near_threshold_but_comparison_safe():
+    call = next(
+        call
+        for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+        if call.dimensions["data_quality"] == "low"
+    )
+    snapshot = build_synthetic_snapshot(call)
+
+    assert snapshot["coverage"]["selected"]["ratio"] == "0.800000"
+    assert snapshot["coverage"]["prior"]["ratio"] == "0.800000"
+    assert snapshot["comparison_allowed"] is True
+    assert snapshot["comparison_suppressed_reasons"] == []
+
+
+def test_quiet_sentinel_is_a_tenth_percent_leader_over_flat_comparison():
+    call = next(
+        call
+        for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+        if call.scenario_id == "pair-01" and call.sweep == "pairwise"
+    )
+    packet = project_provider_packet(build_synthetic_snapshot(call))
+
+    assert packet["candidates"][0]["family_facts"]["volume"]["change_pct"] == (
+        "0.100000"
+    )
+    assert packet["candidates"][1]["family_facts"]["volume"]["change_pct"] == (
+        "0.000000"
+    )
+
+
+def test_suppressed_comparison_projection_does_not_leak_change_values():
     call = next(
         call
         for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
         if call.scenario_id == "pair-16" and call.sweep == "pairwise"
     )
     snapshot = build_synthetic_snapshot(call)
-
-    assert snapshot["comparison_allowed"] is False
-    for candidate in snapshot["candidates"]:
-        facts = candidate["family_facts"]
-        assert facts["volume"]["change_pct"] is None
-        assert facts["volume"]["comparison_state"] == "unavailable"
-        assert facts["engagement"]["intensity_change_pct"] is None
-        assert all(
-            label["brand_change_pp"] is None
-            for family in (
-                "post_type",
-                "discourse",
-                "sentiment",
-                "china_nationalism",
-                "us_nationalism",
-            )
-            for label in facts[family]["labels"]
-        )
+    snapshot["comparison_allowed"] = False
+    snapshot["comparison_suppressed_reasons"] = ["insufficient_coverage"]
 
     provider_packet = project_provider_packet(snapshot)
+    assert all(
+        candidate["quantitative_facts"] == []
+        for candidate in provider_packet["candidates"]
+    )
 
     def assert_comparison_inputs_are_hidden(value):
         if isinstance(value, dict):
@@ -293,8 +345,13 @@ def test_preflight_is_provider_free_and_reports_resource_envelope():
     assert preflight["planned_call_count"] == 28
     assert preflight["planned_calls_fit_call_cap"] is True
     assert preflight["concurrency"] == 1
+    assert preflight["headline_quantitative_fact_required"] is True
     assert all(item["packet_bytes"] > 0 for item in preflight["estimates"])
     assert all(item["estimated_input_tokens"] > 0 for item in preflight["estimates"])
+    assert all(
+        item["quantitative_fact_count"] >= 2
+        for item in preflight["estimates"]
+    )
 
 
 def test_preflight_refuses_a_request_outside_checked_context_limit():
@@ -327,6 +384,8 @@ def test_runner_is_sequential_exact_model_and_records_complete_artifact():
     } == {'{"type": "disabled"}'}
     result = artifact["results"][0]
     assert result["packet_bytes"] > 0
+    assert result["quantitative_fact_count"] >= 2
+    assert len(result["headline_quantitative_fact_ids"]) >= 1
     assert result["provider_usage"] == {
         "reported": True,
         "input_tokens": 500,

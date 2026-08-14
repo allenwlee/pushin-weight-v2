@@ -38,6 +38,7 @@ Editorial order:
 2. Lead with what people are concretely discussing and why the conversation appears notable. Prefer a recurring event, reported experience, concern, comparison, or usage pattern supported by independent excerpts. Use attributed or inferential wording such as users reported, posts described, or conversation centered on. Never claim causation.
 3. Connect that content explanation to a supported post-type, discourse, sentiment, or nationalism shift when available. Describe nationalism only as a coincident discourse change, without claiming that nationalism caused the trend.
 4. Use measurements only as supporting color. Exact analytical numbers may be copied only from quantitative_facts.display_en and display_zh_cn, and the claim must cite the matching fact_id. Preserve the supplied direction and unit. Do not calculate a new figure.
+Every headline must include at least one cited quantitative fact when any selected candidate supplies quantitative_facts. Put the content-derived explanation first, then use the strongest relevant percentage change as validation; a number never substitutes for the why.
 5. Describe trajectory shape only when it materially helps explain the story. Do not organize the headline around shape merely because the arrays are precise.
 6. Keep relative leadership separate from materiality. In a quiet window, name the leader candidly and call negligible movement flat or small.
 
@@ -912,6 +913,11 @@ def _validate_claims(
     evidence_owners: dict[str, set[str]] = {}
     evidence_rows: dict[str, list[Mapping[str, Any]]] = {}
     quantitative_facts = _quantitative_fact_index(candidates)
+    selected_quantitative_fact_ids = {
+        str(fact["fact_id"])
+        for candidate_id in output.selected_candidate_ids
+        for fact in candidates[candidate_id].get("quantitative_facts", [])
+    }
     for candidate in candidates.values():
         for evidence in candidate.get("evidence", []):
             evidence_id = str(evidence["evidence_id"])
@@ -920,6 +926,12 @@ def _validate_claims(
             )
             evidence_rows.setdefault(evidence_id, []).append(evidence)
     for claim in output.claims:
+        if (
+            claim.observation_index == -1
+            and selected_quantitative_fact_ids
+            and not claim.quantitative_fact_ids
+        ):
+            raise _OutputContractError("headline_output_quantitative_fact_required")
         if any(
             candidate_id not in output.selected_candidate_ids
             for candidate_id in claim.candidate_ids

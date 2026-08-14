@@ -309,10 +309,9 @@ def _call(
 def build_synthetic_snapshot(call: EvaluationCall) -> dict[str, Any]:
     """Build a deterministic closed snapshot; budget variants are supersets."""
     dimensions = call.dimensions
-    comparison_allowed = dimensions["data_quality"] == "high"
-    selected_count = 150 if dimensions["quantity"] == "high" else 100
-    prior_count = 100
-    change = "50.000000" if selected_count == 150 else "0.000000"
+    selected_count = 1_500 if dimensions["quantity"] == "high" else 1_001
+    prior_count = 1_000
+    change = "50.000000" if selected_count == 1_500 else "0.100000"
     if dimensions["rate"] == "high":
         series = [6, 7, 8, 9, 11, 15, 28, 66]
     elif dimensions["shape"] == "high":
@@ -334,41 +333,43 @@ def build_synthetic_snapshot(call: EvaluationCall) -> dict[str, Any]:
         lead=True,
     )
     comparison_change = (
-        "45.000000" if dimensions["candidate_competition"] == "high" else "5.000000"
+        "45.000000" if dimensions["candidate_competition"] == "high" else "0.000000"
     )
     comparison = _synthetic_candidate(
         candidate_id="minimax:full_window",
         brand_key="minimax",
         display_name="MiniMax",
         post_counts=[12, 12, 13, 13, 12, 13, 12, 13],
-        selected_count=105 if dimensions["candidate_competition"] == "low" else 145,
-        prior_count=100,
+        selected_count=(
+            1_000 if dimensions["candidate_competition"] == "low" else 1_450
+        ),
+        prior_count=1_000,
         change=comparison_change,
         dimensions={**dimensions, "content": "low", "evidence_strength": "low"},
         evidence_budget=4,
         excerpt_characters=call.excerpt_characters,
         lead=False,
     )
-    coverage_ratio = "1.000000" if comparison_allowed else "0.500000"
+    coverage_ratio = (
+        "1.000000" if dimensions["data_quality"] == "high" else "0.800000"
+    )
     return {
         "snapshot_schema_version": 1,
         "window_days": 7,
         "as_of": "2026-08-14T00:00:00Z",
         "coverage": {
             "selected": {
-                "state": "sufficient" if comparison_allowed else "partial",
+                "state": "sufficient",
                 "ratio": coverage_ratio,
             },
             "prior": {
-                "state": "sufficient" if comparison_allowed else "partial",
+                "state": "sufficient",
                 "ratio": coverage_ratio,
             },
         },
         "unresolved_backlog_intervals": [],
-        "comparison_suppressed_reasons": []
-        if comparison_allowed
-        else ["insufficient_coverage"],
-        "comparison_allowed": comparison_allowed,
+        "comparison_suppressed_reasons": [],
+        "comparison_allowed": True,
         "thresholds": {"minimum_coverage": "0.750000", "episode_peak_ratio": "3.0"},
         "evidence_policy": {
             "version": "synthetic-evaluation-v1",
@@ -407,14 +408,18 @@ def _synthetic_candidate(
     lead: bool,
 ) -> dict[str, Any]:
     mix_shift = dimensions["mix"] == "high" and lead
-    comparison_allowed = dimensions["data_quality"] == "high"
-    coverage = "1.000000" if comparison_allowed else "0.500000"
+    coverage = (
+        "1.000000" if dimensions["data_quality"] == "high" else "0.800000"
+    )
+    engagement_changed = (
+        dimensions["quantity"] == "high" or dimensions["rate"] == "high"
+    ) and lead
     labels = {
-        "post_type": ("hands_on", 16 if mix_shift else 10, 10),
-        "discourse": ("technical_analysis", 18 if mix_shift else 12, 12),
-        "sentiment": ("positive", 30 if mix_shift else 20, 20),
-        "china_nationalism": ("neutral", 4, 4),
-        "us_nationalism": ("neutral", 4, 4),
+        "post_type": ("hands_on", 160, 100),
+        "discourse": ("technical_analysis", 180, 120),
+        "sentiment": ("positive", 300, 200),
+        "china_nationalism": ("neutral", 40, 40),
+        "us_nationalism": ("neutral", 40, 40),
     }
     family_facts: dict[str, Any] = {
         "volume": {
@@ -422,16 +427,30 @@ def _synthetic_candidate(
             "selected_authors": max(10, selected_count // 3),
             "prior_count": prior_count,
             "prior_authors": max(10, prior_count // 3),
-            "change_pct": change if comparison_allowed else None,
-            "comparison_state": "available" if comparison_allowed else "unavailable",
+            "change_pct": change,
+            "comparison_state": "available",
         },
         "engagement": {
-            "selected": {"eligible_count": selected_count, "intensity": "5.000000"},
+            "selected": {
+                "eligible_count": selected_count,
+                "intensity": "5.000000" if engagement_changed else "4.000000",
+            },
             "prior": {"eligible_count": prior_count, "intensity": "4.000000"},
-            "intensity_change_pct": "25.000000" if comparison_allowed else None,
+            "intensity_change_pct": (
+                "25.000000" if engagement_changed else "0.000000"
+            ),
         },
     }
-    for family, (key, selected, prior) in labels.items():
+    for family, (key, shifted_selected, prior) in labels.items():
+        selected = (
+            shifted_selected
+            if mix_shift and family in {"post_type", "discourse", "sentiment"}
+            else round(prior * selected_count / prior_count)
+        )
+        brand_change_pp = (
+            Decimal(selected) / Decimal(selected_count)
+            - Decimal(prior) / Decimal(prior_count)
+        ) * 100
         family_facts[family] = {
             "selected_coverage_ratio": coverage,
             "prior_coverage_ratio": coverage,
@@ -442,9 +461,7 @@ def _synthetic_candidate(
                     "prior_count": prior,
                     "selected_basis_count": selected_count,
                     "prior_basis_count": prior_count,
-                    "brand_change_pp": (
-                        "10.000000" if mix_shift else "0.000000"
-                    ) if comparison_allowed else None,
+                    "brand_change_pp": _decimal_json(brand_change_pp),
                 }
             ],
         }
@@ -588,6 +605,14 @@ def evaluation_preflight(
     for call in calls:
         snapshot = build_synthetic_snapshot(call)
         packet, request = build_trend_narrative_request(snapshot, config)
+        quantitative_fact_count = sum(
+            len(candidate.get("quantitative_facts", []))
+            for candidate in packet.get("candidates", [])
+        )
+        if quantitative_fact_count < len(packet.get("candidates", [])):
+            raise EvaluationConfigurationError(
+                "evaluation_quantitative_facts_missing"
+            )
         packet_bytes = len(canonical_snapshot_json(packet).encode("utf-8"))
         if packet_bytes > manifest.max_packet_bytes:
             raise EvaluationConfigurationError("evaluation_packet_limit_exceeded")
@@ -601,6 +626,7 @@ def evaluation_preflight(
             {
                 "call_id": call.call_id,
                 "packet_bytes": packet_bytes,
+                "quantitative_fact_count": quantitative_fact_count,
                 "estimated_input_tokens": estimated_input,
                 "reserved_cost_dollars": _decimal_json(
                     estimate_cost(
@@ -617,6 +643,7 @@ def evaluation_preflight(
         "planned_call_count": len(calls),
         "planned_calls_fit_call_cap": len(calls) <= manifest.max_calls,
         "concurrency": 1,
+        "headline_quantitative_fact_required": True,
         "evidence_budgets": list(EVIDENCE_BUDGETS),
         "density_excerpt_characters": list(DENSITY_EXCERPT_CHARACTERS),
         "estimates": estimates,
@@ -715,6 +742,7 @@ def run_synthetic_evaluation(
         accounted_cost += actual_cost
         raw_output = str(capture.get("raw_output") or "")
         parsed = _parse_bilingual(raw_output)
+        headline_quantitative_fact_ids = _headline_quantitative_fact_ids(raw_output)
         results.append(
             {
                 "call_id": call.call_id,
@@ -725,6 +753,11 @@ def run_synthetic_evaluation(
                 "excerpt_characters": call.excerpt_characters,
                 "model": config.model,
                 "packet_bytes": packet_bytes,
+                "quantitative_fact_count": sum(
+                    len(candidate.get("quantitative_facts", []))
+                    for candidate in packet.get("candidates", [])
+                ),
+                "headline_quantitative_fact_ids": headline_quantitative_fact_ids,
                 "estimated_input_tokens": estimated_input,
                 "reserved_cost_dollars": _decimal_json(reserved_cost),
                 "provider_usage": {
@@ -803,6 +836,24 @@ def _parse_bilingual(raw: str) -> dict[str, str]:
         "body_en": str(parsed.get("body_en") or ""),
         "body_zh_cn": str(parsed.get("body_zh_cn") or ""),
     }
+
+
+def _headline_quantitative_fact_ids(raw: str) -> list[str]:
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(parsed, Mapping):
+        return []
+    claims = parsed.get("claims")
+    if not isinstance(claims, list):
+        return []
+    for claim in claims:
+        if isinstance(claim, Mapping) and claim.get("observation_index") == -1:
+            fact_ids = claim.get("quantitative_fact_ids")
+            if isinstance(fact_ids, list):
+                return [str(fact_id) for fact_id in fact_ids]
+    return []
 
 
 def materiality_samples_from_facts(

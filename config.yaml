@@ -149,8 +149,8 @@ headline_narrative:
   base_url: "https://api.deepseek.com/anthropic"
   model: "deepseek-v4-pro"
   timeout_seconds: 45
-  prompt_version: "headline-v9-why-first-evidence-contract"
-  publication_epoch: 9
+  prompt_version: "headline-v10-why-first-quantitative-color"
+  publication_epoch: 10
   materiality_policy_version: "pending-live-review-v1"
   cadence_minutes: {1: 30, 7: 60, 30: 360, 365: 1440}
   stale_minutes: {1: 60, 7: 120, 30: 720, 365: 2880}

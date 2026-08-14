@@ -175,7 +175,7 @@ classifier, or ambient SDK model settings:
 | Timeout | 45 seconds |
 | SDK retries | 0 |
 | Requests per changed candidate-present window | exactly 1 |
-| Prompt version | `headline-v9-why-first-evidence-contract` |
+| Prompt version | `headline-v10-why-first-quantitative-color` |
 | Publication epoch | 8 |
 
 Credentials resolve only from `DEEPSEEK_API_KEY` or
@@ -196,6 +196,7 @@ Editorial order:
 2. Lead with what people are concretely discussing and why the conversation appears notable. Prefer a recurring event, reported experience, concern, comparison, or usage pattern supported by independent excerpts. Use attributed or inferential wording such as users reported, posts described, or conversation centered on. Never claim causation.
 3. Connect that content explanation to a supported post-type, discourse, sentiment, or nationalism shift when available. Describe nationalism only as a coincident discourse change, without claiming that nationalism caused the trend.
 4. Use measurements only as supporting color. Exact analytical numbers may be copied only from quantitative_facts.display_en and display_zh_cn, and the claim must cite the matching fact_id. Preserve the supplied direction and unit. Do not calculate a new figure.
+Every headline must include at least one cited quantitative fact when any selected candidate supplies quantitative_facts. Put the content-derived explanation first, then use the strongest relevant percentage change as validation; a number never substitutes for the why.
 5. Describe trajectory shape only when it materially helps explain the story. Do not organize the headline around shape merely because the arrays are precise.
 6. Keep relative leadership separate from materiality. In a quiet window, name the leader candidly and call negligible movement flat or small.
 

@@ -170,20 +170,36 @@ def _snapshot(*, two_candidates: bool = True, evidence_supported: bool = True) -
     }
 
 
-def _valid_payload() -> dict:
+def _valid_payload(snapshot: dict | None = None) -> dict:
+    snapshot = snapshot or _snapshot()
+    fact = _quantitative_fact(
+        snapshot,
+        family="volume",
+        metric="change_pct",
+    )
+    candidate = snapshot["candidates"][0]
+    candidate_id = candidate["candidate_id"]
+    name_en = candidate["display_name_en"]
+    name_zh_cn = candidate["display_name_zh_cn"]
     return {
-        "body_en": "MiniMax rises sharply before settling into sustained attention.",
-        "body_zh_cn": "MiniMax 的讨论热度急升后维持在较高水平。",
+        "body_en": (
+            f"{name_en} rises sharply before settling into sustained attention, "
+            f"with post volume up {fact['display_en']}."
+        ),
+        "body_zh_cn": (
+            f"{name_zh_cn} 的讨论热度急升后维持在较高水平，帖子量上升"
+            f"{fact['display_zh_cn']}。"
+        ),
         "observations_en": [
             "The trajectory is a step change followed by a durable plateau."
         ],
         "observations_zh_cn": ["走势呈现阶跃式上升，随后形成持续平台。"],
-        "selected_candidate_ids": ["minimax:full_window"],
+        "selected_candidate_ids": [candidate_id],
         "subjects": [
             {
                 "support_type": "measured_candidate",
                 "entity_type": "brand",
-                "candidate_id": "minimax:full_window",
+                "candidate_id": candidate_id,
                 "observed_name": "",
                 "evidence_ids": [],
             }
@@ -191,17 +207,17 @@ def _valid_payload() -> dict:
         "claims": [
             {
                 "observation_index": -1,
-                "candidate_ids": ["minimax:full_window"],
+                "candidate_ids": [candidate_id],
                 "families": ["volume", "engagement"],
                 "evidence_ids": [],
-                "quantitative_fact_ids": [],
+                "quantitative_fact_ids": [fact["fact_id"]],
                 "event_anchor": "",
                 "explanation_type": "aggregate_trajectory",
                 "evidence_confidence": "aggregate_only",
             },
             {
                 "observation_index": 0,
-                "candidate_ids": ["minimax:full_window"],
+                "candidate_ids": [candidate_id],
                 "families": ["volume"],
                 "evidence_ids": [],
                 "quantitative_fact_ids": [],
@@ -217,9 +233,13 @@ def _two_candidate_payload() -> dict:
     payload = _valid_payload()
     payload.update(
         body_en=(
-            "MiniMax and DeepSeek both break into unusually sustained attention."
+            "MiniMax and DeepSeek both break into unusually sustained attention, "
+            "with MiniMax post volume up 100%."
         ),
-        body_zh_cn="MiniMax 与 DeepSeek 均进入异常且持续的高关注状态。",
+        body_zh_cn=(
+            "MiniMax 与 DeepSeek 均进入异常且持续的高关注状态，MiniMax "
+            "帖子量上升100%。"
+        ),
         selected_candidate_ids=[
             "minimax:full_window",
             "deepseek:episode:one",
@@ -241,9 +261,15 @@ def _two_candidate_payload() -> dict:
 
 def _evidence_entity_payload() -> dict:
     payload = _valid_payload()
+    volume_fact_id = payload["claims"][0]["quantitative_fact_ids"][0]
     payload.update(
-        body_en="MiniMax rises as discussion repeatedly connects it to OffListModel.",
-        body_zh_cn="MiniMax 热度上升，讨论中反复将其与 OffListModel 联系起来。",
+        body_en=(
+            "MiniMax post volume rose 100% as discussion repeatedly connected it "
+            "to OffListModel."
+        ),
+        body_zh_cn=(
+            "MiniMax 帖子量上升100%，讨论中反复将其与 OffListModel 联系起来。"
+        ),
         observations_en=[
             "Independent evidence clusters repeatedly name OffListModel in the same discussion."
         ],
@@ -264,9 +290,9 @@ def _evidence_entity_payload() -> dict:
             {
                 "observation_index": -1,
                 "candidate_ids": ["minimax:full_window"],
-                "families": ["evidence"],
+                "families": ["volume", "evidence"],
                 "evidence_ids": ["e_one", "e_two"],
-                "quantitative_fact_ids": [],
+                "quantitative_fact_ids": [volume_fact_id],
                 "event_anchor": "",
                 "explanation_type": "recurring_content",
                 "evidence_confidence": "recurring_independent",
@@ -408,8 +434,8 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
-    assert config.prompt_version == "headline-v9-why-first-evidence-contract"
-    assert config.publication_epoch == 9
+    assert config.prompt_version == "headline-v10-why-first-quantitative-color"
+    assert config.publication_epoch == 10
     assert config.materiality_policy_version == "pending-live-review-v1"
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
@@ -528,6 +554,9 @@ def test_literal_prompt_requires_why_first_mix_context_and_two_winners():
     )
     assert "Isolated speculation is not an event" in HEADLINE_SYSTEM_PROMPT_V3
     assert "Avoid causal verbs even in negated phrases" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "Every headline must include at least one cited quantitative fact" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
 
 
 def test_current_reference_literal_prompt_matches_active_contract_exactly():
@@ -651,7 +680,7 @@ def test_quiet_relative_leader_accepts_a_cited_tenth_percent():
     ("mutation", "expected_code"),
     [
         ("altered", "headline_output_quantitative_fact_unused_or_unaligned"),
-        ("uncited", "headline_output_en_digits"),
+        ("uncited", "headline_output_quantitative_fact_required"),
         ("wrong_family", "headline_output_quantitative_family_mismatch"),
     ],
 )
@@ -914,8 +943,12 @@ def test_concrete_event_requires_a_supported_shared_anchor():
         _evidence("e_two", "Developers discussed the Aurora release from MiniMax."),
     ]
     payload = _valid_payload()
-    payload["body_en"] = "MiniMax draws attention after the Aurora release."
-    payload["body_zh_cn"] = "MiniMax 在 Aurora release 发布后受到更多关注。"
+    payload["body_en"] = (
+        "MiniMax draws attention after the Aurora release, with post volume up 100%."
+    )
+    payload["body_zh_cn"] = (
+        "MiniMax 在 Aurora release 发布后受到更多关注，帖子量上升100%。"
+    )
     payload["claims"][0].update(
         families=["volume", "evidence"],
         evidence_ids=["e_one", "e_two"],
@@ -936,8 +969,12 @@ def test_concrete_event_requires_a_supported_shared_anchor():
 
 def test_event_language_without_anchor_fails_closed():
     payload = _valid_payload()
-    payload["body_en"] = "MiniMax draws attention after a major release."
-    payload["body_zh_cn"] = "MiniMax 在一次重要发布后受到更多关注。"
+    payload["body_en"] = (
+        "MiniMax draws attention after a major release, with post volume up 100%."
+    )
+    payload["body_zh_cn"] = (
+        "MiniMax 在一次重要发布后受到更多关注，帖子量上升100%。"
+    )
 
     with pytest.raises(HeadlineGenerationError) as captured:
         _generate(payload)
@@ -947,8 +984,13 @@ def test_event_language_without_anchor_fails_closed():
 
 def test_chinese_user_posting_language_is_not_mistaken_for_a_release_event():
     payload = _valid_payload()
-    payload["body_en"] = "MiniMax draws attention as users post technical analysis."
-    payload["body_zh_cn"] = "MiniMax 因用户发布技术分析帖子而受到关注。"
+    payload["body_en"] = (
+        "MiniMax draws attention as users post technical analysis, with post "
+        "volume up 100%."
+    )
+    payload["body_zh_cn"] = (
+        "MiniMax 因用户发布技术分析帖子而受到关注，帖子量上升100%。"
+    )
 
     result, _ = _generate(payload)
 
@@ -969,8 +1011,11 @@ def test_recurring_explanation_requires_a_shared_theme_across_sources():
 
 def test_nationalism_claim_rejects_causal_wording_in_either_locale():
     payload = _valid_payload()
-    payload["body_en"] = "MiniMax rises because pro-China discourse drove attention."
-    payload["body_zh_cn"] = "MiniMax 因亲华讨论推动关注而上升。"
+    payload["body_en"] = (
+        "MiniMax rises because pro-China discourse drove attention, with post "
+        "volume up 100%."
+    )
+    payload["body_zh_cn"] = "MiniMax 因亲华讨论推动关注而上升，帖子量上升100%。"
     payload["claims"][0]["families"] = ["volume", "china_nationalism"]
 
     with pytest.raises(HeadlineGenerationError) as captured:
@@ -981,8 +1026,11 @@ def test_nationalism_claim_rejects_causal_wording_in_either_locale():
 
 def test_causal_wording_cannot_hide_behind_a_non_nationalism_family():
     payload = _valid_payload()
-    payload["body_en"] = "MiniMax rises because pro-China discourse drove attention."
-    payload["body_zh_cn"] = "MiniMax 因亲华讨论推动关注而上升。"
+    payload["body_en"] = (
+        "MiniMax rises because pro-China discourse drove attention, with post "
+        "volume up 100%."
+    )
+    payload["body_zh_cn"] = "MiniMax 因亲华讨论推动关注而上升，帖子量上升100%。"
     payload["claims"][0]["families"] = ["volume"]
 
     with pytest.raises(HeadlineGenerationError) as captured:
@@ -1013,7 +1061,10 @@ def test_evidence_only_subject_cannot_be_described_as_self_trending(
     body_zh_cn,
 ):
     payload = _evidence_entity_payload()
-    payload.update(body_en=body_en, body_zh_cn=body_zh_cn)
+    payload.update(
+        body_en=f"{body_en} MiniMax post volume rose 100%.",
+        body_zh_cn=f"{body_zh_cn} MiniMax 帖子量上升100%。",
+    )
 
     with pytest.raises(HeadlineGenerationError) as captured:
         _generate(payload)
@@ -1023,7 +1074,10 @@ def test_evidence_only_subject_cannot_be_described_as_self_trending(
 
 def test_undeclared_entity_name_in_prose_fails_closed():
     payload = _valid_payload()
-    payload["body_en"] = "MiniMax rises while OpenAI draws separate attention."
+    payload["body_en"] = (
+        "MiniMax rises while OpenAI draws separate attention, with post volume "
+        "up 100%."
+    )
 
     with pytest.raises(HeadlineGenerationError) as captured:
         _generate(payload)
@@ -1101,11 +1155,15 @@ def test_instruction_bearing_evidence_cannot_expand_candidate_authority():
     ("mutate", "expected_code"),
     [
         (
-            lambda payload: payload.update(body_en="MiniMax has 30 posts today."),
+            lambda payload: payload.update(
+                body_en="MiniMax has 30 posts today, with post volume up 100%."
+            ),
             "headline_output_en_digits",
         ),
         (
-            lambda payload: payload.update(body_en="MiniMax rises at https://x.com"),
+            lambda payload: payload.update(
+                body_en="MiniMax rises at https://x.com, with post volume up 100%."
+            ),
             "headline_output_schema_invalid",
         ),
         (
@@ -1188,15 +1246,7 @@ def test_digit_bearing_allowed_name_does_not_allow_numeric_analysis():
     candidate["display_name_en"] = "01.AI Yi"
     candidate["display_name_zh_cn"] = "01.AI Yi"
     candidate["candidate_id"] = "yi:full_window"
-    payload = _valid_payload()
-    payload.update(
-        body_en="01.AI Yi rises sharply before settling into sustained attention.",
-        body_zh_cn="01.AI Yi 的讨论热度急升后维持在较高水平。",
-        selected_candidate_ids=["yi:full_window"],
-    )
-    payload["subjects"][0]["candidate_id"] = "yi:full_window"
-    for claim in payload["claims"]:
-        claim["candidate_ids"] = ["yi:full_window"]
+    payload = _valid_payload(snapshot)
 
     result, _ = _generate(payload, snapshot=snapshot)
     assert result.body_en.startswith("01.AI Yi")
@@ -1231,7 +1281,7 @@ def test_generation_fingerprint_changes_with_analysis_route_prompt_and_epoch():
 
     assert generation_fingerprint(
         snapshot,
-        baseline.model_copy(update={"publication_epoch": 10}),
+        baseline.model_copy(update={"publication_epoch": 11}),
     ) != fingerprint
     assert generation_fingerprint(
         snapshot,
