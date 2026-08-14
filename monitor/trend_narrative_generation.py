@@ -535,9 +535,10 @@ def generate_trend_narrative(
     api_key: str | None = None,
     client_factory: Callable[..., Any] | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    response_observer: Callable[[Any, int], None] | None = None,
 ) -> GeneratedTrendNarrative:
     """Make exactly one provider request and accept all output or none."""
-    packet = _validate_snapshot_input(snapshot)
+    packet, request = build_trend_narrative_request(snapshot, config)
     credential = api_key or _resolve_provider_credential(config)
     if not credential:
         raise HeadlineGenerationError("headline_credential_unavailable")
@@ -550,12 +551,14 @@ def generate_trend_narrative(
     )
     started = monotonic()
     try:
-        message = client.messages.create(**_request_payload(packet, config))
+        message = client.messages.create(**request)
     except SoftTimeLimitExceeded:
         raise
     except Exception as exc:
         raise HeadlineGenerationError("headline_provider_request_failed") from exc
     elapsed_ms = max(0, round((monotonic() - started) * 1000))
+    if response_observer is not None:
+        response_observer(message, elapsed_ms)
     try:
         raw = _normalize_json_envelope(_message_text(message))
         parsed = json.loads(raw)
@@ -616,6 +619,15 @@ def _resolve_provider_credential(config: HeadlineNarrativeConfig) -> str | None:
     if config.provider == "minimax":
         return os.environ.get("MINIMAX_API_TOKEN")
     return os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_KEY")
+
+
+def build_trend_narrative_request(
+    snapshot: dict[str, Any],
+    config: HeadlineNarrativeConfig,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return the exact validated packet and request used by generation."""
+    packet = _validate_snapshot_input(snapshot)
+    return packet, _request_payload(packet, config)
 
 
 def _request_payload(
@@ -1109,9 +1121,11 @@ def _validate_explanation_support(
         bool(evidence.get("source_flags", {}).get("official"))
         for evidence in rows
     )
-    if claim.explanation_type in {"recurring_content", "structured_mix"}:
-        if "evidence" not in claim.families or not recurring:
-            raise _OutputContractError("headline_output_explanation_support_weak")
+    if (
+        claim.explanation_type in {"recurring_content", "structured_mix"}
+        and ("evidence" not in claim.families or not recurring)
+    ):
+        raise _OutputContractError("headline_output_explanation_support_weak")
     if claim.explanation_type == "structured_mix" and not set(
         claim.families
     ).intersection({"post_type", "discourse", "sentiment"}):

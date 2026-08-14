@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "design": "oa-16-two-level-pairwise-v1",
+  "scenarios": [
+    {"scenario_id":"pair-01","sentinel":true,"dimensions":{"quantity":"low","rate":"low","mix":"low","content":"low","evidence_strength":"low","shape":"low","data_quality":"low","candidate_competition":"low"}},
+    {"scenario_id":"pair-02","sentinel":false,"dimensions":{"quantity":"high","rate":"low","mix":"low","content":"low","evidence_strength":"high","shape":"high","data_quality":"high","candidate_competition":"low"}},
+    {"scenario_id":"pair-03","sentinel":false,"dimensions":{"quantity":"low","rate":"high","mix":"low","content":"low","evidence_strength":"high","shape":"low","data_quality":"low","candidate_competition":"high"}},
+    {"scenario_id":"pair-04","sentinel":false,"dimensions":{"quantity":"high","rate":"high","mix":"low","content":"low","evidence_strength":"low","shape":"high","data_quality":"high","candidate_competition":"high"}},
+    {"scenario_id":"pair-05","sentinel":false,"dimensions":{"quantity":"low","rate":"low","mix":"high","content":"low","evidence_strength":"low","shape":"high","data_quality":"low","candidate_competition":"high"}},
+    {"scenario_id":"pair-06","sentinel":false,"dimensions":{"quantity":"high","rate":"low","mix":"high","content":"low","evidence_strength":"high","shape":"low","data_quality":"high","candidate_competition":"high"}},
+    {"scenario_id":"pair-07","sentinel":false,"dimensions":{"quantity":"low","rate":"high","mix":"high","content":"low","evidence_strength":"high","shape":"high","data_quality":"low","candidate_competition":"low"}},
+    {"scenario_id":"pair-08","sentinel":false,"dimensions":{"quantity":"high","rate":"high","mix":"high","content":"low","evidence_strength":"low","shape":"low","data_quality":"high","candidate_competition":"low"}},
+    {"scenario_id":"pair-09","sentinel":false,"dimensions":{"quantity":"low","rate":"low","mix":"low","content":"high","evidence_strength":"low","shape":"low","data_quality":"high","candidate_competition":"low"}},
+    {"scenario_id":"pair-10","sentinel":false,"dimensions":{"quantity":"high","rate":"low","mix":"low","content":"high","evidence_strength":"high","shape":"high","data_quality":"low","candidate_competition":"low"}},
+    {"scenario_id":"pair-11","sentinel":false,"dimensions":{"quantity":"low","rate":"high","mix":"low","content":"high","evidence_strength":"high","shape":"low","data_quality":"high","candidate_competition":"high"}},
+    {"scenario_id":"pair-12","sentinel":false,"dimensions":{"quantity":"high","rate":"high","mix":"low","content":"high","evidence_strength":"low","shape":"high","data_quality":"low","candidate_competition":"high"}},
+    {"scenario_id":"pair-13","sentinel":false,"dimensions":{"quantity":"low","rate":"low","mix":"high","content":"high","evidence_strength":"low","shape":"high","data_quality":"high","candidate_competition":"high"}},
+    {"scenario_id":"pair-14","sentinel":false,"dimensions":{"quantity":"high","rate":"low","mix":"high","content":"high","evidence_strength":"high","shape":"low","data_quality":"low","candidate_competition":"high"}},
+    {"scenario_id":"pair-15","sentinel":false,"dimensions":{"quantity":"low","rate":"high","mix":"high","content":"high","evidence_strength":"high","shape":"high","data_quality":"high","candidate_competition":"low"}},
+    {"scenario_id":"pair-16","sentinel":true,"dimensions":{"quantity":"high","rate":"high","mix":"high","content":"high","evidence_strength":"low","shape":"low","data_quality":"low","candidate_competition":"low"}}
+  ]
+}
