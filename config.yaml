@@ -162,6 +162,13 @@ headline_narrative:
   steady_ratio: "0.85"
   episode_peak_ratio: "3.0"
   fingerprint_band_percent: 5
+  evidence_policy_version: "adaptive-v1"
+  evidence_reservoir_rank_limit: 32
+  evidence_floor: 4
+  evidence_lead_ceiling: 48
+  evidence_comparison_ceiling: 12
+  evidence_excerpt_characters: 1000
+  evidence_provider_packet_bytes: 131072
   call_cap: 4
   max_body_en_chars: 240
   max_body_zh_cn_chars: 120

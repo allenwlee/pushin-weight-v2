@@ -316,6 +316,13 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
     assert config.call_cap == 4
+    assert config.evidence_policy_version == "adaptive-v1"
+    assert config.evidence_reservoir_rank_limit == 32
+    assert config.evidence_floor == 4
+    assert config.evidence_lead_ceiling == 48
+    assert config.evidence_comparison_ceiling == 12
+    assert config.evidence_excerpt_characters == 1_000
+    assert config.evidence_provider_packet_bytes == 128 * 1024
     assert not config.serving_enabled
     assert not config.enqueue_enabled
     assert not config.provider_calls_enabled
@@ -909,6 +916,25 @@ def test_generation_fingerprint_changes_with_provider_request_version(monkeypatc
     )
 
     assert generation_fingerprint(snapshot, config) != fingerprint
+
+
+def test_generation_fingerprint_changes_with_evidence_policy_inputs():
+    snapshot = _snapshot()
+    snapshot["evidence_policy"] = {
+        "version": "adaptive-v1",
+        "reservoir_rank_limit": 32,
+        "floor": 4,
+        "lead_ceiling": 48,
+        "comparison_ceiling": 12,
+        "excerpt_characters": 1_000,
+        "provider_packet_bytes": 128 * 1024,
+    }
+    baseline = generation_fingerprint(snapshot, HeadlineNarrativeConfig())
+
+    changed = deepcopy(snapshot)
+    changed["evidence_policy"]["version"] = "adaptive-v2"
+
+    assert generation_fingerprint(changed, HeadlineNarrativeConfig()) != baseline
 
 
 def test_generation_fingerprint_uses_material_five_point_shape_bands():

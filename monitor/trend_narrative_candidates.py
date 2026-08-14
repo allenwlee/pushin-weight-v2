@@ -6,6 +6,7 @@ import hashlib
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -22,13 +23,13 @@ from monitor.trend_narrative_facts import (
 
 TREND_SNAPSHOT_SCHEMA_VERSION = 1
 MAX_SHORTLIST_CANDIDATES = 6
-MAX_EVIDENCE_PER_CANDIDATE = 4
 MAX_EVIDENCE_CHARACTERS = 1_000
 MAX_SNAPSHOT_BYTES = 256 * 1024
 MAX_PROVIDER_PACKET_BYTES = 128 * 1024
 SNAPSHOT_STATEMENT_TIMEOUT_MS = 30_000
 SNAPSHOT_LOCK_TIMEOUT_MS = 5_000
 NEAR_DUPLICATE_JACCARD = Decimal("0.90")
+RECURRING_THEME_JACCARD = Decimal("0.35")
 FAMILY_ORDER = (
     "volume",
     "engagement",
@@ -43,6 +44,8 @@ EVIDENCE_ROLE_ORDER = (
     "dominant_discourse_representative",
     "contrasting_reaction",
 )
+EVIDENCE_QUERY_RANK_STREAMS = 5
+SUPPORTING_CONTEXT_ROLE = "supporting_context"
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _PURE_REPOST_RE = re.compile(r"^\s*RT\s+@", re.IGNORECASE)
@@ -60,6 +63,36 @@ class TrendSnapshotTransactionError(TrendSnapshotError):
     """Snapshot construction could not establish its required read boundary."""
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceSelectionPolicy:
+    """Versioned hard bounds for one deterministic evidence allocation."""
+
+    version: str = "adaptive-v1"
+    reservoir_rank_limit: int = 32
+    floor: int = 4
+    lead_ceiling: int = 48
+    comparison_ceiling: int = 12
+    excerpt_characters: int = MAX_EVIDENCE_CHARACTERS
+    provider_packet_bytes: int = MAX_PROVIDER_PACKET_BYTES
+
+    def __post_init__(self) -> None:
+        if not self.version or len(self.version) > 64:
+            raise ValueError("evidence policy version must contain 1-64 characters")
+        if not 4 <= self.reservoir_rank_limit <= 64:
+            raise ValueError("evidence reservoir rank limit must be between 4 and 64")
+        if not 1 <= self.floor <= self.comparison_ceiling <= self.lead_ceiling <= 64:
+            raise ValueError("evidence allocation limits must be ordered within 1-64")
+        if not 200 <= self.excerpt_characters <= MAX_EVIDENCE_CHARACTERS:
+            raise ValueError("evidence excerpt limit must be between 200 and 1000")
+        if not 32 * 1024 <= self.provider_packet_bytes <= MAX_PROVIDER_PACKET_BYTES:
+            raise ValueError(
+                "evidence provider packet limit is outside the safe envelope"
+            )
+
+
+DEFAULT_EVIDENCE_SELECTION_POLICY = EvidenceSelectionPolicy()
+
+
 def canonical_snapshot_json(
     packet: Mapping[str, Any],
     *,
@@ -71,13 +104,17 @@ def canonical_snapshot_json(
     return encoded
 
 
-def normalized_excerpt(value: str | None) -> str:
+def normalized_excerpt(
+    value: str | None,
+    *,
+    max_characters: int = MAX_EVIDENCE_CHARACTERS,
+) -> str:
     """Normalize an exact evidence excerpt and apply the fixed character cap."""
     if not value:
         return ""
     normalized = unicodedata.normalize("NFC", value)
     collapsed = _WHITESPACE_RE.sub(" ", normalized).strip()
-    return collapsed[:MAX_EVIDENCE_CHARACTERS]
+    return collapsed[:max_characters]
 
 
 def text_five_gram_jaccard(left: str, right: str) -> Decimal:
@@ -169,6 +206,7 @@ def build_trend_analysis_snapshot(
     *,
     as_of: datetime,
     thresholds: TrendFactThresholds = DEFAULT_TREND_THRESHOLDS,
+    evidence_policy: EvidenceSelectionPolicy = DEFAULT_EVIDENCE_SELECTION_POLICY,
 ) -> dict[str, Any]:
     """Build and serialize one immutable snapshot under one read-only DB view."""
     if connection.vendor != "postgresql":
@@ -205,16 +243,25 @@ def build_trend_analysis_snapshot(
             as_of=as_of_utc,
             candidate_keys=brand_keys,
         )
-        evidence_rows = _fetch_evidence_rows(shortlist, as_of=as_of_utc)
+        evidence_rows = _fetch_evidence_rows(
+            shortlist,
+            as_of=as_of_utc,
+            rank_limit=evidence_policy.reservoir_rank_limit,
+        )
         snapshot = _assemble_snapshot(
             facts=facts,
             shortlist=shortlist,
             details=details,
             evidence_rows=evidence_rows,
+            evidence_policy=evidence_policy,
+        )
+        _fit_snapshot_evidence_to_packet_budget(
+            snapshot,
+            max_bytes=evidence_policy.provider_packet_bytes,
         )
         canonical_snapshot_json(snapshot, enforce_limit=True)
         provider_json = canonical_snapshot_json(project_provider_packet(snapshot))
-        if len(provider_json.encode("utf-8")) > MAX_PROVIDER_PACKET_BYTES:
+        if len(provider_json.encode("utf-8")) > evidence_policy.provider_packet_bytes:
             raise TrendSnapshotSizeError("trend_provider_packet_too_large")
     return snapshot
 
@@ -240,15 +287,18 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
                 ),
                 "episodes": candidate["episodes"],
                 "coarse_series": candidate["series"]["coarse"],
+                "evidence_allocation": candidate.get("evidence_allocation", {}),
                 "evidence_support": candidate["evidence_support"],
                 "evidence": [
                     {
                         "evidence_id": evidence["evidence_id"],
                         "source_cluster_id": evidence["source_cluster_id"],
+                        "theme_cluster_id": evidence.get("theme_cluster_id", ""),
                         "author_group_id": evidence["author_group_id"],
                         "excerpt": evidence["excerpt"],
                         "roles": evidence["roles"],
                         "source_flags": evidence["source_flags"],
+                        "post_type_keys": evidence.get("post_type_keys", []),
                         "discourse_keys": evidence["discourse_keys"],
                         "sentiment_keys": evidence["sentiment_keys"],
                     }
@@ -271,6 +321,7 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "comparison_allowed": snapshot["comparison_allowed"],
         "thresholds": snapshot["thresholds"],
+        "evidence_policy": snapshot.get("evidence_policy", {}),
         "series_axis": {"coarse": snapshot["series_axis"]["coarse"]},
         "candidates": candidates,
     }
@@ -430,6 +481,7 @@ def _assemble_snapshot(
     shortlist: Sequence[Mapping[str, Any]],
     details: Mapping[str, Any],
     evidence_rows: Sequence[Mapping[str, Any]],
+    evidence_policy: EvidenceSelectionPolicy,
 ) -> dict[str, Any]:
     sources = {
         str(row["candidate_key"]["candidate_id"]): row
@@ -439,7 +491,25 @@ def _assemble_snapshot(
         str(row["candidate_key"]["brand_key"]): row
         for row in details.get("candidates", [])
     }
-    evidence_by_candidate = _select_evidence(evidence_rows)
+    evidence_candidates = []
+    for selected in shortlist:
+        source = sources[str(selected["source_candidate_id"])]
+        evidence_candidates.append(
+            {
+                **selected,
+                "family_facts": _relevant_family_facts(
+                    source,
+                    selected["signals"],
+                ),
+            }
+        )
+    evidence_by_candidate, evidence_allocations = (
+        _select_evidence_with_allocation(
+            evidence_rows,
+            candidates=evidence_candidates,
+            policy=evidence_policy,
+        )
+    )
     series_axis = _shared_series_axis(details)
     candidates = []
     for selected in shortlist:
@@ -478,6 +548,10 @@ def _assemble_snapshot(
                         include_post_kinds=False,
                     ),
                 },
+                "evidence_allocation": evidence_allocations.get(
+                    str(selected["candidate_id"]),
+                    _empty_evidence_allocation(evidence_policy),
+                ),
                 "evidence_support": _evidence_support(evidence),
                 "evidence": evidence,
             }
@@ -500,10 +574,24 @@ def _assemble_snapshot(
         ),
         "comparison_allowed": facts["comparison_allowed"],
         "thresholds": facts["thresholds"],
+        "evidence_policy": {
+            "version": evidence_policy.version,
+            "reservoir_rank_limit": evidence_policy.reservoir_rank_limit,
+            "floor": evidence_policy.floor,
+            "lead_ceiling": evidence_policy.lead_ceiling,
+            "comparison_ceiling": evidence_policy.comparison_ceiling,
+            "excerpt_characters": evidence_policy.excerpt_characters,
+            "provider_packet_bytes": evidence_policy.provider_packet_bytes,
+        },
         "selection": {
             "family_order": list(FAMILY_ORDER),
             "max_candidates": MAX_SHORTLIST_CANDIDATES,
             "candidate_count": len(candidates),
+            "evidence_query_row_ceiling": (
+                len(shortlist)
+                * evidence_policy.reservoir_rank_limit
+                * EVIDENCE_QUERY_RANK_STREAMS
+            ),
         },
         "series_axis": series_axis,
         "candidates": candidates,
@@ -708,7 +796,10 @@ def _ratio_percent(numerator: int, denominator: int) -> int:
 
 
 def _fetch_evidence_rows(
-    candidates: Sequence[Mapping[str, Any]], *, as_of: datetime
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    as_of: datetime,
+    rank_limit: int,
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
@@ -781,8 +872,11 @@ def _fetch_evidence_rows(
                 base.brand_key,
                 base.tweet_id,
                 array_agg(
+                    DISTINCT s.post_type_key::text ORDER BY s.post_type_key::text
+                ) FILTER (WHERE s.post_type_key IS NOT NULL) AS post_type_keys,
+                array_agg(
                     DISTINCT s.sentiment::text ORDER BY s.sentiment::text
-                ) AS sentiment_keys
+                ) FILTER (WHERE s.sentiment IS NOT NULL) AS sentiment_keys
             FROM base_posts base
             JOIN posts_brands_signals s
               ON s.post_id = base.tweet_id
@@ -810,6 +904,8 @@ def _fetch_evidence_rows(
                 CASE WHEN base.metrics_observed
                      THEN base.stored_interactions ELSE 0
                 END::bigint AS interactions,
+                coalesce(sig.post_type_keys, ARRAY[]::text[])
+                    AS post_type_keys,
                 coalesce(sig.sentiment_keys, ARRAY[]::text[])
                     AS sentiment_keys,
                 coalesce(dis.discourse_keys, ARRAY[]::text[])
@@ -902,11 +998,11 @@ def _fetch_evidence_rows(
         )
         SELECT *
         FROM ranked
-        WHERE official_rank <= 8
-           OR catalyst_rank <= 8
-           OR original_rank <= 8
-           OR discourse_rank <= 8
-           OR contrast_rank <= 8
+        WHERE official_rank <= %s
+           OR catalyst_rank <= %s
+           OR original_rank <= %s
+           OR discourse_rank <= %s
+           OR contrast_rank <= %s
         ORDER BY position, least(
                     official_rank, catalyst_rank, original_rank,
                     discourse_rank, contrast_rank
@@ -919,6 +1015,7 @@ def _fetch_evidence_rows(
         [_parse_utc(str(row["end_at"])) for row in candidates],
         as_of,
         as_of,
+        *([rank_limit] * EVIDENCE_QUERY_RANK_STREAMS),
     ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
@@ -931,27 +1028,107 @@ def _fetch_evidence_rows(
 def _select_evidence(
     rows: Sequence[Mapping[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
+    selected, _allocations = _select_evidence_with_allocation(
+        rows,
+        candidates=(),
+        policy=DEFAULT_EVIDENCE_SELECTION_POLICY,
+    )
+    return selected
+
+
+def _select_evidence_with_allocation(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    candidates: Sequence[Mapping[str, Any]],
+    policy: EvidenceSelectionPolicy,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
+    pools = _prepare_evidence_pools(rows, policy=policy)
+    candidate_rows = {
+        str(candidate["candidate_id"]): candidate for candidate in candidates
+    }
+    for candidate_id, pool in pools.items():
+        if candidate_id in candidate_rows:
+            continue
+        created = sorted(str(row["created_at"]) for row in pool)
+        candidate_rows[candidate_id] = {
+            "candidate_id": candidate_id,
+            "start_at": created[0] if created else "",
+            "end_at": created[-1] if created else "",
+            "signals": [],
+            "family_facts": {},
+        }
+
+    ranked_ids = sorted(
+        candidate_rows,
+        key=lambda candidate_id: (
+            _story_potential_key(
+                candidate_rows[candidate_id],
+                pools.get(candidate_id, []),
+            ),
+            candidate_id.casefold(),
+            candidate_id,
+        ),
+        reverse=True,
+    )
+    lead_id = ranked_ids[0] if ranked_ids else ""
+    selected_by_candidate: dict[str, list[dict[str, Any]]] = {}
+    allocations: dict[str, dict[str, Any]] = {}
+    for story_rank, candidate_id in enumerate(ranked_ids, start=1):
+        candidate = candidate_rows[candidate_id]
+        pool = pools.get(candidate_id, [])
+        signal_families = {
+            str(signal.get("family") or "")
+            for signal in candidate.get("signals", [])
+        }
+        if candidate_id == lead_id:
+            allocation_class = "lead"
+            ceiling = policy.lead_ceiling
+        elif len(signal_families) > 1 or signal_families.intersection(
+            {"post_type", "discourse", "sentiment", "nationalism"}
+        ):
+            allocation_class = "comparison"
+            ceiling = policy.comparison_ceiling
+        else:
+            allocation_class = "floor"
+            ceiling = policy.floor
+        available_clusters = len(
+            {str(evidence["source_cluster_id"]) for evidence in pool}
+        )
+        target = min(ceiling, available_clusters)
+        selected = _select_candidate_evidence(
+            pool,
+            candidate=candidate,
+            target=target,
+        )
+        selected_by_candidate[candidate_id] = selected
+        allocations[candidate_id] = {
+            "policy_version": policy.version,
+            "allocation_class": allocation_class,
+            "story_rank": story_rank,
+            "reservoir_count": len(pool),
+            "available_independent_source_count": available_clusters,
+            "protected_floor_count": min(policy.floor, available_clusters),
+            "target_count": target,
+            "selected_count": len(selected),
+            "packet_trimmed_count": 0,
+        }
+    return selected_by_candidate, allocations
+
+
+def _prepare_evidence_pools(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    policy: EvidenceSelectionPolicy,
+) -> dict[str, list[dict[str, Any]]]:
     pools: dict[str, list[dict[str, Any]]] = {}
-    cluster_representatives: dict[str, list[tuple[str, str]]] = {}
     for row in rows:
         candidate_id = str(row["candidate_id"])
-        evidence = _evidence_candidate(row)
+        evidence = _evidence_candidate(
+            row,
+            excerpt_characters=policy.excerpt_characters,
+        )
         if evidence is None:
             continue
-        representatives = cluster_representatives.setdefault(candidate_id, [])
-        matched_cluster = next(
-            (
-                cluster_id
-                for cluster_id, excerpt in representatives
-                if text_five_gram_jaccard(excerpt, evidence["excerpt"])
-                >= NEAR_DUPLICATE_JACCARD
-            ),
-            None,
-        )
-        if matched_cluster is None:
-            matched_cluster = str(evidence["source_cluster_id"])
-            representatives.append((matched_cluster, evidence["excerpt"]))
-        evidence["source_cluster_id"] = matched_cluster
         evidence["_ranks"] = {
             "official_or_catalyst": (
                 int(row["official_rank"])
@@ -975,58 +1152,384 @@ def _select_evidence(
                 and row["dominant_sentiment"] not in row["sentiment_keys"]
             ),
         }
+        evidence["_interactions"] = int(row.get("interactions") or 0)
         pools.setdefault(candidate_id, []).append(evidence)
 
-    selected_by_candidate: dict[str, list[dict[str, Any]]] = {}
-    for candidate_id, pool in pools.items():
-        selected: list[dict[str, Any]] = []
-        selected_ids: dict[str, dict[str, Any]] = {}
-        selected_clusters: set[str] = set()
-        for role in EVIDENCE_ROLE_ORDER:
-            fallback_existing: dict[str, Any] | None = None
-            ranked = sorted(
-                (
-                    evidence
-                    for evidence in pool
-                    if evidence["_role_eligible"][role]
-                ),
-                key=lambda evidence: (
-                    evidence["_ranks"][role],
-                    evidence["evidence_id"],
-                ),
+    max_rows = policy.reservoir_rank_limit * EVIDENCE_QUERY_RANK_STREAMS
+    for candidate_id, unbounded_pool in list(pools.items()):
+        pool = sorted(
+            unbounded_pool,
+            key=lambda evidence: (
+                min(evidence["_ranks"].values()),
+                str(evidence["created_at"]),
+                str(evidence["evidence_id"]),
+            ),
+        )[:max_rows]
+        _assign_text_clusters(candidate_id, pool)
+        pools[candidate_id] = pool
+    return pools
+
+
+def _assign_text_clusters(
+    candidate_id: str,
+    pool: Sequence[dict[str, Any]],
+) -> None:
+    ordered = sorted(
+        pool,
+        key=lambda item: (
+            str(item["excerpt"]).casefold(),
+            str(item["evidence_id"]),
+        ),
+    )
+    source_representatives: list[tuple[str, str]] = []
+    theme_representatives: list[tuple[str, str]] = []
+    for evidence in ordered:
+        matched_cluster = next(
+            (
+                cluster_id
+                for cluster_id, excerpt in source_representatives
+                if text_five_gram_jaccard(excerpt, evidence["excerpt"])
+                >= NEAR_DUPLICATE_JACCARD
+            ),
+            None,
+        )
+        if matched_cluster is None:
+            matched_cluster = str(evidence["source_cluster_id"])
+            source_representatives.append(
+                (matched_cluster, str(evidence["excerpt"]))
             )
-            for evidence in ranked:
-                evidence_id = str(evidence["evidence_id"])
-                if evidence_id in selected_ids:
-                    fallback_existing = selected_ids[evidence_id]
-                    continue
-                cluster_id = str(evidence["source_cluster_id"])
-                if cluster_id in selected_clusters:
-                    continue
-                if len(selected) >= MAX_EVIDENCE_PER_CANDIDATE:
-                    break
-                public = {
-                    key: value
-                    for key, value in evidence.items()
-                    if not key.startswith("_")
-                }
-                public["roles"] = [role]
-                selected.append(public)
-                selected_ids[evidence_id] = public
-                selected_clusters.add(cluster_id)
+        evidence["source_cluster_id"] = matched_cluster
+
+        matched_theme = next(
+            (
+                theme_id
+                for theme_id, excerpt in theme_representatives
+                if text_five_gram_jaccard(excerpt, evidence["excerpt"])
+                >= RECURRING_THEME_JACCARD
+            ),
+            None,
+        )
+        if matched_theme is None:
+            matched_theme = "th_" + _digest(
+                candidate_id,
+                str(evidence["excerpt"]),
+            )[:20]
+            theme_representatives.append(
+                (matched_theme, str(evidence["excerpt"]))
+            )
+        evidence["theme_cluster_id"] = matched_theme
+
+    for evidence in pool:
+        theme_rows = [
+            item
+            for item in pool
+            if item["theme_cluster_id"] == evidence["theme_cluster_id"]
+        ]
+        authors = {
+            str(item["author_group_id"])
+            for item in theme_rows
+            if item.get("author_group_id")
+        }
+        clusters = {str(item["source_cluster_id"]) for item in theme_rows}
+        evidence["_theme_support_count"] = min(len(authors), len(clusters))
+
+
+def _story_potential_key(
+    candidate: Mapping[str, Any],
+    pool: Sequence[Mapping[str, Any]],
+) -> tuple[int, int, int, int, int, int]:
+    signals = list(candidate.get("signals", []))
+    signal_families = {str(signal.get("family") or "") for signal in signals}
+    mix_signal_count = len(
+        signal_families.intersection(
+            {"post_type", "discourse", "sentiment", "nationalism"}
+        )
+    )
+    recurring_themes = {
+        str(evidence.get("theme_cluster_id") or "")
+        for evidence in pool
+        if int(evidence.get("_theme_support_count") or 0) >= 2
+    }
+    label_diversity = sum(
+        len(
+            {
+                str(key)
+                for evidence in pool
+                for key in evidence.get(field, [])
+            }
+        )
+        for field in ("post_type_keys", "discourse_keys", "sentiment_keys")
+    )
+    independent_authors = len(
+        {
+            str(evidence["author_group_id"])
+            for evidence in pool
+            if evidence.get("author_group_id")
+        }
+    )
+    independent_clusters = len(
+        {str(evidence["source_cluster_id"]) for evidence in pool}
+    )
+    volume = _selected_volume(candidate.get("family_facts", {}).get("volume", {}))
+    return (
+        len(recurring_themes),
+        mix_signal_count,
+        len(signal_families),
+        label_diversity,
+        min(independent_authors, independent_clusters),
+        volume,
+    )
+
+
+def _selected_volume(volume: Mapping[str, Any]) -> int:
+    values = [
+        volume.get("selected_count"),
+        volume.get("selected_posts"),
+        volume.get("full_window", {}).get("post_count")
+        if isinstance(volume.get("full_window"), Mapping)
+        else None,
+    ]
+    for value in values:
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def _select_candidate_evidence(
+    pool: Sequence[Mapping[str, Any]],
+    *,
+    candidate: Mapping[str, Any],
+    target: int,
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    selected_ids: dict[str, dict[str, Any]] = {}
+    selected_clusters: set[str] = set()
+    selected_authors: set[str] = set()
+
+    def add(evidence: Mapping[str, Any], *, role: str) -> bool:
+        evidence_id = str(evidence["evidence_id"])
+        if evidence_id in selected_ids:
+            public = selected_ids[evidence_id]
+            if role not in public["roles"]:
+                public["roles"].append(role)
+            return False
+        cluster_id = str(evidence["source_cluster_id"])
+        if len(selected) >= target or cluster_id in selected_clusters:
+            return False
+        public = {
+            key: value for key, value in evidence.items() if not key.startswith("_")
+        }
+        public["roles"] = [role]
+        selected.append(public)
+        selected_ids[evidence_id] = public
+        selected_clusters.add(cluster_id)
+        if evidence.get("author_group_id"):
+            selected_authors.add(str(evidence["author_group_id"]))
+        return True
+
+    for role in EVIDENCE_ROLE_ORDER:
+        ranked = sorted(
+            (
+                evidence
+                for evidence in pool
+                if evidence["_role_eligible"][role]
+            ),
+            key=lambda evidence: (
+                str(evidence.get("author_group_id") or "") in selected_authors,
+                evidence["_ranks"][role],
+                str(evidence["evidence_id"]),
+            ),
+        )
+        for evidence in ranked:
+            if add(evidence, role=role):
                 break
-            else:
-                if fallback_existing is not None:
-                    fallback_existing["roles"].append(role)
-        selected_by_candidate[candidate_id] = selected
-    return selected_by_candidate
+            if str(evidence["evidence_id"]) in selected_ids:
+                break
+
+    recurring = sorted(
+        (
+            evidence
+            for evidence in pool
+            if int(evidence.get("_theme_support_count") or 0) >= 2
+        ),
+        key=lambda evidence: (
+            -int(evidence["_theme_support_count"]),
+            str(evidence["theme_cluster_id"]),
+            str(evidence["created_at"]),
+            str(evidence["evidence_id"]),
+        ),
+    )
+    for evidence in recurring:
+        add(evidence, role=SUPPORTING_CONTEXT_ROLE)
+
+    for segment in range(3):
+        segment_rows = [
+            evidence
+            for evidence in pool
+            if _evidence_time_segment(evidence, candidate=candidate) == segment
+        ]
+        for evidence in sorted(
+            segment_rows,
+            key=lambda item: (
+                str(item.get("author_group_id") or "") in selected_authors,
+                str(item["created_at"]),
+                str(item["evidence_id"]),
+            ),
+        ):
+            if add(evidence, role=SUPPORTING_CONTEXT_ROLE):
+                break
+
+    for field in ("post_type_keys", "discourse_keys", "sentiment_keys"):
+        keys = sorted(
+            {
+                str(key)
+                for evidence in pool
+                for key in evidence.get(field, [])
+            }
+        )
+        for key in keys:
+            choices = [
+                evidence for evidence in pool if key in evidence.get(field, [])
+            ]
+            for evidence in sorted(
+                choices,
+                key=lambda item: (
+                    str(item.get("author_group_id") or "") in selected_authors,
+                    -int(item.get("_interactions") or 0),
+                    str(item["evidence_id"]),
+                ),
+            ):
+                if add(evidence, role=SUPPORTING_CONTEXT_ROLE):
+                    break
+
+    remaining = sorted(
+        pool,
+        key=lambda evidence: (
+            str(evidence.get("author_group_id") or "") in selected_authors,
+            -int(evidence.get("_theme_support_count") or 0),
+            -len(evidence.get("post_type_keys", [])),
+            -len(evidence.get("discourse_keys", [])),
+            -len(evidence.get("sentiment_keys", [])),
+            -int(evidence.get("_interactions") or 0),
+            min(evidence["_ranks"].values()),
+            str(evidence["created_at"]),
+            str(evidence["evidence_id"]),
+        ),
+    )
+    for evidence in remaining:
+        add(evidence, role=SUPPORTING_CONTEXT_ROLE)
+    return selected
+
+
+def _evidence_time_segment(
+    evidence: Mapping[str, Any],
+    *,
+    candidate: Mapping[str, Any],
+) -> int:
+    created_at = _parse_utc(str(evidence["created_at"]))
+    try:
+        start_at = _parse_utc(str(candidate.get("start_at") or ""))
+        end_at = _parse_utc(str(candidate.get("end_at") or ""))
+    except ValueError:
+        return 1
+    duration = (end_at - start_at).total_seconds()
+    if duration <= 0:
+        return 1
+    position = (created_at - start_at).total_seconds() / duration
+    if position < 1 / 3:
+        return 0
+    if position < 2 / 3:
+        return 1
+    return 2
+
+
+def _empty_evidence_allocation(
+    policy: EvidenceSelectionPolicy,
+) -> dict[str, Any]:
+    return {
+        "policy_version": policy.version,
+        "allocation_class": "floor",
+        "story_rank": 0,
+        "reservoir_count": 0,
+        "available_independent_source_count": 0,
+        "protected_floor_count": 0,
+        "target_count": 0,
+        "selected_count": 0,
+        "packet_trimmed_count": 0,
+    }
+
+
+def _fit_snapshot_evidence_to_packet_budget(
+    snapshot: dict[str, Any],
+    *,
+    max_bytes: int,
+    max_snapshot_bytes: int = MAX_SNAPSHOT_BYTES,
+) -> None:
+    """Trim low-priority excerpts until both serialized forms are bounded."""
+
+    def packet_bytes() -> int:
+        packet = project_provider_packet(snapshot)
+        return len(canonical_snapshot_json(packet).encode("utf-8"))
+
+    candidates = list(snapshot.get("candidates", []))
+    def snapshot_bytes() -> int:
+        return len(canonical_snapshot_json(snapshot).encode("utf-8"))
+
+    while packet_bytes() > max_bytes or snapshot_bytes() > max_snapshot_bytes:
+        removable = [candidate for candidate in candidates if candidate["evidence"]]
+        if not removable:
+            if snapshot_bytes() > max_snapshot_bytes:
+                raise TrendSnapshotSizeError("trend_snapshot_too_large")
+            raise TrendSnapshotSizeError("trend_provider_packet_too_large")
+        candidate = min(removable, key=_packet_trim_priority)
+        candidate["evidence"].pop()
+        allocation = candidate["evidence_allocation"]
+        allocation["selected_count"] = len(candidate["evidence"])
+        allocation["packet_trimmed_count"] = (
+            int(allocation.get("packet_trimmed_count") or 0) + 1
+        )
+        candidate["evidence_support"] = _evidence_support(candidate["evidence"])
+
+
+def _packet_trim_priority(candidate: Mapping[str, Any]) -> tuple[int, int, int]:
+    """Prefer comparison extras, then weak floors, before lead evidence."""
+    allocation = candidate.get("evidence_allocation", {})
+    selected_count = len(candidate.get("evidence", []))
+    policy_floor = int(allocation.get("protected_floor_count") or 0)
+    above_floor = selected_count > policy_floor
+    is_lead = allocation.get("allocation_class") == "lead"
+    story_rank = int(allocation.get("story_rank") or 0)
+    phase = (
+        0
+        if above_floor and not is_lead
+        else 1
+        if above_floor
+        else 2
+        if not is_lead
+        else 3
+    )
+    return (
+        phase,
+        -story_rank,
+        -selected_count,
+    )
 
 
 def _evidence_candidate(
     row: Mapping[str, Any],
+    *,
+    excerpt_characters: int = MAX_EVIDENCE_CHARACTERS,
 ) -> dict[str, Any] | None:
-    post_text = normalized_excerpt(row.get("text"))
-    quoted_text = normalized_excerpt(row.get("quoted_text"))
+    post_text = normalized_excerpt(
+        row.get("text"),
+        max_characters=excerpt_characters,
+    )
+    quoted_text = normalized_excerpt(
+        row.get("quoted_text"),
+        max_characters=excerpt_characters,
+    )
     is_retweet = bool(row["is_retweet"])
     if post_text and not (is_retweet and _PURE_REPOST_RE.match(post_text)):
         excerpt = post_text
@@ -1073,6 +1576,9 @@ def _evidence_candidate(
             "metrics_observed": bool(row["metrics_observed"]),
             "occurrence_source": occurrence_source,
         },
+        "post_type_keys": sorted(
+            str(key) for key in row.get("post_type_keys", [])
+        ),
         "discourse_keys": sorted(str(key) for key in row["discourse_keys"]),
         "sentiment_keys": sorted(str(key) for key in row["sentiment_keys"]),
     }

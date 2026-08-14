@@ -186,7 +186,7 @@ def _enable(monkeypatch, *, fail_window: int | None = None, changed=None):
     )
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
-        lambda window_days, *, as_of, thresholds: _snapshot(
+        lambda window_days, *, as_of, thresholds, evidence_policy: _snapshot(
             window_days,
             as_of=as_of,
             changed=window_days in changed,
@@ -237,12 +237,22 @@ def test_scheduled_task_reaches_generation_with_pinned_provider_controls(
     )
     configured_generate = task_module.generate_trend_narrative
     observed: list[tuple[int, str, str]] = []
+    observed_policies = []
 
     monkeypatch.setattr(
         "monitor.trend_narrative_queue.coalesce_envelope",
         lambda envelope: envelope,
     )
     monkeypatch.setattr("monitor.trend_narrative_tasks.timezone.now", lambda: NOW)
+
+    def capture_snapshot(window_days, *, as_of, thresholds, evidence_policy):
+        observed_policies.append(evidence_policy)
+        return _snapshot(window_days, as_of=as_of)
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        capture_snapshot,
+    )
 
     def capture_generation(snapshot, active_config):
         observed.append(
@@ -268,6 +278,13 @@ def test_scheduled_task_reaches_generation_with_pinned_provider_controls(
         for window_days in (1, 7, 30, 365)
     ]
     assert config.model == "deepseek-v4-pro"
+    assert [policy.version for policy in observed_policies] == [
+        "adaptive-v1",
+        "adaptive-v1",
+        "adaptive-v1",
+        "adaptive-v1",
+    ]
+    assert all(policy.lead_ceiling == 48 for policy in observed_policies)
 
 
 def test_same_semantics_after_due_cadence_advances_checks_with_zero_calls(
@@ -314,7 +331,7 @@ def test_provider_disabled_consumes_envelope_with_zero_reservations(monkeypatch)
     )
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
-        lambda window_days, *, as_of, thresholds: _snapshot(
+        lambda window_days, *, as_of, thresholds, evidence_policy: _snapshot(
             window_days, as_of=as_of
         ),
     )
@@ -346,7 +363,7 @@ def test_provider_disable_after_envelope_start_consumes_zero_slots(monkeypatch):
         lambda: active["config"],
     )
 
-    def build(window_days, *, as_of, thresholds):
+    def build(window_days, *, as_of, thresholds, evidence_policy):
         active["config"] = disabled
         return _snapshot(window_days, as_of=as_of)
 
@@ -380,7 +397,7 @@ def test_snapshot_soft_timeout_stops_before_later_windows(monkeypatch):
         lambda: config,
     )
 
-    def timeout(window_days, *, as_of, thresholds):
+    def timeout(window_days, *, as_of, thresholds, evidence_policy):
         attempted_windows.append(window_days)
         raise SoftTimeLimitExceeded()
 
@@ -449,7 +466,7 @@ def test_provider_enable_fills_cold_cache_without_waiting_for_cadence(monkeypatc
     )
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
-        lambda window_days, *, as_of, thresholds: _snapshot(
+        lambda window_days, *, as_of, thresholds, evidence_policy: _snapshot(
             window_days, as_of=as_of
         ),
     )
@@ -497,10 +514,15 @@ def test_one_snapshot_failure_does_not_discard_other_publications(monkeypatch):
         fromlist=["build_trend_analysis_snapshot"],
     ).build_trend_analysis_snapshot
 
-    def build(window_days, *, as_of, thresholds):
+    def build(window_days, *, as_of, thresholds, evidence_policy):
         if window_days == 7:
             raise RuntimeError("fixture snapshot failure")
-        return normal_builder(window_days, as_of=as_of, thresholds=thresholds)
+        return normal_builder(
+            window_days,
+            as_of=as_of,
+            thresholds=thresholds,
+            evidence_policy=evidence_policy,
+        )
 
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
@@ -524,7 +546,7 @@ def test_one_snapshot_failure_does_not_discard_other_publications(monkeypatch):
 def test_empty_candidate_snapshot_records_no_call_and_skips_provider(monkeypatch):
     config, calls = _enable(monkeypatch)
 
-    def empty_snapshot(window_days, *, as_of, thresholds):
+    def empty_snapshot(window_days, *, as_of, thresholds, evidence_policy):
         snapshot = _snapshot(window_days, as_of=as_of)
         snapshot["candidates"] = []
         snapshot["selection"]["candidate_count"] = 0

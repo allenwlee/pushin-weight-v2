@@ -13,7 +13,10 @@ from billiard.exceptions import SoftTimeLimitExceeded
 from django.utils import timezone
 
 from core.models import TrendNarrative
-from monitor.trend_narrative_candidates import build_trend_analysis_snapshot
+from monitor.trend_narrative_candidates import (
+    EvidenceSelectionPolicy,
+    build_trend_analysis_snapshot,
+)
 from monitor.trend_narrative_facts import (
     ALLOWED_TREND_WINDOWS,
     TrendFactThresholds,
@@ -75,6 +78,7 @@ def process_trend_narrative_envelope(
         stale_minutes=config.stale_minutes,
     )
     thresholds = _thresholds(config)
+    evidence_policy = _evidence_policy(config)
     for window_days in sorted(ALLOWED_TREND_WINDOWS):
         if stats["slots_consumed"] >= config.call_cap:
             break
@@ -112,6 +116,7 @@ def process_trend_narrative_envelope(
                 window_days,
                 as_of=facts_as_of,
                 thresholds=thresholds,
+                evidence_policy=evidence_policy,
             )
         except SoftTimeLimitExceeded:
             raise
@@ -393,6 +398,20 @@ def _thresholds(config: HeadlineNarrativeConfig) -> TrendFactThresholds:
         rising_ratio=config.rising_ratio,
         steady_ratio=config.steady_ratio,
         episode_peak_ratio=config.episode_peak_ratio,
+    )
+
+
+def _evidence_policy(
+    config: HeadlineNarrativeConfig,
+) -> EvidenceSelectionPolicy:
+    return EvidenceSelectionPolicy(
+        version=config.evidence_policy_version,
+        reservoir_rank_limit=config.evidence_reservoir_rank_limit,
+        floor=config.evidence_floor,
+        lead_ceiling=config.evidence_lead_ceiling,
+        comparison_ceiling=config.evidence_comparison_ceiling,
+        excerpt_characters=config.evidence_excerpt_characters,
+        provider_packet_bytes=config.evidence_provider_packet_bytes,
     )
 
 

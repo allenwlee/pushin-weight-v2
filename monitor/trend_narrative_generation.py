@@ -661,6 +661,7 @@ def _fingerprint_packet(
         ),
         "comparison_allowed": packet.get("comparison_allowed"),
         "thresholds": _copy_json(packet.get("thresholds", {})),
+        "evidence_policy": _copy_json(packet.get("evidence_policy", {})),
         "series_axis": {"coarse": axis},
         "shape_band_percent": band_percent,
         "candidates": candidates,

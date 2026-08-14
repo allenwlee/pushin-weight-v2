@@ -31,6 +31,7 @@ from monitor.trend_narrative_candidates import (
     MAX_SNAPSHOT_BYTES,
     SNAPSHOT_LOCK_TIMEOUT_MS,
     SNAPSHOT_STATEMENT_TIMEOUT_MS,
+    EvidenceSelectionPolicy,
     TrendSnapshotSizeError,
     build_trend_analysis_snapshot,
     canonical_snapshot_json,
@@ -260,7 +261,11 @@ def _seed_snapshot_posts() -> tuple[Brand, str, str]:
     return brand, raw_author_id, raw_post_id
 
 
-def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog):
+def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypatch):
+    def forbid_harvest(*args, **kwargs):
+        raise AssertionError("headline snapshot must not invoke harvesting")
+
+    monkeypatch.setattr("monitor.cycle.CycleRunner.run", forbid_harvest)
     brand, raw_author_id, raw_post_id = _seed_snapshot_posts()
     thresholds = TrendFactThresholds(
         min_posts=2,
@@ -299,7 +304,10 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog):
     assert len(snapshot["candidates"]) == 1
     candidate = snapshot["candidates"][0]
     assert candidate["brand_key"] == brand.nickname
-    assert 1 <= len(candidate["evidence"]) <= 4
+    assert 1 <= len(candidate["evidence"]) <= 48
+    assert candidate["evidence_allocation"]["selected_count"] == len(
+        candidate["evidence"]
+    )
     assert candidate["evidence"][0]["roles"][0] == "official_or_catalyst"
     assert all(
         "RT @source" not in evidence["excerpt"]
@@ -331,6 +339,13 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog):
     assert raw_author_id not in canonical
     assert raw_post_id not in canonical
     assert "fine_series" not in provider_json
+    assert provider["evidence_policy"]["version"] == "adaptive-v1"
+    assert provider["candidates"][0]["evidence_allocation"] == candidate[
+        "evidence_allocation"
+    ]
+    assert provider["candidates"][0]["evidence"][0]["post_type_keys"] == [
+        "reaction"
+    ]
     assert provider["candidates"][0]["metadata_trajectories"] == trajectories
     assert not caplog.records
     assert json.loads(canonical) == snapshot
@@ -440,6 +455,220 @@ def test_near_duplicate_source_clusters_cannot_fill_two_evidence_roles():
     } <= selected_excerpts
 
 
+def _adaptive_evidence_row(
+    candidate_id: str,
+    index: int,
+    *,
+    author_id: str | None = None,
+) -> dict:
+    hands_on = index % 2 == 0
+    positive = index % 3 != 0
+    return {
+        "candidate_id": candidate_id,
+        "brand_key": candidate_id.split(":", 1)[0],
+        "tweet_id": f"{candidate_id}-post-{index:02d}",
+        "author_id": author_id or f"{candidate_id}-author-{index:02d}",
+        "quoted_status_id": None,
+        "created_at": AS_OF - timedelta(hours=23) + timedelta(minutes=25 * index),
+        "text": (
+            "Hands-on users report faster downloads and stronger reasoning "
+            f"during workflow-{index} benchmark-{index} device-{index}"
+            if hands_on
+            else "Release discussion compares model access and pricing "
+            f"across region-{index} cohort-{index} plan-{index}"
+        ),
+        "quoted_text": None,
+        "is_retweet": False,
+        "is_quote": index % 5 == 0,
+        "metrics_observed": True,
+        "interactions": 500 - index,
+        "is_official": index == 0,
+        "post_type_keys": ["hands_on" if hands_on else "release"],
+        "sentiment_keys": ["positive" if positive else "negative"],
+        "discourse_keys": ["technical_analysis" if hands_on else "release_buzz"],
+        "dominant_discourse": "technical_analysis",
+        "dominant_sentiment": "positive",
+        "official_rank": index + 1,
+        "catalyst_rank": index + 1,
+        "original_rank": index + 1,
+        "discourse_rank": index + 1,
+        "contrast_rank": index + 1,
+    }
+
+
+def test_adaptive_evidence_deepens_the_story_leader_and_preserves_strata():
+    policy = EvidenceSelectionPolicy(
+        version="test-adaptive-v1",
+        reservoir_rank_limit=32,
+        floor=4,
+        lead_ceiling=24,
+        comparison_ceiling=8,
+        excerpt_characters=600,
+        provider_packet_bytes=MAX_PROVIDER_PACKET_BYTES,
+    )
+    candidates = [
+        {
+            "candidate_id": "deepseek:full_window",
+            "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+            "end_at": AS_OF.isoformat(),
+            "signals": [
+                {"family": "volume", "rank": 1, "stream_position": 1},
+                {"family": "discourse", "rank": 1, "stream_position": 1},
+                {"family": "sentiment", "rank": 1, "stream_position": 1},
+            ],
+            "family_facts": {"volume": {"selected_count": 4_000}},
+        },
+        {
+            "candidate_id": "comparison:full_window",
+            "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+            "end_at": AS_OF.isoformat(),
+            "signals": [
+                {"family": "volume", "rank": 2, "stream_position": 2},
+            ],
+            "family_facts": {"volume": {"selected_count": 48}},
+        },
+    ]
+    rows = [
+        *[_adaptive_evidence_row("deepseek:full_window", index) for index in range(48)],
+        *[
+            {
+                **_adaptive_evidence_row("comparison:full_window", index),
+                "text": (
+                    f"Comparison note {index} uses token-{index:02d} "
+                    f"channel-{index:02d} subject-{index:02d} source-{index:02d}"
+                ),
+                "post_type_keys": [],
+                "sentiment_keys": [],
+                "discourse_keys": [],
+                "dominant_discourse": None,
+                "dominant_sentiment": None,
+            }
+            for index in range(12)
+        ],
+    ]
+
+    selected, allocations = trend_candidates._select_evidence_with_allocation(
+        rows,
+        candidates=candidates,
+        policy=policy,
+    )
+
+    lead = selected["deepseek:full_window"]
+    comparison = selected["comparison:full_window"]
+    assert len(lead) == 24
+    assert len(comparison) == 4
+    assert allocations["deepseek:full_window"]["allocation_class"] == "lead"
+    assert allocations["comparison:full_window"]["allocation_class"] == "floor"
+    assert {row["post_type_keys"][0] for row in lead} == {"hands_on", "release"}
+    assert {row["sentiment_keys"][0] for row in lead} == {"positive", "negative"}
+    assert {row["discourse_keys"][0] for row in lead} == {
+        "technical_analysis",
+        "release_buzz",
+    }
+    observed_hours = {
+        datetime.fromisoformat(row["created_at"]).hour
+        for row in lead
+    }
+    assert min(observed_hours) <= 2
+    assert max(observed_hours) >= 17
+    assert len({row["source_cluster_id"] for row in lead}) == len(lead)
+    assert len({row["author_group_id"] for row in lead}) == len(lead)
+
+    repeated, repeated_allocations = (
+        trend_candidates._select_evidence_with_allocation(
+            list(reversed(rows)),
+            candidates=candidates,
+            policy=policy,
+        )
+    )
+    assert repeated == selected
+    assert repeated_allocations == allocations
+
+
+def test_adaptive_evidence_returns_every_sparse_independent_post():
+    policy = EvidenceSelectionPolicy(
+        version="test-adaptive-v1",
+        reservoir_rank_limit=32,
+        floor=4,
+        lead_ceiling=48,
+        comparison_ceiling=12,
+        excerpt_characters=600,
+        provider_packet_bytes=MAX_PROVIDER_PACKET_BYTES,
+    )
+    candidate = {
+        "candidate_id": "sparse:full_window",
+        "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+        "end_at": AS_OF.isoformat(),
+        "signals": [{"family": "volume", "rank": 1, "stream_position": 1}],
+        "family_facts": {"volume": {"selected_count": 3}},
+    }
+    rows = [_adaptive_evidence_row("sparse:full_window", index) for index in range(3)]
+
+    selected, allocations = trend_candidates._select_evidence_with_allocation(
+        rows,
+        candidates=[candidate],
+        policy=policy,
+    )
+
+    assert len(selected["sparse:full_window"]) == 3
+    assert allocations["sparse:full_window"]["selected_count"] == 3
+    assert allocations["sparse:full_window"]["target_count"] == 3
+
+
+def test_same_author_posts_never_create_independent_event_support():
+    rows = [
+        {
+            **_adaptive_evidence_row(
+                "one-author:full_window",
+                index,
+                author_id="same-author",
+            ),
+            "is_official": False,
+        }
+        for index in range(12)
+    ]
+
+    selected = trend_candidates._select_evidence(rows)["one-author:full_window"]
+    support = trend_candidates._evidence_support(selected)
+
+    assert support["distinct_author_group_count"] == 1
+    assert support["event_claim_may_be_supported"] is False
+
+
+def test_high_volume_reservoir_and_final_allocation_remain_bounded():
+    policy = EvidenceSelectionPolicy(
+        version="test-adaptive-v1",
+        reservoir_rank_limit=32,
+        floor=4,
+        lead_ceiling=48,
+        comparison_ceiling=12,
+        excerpt_characters=600,
+        provider_packet_bytes=MAX_PROVIDER_PACKET_BYTES,
+    )
+    candidate = {
+        "candidate_id": "large:full_window",
+        "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+        "end_at": AS_OF.isoformat(),
+        "signals": [{"family": "volume", "rank": 1, "stream_position": 1}],
+        "family_facts": {"volume": {"selected_count": 4_000}},
+    }
+    rows = [
+        _adaptive_evidence_row("large:full_window", index)
+        for index in range(300)
+    ]
+
+    selected, allocations = trend_candidates._select_evidence_with_allocation(
+        rows,
+        candidates=[candidate],
+        policy=policy,
+    )
+
+    allocation = allocations["large:full_window"]
+    assert allocation["reservoir_count"] <= 32 * 5
+    assert allocation["selected_count"] == len(selected["large:full_window"])
+    assert allocation["selected_count"] <= 48
+
+
 def test_worst_case_snapshot_and_provider_projection_stay_bounded():
     _seed_snapshot_posts()
     base = build_trend_analysis_snapshot(
@@ -479,6 +708,7 @@ def test_worst_case_snapshot_and_provider_projection_stay_bounded():
         for values in engagement["post_kinds"].values():
             for key, array in values.items():
                 values[key] = (array * 4)[:365]
+        target_count = 48 if candidate_index == 0 else 12
         candidate["evidence"] = [
             {
                 **deepcopy(template["evidence"][0]),
@@ -487,11 +717,27 @@ def test_worst_case_snapshot_and_provider_projection_stay_bounded():
                 "author_group_id": f"ag_{candidate_index}_{evidence_index}",
                 "excerpt": "界" * 1_000,
             }
-            for evidence_index in range(4)
+            for evidence_index in range(target_count)
         ]
+        candidate["evidence_allocation"] = {
+            "policy_version": "adaptive-v1",
+            "allocation_class": "lead" if candidate_index == 0 else "comparison",
+            "story_rank": candidate_index + 1,
+            "reservoir_count": target_count,
+            "available_independent_source_count": target_count,
+            "protected_floor_count": 4,
+            "target_count": target_count,
+            "selected_count": target_count,
+            "packet_trimmed_count": 0,
+        }
         candidates.append(candidate)
     worst["candidates"] = candidates
     worst["selection"]["candidate_count"] = 6
+
+    trend_candidates._fit_snapshot_evidence_to_packet_budget(
+        worst,
+        max_bytes=MAX_PROVIDER_PACKET_BYTES,
+    )
 
     snapshot_bytes = len(canonical_snapshot_json(worst).encode("utf-8"))
     provider_bytes = len(
@@ -500,6 +746,13 @@ def test_worst_case_snapshot_and_provider_projection_stay_bounded():
 
     assert snapshot_bytes <= MAX_SNAPSHOT_BYTES
     assert provider_bytes <= MAX_PROVIDER_PACKET_BYTES
+    assert sum(
+        candidate["evidence_allocation"]["packet_trimmed_count"]
+        for candidate in worst["candidates"]
+    ) > 0
+    assert len(worst["candidates"][0]["evidence"]) >= len(
+        worst["candidates"][1]["evidence"]
+    )
 
 
 def test_size_guard_fails_with_a_safe_code():
