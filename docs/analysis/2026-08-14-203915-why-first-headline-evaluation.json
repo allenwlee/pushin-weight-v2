@@ -1,0 +1,2359 @@
+{
+  "artifact_schema_version": 1,
+  "execution": {
+    "accounted_cost_dollars": "0.109000",
+    "accounted_input_tokens": 208472,
+    "calls_used": 28,
+    "concurrency": 1,
+    "stop_reason": "completed"
+  },
+  "manifest": {
+    "concurrency": 1,
+    "context_window_tokens": 1000000,
+    "dollar_budget": "0.70",
+    "input_dollars_per_million_tokens": "0.435",
+    "input_token_budget": 1400000,
+    "max_calls": 28,
+    "max_output_tokens": 1600,
+    "max_packet_bytes": 86144,
+    "model": "deepseek-v4-pro",
+    "output_dollars_per_million_tokens": "0.87",
+    "pricing_checked_at": "2026-08-14T20:30:37Z",
+    "run_id": "2026-08-15-owner-authorized-why-first-v1"
+  },
+  "preflight": {
+    "concurrency": 1,
+    "density_excerpt_characters": [
+      250,
+      500,
+      750,
+      1000
+    ],
+    "estimated_input_tokens_total": 1386835,
+    "estimated_reserved_cost_dollars_total": "0.642251",
+    "estimates": [
+      {
+        "call_id": "pairwise:pair-01:e4:c1000",
+        "estimated_input_tokens": 22088,
+        "packet_bytes": 16985,
+        "reserved_cost_dollars": "0.011000"
+      },
+      {
+        "call_id": "pairwise:pair-02:e12:c1000",
+        "estimated_input_tokens": 42747,
+        "packet_bytes": 36150,
+        "reserved_cost_dollars": "0.019987"
+      },
+      {
+        "call_id": "pairwise:pair-03:e24:c1000",
+        "estimated_input_tokens": 50824,
+        "packet_bytes": 44721,
+        "reserved_cost_dollars": "0.023500"
+      },
+      {
+        "call_id": "pairwise:pair-04:e48:c1000",
+        "estimated_input_tokens": 94475,
+        "packet_bytes": 86078,
+        "reserved_cost_dollars": "0.042489"
+      },
+      {
+        "call_id": "pairwise:pair-05:e4:c1000",
+        "estimated_input_tokens": 22089,
+        "packet_bytes": 16986,
+        "reserved_cost_dollars": "0.011001"
+      },
+      {
+        "call_id": "pairwise:pair-06:e12:c1000",
+        "estimated_input_tokens": 42820,
+        "packet_bytes": 36223,
+        "reserved_cost_dollars": "0.020019"
+      },
+      {
+        "call_id": "pairwise:pair-07:e24:c1000",
+        "estimated_input_tokens": 50831,
+        "packet_bytes": 44728,
+        "reserved_cost_dollars": "0.023503"
+      },
+      {
+        "call_id": "pairwise:pair-08:e48:c1000",
+        "estimated_input_tokens": 94541,
+        "packet_bytes": 86144,
+        "reserved_cost_dollars": "0.042517"
+      },
+      {
+        "call_id": "pairwise:pair-09:e4:c1000",
+        "estimated_input_tokens": 31254,
+        "packet_bytes": 25057,
+        "reserved_cost_dollars": "0.014987"
+      },
+      {
+        "call_id": "pairwise:pair-10:e12:c1000",
+        "estimated_input_tokens": 33638,
+        "packet_bytes": 28135,
+        "reserved_cost_dollars": "0.016025"
+      },
+      {
+        "call_id": "pairwise:pair-11:e24:c1000",
+        "estimated_input_tokens": 60073,
+        "packet_bytes": 52876,
+        "reserved_cost_dollars": "0.027524"
+      },
+      {
+        "call_id": "pairwise:pair-12:e48:c1000",
+        "estimated_input_tokens": 85507,
+        "packet_bytes": 78204,
+        "reserved_cost_dollars": "0.038588"
+      },
+      {
+        "call_id": "pairwise:pair-13:e4:c1000",
+        "estimated_input_tokens": 31320,
+        "packet_bytes": 25123,
+        "reserved_cost_dollars": "0.015016"
+      },
+      {
+        "call_id": "pairwise:pair-14:e12:c1000",
+        "estimated_input_tokens": 33646,
+        "packet_bytes": 28143,
+        "reserved_cost_dollars": "0.016028"
+      },
+      {
+        "call_id": "pairwise:pair-15:e24:c1000",
+        "estimated_input_tokens": 60139,
+        "packet_bytes": 52942,
+        "reserved_cost_dollars": "0.027552"
+      },
+      {
+        "call_id": "pairwise:pair-16:e48:c1000",
+        "estimated_input_tokens": 85514,
+        "packet_bytes": 78211,
+        "reserved_cost_dollars": "0.038591"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e4:c1000",
+        "estimated_input_tokens": 22088,
+        "packet_bytes": 16985,
+        "reserved_cost_dollars": "0.011000"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e12:c1000",
+        "estimated_input_tokens": 33586,
+        "packet_bytes": 28083,
+        "reserved_cost_dollars": "0.016002"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e24:c1000",
+        "estimated_input_tokens": 50830,
+        "packet_bytes": 44727,
+        "reserved_cost_dollars": "0.023503"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e48:c1000",
+        "estimated_input_tokens": 85318,
+        "packet_bytes": 78015,
+        "reserved_cost_dollars": "0.038505"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e4:c1000",
+        "estimated_input_tokens": 22108,
+        "packet_bytes": 17005,
+        "reserved_cost_dollars": "0.011009"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e12:c1000",
+        "estimated_input_tokens": 33638,
+        "packet_bytes": 28135,
+        "reserved_cost_dollars": "0.016025"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e24:c1000",
+        "estimated_input_tokens": 50930,
+        "packet_bytes": 44827,
+        "reserved_cost_dollars": "0.023547"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e48:c1000",
+        "estimated_input_tokens": 85514,
+        "packet_bytes": 78211,
+        "reserved_cost_dollars": "0.038591"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c250",
+        "estimated_input_tokens": 29829,
+        "packet_bytes": 23726,
+        "reserved_cost_dollars": "0.014368"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c500",
+        "estimated_input_tokens": 36829,
+        "packet_bytes": 30726,
+        "reserved_cost_dollars": "0.017413"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c750",
+        "estimated_input_tokens": 43829,
+        "packet_bytes": 37726,
+        "reserved_cost_dollars": "0.020458"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c1000",
+        "estimated_input_tokens": 50830,
+        "packet_bytes": 44727,
+        "reserved_cost_dollars": "0.023503"
+      }
+    ],
+    "evidence_budgets": [
+      4,
+      12,
+      24,
+      48
+    ],
+    "manifest": {
+      "concurrency": 1,
+      "context_window_tokens": 1000000,
+      "dollar_budget": "0.70",
+      "input_dollars_per_million_tokens": "0.435",
+      "input_token_budget": 1400000,
+      "max_calls": 28,
+      "max_output_tokens": 1600,
+      "max_packet_bytes": 86144,
+      "model": "deepseek-v4-pro",
+      "output_dollars_per_million_tokens": "0.87",
+      "pricing_checked_at": "2026-08-14T20:30:37Z",
+      "run_id": "2026-08-15-owner-authorized-why-first-v1"
+    },
+    "planned_call_count": 28,
+    "planned_calls_fit_call_cap": true,
+    "transport_enabled": false
+  },
+  "results": [
+    {
+      "accounted_cost_dollars": "0.002549",
+      "bilingual_output": {
+        "body_en": "DeepSeek and MiniMax both held flat conversation volume this week, with users mainly sharing neutral technical-analysis posts and hands-on content.",
+        "body_zh_cn": "DeepSeek 和 MiniMax 本周讨论量均持平，用户主要发布中性的技术分析帖和上手体验内容。"
+      },
+      "call_id": "pairwise:pair-01:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 22088,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6352,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 16985,
+      "provider_usage": {
+        "input_tokens": 4643,
+        "output_tokens": 608,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek and MiniMax both held flat conversation volume this week, with users mainly sharing neutral technical-analysis posts and hands-on content.\",\n  \"body_zh_cn\": \"DeepSeek 和 MiniMax 本周讨论量均持平，用户主要发布中性的技术分析帖和上手体验内容。\",\n  \"observations_en\": [\n    \"DeepSeek led the window on volume, but its movement was negligible.\",\n    \"MiniMax showed a small volume increase while its post-type, sentiment, and discourse mix stayed unchanged.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 在本窗口的讨论量领先，但变化幅度很小。\",\n    \"MiniMax 讨论量小幅上升，而帖子类型、情绪和话语构成保持不变。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011000",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004674",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window with a sharp volume spike, while MiniMax stayed nearly flat.",
+        "body_zh_cn": "DeepSeek 以明显的发帖量激增领跑本窗口，而 MiniMax 基本持平。"
+      },
+      "call_id": "pairwise:pair-02:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 42747,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 8861,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 36150,
+      "provider_usage": {
+        "input_tokens": 9070,
+        "output_tokens": 837,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window with a sharp volume spike, while MiniMax stayed nearly flat.\",\n  \"body_zh_cn\": \"DeepSeek 以明显的发帖量激增领跑本窗口，而 MiniMax 基本持平。\",\n  \"observations_en\": [\n    \"DeepSeek's volume rose 50% and engagement intensity rose 25%, with posts centered on technical analysis.\",\n    \"MiniMax's volume rose only 5%, with engagement intensity up 25% and no notable mix shift.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的发帖量上升 50%，互动强度上升 25%，讨论集中在技术分析。\",\n    \"MiniMax 的发帖量仅上升 5%，互动强度上升 25%，内容结构无明显变化。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_02f672b1cfbbe6d25a32f21f\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_22ff2ccd3ad9ee3e9d0ab286\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.019987",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-02",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004939",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as conversation about its intelligence gains accelerated late in the period, while MiniMax held a steady but smaller presence.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，关于其智能提升的讨论在后期加速，而 MiniMax 保持稳定但较小的声量。"
+      },
+      "call_id": "pairwise:pair-03:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 50824,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 9718,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44721,
+      "provider_usage": {
+        "input_tokens": 9683,
+        "output_tokens": 836,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as conversation about its intelligence gains accelerated late in the period, while MiniMax held a steady but smaller presence.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，关于其智能提升的讨论在后期加速，而 MiniMax 保持稳定但较小的声量。\",\n  \"observations_en\": [\n    \"DeepSeek posts rose sharply near the end of the window, with users speculating about improved intelligence.\",\n    \"MiniMax volume stayed flat across the window, with limited independent discussion.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的帖子在窗口临近结束时急剧增加，用户猜测其智能有所提升。\",\n    \"MiniMax 的声量在整个窗口保持平稳，独立讨论有限。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.023500",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-03",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.008035",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as conversation volume climbed 50%, but the rise was driven by generic buzz-release posts from a single source cluster with no recurring topic, so the movement is analytically thin.",
+        "body_zh_cn": "DeepSeek 在本窗口以 50% 的讨论量增幅领先，但增长来自单一来源簇的泛化发布帖，缺乏反复出现的主题，因此这一波动的分析支撑较弱。"
+      },
+      "call_id": "pairwise:pair-04:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 94475,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7510,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 86078,
+      "provider_usage": {
+        "input_tokens": 17502,
+        "output_tokens": 485,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as conversation volume climbed 50%, but the rise was driven by generic buzz-release posts from a single source cluster with no recurring topic, so the movement is analytically thin.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口以 50% 的讨论量增幅领先，但增长来自单一来源簇的泛化发布帖，缺乏反复出现的主题，因此这一波动的分析支撑较弱。\",\n  \"observations_en\": [\n    \"MiniMax also posted a 45% volume increase, but its evidence shows the same single-cluster, generic buzz-release pattern, leaving no independent story to support a second headline candidate.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的讨论量也增长了 45%，但其证据同样呈现单一来源簇的泛化发布模式，没有独立故事支撑其成为第二个头条候选。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.042489",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 1 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-04",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002285",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as conversation centered on technical analysis and hands-on posts, while MiniMax showed the larger relative volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析和上手体验帖，而 MiniMax 的相对发帖量增幅更大。"
+      },
+      "call_id": "pairwise:pair-05:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 22089,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6465,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 16986,
+      "provider_usage": {
+        "input_tokens": 4004,
+        "output_tokens": 624,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as conversation centered on technical analysis and hands-on posts, while MiniMax showed the larger relative volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析和上手体验帖，而 MiniMax 的相对发帖量增幅更大。\",\n  \"observations_en\": [\n    \"DeepSeek saw a mid-window spike in posts, but the surrounding days were flat and the overall window remained small.\",\n    \"MiniMax showed a larger relative volume increase, though its post-type and sentiment mix stayed essentially unchanged.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的发帖量在窗口中期出现一次冲高，但前后几天平稳，整体窗口规模仍然较小。\",\n    \"MiniMax 的相对发帖量增幅更大，但其帖型和情绪结构基本没有变化。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"discourse\",\n        \"post_type\",\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011001",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-05",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004457",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as users reported improved intelligence and hands-on technical analysis, with volume up 50% and engagement intensity up 25%.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，用户报告其智能有所提升并展开动手技术分析，帖子量增长 50%，互动强度增长 25%。"
+      },
+      "call_id": "pairwise:pair-06:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 42820,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 9244,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 36223,
+      "provider_usage": {
+        "input_tokens": 8437,
+        "output_tokens": 904,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as users reported improved intelligence and hands-on technical analysis, with volume up 50% and engagement intensity up 25%.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，用户报告其智能有所提升并展开动手技术分析，帖子量增长 50%，互动强度增长 25%。\",\n  \"observations_en\": [\n    \"MiniMax also rose 45% in volume, but its post-type, discourse, sentiment, and nationalism mixes stayed flat.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的帖子量也增长 45%，但其帖子类型、话语、情绪和民族主义构成均持平。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_2feb2b34f6653f30513ee923\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_02f672b1cfbbe6d25a32f21f\",\n        \"qf_446618ab6f7f4761c6418359\",\n        \"qf_c925b3bd4285de652714bb68\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\",\n        \"china_nationalism\",\n        \"us_nationalism\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_d8a3b8738967b19a3a9d2a85\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_f456f60ebe094d3f7a730384\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_2af119b3ac722efe6b4df71e\",\n        \"qf_6f1448fbfe7962e3016c2afe\",\n        \"qf_b14d0ba5610c534331c818e3\",\n        \"qf_a04420bbc06682a0e374d4e1\",\n        \"qf_a8312993580d361884f275cd\",\n        \"qf_e7647d65b71eb4b12e8d4112\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.020019",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-06",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004677",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged late in the window as users speculated about improved intelligence, while MiniMax held a small, steady lead in overall volume.",
+        "body_zh_cn": "DeepSeek 相关讨论在窗口后期激增，用户猜测其智能水平有所提升，而 MiniMax 在整体讨论量上保持小幅稳定领先。"
+      },
+      "call_id": "pairwise:pair-07:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 50831,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 9267,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44728,
+      "provider_usage": {
+        "input_tokens": 9044,
+        "output_tokens": 854,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged late in the window as users speculated about improved intelligence, while MiniMax held a small, steady lead in overall volume.\",\n  \"body_zh_cn\": \"DeepSeek 相关讨论在窗口后期激增，用户猜测其智能水平有所提升，而 MiniMax 在整体讨论量上保持小幅稳定领先。\",\n  \"observations_en\": [\n    \"DeepSeek posts rose sharply near the end of the window, with technical analysis and positive sentiment both gaining share.\",\n    \"MiniMax volume was slightly higher overall but remained flat across the window.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 相关帖子在窗口临近结束时急剧增加，技术分析和正面情绪占比均有所上升。\",\n    \"MiniMax 整体讨论量略高，但在整个窗口内保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.023503",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-07",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.006639",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users posted hands-on technical analysis, with volume up 50% and engagement intensity up 25%.",
+        "body_zh_cn": "DeepSeek 相关讨论激增，用户发布大量实操技术分析，讨论量上升 50%，互动强度上升 25%。"
+      },
+      "call_id": "pairwise:pair-08:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 94541,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 11160,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 86144,
+      "provider_usage": {
+        "input_tokens": 13029,
+        "output_tokens": 1117,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users posted hands-on technical analysis, with volume up 50% and engagement intensity up 25%.\",\n  \"body_zh_cn\": \"DeepSeek 相关讨论激增，用户发布大量实操技术分析，讨论量上升 50%，互动强度上升 25%。\",\n  \"observations_en\": [\n    \"MiniMax remained the quiet relative leader, with volume up only 5% and flat post-type, discourse, sentiment, and nationalism mixes.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 仍是相对平静的领先者，讨论量仅上升 5%，帖子类型、话语、情绪和民族主义构成均持平。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_2feb2b34f6653f30513ee923\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_02f672b1cfbbe6d25a32f21f\",\n        \"qf_446618ab6f7f4761c6418359\",\n        \"qf_c925b3bd4285de652714bb68\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\",\n        \"china_nationalism\",\n        \"us_nationalism\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_d8a3b8738967b19a3a9d2a85\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_f456f60ebe094d3f7a730384\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_2af119b3ac722efe6b4df71e\",\n        \"qf_6f1448fbfe7962e3016c2afe\",\n        \"qf_b14d0ba5610c534331c818e3\",\n        \"qf_a04420bbc06682a0e374d4e1\",\n        \"qf_a8312993580d361884f275cd\",\n        \"qf_e7647d65b71eb4b12e8d4112\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.042517",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-08",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003451",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation held flat this week while users repeatedly described downloading it more often and finding it more intelligent in hands-on work.",
+        "body_zh_cn": "DeepSeek 本周讨论量持平，但用户反复提到更频繁地下载它，并认为它在实际操作中更智能。"
+      },
+      "call_id": "pairwise:pair-09:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 31254,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 8638,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 25057,
+      "provider_usage": {
+        "input_tokens": 6287,
+        "output_tokens": 823,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation held flat this week while users repeatedly described downloading it more often and finding it more intelligent in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 本周讨论量持平，但用户反复提到更频繁地下载它，并认为它在实际操作中更智能。\",\n  \"observations_en\": [\n    \"MiniMax volume rose slightly, but its posts were mostly general mentions without a recurring reason.\",\n    \"Engagement intensity increased for both DeepSeek and MiniMax even as their post-type and sentiment mixes stayed flat.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 讨论量小幅上升，但相关帖子多为没有反复出现原因的一般性提及。\",\n    \"DeepSeek 和 MiniMax 的互动强度均有所上升，而帖子类型和情绪构成保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_22ff2ccd3ad9ee3e9d0ab286\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"engagement\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [],\n      \"quantitative_fact_ids\": [\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_22ff2ccd3ad9ee3e9d0ab286\",\n        \"qf_2feb2b34f6653f30513ee923\",\n        \"qf_d8a3b8738967b19a3a9d2a85\",\n        \"qf_c925b3bd4285de652714bb68\",\n        \"qf_2af119b3ac722efe6b4df71e\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.014987",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-09",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003156",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly reported downloading it more often and described improved intelligence in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复表示下载更频繁，并称实际使用中的智能表现有所提升。"
+      },
+      "call_id": "pairwise:pair-10:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 33638,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7356,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28135,
+      "provider_usage": {
+        "input_tokens": 5892,
+        "output_tokens": 682,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly reported downloading it more often and described improved intelligence in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复表示下载更频繁，并称实际使用中的智能表现有所提升。\",\n  \"observations_en\": [\n    \"The spike was concentrated in one interval, with volume rising sharply before returning to prior levels.\",\n    \"MiniMax showed only a small, flat change in volume with no recurring story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"激增集中在单个时段，讨论量大幅上升后回落至先前水平。\",\n    \"MiniMax 的讨论量变化很小且平稳，没有形成反复出现的叙事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016025",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-10",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005905",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax volume rose on scattered buzz-release posts.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁下载及实际使用中智能表现提升，而 MiniMax 的讨论量因零散的产品发布帖而上升。"
+      },
+      "call_id": "pairwise:pair-11:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 60073,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 9632,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 52876,
+      "provider_usage": {
+        "input_tokens": 11455,
+        "output_tokens": 1060,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax volume rose on scattered buzz-release posts.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁下载及实际使用中智能表现提升，而 MiniMax 的讨论量因零散的产品发布帖而上升。\",\n  \"observations_en\": [\n    \"DeepSeek volume was flat, but engagement intensity rose 25% as positive hands-on reports repeated across independent sources.\",\n    \"MiniMax volume rose 45%, though its evidence came from a single source cluster with no recurring theme.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的讨论量持平，但参与强度上升 25%，积极的实际使用报告在多个独立来源中反复出现。\",\n    \"MiniMax 的讨论量上升 45%，但其证据来自单一来源集群，且没有反复出现的主题。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_22ff2ccd3ad9ee3e9d0ab286\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_22ff2ccd3ad9ee3e9d0ab286\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.027524",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-11",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.007549",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载，并认为其在动手使用中更智能。"
+      },
+      "call_id": "pairwise:pair-12:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 85507,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 11237,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78204,
+      "provider_usage": {
+        "input_tokens": 15092,
+        "output_tokens": 1131,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载，并认为其在动手使用中更智能。\",\n  \"observations_en\": [\n    \"The rise was led by positive hands-on posts, while engagement intensity also increased.\",\n    \"MiniMax showed a smaller volume rise, but its posts remained generic buzz without a recurring story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"增长主要由积极的动手使用帖推动，同时互动强度也有所上升。\",\n    \"MiniMax 的讨论量增幅较小，且帖子仍为泛泛的发布动态，缺乏反复出现的故事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.038588",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-12",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003506",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax drew only scattered speculation and general mentions.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户反馈下载更频繁、实际使用中智能表现提升，而 MiniMax 仅有零散的猜测和一般性提及。"
+      },
+      "call_id": "pairwise:pair-13:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 31320,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 8326,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 25123,
+      "provider_usage": {
+        "input_tokens": 6422,
+        "output_tokens": 819,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax drew only scattered speculation and general mentions.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户反馈下载更频繁、实际使用中智能表现提升，而 MiniMax 仅有零散的猜测和一般性提及。\",\n  \"observations_en\": [\n    \"DeepSeek's hands-on posts and positive sentiment both rose, with technical analysis remaining the dominant discourse.\",\n    \"MiniMax's volume increased, but its post-type, discourse, and sentiment mix stayed flat.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的实操帖子和正面情绪均有所上升，技术分析仍是主要讨论方向。\",\n    \"MiniMax 的讨论量有所增加，但帖子类型、讨论方向和情绪结构保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\",\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_446618ab6f7f4761c6418359\",\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_446618ab6f7f4761c6418359\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_6f1448fbfe7962e3016c2afe\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.015016",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-13",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003062",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，用户反复提到更频繁地下载它，并认为它在实际使用中变得更智能。"
+      },
+      "call_id": "pairwise:pair-14:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 33646,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6190,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28143,
+      "provider_usage": {
+        "input_tokens": 6021,
+        "output_tokens": 509,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，用户反复提到更频繁地下载它，并认为它在实际使用中变得更智能。\",\n  \"observations_en\": [\n    \"MiniMax also rose, but its conversation centered on a single author's general mentions rather than a recurring user story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 也有所上升，但其讨论主要来自同一位作者的一般性提及，而非反复出现的用户故事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016028",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-14",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005881",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, alongside a rise in positive hands-on posts.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁下载并在实际使用中感受到智能提升，同时积极的实操帖有所增加。"
+      },
+      "call_id": "pairwise:pair-15:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 60139,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 10462,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 52942,
+      "provider_usage": {
+        "input_tokens": 11334,
+        "output_tokens": 1093,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, alongside a rise in positive hands-on posts.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁下载并在实际使用中感受到智能提升，同时积极的实操帖有所增加。\",\n  \"observations_en\": [\n    \"Users described downloading DeepSeek more often and noticing improved intelligence in hands-on work, with positive hands-on posts up 60%.\",\n    \"MiniMax showed a small volume increase, but its conversation remained flat across post type, discourse, and sentiment.\"\n  ],\n  \"observations_zh_cn\": [\n    \"用户表示更频繁下载 DeepSeek，并在实际使用中感受到智能提升，积极的实操帖增加了 60%。\",\n    \"MiniMax 的讨论量小幅上升，但帖子类型、话语和情绪均保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\",\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_446618ab6f7f4761c6418359\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_446618ab6f7f4761c6418359\",\n        \"qf_f905a89e521cf68a119ed728\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"discourse\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_6f1448fbfe7962e3016c2afe\"\n      ],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.027552",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-15",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005589",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more useful in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中感到它更聪明。"
+      },
+      "call_id": "pairwise:pair-16:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 85514,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 10259,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78211,
+      "provider_usage": {
+        "input_tokens": 10613,
+        "output_tokens": 1118,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more useful in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中感到它更聪明。\",\n  \"observations_en\": [\n    \"The rise was led by hands-on posts with positive sentiment, while engagement intensity also moved higher.\",\n    \"MiniMax stayed comparatively flat, with only scattered mentions and no recurring story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"增长主要由积极情绪的实际使用帖带动，互动强度也同步上升。\",\n    \"MiniMax 相对平稳，仅有零散提及，没有形成反复出现的主题。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.038591",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English said users found DeepSeek more useful while Chinese said it was more intelligent.",
+          "verdict": "fail"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.000531",
+      "bilingual_output": {
+        "body_en": "DeepSeek and MiniMax both held flat conversation volume this week, with users mainly posting neutral technical analysis and hands-on content.",
+        "body_zh_cn": "DeepSeek 和 MiniMax 本周讨论量均持平，用户主要发布中性技术分析与上手体验内容。"
+      },
+      "call_id": "evidence_count:pair-01:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 22088,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6050,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 16985,
+      "provider_usage": {
+        "input_tokens": 35,
+        "output_tokens": 593,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek and MiniMax both held flat conversation volume this week, with users mainly posting neutral technical analysis and hands-on content.\",\n  \"body_zh_cn\": \"DeepSeek 和 MiniMax 本周讨论量均持平，用户主要发布中性技术分析与上手体验内容。\",\n  \"observations_en\": [\n    \"DeepSeek led the window on volume, but its movement was flat.\",\n    \"MiniMax showed a small volume increase while its post-type and sentiment mix stayed unchanged.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 在本窗口的讨论量领先，但变化持平。\",\n    \"MiniMax 讨论量小幅上升，而帖子类型与情绪结构保持不变。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011000",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003195",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window with flat volume, while MiniMax posted a small increase.",
+        "body_zh_cn": "DeepSeek 在平静窗口中以持平声量领先，MiniMax 则出现小幅增长。"
+      },
+      "call_id": "evidence_count:pair-01:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 33586,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7286,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28083,
+      "provider_usage": {
+        "input_tokens": 5891,
+        "output_tokens": 727,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window with flat volume, while MiniMax posted a small increase.\",\n  \"body_zh_cn\": \"DeepSeek 在平静窗口中以持平声量领先，MiniMax 则出现小幅增长。\",\n  \"observations_en\": [\n    \"Conversation centered on technical analysis, with posts described as general mentions without a recurring reason.\",\n    \"Engagement intensity rose for both candidates even as post-type and sentiment mixes stayed unchanged.\"\n  ],\n  \"observations_zh_cn\": [\n    \"讨论集中在技术分析上，帖子被描述为没有重复原因的一般性提及。\",\n    \"两个候选对象的互动强度均有所上升，而帖子类型和情绪构成保持不变。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016002",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003799",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users posted about technical analysis, while MiniMax saw a small volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。"
+      },
+      "call_id": "evidence_count:pair-01:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 50830,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 5983,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44727,
+      "provider_usage": {
+        "input_tokens": 7635,
+        "output_tokens": 549,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users posted about technical analysis, while MiniMax saw a small volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。\",\n  \"observations_en\": [\n    \"DeepSeek led the window with flat volume and steady technical-analysis posts.\",\n    \"MiniMax showed a small volume increase while its discourse mix remained unchanged.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 以持平的量和稳定的技术分析帖子领先本窗口。\",\n    \"MiniMax 出现了小幅量增，但其话语结构保持不变。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.023503",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005651",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet week of AI model chatter, with posts centered on technical analysis and neutral sentiment while engagement intensity rose.",
+        "body_zh_cn": "DeepSeek 在本周平静的 AI 模型讨论中领先，帖子以技术分析和中性情绪为主，同时参与强度有所上升。"
+      },
+      "call_id": "evidence_count:pair-01:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 85318,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 8066,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78015,
+      "provider_usage": {
+        "input_tokens": 11763,
+        "output_tokens": 614,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet week of AI model chatter, with posts centered on technical analysis and neutral sentiment while engagement intensity rose.\",\n  \"body_zh_cn\": \"DeepSeek 在本周平静的 AI 模型讨论中领先，帖子以技术分析和中性情绪为主，同时参与强度有所上升。\",\n  \"observations_en\": [\n    \"Conversation centered on technical analysis, with neutral sentiment and buzz-release posts dominating the measured window.\",\n    \"MiniMax showed a small volume increase but remained a secondary comparison candidate with no independent recurring story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"讨论以技术分析为主，中性情绪和发布类帖子在测量窗口内占主导地位。\",\n    \"MiniMax 的讨论量略有增加，但仍为次要对比候选，未形成独立的重复性叙事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\",\n        \"discourse\",\n        \"sentiment\",\n        \"post_type\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"discourse\",\n        \"sentiment\",\n        \"post_type\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.038505",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002061",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users reported downloading it more often and described improved intelligence in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户报告更频繁下载并描述实际使用中的智能提升。"
+      },
+      "call_id": "evidence_count:pair-16:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 22108,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 4702,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 17005,
+      "provider_usage": {
+        "input_tokens": 3877,
+        "output_tokens": 431,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users reported downloading it more often and described improved intelligence in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户报告更频繁下载并描述实际使用中的智能提升。\",\n  \"observations_en\": [\n    \"MiniMax showed only a small, flat change in volume with no recurring theme behind the mentions.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 仅出现小幅且平稳的讨论量变化，提及背后没有反复出现的主题。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011009",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002604",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中感到其更智能。"
+      },
+      "call_id": "evidence_count:pair-16:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 33638,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7156,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28135,
+      "provider_usage": {
+        "input_tokens": 4613,
+        "output_tokens": 687,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中感到其更智能。\",\n  \"observations_en\": [\n    \"The rise was led by hands-on posts with positive sentiment, while technical analysis remained the dominant discourse.\",\n    \"MiniMax stayed comparatively flat, with only scattered speculation about improved intelligence.\"\n  ],\n  \"observations_zh_cn\": [\n    \"增长主要由积极情绪的实际使用帖推动，技术分析仍是主要讨论类型。\",\n    \"MiniMax 相对平稳，仅有零散关于智能提升的猜测。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016025",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003218",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中感到其更智能。"
+      },
+      "call_id": "evidence_count:pair-16:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 50930,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 8253,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44827,
+      "provider_usage": {
+        "input_tokens": 5717,
+        "output_tokens": 840,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中感到其更智能。\",\n  \"observations_en\": [\n    \"The rise was led by hands-on posts with positive sentiment, while technical analysis remained the dominant discourse.\",\n    \"MiniMax stayed comparatively flat, with only scattered neutral buzz-release mentions.\"\n  ],\n  \"observations_zh_cn\": [\n    \"增长主要由正面情绪的实际使用帖带动，技术分析仍是主要讨论类型。\",\n    \"MiniMax 相对平稳，仅有零散的中性发布提及。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.023547",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.001040",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载，并认为它在实际使用中更智能。"
+      },
+      "call_id": "evidence_count:pair-16:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 85514,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 9688,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78211,
+      "provider_usage": {
+        "input_tokens": 117,
+        "output_tokens": 1137,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding it more intelligent in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载，并认为它在实际使用中更智能。\",\n  \"observations_en\": [\n    \"The rise was led by hands-on posts with positive sentiment, while technical analysis remained the dominant discourse.\",\n    \"MiniMax stayed comparatively flat, with only scattered buzz-release mentions and no recurring story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"增长主要由正面情绪的实际使用帖带动，技术分析仍是主要讨论类型。\",\n    \"MiniMax 相对平稳，仅有零散的产品发布提及，没有形成反复出现的话题。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"post_type\",\n        \"sentiment\",\n        \"discourse\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\",\n        \"ev_05\",\n        \"ev_06\",\n        \"ev_07\",\n        \"ev_08\",\n        \"ev_09\",\n        \"ev_10\",\n        \"ev_11\",\n        \"ev_12\",\n        \"ev_13\",\n        \"ev_14\",\n        \"ev_15\",\n        \"ev_16\",\n        \"ev_17\",\n        \"ev_18\",\n        \"ev_19\",\n        \"ev_20\",\n        \"ev_21\",\n        \"ev_22\",\n        \"ev_23\",\n        \"ev_24\",\n        \"ev_25\",\n        \"ev_26\",\n        \"ev_27\",\n        \"ev_28\",\n        \"ev_29\",\n        \"ev_30\",\n        \"ev_31\",\n        \"ev_32\",\n        \"ev_33\",\n        \"ev_34\",\n        \"ev_35\",\n        \"ev_36\",\n        \"ev_37\",\n        \"ev_38\",\n        \"ev_39\",\n        \"ev_40\",\n        \"ev_41\",\n        \"ev_42\",\n        \"ev_43\",\n        \"ev_44\",\n        \"ev_45\",\n        \"ev_46\",\n        \"ev_47\",\n        \"ev_48\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.038591",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "A mix change was expected, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "A positive-sentiment change was supplied with the mix shift, but no schema-valid claim connected it to the headline.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003048",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users posted about technical analysis, while MiniMax saw a small volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c250",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 29829,
+      "evidence_budget": 24,
+      "excerpt_characters": 250,
+      "generated_output_hash": "",
+      "latency_ms": 6277,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 23726,
+      "provider_usage": {
+        "input_tokens": 5890,
+        "output_tokens": 559,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users posted about technical analysis, while MiniMax saw a small volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。\",\n  \"observations_en\": [\n    \"DeepSeek's post volume was flat, and its engagement intensity rose modestly.\",\n    \"MiniMax's post volume rose slightly, with engagement intensity also up modestly.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的帖子量持平，互动强度小幅上升。\",\n    \"MiniMax 的帖子量小幅上升，互动强度也小幅上升。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.014368",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003440",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users posted about technical analysis, while MiniMax showed a small volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c500",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 36829,
+      "evidence_budget": 24,
+      "excerpt_characters": 500,
+      "generated_output_hash": "",
+      "latency_ms": 7425,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 30726,
+      "provider_usage": {
+        "input_tokens": 6646,
+        "output_tokens": 631,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users posted about technical analysis, while MiniMax showed a small volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。\",\n  \"observations_en\": [\n    \"Conversation centered on technical analysis posts, with neutral sentiment and buzz release content.\",\n    \"Engagement intensity rose for both candidates, while volume stayed flat for DeepSeek and rose slightly for MiniMax.\"\n  ],\n  \"observations_zh_cn\": [\n    \"对话集中在技术分析帖子上，情绪中性，内容为发布动态。\",\n    \"两个候选对象的参与强度均有所上升，DeepSeek 的量保持平稳，MiniMax 的量小幅上升。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"post_type\",\n        \"sentiment\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"discourse\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"structured_mix\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"engagement\",\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.017413",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003642",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users posted about technical analysis, while MiniMax showed a small volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c750",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 43829,
+      "evidence_budget": 24,
+      "excerpt_characters": 750,
+      "generated_output_hash": "",
+      "latency_ms": 6992,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 37726,
+      "provider_usage": {
+        "input_tokens": 7677,
+        "output_tokens": 348,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users posted about technical analysis, while MiniMax showed a small volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。\",\n  \"observations_en\": [\n    \"Conversation centered on technical analysis, with neutral sentiment and buzz-release posts.\",\n    \"MiniMax showed a small volume increase while DeepSeek remained flat.\"\n  ],\n  \"observations_zh_cn\": [\n    \"讨论集中在技术分析上，情绪中性，帖子以发布动态为主。\",\n    \"MiniMax 出现小幅量增，而 DeepSeek 保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"post_type\",\n        \"sentiment\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.020458",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.000415",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet week of AI model chatter, with posts speculating about improved intelligence while overall volume stayed flat.",
+        "body_zh_cn": "DeepSeek 在本周平静的 AI 模型讨论中领先，帖子猜测其智能有所提升，而整体声量保持平稳。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 50830,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 5202,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44727,
+      "provider_usage": {
+        "input_tokens": 83,
+        "output_tokens": 435,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet week of AI model chatter, with posts speculating about improved intelligence while overall volume stayed flat.\",\n  \"body_zh_cn\": \"DeepSeek 在本周平静的 AI 模型讨论中领先，帖子猜测其智能有所提升，而整体声量保持平稳。\",\n  \"observations_en\": [\n    \"MiniMax showed a small volume increase, but the conversation remained thin and lacked a recurring theme.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的声量略有上升，但讨论仍然稀少，且缺乏反复出现的主题。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    \"DeepSeek\",\n    \"MiniMax\"\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"discourse\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": null,\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.023503",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic prose judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Confidence could not pass: subjects were malformed, event_anchor was null, and many claims exceeded the bounded evidence or fact citation limits.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Unpublishable selection: subjects were name strings instead of measured-subject objects; raw output selected 2 candidate(s).",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Materiality wording cannot be accepted from an output rejected before claim and candidate validation.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "This scenario did not require a mix-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact quantitative figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "This scenario did not require a sentiment-change explanation.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Raw prose was reviewed, but its why cannot pass because the schema-invalid claim graph could not establish publishable evidence support.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Absence of unsupported claims cannot be established because the provider output failed the closed schema before evidence validation.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    }
+  ],
+  "transport_enabled": true
+}
