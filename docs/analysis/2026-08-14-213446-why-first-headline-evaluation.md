@@ -10,6 +10,10 @@
 The JSON sibling is the reproducible machine record with all 28 bilingual
 outputs editorially reviewed.
 
+Every generated English and Simplified Chinese headline is reproduced in the
+[readable headline appendix](2026-08-14-213446-why-first-headline-samples.md),
+grouped by editorially accepted and rejected output.
+
 ## Decision
 
 **Reject activation. No evidence-count policy or materiality policy is
