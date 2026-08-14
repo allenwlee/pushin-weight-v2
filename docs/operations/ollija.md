@@ -242,6 +242,20 @@ OLLIJA_PRODUCTION_BROWSER_STORAGE_STATE=.ollija/state/production-browser.json
   --browser-storage-state .ollija/state/production-browser.json
 ```
 
+For remote verification, keep the authenticated browser on the operator's
+machine and expose its Chrome DevTools Protocol endpoint only over the private
+tailnet. Ollija connects to that browser, records a hash of the visible
+headline, and leaves the browser, cookies, and storage on the operator's
+machine:
+
+```bash
+./bin/ollija verify-production \
+  --browser-cdp-url http://<operator-tailnet-host>:9222
+```
+
+The storage-state and CDP options are mutually exclusive. The CDP endpoint
+must not be exposed publicly; use Tailscale or an SSH tunnel.
+
 Verification waits for `pushinweight-web`, `pushinweight-headlines`, and
 `pushinweight-harvest` to be `live` at one exact SHA; checks the public login
 route; opens the real authenticated feed; requires a visible, non-empty

@@ -80,6 +80,7 @@ verification:
   headline_selector: "[data-pw-headline-body]"
   headline_unavailable_text: Trend summary is unavailable.
   browser_storage_state_env: OLLIJA_PRODUCTION_BROWSER_STORAGE_STATE
+  browser_cdp_url_env: OLLIJA_PRODUCTION_BROWSER_CDP_URL
   deploy_timeout_seconds: 1800
   poll_interval_seconds: 10
   refresh_max_age_seconds: 86400

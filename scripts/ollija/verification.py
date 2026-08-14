@@ -118,6 +118,55 @@ class PlaywrightBrowserProbe:
         )
 
 
+class CdpBrowserProbe:
+    """Probe an authenticated browser without copying its session state."""
+
+    def __init__(self, cdp_url: str) -> None:
+        self.cdp_url = cdp_url
+
+    def observe_headline(
+        self,
+        *,
+        url: str,
+        selector: str,
+        unavailable_text: str,
+    ) -> BrowserObservation:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise VerificationError("playwright_unavailable") from exc
+
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.connect_over_cdp(self.cdp_url)
+                if not browser.contexts:
+                    raise VerificationError("production_remote_browser_context_missing")
+                page = browser.contexts[0].new_page()
+                try:
+                    page.goto(url, wait_until="networkidle", timeout=60_000)
+                    locator = page.locator(selector).first
+                    locator.wait_for(state="visible", timeout=30_000)
+                    text = locator.inner_text().strip()
+                    final_url = page.url
+                    visible = locator.is_visible()
+                finally:
+                    page.close()
+                # The remote browser owns its context and remains open.
+        except VerificationError:
+            raise
+        except Exception as exc:
+            raise VerificationError("production_remote_browser_probe_failed") from exc
+
+        if not visible or not text or unavailable_text.casefold() in text.casefold():
+            raise VerificationError("production_headline_not_visible")
+        return BrowserObservation(
+            final_url=final_url,
+            selector=selector,
+            visible=True,
+            text_fingerprint=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        )
+
+
 def probe_route(
     base_url: str,
     path: str,

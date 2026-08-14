@@ -49,7 +49,7 @@ from .render import RenderClient, RenderObservationError
 from .results import CommandError, CommandResult, EvidenceRef, NextAction
 from .state import CandidateIdentity, Receipt, ReceiptError, ReceiptStore
 from .status import build_doctor_result, build_status_result, collect_status_facts
-from .verification import PlaywrightBrowserProbe, VerificationError
+from .verification import CdpBrowserProbe, PlaywrightBrowserProbe, VerificationError
 from .versioning import VersionError, parse_beta_version
 
 _COACHING = """common prompts:
@@ -102,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--browser-storage-state",
         type=Path,
         help="Ignored Playwright storage-state file for the owner's Google session.",
+    )
+    verification.add_argument(
+        "--browser-cdp-url",
+        help="Chrome DevTools Protocol URL for an authenticated remote browser.",
     )
     verification.add_argument("--json", action="store_true", dest="json_output")
     approval = subparsers.add_parser(
@@ -633,7 +637,12 @@ def _release(config, facts) -> CommandResult:
     )
 
 
-def _verify_production(config, facts, storage_state: Path | None) -> CommandResult:
+def _verify_production(
+    config,
+    facts,
+    storage_state: Path | None,
+    browser_cdp_url: str | None,
+) -> CommandResult:
     blocked = _preflight_mutation("verify-production", facts)
     if blocked:
         return blocked
@@ -644,18 +653,35 @@ def _verify_production(config, facts, storage_state: Path | None) -> CommandResu
         else ""
     )
     selected = storage_state or (Path(environment_path) if environment_path else None)
-    if selected is None:
+    cdp_env_name = config.verification.get("browser_cdp_url_env")
+    configured_cdp = (
+        os.environ.get(cdp_env_name, "")
+        if isinstance(cdp_env_name, str) and cdp_env_name
+        else ""
+    )
+    selected_cdp = browser_cdp_url or configured_cdp or None
+    if selected is not None and selected_cdp is not None:
+        return _mutation_failure(
+            "verify-production",
+            "production_browser_probe_selection_ambiguous",
+        )
+    if selected is None and selected_cdp is None:
         return _mutation_failure(
             "verify-production",
             "production_browser_storage_state_missing",
         )
+    browser_probe = (
+        CdpBrowserProbe(selected_cdp)
+        if selected_cdp is not None
+        else PlaywrightBrowserProbe(selected)
+    )
     receipt, report = verify_and_tag_candidate(
         config=config,
         git=facts.git,
         package_version=facts.package_version,
         render=RenderClient(root=config.root),
         publisher=GitPublisher(config.root),
-        browser_probe=PlaywrightBrowserProbe(selected),
+        browser_probe=browser_probe,
         now=datetime.now(UTC),
     )
     return CommandResult(
@@ -713,7 +739,12 @@ def main(
         elif args.command == "release":
             result = _release(config, facts)
         elif args.command == "verify-production":
-            result = _verify_production(config, facts, args.browser_storage_state)
+            result = _verify_production(
+                config,
+                facts,
+                args.browser_storage_state,
+                args.browser_cdp_url,
+            )
         elif args.command == "preview":
             result = _preview(config, facts)
         else:
