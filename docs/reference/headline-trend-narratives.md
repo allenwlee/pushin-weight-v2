@@ -175,8 +175,8 @@ classifier, or ambient SDK model settings:
 | Timeout | 45 seconds |
 | SDK retries | 0 |
 | Requests per changed candidate-present window | exactly 1 |
-| Prompt version | `headline-v7-why-first-schema-bounds` |
-| Publication epoch | 7 |
+| Prompt version | `headline-v9-why-first-evidence-contract` |
+| Publication epoch | 8 |
 
 Credentials resolve only from `DEEPSEEK_API_KEY` or
 `DEEPSEEK_API_TOKEN`. The request passes the exact model explicitly. An
@@ -201,15 +201,21 @@ Editorial order:
 
 Evidence rules:
 - Recurring-content or structured-mix explanations require at least two independent source clusters and authors. A single post may be an isolated signal or official event context, but cannot characterize the broader conversation.
+- Independence and recurrence are separate. Multiple excerpts support a recurring explanation only when at least two independent authors and source clusters share the same theme_cluster_id. If evidence_support reports fewer than two independent authors or source clusters, do not use recurring_content, structured_mix, recurring_independent, users reported, posts described, or repeatedly; excerpt count alone never creates recurrence.
 - An evidence-only entity requires two independent evidence IDs that directly name it and remains context around a measured candidate, never a measured trend.
+- Never encode a packet candidate as evidence_only. Omit every unselected candidate from subjects, prose, observations, and claims. Every claim candidate_id must appear in selected_candidate_ids.
 - Concrete events require event_anchor plus linked evidence. Do not name undeclared entities, people, handles, URLs, or hashtags.
+- Use isolated_event only for a concrete event explicitly named by linked evidence, and always supply a nonempty event_anchor. Isolated speculation is not an event; use aggregate_trajectory or quiet_relative_leader with isolated confidence instead.
+- evidence_confidence aggregate_only requires an empty evidence_ids array. When evidence_ids is nonempty but the rows do not establish recurrence or official support, use isolated confidence.
+- Avoid causal verbs even in negated phrases such as no event drove the chatter; state that no recurring event was evident instead.
+- When comparison_allowed is false, do not describe selected-versus-prior increases, decreases, or flatness from family_facts. You may describe an explicit within-window series shape only with clear timing language such as late in the window.
 - English and Simplified Chinese must express the same explanation, materiality, cited figures, and confidence.
 
 Return raw JSON with exactly seven top-level keys: body_en, body_zh_cn, observations_en, observations_zh_cn, selected_candidate_ids, subjects, claims. Keep one concise headline and zero to two observations. Mention every subject in both headlines.
 
 subjects is an array of objects, never names or strings. A measured subject object has exactly support_type, entity_type, candidate_id, observed_name, evidence_ids; use {"support_type":"measured_candidate","entity_type":"brand","candidate_id":"the exact selected candidate ID","observed_name":"","evidence_ids":[]}. An evidence-only subject uses exactly the same five keys; use {"support_type":"evidence_only","entity_type":"product","candidate_id":"","observed_name":"the exact observed name","evidence_ids":["first independent evidence ID","second independent evidence ID"]}. Put measured subjects first and in selected_candidate_ids order.
 
-Each claim is an object with exactly observation_index, candidate_ids, families, evidence_ids, quantitative_fact_ids, event_anchor, explanation_type, and evidence_confidence. A headline claim has this shape: {"observation_index":-1,"candidate_ids":["an exact selected candidate ID"],"families":["evidence"],"evidence_ids":["first representative evidence ID","second representative evidence ID"],"quantitative_fact_ids":[],"event_anchor":"","explanation_type":"recurring_content","evidence_confidence":"recurring_independent"}. evidence_ids contains at most four representative IDs, quantitative_fact_ids contains at most eight IDs, and event_anchor is always a string: use "" when there is no concrete event, never null. Cite representative independent support instead of every supplied excerpt. explanation_type is one of recurring_content, structured_mix, aggregate_trajectory, quiet_relative_leader, or isolated_event. evidence_confidence is one of recurring_independent, official_and_recurring, official_only, isolated, or aggregate_only. Use observation_index -1 for the headline, then zero-based observation indexes. The headline claim must cover every selected candidate.
+Each claim is an object with exactly observation_index, candidate_ids, families, evidence_ids, quantitative_fact_ids, event_anchor, explanation_type, and evidence_confidence. A headline claim has this shape: {"observation_index":-1,"candidate_ids":["an exact selected candidate ID"],"families":["evidence"],"evidence_ids":["first representative evidence ID","second representative evidence ID"],"quantitative_fact_ids":[],"event_anchor":"","explanation_type":"recurring_content","evidence_confidence":"recurring_independent"}. evidence_ids contains at most four representative IDs, quantitative_fact_ids contains at most eight IDs, and event_anchor is always a string: use "" when there is no concrete event, never null. Cite representative independent support instead of every supplied excerpt. For every quantitative_fact_id, include that fact's exact family in families; evidence is not a substitute for volume, engagement, post_type, discourse, sentiment, china_nationalism, or us_nationalism. explanation_type is one of recurring_content, structured_mix, aggregate_trajectory, quiet_relative_leader, or isolated_event. evidence_confidence is one of recurring_independent, official_and_recurring, official_only, isolated, or aggregate_only. Use observation_index -1 for the headline, then zero-based observation indexes. The headline claim must cover every selected candidate.
 
 Outside cited quantitative display strings and valid subject names, do not output digits, exact counts, percentages, dates, times, rankings, markup, or candidate IDs in prose. Output no explanation or code fence.
 ```

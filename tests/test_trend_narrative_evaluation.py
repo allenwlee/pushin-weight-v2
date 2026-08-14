@@ -181,6 +181,84 @@ def test_synthetic_snapshot_uses_production_provider_projection_and_packet_bound
     assert "coarse_series" in packet["candidates"][0]
 
 
+def test_synthetic_evidence_ids_are_unique_across_candidates():
+    call = next(
+        call
+        for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+        if call.scenario_id == "pair-16" and call.sweep == "pairwise"
+    )
+    snapshot = build_synthetic_snapshot(call)
+    lead_ids = {
+        row["evidence_id"] for row in snapshot["candidates"][0]["evidence"]
+    }
+    comparison_ids = {
+        row["evidence_id"] for row in snapshot["candidates"][1]["evidence"]
+    }
+
+    assert lead_ids.isdisjoint(comparison_ids)
+
+
+def test_suppressed_comparison_fixture_does_not_leak_change_values():
+    call = next(
+        call
+        for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+        if call.scenario_id == "pair-16" and call.sweep == "pairwise"
+    )
+    snapshot = build_synthetic_snapshot(call)
+
+    assert snapshot["comparison_allowed"] is False
+    for candidate in snapshot["candidates"]:
+        facts = candidate["family_facts"]
+        assert facts["volume"]["change_pct"] is None
+        assert facts["volume"]["comparison_state"] == "unavailable"
+        assert facts["engagement"]["intensity_change_pct"] is None
+        assert all(
+            label["brand_change_pp"] is None
+            for family in (
+                "post_type",
+                "discourse",
+                "sentiment",
+                "china_nationalism",
+                "us_nationalism",
+            )
+            for label in facts[family]["labels"]
+        )
+
+    provider_packet = project_provider_packet(snapshot)
+
+    def assert_comparison_inputs_are_hidden(value):
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                if "prior" in key.casefold() or "change" in key.casefold():
+                    assert nested is None
+                else:
+                    assert_comparison_inputs_are_hidden(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                assert_comparison_inputs_are_hidden(nested)
+
+    for candidate in provider_packet["candidates"]:
+        assert_comparison_inputs_are_hidden(candidate["family_facts"])
+
+
+def test_nonindependent_fixture_describes_repetition_by_one_source():
+    call = next(
+        call
+        for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
+        if call.scenario_id == "pair-16" and call.sweep == "pairwise"
+    )
+    snapshot = build_synthetic_snapshot(call)
+    evidence = snapshot["candidates"][0]["evidence"]
+
+    assert len({row["source_cluster_id"] for row in evidence}) == 1
+    assert "One user reported" in evidence[0]["excerpt"]
+    assert all(
+        "The same source repeated" in row["excerpt"]
+        for row in evidence[1:]
+    )
+    assert all("independent report" not in row["excerpt"] for row in evidence)
+
+
 @pytest.mark.parametrize(
     "overrides,error",
     [

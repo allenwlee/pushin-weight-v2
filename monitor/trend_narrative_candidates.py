@@ -285,7 +285,10 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
                 "start_at": candidate["start_at"],
                 "end_at": candidate["end_at"],
                 "signals": candidate["signals"],
-                "family_facts": candidate["family_facts"],
+                "family_facts": _provider_family_facts(
+                    candidate["family_facts"],
+                    comparison_allowed=comparison_allowed,
+                ),
                 "quantitative_facts": _quantitative_display_facts(
                     candidate,
                     comparison_allowed=comparison_allowed,
@@ -336,6 +339,36 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         "series_axis": {"coarse": snapshot["series_axis"]["coarse"]},
         "candidates": candidates,
     }
+
+
+def _provider_family_facts(
+    value: Any,
+    *,
+    comparison_allowed: bool,
+) -> Any:
+    """Hide prior-window inputs when the snapshot suppresses comparison."""
+    if comparison_allowed:
+        return value
+    if isinstance(value, Mapping):
+        projected = {}
+        for key, nested in value.items():
+            normalized_key = str(key).casefold()
+            if "prior" in normalized_key or "change" in normalized_key:
+                projected[key] = None
+            elif normalized_key == "comparison_state":
+                projected[key] = "unavailable"
+            else:
+                projected[key] = _provider_family_facts(
+                    nested,
+                    comparison_allowed=False,
+                )
+        return projected
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [
+            _provider_family_facts(item, comparison_allowed=False)
+            for item in value
+        ]
+    return value
 
 
 def _quantitative_display_facts(

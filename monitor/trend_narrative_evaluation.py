@@ -407,7 +407,8 @@ def _synthetic_candidate(
     lead: bool,
 ) -> dict[str, Any]:
     mix_shift = dimensions["mix"] == "high" and lead
-    coverage = "1.000000" if dimensions["data_quality"] == "high" else "0.500000"
+    comparison_allowed = dimensions["data_quality"] == "high"
+    coverage = "1.000000" if comparison_allowed else "0.500000"
     labels = {
         "post_type": ("hands_on", 16 if mix_shift else 10, 10),
         "discourse": ("technical_analysis", 18 if mix_shift else 12, 12),
@@ -421,13 +422,13 @@ def _synthetic_candidate(
             "selected_authors": max(10, selected_count // 3),
             "prior_count": prior_count,
             "prior_authors": max(10, prior_count // 3),
-            "change_pct": change,
-            "comparison_state": "available",
+            "change_pct": change if comparison_allowed else None,
+            "comparison_state": "available" if comparison_allowed else "unavailable",
         },
         "engagement": {
             "selected": {"eligible_count": selected_count, "intensity": "5.000000"},
             "prior": {"eligible_count": prior_count, "intensity": "4.000000"},
-            "intensity_change_pct": "25.000000",
+            "intensity_change_pct": "25.000000" if comparison_allowed else None,
         },
     }
     for family, (key, selected, prior) in labels.items():
@@ -441,7 +442,9 @@ def _synthetic_candidate(
                     "prior_count": prior,
                     "selected_basis_count": selected_count,
                     "prior_basis_count": prior_count,
-                    "brand_change_pp": "10.000000" if mix_shift else "0.000000",
+                    "brand_change_pp": (
+                        "10.000000" if mix_shift else "0.000000"
+                    ) if comparison_allowed else None,
                 }
             ],
         }
@@ -452,6 +455,7 @@ def _synthetic_candidate(
             independent=dimensions["evidence_strength"] == "high" and lead,
             excerpt_characters=excerpt_characters,
             brand=display_name,
+            brand_key=brand_key,
         )
         for index in range(evidence_budget)
     ]
@@ -508,11 +512,22 @@ def _synthetic_evidence(
     independent: bool,
     excerpt_characters: int,
     brand: str,
+    brand_key: str,
 ) -> dict[str, Any]:
-    if recurring:
+    if recurring and independent:
         reason = (
             f"A user reported downloading {brand} more often and described "
             f"improved intelligence in hands-on work; independent report {index + 1}. "
+        )
+    elif recurring and index == 0:
+        reason = (
+            f"One user reported downloading {brand} more often and described "
+            "improved intelligence in hands-on work. "
+        )
+    elif recurring:
+        reason = (
+            f"The same source repeated its report about downloading {brand} more "
+            "often and improved intelligence in hands-on work. "
         )
     elif index == 0:
         reason = f"One post speculated that {brand} intelligence had improved. "
@@ -522,12 +537,12 @@ def _synthetic_evidence(
     excerpt = (reason + filler)[:excerpt_characters]
     source_number = index if independent else 0
     return {
-        "evidence_id": f"ev_{index + 1:02d}",
-        "source_cluster_id": f"source_{source_number + 1:02d}",
-        "theme_cluster_id": "downloads_intelligence"
+        "evidence_id": f"{brand_key}_ev_{index + 1:02d}",
+        "source_cluster_id": f"{brand_key}_source_{source_number + 1:02d}",
+        "theme_cluster_id": f"{brand_key}_downloads_intelligence"
         if recurring
-        else f"generic_{index:02d}",
-        "author_group_id": f"author_{source_number + 1:02d}",
+        else f"{brand_key}_generic_{index:02d}",
+        "author_group_id": f"{brand_key}_author_{source_number + 1:02d}",
         "excerpt": excerpt,
         "roles": ["recurring_theme" if recurring else "top_engaged_original"],
         "source_flags": {

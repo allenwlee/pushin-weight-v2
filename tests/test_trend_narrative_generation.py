@@ -28,6 +28,7 @@ def _evidence(evidence_id: str, excerpt: str) -> dict:
     return {
         "evidence_id": evidence_id,
         "source_cluster_id": f"sc_{evidence_id}",
+        "theme_cluster_id": "shared_test_theme",
         "author_group_id": f"ag_{evidence_id}",
         "excerpt": excerpt,
         "roles": ["top_engaged_original"],
@@ -407,8 +408,8 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
-    assert config.prompt_version == "headline-v7-why-first-schema-bounds"
-    assert config.publication_epoch == 7
+    assert config.prompt_version == "headline-v9-why-first-evidence-contract"
+    assert config.publication_epoch == 9
     assert config.materiality_policy_version == "pending-live-review-v1"
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
@@ -515,6 +516,18 @@ def test_literal_prompt_requires_why_first_mix_context_and_two_winners():
     assert "quantitative_fact_ids contains at most eight IDs" in (
         HEADLINE_SYSTEM_PROMPT_V3
     )
+    assert "share the same theme_cluster_id" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "Never encode a packet candidate as evidence_only" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
+    assert "include that fact's exact family in families" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
+    assert "aggregate_only requires an empty evidence_ids array" in (
+        HEADLINE_SYSTEM_PROMPT_V3
+    )
+    assert "Isolated speculation is not an event" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "Avoid causal verbs even in negated phrases" in HEADLINE_SYSTEM_PROMPT_V3
 
 
 def test_current_reference_literal_prompt_matches_active_contract_exactly():
@@ -932,6 +945,28 @@ def test_event_language_without_anchor_fails_closed():
     assert captured.value.code == "headline_output_event_anchor_required"
 
 
+def test_chinese_user_posting_language_is_not_mistaken_for_a_release_event():
+    payload = _valid_payload()
+    payload["body_en"] = "MiniMax draws attention as users post technical analysis."
+    payload["body_zh_cn"] = "MiniMax 因用户发布技术分析帖子而受到关注。"
+
+    result, _ = _generate(payload)
+
+    assert result.body_zh_cn == payload["body_zh_cn"]
+
+
+def test_recurring_explanation_requires_a_shared_theme_across_sources():
+    snapshot = _snapshot(two_candidates=False)
+    snapshot["candidates"][0]["evidence"][0]["theme_cluster_id"] = "theme_one"
+    snapshot["candidates"][0]["evidence"][1]["theme_cluster_id"] = "theme_two"
+    payload = _evidence_entity_payload()
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        _generate(payload, snapshot=snapshot)
+
+    assert captured.value.code == "headline_output_explanation_support_weak"
+
+
 def test_nationalism_claim_rejects_causal_wording_in_either_locale():
     payload = _valid_payload()
     payload["body_en"] = "MiniMax rises because pro-China discourse drove attention."
@@ -1196,7 +1231,7 @@ def test_generation_fingerprint_changes_with_analysis_route_prompt_and_epoch():
 
     assert generation_fingerprint(
         snapshot,
-        baseline.model_copy(update={"publication_epoch": 8}),
+        baseline.model_copy(update={"publication_epoch": 10}),
     ) != fingerprint
     assert generation_fingerprint(
         snapshot,
