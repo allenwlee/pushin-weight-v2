@@ -1,6 +1,6 @@
 # Render runbook — Pushin Weight v2
 
-Last verified against the Render account and Blueprint: 2026-08-13.
+Last verified against the Render account and Blueprint: 2026-08-14.
 
 ## Deployed reality
 
@@ -71,6 +71,29 @@ environment value after a Blueprint sync, so the release owner must verify the
 resolved database identity on every service after sync and manually inject the
 same managed credential through Render if a service did not update. Never
 commit a connection string to source control.
+
+### Database credential rotation
+
+Use Render-managed users rather than `CREATE USER` or `ALTER ROLE`. A newly
+created managed user becomes the database default, but the old user remains
+valid until explicitly retired.
+
+1. Create the new managed credential through Render and leave the old user
+   active.
+2. Sync the Blueprint and redeploy every active database consumer.
+3. Inspect the resolved `DATABASE_URL` on web, headlines, and harvest without
+   printing it; verify that its username is the new default. A green deploy at
+   the expected SHA is necessary but not sufficient.
+4. Verify the login endpoint and relevant worker/cron logs, then query
+   `pg_stat_activity` for connections using the old username.
+5. Retire the old managed credential only when its connection count is zero.
+6. Verify the old credential is rejected and repeat the endpoint/log checks.
+
+During the 2026-08-14 rotation, a normal commit-triggered Blueprint deploy was
+green but did not refresh the three existing services' resolved database URL.
+Retiring the old user caused a short outage until the new internal connection
+URL was applied directly and all three services were redeployed. Never use
+deploy status alone as the retirement gate.
 
 The headline route is pinned to DeepSeek V4 via
 `https://api.deepseek.com/anthropic` + `deepseek-v4-pro`, matching the

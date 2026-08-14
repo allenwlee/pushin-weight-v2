@@ -95,8 +95,8 @@ With `Content-Type: application/octet-stream` and `--data-binary "@dump.bin"`: r
 | Drive access token | (regenerable via `python3 /tmp/gen_signed_url.py`) | 1-hour lifetime, currently has ~50 min left |
 | `magic-wormhole` install | `/opt/homebrew/bin/wormhole` (both fuchitalee and local) | ✅ |
 | Shadow DB | `pushinweight-db-shadow` (`dpg-d9koekqjobas73fvjqng-a`) | clean, 0 tables |
-| Shadow external URL | `postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com/pushinweight_shadow` | ✅ |
-| Shadow internal URL | `postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow` | ✅ |
+| Shadow external URL | `postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com/pushinweight_shadow` | ✅ |
+| Shadow internal URL | `postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow` | ✅ |
 | Prod DB | `pushinweight-db` on basic_1gb | 0 tables (data lost) |
 | Cron | `*/15 * * * *` (still running) | NOT yet paused (recipe said pause-after-recovery) |
 
@@ -149,7 +149,7 @@ md5sum /tmp/dump.bin
 
 ```bash
 # In Render shell (from inside Render's internal network)
-SHADOW_DATABASE_URL="postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow" \
+SHADOW_DATABASE_URL="postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow" \
 DUMP_PATH=/tmp/pushinweight-20260728-141129.dump \
 EXPECTED_MD5=8335a6955955b834d83008fad532606c \
 /opt/render/project/src/scripts/ops/shadow_restore.sh
@@ -159,7 +159,7 @@ EXPECTED_MD5=8335a6955955b834d83008fad532606c \
 ### Then U3 (migrations on shadow):
 
 ```bash
-SHADOW_DATABASE_URL="postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow" \
+SHADOW_DATABASE_URL="postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow" \
 python manage.py migrate --noinput
 # expect migrations 0001 → 0002 → 0003 → 0006 → 0004 → 0005
 

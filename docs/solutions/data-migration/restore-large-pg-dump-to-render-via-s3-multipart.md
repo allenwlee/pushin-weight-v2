@@ -139,7 +139,7 @@ Render's egress is a data-center NIC with no NAT timeout, no consumer-router PMT
 
 ```bash
 # Inside the Render shell
-export SHADOW_DB="postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow"
+export SHADOW_DB="postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow"
 
 pg_restore --no-owner --no-privileges --jobs=1 \
     -d "$SHADOW_DB" \
@@ -207,7 +207,7 @@ render logs -r srv-d9go2breo5us73cg6vqg --limit 100
 
 If you see the OLD hostname in the logs, the env var stayed stale. **Do not** rely on `render deploys list` showing `Live` — a service can be Live with a stale env var.
 
-**Fix**: open the Render dashboard → `pushinweight-web` → Environment → `DATABASE_URL` → edit → paste the new shadow connection string (`postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow`) → Save. Render will trigger a redeploy automatically. Repeat for `pushinweight-worker`, `pushinweight-beat`, and `pushinweight-harvest` (the cron). This is the only path that forces an env var refresh; the CLI's `render deploys create` triggers a rebuild but does not force env var refresh, and if the build fails the running service keeps the old env var.
+**Fix**: open the Render dashboard → `pushinweight-web` → Environment → `DATABASE_URL` → edit → paste the new shadow connection string (`postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow`) → Save. Render will trigger a redeploy automatically. Repeat for `pushinweight-worker`, `pushinweight-beat`, and `pushinweight-harvest` (the cron). This is the only path that forces an env var refresh; the CLI's `render deploys create` triggers a rebuild but does not force env var refresh, and if the build fails the running service keeps the old env var.
 
 The dashboard edit is manual but it is the only reliable path. The Render CLI/REST API exposes env var reads but the env var writes on a previously-deployed service do not propagate through the blueprint-sync layer in the way you'd expect; the dashboard is the canonical surface for this update.
 

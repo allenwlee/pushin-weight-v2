@@ -8,8 +8,19 @@
 # and run logs that have no value in git history.
 /.context/
 
+# Local secrets and ollija runtime evidence. The example file is intentionally
+# tracked; real values and mutable receipts stay on the authoritative host.
+/.env
+/.env.*
+!/.env.example
+/.ollija/state/
+/.ollija/tmp/
+
 # Legacy runtime data
 data/monitor.db
+data/django_dev.db
+data/django_dev.db-*
+data/django_dev.db.*
 
 # Runtime data (not committed)
 data/runs/raw/

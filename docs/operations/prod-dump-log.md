@@ -9,7 +9,7 @@ Per plan `2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md` U0,
 - **DB name**: `pushinweight_shadow`
 - **DB id**: `dpg-d9koekqjobas73fvjqng-a`
 - **Plan**: `basic_1gb` (Render Postgres)
-- **External URL**: `postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com:5432/pushinweight_shadow`
+- **External URL**: `postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com:5432/pushinweight_shadow`
 - **Status as of 2026-07-30**: `available`, not suspended, region: oregon
 
 ## Storage locations
@@ -30,7 +30,7 @@ Per plan `2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md` U0,
   ```
   /opt/homebrew/bin/pg_dump --no-owner --no-privileges --format=custom \
       --file=/Users/fuchitalee/Downloads/pushinweight-dumps/pushinweight-20260730-104308.dump \
-      "postgresql://pushinweight_shadow:w5W9bFaa5Orol8XHTsu8bUEgMXV8kwYo@dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com:5432/pushinweight_shadow"
+      "postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com:5432/pushinweight_shadow"
   ```
 - **File**:
   - Path: `/Users/fuchitalee/Downloads/pushinweight-dumps/pushinweight-20260730-104308.dump`

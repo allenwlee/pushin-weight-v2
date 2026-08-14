@@ -235,7 +235,7 @@ The restore-mode `build.sh` does:
 #!/usr/bin/env bash
 set -euo pipefail
 DUMP_URL="<gh-asset-url-from-U1>"
-INTERNAL_DB="postgresql://pushinweight:Dt1Fe4R22FGttNNrtLeHByGYWalazyLJ@dpg-d9go1njeo5us73cg5u00-a:5432/pushinweight"
+INTERNAL_DB="postgresql://pushinweight:<redacted>@dpg-d9go1njeo5us73cg5u00-a:5432/pushinweight"
 
 curl -L -o /tmp/dump.bin "$DUMP_URL"
 ls -lh /tmp/dump.bin  # verify size

@@ -116,6 +116,15 @@ discussing domain concepts.
 
 # pushin-weight-v2 Agent Rules
 
+## ollija host authority
+
+`fuchitalee` is the sole authoritative host for this repository and ollija's
+runtime state. Do not create a checkout, worktree, cache, backup, receipt, or
+other PushinWeight/ollija artifact on `allenwlee`; it is only a keyboard and
+browser endpoint. Follow the authority-transfer procedure in
+`docs/operations/ollija-rollout-baseline.md` before treating any replacement
+host as writable.
+
 ## Memory
 
 Topic files live under `~/.claude/projects/-Users-allenwlee/memory/` and are loaded on demand. Each entry below has a corresponding detail file with the full context.

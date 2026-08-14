@@ -55,7 +55,7 @@ Create `~/Library/LaunchAgents/com.pushinweight.resolve-lonely.plist`:
   <key>EnvironmentVariables</key>
   <dict>
     <key>DATABASE_URL</key>
-    <string>postgresql://pushinweight_shadow:&lt;redacted&gt;@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow</string>
+    <string>postgresql://pushinweight_shadow:<redacted>@dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow</string>
     <key>PATH</key>
     <string>/Users/fuchitalee/development/pushin-weight-v2/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>

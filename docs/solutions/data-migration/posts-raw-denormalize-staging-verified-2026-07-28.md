@@ -64,7 +64,7 @@ The `posts.raw → typed columns` denormalization migration has been **fully ver
 **Prod DB (untouched):**
 - `dpg-d9go1njeo5us73cg5u00-a` on Render (`pushinweight-db`)
 - Plan: `free`, no automatic backups
-- Connection string: `postgresql://pushinweight:Dt1Fe4R22FGttNNrtLeHByGYWalazyLJ@dpg-d9go1njeo5us73cg5u00-a.oregon-postgres.render.com/pushinweight`
+- Connection string: `postgresql://pushinweight:<redacted>@dpg-d9go1njeo5us73cg5u00-a.oregon-postgres.render.com/pushinweight`
 - Access from fuchitalee via `render psql` (CLI auth file is on fuchitalee only — not on laptop)
 
 ## The 4 bugs found and fixed
@@ -344,7 +344,7 @@ Expected: 0 (every post fetched in the last hour should have its typed columns p
 
 3. **Backup file is at `~/Downloads/pushinweight-20260728-200742.dump`.** Restore command (if you need to undo prod):
    ```bash
-   /opt/homebrew/bin/pg_restore -Fc -d "postgresql://pushinweight:Dt1Fe4R22FGttNNrtLeHByGYWalazyLJ@dpg-d9go1njeo5us73cg5u00-a.oregon-postgres.render.com/pushinweight" \
+   /opt/homebrew/bin/pg_restore -Fc -d "postgresql://pushinweight:<redacted>@dpg-d9go1njeo5us73cg5u00-a.oregon-postgres.render.com/pushinweight" \
      --clean --if-exists --no-owner --no-privileges \
      ~/Downloads/pushinweight-20260728-200742.dump
    ```
