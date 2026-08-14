@@ -124,6 +124,23 @@ The one current published `TrendNarrative` for a window. Failed, suppressed,
 disabled, stale, or superseded attempts do not erase it; the public projection
 continues to serve it unless serving itself is disabled.
 
+### Why-first trend headline
+
+A trend headline whose primary claim explains what people are discussing and
+why the selected brand is notable when recurring content supports that
+judgment. Quantity, rate, sentiment, engagement, and trajectory shape provide
+validation or additional color; they do not automatically lead the headline
+merely because they are easier to measure. A quiet or unsupported window still
+gets a candid headline without a fabricated reason.
+
+### Relative leader and absolute materiality
+
+The relative leader is the strongest supported story among measured candidates
+for a window, even when every candidate is quiet. Absolute materiality describes
+the size of that leader's movement using window-specific language such as flat,
+small, meaningful, or sharp. Selecting a relative leader never authorizes the
+headline to exaggerate its absolute materiality.
+
 ## x-monitor deployment
 
 Vocabulary scoped to the launchd-based deployment story — the two LaunchAgents, the pause sentinel, and the in-process lockfile that prevents overlapping cycles.
