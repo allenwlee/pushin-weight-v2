@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -504,6 +505,20 @@ def test_literal_prompt_requires_why_first_mix_context_and_two_winners():
         HEADLINE_SYSTEM_PROMPT_V3
     )
     assert "evidence-only entity" in HEADLINE_SYSTEM_PROMPT_V3
+
+
+def test_current_reference_literal_prompt_matches_active_contract_exactly():
+    reference = Path("docs/reference/headline-trend-narratives.md").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(
+        r"### Literal system prompt\n\n.*?```text\n(.*?)\n```",
+        reference,
+        flags=re.DOTALL,
+    )
+
+    assert match is not None
+    assert match.group(1) == HEADLINE_SYSTEM_PROMPT_V3
 
 
 def test_flat_volume_mix_story_leads_with_supported_content_and_cited_color():

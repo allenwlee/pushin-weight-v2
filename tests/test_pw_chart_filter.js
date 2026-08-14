@@ -56,6 +56,7 @@ function payload(windowDays, count, pulseName) {
       state: 'available',
       state_label: 'Available',
       body: (pulseName || 'No trend') + ' leads attention.',
+      body_prefix: '',
       body_remainder: 'leads attention.',
       observations: pulseName ? [
         'Attention rises and then holds.',
@@ -180,6 +181,7 @@ function makeNode() {
 function makeHeadline() {
   const root = makeNode();
   const bodyParent = makeNode();
+  const prefix = makeNode();
   const body = makeNode();
   const state = makeNode();
   const voices = makeNode();
@@ -188,6 +190,7 @@ function makeHeadline() {
   const status = makeNode();
   body.parentNode = bodyParent;
   root.querySelector = function (selector) {
+    if (selector === '[data-pw-headline-prefix]') return prefix;
     if (selector === '[data-pw-headline-body]') return body;
     if (selector === '[data-pw-headline-state]') return state;
     if (selector === '[data-pw-headline-brand]') {
@@ -198,7 +201,7 @@ function makeHeadline() {
     if (selector === '[data-pw-headline-observations]') return observations;
     return null;
   };
-  return { root, body, state, voices, observations, status };
+  return { root, prefix, body, state, voices, observations, status };
 }
 
 function response(data, ok = true) {
@@ -359,6 +362,22 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'headline commits the matching primary subject anchor');
   assert(base.headline.root.querySelector('[data-pw-headline-brand]') === focusedBrand,
     'refresh reconciles the brand anchor in place so keyboard focus can survive');
+  const contextual = makeSandbox();
+  const contextualPayload = payload(7, 4, 'MiniMax');
+  contextualPayload.trend_narrative.body =
+    'In a mostly unremarkable week, MiniMax led with a small rise.';
+  contextualPayload.trend_narrative.body_prefix = 'In a mostly unremarkable week, ';
+  contextualPayload.trend_narrative.body_remainder = ' led with a small rise.';
+  contextual.fetchQueue.push(response(contextualPayload));
+  contextual.document.dispatchEvent(
+    new contextual.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  await flush();
+  assert(contextual.headline.prefix.textContent === 'In a mostly unremarkable week, ' &&
+    contextual.headline.body.textContent === ' led with a small rise.',
+    'headline keeps context on both sides of the linked primary brand');
+  assert(contextual.headline.root.querySelector('[data-pw-headline-brand]').textContent === 'MiniMax',
+    'contextual headline links the in-place primary brand exactly once');
   assert(base.headline.observations.children.length === 2 &&
     base.headline.observations.children[0].textContent === 'Attention rises and then holds.' &&
     base.headline.observations.children[1].textContent === 'Engagement remains elevated.',

@@ -34,6 +34,8 @@ def _publish(
     *,
     coverage_state: str = "sufficient",
     output_schema_version: int = 2,
+    body_en: str = "MiniMax leads attention across the market.",
+    body_zh_cn: str = "MiniMax 当前在市场讨论中更受关注。",
 ):
     brand = Brand.objects.create(
         nickname="minimax",
@@ -120,8 +122,8 @@ def _publish(
         row.pk,
         owner="worker-a",
         fence=row.claim_fence,
-        body_en="MiniMax leads attention across the market.",
-        body_zh_cn="MiniMax 当前在市场讨论中更受关注。",
+        body_en=body_en,
+        body_zh_cn=body_zh_cn,
         output_hash="b" * 64,
         input_tokens=100,
         output_tokens=40,
@@ -235,7 +237,8 @@ def test_available_projection_selects_locale_and_public_brand_link(locale, expec
         "可用" if locale in {"zh_cn", "zh-CN", "zh_hans"} else "Available"
     )
     assert payload["body"] == expected
-    assert payload["body_remainder"] == expected.removeprefix("MiniMax ")
+    assert payload["body_prefix"] == ""
+    assert payload["body_remainder"] == expected[len("MiniMax") :]
     assert payload["observations"] == (
         ["讨论热度上升后保持稳定。"]
         if locale in {"zh_cn", "zh-CN", "zh_hans"}
@@ -257,6 +260,25 @@ def test_available_projection_selects_locale_and_public_brand_link(locale, expec
     assert "provider" not in payload
     assert "error" not in payload
     assert "claim" not in payload
+
+
+def test_projection_preserves_primary_brand_position_inside_quiet_context():
+    body = (
+        "In a mostly unremarkable week, MiniMax led with a small 0.1% rise "
+        "in post volume."
+    )
+    _publish(body_en=body)
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert payload["body"] == body
+    assert payload["body_prefix"] == "In a mostly unremarkable week, "
+    assert payload["body_remainder"] == " led with a small 0.1% rise in post volume."
 
 
 def test_schema_three_row_keeps_the_public_browser_dto_at_schema_two():

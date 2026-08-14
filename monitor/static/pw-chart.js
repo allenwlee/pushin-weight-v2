@@ -47,6 +47,8 @@
         !isObject(payload.trend_narrative) ||
         ![1, 2].includes(Number(payload.trend_narrative.schema_version)) ||
         typeof payload.trend_narrative.body !== 'string' ||
+        (payload.trend_narrative.body_prefix !== undefined &&
+         typeof payload.trend_narrative.body_prefix !== 'string') ||
         (payload.trend_narrative.body_remainder !== undefined &&
          typeof payload.trend_narrative.body_remainder !== 'string') ||
         typeof payload.trend_narrative.state_label !== 'string' ||
@@ -252,6 +254,7 @@
   function renderHeadline(narrative, topVoices) {
     var strip = document.querySelector('[data-pw-headline]');
     if (!strip) return;
+    var prefix = strip.querySelector('[data-pw-headline-prefix]');
     var body = strip.querySelector('[data-pw-headline-body]');
     var state = strip.querySelector('[data-pw-headline-state]');
     var oldBrand = strip.querySelector('[data-pw-headline-brand]');
@@ -271,7 +274,10 @@
     } else if (oldBrand && oldBrand.parentNode) {
       oldBrand.parentNode.removeChild(oldBrand);
     }
-    if (body) body.textContent = narrative.body_remainder || narrative.body;
+    if (prefix) prefix.textContent = narrative.body_prefix || '';
+    if (body) body.textContent = typeof narrative.body_remainder === 'string'
+      ? narrative.body_remainder
+      : narrative.body;
     if (state) state.textContent = narrative.state_label;
     var observations = strip.querySelector('[data-pw-headline-observations]');
     if (observations) {

@@ -266,6 +266,164 @@ def _assert_parser_regions(page: Page, spec: MockupSpec, *, locale: str, viewpor
     return counts
 
 
+def _why_first_browser_snapshot(
+    *,
+    window_days: int,
+    brand_key: str,
+    display_name: str,
+    volume_change: str,
+    selected_posts: int,
+    prior_posts: int,
+    include_mix: bool,
+    as_of: datetime,
+) -> dict[str, object]:
+    """Closed synthetic facts for rendered schema-three browser proof."""
+    evidence = [
+        {
+            "evidence_id": f"{brand_key}_{window_days}_downloads",
+            "source_cluster_id": f"{brand_key}_{window_days}_source_one",
+            "theme_cluster_id": "downloads_and_intelligence",
+            "author_group_id": f"{brand_key}_{window_days}_author_one",
+            "excerpt": (
+                f"A user reported downloading {display_name} more often and "
+                "described improved intelligence in hands-on work."
+            ),
+            "roles": ["recurring_theme"],
+            "source_flags": {
+                "official": False,
+                "post_kind": "source_post",
+                "metrics_observed": True,
+                "occurrence_source": "original_post",
+            },
+            "post_type_keys": ["hands_on"],
+            "discourse_keys": ["technical_analysis"],
+            "sentiment_keys": ["positive"],
+        },
+        {
+            "evidence_id": f"{brand_key}_{window_days}_release",
+            "source_cluster_id": f"{brand_key}_{window_days}_source_two",
+            "theme_cluster_id": "downloads_and_intelligence",
+            "author_group_id": f"{brand_key}_{window_days}_author_two",
+            "excerpt": (
+                f"A separate post discussed {display_name}'s latest model release "
+                "and reported more downloads after trying it."
+            ),
+            "roles": ["recurring_theme"],
+            "source_flags": {
+                "official": False,
+                "post_kind": "source_post",
+                "metrics_observed": True,
+                "occurrence_source": "original_post",
+            },
+            "post_type_keys": ["hands_on"],
+            "discourse_keys": ["technical_analysis"],
+            "sentiment_keys": ["positive"],
+        },
+    ]
+    metadata = {
+        "selected_coverage_ratio": "1.000000",
+        "prior_coverage_ratio": "1.000000",
+        "labels": [],
+    }
+    post_type = dict(metadata)
+    sentiment = dict(metadata)
+    if include_mix:
+        post_type["labels"] = [
+            {
+                "key": "hands_on",
+                "selected_count": 16,
+                "prior_count": 10,
+                "selected_basis_count": selected_posts,
+                "prior_basis_count": prior_posts,
+                "brand_change_pp": "6.000000",
+            }
+        ]
+        sentiment["labels"] = [
+            {
+                "key": "positive",
+                "selected_count": 30,
+                "prior_count": 20,
+                "selected_basis_count": selected_posts,
+                "prior_basis_count": prior_posts,
+                "brand_change_pp": "10.000000",
+            }
+        ]
+    candidate_id = f"{brand_key}:full_window"
+    candidate = {
+        "candidate_id": candidate_id,
+        "brand_key": brand_key,
+        "display_name_en": display_name,
+        "display_name_zh_cn": display_name,
+        "kind": "full_window",
+        "start_at": (as_of - timedelta(days=window_days)).isoformat(),
+        "end_at": as_of.isoformat(),
+        "signals": [{"family": "post_type" if include_mix else "volume", "rank": 1}],
+        "family_facts": {
+            "volume": {
+                "selected_count": selected_posts,
+                "selected_authors": 40,
+                "prior_count": prior_posts,
+                "prior_authors": 35,
+                "change_pct": volume_change,
+                "comparison_state": "available",
+            },
+            "engagement": {
+                "selected": {"eligible_count": selected_posts, "intensity": "5.0"},
+                "prior": {"eligible_count": prior_posts, "intensity": "5.0"},
+                "intensity_change_pct": "0.000000",
+            },
+            "post_type": post_type,
+            "discourse": metadata,
+            "sentiment": sentiment,
+            "china_nationalism": metadata,
+            "us_nationalism": metadata,
+        },
+        "metadata_trajectories": {},
+        "episodes": [],
+        "series": {
+            "coarse": {
+                "post_counts": [selected_posts // 2, selected_posts - selected_posts // 2],
+                "author_counts": [20, 20],
+                "engagement": {
+                    "eligible_counts": [selected_posts // 2, selected_posts - selected_posts // 2],
+                    "missing_counts": [0, 0],
+                    "coverage_ratios": ["1.000000", "1.000000"],
+                    "interactions": [100, 100],
+                    "intensities": ["5.000000", "5.000000"],
+                    "concentrations": ["0.200000", "0.200000"],
+                    "post_kinds": {},
+                },
+            }
+        },
+        "evidence_allocation": {"role": "lead", "selected_count": 2},
+        "evidence_support": {
+            "official_source_count": 0,
+            "distinct_author_group_count": 2,
+            "distinct_source_cluster_count": 2,
+            "event_claim_may_be_supported": True,
+            "evidence_only_entity_may_be_supported": False,
+        },
+        "evidence": evidence,
+    }
+    return {
+        "snapshot_schema_version": 1,
+        "window_days": window_days,
+        "as_of": as_of.isoformat(),
+        "coverage": {
+            "selected": {"state": "sufficient", "ratio": "1.000000"},
+            "prior": {"state": "sufficient", "ratio": "1.000000"},
+        },
+        "unresolved_backlog_intervals": [],
+        "comparison_suppressed_reasons": [],
+        "comparison_allowed": True,
+        "thresholds": {"minimum_coverage": "0.750000"},
+        "evidence_policy": {"version": "browser-why-first-v1"},
+        "series_axis": {"coarse": {"bucket_count": 2, "bucket_seconds": 3600}},
+        "selection": {"candidate_count": 1},
+        "candidates": [candidate],
+    }
+
+
 @override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
 class HomeV22BrowserTests(StaticLiveServerTestCase):
     """Root-route, real-PostgreSQL browser proof for v22's visible shell."""
@@ -311,6 +469,125 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         _freeze_clock(context)
         context.add_cookies(cookies)
         return context
+
+    def _publish_why_first_browser_narrative(
+        self,
+        *,
+        snapshot: dict[str, object],
+        body_en: str,
+        body_zh_cn: str,
+        families: list[str],
+        quantitative_fact_keys: list[tuple[str, str]],
+        explanation_type: str,
+        evidence_ids: list[str],
+    ) -> None:
+        from core.models import Brand
+        from monitor.trend_narrative_candidates import project_provider_packet
+        from monitor.trend_narrative_lifecycle import (
+            mark_transport_completed,
+            mark_transport_started,
+            publish_generation,
+            reserve_generation,
+        )
+
+        candidate = snapshot["candidates"][0]
+        brand_key = candidate["brand_key"]
+        display_name = candidate["display_name_en"]
+        Brand.objects.update_or_create(
+            nickname=brand_key,
+            defaults={
+                "display_name": display_name,
+                "display_name_en": display_name,
+                "display_name_zh_cn": display_name,
+            },
+        )
+        facts = {
+            (fact["family"], fact["metric"]): fact["fact_id"]
+            for fact in project_provider_packet(snapshot)["candidates"][0][
+                "quantitative_facts"
+            ]
+        }
+        fact_ids = [facts[key] for key in quantitative_fact_keys]
+        as_of = datetime.fromisoformat(snapshot["as_of"])
+        window_days = snapshot["window_days"]
+        candidate_id = candidate["candidate_id"]
+        owner = f"browser-why-first-{window_days}"
+        row = reserve_generation(
+            source_cycle_id=owner,
+            window_days=window_days,
+            facts_as_of=as_of,
+            semantic_fingerprint=f"{window_days:064x}",
+            generation_facts=snapshot,
+            publication_epoch=6,
+            prompt_version="headline-v6-why-first",
+            provider="deepseek",
+            provider_host="api.deepseek.com",
+            llm_model_name="deepseek-v4-pro",
+            owner=owner,
+            now=as_of,
+            lease_seconds=90,
+            output_schema_version=3,
+        )
+        self.assertIsNotNone(row)
+        self.assertTrue(
+            mark_transport_started(
+                row.pk,
+                owner=owner,
+                fence=row.claim_fence,
+                now=as_of,
+            )
+        )
+        self.assertTrue(
+            mark_transport_completed(
+                row.pk,
+                owner=owner,
+                fence=row.claim_fence,
+                now=as_of + timedelta(milliseconds=250),
+            )
+        )
+        claim = {
+            "observation_index": -1,
+            "candidate_ids": [candidate_id],
+            "families": families,
+            "evidence_ids": evidence_ids,
+            "quantitative_fact_ids": fact_ids,
+            "event_anchor": "latest model release" if window_days == 1 else "",
+            "explanation_type": explanation_type,
+            "evidence_confidence": (
+                "recurring_independent" if evidence_ids else "aggregate_only"
+            ),
+        }
+        self.assertTrue(
+            publish_generation(
+                row.pk,
+                owner=owner,
+                fence=row.claim_fence,
+                body_en=body_en,
+                body_zh_cn=body_zh_cn,
+                output_hash=(str(window_days)[-1] or "0") * 64,
+                input_tokens=500,
+                output_tokens=120,
+                latency_ms=250,
+                now=as_of + timedelta(seconds=1),
+                observations_en=[],
+                observations_zh_cn=[],
+                selected_candidate_ids=[candidate_id],
+                claims=[claim],
+                subjects=[
+                    {
+                        "position": 0,
+                        "support_type": "measured_candidate",
+                        "entity_type": "brand",
+                        "identity_type": "brand",
+                        "canonical_key_snapshot": brand_key,
+                        "name_en_snapshot": display_name,
+                        "name_zh_cn_snapshot": display_name,
+                        "candidate_id": candidate_id,
+                        "evidence_ids": [],
+                    }
+                ],
+            )
+        )
 
     def test_zh_hans_renders_chinese_chrome_in_browser(self) -> None:
         """The Django ``zh_hans`` alias keeps v22 chrome Chinese after JS initializes."""
@@ -980,6 +1257,204 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertIsNotNone(zh_shape)
                     self.assertGreater(zh_shape["width"], 0)
                     self.assertGreater(zh_shape["height"], 0)
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_why_first_flat_mix_and_quiet_leader_render_after_replacement(
+        self,
+    ) -> None:
+        """Readers see grounded why, numeric color, and candid quiet wording."""
+        from x_monitor.config import HeadlineNarrativeConfig
+
+        as_of = datetime.now(UTC)
+        release_en = (
+            "DeepSeek users reported more downloads and improved intelligence "
+            "after its latest model release; hands-on posts increased 60%, "
+            "positive sentiment increased 50%, and post volume rose 50%."
+        )
+        release_zh = (
+            "DeepSeek 最新模型发布后，用户称下载次数增加且智能表现提升；"
+            "实际使用类帖子增加60%，正面情绪增加50%，帖子量增加50%。"
+        )
+        flat_en = (
+            "DeepSeek users reported more downloads and improved intelligence; "
+            "hands-on posts increased 60%, while overall post volume remained "
+            "flat at 0% and positive sentiment increased 50%."
+        )
+        flat_zh = (
+            "DeepSeek 用户称下载更频繁且智能表现提升；实际使用类帖子增加60%，"
+            "总体帖子量保持在0%，正面情绪增加50%。"
+        )
+        quiet_en = (
+            "In a mostly unremarkable week, MiniMax led with a small 0.1% rise "
+            "in post volume."
+        )
+        quiet_zh = "在整体平淡的一周中，MiniMax 以帖子量小幅增加0.1%居首。"
+
+        self._publish_why_first_browser_narrative(
+            snapshot=_why_first_browser_snapshot(
+                window_days=1,
+                brand_key="deepseek",
+                display_name="DeepSeek",
+                volume_change="50.000000",
+                selected_posts=150,
+                prior_posts=100,
+                include_mix=True,
+                as_of=as_of,
+            ),
+            body_en=release_en,
+            body_zh_cn=release_zh,
+            families=["evidence", "post_type", "sentiment", "volume"],
+            quantitative_fact_keys=[
+                ("post_type", "count_change_pct"),
+                ("sentiment", "count_change_pct"),
+                ("volume", "change_pct"),
+            ],
+            explanation_type="recurring_content",
+            evidence_ids=["deepseek_1_downloads", "deepseek_1_release"],
+        )
+        self._publish_why_first_browser_narrative(
+            snapshot=_why_first_browser_snapshot(
+                window_days=7,
+                brand_key="deepseek",
+                display_name="DeepSeek",
+                volume_change="0.000000",
+                selected_posts=100,
+                prior_posts=100,
+                include_mix=True,
+                as_of=as_of,
+            ),
+            body_en=flat_en,
+            body_zh_cn=flat_zh,
+            families=["evidence", "post_type", "sentiment", "volume"],
+            quantitative_fact_keys=[
+                ("post_type", "count_change_pct"),
+                ("volume", "change_pct"),
+                ("sentiment", "count_change_pct"),
+            ],
+            explanation_type="structured_mix",
+            evidence_ids=["deepseek_7_downloads", "deepseek_7_release"],
+        )
+        self._publish_why_first_browser_narrative(
+            snapshot=_why_first_browser_snapshot(
+                window_days=30,
+                brand_key="minimax",
+                display_name="MiniMax",
+                volume_change="0.100000",
+                selected_posts=1_001,
+                prior_posts=1_000,
+                include_mix=False,
+                as_of=as_of,
+            ),
+            body_en=quiet_en,
+            body_zh_cn=quiet_zh,
+            families=["volume"],
+            quantitative_fact_keys=[("volume", "change_pct")],
+            explanation_type="quiet_relative_leader",
+            evidence_ids=[],
+        )
+
+        def normalized(page, selector="[data-pw-headline] .body"):
+            return " ".join(page.locator(selector).inner_text().split())
+
+        config = HeadlineNarrativeConfig(serving_enabled=True)
+        cookies = self._authenticated_cookies("en")
+        with (
+            patch(
+                "monitor.trend_narrative_projection._load_config",
+                return_value=config,
+            ),
+            sync_playwright() as playwright,
+        ):
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(
+                    browser,
+                    cookies,
+                    VIEWPORTS["desktop"],
+                )
+                page = context.new_page()
+                try:
+                    response = page.goto(self.live_server_url, wait_until="networkidle")
+                    self.assertIsNotNone(response)
+                    self.assertTrue(
+                        response.headers.get("content-language", "en").startswith("en")
+                    )
+                    self.assertEqual(normalized(page), release_en)
+                    self.assertGreater(
+                        page.locator("[data-pw-headline-body]").bounding_box()["height"],
+                        0,
+                    )
+
+                    for window_days, expected in ((7, flat_en), (30, quiet_en)):
+                        page.locator("[data-pw-headline-body]").evaluate(
+                            "node => { node.textContent = 'stale headline'; }"
+                        )
+                        with page.expect_response(
+                            lambda result: "/chart.html?" in result.url
+                        ):
+                            page.locator(
+                                f"[data-pw-window-btn='{window_days}']"
+                            ).click()
+                        page.wait_for_function(
+                            """() => !document.querySelector(
+                              '[data-pw-headline] .body'
+                            )?.innerText.includes('stale headline')""",
+                        )
+                        self.assertEqual(normalized(page), expected)
+                        if window_days == 7:
+                            rendered_flat = normalized(page)
+                            self.assertNotIn("release", rendered_flat.casefold())
+                            self.assertLess(
+                                rendered_flat.index("downloads"),
+                                rendered_flat.index("60%"),
+                            )
+
+                    self.assertNotRegex(
+                        normalized(page).casefold(),
+                        r"surge|soar|momentum|breakout|remarkable rise",
+                    )
+                    payload = page.evaluate(
+                        """() => JSON.parse(
+                          document.querySelector('canvas.home-chart').dataset.home
+                        ).trend_narrative"""
+                    )
+                    self.assertEqual(payload["schema_version"], 2)
+                    self.assertNotIn("claims", payload)
+                    self.assertNotIn("evidence_ids", json.dumps(payload))
+
+                    with page.expect_navigation(wait_until="networkidle") as navigation:
+                        page.locator("[data-pw-locale-btn='zh_cn']").click()
+                    self.assertTrue(
+                        navigation.value.headers.get("content-language", "").startswith(
+                            "zh"
+                        )
+                    )
+                    self.assertEqual(normalized(page), release_zh)
+
+                    for window_days, expected in ((7, flat_zh), (30, quiet_zh)):
+                        with page.expect_response(
+                            lambda result: "/chart.html?" in result.url
+                        ):
+                            page.locator(
+                                f"[data-pw-window-btn='{window_days}']"
+                            ).click()
+                        page.wait_for_function(
+                            """windowDays => document.querySelector(
+                              '[data-pw-headline]'
+                            )?.getAttribute('data-pw-window') === String(windowDays)""",
+                            arg=window_days,
+                        )
+                        self.assertEqual(normalized(page), expected)
+                        if window_days == 7:
+                            rendered_flat = normalized(page)
+                            self.assertNotIn("发布", rendered_flat)
+                            self.assertLess(
+                                rendered_flat.index("下载"),
+                                rendered_flat.index("60%"),
+                            )
                 finally:
                     context.close()
             finally:

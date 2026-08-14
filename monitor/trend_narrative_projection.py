@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +42,7 @@ def project_trend_narrative(
         "state": "unavailable",
         "state_label": _state_label("unavailable", is_zh=is_zh),
         "body": fallback_body,
+        "body_prefix": "",
         "body_remainder": fallback_body,
         "observations": [],
         "subjects": [],
@@ -104,7 +106,7 @@ def project_trend_narrative(
         body = f"{body} {_coverage_context(current, is_zh=is_zh)}"
     subjects = _subject_projection(current, is_zh=is_zh)
     primary_brand = subjects[0] if subjects else None
-    body_remainder = _body_remainder(
+    body_prefix, body_remainder = _body_parts(
         body,
         primary_brand["display_name"] if primary_brand else "",
     )
@@ -113,6 +115,7 @@ def project_trend_narrative(
         "state": state,
         "state_label": _state_label(state, is_zh=is_zh),
         "body": body,
+        "body_prefix": body_prefix,
         "body_remainder": body_remainder,
         "observations": observations,
         "subjects": subjects,
@@ -297,15 +300,19 @@ def _subject_projection(
     ]
 
 
-def _body_remainder(body: str, leading_name: str) -> str:
-    if not leading_name or not body.casefold().startswith(leading_name.casefold()):
-        return body
-    boundary = body[len(leading_name) : len(leading_name) + 1]
-    if boundary and boundary.isalnum():
-        return body
-    return body[len(leading_name) :].lstrip()
-
-
+def _body_parts(body: str, primary_name: str) -> tuple[str, str]:
+    """Split around the first subject occurrence so its link stays in place."""
+    if not primary_name:
+        return "", body
+    for match in re.finditer(re.escape(primary_name), body, flags=re.IGNORECASE):
+        preceding = body[match.start() - 1 : match.start()]
+        following = body[match.end() : match.end() + 1]
+        if (preceding and preceding.isalnum()) or (
+            following and following.isalnum()
+        ):
+            continue
+        return body[: match.start()], body[match.end() :]
+    return "", body
 def _public_observations(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []

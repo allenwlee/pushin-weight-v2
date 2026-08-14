@@ -65,7 +65,7 @@ legacy SQLite database, `schema.dot`, or the retired PNG.
 For `headline-trend-narratives.md`, also perform these exact checks:
 
 1. Compare the fenced literal prompt with
-   `monitor/trend_narrative_generation.py::HEADLINE_SYSTEM_PROMPT_V2`
+   `monitor/trend_narrative_generation.py::HEADLINE_SYSTEM_PROMPT_V3`
    character-for-character.
 2. Verify candidate, series, episode, evidence, and provider-packet limits
    against `monitor/trend_narrative_candidates.py`.
@@ -137,7 +137,7 @@ code drift in the operator handoff.
 4. Spot-check at least two substantive claims in each focused reference
    against its primary source.
 5. Programmatically compare the literal headline prompt block with
-   `HEADLINE_SYSTEM_PROMPT_V2`; require an exact match.
+   `HEADLINE_SYSTEM_PROMPT_V3`; require an exact match.
 6. Confirm every README reference link resolves to an existing file and its
    target H1 still describes the linked subject.
 7. Confirm `schema.dot`, the retired PNG, code, migrations, configuration, and
