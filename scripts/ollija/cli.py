@@ -21,6 +21,7 @@ from .database import (
     safety_policy_from_config,
 )
 from .git import mutation_preflight
+from .hosted_database import HostedStagingBootstrap
 from .preview import (
     PreviewError,
     build_preview_plan,
@@ -38,6 +39,7 @@ _COACHING = """common prompts:
   what's next?          ollija status
   check my setup        ollija doctor
   refresh review data   ollija refresh-local
+  refresh hosted data   ollija refresh-staging
   start work            ollija start
   show local preview    ollija preview
   stop local preview    ollija preview-stop
@@ -60,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("status", "Read live authorities and recommend exactly one next action."),
         ("doctor", "Check the authoritative host, tools, auth, Git, and databases."),
         ("refresh-local", "Refresh a guarded local production-derived snapshot."),
+        ("refresh-staging", "Copy the active scrubbed snapshot to hosted staging."),
         ("preview", "Start the local PostgreSQL preview on private tailnet HTTPS."),
         ("preview-stop", "Stop only the scoped ollija preview process."),
     ):
@@ -260,6 +263,52 @@ def _preview(config, facts) -> CommandResult:
     )
 
 
+def _refresh_staging(config, facts) -> CommandResult:
+    blocked = _preflight_mutation("refresh-staging", facts)
+    if blocked:
+        return blocked
+    target_url = os.environ.get("OLLIJA_STAGING_DATABASE_URL", "")
+    staging = config.environments.get("staging", {})
+    resource_id = staging.get("database_resource_id")
+    if not target_url:
+        return _mutation_failure("refresh-staging", "staging_database_url_missing")
+    if not isinstance(resource_id, str) or not resource_id:
+        return _mutation_failure(
+            "refresh-staging",
+            "staging_database_resource_identity_missing",
+        )
+    report = HostedStagingBootstrap(
+        config=config,
+        target_database_url=target_url,
+        target_resource_id=resource_id,
+    ).run()
+    candidate = _candidate_identity(config, facts)
+    receipt = Receipt.create(
+        kind="refresh",
+        candidate=candidate,
+        created_at=datetime.now(UTC),
+        payload=report.to_receipt_payload(),
+    )
+    store = ReceiptStore(
+        config.root / config.state.directory,
+        retention_days=config.state.retention_days,
+    )
+    store.write_receipt(receipt)
+    store.set_reference("hosted_refresh", receipt.receipt_id)
+    return CommandResult(
+        command="refresh-staging",
+        status="ok",
+        state=facts.lifecycle_state,
+        summary="Hosted staging received the scrubbed, validated local snapshot.",
+        evidence=(EvidenceRef("refresh", receipt.receipt_id, candidate.sha),),
+        details=report.to_receipt_payload(),
+        next_action=NextAction(
+            "ollija stage",
+            "Deploy the exact candidate against the active hosted snapshot.",
+        ),
+    )
+
+
 def _preview_stop(config, facts) -> CommandResult:
     blocked = _preflight_mutation("preview-stop", facts)
     if blocked:
@@ -295,6 +344,8 @@ def main(
             result = build_doctor_result(facts)
         elif args.command == "refresh-local":
             result = _refresh_local(config, facts)
+        elif args.command == "refresh-staging":
+            result = _refresh_staging(config, facts)
         elif args.command == "preview":
             result = _preview(config, facts)
         else:
