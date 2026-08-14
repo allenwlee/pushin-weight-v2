@@ -3,7 +3,29 @@ from __future__ import annotations
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from project.staging import validate_staging_environment
+from project.staging import (
+    should_run_build_migrations,
+    validate_staging_environment,
+)
+
+
+def test_new_staging_database_stays_empty_until_ollija_bootstraps_it() -> None:
+    assert not should_run_build_migrations(
+        staging_enabled=True,
+        marker_status=None,
+    )
+    assert not should_run_build_migrations(
+        staging_enabled=True,
+        marker_status="building",
+    )
+    assert should_run_build_migrations(
+        staging_enabled=True,
+        marker_status="active",
+    )
+    assert should_run_build_migrations(
+        staging_enabled=False,
+        marker_status=None,
+    )
 
 
 def test_staging_boot_requires_its_own_auth_and_owner_values() -> None:

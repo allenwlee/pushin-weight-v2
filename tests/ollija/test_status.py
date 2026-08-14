@@ -57,13 +57,17 @@ def _facts(*, state: str = "candidate") -> StatusFacts:
     )
 
 
-def test_clean_candidate_recommends_exactly_one_stage_action() -> None:
-    result = build_status_result(_facts())
+def test_candidate_recommends_candidate_bound_refresh_sequence() -> None:
+    candidate = build_status_result(_facts(state="candidate"))
+    local = build_status_result(_facts(state="local_refreshed"))
+    ready = build_status_result(_facts(state="ready_to_stage"))
 
-    assert result.status == "ok"
-    assert result.state == "candidate"
-    assert result.next_action is not None
-    assert result.next_action.command == "ollija stage"
+    assert candidate.next_action is not None
+    assert candidate.next_action.command == "ollija refresh-local"
+    assert local.next_action is not None
+    assert local.next_action.command == "ollija refresh-staging"
+    assert ready.next_action is not None
+    assert ready.next_action.command == "ollija stage"
 
 
 def test_unreachable_external_authority_is_unknown_never_passed() -> None:

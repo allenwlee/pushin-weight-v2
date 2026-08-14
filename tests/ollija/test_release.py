@@ -12,6 +12,7 @@ from scripts.ollija.git import GitObservation
 from scripts.ollija.release import (
     GitPublisher,
     ReleaseError,
+    inspect_refresh_readiness,
     require_release_readiness,
     verify_and_tag_candidate,
 )
@@ -58,6 +59,7 @@ def _write_ready_receipts(config) -> None:
         candidate=_candidate(),
         created_at=NOW,
         payload={
+            "target_resource_id": "local:fuchitalee",
             "target_marker_status": "active",
             "raw_artifact_removed": True,
             "database_affecting": True,
@@ -73,6 +75,7 @@ def _write_ready_receipts(config) -> None:
             "target_resource_id": "dpg-stage",
             "target_marker_status": "active",
             "raw_artifact_removed": True,
+            "local_refresh_receipt_id": local.receipt_id,
         },
     )
     stage = Receipt.create(
@@ -197,6 +200,40 @@ def test_release_readiness_requires_fresh_sha_bound_refresh_and_human_proof(
         "iphone",
     }
     assert evidence.hosted_refresh.payload["target_resource_id"] == "dpg-stage"
+
+
+def test_hosted_refresh_must_derive_from_the_current_local_refresh(
+    tmp_path: Path,
+) -> None:
+    config = _configured(tmp_path)
+    _write_ready_receipts(config)
+    store = ReceiptStore(config.root / config.state.directory)
+    receipts = store.iter_receipts()
+    candidate = next(item for item in receipts if item.kind == "candidate")
+    hosted = Receipt.create(
+        kind="refresh",
+        candidate=_candidate(),
+        created_at=NOW,
+        payload={
+            "target_resource_id": "dpg-stage",
+            "target_marker_status": "active",
+            "raw_artifact_removed": True,
+            "local_refresh_receipt_id": "f" * 64,
+        },
+    )
+    store.write_receipt(hosted)
+    store.set_reference("hosted_refresh", hosted.receipt_id)
+
+    readiness = inspect_refresh_readiness(
+        config,
+        store,
+        store.iter_receipts(),
+        candidate,
+        now=NOW,
+    )
+
+    assert readiness.state == "local_refreshed"
+    assert readiness.error_code == "hosted_refresh_local_mismatch"
 
 
 def test_replaced_staging_deploy_blocks_release(tmp_path: Path) -> None:

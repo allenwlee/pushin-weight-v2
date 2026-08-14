@@ -35,6 +35,14 @@ class ReleaseEvidence:
     bridgewright_evidence: tuple[Receipt, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class RefreshReadiness:
+    state: str
+    local: Receipt | None = None
+    hosted: Receipt | None = None
+    error_code: str | None = None
+
+
 def deployment_set_id(deployments: Sequence[RenderDeployment]) -> str:
     body = [
         {
@@ -188,6 +196,120 @@ def _referenced_receipt(
     return receipt
 
 
+def inspect_refresh_readiness(
+    config: ProjectConfig,
+    store: ReceiptStore,
+    receipts: Sequence[Receipt],
+    candidate: Receipt,
+    *,
+    now: datetime,
+) -> RefreshReadiness:
+    """Return the next refresh transition using the same gates as release."""
+
+    try:
+        local = _referenced_receipt(
+            store,
+            receipts,
+            reference="active_refresh",
+            kind="refresh",
+        )
+    except ReleaseError as exc:
+        return RefreshReadiness("candidate", error_code=str(exc))
+    if local.candidate != candidate.candidate:
+        return RefreshReadiness("candidate", error_code="local_refresh_candidate_stale")
+
+    max_age_seconds = config.verification.get("refresh_max_age_seconds", 86_400)
+    if not isinstance(max_age_seconds, int) or max_age_seconds < 1:
+        return RefreshReadiness("candidate", error_code="refresh_age_policy_invalid")
+    threshold = now.astimezone(UTC) - timedelta(seconds=max_age_seconds)
+    if local.created_at < threshold:
+        return RefreshReadiness("candidate", error_code="local_refresh_expired")
+
+    local_environment = config.environments.get("local")
+    local_resource_id = (
+        local_environment.get("database_resource_id")
+        if isinstance(local_environment, Mapping)
+        else None
+    )
+    if not isinstance(local_resource_id, str) or not local_resource_id:
+        return RefreshReadiness(
+            "candidate", error_code="local_database_resource_identity_missing"
+        )
+    if local.payload.get("target_resource_id") != local_resource_id:
+        return RefreshReadiness(
+            "candidate", error_code="local_refresh_resource_mismatch"
+        )
+    if local.payload.get("target_marker_status") != "active":
+        return RefreshReadiness("candidate", error_code="local_refresh_not_active")
+    if local.payload.get("raw_artifact_removed") is not True:
+        return RefreshReadiness(
+            "candidate", error_code="local_refresh_artifact_retained"
+        )
+    if local.payload.get("database_affecting") is True and (
+        local.payload.get("live_code_compatible") is not True
+        or not local.payload.get("recovery_posture")
+    ):
+        return RefreshReadiness(
+            "candidate", error_code="database_recovery_posture_unproven"
+        )
+
+    try:
+        hosted = _referenced_receipt(
+            store,
+            receipts,
+            reference="hosted_refresh",
+            kind="refresh",
+        )
+    except ReleaseError as exc:
+        return RefreshReadiness(
+            "local_refreshed", local=local, error_code=str(exc)
+        )
+    if hosted.candidate != candidate.candidate:
+        return RefreshReadiness(
+            "local_refreshed",
+            local=local,
+            error_code="hosted_refresh_candidate_stale",
+        )
+    if hosted.created_at < threshold:
+        return RefreshReadiness(
+            "local_refreshed", local=local, error_code="hosted_refresh_expired"
+        )
+
+    staging = config.environments.get("staging")
+    resource_id = (
+        staging.get("database_resource_id") if isinstance(staging, Mapping) else None
+    )
+    if not isinstance(resource_id, str) or not resource_id:
+        return RefreshReadiness(
+            "local_refreshed",
+            local=local,
+            error_code="staging_database_resource_identity_missing",
+        )
+    if hosted.payload.get("target_resource_id") != resource_id:
+        return RefreshReadiness(
+            "local_refreshed",
+            local=local,
+            error_code="hosted_refresh_resource_mismatch",
+        )
+    if hosted.payload.get("target_marker_status") != "active":
+        return RefreshReadiness(
+            "local_refreshed", local=local, error_code="hosted_refresh_not_active"
+        )
+    if hosted.payload.get("raw_artifact_removed") is not True:
+        return RefreshReadiness(
+            "local_refreshed",
+            local=local,
+            error_code="hosted_refresh_artifact_retained",
+        )
+    if hosted.payload.get("local_refresh_receipt_id") != local.receipt_id:
+        return RefreshReadiness(
+            "local_refreshed",
+            local=local,
+            error_code="hosted_refresh_local_mismatch",
+        )
+    return RefreshReadiness("ready_to_stage", local=local, hosted=hosted)
+
+
 def _active_candidate(
     store: ReceiptStore,
     receipts: Sequence[Receipt],
@@ -218,47 +340,18 @@ def _require_refreshes(
     *,
     now: datetime,
 ) -> tuple[Receipt, Receipt]:
-    local = _referenced_receipt(
+    readiness = inspect_refresh_readiness(
+        config,
         store,
         receipts,
-        reference="active_refresh",
-        kind="refresh",
+        candidate,
+        now=now,
     )
-    hosted = _referenced_receipt(
-        store,
-        receipts,
-        reference="hosted_refresh",
-        kind="refresh",
-    )
-    if local.candidate != candidate.candidate or hosted.candidate != candidate.candidate:
-        raise ReleaseError("refresh_candidate_stale")
-    max_age_seconds = config.verification.get("refresh_max_age_seconds", 86_400)
-    if not isinstance(max_age_seconds, int) or max_age_seconds < 1:
-        raise ReleaseError("refresh_age_policy_invalid")
-    threshold = now.astimezone(UTC) - timedelta(seconds=max_age_seconds)
-    if local.created_at < threshold or hosted.created_at < threshold:
-        raise ReleaseError("refresh_evidence_expired")
-    if local.payload.get("target_marker_status") != "active":
-        raise ReleaseError("local_refresh_not_active")
-    if local.payload.get("raw_artifact_removed") is not True:
-        raise ReleaseError("local_refresh_artifact_retained")
-    if local.payload.get("database_affecting") is True and (
-        local.payload.get("live_code_compatible") is not True
-        or not local.payload.get("recovery_posture")
-    ):
-        raise ReleaseError("database_recovery_posture_unproven")
-
-    staging = config.environments.get("staging")
-    resource_id = staging.get("database_resource_id") if isinstance(staging, Mapping) else None
-    if not isinstance(resource_id, str) or not resource_id:
-        raise ReleaseError("staging_database_resource_identity_missing")
-    if hosted.payload.get("target_resource_id") != resource_id:
-        raise ReleaseError("hosted_refresh_resource_mismatch")
-    if hosted.payload.get("target_marker_status") != "active":
-        raise ReleaseError("hosted_refresh_not_active")
-    if hosted.payload.get("raw_artifact_removed") is not True:
-        raise ReleaseError("hosted_refresh_artifact_retained")
-    return local, hosted
+    if readiness.error_code:
+        raise ReleaseError(readiness.error_code)
+    if readiness.local is None or readiness.hosted is None:
+        raise ReleaseError("refresh_evidence_incomplete")
+    return readiness.local, readiness.hosted
 
 
 def _staging_specification(config: ProjectConfig) -> tuple[str, str]:

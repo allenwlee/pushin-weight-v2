@@ -8,6 +8,7 @@ import socket
 import tomllib
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ from .git import (
     observe_git,
 )
 from .redaction import redact_text
-from .release import deployment_set_id
+from .release import deployment_set_id, inspect_refresh_readiness
 from .render import RenderClient, RenderDeployment, RenderObservationError
 from .results import CommandResult, EvidenceRef, NextAction
 from .state import (
@@ -53,7 +54,17 @@ class StatusFacts:
 
 _NEXT_ACTIONS = {
     "idle": NextAction("ollija start", "Select the clean commit as a candidate."),
-    "candidate": NextAction("ollija stage", "Deploy this exact candidate to staging."),
+    "candidate": NextAction(
+        "ollija refresh-local",
+        "Refresh production-derived review data for this exact candidate.",
+    ),
+    "local_refreshed": NextAction(
+        "ollija refresh-staging",
+        "Copy the candidate-bound scrubbed snapshot to hosted staging.",
+    ),
+    "ready_to_stage": NextAction(
+        "ollija stage", "Deploy this exact candidate to staging."
+    ),
     "staged": NextAction(
         "ollija approve desktop", "Review the staged candidate in desktop Chrome."
     ),
@@ -293,11 +304,24 @@ def _receipt_state(
                 required_evidence=required_evidence,
             )
         evaluation = evaluate_lifecycle(receipts, live)
+        lifecycle_state = evaluation.state
+        refresh_warning: tuple[str, ...] = ()
+        if lifecycle_state == "candidate" and candidate_receipt is not None:
+            readiness = inspect_refresh_readiness(
+                config,
+                store,
+                receipts,
+                candidate_receipt,
+                now=datetime.now(UTC),
+            )
+            lifecycle_state = readiness.state
+            if readiness.error_code:
+                refresh_warning = (f"refresh_gate: {readiness.error_code}",)
         warnings = live_warnings + tuple(
             f"stale receipt: {receipt_id}"
             for receipt_id in evaluation.stale_receipt_ids
-        )
-        return evaluation.state, warnings
+        ) + refresh_warning
+        return lifecycle_state, warnings
     except ReceiptError as exc:
         return "idle", (redact_text(str(exc)),)
 

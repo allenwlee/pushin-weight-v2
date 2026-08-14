@@ -40,6 +40,7 @@ from .redaction import UnsafeOutputError, redact_text
 from .release import (
     GitPublisher,
     ReleaseError,
+    inspect_refresh_readiness,
     promote_candidate,
     stage_candidate,
     verify_and_tag_candidate,
@@ -187,6 +188,33 @@ def _candidate_identity(config, facts) -> CandidateIdentity:
         release_tag=beta.release_tag,
         surface_fingerprint=impact.surface_fingerprint,
     )
+
+
+def _active_candidate_for_refresh(
+    config,
+    facts,
+) -> tuple[ReceiptStore, tuple[Receipt, ...], Receipt]:
+    store = ReceiptStore(
+        config.root / config.state.directory,
+        retention_days=config.state.retention_days,
+    )
+    candidate_id = store.read_reference("active_candidate")
+    if not candidate_id:
+        raise RefreshError("active_candidate_missing")
+    receipts = store.iter_receipts()
+    candidate = next(
+        (
+            receipt
+            for receipt in receipts
+            if receipt.kind == "candidate" and receipt.receipt_id == candidate_id
+        ),
+        None,
+    )
+    if candidate is None:
+        raise RefreshError("active_candidate_receipt_missing")
+    if candidate.candidate != _candidate_identity(config, facts):
+        raise RefreshError("active_candidate_identity_mismatch")
+    return store, receipts, candidate
 
 
 def _changed_paths(config) -> tuple[str, ...]:
@@ -385,6 +413,10 @@ def _refresh_local(config, facts) -> CommandResult:
             "refresh-local",
             "production_readonly_database_url_missing",
         )
+    store, _receipts, candidate_receipt = _active_candidate_for_refresh(
+        config,
+        facts,
+    )
     backend = PostgresRefreshBackend(
         config=config,
         source_database_url=source_url,
@@ -393,16 +425,12 @@ def _refresh_local(config, facts) -> CommandResult:
         backend=backend,
         policy=safety_policy_from_config(config),
     ).run()
-    candidate = _candidate_identity(config, facts)
+    candidate = candidate_receipt.candidate
     receipt = Receipt.create(
         kind="refresh",
         candidate=candidate,
         created_at=datetime.now(UTC),
         payload=report.to_receipt_payload(),
-    )
-    store = ReceiptStore(
-        config.root / config.state.directory,
-        retention_days=config.state.retention_days,
     )
     store.write_receipt(receipt)
     store.set_reference("active_refresh", receipt.receipt_id)
@@ -466,21 +494,41 @@ def _refresh_staging(config, facts) -> CommandResult:
             "refresh-staging",
             "staging_database_resource_identity_missing",
         )
+    store, receipts, candidate_receipt = _active_candidate_for_refresh(
+        config,
+        facts,
+    )
+    readiness = inspect_refresh_readiness(
+        config,
+        store,
+        receipts,
+        candidate_receipt,
+        now=datetime.now(UTC),
+    )
+    if readiness.local is None:
+        raise RefreshError(readiness.error_code or "local_refresh_missing")
     report = HostedStagingBootstrap(
         config=config,
         target_database_url=target_url,
         target_resource_id=resource_id,
     ).run()
-    candidate = _candidate_identity(config, facts)
+    local = readiness.local
+    if (
+        report.source_database != local.payload.get("target_database")
+        or report.source_resource_id != local.payload.get("target_resource_id")
+        or dict(report.row_counts) != local.payload.get("row_counts")
+    ):
+        raise RefreshError("hosted_refresh_local_source_mismatch")
+    candidate = candidate_receipt.candidate
+    payload = {
+        **report.to_receipt_payload(),
+        "local_refresh_receipt_id": local.receipt_id,
+    }
     receipt = Receipt.create(
         kind="refresh",
         candidate=candidate,
         created_at=datetime.now(UTC),
-        payload=report.to_receipt_payload(),
-    )
-    store = ReceiptStore(
-        config.root / config.state.directory,
-        retention_days=config.state.retention_days,
+        payload=payload,
     )
     store.write_receipt(receipt)
     store.set_reference("hosted_refresh", receipt.receipt_id)
@@ -490,7 +538,7 @@ def _refresh_staging(config, facts) -> CommandResult:
         state=facts.lifecycle_state,
         summary="Hosted staging received the scrubbed, validated local snapshot.",
         evidence=(EvidenceRef("refresh", receipt.receipt_id, candidate.sha),),
-        details=report.to_receipt_payload(),
+        details=payload,
         next_action=NextAction(
             "ollija stage",
             "Deploy the exact candidate against the active hosted snapshot.",
