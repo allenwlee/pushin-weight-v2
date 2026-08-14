@@ -21,6 +21,14 @@ fetch-vs-insert anomalies), read and follow
 M12, M17, M18). This applies to every agent working in this repository,
 including Claude Code and Codex.
 
+## Staging and releases
+
+Before coaching or performing a PushinWeight staging, approval, beta release,
+production verification, or failed-release recovery action, read and follow
+`.agents/skills/ollija/SKILL.md`. Begin with `./bin/ollija status --json` and
+use the Ollija command surface; do not substitute direct Git/Render/database
+mutations. Desktop and physical-iPhone approvals remain explicit owner actions.
+
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules
 

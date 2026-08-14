@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ollija"
+  short_description: "Coach safe PushinWeight staging and releases"
+  default_prompt: "Use $ollija to inspect PushinWeight release state and guide the next safe staging or release action."
