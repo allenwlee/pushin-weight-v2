@@ -25,7 +25,13 @@ from .redaction import redact_text
 from .release import deployment_set_id
 from .render import RenderClient, RenderDeployment, RenderObservationError
 from .results import CommandResult, EvidenceRef, NextAction
-from .state import LiveAuthorities, ReceiptError, ReceiptStore, evaluate_lifecycle
+from .state import (
+    CandidateIdentity,
+    LiveAuthorities,
+    ReceiptError,
+    ReceiptStore,
+    evaluate_lifecycle,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +273,7 @@ def _receipt_state(
         if active is not None and active.sha != git.head_sha:
             active = None
         live = LiveAuthorities(candidate=active)
+        live_warnings: tuple[str, ...] = ()
         if active is not None and candidate_receipt is not None:
             required_approvals = tuple(
                 item
@@ -278,7 +285,7 @@ def _receipt_state(
                 for item in candidate_receipt.payload.get("required_evidence", ())
                 if isinstance(item, str)
             )
-            live = _observe_live_authorities(
+            live, live_warnings = _observe_live_authorities(
                 config,
                 runner,
                 active=active,
@@ -286,7 +293,7 @@ def _receipt_state(
                 required_evidence=required_evidence,
             )
         evaluation = evaluate_lifecycle(receipts, live)
-        warnings = tuple(
+        warnings = live_warnings + tuple(
             f"stale receipt: {receipt_id}"
             for receipt_id in evaluation.stale_receipt_ids
         )
@@ -299,10 +306,10 @@ def _observe_live_authorities(
     config: ProjectConfig,
     runner: CommandRunner,
     *,
-    active,
+    active: CandidateIdentity,
     required_approvals: tuple[str, ...],
     required_evidence: tuple[str, ...],
-) -> LiveAuthorities:
+) -> tuple[LiveAuthorities, tuple[str, ...]]:
     client = RenderClient(root=config.root, runner=runner)
     warnings: list[str] = []
     staging_id = None
@@ -352,16 +359,19 @@ def _observe_live_authorities(
             else:
                 production_status = "failed"
 
-    return LiveAuthorities(
-        candidate=active,
-        staging_deployment_id=staging_id,
-        staging_deployed_sha=staging_sha,
-        staging_status=staging_status,
-        production_deployment_id=production_id,
-        production_deployed_sha=production_sha,
-        production_status=production_status,
-        required_approvals=required_approvals,
-        required_evidence=required_evidence,
+    return (
+        LiveAuthorities(
+            candidate=active,
+            staging_deployment_id=staging_id,
+            staging_deployed_sha=staging_sha,
+            staging_status=staging_status,
+            production_deployment_id=production_id,
+            production_deployed_sha=production_sha,
+            production_status=production_status,
+            required_approvals=required_approvals,
+            required_evidence=required_evidence,
+        ),
+        tuple(warnings),
     )
 
 

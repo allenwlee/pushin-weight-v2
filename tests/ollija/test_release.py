@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,9 +9,15 @@ import pytest
 
 from scripts.ollija.config import load_project_config
 from scripts.ollija.git import GitObservation
-from scripts.ollija.release import ReleaseError, require_release_readiness
+from scripts.ollija.release import (
+    GitPublisher,
+    ReleaseError,
+    require_release_readiness,
+    verify_and_tag_candidate,
+)
 from scripts.ollija.render import RenderDeployment
 from scripts.ollija.state import CandidateIdentity, Receipt, ReceiptStore
+from scripts.ollija.verification import BrowserObservation, RouteObservation
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHA = "a" * 40
@@ -129,6 +136,22 @@ def _write_ready_receipts(config) -> None:
     store.set_reference("active_staging", stage.receipt_id)
 
 
+def _write_last_known_good(config) -> None:
+    store = ReceiptStore(config.root / config.state.directory)
+    receipt = Receipt.create(
+        kind="last_known_good",
+        candidate=_candidate(),
+        created_at=NOW,
+        payload={
+            "service_set_id": "prior-set",
+            "deployed_sha": PRIOR_SHA,
+            "deployments": [],
+        },
+    )
+    store.write_receipt(receipt)
+    store.set_reference("pre_release_last_known_good", receipt.receipt_id)
+
+
 def _git() -> GitObservation:
     return GitObservation(
         repository_root=REPO_ROOT,
@@ -189,3 +212,131 @@ def test_replaced_staging_deploy_blocks_release(tmp_path: Path) -> None:
             staging_live=replaced,
             now=NOW,
         )
+
+
+class _Render:
+    def __init__(self, staging: RenderDeployment) -> None:
+        self.staging = staging
+
+    def require_resource(self, **kwargs) -> None:
+        return None
+
+    def current_deployment(self, resource_id: str) -> RenderDeployment:
+        return self.staging
+
+    def wait_for_exact_deployment(
+        self,
+        *,
+        resource_id: str,
+        candidate_sha: str,
+        timeout_seconds: int,
+        poll_interval_seconds: float,
+    ) -> RenderDeployment:
+        return replace(
+            self.staging,
+            resource_id=resource_id,
+            deployment_id=f"dep-{resource_id}",
+            commit_sha=candidate_sha,
+        )
+
+
+class _Publisher:
+    def __init__(self) -> None:
+        self.tags: list[tuple[str, str]] = []
+
+    def tag_and_push(self, *, sha: str, tag: str) -> None:
+        self.tags.append((sha, tag))
+
+
+class _Browser:
+    def observe_headline(self, *, url: str, selector: str, unavailable_text: str):
+        return BrowserObservation(
+            final_url=url,
+            selector=selector,
+            visible=True,
+            text_fingerprint="f" * 64,
+        )
+
+
+def test_verification_revalidates_current_staging_before_tagging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _configured(tmp_path)
+    for filename in ("config.yaml", "render.yaml"):
+        shutil.copy2(REPO_ROOT / filename, tmp_path / filename)
+    _write_ready_receipts(config)
+    _write_last_known_good(config)
+    git = replace(
+        _git(),
+        production_sha=SHA,
+        staging_sha=SHA,
+        branch_relationship="equal",
+    )
+    monkeypatch.setattr(
+        "scripts.ollija.verification.probe_route",
+        lambda base, path: RouteObservation(
+            url=base + path,
+            status_code=200,
+            final_url=base + path,
+        ),
+    )
+    publisher = _Publisher()
+
+    receipt, _report = verify_and_tag_candidate(
+        config=config,
+        git=git,
+        package_version="0.2.0b1",
+        render=_Render(_stage()),
+        publisher=publisher,
+        browser_probe=_Browser(),
+        now=NOW,
+    )
+
+    assert publisher.tags == [(SHA, "v0.2.0-beta.1")]
+    assert receipt.payload["staging_deployment_id"] == "dep-stage"
+    assert len(receipt.payload["approval_receipt_ids"]) == 2
+
+
+def test_verification_does_not_tag_after_staging_replacement(
+    tmp_path: Path,
+) -> None:
+    config = _configured(tmp_path)
+    _write_ready_receipts(config)
+    _write_last_known_good(config)
+    git = replace(
+        _git(),
+        production_sha=SHA,
+        staging_sha=SHA,
+        branch_relationship="equal",
+    )
+    publisher = _Publisher()
+
+    with pytest.raises(ReleaseError, match="replaced"):
+        verify_and_tag_candidate(
+            config=config,
+            git=git,
+            package_version="0.2.0b1",
+            render=_Render(replace(_stage(), deployment_id="dep-replaced")),
+            publisher=publisher,
+            browser_probe=_Browser(),
+            now=NOW,
+        )
+
+    assert publisher.tags == []
+
+
+def test_existing_remote_tag_is_rejected_before_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publisher = GitPublisher(tmp_path)
+    monkeypatch.setattr(publisher, "_try", lambda *args: (1, ""))
+    monkeypatch.setattr(
+        publisher,
+        "_run",
+        lambda *args: f"{'c' * 40}\trefs/tags/v0.2.0-beta.1\n",
+    )
+
+    with pytest.raises(ReleaseError, match="already_exists"):
+        publisher.assert_tag_absent("v0.2.0-beta.1")

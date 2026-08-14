@@ -213,18 +213,7 @@ def _start_candidate(config, facts) -> CommandResult:
     if blocked:
         return blocked
     beta = parse_beta_version(facts.package_version)
-    existing = subprocess.run(
-        ["git", "tag", "--list", beta.release_tag],
-        cwd=config.root,
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
-    if existing.returncode != 0:
-        raise VersionError("release_tag_lookup_failed")
-    if existing.stdout.strip():
-        raise VersionError("release_tag_already_exists")
+    GitPublisher(config.root).assert_tag_absent(beta.release_tag)
     impact = assess_ui_impact(config, _changed_paths(config))
     if not facts.git.head_sha:
         raise VersionError("candidate_sha_unavailable")

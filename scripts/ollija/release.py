@@ -98,6 +98,24 @@ class GitPublisher:
         if len(fields) != 2 or fields[0] != sha:
             raise ReleaseError("git_remote_ref_identity_mismatch")
 
+    def assert_tag_absent(self, tag: str) -> None:
+        local_returncode, _local = self._try(
+            "rev-parse", "--verify", "--quiet", f"{tag}^{{}}"
+        )
+        if local_returncode == 0:
+            raise ReleaseError("release_tag_already_exists")
+        if local_returncode != 1:
+            raise ReleaseError("release_tag_lookup_failed")
+        remote = self._run(
+            "ls-remote",
+            "--tags",
+            "origin",
+            f"refs/tags/{tag}",
+            f"refs/tags/{tag}^{{}}",
+        )
+        if remote.strip():
+            raise ReleaseError("release_tag_already_exists")
+
     def tag_and_push(self, *, sha: str, tag: str) -> None:
         returncode, local = self._try(
             "rev-parse", "--verify", "--quiet", f"{tag}^{{}}"
@@ -283,6 +301,7 @@ def stage_candidate(
         git=git,
         package_version=package_version,
     )
+    publisher.assert_tag_absent(candidate.candidate.release_tag)
     local_refresh, hosted_refresh = _require_refreshes(
         config,
         store,
@@ -485,6 +504,7 @@ def promote_candidate(
         staging_live=staging_live,
         now=now,
     )
+    publisher.assert_tag_absent(evidence.candidate.candidate.release_tag)
     current = observe_production_service_set(config=config, render=render)
     if any(item.status != "live" for item in current):
         raise ReleaseError("production_last_known_good_not_live")
@@ -525,14 +545,23 @@ def verify_and_tag_candidate(
     browser_probe: BrowserProbe,
     now: datetime,
 ) -> tuple[Receipt, ProductionVerification]:
-    store = _store(config)
-    receipts = store.iter_receipts()
-    candidate = _active_candidate(
-        store,
-        receipts,
+    staging_service_id, staging_service_name = _staging_specification(config)
+    render.require_resource(
+        resource_id=staging_service_id,
+        name=staging_service_name,
+        kind="web",
+        branch=config.git.staging_branch,
+        repository_slug=config.authority.repository_slug,
+    )
+    staging_live = render.current_deployment(staging_service_id)
+    evidence = require_release_readiness(
+        config=config,
         git=git,
         package_version=package_version,
+        staging_live=staging_live,
+        now=now,
     )
+    candidate = evidence.candidate
     if git.production_sha != candidate.candidate.sha:
         raise ReleaseError("production_branch_candidate_mismatch")
     deployments = observe_production_service_set(
@@ -566,28 +595,20 @@ def verify_and_tag_candidate(
         headline_unavailable_text=str(required_strings["headline_unavailable_text"]),
         browser_probe=browser_probe,
     )
+    store = _store(config)
+    receipts = store.iter_receipts()
+    previous = _referenced_receipt(
+        store,
+        receipts,
+        reference="pre_release_last_known_good",
+        kind="last_known_good",
+    )
     publisher.tag_and_push(
         sha=candidate.candidate.sha,
         tag=candidate.candidate.release_tag,
     )
-    stage = _referenced_receipt(
-        store,
-        receipts,
-        reference="active_staging",
-        kind="staging_deploy",
-    )
-    previous_id = store.read_reference("pre_release_last_known_good")
-    approvals = [
-        item.receipt_id
-        for item in receipts
-        if item.kind == "approval" and item.candidate == candidate.candidate
-    ]
-    bridgewright = [
-        item.receipt_id
-        for item in receipts
-        if item.kind == "bridgewright_evidence"
-        and item.candidate == candidate.candidate
-    ]
+    if evidence.staging_deploy is None:
+        raise ReleaseError("staging_receipt_missing")
     payload = {
         **report.to_receipt_payload(),
         "deployment_id": deployment_set_id(deployments),
@@ -595,11 +616,17 @@ def verify_and_tag_candidate(
         "status": "live",
         "release_tag": candidate.candidate.release_tag,
         "release_tag_pushed": True,
-        "staging_receipt_id": stage.receipt_id,
-        "staging_deployment_id": stage.payload.get("deployment_id"),
-        "approval_receipt_ids": sorted(approvals),
-        "bridgewright_evidence_receipt_ids": sorted(bridgewright),
-        "last_known_good_receipt_id": previous_id,
+        "staging_receipt_id": evidence.staging_deploy.receipt_id,
+        "staging_deployment_id": evidence.staging_deploy.payload.get(
+            "deployment_id"
+        ),
+        "approval_receipt_ids": sorted(
+            item.receipt_id for item in evidence.approvals
+        ),
+        "bridgewright_evidence_receipt_ids": sorted(
+            item.receipt_id for item in evidence.bridgewright_evidence
+        ),
+        "last_known_good_receipt_id": previous.receipt_id,
         "completed_at": now.astimezone(UTC).isoformat(),
     }
     receipt = Receipt.create(
