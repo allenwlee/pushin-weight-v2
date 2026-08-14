@@ -24,6 +24,7 @@ state:
 environments:
   local:
     database_name: pushinweight_staging
+    database_resource_id: local:fuchitalee
     preview_host: 127.0.0.1
     preview_port: 8000
     tailscale_hostname: fuchitalee
@@ -61,6 +62,12 @@ database_safety:
     - pushinweight_shadow
     - pushinweight
   staging_name_prefix: pushinweight_staging
+  source_readonly_role: ollija_dump
+  local_hosts:
+    - local_socket
+    - localhost
+    - 127.0.0.1
+    - "::1"
   marker_table: ollija_environment_marker
   marker_environment: staging
 

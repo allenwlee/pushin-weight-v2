@@ -102,6 +102,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "project.middleware.StagingOwnerOnlyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     # django-allauth
     "allauth.account.middleware.AccountMiddleware",
@@ -160,6 +161,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+# A copied production database is reachable only by the explicitly configured
+# owner when the staging profile is active. Production leaves this middleware
+# inert. The empty allowlist deliberately fails closed.
+OLLIJA_STAGING_MODE = env.bool("OLLIJA_STAGING_MODE", default=False)
+OLLIJA_STAGING_ALLOWED_EMAILS = frozenset(
+    email.strip().casefold()
+    for email in env.list("OLLIJA_STAGING_ALLOWED_EMAILS", default=[])
+    if email.strip()
+)
 
 # ============================================================================
 # django-allauth — Google OAuth
