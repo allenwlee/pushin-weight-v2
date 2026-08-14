@@ -4,7 +4,6 @@ import re
 import subprocess
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLACEHOLDER_PASSWORDS = {
     "change-me",
@@ -25,9 +24,11 @@ DATABASE_URL = re.compile(
     r"postgres(?:ql)?://(?P<user>[^\s/:@]+):(?P<password>[^\s@/]+)@",
     re.IGNORECASE,
 )
-TOKEN_PREFIX = "".join(("s", "k", "-"))
+TOKEN_PREFIX = "".join(("s", "k", "-"))  # noqa: FLY002 - avoid scanner self-match
 TOKEN = re.compile(rf"(?<![A-Za-z0-9]){TOKEN_PREFIX}[A-Za-z0-9_-]{{20,}}")
-PRIVATE_KEY_MARKER = "".join(("-----BEGIN ", "PRIVATE KEY-----"))
+PRIVATE_KEY_MARKER = "".join(  # noqa: FLY002 - avoid scanner self-match
+    ("-----BEGIN ", "PRIVATE KEY-----")
+)
 
 
 def _git(*args: str) -> str:
