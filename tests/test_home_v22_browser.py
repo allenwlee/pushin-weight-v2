@@ -867,6 +867,124 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_no_story_headline_is_bilingual_after_atomic_dom_replacement(
+        self,
+    ) -> None:
+        """A newer empty check replaces stale story DOM in both locales."""
+        from monitor.trend_narrative_lifecycle import record_no_call_check
+        from x_monitor.config import HeadlineNarrativeConfig
+
+        checked_at = datetime.now(UTC)
+        for window_days in (1, 7):
+            facts = {
+                "snapshot_schema_version": 1,
+                "window_days": window_days,
+                "as_of": checked_at.isoformat(),
+                "coverage": {
+                    "selected": {
+                        "state": "sufficient",
+                        "ratio": "1.000000",
+                    },
+                    "prior": {
+                        "state": "sufficient",
+                        "ratio": "1.000000",
+                    },
+                },
+                "candidates": [],
+            }
+            self.assertIsNotNone(
+                record_no_call_check(
+                    source_cycle_id=f"browser-no-story-{window_days}",
+                    window_days=window_days,
+                    facts_as_of=checked_at,
+                    semantic_fingerprint=str(window_days) * 64,
+                    facts=facts,
+                    checked_at=checked_at,
+                    status="checked",
+                    reason_code="insufficient_data",
+                )
+            )
+
+        config = HeadlineNarrativeConfig(serving_enabled=True)
+        with (
+            patch(
+                "monitor.trend_narrative_projection._load_config",
+                return_value=config,
+            ),
+            sync_playwright() as playwright,
+        ):
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport=VIEWPORTS["desktop"],
+                    timezone_id="Asia/Tokyo",
+                )
+                _freeze_clock(context)
+                page = context.new_page()
+                try:
+                    expected_en = (
+                        "No clear conversation story emerged in this window."
+                    )
+                    page.goto(
+                        f"{self.live_server_url}/?locale=en",
+                        wait_until="networkidle",
+                    )
+                    headline = page.locator("[data-pw-headline]")
+                    body = headline.locator("[data-pw-headline-body]")
+                    self.assertEqual(body.inner_text(), expected_en)
+                    self.assertEqual(
+                        headline.locator("[data-pw-headline-brand]").count(),
+                        0,
+                    )
+                    shape = body.bounding_box()
+                    self.assertIsNotNone(shape)
+                    self.assertGreater(shape["width"], 0)
+                    self.assertGreater(shape["height"], 0)
+
+                    body.evaluate(
+                        "node => { node.textContent = 'stale browser story'; }"
+                    )
+                    with page.expect_response(
+                        lambda response: "/chart.html?" in response.url
+                    ):
+                        page.locator("[data-pw-window-btn='7']").click()
+                    page.wait_for_function(
+                        """expected => document.querySelector(
+                          '[data-pw-headline-body]'
+                        )?.textContent === expected""",
+                        arg=expected_en,
+                    )
+                    self.assertTrue(
+                        headline.locator(
+                            "[data-pw-headline-observations]"
+                        ).is_hidden()
+                    )
+                    payload = page.evaluate(
+                        """() => JSON.parse(
+                          document.querySelector('canvas.home-chart').dataset.home
+                        ).trend_narrative"""
+                    )
+                    self.assertEqual(payload["schema_version"], 2)
+                    self.assertEqual(payload["window_days"], 7)
+                    self.assertEqual(payload["body"], expected_en)
+                    self.assertEqual(payload["subjects"], [])
+
+                    page.goto(
+                        f"{self.live_server_url}/?locale=zh_hans",
+                        wait_until="networkidle",
+                    )
+                    expected_zh = "这一时间段内没有出现明确的讨论主题。"
+                    zh_body = page.locator("[data-pw-headline-body]")
+                    self.assertEqual(zh_body.inner_text(), expected_zh)
+                    zh_shape = zh_body.bounding_box()
+                    self.assertIsNotNone(zh_shape)
+                    self.assertGreater(zh_shape["width"], 0)
+                    self.assertGreater(zh_shape["height"], 0)
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_anonymous_filters_window_and_pulse_share_one_request_state(self) -> None:
         """One V22 action emits one immutable state to feed and chart."""
 

@@ -13,6 +13,7 @@ from monitor.trend_narrative_lifecycle import (
     mark_transport_completed,
     mark_transport_started,
     publish_generation,
+    record_no_call_check,
     reserve_generation,
 )
 from monitor.trend_narrative_projection import project_trend_narrative
@@ -179,6 +180,34 @@ def _publish(
     return row
 
 
+def _record_no_story(
+    *,
+    window_days: int,
+    facts_as_of: datetime,
+    checked_at: datetime,
+    source_cycle_id: str = "no-story-cycle",
+):
+    return record_no_call_check(
+        source_cycle_id=source_cycle_id,
+        window_days=window_days,
+        facts_as_of=facts_as_of,
+        semantic_fingerprint="f" * 64,
+        facts={
+            "snapshot_schema_version": 1,
+            "window_days": window_days,
+            "as_of": facts_as_of.isoformat(),
+            "coverage": {
+                "selected": {"state": "sufficient", "ratio": "1.000000"},
+                "prior": {"state": "sufficient", "ratio": "1.000000"},
+            },
+            "candidates": [],
+        },
+        checked_at=checked_at,
+        status="checked",
+        reason_code="insufficient_data",
+    )
+
+
 @pytest.mark.parametrize(
     ("locale", "expected"),
     [
@@ -244,6 +273,88 @@ def test_schema_three_row_keeps_the_public_browser_dto_at_schema_two():
     assert payload["schema_version"] == 2
     assert payload["body"] == "MiniMax leads attention across the market."
     assert "claims" not in payload
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [
+        ("en", "No clear conversation story emerged in this window."),
+        ("zh_hans", "这一时间段内没有出现明确的讨论主题。"),
+    ],
+)
+def test_newer_no_candidate_check_supersedes_an_older_story(locale, expected):
+    _publish()
+    no_story = _record_no_story(
+        window_days=1,
+        facts_as_of=NOW + timedelta(hours=1),
+        checked_at=NOW + timedelta(hours=1, seconds=1),
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale=locale,
+        now=NOW + timedelta(hours=1, minutes=1),
+        config=_config(),
+    )
+
+    assert payload["schema_version"] == 2
+    assert payload["state"] == "available"
+    assert payload["body"] == expected
+    assert payload["body_remainder"] == expected
+    assert payload["subjects"] == []
+    assert payload["primary_brand"] is None
+    assert payload["observations"] == []
+    assert payload["generated_at"] is None
+    assert payload["checked_at"] == no_story.latest_checked_at.isoformat()
+
+
+def test_older_no_candidate_check_and_newer_failure_preserve_last_good():
+    current = _publish()
+    _record_no_story(
+        window_days=1,
+        facts_as_of=NOW - timedelta(hours=1),
+        checked_at=NOW + timedelta(seconds=2),
+    )
+    record_no_call_check(
+        source_cycle_id="newer-provider-failure",
+        window_days=1,
+        facts_as_of=NOW + timedelta(hours=2),
+        semantic_fingerprint="9" * 64,
+        facts=current.generation_facts,
+        checked_at=NOW + timedelta(hours=2, seconds=1),
+        status="suppressed",
+        reason_code="provider_request_failed",
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert payload["body"] == current.body_en
+    assert payload["primary_brand"]["key"] == "minimax"
+
+
+def test_no_story_checked_time_breaks_an_equal_facts_as_of_tie():
+    _publish()
+    _record_no_story(
+        window_days=1,
+        facts_as_of=NOW,
+        checked_at=NOW + timedelta(seconds=2),
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(seconds=3),
+        config=_config(),
+    )
+
+    assert payload["body"] == (
+        "No clear conversation story emerged in this window."
+    )
 
 
 def test_stale_uses_last_good_body_and_deleted_brand_loses_only_link():
