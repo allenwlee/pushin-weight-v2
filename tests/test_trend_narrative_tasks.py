@@ -122,7 +122,7 @@ def _result(snapshot: dict, config: HeadlineNarrativeConfig):
     brand = candidate["display_name_en"]
     candidate_id = candidate["candidate_id"]
     return SimpleNamespace(
-        output_schema_version=2,
+        output_schema_version=3,
         body_en=f"{brand} leads attention across the market.",
         body_zh_cn=f"当前市场讨论中，{brand} 更受关注。",
         observations_en=("Attention rises and then holds.",),
@@ -148,14 +148,20 @@ def _result(snapshot: dict, config: HeadlineNarrativeConfig):
                 "candidate_ids": [candidate_id],
                 "families": ["volume"],
                 "evidence_ids": [],
+                "quantitative_fact_ids": [],
                 "event_anchor": "",
+                "explanation_type": "aggregate_trajectory",
+                "evidence_confidence": "aggregate_only",
             },
             {
                 "observation_index": 0,
                 "candidate_ids": [candidate_id],
                 "families": ["volume"],
                 "evidence_ids": [],
+                "quantitative_fact_ids": [],
                 "event_anchor": "",
+                "explanation_type": "aggregate_trajectory",
+                "evidence_confidence": "aggregate_only",
             },
         ),
         output_hash="b" * 64,
@@ -219,7 +225,7 @@ def test_cold_refresh_makes_exactly_four_calls_and_duplicate_makes_zero(
     assert duplicate["slots_consumed"] == 0
     assert calls == [1, 7, 30, 365]
     assert TrendNarrative.objects.filter(call_slot_consumed=True).count() == 4
-    assert TrendNarrative.objects.filter(output_schema_version=2).count() == 4
+    assert TrendNarrative.objects.filter(output_schema_version=3).count() == 4
     assert TrendNarrativeSubject.objects.count() == 4
     one_day = TrendNarrative.objects.get(window_days=1, is_current=True)
     assert one_day.body_zh_cn == one_day.body_zh_hans

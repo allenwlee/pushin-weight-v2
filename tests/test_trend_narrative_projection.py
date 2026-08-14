@@ -32,6 +32,7 @@ def _publish(
     window_days: int = 1,
     *,
     coverage_state: str = "sufficient",
+    output_schema_version: int = 2,
 ):
     brand = Brand.objects.create(
         nickname="minimax",
@@ -55,12 +56,27 @@ def _publish(
                 "earliest_at": "2025-10-01T00:00:00+00:00",
             },
         },
+        "unresolved_backlog_intervals": [],
+        "comparison_suppressed_reasons": [],
+        "comparison_allowed": False,
+        "thresholds": {"minimum_coverage": "0.800000"},
+        "series_axis": {"coarse": {"bucket_count": 1}},
         "candidates": [
             {
                 "candidate_id": "minimax:full_window",
                 "brand_key": brand.pk,
                 "display_name_en": "MiniMax",
                 "display_name_zh_cn": "MiniMax",
+                "kind": "full_window",
+                "start_at": "2026-08-12T11:00:00Z",
+                "end_at": "2026-08-12T12:00:00Z",
+                "signals": [{"family": "volume", "rank": 1}],
+                "family_facts": {"volume": {"change_pct": None}},
+                "metadata_trajectories": {},
+                "episodes": [],
+                "series": {"coarse": {"post_counts": [1]}},
+                "evidence_allocation": {},
+                "evidence_support": {},
                 "evidence": [],
             }
         ],
@@ -84,7 +100,7 @@ def _publish(
         owner="worker-a",
         now=NOW,
         lease_seconds=90,
-        output_schema_version=2,
+        output_schema_version=output_schema_version,
     )
     assert row is not None
     assert mark_transport_started(
@@ -119,12 +135,30 @@ def _publish(
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["volume"],
                 "evidence_ids": [],
+                **(
+                    {
+                        "quantitative_fact_ids": [],
+                        "explanation_type": "aggregate_trajectory",
+                        "evidence_confidence": "aggregate_only",
+                    }
+                    if output_schema_version == 3
+                    else {}
+                ),
             },
             {
                 "observation_index": 0,
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["volume"],
                 "evidence_ids": [],
+                **(
+                    {
+                        "quantitative_fact_ids": [],
+                        "explanation_type": "aggregate_trajectory",
+                        "evidence_confidence": "aggregate_only",
+                    }
+                    if output_schema_version == 3
+                    else {}
+                ),
             }
         ],
         subjects=[
@@ -194,6 +228,22 @@ def test_available_projection_selects_locale_and_public_brand_link(locale, expec
     assert "provider" not in payload
     assert "error" not in payload
     assert "claim" not in payload
+
+
+def test_schema_three_row_keeps_the_public_browser_dto_at_schema_two():
+    row = _publish(output_schema_version=3)
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert row.output_schema_version == 3
+    assert payload["schema_version"] == 2
+    assert payload["body"] == "MiniMax leads attention across the market."
+    assert "claims" not in payload
 
 
 def test_stale_uses_last_good_body_and_deleted_brand_loses_only_link():

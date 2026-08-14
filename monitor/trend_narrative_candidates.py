@@ -8,7 +8,7 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from django.db import connection, transaction
@@ -26,6 +26,7 @@ MAX_SHORTLIST_CANDIDATES = 6
 MAX_EVIDENCE_CHARACTERS = 1_000
 MAX_SNAPSHOT_BYTES = 256 * 1024
 MAX_PROVIDER_PACKET_BYTES = 128 * 1024
+MAX_QUANTITATIVE_FACTS_PER_CANDIDATE = 24
 SNAPSHOT_STATEMENT_TIMEOUT_MS = 30_000
 SNAPSHOT_LOCK_TIMEOUT_MS = 5_000
 NEAR_DUPLICATE_JACCARD = Decimal("0.90")
@@ -269,6 +270,10 @@ def build_trend_analysis_snapshot(
 def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     """Remove complete fine vectors and private source metadata for DeepSeek."""
     candidates = []
+    comparison_allowed = bool(snapshot.get("comparison_allowed"))
+    minimum_coverage = Decimal(
+        str(snapshot.get("thresholds", {}).get("minimum_coverage") or 0)
+    )
     for candidate in snapshot.get("candidates", []):
         candidates.append(
             {
@@ -281,6 +286,11 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
                 "end_at": candidate["end_at"],
                 "signals": candidate["signals"],
                 "family_facts": candidate["family_facts"],
+                "quantitative_facts": _quantitative_display_facts(
+                    candidate,
+                    comparison_allowed=comparison_allowed,
+                    minimum_coverage=minimum_coverage,
+                ),
                 "metadata_trajectories": candidate.get(
                     "metadata_trajectories",
                     {},
@@ -321,9 +331,160 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "comparison_allowed": snapshot["comparison_allowed"],
         "thresholds": snapshot["thresholds"],
+        "quantitative_fact_schema_version": 1,
         "evidence_policy": snapshot.get("evidence_policy", {}),
         "series_axis": {"coarse": snapshot["series_axis"]["coarse"]},
         "candidates": candidates,
+    }
+
+
+def _quantitative_display_facts(
+    candidate: Mapping[str, Any],
+    *,
+    comparison_allowed: bool,
+    minimum_coverage: Decimal,
+) -> list[dict[str, Any]]:
+    if not comparison_allowed:
+        return []
+    candidate_id = str(candidate["candidate_id"])
+    family_facts = candidate.get("family_facts", {})
+    projected: list[dict[str, Any]] = []
+    volume = family_facts.get("volume", {})
+    volume_change = volume.get("change_pct")
+    if volume_change is None:
+        volume_change = volume.get("selected_prior_pct_change")
+    fact = _quantitative_display_fact(
+        candidate_id=candidate_id,
+        family="volume",
+        metric="change_pct",
+        label_key="",
+        source_value=volume_change,
+        unit="percent",
+    )
+    if fact is not None:
+        projected.append(fact)
+
+    engagement = family_facts.get("engagement", {})
+    fact = _quantitative_display_fact(
+        candidate_id=candidate_id,
+        family="engagement",
+        metric="intensity_change_pct",
+        label_key="",
+        source_value=engagement.get("intensity_change_pct"),
+        unit="percent",
+    )
+    if fact is not None:
+        projected.append(fact)
+
+    for family in (
+        "post_type",
+        "discourse",
+        "sentiment",
+        "china_nationalism",
+        "us_nationalism",
+    ):
+        family_fact = family_facts.get(family, {})
+        if not _metadata_comparison_has_coverage(
+            family_fact,
+            minimum_coverage=minimum_coverage,
+        ):
+            continue
+        facts = []
+        for label in family_fact.get("labels", []):
+            label_key = str(label.get("key") or "")
+            prevalence_fact = _quantitative_display_fact(
+                candidate_id=candidate_id,
+                family=family,
+                metric="brand_change_pp",
+                label_key=label_key,
+                source_value=label.get("brand_change_pp"),
+                unit="percentage_points",
+            )
+            if prevalence_fact is not None:
+                facts.append(prevalence_fact)
+            prior_count = int(label.get("prior_count") or 0)
+            selected_count = int(label.get("selected_count") or 0)
+            if prior_count > 0:
+                count_change = (
+                    (Decimal(selected_count) / Decimal(prior_count) - 1) * 100
+                )
+                count_fact = _quantitative_display_fact(
+                    candidate_id=candidate_id,
+                    family=family,
+                    metric="count_change_pct",
+                    label_key=label_key,
+                    source_value=count_change,
+                    unit="percent",
+                )
+                if count_fact is not None:
+                    count_fact["source_selected_count"] = selected_count
+                    count_fact["source_prior_count"] = prior_count
+                    facts.append(count_fact)
+        projected.extend(
+            sorted(
+                facts,
+                key=lambda item: (
+                    -abs(Decimal(str(item["source_value"]))),
+                    str(item["label_key"]).casefold(),
+                    str(item["label_key"]),
+                ),
+            )[:4]
+        )
+    return projected[:MAX_QUANTITATIVE_FACTS_PER_CANDIDATE]
+
+
+def _metadata_comparison_has_coverage(
+    family_fact: Mapping[str, Any],
+    *,
+    minimum_coverage: Decimal,
+) -> bool:
+    try:
+        selected = Decimal(str(family_fact["selected_coverage_ratio"]))
+        prior = Decimal(str(family_fact["prior_coverage_ratio"]))
+    except (InvalidOperation, KeyError, TypeError):
+        return False
+    return selected >= minimum_coverage and prior >= minimum_coverage
+
+
+def _quantitative_display_fact(
+    *,
+    candidate_id: str,
+    family: str,
+    metric: str,
+    label_key: str,
+    source_value: object,
+    unit: str,
+) -> dict[str, Any] | None:
+    if source_value is None:
+        return None
+    source_text = str(source_value)
+    try:
+        exact = Decimal(source_text)
+    except InvalidOperation:
+        return None
+    if not exact.is_finite():
+        return None
+    magnitude = abs(exact)
+    quantum = Decimal("0.1") if magnitude < 1 else Decimal(1)
+    rounded = magnitude.quantize(quantum, rounding=ROUND_HALF_UP)
+    display_number = format(rounded, "f")
+    if "." in display_number:
+        display_number = display_number.rstrip("0").rstrip(".")
+    suffix_en = "%" if unit == "percent" else " percentage points"
+    suffix_zh_cn = "%" if unit == "percent" else "个百分点"
+    fact_key = f"{candidate_id}:{family}:{metric}:{label_key}"
+    return {
+        "fact_id": "qf_" + _digest(fact_key)[:24],
+        "candidate_id": candidate_id,
+        "family": family,
+        "metric": metric,
+        "label_key": label_key,
+        "unit": unit,
+        "source_value": format(exact, "f"),
+        "rounding": "nearest_tenth_below_one_else_whole",
+        "direction": "increase" if exact > 0 else "decrease" if exact < 0 else "flat",
+        "display_en": display_number + suffix_en,
+        "display_zh_cn": display_number + suffix_zh_cn,
     }
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any
@@ -10,6 +11,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import Q, QuerySet
 
 from core.models import Brand, Product, TrendNarrative, TrendNarrativeSubject
+from monitor.trend_narrative_candidates import project_provider_packet
 from monitor.trend_narrative_coverage import selected_coverage_state
 
 _ADVISORY_LOCK_NAMESPACE = 1_926_082_021
@@ -329,6 +331,8 @@ def publish_generation(
 
         publication = _validate_publication_payload(
             row,
+            body_en=body_en,
+            body_zh_cn=body_zh_cn,
             observations_en=observations_en,
             observations_zh_cn=observations_zh_cn,
             selected_candidate_ids=selected_candidate_ids,
@@ -512,6 +516,8 @@ def _brand_snapshot(value: object) -> dict[str, Any]:
 def _validate_publication_payload(
     row: TrendNarrative,
     *,
+    body_en: str,
+    body_zh_cn: str,
     observations_en: Sequence[str],
     observations_zh_cn: Sequence[str],
     selected_candidate_ids: Sequence[str],
@@ -529,7 +535,7 @@ def _validate_publication_payload(
         if any(payload.values()):
             raise ValueError("schema-1 publications cannot contain schema-2 output")
         return payload
-    if row.output_schema_version != 2:
+    if row.output_schema_version not in {2, 3}:
         raise ValueError("unsupported trend narrative output schema")
     payload["subjects"] = _resolve_evidence_subject_identities(
         payload["subjects"]
@@ -542,6 +548,13 @@ def _validate_publication_payload(
         claim.get("observation_index") for claim in payload["claims"]
     ] != [-1, *range(len(payload["observations_en"]))]:
         raise ValueError("schema-2 claims must cover headline then observations")
+    if row.output_schema_version == 3:
+        _validate_schema_three_claims(
+            row,
+            body_en=body_en,
+            body_zh_cn=body_zh_cn,
+            payload=payload,
+        )
     if len(payload["selected_candidate_ids"]) not in {1, 2} or len(
         set(payload["selected_candidate_ids"])
     ) != len(payload["selected_candidate_ids"]):
@@ -617,6 +630,91 @@ def _validate_publication_payload(
     elif len(measured) != 1 or len(evidence_only) > 1:
         raise ValueError("invalid measured/evidence-only subject combination")
     return payload
+
+
+def _validate_schema_three_claims(
+    row: TrendNarrative,
+    *,
+    body_en: str,
+    body_zh_cn: str,
+    payload: Mapping[str, Any],
+) -> None:
+    try:
+        packet = project_provider_packet(row.generation_facts or {})
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("schema-3 generation facts are invalid") from exc
+    facts = {
+        str(fact["fact_id"]): fact
+        for candidate in packet.get("candidates", [])
+        for fact in candidate.get("quantitative_facts", [])
+        if fact.get("fact_id")
+    }
+    names_en = {
+        str(subject.get("name_en_snapshot") or "")
+        for subject in payload["subjects"]
+        if subject.get("name_en_snapshot")
+    }
+    names_zh_cn = {
+        str(subject.get("name_zh_cn_snapshot") or "")
+        for subject in payload["subjects"]
+        if subject.get("name_zh_cn_snapshot")
+    }
+    texts_en = [body_en, *payload["observations_en"]]
+    texts_zh_cn = [body_zh_cn, *payload["observations_zh_cn"]]
+    for position, claim in enumerate(payload["claims"]):
+        required = {
+            "quantitative_fact_ids",
+            "explanation_type",
+            "evidence_confidence",
+        }
+        if not required.issubset(claim):
+            raise ValueError("schema-3 claims require why-first metadata")
+        fact_ids = claim.get("quantitative_fact_ids")
+        if not isinstance(fact_ids, list) or len(fact_ids) != len(set(fact_ids)):
+            raise ValueError("schema-3 quantitative fact IDs must be unique")
+        claim_candidates = set(claim.get("candidate_ids") or [])
+        claim_families = set(claim.get("families") or [])
+        cited = []
+        for fact_id in fact_ids:
+            fact = facts.get(str(fact_id))
+            if fact is None:
+                raise ValueError("schema-3 quantitative fact is unavailable")
+            if fact.get("candidate_id") not in claim_candidates:
+                raise ValueError("schema-3 quantitative candidate mismatch")
+            if fact.get("family") not in claim_families:
+                raise ValueError("schema-3 quantitative family mismatch")
+            cited.append(fact)
+        text_en = texts_en[position]
+        text_zh_cn = texts_zh_cn[position]
+        for fact in cited:
+            if (
+                str(fact["display_en"]) not in text_en
+                or str(fact["display_zh_cn"]) not in text_zh_cn
+            ):
+                raise ValueError("schema-3 quantitative fact must be bilingual")
+        if _uncited_digit(
+            text_en,
+            names_en.union(str(fact["display_en"]) for fact in cited),
+        ) or _uncited_digit(
+            text_zh_cn,
+            names_zh_cn.union(
+                str(fact["display_zh_cn"]) for fact in cited
+            ),
+        ):
+            raise ValueError("schema-3 prose contains an uncited digit")
+
+
+def _uncited_digit(value: str, allowed_spans: set[str]) -> bool:
+    remainder = value
+    for span in sorted(allowed_spans, key=len, reverse=True):
+        if any(character.isdigit() for character in span):
+            remainder = re.sub(
+                re.escape(span),
+                "",
+                remainder,
+                flags=re.IGNORECASE,
+            )
+    return any(character.isdigit() for character in remainder)
 
 
 def _write_subjects(

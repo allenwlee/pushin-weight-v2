@@ -22,6 +22,7 @@ from monitor.trend_narrative_facts import (
     TrendFactThresholds,
 )
 from monitor.trend_narrative_generation import (
+    HEADLINE_OUTPUT_SCHEMA_VERSION,
     HeadlineGenerationError,
     generate_trend_narrative,
     generation_fingerprint,
@@ -239,7 +240,7 @@ def process_trend_narrative_envelope(
             owner=owner,
             now=attempt_started_at,
             lease_seconds=active_config.lease_seconds,
-            output_schema_version=2,
+            output_schema_version=HEADLINE_OUTPUT_SCHEMA_VERSION,
         )
         if attempt is None:
             continue

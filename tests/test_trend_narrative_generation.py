@@ -12,9 +12,10 @@ from billiard.exceptions import SoftTimeLimitExceeded
 from pydantic import ValidationError
 
 import monitor.trend_narrative_generation as trend_generation
+from monitor.trend_narrative_candidates import project_provider_packet
 from monitor.trend_narrative_generation import (
     HEADLINE_OUTPUT_SCHEMA_VERSION,
-    HEADLINE_SYSTEM_PROMPT_V2,
+    HEADLINE_SYSTEM_PROMPT_V3,
     HeadlineGenerationError,
     generate_trend_narrative,
     generation_fingerprint,
@@ -191,14 +192,20 @@ def _valid_payload() -> dict:
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["volume", "engagement"],
                 "evidence_ids": [],
+                "quantitative_fact_ids": [],
                 "event_anchor": "",
+                "explanation_type": "aggregate_trajectory",
+                "evidence_confidence": "aggregate_only",
             },
             {
                 "observation_index": 0,
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["volume"],
                 "evidence_ids": [],
+                "quantitative_fact_ids": [],
                 "event_anchor": "",
+                "explanation_type": "aggregate_trajectory",
+                "evidence_confidence": "aggregate_only",
             }
         ],
     }
@@ -257,14 +264,20 @@ def _evidence_entity_payload() -> dict:
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["evidence"],
                 "evidence_ids": ["e_one", "e_two"],
+                "quantitative_fact_ids": [],
                 "event_anchor": "",
+                "explanation_type": "recurring_content",
+                "evidence_confidence": "recurring_independent",
             },
             {
                 "observation_index": 0,
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["evidence"],
                 "evidence_ids": ["e_one", "e_two"],
+                "quantitative_fact_ids": [],
                 "event_anchor": "",
+                "explanation_type": "recurring_content",
+                "evidence_confidence": "recurring_independent",
             }
         ],
     )
@@ -305,14 +318,97 @@ def _generate(payload: object, *, snapshot: dict | None = None):
     return result, client
 
 
+def _quantitative_fact(
+    snapshot: dict,
+    *,
+    family: str,
+    metric: str,
+    label_key: str = "",
+) -> dict:
+    packet = project_provider_packet(snapshot)
+    return next(
+        fact
+        for fact in packet["candidates"][0]["quantitative_facts"]
+        if fact["family"] == family
+        and fact["metric"] == metric
+        and fact["label_key"] == label_key
+    )
+
+
+def _flat_volume_mix_snapshot() -> dict:
+    snapshot = _snapshot(two_candidates=False)
+    candidate = snapshot["candidates"][0]
+    candidate.update(
+        candidate_id="deepseek:full_window",
+        brand_key="deepseek",
+        display_name_en="DeepSeek",
+        display_name_zh_cn="DeepSeek",
+        evidence=[
+            _evidence(
+                "e_downloads",
+                "DeepSeek users report more downloads during hands-on use.",
+            ),
+            _evidence(
+                "e_intelligence",
+                "Developers report stronger intelligence in DeepSeek workflows.",
+            ),
+        ],
+        evidence_support={
+            "official_source_count": 0,
+            "distinct_author_group_count": 2,
+            "distinct_source_cluster_count": 2,
+            "event_claim_may_be_supported": True,
+            "evidence_only_entity_may_be_supported": True,
+        },
+    )
+    candidate["family_facts"] = {
+        "volume": {
+            "selected_count": 4_000,
+            "prior_count": 4_000,
+            "change_pct": "0.000000",
+            "comparison_state": "available",
+        },
+        "post_type": {
+            "selected_coverage_ratio": "1.000000",
+            "prior_coverage_ratio": "1.000000",
+            "labels": [
+                {
+                    "key": "hands_on",
+                    "selected_count": 16,
+                    "prior_count": 10,
+                    "brand_change_pp": "24.000000",
+                }
+            ],
+        },
+        "sentiment": {
+            "selected_coverage_ratio": "1.000000",
+            "prior_coverage_ratio": "1.000000",
+            "labels": [
+                {
+                    "key": "positive",
+                    "selected_count": 15,
+                    "prior_count": 10,
+                    "brand_change_pp": "20.000000",
+                }
+            ],
+        },
+    }
+    candidate["signals"] = [
+        {"family": "post_type", "rank": 1},
+        {"family": "sentiment", "rank": 1},
+    ]
+    return snapshot
+
+
 def test_headline_config_defaults_are_pinned_and_fail_closed():
     config = HeadlineNarrativeConfig()
 
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
-    assert config.prompt_version == "headline-v5-analytical"
-    assert config.publication_epoch == 5
+    assert config.prompt_version == "headline-v6-why-first"
+    assert config.publication_epoch == 6
+    assert config.materiality_policy_version == "pending-live-review-v1"
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
     assert config.call_cap == 4
@@ -385,7 +481,7 @@ def test_real_boundary_pins_dsv4_route_and_sends_bounded_analysis_packet(
     assert call["temperature"] == 0
     assert call["max_tokens"] == 1_600
     assert call["thinking"] == {"type": "disabled"}
-    assert call["system"] == HEADLINE_SYSTEM_PROMPT_V2
+    assert call["system"] == HEADLINE_SYSTEM_PROMPT_V3
     assert "coarse_series" in call["messages"][0]["content"]
     assert "OffListModel appeared beside MiniMax" in call["messages"][0]["content"]
     assert "author_id" not in call["messages"][0]["content"]
@@ -398,16 +494,193 @@ def test_real_boundary_pins_dsv4_route_and_sends_bounded_analysis_packet(
     assert result.latency_ms == 250
 
 
-def test_literal_prompt_requires_shapes_metadata_nationalism_and_two_winners():
-    assert "Select two measured candidates" in HEADLINE_SYSTEM_PROMPT_V2
-    assert "trajectory across all supplied buckets" in HEADLINE_SYSTEM_PROMPT_V2
-    assert "post type, discourse, sentiment, and nationalism" in (
-        HEADLINE_SYSTEM_PROMPT_V2
+def test_literal_prompt_requires_why_first_mix_context_and_two_winners():
+    assert "what people are concretely discussing" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "measurements only as supporting color" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "post-type, discourse, sentiment, or nationalism" in (
+        HEADLINE_SYSTEM_PROMPT_V3
     )
     assert "without claiming that nationalism caused the trend" in (
-        HEADLINE_SYSTEM_PROMPT_V2
+        HEADLINE_SYSTEM_PROMPT_V3
     )
-    assert "evidence-only entity" in HEADLINE_SYSTEM_PROMPT_V2
+    assert "evidence-only entity" in HEADLINE_SYSTEM_PROMPT_V3
+
+
+def test_flat_volume_mix_story_leads_with_supported_content_and_cited_color():
+    snapshot = _flat_volume_mix_snapshot()
+    volume = _quantitative_fact(
+        snapshot,
+        family="volume",
+        metric="change_pct",
+    )
+    hands_on = _quantitative_fact(
+        snapshot,
+        family="post_type",
+        metric="count_change_pct",
+        label_key="hands_on",
+    )
+    positive = _quantitative_fact(
+        snapshot,
+        family="sentiment",
+        metric="count_change_pct",
+        label_key="positive",
+    )
+    payload = {
+        "body_en": (
+            "DeepSeek users reported more downloads and stronger intelligence as "
+            "hands-on posts rose 60%; volume stayed flat at 0%, while positive "
+            "sentiment rose 50%."
+        ),
+        "body_zh_cn": (
+            "DeepSeek 用户称下载量增加、智能表现增强；动手体验帖增加60%，"
+            "总声量持平于0%，正面情绪增加50%。"
+        ),
+        "observations_en": [],
+        "observations_zh_cn": [],
+        "selected_candidate_ids": ["deepseek:full_window"],
+        "subjects": [
+            {
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "candidate_id": "deepseek:full_window",
+                "observed_name": "",
+                "evidence_ids": [],
+            }
+        ],
+        "claims": [
+            {
+                "observation_index": -1,
+                "candidate_ids": ["deepseek:full_window"],
+                "families": ["evidence", "post_type", "volume", "sentiment"],
+                "evidence_ids": ["e_downloads", "e_intelligence"],
+                "quantitative_fact_ids": [
+                    hands_on["fact_id"],
+                    volume["fact_id"],
+                    positive["fact_id"],
+                ],
+                "event_anchor": "",
+                "explanation_type": "structured_mix",
+                "evidence_confidence": "recurring_independent",
+            }
+        ],
+    }
+
+    result, _client = _generate(payload, snapshot=snapshot)
+
+    assert result.output_schema_version == 3
+    assert result.body_en.index("reported") < result.body_en.index("60%")
+    assert result.body_zh_cn.index("用户称") < result.body_zh_cn.index("60%")
+    assert result.claims[0]["quantitative_fact_ids"] == [
+        hands_on["fact_id"],
+        volume["fact_id"],
+        positive["fact_id"],
+    ]
+
+
+def test_quiet_relative_leader_accepts_a_cited_tenth_percent():
+    snapshot = _snapshot(two_candidates=False)
+    snapshot["candidates"][0]["family_facts"]["volume"][
+        "selected_prior_pct_change"
+    ] = "0.100000"
+    fact = _quantitative_fact(
+        snapshot,
+        family="volume",
+        metric="change_pct",
+    )
+    payload = _valid_payload()
+    payload.update(
+        body_en="MiniMax led a quiet week with a small 0.1% rise in post volume.",
+        body_zh_cn="MiniMax 在平静的一周中领先，帖子声量仅小幅上升0.1%。",
+        observations_en=[],
+        observations_zh_cn=[],
+    )
+    payload["claims"] = [
+        {
+            **payload["claims"][0],
+            "families": ["volume"],
+            "quantitative_fact_ids": [fact["fact_id"]],
+            "explanation_type": "quiet_relative_leader",
+        }
+    ]
+
+    result, _client = _generate(payload, snapshot=snapshot)
+
+    assert fact["display_en"] == fact["display_zh_cn"] == "0.1%"
+    assert "quiet" in result.body_en
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_code"),
+    [
+        ("altered", "headline_output_quantitative_fact_unused_or_unaligned"),
+        ("uncited", "headline_output_en_digits"),
+        ("wrong_family", "headline_output_quantitative_family_mismatch"),
+    ],
+)
+def test_altered_uncited_and_wrong_family_quantities_fail_closed(
+    mutation,
+    expected_code,
+):
+    snapshot = _snapshot(two_candidates=False)
+    fact = _quantitative_fact(
+        snapshot,
+        family="volume",
+        metric="change_pct",
+    )
+    payload = _valid_payload()
+    payload.update(
+        body_en="MiniMax post volume rose 100% across the window.",
+        body_zh_cn="MiniMax 在这一时段的帖子声量上升100%。",
+        observations_en=[],
+        observations_zh_cn=[],
+    )
+    payload["claims"] = [
+        {
+            **payload["claims"][0],
+            "families": ["volume"],
+            "quantitative_fact_ids": [fact["fact_id"]],
+        }
+    ]
+    if mutation == "altered":
+        payload["body_en"] = payload["body_en"].replace("100%", "101%")
+    elif mutation == "uncited":
+        payload["claims"][0]["quantitative_fact_ids"] = []
+    else:
+        payload["claims"][0]["families"] = ["engagement"]
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        _generate(payload, snapshot=snapshot)
+
+    assert captured.value.code == expected_code
+
+
+def test_suppressed_comparison_cannot_supply_a_quantitative_fact():
+    snapshot = _snapshot(two_candidates=False)
+    fact_id = _quantitative_fact(
+        snapshot,
+        family="volume",
+        metric="change_pct",
+    )["fact_id"]
+    snapshot["comparison_allowed"] = False
+    payload = _valid_payload()
+    payload.update(
+        body_en="MiniMax post volume rose 100% across the window.",
+        body_zh_cn="MiniMax 在这一时段的帖子声量上升100%。",
+        observations_en=[],
+        observations_zh_cn=[],
+    )
+    payload["claims"] = [
+        {
+            **payload["claims"][0],
+            "families": ["volume"],
+            "quantitative_fact_ids": [fact_id],
+        }
+    ]
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        _generate(payload, snapshot=snapshot)
+
+    assert captured.value.code == "headline_output_quantitative_fact_unknown"
 
 
 def test_deepseek_route_uses_shared_dsv4_credential(monkeypatch):
@@ -470,7 +743,7 @@ def test_co_dominance_evaluation_fixture_covers_one_and_two_brand_decisions():
     )
 
     assert fixture["schema_version"] == "trend-narrative-co-dominance-eval/v1"
-    assert fixture["selection_rule"] in HEADLINE_SYSTEM_PROMPT_V2
+    assert fixture["selection_rule"] in HEADLINE_SYSTEM_PROMPT_V3
     expected_counts = {
         case["id"]: len(case["expected_selected_candidate_ids"])
         for case in fixture["cases"]
@@ -574,6 +847,8 @@ def test_headline_claim_must_cover_every_selected_and_evidence_only_subject():
     incomplete_evidence["claims"][0].update(
         families=["volume"],
         evidence_ids=[],
+        explanation_type="aggregate_trajectory",
+        evidence_confidence="aggregate_only",
     )
     with pytest.raises(HeadlineGenerationError) as evidence_error:
         _generate(incomplete_evidence)
@@ -607,6 +882,8 @@ def test_concrete_event_requires_a_supported_shared_anchor():
         families=["volume", "evidence"],
         evidence_ids=["e_one", "e_two"],
         event_anchor="Aurora release",
+        explanation_type="recurring_content",
+        evidence_confidence="recurring_independent",
     )
 
     result, _ = _generate(payload, snapshot=snapshot)
@@ -894,7 +1171,13 @@ def test_generation_fingerprint_changes_with_analysis_route_prompt_and_epoch():
 
     assert generation_fingerprint(
         snapshot,
-        baseline.model_copy(update={"publication_epoch": 6}),
+        baseline.model_copy(update={"publication_epoch": 7}),
+    ) != fingerprint
+    assert generation_fingerprint(
+        snapshot,
+        baseline.model_copy(
+            update={"materiality_policy_version": "reviewed-window-v2"}
+        ),
     ) != fingerprint
     minimax = HeadlineNarrativeConfig(
         provider="minimax",
@@ -912,7 +1195,7 @@ def test_generation_fingerprint_changes_with_provider_request_version(monkeypatc
     monkeypatch.setattr(
         trend_generation,
         "HEADLINE_REQUEST_VERSION",
-        "dsv4-json-nonthinking-v2",
+        "dsv4-json-nonthinking-v3",
     )
 
     assert generation_fingerprint(snapshot, config) != fingerprint
