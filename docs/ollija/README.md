@@ -11,6 +11,17 @@ person who puts it up”). The name reflects its job: make the next safe change
 clear, record what was actually reviewed, and prevent an accidental production
 change.
 
+The Hangul spelling is **올리자** (*ollija*). It comes from **올리다** (*ollida*,
+“to raise,” “upload,” “put online,” or “deploy”) plus **-자** (*-ja*, the
+hortative ending meaning “let’s”). Korean software teams commonly use **올리다**
+for putting a server, container, build, or feature into service. The name also
+contains a deliberate wordplay: **-자** can evoke “the person who does [the
+action]” when heard as the agent-like **자** used in Korean compounds, so
+**올리자** suggests both “let’s put it up” and “the one who puts it up.”
+Strictly speaking, the **-자** in the expression is the grammatical “let’s”
+ending; the second meaning is a product-name association, not a claim that the
+same Korean suffix has both grammatical functions in this exact word.
+
 ## The short version
 
 PushinWeight is a live web product. A single developer is responsible for its
