@@ -31,49 +31,7 @@ python manage.py compilemessages
 
 python manage.py collectstatic --no-input --clear
 
-# Acquire the migration advisory lock on the same connection that
-# Django will use, then run migrate. The lock is automatically
-# released when this Python process exits (Postgres session close).
-DJANGO_SETTINGS_MODULE=project.settings python -c "
-import django
-django.setup()
-from django.conf import settings
-from django.db import connection
-from project.staging import should_run_build_migrations
-
-marker_status = None
-if settings.OLLIJA_STAGING_MODE:
-    with connection.cursor() as cur:
-        cur.execute('SELECT to_regclass($$public.ollija_environment_marker$$)')
-        if cur.fetchone()[0] is not None:
-            cur.execute(
-                'SELECT status FROM public.ollija_environment_marker '
-                'WHERE singleton = TRUE'
-            )
-            row = cur.fetchone()
-            marker_status = row[0] if row else None
-if not should_run_build_migrations(
-    staging_enabled=settings.OLLIJA_STAGING_MODE,
-    marker_status=marker_status,
-):
-    print(
-        'Skipped migrations until the Ollija staging database is active',
-        flush=True,
-    )
-    raise SystemExit(0)
-
-with connection.cursor() as cur:
-    cur.execute('SELECT pg_advisory_lock(8675309)')
-print('Acquired migration advisory lock 8675309', flush=True)
-
-# Run migrate in-process via Django's management command. The
-# existing DB connection (with the lock) is reused.
-from django.core.management import execute_from_command_line
-execute_from_command_line(['manage.py', 'migrate', '--noinput'])
-
-# Lock is released automatically when this process exits, but be
-# explicit anyway in case Django ever moves to a connection pool.
-with connection.cursor() as cur:
-    cur.execute('SELECT pg_advisory_unlock(8675309)')
-print('Released migration advisory lock', flush=True)
-"
+# Acquire the migration advisory lock on the same connection that Django uses.
+# New Ollija staging databases intentionally skip this step until their guarded
+# production-derived snapshot is active.
+DJANGO_SETTINGS_MODULE=project.settings python scripts/render_migrate.py
