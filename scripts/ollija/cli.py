@@ -37,9 +37,18 @@ from .preview import (
     tailscale_dns_name,
 )
 from .redaction import UnsafeOutputError, redact_text
+from .release import (
+    GitPublisher,
+    ReleaseError,
+    promote_candidate,
+    stage_candidate,
+    verify_and_tag_candidate,
+)
+from .render import RenderClient, RenderObservationError
 from .results import CommandError, CommandResult, EvidenceRef, NextAction
-from .state import CandidateIdentity, Receipt, ReceiptStore
+from .state import CandidateIdentity, Receipt, ReceiptError, ReceiptStore
 from .status import build_doctor_result, build_status_result, collect_status_facts
+from .verification import PlaywrightBrowserProbe, VerificationError
 from .versioning import VersionError, parse_beta_version
 
 _COACHING = """common prompts:
@@ -74,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
         ("preview-stop", "Stop only the scoped ollija preview process."),
         ("start", "Freeze the clean beta commit as the active candidate."),
         ("assess-ui", "Record clean Bridgewright assessment evidence."),
+        ("stage", "Deploy the frozen candidate to isolated hosted staging."),
+        ("release", "Fast-forward production to the approved candidate."),
     ):
         subparser = subparsers.add_parser(command, help=help_text)
         subparser.add_argument(
@@ -82,6 +93,16 @@ def build_parser() -> argparse.ArgumentParser:
             dest="json_output",
             help="Emit the versioned structured result envelope.",
         )
+    verification = subparsers.add_parser(
+        "verify-production",
+        help="Verify every production service and the visible headline, then tag.",
+    )
+    verification.add_argument(
+        "--browser-storage-state",
+        type=Path,
+        help="Ignored Playwright storage-state file for the owner's Google session.",
+    )
+    verification.add_argument("--json", action="store_true", dest="json_output")
     approval = subparsers.add_parser(
         "approve",
         help="Record an explicit owner review against the staged deployment.",
@@ -346,7 +367,8 @@ def _approve(config, facts, approval_kind: str) -> CommandResult:
 
 
 def _preflight_mutation(command: str, facts) -> CommandResult | None:
-    decision = mutation_preflight(facts.authority, facts.git, operation="stage")
+    operation = "release" if command in {"release", "verify-production"} else "stage"
+    decision = mutation_preflight(facts.authority, facts.git, operation=operation)
     failing_checks = [check for check in facts.checks if check.status != "passed"]
     if decision.allowed and not failing_checks:
         return None
@@ -502,6 +524,125 @@ def _preview_stop(config, facts) -> CommandResult:
     )
 
 
+def _stage(config, facts) -> CommandResult:
+    blocked = _preflight_mutation("stage", facts)
+    if blocked:
+        return blocked
+    receipt = stage_candidate(
+        config=config,
+        git=facts.git,
+        package_version=facts.package_version,
+        render=RenderClient(root=config.root),
+        publisher=GitPublisher(config.root),
+        now=datetime.now(UTC),
+    )
+    return CommandResult(
+        command="stage",
+        status="ok",
+        state="staged",
+        summary="The exact candidate is live on isolated hosted staging.",
+        evidence=(
+            EvidenceRef("staging_deploy", receipt.receipt_id, receipt.candidate.sha),
+        ),
+        details={
+            "deployment_id": receipt.payload.get("deployment_id"),
+            "deployed_sha": receipt.payload.get("deployed_sha"),
+            "status": receipt.payload.get("status"),
+        },
+        next_action=NextAction(
+            "ollija assess-ui",
+            "Collect assessment evidence before owner desktop and iPhone review.",
+        ),
+    )
+
+
+def _release(config, facts) -> CommandResult:
+    blocked = _preflight_mutation("release", facts)
+    if blocked:
+        return blocked
+    evidence, last_known_good = promote_candidate(
+        config=config,
+        git=facts.git,
+        package_version=facts.package_version,
+        render=RenderClient(root=config.root),
+        publisher=GitPublisher(config.root),
+        now=datetime.now(UTC),
+    )
+    return CommandResult(
+        command="release",
+        status="ok",
+        state="releasing",
+        summary="Production main now points to the exact approved candidate.",
+        evidence=(
+            EvidenceRef(
+                "candidate",
+                evidence.candidate.receipt_id,
+                evidence.candidate.candidate.sha,
+            ),
+            EvidenceRef(
+                "last_known_good",
+                last_known_good.receipt_id,
+                evidence.candidate.candidate.sha,
+            ),
+        ),
+        details={
+            "deployed_sha": evidence.candidate.candidate.sha,
+            "release_tag": evidence.candidate.candidate.release_tag,
+        },
+        next_action=NextAction(
+            "ollija verify-production",
+            "Wait for every Render resource and verify the visible headline before tagging.",
+        ),
+    )
+
+
+def _verify_production(config, facts, storage_state: Path | None) -> CommandResult:
+    blocked = _preflight_mutation("verify-production", facts)
+    if blocked:
+        return blocked
+    configured_env = config.verification.get("browser_storage_state_env")
+    environment_path = (
+        os.environ.get(configured_env, "")
+        if isinstance(configured_env, str) and configured_env
+        else ""
+    )
+    selected = storage_state or (Path(environment_path) if environment_path else None)
+    if selected is None:
+        return _mutation_failure(
+            "verify-production",
+            "production_browser_storage_state_missing",
+        )
+    receipt, report = verify_and_tag_candidate(
+        config=config,
+        git=facts.git,
+        package_version=facts.package_version,
+        render=RenderClient(root=config.root),
+        publisher=GitPublisher(config.root),
+        browser_probe=PlaywrightBrowserProbe(selected),
+        now=datetime.now(UTC),
+    )
+    return CommandResult(
+        command="verify-production",
+        status="ok",
+        state="verified",
+        summary="The approved beta is live, visibly serving a headline, and tagged.",
+        evidence=(
+            EvidenceRef("production_deploy", receipt.receipt_id, receipt.candidate.sha),
+        ),
+        details={
+            "deployment_id": receipt.payload.get("deployment_id"),
+            "deployed_sha": receipt.candidate.sha,
+            "release_tag": receipt.candidate.release_tag,
+            "headline_visible": report.browser.visible,
+            "headline_model": report.headline_model,
+        },
+        next_action=NextAction(
+            "ollija status",
+            "Confirm the sealed release state and begin the next change from staging.",
+        ),
+    )
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -530,6 +671,12 @@ def main(
             result = _assess_ui(config, facts)
         elif args.command == "approve":
             result = _approve(config, facts, args.approval_kind)
+        elif args.command == "stage":
+            result = _stage(config, facts)
+        elif args.command == "release":
+            result = _release(config, facts)
+        elif args.command == "verify-production":
+            result = _verify_production(config, facts, args.browser_storage_state)
         elif args.command == "preview":
             result = _preview(config, facts)
         else:
@@ -544,6 +691,10 @@ def main(
         DatabaseGuardError,
         PreviewError,
         RefreshError,
+        ReceiptError,
+        ReleaseError,
+        RenderObservationError,
+        VerificationError,
         VersionError,
     ) as exc:
         result = _mutation_failure(args.command, redact_text(str(exc)))

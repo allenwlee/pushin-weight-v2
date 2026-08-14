@@ -9,6 +9,13 @@ share production resource names, database bindings, secret groups, workers,
 cron jobs, brokers, or provider credentials. Setup and verification are in
 `docs/operations/ollija.md`.
 
+Production promotion is performed through `./bin/ollija release`, which
+fast-forwards `main` to the exact approved staging SHA. The separate
+`./bin/ollija verify-production` command observes all three configured deploy
+resources, exercises the authenticated headline DOM, confirms the DSV4 route,
+and creates the beta tag only after those checks pass. Do not manually tag a
+green Render build; green build status alone is not the release condition.
+
 ## Deployed reality
 
 Production harvesting is synchronous and has one scheduler:

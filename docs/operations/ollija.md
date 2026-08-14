@@ -164,3 +164,107 @@ validated scrubbed snapshot. Never copy staging data back to production.
   worker, Redis, Twitter, DeepSeek, or other provider-backed service.
 - A green deploy is not proof of environment identity. ollija verifies the
   live commit, database/resource identity, access boundary, and visible page.
+
+## Candidate, staging, and approval loop
+
+Finish and commit the intended change, including its beta version, before
+freezing it. For the first beta the package/version pair is `0.2.0b1` and
+`v0.2.0-beta.1`.
+
+```bash
+./bin/ollija start
+./bin/ollija refresh-local
+./bin/ollija preview
+```
+
+Review the private preview, then stop it. Once the hosted staging resource IDs
+are recorded in `.ollija/project.yaml` and its ignored connection string is in
+`OLLIJA_STAGING_DATABASE_URL`, bootstrap and deploy the same candidate:
+
+```bash
+./bin/ollija preview-stop
+./bin/ollija refresh-staging
+./bin/ollija stage
+```
+
+`stage` advances only `staging`, waits for the configured staging web service,
+and accepts only the newest Render deployment when it is `live` at the exact
+candidate SHA. A newer build, failed build, wrong SHA, replaced deploy, stale
+refresh, or mismatched resource identity invalidates the stage.
+
+For a UI-affecting candidate, collect assessment evidence and then perform the
+two owner reviews. The iPhone approval means the owner inspected the physical
+iPhone 13 in Chrome; a simulator or agent statement cannot substitute for it.
+
+```bash
+./bin/ollija assess-ui
+./bin/ollija approve desktop
+./bin/ollija approve iphone
+./bin/ollija status
+```
+
+Any commit after `start`, any replacement staging deployment, or any UI-impact
+change makes the old evidence stale. Commit the correction and repeat from
+`start`; do not edit receipt JSON.
+
+## Exact-SHA production release
+
+Release is deliberately two commands. The first command re-reads Git, Render,
+refresh, migration/recovery, Bridgewright, desktop, and iPhone authorities. It
+records the currently live production service set, then asks the Git server to
+fast-forward `main` to the exact approved SHA. There is no force push or merge
+commit.
+
+```bash
+./bin/ollija release
+```
+
+Before production verification, create an ignored Playwright storage-state
+file by opening production in a headed browser and completing Google login:
+
+```bash
+.venv/bin/playwright codegen \
+  --save-storage=.ollija/state/production-browser.json \
+  https://pushinweight-web.onrender.com/feed/
+```
+
+Close that browser after the authenticated feed is visible, then either put
+this path in the ignored `.env` or pass it once:
+
+```text
+OLLIJA_PRODUCTION_BROWSER_STORAGE_STATE=.ollija/state/production-browser.json
+```
+
+```bash
+./bin/ollija verify-production
+# or:
+./bin/ollija verify-production \
+  --browser-storage-state .ollija/state/production-browser.json
+```
+
+Verification waits for `pushinweight-web`, `pushinweight-headlines`, and
+`pushinweight-harvest` to be `live` at one exact SHA; checks the public login
+route; opens the real authenticated feed; requires a visible, non-empty
+`[data-pw-headline-body]` whose text is not the unavailable state; and confirms
+the checked-in headline route is DeepSeek `deepseek-v4-pro` with the
+worker-scoped credential. It stores only a hash of the rendered headline, not
+the text or browser session. Only after every check passes does it create and
+push the annotated beta tag and seal the production receipt.
+
+## Failed or interrupted release
+
+- If staging fails, production and `main` are untouched. Fix and commit, then
+  freeze and stage a new candidate.
+- If `main` advanced but a Render build failed, do not tag and do not call the
+  release complete. `ollija verify-production` can be retried after the same
+  SHA is healthy; a code correction is a new candidate and needs new staging
+  approvals.
+- If the candidate is live but the headline/browser check fails, preserve the
+  last-known-good receipt and fix forward. Redeploying old code is safe only
+  when the refresh receipt proved old-code compatibility with the migrated
+  schema.
+- If the verification command was interrupted, rerun it. Render and Git are
+  re-observed; an exact existing tag is idempotent, while a conflicting tag is
+  a hard stop.
+- Never copy staging data to production, manually rewrite receipts, force-push
+  either branch, or create the beta tag before visible verification.

@@ -22,6 +22,8 @@ from .git import (
     observe_git,
 )
 from .redaction import redact_text
+from .release import deployment_set_id
+from .render import RenderClient, RenderDeployment, RenderObservationError
 from .results import CommandResult, EvidenceRef, NextAction
 from .state import LiveAuthorities, ReceiptError, ReceiptStore, evaluate_lifecycle
 
@@ -241,6 +243,7 @@ def _tool_checks(
 def _receipt_state(
     config: ProjectConfig,
     git: GitObservation,
+    runner: CommandRunner,
 ) -> tuple[str, tuple[str, ...]]:
     store = ReceiptStore(
         config.root / config.state.directory,
@@ -252,17 +255,37 @@ def _receipt_state(
     try:
         receipts = store.iter_receipts()
         active_id = store.read_reference("active_candidate")
-        active = next(
+        candidate_receipt = next(
             (
-                receipt.candidate
+                receipt
                 for receipt in receipts
                 if receipt.kind == "candidate" and receipt.receipt_id == active_id
             ),
             None,
         )
+        active = candidate_receipt.candidate if candidate_receipt else None
         if active is not None and active.sha != git.head_sha:
             active = None
-        evaluation = evaluate_lifecycle(receipts, LiveAuthorities(candidate=active))
+        live = LiveAuthorities(candidate=active)
+        if active is not None and candidate_receipt is not None:
+            required_approvals = tuple(
+                item
+                for item in candidate_receipt.payload.get("required_approvals", ())
+                if isinstance(item, str)
+            )
+            required_evidence = tuple(
+                item
+                for item in candidate_receipt.payload.get("required_evidence", ())
+                if isinstance(item, str)
+            )
+            live = _observe_live_authorities(
+                config,
+                runner,
+                active=active,
+                required_approvals=required_approvals,
+                required_evidence=required_evidence,
+            )
+        evaluation = evaluate_lifecycle(receipts, live)
         warnings = tuple(
             f"stale receipt: {receipt_id}"
             for receipt_id in evaluation.stale_receipt_ids
@@ -270,6 +293,76 @@ def _receipt_state(
         return evaluation.state, warnings
     except ReceiptError as exc:
         return "idle", (redact_text(str(exc)),)
+
+
+def _observe_live_authorities(
+    config: ProjectConfig,
+    runner: CommandRunner,
+    *,
+    active,
+    required_approvals: tuple[str, ...],
+    required_evidence: tuple[str, ...],
+) -> LiveAuthorities:
+    client = RenderClient(root=config.root, runner=runner)
+    warnings: list[str] = []
+    staging_id = None
+    staging_sha = None
+    staging_status = None
+    staging = config.environments.get("staging")
+    if isinstance(staging, Mapping):
+        configured_id = staging.get("web_service_id")
+        if isinstance(configured_id, str) and configured_id:
+            try:
+                observed = client.current_deployment(configured_id)
+                staging_id = observed.deployment_id
+                staging_sha = observed.commit_sha
+                staging_status = observed.status
+            except RenderObservationError:
+                warnings.append("staging_render_state_unavailable")
+
+    production_id = None
+    production_sha = None
+    production_status = None
+    production = config.environments.get("production")
+    services = production.get("deploy_services") if isinstance(production, Mapping) else None
+    if isinstance(services, list) and services:
+        deployments: list[RenderDeployment] = []
+        try:
+            for service in services:
+                if not isinstance(service, Mapping) or not isinstance(
+                    service.get("id"), str
+                ):
+                    raise RenderObservationError("production_service_set_invalid")
+                deployments.append(client.current_deployment(str(service["id"])))
+        except RenderObservationError:
+            warnings.append("production_render_state_unavailable")
+        if deployments and len(deployments) == len(services):
+            production_id = deployment_set_id(deployments)
+            shas = {item.commit_sha for item in deployments}
+            statuses = {item.status for item in deployments}
+            production_sha = next(iter(shas)) if len(shas) == 1 else "mixed"
+            if statuses == {"live"}:
+                production_status = "live"
+            elif statuses & {
+                "build_in_progress",
+                "pre_deploy_in_progress",
+                "update_in_progress",
+            }:
+                production_status = "update_in_progress"
+            else:
+                production_status = "failed"
+
+    return LiveAuthorities(
+        candidate=active,
+        staging_deployment_id=staging_id,
+        staging_deployed_sha=staging_sha,
+        staging_status=staging_status,
+        production_deployment_id=production_id,
+        production_deployed_sha=production_sha,
+        production_status=production_status,
+        required_approvals=required_approvals,
+        required_evidence=required_evidence,
+    )
 
 
 def collect_status_facts(
@@ -294,7 +387,7 @@ def collect_status_facts(
             checks=(),
         )
 
-    lifecycle_state, receipt_warnings = _receipt_state(config, git)
+    lifecycle_state, receipt_warnings = _receipt_state(config, git, active_runner)
     return StatusFacts(
         authority=authority,
         git=git,

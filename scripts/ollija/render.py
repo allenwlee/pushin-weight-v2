@@ -1,15 +1,24 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+import json
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from .git import CommandRunner, SubprocessRunner
+
 
 class RenderTopologyError(ValueError):
     """A Blueprint or live Render topology violates environment isolation."""
+
+
+class RenderObservationError(ValueError):
+    """Render could not prove a configured resource's exact deployment state."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +28,53 @@ class StagingTopology:
     branch: str
     service_types: tuple[str, ...]
     environment_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderResource:
+    resource_id: str
+    name: str
+    kind: str
+    branch: str
+    repository: str
+    url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RenderDeployment:
+    resource_id: str
+    deployment_id: str
+    commit_sha: str
+    status: str
+    created_at: datetime
+    finished_at: datetime | None
+
+    def to_receipt_payload(self) -> dict[str, str | None]:
+        return {
+            "resource_id": self.resource_id,
+            "deployment_id": self.deployment_id,
+            "deployed_sha": self.commit_sha,
+            "status": self.status,
+            "created_at": self.created_at.astimezone(UTC).isoformat(),
+            "finished_at": (
+                self.finished_at.astimezone(UTC).isoformat()
+                if self.finished_at
+                else None
+            ),
+        }
+
+
+_SERVICE_KINDS = {
+    "web_service": "web",
+    "background_worker": "worker",
+    "cron_job": "cron",
+}
+_FAILED_DEPLOY_STATUSES = {
+    "build_failed",
+    "canceled",
+    "pre_deploy_failed",
+    "update_failed",
+}
 
 
 _FORBIDDEN_ENV_KEYS = {
@@ -135,3 +191,189 @@ def assert_blueprints_are_disjoint(
         raise RenderTopologyError(
             "blueprint_resource_overlap:" + ",".join(sorted(overlap))
         )
+
+
+def _parse_time(value: object, *, required: bool = True) -> datetime | None:
+    if value is None and not required:
+        return None
+    if not isinstance(value, str):
+        raise RenderObservationError("render_timestamp_invalid")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise RenderObservationError("render_timestamp_invalid") from exc
+    if parsed.tzinfo is None:
+        raise RenderObservationError("render_timestamp_invalid")
+    return parsed.astimezone(UTC)
+
+
+def parse_render_resources(output: str) -> tuple[RenderResource, ...]:
+    try:
+        body = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise RenderObservationError("render_inventory_invalid") from exc
+    if not isinstance(body, list):
+        raise RenderObservationError("render_inventory_invalid")
+    resources: list[RenderResource] = []
+    for wrapper in body:
+        if not isinstance(wrapper, Mapping):
+            continue
+        service = wrapper.get("service")
+        if not isinstance(service, Mapping):
+            continue
+        resource_id = service.get("id")
+        name = service.get("name")
+        kind = _SERVICE_KINDS.get(str(service.get("type")))
+        branch = service.get("branch")
+        repository = service.get("repo")
+        if not all(
+            isinstance(value, str) and value
+            for value in (resource_id, name, kind, branch, repository)
+        ):
+            raise RenderObservationError("render_service_identity_invalid")
+        details = service.get("serviceDetails")
+        url = details.get("url") if isinstance(details, Mapping) else None
+        resources.append(
+            RenderResource(
+                resource_id=str(resource_id),
+                name=str(name),
+                kind=str(kind),
+                branch=str(branch),
+                repository=str(repository),
+                url=str(url) if isinstance(url, str) and url else None,
+            )
+        )
+    return tuple(resources)
+
+
+def parse_render_deployments(
+    output: str,
+    *,
+    resource_id: str,
+) -> tuple[RenderDeployment, ...]:
+    try:
+        body = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise RenderObservationError("render_deployments_invalid") from exc
+    if not isinstance(body, list):
+        raise RenderObservationError("render_deployments_invalid")
+    deployments: list[RenderDeployment] = []
+    for raw in body:
+        if not isinstance(raw, Mapping):
+            raise RenderObservationError("render_deployment_invalid")
+        commit = raw.get("commit")
+        if not isinstance(commit, Mapping):
+            raise RenderObservationError("render_deployment_commit_missing")
+        deployment_id = raw.get("id")
+        commit_sha = commit.get("id")
+        status = raw.get("status")
+        if not all(
+            isinstance(value, str) and value
+            for value in (deployment_id, commit_sha, status)
+        ):
+            raise RenderObservationError("render_deployment_identity_invalid")
+        deployments.append(
+            RenderDeployment(
+                resource_id=resource_id,
+                deployment_id=str(deployment_id),
+                commit_sha=str(commit_sha),
+                status=str(status),
+                created_at=_parse_time(raw.get("createdAt")),  # type: ignore[arg-type]
+                finished_at=_parse_time(raw.get("finishedAt"), required=False),
+            )
+        )
+    return tuple(sorted(deployments, key=lambda item: item.created_at, reverse=True))
+
+
+class RenderClient:
+    """Small read-only Render observer used around Git-triggered deploys."""
+
+    def __init__(
+        self,
+        *,
+        root: Path,
+        runner: CommandRunner | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.root = root
+        self.runner = runner or SubprocessRunner()
+        self.sleep = sleep
+
+    def resources(self) -> tuple[RenderResource, ...]:
+        result = self.runner.run(
+            ("render", "services", "--output", "json"),
+            cwd=self.root,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RenderObservationError("render_inventory_unavailable")
+        return parse_render_resources(result.stdout)
+
+    def require_resource(
+        self,
+        *,
+        resource_id: str,
+        name: str,
+        kind: str,
+        branch: str,
+        repository_slug: str,
+    ) -> RenderResource:
+        matches = [
+            resource for resource in self.resources() if resource.resource_id == resource_id
+        ]
+        if len(matches) != 1:
+            raise RenderObservationError("render_resource_identity_missing")
+        resource = matches[0]
+        expected_repo_suffix = f"/{repository_slug}"
+        if resource.name != name:
+            raise RenderObservationError("render_resource_name_mismatch")
+        if resource.kind != kind:
+            raise RenderObservationError("render_resource_kind_mismatch")
+        if resource.branch != branch:
+            raise RenderObservationError("render_resource_branch_mismatch")
+        if not resource.repository.removesuffix(".git").endswith(expected_repo_suffix):
+            raise RenderObservationError("render_resource_repository_mismatch")
+        return resource
+
+    def deployments(self, resource_id: str) -> tuple[RenderDeployment, ...]:
+        result = self.runner.run(
+            ("render", "deploys", "list", resource_id, "--output", "json"),
+            cwd=self.root,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RenderObservationError("render_deployments_unavailable")
+        return parse_render_deployments(result.stdout, resource_id=resource_id)
+
+    def current_deployment(self, resource_id: str) -> RenderDeployment:
+        deployments = self.deployments(resource_id)
+        if deployments:
+            return deployments[0]
+        raise RenderObservationError("render_deployment_missing")
+
+    def wait_for_exact_deployment(
+        self,
+        *,
+        resource_id: str,
+        candidate_sha: str,
+        timeout_seconds: int,
+        poll_interval_seconds: float,
+    ) -> RenderDeployment:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            deployments = self.deployments(resource_id)
+            exact = next(
+                (item for item in deployments if item.commit_sha == candidate_sha),
+                None,
+            )
+            if exact is not None and exact.status == "live":
+                return exact
+            if exact is not None and exact.status in _FAILED_DEPLOY_STATUSES:
+                raise RenderObservationError(
+                    f"render_deployment_failed:{resource_id}:{exact.status}"
+                )
+            if time.monotonic() >= deadline:
+                raise RenderObservationError(
+                    f"render_deployment_timeout:{resource_id}"
+                )
+            self.sleep(poll_interval_seconds)

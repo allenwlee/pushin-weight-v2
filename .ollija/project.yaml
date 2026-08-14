@@ -72,10 +72,17 @@ database_safety:
   marker_environment: staging
 
 verification:
+  production_base_url: https://pushinweight-web.onrender.com
   health_path: /accounts/login/
   smoke_path: /accounts/login/
   authenticated_home_path: /feed/
   headline_path: /feed/
+  headline_selector: "[data-pw-headline-body]"
+  headline_unavailable_text: Trend summary is unavailable.
+  browser_storage_state_env: OLLIJA_PRODUCTION_BROWSER_STORAGE_STATE
+  deploy_timeout_seconds: 1800
+  poll_interval_seconds: 10
+  refresh_max_age_seconds: 86400
 
 ui_impact:
   path_patterns:
