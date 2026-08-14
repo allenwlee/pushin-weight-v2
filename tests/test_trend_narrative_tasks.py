@@ -227,6 +227,49 @@ def test_cold_refresh_makes_exactly_four_calls_and_duplicate_makes_zero(
     assert one_day.selected_candidate_ids == ["minimax:full_window"]
 
 
+def test_scheduled_task_reaches_generation_with_pinned_provider_controls(
+    monkeypatch,
+):
+    config, calls = _enable(monkeypatch)
+    task_module = __import__(
+        "monitor.trend_narrative_tasks",
+        fromlist=["generate_trend_narrative"],
+    )
+    configured_generate = task_module.generate_trend_narrative
+    observed: list[tuple[int, str, str]] = []
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_queue.coalesce_envelope",
+        lambda envelope: envelope,
+    )
+    monkeypatch.setattr("monitor.trend_narrative_tasks.timezone.now", lambda: NOW)
+
+    def capture_generation(snapshot, active_config):
+        observed.append(
+            (
+                snapshot["window_days"],
+                active_config.provider,
+                active_config.model,
+            )
+        )
+        return configured_generate(snapshot, active_config)
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.generate_trend_narrative",
+        capture_generation,
+    )
+
+    result = refresh_trend_narratives.run(_envelope())
+
+    assert result["published"] == 4
+    assert calls == [1, 7, 30, 365]
+    assert observed == [
+        (window_days, "deepseek", "deepseek-v4-pro")
+        for window_days in (1, 7, 30, 365)
+    ]
+    assert config.model == "deepseek-v4-pro"
+
+
 def test_same_semantics_after_due_cadence_advances_checks_with_zero_calls(
     monkeypatch,
 ):
