@@ -23,7 +23,7 @@ state:
 
 environments:
   local:
-    database_name: pushinweight_local_staging
+    database_name: pushinweight_staging
     preview_host: 127.0.0.1
     preview_port: 8000
     tailscale_hostname: fuchitalee
@@ -84,3 +84,30 @@ ui_impact:
 bridgewright:
   config_path: bridgewright.yaml
   required_project: pushin-weight-v2
+
+tooling:
+  render:
+    executable: render
+    version_args: [--version]
+    minimum_version: 2.22.0
+    probe_args: [whoami]
+  tailscale:
+    executable: tailscale
+    version_args: [version]
+    minimum_version: 1.90.0
+    probe_args: [status, --json]
+    probe_json_path: BackendState
+    probe_json_equals: Running
+  psql:
+    executable: psql
+    version_args: [--version]
+    minimum_version: 18.0.0
+  pg_dump:
+    executable: pg_dump
+    version_args: [--version]
+    minimum_version: 18.0.0
+  bridgewright:
+    executable: /Users/fuchitalee/development/bridgewright/.venv/bin/bridgewright
+    version_args: [capabilities]
+    minimum_version: 0.1.0
+    version_json_path: capability_contract.build_identity.version

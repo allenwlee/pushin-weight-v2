@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 
 from . import PROJECT_CONTRACT_VERSION
-from .results import UnsafeResultError, assert_safe_value
+from .redaction import UnsafeOutputError, assert_safe_value
 
 
 class ConfigError(ValueError):
@@ -50,6 +50,7 @@ class ProjectConfig:
     verification: Mapping[str, Any]
     ui_impact: Mapping[str, Any]
     bridgewright: Mapping[str, Any]
+    tooling: Mapping[str, Any]
 
 
 _REQUIRED_TOP_LEVEL = {
@@ -64,6 +65,7 @@ _REQUIRED_TOP_LEVEL = {
     "verification",
     "ui_impact",
     "bridgewright",
+    "tooling",
 }
 
 
@@ -111,7 +113,7 @@ def load_project_config(start: str | Path = ".") -> ProjectConfig:
 
     try:
         assert_safe_value(raw, location="project contract")
-    except UnsafeResultError as exc:
+    except UnsafeOutputError as exc:
         raise ConfigError(str(exc)) from exc
 
     version = raw.get("schema_version")
@@ -181,4 +183,5 @@ def load_project_config(start: str | Path = ".") -> ProjectConfig:
         verification=_mapping(raw, "verification"),
         ui_impact=_mapping(raw, "ui_impact"),
         bridgewright=_mapping(raw, "bridgewright"),
+        tooling=_mapping(raw, "tooling"),
     )

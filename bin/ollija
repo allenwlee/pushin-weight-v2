@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OLLIJA_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OLLIJA_REPO_ROOT="$(cd "$OLLIJA_BIN_DIR/.." && pwd)"
+
+if [[ -x "$OLLIJA_REPO_ROOT/.venv/bin/python" ]]; then
+  OLLIJA_PYTHON="$OLLIJA_REPO_ROOT/.venv/bin/python"
+else
+  OLLIJA_PYTHON="${PYTHON:-python3}"
+fi
+
+cd "$OLLIJA_REPO_ROOT"
+exec "$OLLIJA_PYTHON" -m scripts.ollija "$@"

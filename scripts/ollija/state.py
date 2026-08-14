@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import RECEIPT_SCHEMA_VERSION
-from .results import UnsafeResultError, assert_safe_value
+from .redaction import UnsafeOutputError, assert_safe_value
 
 
 class ReceiptError(ValueError):
@@ -121,7 +121,7 @@ class Receipt:
         safe_payload = dict(payload or {})
         try:
             assert_safe_value(safe_payload, location="receipt payload")
-        except UnsafeResultError as exc:
+        except UnsafeOutputError as exc:
             raise ReceiptError(str(exc)) from exc
         unsigned = {
             "schema_version": RECEIPT_SCHEMA_VERSION,

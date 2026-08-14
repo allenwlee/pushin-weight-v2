@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from scripts.ollija.redaction import UnsafeOutputError, redact_text
 from scripts.ollija.results import (
     CommandError,
     CommandResult,
     EvidenceRef,
     NextAction,
-    UnsafeResultError,
-    redact_text,
 )
 
 SHA = "a" * 40
@@ -63,7 +62,7 @@ def test_result_serialization_rejects_secret_fields_and_database_urls(
         details=unsafe_detail,
     )
 
-    with pytest.raises(UnsafeResultError):
+    with pytest.raises(UnsafeOutputError):
         result.to_dict()
 
 

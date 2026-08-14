@@ -56,6 +56,11 @@ ui_impact:
   path_patterns: [templates/**, static/**, bridgewright.yaml]
 bridgewright:
   config_path: bridgewright.yaml
+tooling:
+  render:
+    executable: render
+    version_args: [--version]
+    minimum_version: 2.22.0
 """,
         encoding="utf-8",
     )
