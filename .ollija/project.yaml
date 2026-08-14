@@ -32,9 +32,9 @@ environments:
     blueprint: render-staging.yaml
     branch: staging
     web_service_name: pushinweight-staging-web
-    web_service_id: null
+    web_service_id: srv-d9vb8t49v7es738lf2ng
     database_name: pushinweight_staging
-    database_resource_id: null
+    database_resource_id: dpg-d9vb8ds9v7es738lepsg-a
     owner_allowlist_env: OLLIJA_STAGING_ALLOWED_EMAILS
   production:
     blueprint: render.yaml
