@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import subprocess
@@ -12,6 +11,12 @@ from typing import TextIO
 
 import environ
 
+from .approvals import (
+    ApprovalError,
+    bridgewright_evidence_receipt,
+    owner_approval_receipt,
+)
+from .bridgewright import BridgewrightError, collect_bridgewright_evidence
 from .config import ConfigError, load_project_config
 from .database import (
     DatabaseGuardError,
@@ -22,6 +27,7 @@ from .database import (
 )
 from .git import mutation_preflight
 from .hosted_database import HostedStagingBootstrap
+from .impact import assess_ui_impact
 from .preview import (
     PreviewError,
     build_preview_plan,
@@ -34,6 +40,7 @@ from .redaction import UnsafeOutputError, redact_text
 from .results import CommandError, CommandResult, EvidenceRef, NextAction
 from .state import CandidateIdentity, Receipt, ReceiptStore
 from .status import build_doctor_result, build_status_result, collect_status_facts
+from .versioning import VersionError, parse_beta_version
 
 _COACHING = """common prompts:
   what's next?          ollija status
@@ -65,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
         ("refresh-staging", "Copy the active scrubbed snapshot to hosted staging."),
         ("preview", "Start the local PostgreSQL preview on private tailnet HTTPS."),
         ("preview-stop", "Stop only the scoped ollija preview process."),
+        ("start", "Freeze the clean beta commit as the active candidate."),
+        ("assess-ui", "Record clean Bridgewright assessment evidence."),
     ):
         subparser = subparsers.add_parser(command, help=help_text)
         subparser.add_argument(
@@ -73,6 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
             dest="json_output",
             help="Emit the versioned structured result envelope.",
         )
+    approval = subparsers.add_parser(
+        "approve",
+        help="Record an explicit owner review against the staged deployment.",
+    )
+    approval.add_argument("approval_kind", choices=("desktop", "iphone"))
+    approval.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
 
@@ -143,6 +158,17 @@ def _candidate_identity(config, facts) -> CandidateIdentity:
     sha = facts.git.head_sha
     if not sha:
         raise RefreshError("candidate_sha_unavailable")
+    beta = parse_beta_version(facts.package_version)
+    impact = assess_ui_impact(config, _changed_paths(config))
+    return CandidateIdentity(
+        sha=sha,
+        package_version=facts.package_version,
+        release_tag=beta.release_tag,
+        surface_fingerprint=impact.surface_fingerprint,
+    )
+
+
+def _changed_paths(config) -> tuple[str, ...]:
     completed = subprocess.run(
         [
             "git",
@@ -158,12 +184,164 @@ def _candidate_identity(config, facts) -> CandidateIdentity:
     )
     if completed.returncode != 0:
         raise RefreshError("candidate_surface_unknown")
-    surface = hashlib.sha256(completed.stdout.encode()).hexdigest()
-    return CandidateIdentity(
-        sha=sha,
-        package_version=facts.package_version,
-        release_tag=f"unreleased-{sha[:12]}",
-        surface_fingerprint=surface,
+    return tuple(sorted(set(completed.stdout.splitlines())))
+
+
+def _start_candidate(config, facts) -> CommandResult:
+    blocked = _preflight_mutation("start", facts)
+    if blocked:
+        return blocked
+    beta = parse_beta_version(facts.package_version)
+    existing = subprocess.run(
+        ["git", "tag", "--list", beta.release_tag],
+        cwd=config.root,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if existing.returncode != 0:
+        raise VersionError("release_tag_lookup_failed")
+    if existing.stdout.strip():
+        raise VersionError("release_tag_already_exists")
+    impact = assess_ui_impact(config, _changed_paths(config))
+    if not facts.git.head_sha:
+        raise VersionError("candidate_sha_unavailable")
+    candidate = CandidateIdentity(
+        sha=facts.git.head_sha,
+        package_version=beta.package_version,
+        release_tag=beta.release_tag,
+        surface_fingerprint=impact.surface_fingerprint,
+    )
+    receipt = Receipt.create(
+        kind="candidate",
+        candidate=candidate,
+        created_at=datetime.now(UTC),
+        payload={
+            "ui_required": impact.ui_required,
+            "matched_paths": list(impact.matched_paths),
+            "changed_paths": list(impact.changed_paths),
+            "required_approvals": list(impact.required_approvals),
+            "required_evidence": list(impact.required_evidence),
+        },
+    )
+    store = ReceiptStore(
+        config.root / config.state.directory,
+        retention_days=config.state.retention_days,
+    )
+    store.write_receipt(receipt)
+    store.set_reference("active_candidate", receipt.receipt_id)
+    return CommandResult(
+        command="start",
+        status="ok",
+        state="candidate",
+        summary=f"Candidate {candidate.release_tag} is frozen at the current commit.",
+        evidence=(EvidenceRef("candidate", receipt.receipt_id, candidate.sha),),
+        details={
+            "package_version": candidate.package_version,
+            "release_tag": candidate.release_tag,
+            "ui_required": impact.ui_required,
+            "required_approvals": list(impact.required_approvals),
+            "required_evidence": list(impact.required_evidence),
+        },
+        next_action=NextAction(
+            "ollija refresh-local",
+            "Refresh data evidence for this exact candidate before staging.",
+        ),
+    )
+
+
+def _active_candidate_and_stage(config) -> tuple[ReceiptStore, Receipt, Receipt]:
+    store = ReceiptStore(
+        config.root / config.state.directory,
+        retention_days=config.state.retention_days,
+    )
+    candidate_id = store.read_reference("active_candidate")
+    if not candidate_id:
+        raise ApprovalError("active_candidate_missing")
+    receipts = store.iter_receipts()
+    candidate_receipt = next(
+        (
+            receipt
+            for receipt in receipts
+            if receipt.kind == "candidate" and receipt.receipt_id == candidate_id
+        ),
+        None,
+    )
+    if candidate_receipt is None:
+        raise ApprovalError("active_candidate_receipt_missing")
+    stages = [
+        receipt
+        for receipt in receipts
+        if receipt.kind == "staging_deploy"
+        and receipt.candidate == candidate_receipt.candidate
+        and receipt.payload.get("status") == "live"
+        and receipt.payload.get("deployed_sha") == candidate_receipt.candidate.sha
+    ]
+    if not stages:
+        raise ApprovalError("live_staging_receipt_missing")
+    return store, candidate_receipt, max(stages, key=lambda receipt: receipt.created_at)
+
+
+def _assess_ui(config, facts) -> CommandResult:
+    blocked = _preflight_mutation("assess-ui", facts)
+    if blocked:
+        return blocked
+    store, candidate_receipt, stage = _active_candidate_and_stage(config)
+    evidence = collect_bridgewright_evidence(config)
+    receipt = bridgewright_evidence_receipt(
+        candidate=candidate_receipt.candidate,
+        deployment_id=str(stage.payload["deployment_id"]),
+        evidence=evidence,
+        created_at=datetime.now(UTC),
+    )
+    store.write_receipt(receipt)
+    return CommandResult(
+        command="assess-ui",
+        status="ok",
+        state="staged",
+        summary="Bridgewright recorded clean assessment evidence without approval authority.",
+        evidence=(
+            EvidenceRef(
+                "bridgewright_evidence",
+                receipt.receipt_id,
+                candidate_receipt.candidate.sha,
+            ),
+        ),
+        next_action=NextAction(
+            "ollija approve desktop",
+            "The owner must inspect this exact staged deployment.",
+        ),
+    )
+
+
+def _approve(config, facts, approval_kind: str) -> CommandResult:
+    blocked = _preflight_mutation("approve", facts)
+    if blocked:
+        return blocked
+    store, candidate_receipt, stage = _active_candidate_and_stage(config)
+    receipt = owner_approval_receipt(
+        candidate=candidate_receipt.candidate,
+        approval_kind=approval_kind,
+        deployment_id=str(stage.payload["deployment_id"]),
+        created_at=datetime.now(UTC),
+    )
+    store.write_receipt(receipt)
+    next_command = (
+        "ollija approve iphone" if approval_kind == "desktop" else "ollija status"
+    )
+    return CommandResult(
+        command=f"approve {approval_kind}",
+        status="ok",
+        state="staged",
+        summary=f"Owner {approval_kind} approval is bound to the staged candidate.",
+        evidence=(
+            EvidenceRef("approval", receipt.receipt_id, candidate_receipt.candidate.sha),
+        ),
+        next_action=NextAction(
+            next_command,
+            "Complete the remaining candidate-bound review evidence.",
+        ),
     )
 
 
@@ -346,6 +524,12 @@ def main(
             result = _refresh_local(config, facts)
         elif args.command == "refresh-staging":
             result = _refresh_staging(config, facts)
+        elif args.command == "start":
+            result = _start_candidate(config, facts)
+        elif args.command == "assess-ui":
+            result = _assess_ui(config, facts)
+        elif args.command == "approve":
+            result = _approve(config, facts, args.approval_kind)
         elif args.command == "preview":
             result = _preview(config, facts)
         else:
@@ -354,7 +538,14 @@ def main(
     except (ConfigError, UnsafeOutputError) as exc:
         result = _config_failure(args.command, exc)
         emit_result(result, json_output=args.json_output, stream=output)
-    except (DatabaseGuardError, PreviewError, RefreshError) as exc:
+    except (
+        ApprovalError,
+        BridgewrightError,
+        DatabaseGuardError,
+        PreviewError,
+        RefreshError,
+        VersionError,
+    ) as exc:
         result = _mutation_failure(args.command, redact_text(str(exc)))
         emit_result(result, json_output=args.json_output, stream=output)
 

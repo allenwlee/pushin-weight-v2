@@ -79,8 +79,13 @@ verification:
 
 ui_impact:
   path_patterns:
-    - templates/**
-    - static/**
+    - monitor/views.py
+    - core/context_processors.py
+    - project/middleware.py
+    - project/settings.py
+    - render-staging.yaml
+    - "**/templates/**"
+    - "**/static/**"
     - locale/**
     - core/templatetags/**
     - tests/mockups/**

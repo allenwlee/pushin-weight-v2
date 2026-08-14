@@ -24,6 +24,7 @@ _SHA = re.compile(r"[0-9a-f]{40,64}")
 _SAFE_NAME = re.compile(r"[a-z][a-z0-9_-]*")
 _RECEIPT_KINDS = {
     "approval",
+    "bridgewright_evidence",
     "candidate",
     "failure",
     "last_known_good",
@@ -186,6 +187,7 @@ class LiveAuthorities:
     production_deployed_sha: str | None = None
     production_status: str | None = None
     required_approvals: tuple[str, ...] = ()
+    required_evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +241,7 @@ def evaluate_lifecycle(
     if not stage_valid:
         stale.update(item.receipt_id for item in stage_receipts)
         for item in matching:
-            if item.kind == "approval":
+            if item.kind in {"approval", "bridgewright_evidence"}:
                 stale.add(item.receipt_id)
         return LifecycleEvaluation("candidate", tuple(sorted(stale)), tuple(reasons))
 
@@ -260,7 +262,30 @@ def evaluate_lifecycle(
         if previous is None or receipt.created_at > previous.created_at:
             approvals[approval_kind] = receipt
 
-    if not all(kind in approvals for kind in live.required_approvals):
+    evidence: dict[str, Receipt] = {}
+    for receipt in (
+        item for item in matching if item.kind == "bridgewright_evidence"
+    ):
+        evidence_kind = receipt.payload.get("evidence_kind")
+        is_valid = bool(
+            isinstance(evidence_kind, str)
+            and receipt.payload.get("status") == "clean"
+            and receipt.payload.get("authority") == "assessment_only"
+            and receipt.payload.get("deployment_id") == live.staging_deployment_id
+            and receipt.payload.get("surface_fingerprint")
+            == candidate.surface_fingerprint
+            and receipt.payload.get("source_revision")
+        )
+        if not is_valid:
+            stale.add(receipt.receipt_id)
+            continue
+        previous = evidence.get(evidence_kind)
+        if previous is None or receipt.created_at > previous.created_at:
+            evidence[evidence_kind] = receipt
+
+    if not all(kind in approvals for kind in live.required_approvals) or not all(
+        kind in evidence for kind in live.required_evidence
+    ):
         return LifecycleEvaluation("staged", tuple(sorted(stale)), tuple(reasons))
 
     if live.production_status in {

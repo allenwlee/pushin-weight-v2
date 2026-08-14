@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "x-monitor"
-version = "0.2.0"
+version = "0.2.0b1"
 description = "Daily multi-language X monitoring for 20 AI model brands — Django + PostgreSQL on Render"
 requires-python = ">=3.11"
 dependencies = [

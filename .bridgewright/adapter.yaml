@@ -1,0 +1,11 @@
+schema_version: bridgewright.pushin-weight-adapter/v1
+project: pushin-weight-v2
+surface: v22-home
+implementation_roots:
+  - monitor/templates
+  - monitor/static
+  - project
+mockup: docs/ideation/mockups/06-tier1-composed.v22-master.html
+proof_environments:
+  - desktop-chromium
+  - physical-iphone-13-chrome

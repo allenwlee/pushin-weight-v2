@@ -1,0 +1,67 @@
+schema_version: bridgewright.project/v2
+configuration:
+  project:
+    namespace: pushin-weight-v2
+    name: PushinWeight
+  authorities:
+    approved_mockup: docs/ideation/mockups/06-tier1-composed.v22-master.html
+    approved_product_intent:
+      - docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md
+      - docs/plans/2026-08-12-121455-feat-v22-headline-trend-narratives.md
+    project_foundation:
+      - monitor/templates
+      - monitor/static
+      - project
+    adapter: .bridgewright/adapter.yaml
+    last_approved_contract: null
+  source_boundaries:
+    - monitor/templates
+    - monitor/static
+    - project
+    - docs/ideation/mockups
+  semantic_anchors:
+    - key: v22.home
+      description: Approved V22 dashboard surface.
+    - key: trend.headline
+      description: Shared analytical trend narrative surface.
+  scenarios: []
+  variants:
+    - key: desktop-en
+      locale: en
+      viewport: desktop-chromium
+      authentication: owner
+    - key: iphone-zh-cn
+      locale: zh-cn
+      viewport: physical-iphone-13
+      authentication: owner
+  expected_approvers:
+    - allen@quantma.com
+  proof_environments:
+    - key: desktop
+      kind: desktop-chromium
+      required: true
+    - key: physical-iphone
+      kind: physical-iphone-13-chrome
+      required: true
+  untracked_allowlist: []
+requires:
+  bridgewright_version: 0.1.0
+  source_revision: 22a380b1f865622cea1669793f9a6d0911e1e6f8
+  capability_schema: bridgewright.capabilities/v1
+  schema_set_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+  skill_digest: 25de14d23567a1fbf321b442c073200c0da09dfcdbb416e7cd3c37db4ed0cf10
+artifact_routes:
+  - name: investigations
+    root: docs/investigations
+    kind: markdown
+  - name: reference
+    root: docs/reference
+    kind: markdown
+  - name: golden-fixtures
+    root: tests/golden/bridgewright
+    kind: fixture
+    schema: null
+catalog:
+  generation: 0
+  entries: []
+  current: {}
