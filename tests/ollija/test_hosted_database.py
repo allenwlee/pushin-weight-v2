@@ -12,6 +12,7 @@ from scripts.ollija.database import (
     safety_policy_from_config,
 )
 from scripts.ollija.hosted_database import (
+    HostedStagingRefresh,
     build_hosted_refresh_plan,
     guard_new_hosted_target,
 )
@@ -120,3 +121,18 @@ def test_repeat_refresh_rejects_an_unhealthy_active_target() -> None:
             public_tables={"posts", "brands", "trend_narratives"},
             suffix="20260815t120000000000z",
         )
+
+
+def test_shadow_django_database_value_remains_a_url() -> None:
+    refresh = object.__new__(HostedStagingRefresh)
+    refresh._target_database_url = (
+        "postgresql://staging:secret@database.example:5432/"
+        "pushinweight_staging?sslmode=require"
+    )
+
+    database_url = refresh._django_database_url("pushinweight_staging_shadow_1")
+
+    assert database_url == (
+        "postgresql://staging:secret@database.example:5432/"
+        "pushinweight_staging_shadow_1?sslmode=require"
+    )

@@ -28,11 +28,18 @@ restores and validates the scrubbed snapshot there, and then swaps database
 names in one PostgreSQL transaction. Render keeps using the canonical
 `pushinweight_staging` connection, while the previous database is disabled and
 retained under an explicit recovery name. A failed pre-cutover attempt removes
-only the shadow created by that attempt.
+only the shadow created by that attempt. If a Render-owned privileged session
+temporarily prevents deletion, Ollija marks that shadow failed, disables new
+connections, and leaves it for bounded maintenance instead of weakening the
+database guard.
 
 Regression coverage keeps first-time bootstrap behavior, proves that an active
 healthy target selects replacement rather than rejection, and rejects targets
 with an unsafe marker or incomplete schema.
+
+The first live exercise also caught a boundary mismatch: psycopg accepts a
+keyword-style connection string, while Django requires `DATABASE_URL` to remain
+a URL. Regression coverage now pins the URL-preserving database-name rewrite.
 
 ## Operational result
 

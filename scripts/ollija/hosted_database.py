@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
 from psycopg import sql
@@ -207,6 +208,20 @@ class HostedStagingRefresh:
     def _database_url(self, database: str) -> str:
         return make_conninfo(self._target_database_url, dbname=database)
 
+    def _django_database_url(self, database: str) -> str:
+        parsed = urlsplit(self._target_database_url)
+        if parsed.scheme not in {"postgres", "postgresql"} or not parsed.netloc:
+            raise RefreshError("staging_database_url_invalid")
+        return urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                f"/{quote(database, safe='')}",
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
     @staticmethod
     def _tables(connection: psycopg.Connection) -> set[str]:
         with connection.cursor() as cursor:
@@ -342,7 +357,7 @@ class HostedStagingRefresh:
     def _run_django(self, database: str, *args: str) -> None:
         python = self.config.root / ".venv" / "bin" / "python"
         environment = _safe_child_environment(
-            {"DATABASE_URL": self._database_url(database)}
+            {"DATABASE_URL": self._django_database_url(database)}
         )
         completed = subprocess.run(
             [str(python), "manage.py", *args],
@@ -471,6 +486,24 @@ class HostedStagingRefresh:
             autocommit=True,
         ) as connection:
             self._guard_admin(connection, initial)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT datname FROM pg_database ORDER BY datname")
+                stale_shadows = [
+                    str(row[0])
+                    for row in cursor.fetchall()
+                    if str(row[0]).startswith(
+                        f"{self.policy.staging_name_prefix}_shadow_"
+                    )
+                    and str(row[0]) != plan.load_database
+                ]
+        for database in stale_shadows:
+            self._discard_shadow(database, initial)
+
+        with psycopg.connect(
+            self._database_url("postgres"),
+            autocommit=True,
+        ) as connection:
+            self._guard_admin(connection, initial)
             for database in (plan.load_database, plan.recovery_database):
                 if self._database_exists(connection, database):
                     raise RefreshError("hosted_refresh_database_already_exists")
@@ -493,7 +526,7 @@ class HostedStagingRefresh:
         self,
         database: str,
         initial: DatabaseFingerprint,
-    ) -> None:
+    ) -> bool:
         if (
             database == initial.database
             or not database.startswith(self.policy.staging_name_prefix)
@@ -506,16 +539,55 @@ class HostedStagingRefresh:
         ) as connection:
             self._guard_admin(connection, initial)
             if not self._database_exists(connection, database):
-                return
+                return True
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_get_userbyid(datdba), datallowconn "
+                    "FROM pg_database "
+                    "WHERE datname = %s",
+                    (database,),
+                )
+                database_row = cursor.fetchone()
+                if database_row is None or str(database_row[0]) != initial.role:
+                    raise DatabaseGuardError("hosted_shadow_owner_mismatch")
+                connections_allowed = bool(database_row[1])
+
+        if not connections_allowed:
+            self._set_database_connections(database, allowed=True, initial=initial)
+
+        fingerprint = self._fingerprint(database)
+        if fingerprint.marker_environment is not None:
+            if fingerprint.marker_environment != self.policy.marker_environment:
+                raise DatabaseGuardError("hosted_shadow_marker_invalid")
+            if fingerprint.marker_status not in {"active", "building", "failed"}:
+                raise DatabaseGuardError("hosted_shadow_status_invalid")
+            if fingerprint.marker_status != "failed":
+                self._set_marker_status(
+                    database,
+                    expected=str(fingerprint.marker_status),
+                    status="failed",
+                )
+
+        self._set_database_connections(database, allowed=False, initial=initial)
+        with psycopg.connect(
+            self._database_url("postgres"),
+            autocommit=True,
+        ) as connection:
+            self._guard_admin(connection, initial)
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                    "WHERE datname = %s AND pid <> pg_backend_pid()",
+                    "WHERE datname = %s AND usename = current_user "
+                    "AND pid <> pg_backend_pid()",
                     (database,),
                 )
-                cursor.execute(
-                    sql.SQL("DROP DATABASE {}").format(sql.Identifier(database))
-                )
+                try:
+                    cursor.execute(
+                        sql.SQL("DROP DATABASE {}").format(sql.Identifier(database))
+                    )
+                except (psycopg.errors.InsufficientPrivilege, psycopg.errors.ObjectInUse):
+                    return False
+        return True
 
     def _restore(self, artifact: Path, database: str) -> None:
         executable = shutil.which("pg_restore")
@@ -772,9 +844,13 @@ class HostedStagingRefresh:
                 recovery_posture=recovery_posture,
                 recovery_database=plan.recovery_database,
             )
-        except BaseException:
+        except BaseException as exc:
             if shadow_prepared:
-                self._discard_shadow(plan.load_database, initial)
+                discarded = self._discard_shadow(plan.load_database, initial)
+                if not discarded:
+                    raise RefreshError(
+                        "hosted_refresh_failed;hosted_shadow_retained_disabled"
+                    ) from exc
             raise
         finally:
             if artifact is not None:
