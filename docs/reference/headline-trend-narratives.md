@@ -1,12 +1,12 @@
 # Why-first headline trend narratives
 
-Last updated: 2026-08-14-23:24:58
+Last updated: 2026-08-15-13:38:57
 
 **Status:** Implemented as a fail-closed release candidate. Serving,
 enqueueing, and provider calls remain independent rollout controls. The checked
-in materiality policy is still `pending-live-review-v1`; it must not be
-activated until the bounded live evaluation and historical calibration are
-reviewed.
+in materiality policy is still `pending-live-review-v1`. The latest bounded
+quantitative evaluation has been reviewed and rejected for activation; the
+historical calibration also remains under-sampled.
 
 This is the current source-level contract for measuring, generating,
 persisting, and rendering the shared conversation headline. Superseded
@@ -108,6 +108,95 @@ The snapshot contains:
 Snapshot construction uses only already stored eligible posts. It never calls
 TwitterAPI, changes harvest cadence, or increases collected volume.
 
+## Provider packet contract
+
+`project_provider_packet(snapshot)` returns this top-level shape:
+
+```text
+snapshot_schema_version
+window_days
+as_of
+coverage
+unresolved_backlog_intervals
+comparison_suppressed_reasons
+comparison_allowed
+thresholds
+quantitative_fact_schema_version
+evidence_policy
+series_axis.coarse
+candidates[]
+```
+
+Each `candidates[]` item contains:
+
+```text
+candidate_id
+brand_key
+display_name_en
+display_name_zh_cn
+kind
+start_at
+end_at
+signals
+family_facts
+quantitative_facts
+metadata_trajectories
+episodes
+coarse_series
+evidence_allocation
+evidence_support
+evidence[]
+```
+
+Actual post content appears only in `candidates[].evidence[].excerpt`. The
+packet does not contain a `posts` array or an unbounded `posts.text` field.
+Each evidence row contains:
+
+```text
+evidence_id
+source_cluster_id
+theme_cluster_id
+author_group_id
+excerpt
+roles
+source_flags
+post_type_keys
+discourse_keys
+sentiment_keys
+```
+
+`excerpt` is normalized text copied from an already stored eligible post and
+is capped at 1,000 characters. It is untrusted quoted evidence, not an
+instruction. Raw post IDs, raw author IDs, author-handle fields, complete source
+metadata, and fine-grained series are not projected to the provider.
+
+For a seven-day window there is no fixed post-text count. The allocator targets
+a floor of 4 independent source clusters when they are available. The likely
+lead can receive at most 48 excerpts, a content-relevant comparison at most 12,
+and a weak floor candidate at most 4. A candidate can receive fewer than its
+target when eligible independent stored evidence is sparse or the packet must
+be trimmed. At most six candidates can appear.
+
+The structural pre-trim maximum is therefore 108 excerpts: one 48-excerpt lead
+plus five 12-excerpt comparisons. At the 1,000-character excerpt cap that is at
+most 108,000 evidence characters before serialization, but the complete packet
+must still fit 131,072 UTF-8 bytes, including aggregates, trajectories, IDs,
+and JSON structure. Deterministic byte trimming usually makes the realized
+maximum lower, especially for multibyte text. Production does not send 48
+excerpts for every candidate.
+
+`family_facts` carries selected-window aggregates and, when allowed, prior
+equal-window comparison inputs. `coarse_series` carries bounded within-window
+bucket values. `metadata_trajectories` carries bounded post-type, discourse,
+sentiment, and nationalism paths. `quantitative_facts` is the only approved
+source of exact analytical numbers in generated prose.
+
+When `comparison_allowed` is false, projection recursively replaces every
+prior/change value in `family_facts` with `null`, sets comparison state to
+`unavailable`, and emits no `quantitative_facts`. Selected-window facts and
+the coarse within-window series remain available, but the model cannot infer a
+selected-versus-prior increase, decrease, or flat result from them.
+
 ## Adaptive evidence policy
 
 The checked-in `adaptive-v1` policy has these hard bounds:
@@ -152,12 +241,15 @@ projection creates bounded `quantitative_facts` with stable IDs containing:
 Supported metrics include volume change, engagement-intensity change,
 metadata prevalence-point change, and metadata label-count change. Values
 below one are rounded to a tenth; other values are rounded to a whole unit.
-Suppressed comparisons emit no quantitative facts.
+Suppressed comparisons emit no quantitative facts. Projection emits at most
+24 quantitative facts per candidate.
 
 Every number in schema-three prose must exactly match the localized display
 string of a cited fact. The claim must cite the fact ID, its candidate, and its
 family. Altered, uncited, suppressed, or wrong-family values reject the entire
-response. Digits that belong to a validated subject name remain allowed.
+response. If any selected candidate supplies quantitative facts, the headline
+claim must cite and visibly render at least one of them after the content-led
+explanation. Digits that belong to a validated subject name remain allowed.
 
 ## Provider request
 
@@ -176,7 +268,7 @@ classifier, or ambient SDK model settings:
 | SDK retries | 0 |
 | Requests per changed candidate-present window | exactly 1 |
 | Prompt version | `headline-v10-why-first-quantitative-color` |
-| Publication epoch | 8 |
+| Publication epoch | 10 |
 
 Credentials resolve only from `DEEPSEEK_API_KEY` or
 `DEEPSEEK_API_TOKEN`. The request passes the exact model explicitly. An
@@ -320,12 +412,34 @@ quality, and candidate competition. Two fixed sentinels repeat at 4, 12, 24,
 and 48 excerpts. A separate density sweep holds 24 excerpts fixed while
 varying excerpt length.
 
+Every core synthetic packet is comparison-safe and contains quantitative
+change evidence. Synthetic `data_quality=low` means 80% coverage in both the
+selected and prior windows, which remains above the configured 75% comparison
+threshold; it does not mean comparison suppression. The quiet sentinel gives
+DeepSeek a 0.1% volume increase and MiniMax a flat 0% comparison. True
+comparison suppression is covered separately by a deterministic projection
+regression.
+
 `--execute` requires an explicit finite manifest with exact model, call cap,
 input-token budget, dollar budget, checked pricing timestamp, context limit,
 and concurrency one. Before each request it reserves conservative input plus
 maximum output cost. Provider usage reconciles the next boundary. Cancellation
 is checked between calls. Raw bilingual output survives validation failure.
 Ordinary tests use fake transport only.
+
+The reviewed quantitative run
+`2026-08-15-owner-approved-why-first-quantitative-color-v5` completed all 28
+calls for $0.125817 and 257,296 provider-reported input tokens. All 28 packets
+contained quantitative facts, all 28 outputs cited at least one headline fact,
+and 27 visibly rendered a percentage. The remaining output omitted its cited
+display values and failed validation. The full generated English and
+Simplified Chinese samples are in
+`docs/analysis/2026-08-14-235900-why-first-headline-samples.md`.
+
+That run validates the quantitative packet contract, not the overall release
+candidate. Only six quiet-window outputs passed the complete editorial rubric;
+no high-content why-first scenario passed both deterministic and editorial
+review. Evidence limits and materiality policy therefore remain inactive.
 
 `--calibrate` reconstructs facts at no more than 64 bounded anchors in fresh
 read-only PostgreSQL transactions. It reports per-window/family sample counts,
@@ -376,7 +490,8 @@ entity discovery. It does not send 48 excerpts for every candidate, define
 relevance by percentage magnitude, run live provider calls in tests, or expose
 evidence to browsers.
 
-Last reviewed: 2026-08-14-23:24:58 JST. Replaced the superseded editorial and
-fixed-sample reference with the why-first, adaptive-evidence, cited-number,
-candid-empty-window, finite-evaluation, and in-place brand-link contracts.
-Materiality bands and activation status remain explicitly pending U6 review.
+Last reviewed: 2026-08-15-13:38:57 JST. Added the exact provider packet shape,
+the sole post-text path and excerpt bounds, comparison-suppression projection,
+per-candidate quantitative-fact cap, mandatory headline quantitative color,
+and the reviewed corrected synthetic-run result. Materiality bands and
+activation remain explicitly blocked by U6 evidence and editorial gates.
