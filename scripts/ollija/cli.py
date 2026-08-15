@@ -26,7 +26,7 @@ from .database import (
     safety_policy_from_config,
 )
 from .git import mutation_preflight
-from .hosted_database import HostedStagingBootstrap
+from .hosted_database import HostedStagingRefresh
 from .impact import assess_ui_impact
 from .preview import (
     PreviewError,
@@ -511,7 +511,7 @@ def _refresh_staging(config, facts) -> CommandResult:
     )
     if readiness.local is None:
         raise RefreshError(readiness.error_code or "local_refresh_missing")
-    report = HostedStagingBootstrap(
+    report = HostedStagingRefresh(
         config=config,
         target_database_url=target_url,
         target_resource_id=resource_id,
