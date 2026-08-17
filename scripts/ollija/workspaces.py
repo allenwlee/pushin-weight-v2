@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from .config import ProjectConfig
+from .git import GitObservation
 
 
 class WorkspaceError(ValueError):
@@ -51,3 +52,26 @@ def prepare_runtime_links(config: ProjectConfig) -> Path:
 
     link.symlink_to(canonical, target_is_directory=True)
     return link
+
+
+def validate_task_workspace(
+    config: ProjectConfig, observation: GitObservation
+) -> Path:
+    if observation.detached:
+        raise WorkspaceError("task_workspace_detached")
+    if not observation.registered_worktree:
+        raise WorkspaceError("task_workspace_unregistered")
+    if observation.dirty_paths:
+        raise WorkspaceError("task_workspace_dirty")
+    if not observation.branch:
+        raise WorkspaceError("task_branch_invalid")
+    expected = task_worktree_path(config, observation.branch)
+    if observation.repository_root.resolve() != expected:
+        raise WorkspaceError("task_worktree_location_invalid")
+    if observation.common_git_directory != (
+        config.authority.repository_root / ".git"
+    ).resolve():
+        raise WorkspaceError("task_worktree_repository_mismatch")
+    if config.root.resolve() != observation.repository_root.resolve():
+        raise WorkspaceError("task_workspace_config_mismatch")
+    return expected

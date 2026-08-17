@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from scripts.ollija.cli import emit_result, render_human
+from scripts.ollija.cli import build_parser, emit_result, render_human
 from scripts.ollija.results import CommandResult, EvidenceRef, NextAction
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -66,3 +66,30 @@ def test_human_output_redacts_synthetic_error() -> None:
 
     assert "live-value" not in rendered
     assert "[REDACTED" in rendered
+
+
+def test_task_commands_are_discoverable_and_verification_is_structured() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "go",
+            "--task",
+            "task-1",
+            "--source",
+            "docs/plans/task.md",
+            "--agent",
+            "codex",
+            "--endpoint",
+            "commit",
+            "--verify-argv",
+            '["pytest","tests/ollija"]',
+        ]
+    )
+    stopped = parser.parse_args(["stop", "task-1"])
+    observed = parser.parse_args(["task-status", "task-1", "--json"])
+
+    assert args.command == "go"
+    assert args.verify_argv == ['["pytest","tests/ollija"]']
+    assert stopped.command == "stop"
+    assert observed.command == "task-status"
+    assert observed.json_output is True

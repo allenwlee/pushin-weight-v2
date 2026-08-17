@@ -610,6 +610,25 @@ class TaskRegistry:
             assert row is not None
             return self._snapshot(row)
 
+    def record_agent_session(
+        self, task_id: str, generation: int, session_id: str
+    ) -> TaskSnapshot:
+        if not session_id or len(session_id) > 200:
+            raise TaskValidationError("agent_session_identity_invalid")
+        now = _timestamp()
+        with self._transaction() as connection:
+            current = self._require_current(connection, task_id, generation)
+            if str(current["state"]) in _TERMINAL_STATES:
+                raise TaskConflict("task_generation_terminal")
+            connection.execute(
+                """UPDATE generations SET agent_session_id = ?, updated_at = ?
+                    WHERE task_id = ? AND generation = ?""",
+                (session_id, now, task_id, generation),
+            )
+            row = self._select_generation(connection, task_id, generation)
+            assert row is not None
+            return self._snapshot(row)
+
     def verify_source(self, task_id: str, generation: int) -> TaskSnapshot:
         snapshot = self.get_generation(task_id, generation)
         current = digest_task_source(Path(snapshot.workspace), snapshot.source_path)
@@ -705,6 +724,26 @@ class TaskRegistry:
             if row is None or row["attempt"] is None:
                 return None
             return self._attempt(connection, task_id, generation, int(row["attempt"]))
+
+    def heartbeat(
+        self, task_id: str, generation: int, attempt: int
+    ) -> AttemptSnapshot:
+        now = _timestamp()
+        with self._transaction() as connection:
+            current = self._require_current(connection, task_id, generation)
+            if str(current["state"]) != "running":
+                raise TaskConflict("heartbeat_state_invalid")
+            connection.execute(
+                """UPDATE attempts SET heartbeat_at = ?
+                    WHERE task_id = ? AND generation = ? AND attempt = ?""",
+                (now, task_id, generation, attempt),
+            )
+            connection.execute(
+                """UPDATE generations SET updated_at = ?
+                    WHERE task_id = ? AND generation = ?""",
+                (now, task_id, generation),
+            )
+            return self._attempt(connection, task_id, generation, attempt)
 
     def finish_attempt(
         self,

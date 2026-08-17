@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -17,6 +18,7 @@ from .approvals import (
     owner_approval_receipt,
 )
 from .bridgewright import BridgewrightError, collect_bridgewright_evidence
+from .agents.registry import AgentDriverError, driver_for
 from .config import ConfigError, load_project_config
 from .database import (
     DatabaseGuardError,
@@ -25,7 +27,7 @@ from .database import (
     RefreshPipeline,
     safety_policy_from_config,
 )
-from .git import mutation_preflight
+from .git import SubprocessRunner, mutation_preflight
 from .hosted_database import HostedStagingRefresh
 from .impact import assess_ui_impact
 from .preview import (
@@ -36,6 +38,7 @@ from .preview import (
     stop_preview,
     tailscale_dns_name,
 )
+from .processes import ProcessControlError
 from .redaction import UnsafeOutputError, redact_text
 from .release import (
     GitPublisher,
@@ -49,15 +52,29 @@ from .render import RenderClient, RenderObservationError
 from .results import CommandError, CommandResult, EvidenceRef, NextAction
 from .state import CandidateIdentity, Receipt, ReceiptError, ReceiptStore
 from .status import build_doctor_result, build_status_result, collect_status_facts
+from .task_control import (
+    GoRequest,
+    TaskControlError,
+    build_task_status_result,
+    go_task,
+    stop_task,
+    task_command_result,
+    with_task_status,
+)
+from .tasks import TaskError
 from .verification import CdpBrowserProbe, PlaywrightBrowserProbe, VerificationError
 from .versioning import VersionError, parse_beta_version
+from .workspaces import WorkspaceError
 
 _COACHING = """common prompts:
   what's next?          ollija status
   check my setup        ollija doctor
   refresh review data   ollija refresh-local
   refresh hosted data   ollija refresh-staging
-  start work            ollija start
+  start bounded work    ollija go --help
+  stop bounded work     ollija stop <task>
+  inspect bounded work  ollija task-status [task]
+  freeze beta candidate ollija start
   show local preview    ollija preview
   stop local preview    ollija preview-stop
   stage this            ollija stage
@@ -114,7 +131,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     approval.add_argument("approval_kind", choices=("desktop", "iphone"))
     approval.add_argument("--json", action="store_true", dest="json_output")
+    go = subparsers.add_parser(
+        "go", help="Explicitly arm one bounded task generation on fuchitalee."
+    )
+    go.add_argument("--task", required=True)
+    go.add_argument("--parent-task")
+    go.add_argument("--source", required=True, type=Path)
+    go.add_argument("--agent", required=True, choices=("codex", "claude"))
+    go.add_argument("--endpoint", required=True, choices=("commit", "production"))
+    go.add_argument(
+        "--verify-argv",
+        action="append",
+        default=[],
+        help='Repeat a JSON argv array, e.g. \'["pytest","tests/ollija"]\'.',
+    )
+    go.add_argument("--no-test-reason")
+    go.add_argument("--json", action="store_true", dest="json_output")
+    stop = subparsers.add_parser(
+        "stop", help="Durably cancel one task before stopping its process tree."
+    )
+    stop.add_argument("task")
+    stop.add_argument("--json", action="store_true", dest="json_output")
+    task_status = subparsers.add_parser(
+        "task-status", help="Read durable task state without extending authority."
+    )
+    task_status.add_argument("task", nargs="?")
+    task_status.add_argument("--json", action="store_true", dest="json_output")
     return parser
+
+
+def _verification_argv(values: list[str]) -> tuple[tuple[str, ...], ...]:
+    commands: list[tuple[str, ...]] = []
+    for value in values:
+        try:
+            body = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise TaskControlError("verification_argv_invalid") from exc
+        if not isinstance(body, list) or not body or not all(
+            isinstance(item, str) and item for item in body
+        ):
+            raise TaskControlError("verification_argv_invalid")
+        commands.append(tuple(body))
+    return tuple(commands)
 
 
 def render_human(result: CommandResult) -> str:
@@ -719,11 +777,47 @@ def main(
     try:
         config = load_project_config(working_directory)
         _load_local_environment(config.root)
-        facts = collect_status_facts(config, cwd=working_directory)
+        if args.command == "task-status":
+            result = build_task_status_result(config, task_id=args.task)
+        else:
+            facts = collect_status_facts(config, cwd=working_directory)
         if args.command == "status":
-            result = build_status_result(facts)
+            result = with_task_status(build_status_result(facts), config)
         elif args.command == "doctor":
             result = build_doctor_result(facts)
+        elif args.command == "go":
+            origin_host = os.environ.get("OLLIJA_ORIGIN_HOST") or socket.gethostname()
+            origin_terminal = (
+                os.environ.get("OLLIJA_ORIGIN_TERMINAL")
+                or os.environ.get("TERM_PROGRAM")
+                or os.environ.get("SSH_TTY")
+                or "unknown"
+            )
+            snapshot = go_task(
+                config,
+                facts,
+                GoRequest(
+                    task_id=args.task,
+                    parent_task_id=args.parent_task,
+                    source_path=args.source.as_posix(),
+                    agent_kind=args.agent,
+                    endpoint=args.endpoint,
+                    verification_argv=_verification_argv(args.verify_argv),
+                    no_test_reason=args.no_test_reason,
+                ),
+                runner=SubprocessRunner(),
+                driver=driver_for(args.agent),
+                origin_host=origin_host,
+                origin_terminal=origin_terminal,
+                execution_host=socket.gethostname(),
+            )
+            result = task_command_result("go", snapshot)
+        elif args.command == "stop":
+            result = task_command_result(
+                f"stop {args.task}", stop_task(config, facts, args.task)
+            )
+        elif args.command == "task-status":
+            pass
         elif args.command == "refresh-local":
             result = _refresh_local(config, facts)
         elif args.command == "refresh-staging":
@@ -758,12 +852,17 @@ def main(
         BridgewrightError,
         DatabaseGuardError,
         PreviewError,
+        ProcessControlError,
         RefreshError,
         ReceiptError,
         ReleaseError,
         RenderObservationError,
+        AgentDriverError,
+        TaskControlError,
+        TaskError,
         VerificationError,
         VersionError,
+        WorkspaceError,
     ) as exc:
         result = _mutation_failure(args.command, redact_text(str(exc)))
         emit_result(result, json_output=args.json_output, stream=output)
