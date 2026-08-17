@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -29,6 +30,15 @@ class AgentDriver(Protocol):
     def probe(self, workspace: Path) -> AgentProbe: ...
 
     def launch(self, task: TaskSnapshot, *, attempt: int) -> AgentLaunch: ...
+
+
+def parse_version(value: str) -> str | None:
+    match = re.search(r"(?<!\d)(\d+(?:\.\d+){1,3})", value)
+    return match.group(1) if match else None
+
+
+def version_at_least(value: str, minimum: tuple[int, ...]) -> bool:
+    return tuple(int(item) for item in value.split(".")) >= minimum
 
 
 def task_prompt(task: TaskSnapshot) -> str:

@@ -145,3 +145,34 @@ def test_supervisor_log_is_private_bounded_and_contains_no_agent_output(
     assert "Implement the task" not in text
     assert "provider response" not in text
     assert log.stat().st_size < 64_000
+
+
+def test_supervisor_updates_heartbeat_while_child_is_running(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    registry = TaskRegistry(tmp_path / "state" / "tasks.sqlite3")
+    armed = registry.arm(_grant(workspace))
+    heartbeats: list[int] = []
+    original = registry.heartbeat
+
+    def heartbeat(task_id: str, generation: int, attempt: int):
+        heartbeats.append(attempt)
+        return original(task_id, generation, attempt)
+
+    registry.heartbeat = heartbeat  # type: ignore[method-assign]
+
+    result = run_supervisor(
+        registry,
+        armed.task_id,
+        armed.generation,
+        command_factory=lambda _task, _attempt: (
+            sys.executable,
+            "-c",
+            "import time; time.sleep(0.15)",
+        ),
+        on_ready=_ready,
+        heartbeat_interval=0.02,
+    )
+
+    assert result.state == "succeeded"
+    assert len(heartbeats) >= 2

@@ -161,7 +161,7 @@ def stop_task(config: ProjectConfig, facts: StatusFacts, task_id: str) -> TaskSn
 
 
 def _next_action(task: TaskSnapshot) -> NextAction:
-    if task.state in {"armed", "running", "restarting", "committing", "releasing"}:
+    if task.is_active and task.state != "awaiting_approval":
         return NextAction(
             f"ollija task-status {task.task_id}",
             "Observe this generation; status does not renew its grant.",
@@ -196,16 +196,13 @@ def build_task_status_result(
             details={"tasks": []},
         )
     tasks = registry.list_tasks()
-    active = tuple(
-        task
-        for task in tasks
-        if task.state not in {"succeeded", "failed", "cancelled", "lost", "paused"}
-    )
-    selected = (
-        registry.get(task_id)
-        if task_id
-        else max(active or tasks, key=lambda task: task.updated_at, default=None)
-    )
+    active = tuple(task for task in tasks if task.is_active)
+    if task_id:
+        selected = next((task for task in tasks if task.task_id == task_id), None)
+        if selected is None:
+            selected = registry.get(task_id)
+    else:
+        selected = max(active or tasks, key=lambda task: task.updated_at, default=None)
     if selected is None:
         return CommandResult(
             command="task-status",
@@ -260,8 +257,7 @@ def with_task_status(base: CommandResult, config: ProjectConfig) -> CommandResul
         (
             task
             for task in tasks
-            if task.state
-            in {"armed", "running", "restarting", "committing", "awaiting_approval", "releasing"}
+            if task.is_active
         ),
         key=lambda task: task.updated_at,
         default=None,

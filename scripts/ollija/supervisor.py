@@ -74,7 +74,10 @@ def run_supervisor(
     command_factory: CommandFactory,
     on_ready: ReadyHandler,
     after_attempt: Callable[[], None] | None = None,
+    heartbeat_interval: float = 5,
 ) -> TaskSnapshot:
+    if heartbeat_interval <= 0:
+        raise ValueError("heartbeat_interval must be positive")
     while True:
         try:
             task = registry.verify_source(task_id, generation)
@@ -142,7 +145,16 @@ def run_supervisor(
             pgid=identity.pgid,
             process_birth=identity.birth,
         )
-        exit_code = process.wait()
+        while True:
+            try:
+                exit_code = process.wait(timeout=heartbeat_interval)
+                break
+            except subprocess.TimeoutExpired:
+                try:
+                    registry.heartbeat(task_id, generation, attempt.attempt)
+                except TaskConflict:
+                    if registry.get(task_id).state != "cancelled":
+                        raise
         classification = "completed" if exit_code == 0 else "unexpected_exit"
         registry.finish_attempt(
             task_id,

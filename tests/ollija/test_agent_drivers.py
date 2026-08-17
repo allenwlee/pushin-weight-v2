@@ -9,7 +9,11 @@ import pytest
 from scripts.ollija.agents.base import task_prompt
 from scripts.ollija.agents.claude import ClaudeDriver
 from scripts.ollija.agents.codex import CodexDriver
-from scripts.ollija.agents.registry import AgentDriverError, driver_for, launch_for_attempt
+from scripts.ollija.agents.registry import (
+    AgentDriverError,
+    driver_for,
+    launch_for_attempt,
+)
 from scripts.ollija.git import CommandOutcome
 from scripts.ollija.tasks import TaskRegistry
 from tests.ollija.test_tasks import _grant

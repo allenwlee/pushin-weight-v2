@@ -82,6 +82,10 @@ class TaskSnapshot:
     outcome_sha: str | None
     failure_code: str | None
 
+    @property
+    def is_active(self) -> bool:
+        return self.state in _ACTIVE_STATES
+
     def to_dict(self) -> dict[str, object]:
         body = asdict(self)
         body["verification_argv"] = [list(command) for command in self.verification_argv]
@@ -483,9 +487,19 @@ class TaskRegistry:
 
     def list_tasks(self) -> tuple[TaskSnapshot, ...]:
         with self._connect() as connection:
-            ids = connection.execute("SELECT task_id FROM tasks ORDER BY task_id").fetchall()
-            rows = [self._select_generation(connection, str(item["task_id"])) for item in ids]
-        return tuple(self._snapshot(row) for row in rows if row is not None)
+            rows = connection.execute(
+                """SELECT t.task_id, t.parent_task_id, t.source_path,
+                          t.workspace, t.branch, g.*
+                     FROM tasks t
+                     JOIN generations g ON g.task_id = t.task_id
+                    WHERE g.generation = (
+                          SELECT MAX(g2.generation)
+                            FROM generations g2
+                           WHERE g2.task_id = t.task_id
+                    )
+                    ORDER BY t.task_id"""
+            ).fetchall()
+        return tuple(self._snapshot(row) for row in rows)
 
     @staticmethod
     def _require_current(

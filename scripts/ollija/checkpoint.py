@@ -116,13 +116,9 @@ def _default_release_executor(workspace: Path) -> ReleaseExecutor:
                 for item in evidence
                 if isinstance(item, dict) and item.get("candidate_sha")
             } if isinstance(evidence, list) else set()
-            candidate_sha = (
-                head_sha
-                if isinstance(head_sha, str) and head_sha
-                else next(iter(candidate_shas))
-                if len(candidate_shas) == 1
-                else None
-            )
+            candidate_sha = head_sha if isinstance(head_sha, str) and head_sha else None
+            if candidate_sha is None and len(candidate_shas) == 1:
+                candidate_sha = next(iter(candidate_shas))
             return ReleaseObservation(
                 str(body["status"]),
                 str(body["state"]),

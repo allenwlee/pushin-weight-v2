@@ -1,24 +1,13 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..git import CommandRunner, SubprocessRunner
 from ..tasks import TaskSnapshot
-from .base import AgentLaunch, AgentProbe, task_prompt
-
-
-def _version(value: str) -> str | None:
-    match = re.search(r"(?<!\d)(\d+(?:\.\d+){1,3})", value)
-    return match.group(1) if match else None
-
-
-def _supported(value: str) -> bool:
-    parts = tuple(int(item) for item in value.split("."))
-    return parts >= (2, 1, 187)
+from .base import AgentLaunch, AgentProbe, parse_version, task_prompt, version_at_least
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,10 +32,10 @@ class ClaudeDriver:
         version_result = self.runner.run(
             (str(self.executable), "--version"), cwd=workspace, timeout=10
         )
-        version = _version(version_result.stdout or version_result.stderr)
+        version = parse_version(version_result.stdout or version_result.stderr)
         if version_result.returncode != 0 or version is None:
             return AgentProbe(self.kind, False, version, "agent_version_unavailable")
-        if not _supported(version):
+        if not version_at_least(version, (2, 1, 187)):
             return AgentProbe(self.kind, False, version, "agent_version_unsupported")
         auth = self.runner.run(
             (str(self.executable), "auth", "status", "--json"),

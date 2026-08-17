@@ -268,6 +268,33 @@ def test_task_status_is_read_only_and_reports_one_next_action(tmp_path: Path) ->
     assert combined.details["release_state"] == "blocked"
 
 
+def test_canonical_checkout_and_worktree_share_task_history(tmp_path: Path) -> None:
+    canonical, workspace = _setup(tmp_path)
+    worktree_config = _config(canonical, workspace)
+    root_config = _config(canonical, canonical)
+    go_task(
+        worktree_config,
+        _facts(canonical, workspace),
+        GoRequest(
+            task_id="task-1",
+            parent_task_id=None,
+            source_path="docs/plans/task.md",
+            agent_kind="codex",
+            endpoint="commit",
+            verification_argv=(("pytest",),),
+            no_test_reason=None,
+        ),
+        runner=_Runner(CommandOutcome(0, "docs/plans/task.md\n", "")),
+        driver=_Driver(),
+        launcher=lambda **_kwargs: "session",
+    )
+
+    assert task_registry_path(worktree_config) == task_registry_path(root_config)
+    root_view = build_task_status_result(root_config, task_id="task-1")
+    assert root_view.state == "armed"
+    assert root_view.details["task"]["workspace"] == str(workspace)
+
+
 def test_paused_task_status_routes_failure_and_projects_safe_incident(
     tmp_path: Path,
 ) -> None:
