@@ -70,6 +70,13 @@ def test_candidate_recommends_candidate_bound_refresh_sequence() -> None:
     assert ready.next_action.command == "ollija stage"
 
 
+def test_live_but_unsealed_release_recommends_verification_not_release() -> None:
+    result = build_status_result(_facts(state="releasing"))
+
+    assert result.next_action is not None
+    assert result.next_action.command == "ollija verify-production"
+
+
 def test_unreachable_external_authority_is_unknown_never_passed() -> None:
     facts = _facts()
     facts = StatusFacts(

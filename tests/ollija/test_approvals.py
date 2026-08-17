@@ -8,6 +8,7 @@ from scripts.ollija.approvals import (
     ApprovalError,
     bridgewright_evidence_receipt,
     owner_approval_receipt,
+    owner_override_receipt,
 )
 from scripts.ollija.bridgewright import BridgewrightEvidence
 from scripts.ollija.state import (
@@ -97,3 +98,32 @@ def test_bridgewright_cannot_be_recorded_as_an_owner_approval() -> None:
             deployment_id="dep-1",
             created_at=NOW,
         )
+
+
+def test_owner_override_is_candidate_bound_and_distinct_from_clean_evidence() -> None:
+    candidate = _candidate()
+    receipts = _base_receipts(candidate)
+    receipts.extend(
+        owner_approval_receipt(
+            candidate=candidate,
+            approval_kind=kind,
+            deployment_id="dep-1",
+            created_at=NOW,
+        )
+        for kind in ("desktop", "iphone")
+    )
+    override = owner_override_receipt(
+        candidate=candidate,
+        assessment_kind="bridgewright",
+        deployment_id="dep-1",
+        owner="allenwlee",
+        reason="Assessment adapter is defective; owner inspected the staged surface.",
+        created_at=NOW,
+    )
+    receipts.append(override)
+
+    assert override.kind == "owner_override"
+    assert override.payload["owner"] == "allenwlee"
+    assert override.payload["assessment_kind"] == "bridgewright"
+    assert override.payload["reason"].startswith("Assessment adapter")
+    assert evaluate_lifecycle(receipts, _live(candidate)).state == "approved"

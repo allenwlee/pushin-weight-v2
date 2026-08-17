@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import sqlite3
-import stat
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator, Sequence
 
 from .redaction import UnsafeOutputError, assert_safe_value
-
 
 TASK_SCHEMA_VERSION = 1
 _TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -535,6 +532,32 @@ class TaskRegistry:
             generation,
             "running",
             allowed=frozenset({"armed", "restarting", "running"}),
+        )
+
+    def mark_committing(self, task_id: str, generation: int) -> TaskSnapshot:
+        return self._set_state(
+            task_id,
+            generation,
+            "committing",
+            allowed=frozenset({"running", "committing"}),
+        )
+
+    def mark_awaiting_approval(
+        self, task_id: str, generation: int
+    ) -> TaskSnapshot:
+        return self._set_state(
+            task_id,
+            generation,
+            "awaiting_approval",
+            allowed=frozenset({"committing", "awaiting_approval"}),
+        )
+
+    def mark_releasing(self, task_id: str, generation: int) -> TaskSnapshot:
+        return self._set_state(
+            task_id,
+            generation,
+            "releasing",
+            allowed=frozenset({"committing", "awaiting_approval", "releasing"}),
         )
 
     def complete(self, task_id: str, generation: int, *, outcome_sha: str) -> TaskSnapshot:

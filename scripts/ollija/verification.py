@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import requests
 import yaml
@@ -69,6 +70,62 @@ class BrowserProbe(Protocol):
         selector: str,
         unavailable_text: str,
     ) -> BrowserObservation: ...
+
+
+def _required_string(values: Mapping[str, object], key: str) -> str:
+    value = values.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise VerificationError(f"production_verification_{key}_invalid")
+    return value.strip()
+
+
+def production_browser_probe(
+    verification: Mapping[str, object],
+    *,
+    storage_state: Path | None = None,
+    browser_cdp_url: str | None = None,
+) -> BrowserProbe:
+    """Validate the production browser contract before production mutation."""
+
+    base_url = _required_string(verification, "production_base_url")
+    parsed_base = urlsplit(base_url)
+    if (
+        parsed_base.scheme != "https"
+        or not parsed_base.hostname
+        or parsed_base.username
+        or parsed_base.password
+    ):
+        raise VerificationError("production_verification_production_base_url_invalid")
+    for key in ("health_path", "smoke_path", "headline_path"):
+        value = _required_string(verification, key)
+        if not value.startswith("/") or urlsplit(value).netloc:
+            raise VerificationError(f"production_verification_{key}_invalid")
+    _required_string(verification, "headline_selector")
+    _required_string(verification, "headline_unavailable_text")
+
+    storage_env = _required_string(verification, "browser_storage_state_env")
+    configured_storage = os.environ.get(storage_env, "")
+    selected_storage = storage_state or (
+        Path(configured_storage) if configured_storage else None
+    )
+    cdp_env = _required_string(verification, "browser_cdp_url_env")
+    configured_cdp = os.environ.get(cdp_env, "")
+    selected_cdp = browser_cdp_url or configured_cdp or None
+    if selected_storage is not None and selected_cdp is not None:
+        raise VerificationError("production_browser_probe_selection_ambiguous")
+    if selected_storage is None and selected_cdp is None:
+        raise VerificationError("production_browser_session_missing")
+    if selected_storage is not None:
+        resolved_storage = selected_storage.expanduser().resolve()
+        if not resolved_storage.is_file():
+            raise VerificationError("production_browser_storage_state_missing")
+        return PlaywrightBrowserProbe(resolved_storage)
+
+    assert selected_cdp is not None
+    parsed_cdp = urlsplit(selected_cdp)
+    if parsed_cdp.scheme not in {"http", "https", "ws", "wss"} or not parsed_cdp.hostname:
+        raise VerificationError("production_browser_cdp_url_invalid")
+    return CdpBrowserProbe(selected_cdp)
 
 
 class PlaywrightBrowserProbe:

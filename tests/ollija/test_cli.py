@@ -87,9 +87,20 @@ def test_task_commands_are_discoverable_and_verification_is_structured() -> None
     )
     stopped = parser.parse_args(["stop", "task-1"])
     observed = parser.parse_args(["task-status", "task-1", "--json"])
+    overridden = parser.parse_args(
+        [
+            "override",
+            "bridgewright",
+            "--owner",
+            "allenwlee",
+            "--reason",
+            "adapter defect",
+        ]
+    )
 
     assert args.command == "go"
     assert args.verify_argv == ['["pytest","tests/ollija"]']
     assert stopped.command == "stop"
     assert observed.command == "task-status"
     assert observed.json_output is True
+    assert overridden.assessment_kind == "bridgewright"

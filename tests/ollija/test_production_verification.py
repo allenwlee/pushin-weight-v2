@@ -10,8 +10,10 @@ from scripts.ollija.render import RenderDeployment
 from scripts.ollija.verification import (
     BrowserObservation,
     CdpBrowserProbe,
+    PlaywrightBrowserProbe,
     RouteObservation,
     VerificationError,
+    production_browser_probe,
     verify_production,
 )
 
@@ -154,3 +156,53 @@ def test_wrong_sha_cannot_verify_even_when_browser_would_pass() -> None:
             headline_unavailable_text="Trend summary is unavailable.",
             browser_probe=_Browser(),
         )
+
+
+def test_browser_prerequisites_require_one_usable_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verification = {
+        "production_base_url": "https://example.invalid",
+        "health_path": "/health/",
+        "smoke_path": "/login/",
+        "headline_path": "/feed/",
+        "headline_selector": "[data-headline]",
+        "headline_unavailable_text": "Unavailable",
+        "browser_storage_state_env": "TEST_STORAGE_STATE",
+        "browser_cdp_url_env": "TEST_CDP_URL",
+    }
+    monkeypatch.delenv("TEST_STORAGE_STATE", raising=False)
+    monkeypatch.delenv("TEST_CDP_URL", raising=False)
+
+    with pytest.raises(VerificationError, match="session_missing"):
+        production_browser_probe(verification)
+
+    storage = tmp_path / "browser.json"
+    storage.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("TEST_STORAGE_STATE", str(storage))
+    assert isinstance(production_browser_probe(verification), PlaywrightBrowserProbe)
+
+    monkeypatch.setenv("TEST_CDP_URL", "http://localhost:9222")
+    with pytest.raises(VerificationError, match="selection_ambiguous"):
+        production_browser_probe(verification)
+
+
+def test_browser_prerequisites_reject_bad_production_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verification = {
+        "production_base_url": "https://example.invalid",
+        "health_path": "/health/",
+        "smoke_path": "/login/",
+        "headline_path": "https://other.invalid/feed/",
+        "headline_selector": "[data-headline]",
+        "headline_unavailable_text": "Unavailable",
+        "browser_storage_state_env": "TEST_STORAGE_STATE",
+        "browser_cdp_url_env": "TEST_CDP_URL",
+    }
+    monkeypatch.delenv("TEST_STORAGE_STATE", raising=False)
+    monkeypatch.setenv("TEST_CDP_URL", "http://localhost:9222")
+
+    with pytest.raises(VerificationError, match="headline_path_invalid"):
+        production_browser_probe(verification)

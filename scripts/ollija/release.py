@@ -33,6 +33,7 @@ class ReleaseEvidence:
     staging_deploy: Receipt | None = None
     approvals: tuple[Receipt, ...] = ()
     bridgewright_evidence: tuple[Receipt, ...] = ()
+    owner_overrides: tuple[Receipt, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -515,6 +516,15 @@ def require_release_readiness(
         and item.payload.get("deployment_id") == staging_live.deployment_id
         and item.payload.get("status") == "clean"
     )
+    overrides = tuple(
+        item
+        for item in receipts
+        if item.kind == "owner_override"
+        and item.candidate == candidate.candidate
+        and item.payload.get("deployment_id") == staging_live.deployment_id
+        and item.payload.get("overridden") is True
+        and item.payload.get("authority") == "explicit_owner_override"
+    )
     return ReleaseEvidence(
         candidate=candidate,
         local_refresh=local_refresh,
@@ -522,6 +532,7 @@ def require_release_readiness(
         staging_deploy=stage,
         approvals=approvals,
         bridgewright_evidence=evidence,
+        owner_overrides=overrides,
     )
 
 
@@ -718,6 +729,9 @@ def verify_and_tag_candidate(
         ),
         "bridgewright_evidence_receipt_ids": sorted(
             item.receipt_id for item in evidence.bridgewright_evidence
+        ),
+        "owner_override_receipt_ids": sorted(
+            item.receipt_id for item in evidence.owner_overrides
         ),
         "last_known_good_receipt_id": previous.receipt_id,
         "completed_at": now.astimezone(UTC).isoformat(),

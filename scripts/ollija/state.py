@@ -28,6 +28,7 @@ _RECEIPT_KINDS = {
     "candidate",
     "failure",
     "last_known_good",
+    "owner_override",
     "production_deploy",
     "refresh",
     "staging_deploy",
@@ -283,6 +284,25 @@ def evaluate_lifecycle(
         if previous is None or receipt.created_at > previous.created_at:
             evidence[evidence_kind] = receipt
 
+    for receipt in (item for item in matching if item.kind == "owner_override"):
+        evidence_kind = receipt.payload.get("assessment_kind")
+        is_valid = bool(
+            isinstance(evidence_kind, str)
+            and receipt.payload.get("overridden") is True
+            and receipt.payload.get("authority") == "explicit_owner_override"
+            and receipt.payload.get("owner")
+            and receipt.payload.get("reason")
+            and receipt.payload.get("deployment_id") == live.staging_deployment_id
+            and receipt.payload.get("surface_fingerprint")
+            == candidate.surface_fingerprint
+        )
+        if not is_valid:
+            stale.add(receipt.receipt_id)
+            continue
+        previous = evidence.get(evidence_kind)
+        if previous is None or receipt.created_at > previous.created_at:
+            evidence[evidence_kind] = receipt
+
     if not all(kind in approvals for kind in live.required_approvals) or not all(
         kind in evidence for kind in live.required_evidence
     ):
@@ -294,6 +314,21 @@ def evaluate_lifecycle(
         "update_in_progress",
     }:
         return LifecycleEvaluation("releasing", tuple(sorted(stale)), tuple(reasons))
+
+    # A candidate already live on production still requires verification and
+    # sealing, never a second promotion of the same SHA (issue #15).
+    if (
+        live.production_status == "live"
+        and live.production_deployed_sha == candidate.sha
+    ):
+        production = _newest(
+            [item for item in matching if item.kind == "production_deploy"],
+            "production_deploy",
+        )
+        if production is None:
+            return LifecycleEvaluation(
+                "releasing", tuple(sorted(stale)), tuple(reasons)
+            )
 
     production_receipts = [
         item for item in matching if item.kind == "production_deploy"

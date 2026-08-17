@@ -4,9 +4,12 @@ import shutil
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from scripts.ollija.approvals import owner_override_receipt
+from scripts.ollija.cli import _release
 from scripts.ollija.config import load_project_config
 from scripts.ollija.git import GitObservation
 from scripts.ollija.release import (
@@ -18,7 +21,11 @@ from scripts.ollija.release import (
 )
 from scripts.ollija.render import RenderDeployment
 from scripts.ollija.state import CandidateIdentity, Receipt, ReceiptStore
-from scripts.ollija.verification import BrowserObservation, RouteObservation
+from scripts.ollija.verification import (
+    BrowserObservation,
+    RouteObservation,
+    VerificationError,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHA = "a" * 40
@@ -48,7 +55,12 @@ def _candidate() -> CandidateIdentity:
     )
 
 
-def _write_ready_receipts(config) -> None:
+def _write_ready_receipts(
+    config,
+    *,
+    include_bridgewright: bool = True,
+    include_override: bool = False,
+) -> None:
     store = ReceiptStore(config.state_root)
     candidate = Receipt.create(
         kind="candidate",
@@ -128,15 +140,28 @@ def _write_ready_receipts(config) -> None:
             "source_revision": "bridgewright-revision",
         },
     )
-    for receipt in (
+    ready_receipts = [
         candidate,
         local,
         hosted,
         stage,
         desktop,
         iphone,
-        bridgewright,
-    ):
+    ]
+    if include_bridgewright:
+        ready_receipts.append(bridgewright)
+    if include_override:
+        ready_receipts.append(
+            owner_override_receipt(
+                candidate=_candidate(),
+                assessment_kind="bridgewright",
+                deployment_id="dep-stage",
+                owner="allenwlee",
+                reason="Bridgewright adapter is defective for this candidate.",
+                created_at=NOW,
+            )
+        )
+    for receipt in ready_receipts:
         store.write_receipt(receipt)
     store.set_reference("active_candidate", candidate.receipt_id)
     store.set_reference("active_refresh", local.receipt_id)
@@ -205,6 +230,29 @@ def test_release_readiness_requires_fresh_sha_bound_refresh_and_human_proof(
         "iphone",
     }
     assert evidence.hosted_refresh.payload["target_resource_id"] == "dpg-stage"
+
+
+def test_release_readiness_preserves_explicit_override_provenance(
+    tmp_path: Path,
+) -> None:
+    config = _configured(tmp_path)
+    _write_ready_receipts(
+        config,
+        include_bridgewright=False,
+        include_override=True,
+    )
+
+    evidence = require_release_readiness(
+        config=config,
+        git=_git(),
+        package_version="0.2.0b1",
+        staging_live=_stage(),
+        now=NOW,
+    )
+
+    assert evidence.bridgewright_evidence == ()
+    assert len(evidence.owner_overrides) == 1
+    assert evidence.owner_overrides[0].payload["owner"] == "allenwlee"
 
 
 def test_hosted_refresh_must_derive_from_the_current_local_refresh(
@@ -340,6 +388,47 @@ def test_verification_revalidates_current_staging_before_tagging(
     assert len(receipt.payload["approval_receipt_ids"]) == 2
 
 
+def test_verification_receipt_keeps_owner_override_distinct(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _configured(tmp_path)
+    for filename in ("config.yaml", "render.yaml"):
+        shutil.copy2(REPO_ROOT / filename, tmp_path / filename)
+    _write_ready_receipts(
+        config,
+        include_bridgewright=False,
+        include_override=True,
+    )
+    _write_last_known_good(config)
+    monkeypatch.setattr(
+        "scripts.ollija.verification.probe_route",
+        lambda base, path: RouteObservation(
+            url=base + path,
+            status_code=200,
+            final_url=base + path,
+        ),
+    )
+
+    receipt, _report = verify_and_tag_candidate(
+        config=config,
+        git=replace(
+            _git(),
+            production_sha=SHA,
+            staging_sha=SHA,
+            branch_relationship="equal",
+        ),
+        package_version="0.2.0b1",
+        render=_Render(_stage()),
+        publisher=_Publisher(),
+        browser_probe=_Browser(),
+        now=NOW,
+    )
+
+    assert receipt.payload["bridgewright_evidence_receipt_ids"] == []
+    assert len(receipt.payload["owner_override_receipt_ids"]) == 1
+
+
 def test_verification_does_not_tag_after_staging_replacement(
     tmp_path: Path,
 ) -> None:
@@ -382,3 +471,28 @@ def test_existing_remote_tag_is_rejected_before_release(
 
     with pytest.raises(ReleaseError, match="already_exists"):
         publisher.assert_tag_absent("v0.2.0-beta.1")
+
+
+def test_release_refuses_to_advance_main_without_browser_prerequisite(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _configured(tmp_path)
+    storage_env = str(config.verification["browser_storage_state_env"])
+    cdp_env = str(config.verification["browser_cdp_url_env"])
+    monkeypatch.delenv(storage_env, raising=False)
+    monkeypatch.delenv(cdp_env, raising=False)
+    monkeypatch.setattr(
+        "scripts.ollija.cli._preflight_mutation",
+        lambda _command, _facts: None,
+    )
+    advanced: list[bool] = []
+    monkeypatch.setattr(
+        "scripts.ollija.cli.promote_candidate",
+        lambda **_kwargs: advanced.append(True),
+    )
+
+    with pytest.raises(VerificationError, match="session_missing"):
+        _release(config, SimpleNamespace())
+
+    assert advanced == []

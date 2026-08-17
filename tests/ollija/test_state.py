@@ -112,6 +112,12 @@ def test_lifecycle_transitions_are_recomputed_from_live_authorities() -> None:
     verified = replace(releasing, production_status="live")
     assert (
         evaluate_lifecycle(
+            [candidate_receipt, staged, desktop, iphone], verified
+        ).state
+        == "releasing"
+    )
+    assert (
+        evaluate_lifecycle(
             [candidate_receipt, staged, desktop, iphone, production], verified
         ).state
         == "verified"

@@ -12,13 +12,14 @@ from typing import TextIO
 
 import environ
 
+from .agents.registry import AgentDriverError, driver_for
 from .approvals import (
     ApprovalError,
     bridgewright_evidence_receipt,
     owner_approval_receipt,
+    owner_override_receipt,
 )
 from .bridgewright import BridgewrightError, collect_bridgewright_evidence
-from .agents.registry import AgentDriverError, driver_for
 from .config import ConfigError, load_project_config
 from .database import (
     DatabaseGuardError,
@@ -62,7 +63,7 @@ from .task_control import (
     with_task_status,
 )
 from .tasks import TaskError
-from .verification import CdpBrowserProbe, PlaywrightBrowserProbe, VerificationError
+from .verification import VerificationError, production_browser_probe
 from .versioning import VersionError, parse_beta_version
 from .workspaces import WorkspaceError
 
@@ -131,6 +132,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     approval.add_argument("approval_kind", choices=("desktop", "iphone"))
     approval.add_argument("--json", action="store_true", dest="json_output")
+    override = subparsers.add_parser(
+        "override",
+        help="Record an explicit owner exception for a defective assessment tool.",
+    )
+    override.add_argument("assessment_kind", choices=("bridgewright",))
+    override.add_argument("--owner", required=True)
+    override.add_argument("--reason", required=True)
+    override.add_argument("--json", action="store_true", dest="json_output")
     go = subparsers.add_parser(
         "go", help="Explicitly arm one bounded task generation on fuchitalee."
     )
@@ -445,6 +454,45 @@ def _approve(config, facts, approval_kind: str) -> CommandResult:
     )
 
 
+def _override(
+    config,
+    facts,
+    assessment_kind: str,
+    owner: str,
+    reason: str,
+) -> CommandResult:
+    blocked = _preflight_mutation("override", facts)
+    if blocked:
+        return blocked
+    store, candidate_receipt, stage = _active_candidate_and_stage(config)
+    receipt = owner_override_receipt(
+        candidate=candidate_receipt.candidate,
+        assessment_kind=assessment_kind,
+        deployment_id=str(stage.payload["deployment_id"]),
+        owner=owner,
+        reason=reason,
+        created_at=datetime.now(UTC),
+    )
+    store.write_receipt(receipt)
+    return CommandResult(
+        command=f"override {assessment_kind}",
+        status="ok",
+        state="staged",
+        summary="Owner override is bound to this candidate and remains distinct from automated evidence.",
+        evidence=(
+            EvidenceRef(
+                "owner_override",
+                receipt.receipt_id,
+                candidate_receipt.candidate.sha,
+            ),
+        ),
+        next_action=NextAction(
+            "ollija status",
+            "Recompute the exact-candidate release state.",
+        ),
+    )
+
+
 def _preflight_mutation(command: str, facts) -> CommandResult | None:
     operation = "release" if command in {"release", "verify-production"} else "stage"
     decision = mutation_preflight(facts.authority, facts.git, operation=operation)
@@ -659,6 +707,9 @@ def _release(config, facts) -> CommandResult:
     blocked = _preflight_mutation("release", facts)
     if blocked:
         return blocked
+    # A release must not make main live unless production verification can
+    # actually run in this same environment afterward.
+    production_browser_probe(config.verification)
     evidence, last_known_good = promote_candidate(
         config=config,
         git=facts.git,
@@ -704,34 +755,10 @@ def _verify_production(
     blocked = _preflight_mutation("verify-production", facts)
     if blocked:
         return blocked
-    configured_env = config.verification.get("browser_storage_state_env")
-    environment_path = (
-        os.environ.get(configured_env, "")
-        if isinstance(configured_env, str) and configured_env
-        else ""
-    )
-    selected = storage_state or (Path(environment_path) if environment_path else None)
-    cdp_env_name = config.verification.get("browser_cdp_url_env")
-    configured_cdp = (
-        os.environ.get(cdp_env_name, "")
-        if isinstance(cdp_env_name, str) and cdp_env_name
-        else ""
-    )
-    selected_cdp = browser_cdp_url or configured_cdp or None
-    if selected is not None and selected_cdp is not None:
-        return _mutation_failure(
-            "verify-production",
-            "production_browser_probe_selection_ambiguous",
-        )
-    if selected is None and selected_cdp is None:
-        return _mutation_failure(
-            "verify-production",
-            "production_browser_storage_state_missing",
-        )
-    browser_probe = (
-        CdpBrowserProbe(selected_cdp)
-        if selected_cdp is not None
-        else PlaywrightBrowserProbe(selected)
+    browser_probe = production_browser_probe(
+        config.verification,
+        storage_state=storage_state,
+        browser_cdp_url=browser_cdp_url,
     )
     receipt, report = verify_and_tag_candidate(
         config=config,
@@ -782,7 +809,12 @@ def main(
         else:
             facts = collect_status_facts(config, cwd=working_directory)
         if args.command == "status":
-            result = with_task_status(build_status_result(facts), config)
+            release_status = build_status_result(facts)
+            result = (
+                release_status
+                if os.environ.get("OLLIJA_RELEASE_ONLY") == "1"
+                else with_task_status(release_status, config)
+            )
         elif args.command == "doctor":
             result = build_doctor_result(facts)
         elif args.command == "go":
@@ -828,6 +860,14 @@ def main(
             result = _assess_ui(config, facts)
         elif args.command == "approve":
             result = _approve(config, facts, args.approval_kind)
+        elif args.command == "override":
+            result = _override(
+                config,
+                facts,
+                args.assessment_kind,
+                args.owner,
+                args.reason,
+            )
         elif args.command == "stage":
             result = _stage(config, facts)
         elif args.command == "release":
