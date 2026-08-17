@@ -322,6 +322,12 @@ def _assert_matching_job(job, plan: BackfillPlan) -> None:
         )
 
 
+def validate_job_plan(job, plan: BackfillPlan) -> None:
+    """Refuse resume when stored identity no longer matches current planning."""
+
+    _assert_matching_job(job, plan)
+
+
 def persist_plan(plan: BackfillPlan):
     """Create or resume one durable job and idempotently seed its work rows."""
 
