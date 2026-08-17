@@ -420,3 +420,144 @@ def test_enrichment_state_is_one_to_one_and_stores_no_payload():
         "model_output",
         "raw_payload",
     }
+
+
+def _backfill_job(key: str):
+    from core.models import BackfillJob
+
+    now = timezone.now().replace(microsecond=0)
+    return BackfillJob.objects.create(
+        key=key,
+        requested_since=now - timedelta(hours=2),
+        requested_until=now,
+        selection_mode=BackfillJob.SelectionMode.EXPLICIT,
+        selection_params={},
+        selected_intervals=[
+            {
+                "since": (now - timedelta(hours=2)).isoformat(),
+                "until": now.isoformat(),
+            }
+        ],
+        brand_filter=[],
+        plan_signature="a" * 64,
+    )
+
+
+def _job_window(job, *, offset_minutes: int = 0):
+    from core.models import HarvestBacklogWindow
+
+    end = timezone.now().replace(microsecond=0) - timedelta(minutes=offset_minutes)
+    start = end - timedelta(minutes=15)
+    return HarvestBacklogWindow.objects.create(
+        backfill_job=job,
+        **CALL_A,
+        original_since=start,
+        original_until=end,
+        remaining_since=start,
+        remaining_until=end,
+        reason_code="operator_backfill",
+    )
+
+
+def test_scheduled_and_job_claims_are_strictly_scoped():
+    from core.models import HarvestBacklogWindow
+
+    now = timezone.now()
+    scheduled = HarvestBacklogWindow.objects.create(
+        **CALL_A,
+        original_since=now - timedelta(minutes=15),
+        original_until=now,
+        remaining_since=now - timedelta(minutes=15),
+        remaining_until=now,
+        reason_code="page_cap",
+    )
+    job = _backfill_job("scope-job")
+    owned = _job_window(job, offset_minutes=30)
+
+    scheduled_claim = HarvestBacklogWindow.objects.claim_next(
+        owner="scheduled",
+        run_id="scheduled-run",
+        claim_expires_at=now + timedelta(minutes=1),
+    )
+    assert scheduled_claim.pk == scheduled.pk
+
+    job_claim = HarvestBacklogWindow.objects.claim_next(
+        owner="backfill",
+        run_id="backfill-run",
+        claim_expires_at=now + timedelta(minutes=1),
+        backfill_job=job,
+    )
+    assert job_claim.pk == owned.pk
+
+
+def test_identical_windows_are_unique_within_but_not_across_jobs():
+    from core.models import HarvestBacklogWindow
+
+    first_job = _backfill_job("first-job")
+    second_job = _backfill_job("second-job")
+    first = _job_window(first_job)
+    HarvestBacklogWindow.objects.create(
+        backfill_job=second_job,
+        **CALL_A,
+        original_since=first.original_since,
+        original_until=first.original_until,
+        remaining_since=first.remaining_since,
+        remaining_until=first.remaining_until,
+        reason_code="operator_backfill",
+    )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        HarvestBacklogWindow.objects.create(
+            backfill_job=first_job,
+            **CALL_A,
+            original_since=first.original_since,
+            original_until=first.original_until,
+            remaining_since=first.remaining_since,
+            remaining_until=first.remaining_until,
+            reason_code="operator_backfill",
+        )
+
+    assert HarvestBacklogWindow.objects.count() == 2
+
+
+def test_expired_claim_recovery_does_not_cross_ownership_scopes():
+    from core.models import HarvestBacklogWindow
+
+    now = timezone.now()
+    job = _backfill_job("expired-job")
+    owned = _job_window(job)
+    HarvestBacklogWindow.objects.filter(pk=owned.pk).update(
+        state="claimed",
+        claim_owner="backfill",
+        claim_run_id="old-run",
+        claimed_at=now - timedelta(minutes=2),
+        claim_expires_at=now - timedelta(minutes=1),
+    )
+
+    assert HarvestBacklogWindow.objects.recover_expired_claims(now=now) == 0
+    owned.refresh_from_db()
+    assert owned.state == "claimed"
+
+    assert (
+        HarvestBacklogWindow.objects.recover_expired_claims(
+            now=now,
+            backfill_job=job,
+        )
+        == 1
+    )
+    owned.refresh_from_db()
+    assert owned.state == "pending"
+
+
+def test_deleting_one_job_cascades_only_its_windows():
+    from core.models import HarvestBacklogWindow
+
+    first_job = _backfill_job("delete-first")
+    second_job = _backfill_job("keep-second")
+    first = _job_window(first_job, offset_minutes=30)
+    second = _job_window(second_job)
+
+    first_job.delete()
+
+    assert not HarvestBacklogWindow.objects.filter(pk=first.pk).exists()
+    assert HarvestBacklogWindow.objects.filter(pk=second.pk).exists()
