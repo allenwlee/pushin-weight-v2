@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .git import CommandRunner, SubprocessRunner
+from .incidents import record_task_incident
 from .tasks import TaskConflict, TaskRegistry, TaskSnapshot, TaskValidationError
 
 
@@ -25,6 +26,24 @@ class ReleaseObservation:
 
 ReleaseExecutor = Callable[[tuple[str, ...]], ReleaseObservation]
 ProductionTail = Callable[..., TaskSnapshot]
+
+
+def _pause(
+    registry: TaskRegistry,
+    task_id: str,
+    generation: int,
+    *,
+    code: str,
+    phase: str,
+) -> TaskSnapshot:
+    snapshot = registry.pause(task_id, generation, failure_code=code)
+    record_task_incident(
+        registry,
+        snapshot,
+        phase=phase,
+        attempt=registry.current_attempt(task_id, generation),
+    )
+    return snapshot
 
 
 def _run(
@@ -125,10 +144,12 @@ def _execute_or_pause(
     observation = executor(command)
     if observation.status == "ok":
         return None
-    return registry.pause(
+    return _pause(
+        registry,
         task_id,
         generation,
-        failure_code=f"release_tail_{command[0]}_failed",
+        code=f"release_tail_{command[0]}_failed",
+        phase=f"release.{command[0]}",
     )
 
 
@@ -150,14 +171,20 @@ def run_production_tail(
             return current
         status = active_executor(("status",))
         if status.status != "ok":
-            return registry.pause(
-                task_id, generation, failure_code="release_tail_status_failed"
-            )
-        if status.candidate_sha != outcome_sha:
-            return registry.pause(
+            return _pause(
+                registry,
                 task_id,
                 generation,
-                failure_code="release_tail_candidate_mismatch",
+                code="release_tail_status_failed",
+                phase="release.status",
+            )
+        if status.candidate_sha != outcome_sha:
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="release_tail_candidate_mismatch",
+                phase="release.identity",
             )
         command: tuple[str, ...] | None
         if status.state == "idle":
@@ -185,10 +212,12 @@ def run_production_tail(
                 task_id, generation, outcome_sha=outcome_sha
             )
         else:
-            return registry.pause(
+            return _pause(
+                registry,
                 task_id,
                 generation,
-                failure_code=f"release_tail_state_{status.state}",
+                code=f"release_tail_state_{status.state}",
+                phase="release.state",
             )
         failed = _execute_or_pause(
             registry, task_id, generation, active_executor, command
@@ -210,36 +239,70 @@ def checkpoint_task(
     except (TaskConflict, TaskValidationError) as exc:
         if str(exc) not in {"task_source_drift", "task_source_missing"}:
             raise
-        return registry.pause(
+        return _pause(
+            registry,
             task_id,
             generation,
-            failure_code="task_source_drift",
+            code="task_source_drift",
+            phase="checkpoint.source",
         )
     workspace = Path(task.workspace)
     active_runner = runner or SubprocessRunner()
     head = _git(active_runner, workspace, "rev-parse", "HEAD")
     if head.returncode != 0:
-        return registry.pause(task_id, generation, failure_code="git_head_unavailable")
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="git_head_unavailable",
+            phase="checkpoint.git",
+        )
     if head.stdout.strip() != task.starting_sha:
-        return registry.pause(
-            task_id, generation, failure_code="agent_advanced_branch"
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="agent_advanced_branch",
+            phase="checkpoint.identity",
         )
     try:
         paths = _changed_paths(active_runner, workspace)
     except CheckpointError as exc:
-        return registry.pause(task_id, generation, failure_code=str(exc))
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code=str(exc),
+            phase="checkpoint.diff",
+        )
     if not paths:
-        return registry.pause(task_id, generation, failure_code="task_diff_missing")
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="task_diff_missing",
+            phase="checkpoint.diff",
+        )
     for command in task.verification_argv:
         result = _run(active_runner, workspace, command, timeout=3600)
         if result.returncode != 0:
-            return registry.pause(
-                task_id, generation, failure_code="verification_failed"
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="verification_failed",
+                phase="checkpoint.verify",
             )
     registry.mark_committing(task_id, generation)
     staged = _git(active_runner, workspace, "add", "--all", "--", *paths)
     if staged.returncode != 0:
-        return registry.pause(task_id, generation, failure_code="git_stage_failed")
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="git_stage_failed",
+            phase="checkpoint.stage",
+        )
     message = f"chore(ollija): complete {task.task_id}"
     committed = _git(
         active_runner,
@@ -252,17 +315,31 @@ def checkpoint_task(
         timeout=120,
     )
     if committed.returncode != 0:
-        return registry.pause(task_id, generation, failure_code="git_commit_failed")
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="git_commit_failed",
+            phase="checkpoint.commit",
+        )
     final = _git(active_runner, workspace, "rev-parse", "HEAD")
     status = _git(active_runner, workspace, "status", "--porcelain=v1", "-z")
     outcome_sha = final.stdout.strip()
     if final.returncode != 0 or status.returncode != 0 or status.stdout:
-        return registry.pause(
-            task_id, generation, failure_code="checkpoint_not_clean"
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="checkpoint_not_clean",
+            phase="checkpoint.verify",
         )
     if outcome_sha == task.starting_sha:
-        return registry.pause(
-            task_id, generation, failure_code="checkpoint_sha_unchanged"
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="checkpoint_sha_unchanged",
+            phase="checkpoint.identity",
         )
     if task.endpoint == "commit":
         return registry.complete(task_id, generation, outcome_sha=outcome_sha)

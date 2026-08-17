@@ -8,12 +8,37 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from .incidents import record_task_incident
 from .processes import observe_process
-from .tasks import AttemptSnapshot, TaskConflict, TaskRegistry, TaskSnapshot
-
+from .tasks import (
+    AttemptSnapshot,
+    TaskConflict,
+    TaskRegistry,
+    TaskSnapshot,
+    TaskValidationError,
+)
 
 CommandFactory = Callable[[TaskSnapshot, AttemptSnapshot], Sequence[str]]
 ReadyHandler = Callable[[TaskRegistry, str, int], None]
+
+
+def _pause(
+    registry: TaskRegistry,
+    task_id: str,
+    generation: int,
+    *,
+    code: str,
+    phase: str,
+    attempt: AttemptSnapshot | None = None,
+) -> TaskSnapshot:
+    snapshot = registry.pause(task_id, generation, failure_code=code)
+    record_task_incident(
+        registry,
+        snapshot,
+        phase=phase,
+        attempt=attempt,
+    )
+    return snapshot
 
 
 def _log_path(registry: TaskRegistry, task_id: str) -> Path:
@@ -51,7 +76,18 @@ def run_supervisor(
     after_attempt: Callable[[], None] | None = None,
 ) -> TaskSnapshot:
     while True:
-        task = registry.verify_source(task_id, generation)
+        try:
+            task = registry.verify_source(task_id, generation)
+        except (TaskConflict, TaskValidationError) as exc:
+            if str(exc) not in {"task_source_drift", "task_source_missing"}:
+                raise
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="task_source_drift",
+                phase="supervisor.source",
+            )
         attempt = registry.start_attempt(
             task_id,
             generation,
@@ -59,7 +95,14 @@ def run_supervisor(
         )
         command = tuple(str(item) for item in command_factory(task, attempt))
         if not command or any(not item for item in command):
-            return registry.pause(task_id, generation, failure_code="agent_command_invalid")
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="agent_command_invalid",
+                phase="agent.command",
+                attempt=attempt,
+            )
         _append_event(registry, task_id, "attempt_started", attempt=attempt.attempt)
         try:
             process = subprocess.Popen(
@@ -70,8 +113,27 @@ def run_supervisor(
                 start_new_session=True,
             )
         except OSError:
-            return registry.pause(task_id, generation, failure_code="agent_launch_failed")
-        identity = _observe_started_process(process.pid)
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="agent_launch_failed",
+                phase="agent.launch",
+                attempt=attempt,
+            )
+        try:
+            identity = _observe_started_process(process.pid)
+        except TaskConflict:
+            process.terminate()
+            process.wait(timeout=5)
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="child_process_identity_unavailable",
+                phase="supervisor.process_identity",
+                attempt=attempt,
+            )
         registry.record_process(
             task_id,
             generation,
@@ -102,13 +164,29 @@ def run_supervisor(
         if current.state == "cancelled":
             return current
         if exit_code == 0:
-            on_ready(registry, task_id, generation)
+            try:
+                on_ready(registry, task_id, generation)
+            except Exception:  # noqa: BLE001 - contain arbitrary checkpoint adapters
+                return _pause(
+                    registry,
+                    task_id,
+                    generation,
+                    code="checkpoint_unhandled",
+                    phase="checkpoint.unhandled",
+                    attempt=registry.current_attempt(task_id, generation),
+                )
             return registry.get(task_id)
         try:
             retry = registry.consume_restart(task_id, generation)
         except TaskConflict:
             return registry.get(task_id)
         if retry.state != "restarting":
+            record_task_incident(
+                registry,
+                retry,
+                phase="agent.restart",
+                attempt=registry.current_attempt(task_id, generation),
+            )
             return retry
 
 
@@ -127,7 +205,14 @@ def reconcile_missing_supervisor(
     attempt = registry.current_attempt(task_id, generation)
     if attempt is not None and process_alive(attempt):
         return "owned_child_alive"
-    return registry.mark_lost(task_id, generation).state
+    lost = registry.mark_lost(task_id, generation)
+    record_task_incident(
+        registry,
+        lost,
+        phase="supervisor.reconcile",
+        attempt=attempt,
+    )
+    return lost.state
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -141,8 +226,12 @@ def main(argv: list[str] | None = None) -> int:
         from .agents.registry import command_for_attempt
         from .checkpoint import checkpoint_task
     except ImportError:
-        registry.pause(
-            args.task, args.generation, failure_code="supervisor_driver_unavailable"
+        _pause(
+            registry,
+            args.task,
+            args.generation,
+            code="supervisor_driver_unavailable",
+            phase="supervisor.import",
         )
         return 2
     result = run_supervisor(

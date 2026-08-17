@@ -4,6 +4,7 @@ import stat
 import sys
 from pathlib import Path
 
+from scripts.ollija.incidents import IncidentStore
 from scripts.ollija.supervisor import reconcile_missing_supervisor, run_supervisor
 from scripts.ollija.tasks import TaskRegistry
 from tests.ollija.test_tasks import _grant
@@ -64,6 +65,8 @@ def test_supervisor_second_crash_pauses_without_third_attempt(tmp_path: Path) ->
     assert result.state == "paused"
     assert result.failure_code == "restart_budget_exhausted"
     assert registry.current_attempt(armed.task_id, armed.generation).attempt == 2
+    incidents = IncidentStore(registry.path.parent).for_task(armed.task_id)
+    assert incidents[-1].phase == "agent.restart"
 
 
 def test_cancellation_after_exit_prevents_retry(tmp_path: Path) -> None:

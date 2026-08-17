@@ -49,6 +49,26 @@ deployment, database snapshot, human approvals, production deployment, and
 visible headline to one exact Git commit (Git’s immutable code-version
 identifier).
 
+Ollija also controls bounded coding work before that release path. Codex or
+Claude can continue on `fuchitalee` after the initiating laptop terminal
+disconnects, but only after the owner gives an explicit `go`. The coding agent
+edits and tests; Ollija independently verifies the result, creates the commit,
+and stops at that commit or continues through staging and production according
+to the original grant. A durable `stop` prevents the task from silently
+restarting.
+
+```text
+owner chooses outcome + coding agent + tests
+    ↓
+one registered worktree on fuchitalee
+    ↓
+detached, observable coding run (one crash retry)
+    ↓
+Ollija-owned tests and checkpoint commit
+    ↓
+stop at commit OR continue through the release path below
+```
+
 ## Where Ollija fits in the technology stack
 
 Ollija does not replace PushinWeight or Render. It sits above them as a release
@@ -63,7 +83,7 @@ orchestration and evidence layer.
 | Git/GitHub | Source-control system | Stores the code history and identifies each candidate exactly. |
 | Google OAuth | Sign-in service | Controls who can enter staging and production. OAuth (Open Authorization) lets Google authenticate a user without PushinWeight storing that user’s Google password. |
 | Bridgewright | UI assessment tool | Inspects a rendered page and records assessment evidence; it cannot approve or release. |
-| Ollija | Release-control layer | Connects all of the above and enforces the release sequence. |
+| Ollija | Task and release-control layer | Bounds agent work, owns the verified commit, and enforces the optional release sequence. |
 
 The authoritative checkout is on `fuchitalee`. `allenwlee` is a browser and
 keyboard endpoint, not a second source-code repository. Project files,
@@ -126,6 +146,51 @@ overlay) so the desktop browser and physical iPhone can review the same local
 surface when needed.
 
 ## What happens during a normal change
+
+### 0. Run bounded coding work, if requested
+
+Ollija asks for no more than three missing choices: stop at a verified commit
+or continue to production through staging; use Codex or Claude; and which exact
+tests prove the task (or why a documentation-only task needs no test).
+
+The worktree must already be registered beneath the canonical repository:
+
+```text
+/Users/fuchitalee/development/pushin-weight-v2/.worktrees/<branch>
+```
+
+From that clean worktree, `go` records the task, its tracked plan, its origin
+terminal, and its authorized endpoint:
+
+```bash
+./bin/ollija go \
+  --task <task-id> \
+  --source docs/plans/<plan>.md \
+  --agent codex \
+  --endpoint commit \
+  --verify-argv '["pytest","tests/ollija"]'
+```
+
+The coding process runs inside a detached tmux session (a host-side terminal
+session). Closing a laptop, SSH connection, or VS Code window does not stop it.
+One child crash is retried once; a second crash pauses. Status reads never
+start or resume work.
+
+```bash
+./bin/ollija task-status <task-id>
+./bin/ollija stop <task-id>
+```
+
+`stop` records cancellation before terminating the exact process family, so a
+late success cannot resurrect the task. The worktree and uncommitted changes
+remain. A machine reboot, lost supervisor, cancellation, or paused failure
+requires another explicit `go`. Only the same task may recover its preserved
+uncommitted (“dirty”) diff; a fresh task must begin clean.
+
+The coding agent never commits or pushes. Ollija reruns the declared tests,
+stages the task diff, creates the commit, and verifies a clean tree. A
+production endpoint then uses the same staging/release engine described below;
+it is not a second deployment path.
 
 ### 1. Start a candidate
 
@@ -220,7 +285,9 @@ physical-device approval.
 
 This is the first command that can change production. It rechecks the candidate,
 refresh receipts, staging identity, deployment identity, Bridgewright evidence,
-and both owner approvals. It then fast-forwards `main` (moves the production
+both owner approvals, production routes/selectors, and one usable authenticated
+browser session. If later verification could not run, it stops before changing
+production. It then fast-forwards `main` (moves the production
 branch forward without rewriting history) to the exact approved commit and
 starts the production deployment.
 
@@ -301,11 +368,19 @@ Receipts must never contain database URLs, API keys, OAuth secrets, browser
 storage, headline text, or raw production data. The production verification
 receipt stores a headline hash rather than the headline itself.
 
+Task generations live in `.ollija/state/tasks.sqlite3`, a shared local SQLite
+ledger (a small transactional database) on `fuchitalee`. It records the coding
+tool, origin host/terminal, execution host, attempts, process identity,
+heartbeat, endpoint, and outcome. Safe incident envelopes live in
+`.ollija/state/incidents/`; they contain classifications and diagnostic route
+names, not prompts, model responses, task output, secrets, or private posts.
+
 ## Safety rules
 
 Ollija refuses mutating commands when:
 
-- the working tree is dirty;
+- a fresh task or release transition has a dirty working tree (only the same
+  terminal task may explicitly re-arm its preserved recovery diff);
 - the checkout is detached or on the wrong host;
 - the repository authority is unavailable;
 - the candidate, staging, or production SHA is inconsistent;
@@ -320,14 +395,22 @@ staging data into production, or manually create the beta tag to get past one.
 Resolve the reported condition and rerun the same idempotent command when the
 candidate has not changed.
 
+If a tool is the problem rather than the candidate, Ollija remains advisory.
+Shell, SSH, tmux, environment, and multi-machine issues route to `infra-shell`
+first. Code/test defects route to `ce-debug` and then `ce-compound` so the fix
+becomes durable documentation. A Bridgewright defect can be captured as a
+candidate-bound owner override that stays distinct from a clean automated
+assessment; it never replaces required device approval.
+
 ## The important files
 
 | File | Purpose |
 | --- | --- |
 | `bin/ollija` | The user-facing command wrapper. |
-| `scripts/ollija/` | Python implementation of state, receipts, database guards, Render integration, approvals, and verification. |
+| `scripts/ollija/` | Python implementation of task supervision, state, incidents, receipts, database guards, Render integration, approvals, and verification. |
 | `.ollija/project.yaml` | The project contract: authoritative host, branches, resources, paths, safeguards, and verification settings. |
-| `.ollija/state/` | Local runtime state and receipts. It is ignored by Git and must remain on `fuchitalee`. |
+| `.ollija/state/` | Local task ledger, incident records, runtime state, and receipts. It is ignored by Git and must remain on `fuchitalee`. |
+| `.worktrees/<branch>/` | The only allowed location for registered task worktrees. |
 | `docs/operations/ollija.md` | Detailed operational runbook and recovery procedures. |
 | `docs/operations/ollija-rollout-baseline.md` | Historical baseline and rollout record. |
 | `.agents/skills/ollija/SKILL.md` | Instructions for AI agents using Ollija. |
@@ -340,6 +423,9 @@ candidate has not changed.
 ```bash
 ./bin/ollija status          # Show the current state and exactly one next action
 ./bin/ollija doctor          # Diagnose setup and authority problems
+./bin/ollija go --help       # Arm one explicit bounded coding task
+./bin/ollija task-status     # Inspect task attribution, attempt, and heartbeat
+./bin/ollija stop <task-id>  # Durably cancel before stopping its process tree
 ./bin/ollija start           # Freeze a clean commit as a candidate
 ./bin/ollija refresh-local   # Build a guarded local review snapshot
 ./bin/ollija preview         # Start local private preview
@@ -349,6 +435,7 @@ candidate has not changed.
 ./bin/ollija assess-ui       # Record Bridgewright assessment
 ./bin/ollija approve desktop # Record owner desktop approval
 ./bin/ollija approve iphone  # Record owner physical-iPhone approval
+./bin/ollija override bridgewright --owner <id> --reason '<why>'
 ./bin/ollija release          # Promote approved candidate to production
 ./bin/ollija verify-production # Verify and seal the production release
 ```

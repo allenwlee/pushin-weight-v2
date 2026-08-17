@@ -1,4 +1,4 @@
 interface:
   display_name: "Ollija"
-  short_description: "Coach safe PushinWeight staging and releases"
-  default_prompt: "Use $ollija to inspect PushinWeight release state and guide the next safe staging or release action."
+  short_description: "Control bounded PushinWeight work and releases"
+  default_prompt: "Use $ollija to inspect authoritative task/release state, keep work in the canonical fuchitalee worktree hierarchy, and guide the next bounded task, staging, or production action."

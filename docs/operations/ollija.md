@@ -1,8 +1,10 @@
 # ollija operations
 
-ollija is PushinWeight's repo-specific staging and release coach. Run it only
-from the authoritative checkout on `fuchitalee`; `allenwlee` remains a keyboard
-and browser client and must not contain a PushinWeight checkout or ollija state.
+ollija is PushinWeight's repo-specific task and release controller. It lets a
+coding agent do bounded implementation work, then owns the verified checkpoint
+and the optional production-through-staging path. Run it only on `fuchitalee`;
+`allenwlee` remains a keyboard/browser client and must not contain a
+PushinWeight checkout, worktree, task ledger, receipt, or Ollija artifact.
 
 ## The ordinary loop
 
@@ -16,6 +18,88 @@ Use `./bin/ollija doctor` when status reports a safety or tooling problem. A
 mutating command refuses a dirty checkout, detached HEAD, unregistered
 worktree, wrong host/repository, unreachable Git authority, or a failed tool
 probe. Status and doctor do not write runtime state.
+
+## Bounded agent work
+
+Ollija does not replace Codex, Claude, or Compound Engineering. It gives one
+coding agent a narrow assignment and records the run independently of the chat
+or terminal that initiated it. Before `go`, settle three facts: the desired
+endpoint (`commit` or `production`), the coding driver (`codex` or `claude`),
+and the exact test argv (argument vector) or a bounded documentation-only
+reason.
+
+The branch must already be attached as a registered Git worktree at exactly:
+
+```text
+/Users/fuchitalee/development/pushin-weight-v2/.worktrees/<branch>
+```
+
+Create it through the repository's worktree workflow. Do not create a second
+worktree root, a nested repository, or a client-local copy. Start a fresh task
+from that clean worktree:
+
+```bash
+./bin/ollija go \
+  --task <stable-task-id> \
+  --source docs/plans/<tracked-plan>.md \
+  --agent codex \
+  --endpoint commit \
+  --verify-argv '["pytest","tests/ollija"]'
+```
+
+`--endpoint production` authorizes the same generation to continue from its
+verified commit through the existing staging and release services. Machine
+checks continue automatically. Candidate-bound desktop and physical-iPhone
+approvals still pause the run when the product contract requires them.
+
+The coding agent may edit and test only. It must leave an uncommitted diff and
+must not stage, commit, push, deploy, create another worktree, or launch another
+agent. Ollija re-runs the declared checks, stages the task worktree's complete
+diff, creates the commit, and confirms the tree is clean. An agent-created
+commit, changed plan, missing diff, or failing gate pauses instead of being
+trusted.
+
+### Observe, stop, and recover
+
+The detached tmux supervisor (a terminal session that remains on the host)
+survives loss of SSH, VS Code, or the initiating terminal. Inspect it from any
+later session routed to `fuchitalee`:
+
+```bash
+./bin/ollija task-status <task-id> --json
+./bin/ollija stop <task-id> --json
+```
+
+`stop` writes durable cancellation before it signals the recorded process
+group. It does not delete the worktree or uncommitted files. One unexpected
+child-agent crash gets one retry. A second crash, missing supervisor, or host
+reboot does not restart automatically; a new explicit `go` is required.
+
+A fresh task must be clean. The one exception is recovery: the same paused,
+cancelled, failed, or lost task may be explicitly re-armed with its preserved
+dirty diff. Here “dirty” means Git sees changes that have not been committed.
+Another task cannot claim that diff.
+
+Task generations and attempt attribution are stored in the shared SQLite
+ledger at `.ollija/state/tasks.sqlite3` under the canonical checkout. This
+records coding driver, origin host/terminal, execution host, process identity,
+heartbeat, endpoint, restart use, and outcome without requiring agents to add
+authorship lines to documents.
+
+### Failure routes
+
+Ollija writes only bounded incident facts under `.ollija/state/incidents/`—no
+prompt body, provider response, browser session, secret, private post content,
+or raw task output. It recommends, but does not autonomously launch, the
+diagnostic workflow:
+
+- environment, SSH, shell, tmux, virtualenv, or multi-machine problem:
+  `infra-shell` first, then `ce-compound` after the fix;
+- code or test defect: `ce-debug`, then `ce-compound`;
+- UI assessment defect: Bridgewright plus `ce-debug` when code is implicated,
+  then `ce-compound`;
+- release verification defect: recompute Ollija status, then use `ce-debug`
+  and `ce-compound`.
 
 ## Local production-derived data
 
@@ -207,9 +291,23 @@ Any commit after `start`, any replacement staging deployment, or any UI-impact
 change makes the old evidence stale. Commit the correction and repeat from
 `start`; do not edit receipt JSON.
 
+If Bridgewright itself is defective, the owner may record a narrow exception:
+
+```bash
+./bin/ollija override bridgewright \
+  --owner <owner-id> \
+  --reason '<what failed and why the exception is justified>'
+```
+
+The immutable receipt remains visibly different from clean automated evidence
+and is bound to the exact candidate and staging deployment. It does not replace
+desktop or physical-iPhone approval.
+
 ## Exact-SHA production release
 
-Release is deliberately two commands. The first command re-reads Git, Render,
+Release is deliberately two commands. Before changing `main`, the first
+command verifies that the configured production routes/selectors and exactly
+one usable authenticated browser mode are available. It then re-reads Git, Render,
 refresh, migration/recovery, Bridgewright, desktop, and iPhone authorities. It
 records the currently live production service set, then asks the Git server to
 fast-forward `main` to the exact approved SHA. There is no force push or merge
@@ -273,6 +371,9 @@ push the annotated beta tag and seal the production receipt.
   release complete. `ollija verify-production` can be retried after the same
   SHA is healthy; a code correction is a new candidate and needs new staging
   approvals.
+- If the exact candidate is already live but lacks a sealed production
+  receipt, status returns `releasing` and the next action is
+  `ollija verify-production`. Never invoke `release` again for that SHA.
 - If the candidate is live but the headline/browser check fails, preserve the
   last-known-good receipt and fix forward. Redeploying old code is safe only
   when the refresh receipt proved old-code compatibility with the migrated

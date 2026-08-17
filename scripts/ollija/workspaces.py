@@ -55,13 +55,16 @@ def prepare_runtime_links(config: ProjectConfig) -> Path:
 
 
 def validate_task_workspace(
-    config: ProjectConfig, observation: GitObservation
+    config: ProjectConfig,
+    observation: GitObservation,
+    *,
+    allow_dirty_recovery: bool = False,
 ) -> Path:
     if observation.detached:
         raise WorkspaceError("task_workspace_detached")
     if not observation.registered_worktree:
         raise WorkspaceError("task_workspace_unregistered")
-    if observation.dirty_paths:
+    if observation.dirty_paths and not allow_dirty_recovery:
         raise WorkspaceError("task_workspace_dirty")
     if not observation.branch:
         raise WorkspaceError("task_branch_invalid")

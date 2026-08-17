@@ -11,6 +11,26 @@ Recorded on 2026-08-14 while establishing the safety baseline for ollija.
 - Implementation branch: `feat/ollija-staging-release`
 - Remote visibility: public; preservation refs containing raw research or screenshots remain local-only.
 
+### Current task-worktree authority
+
+The preservation list below is historical. Current bounded agent work uses one
+canonical hierarchy only:
+
+```text
+/Users/fuchitalee/development/pushin-weight-v2/.worktrees/<branch>
+```
+
+Every entry must be a registered worktree sharing the canonical `.git`
+directory. `fuchitalee` owns the shared `.ollija/state/tasks.sqlite3` ledger,
+incident records, runtime links, and release receipts. No client machine may
+hold a checkout or recovery copy. A task branch is never shared by two
+worktrees; active or dirty recovery worktrees are not moved or removed.
+
+Loss of a client session does not transfer authority because the detached
+supervisor already runs on `fuchitalee`. Loss of `fuchitalee` does not promote
+another host or auto-resume a task; use the authority-transfer procedure below
+and then issue a new explicit `go`.
+
 ## Preserved working state
 
 | Original state | Preservation ref | Commit | Disposition |

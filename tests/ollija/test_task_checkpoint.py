@@ -10,6 +10,7 @@ from scripts.ollija.checkpoint import (
     checkpoint_task,
     run_production_tail,
 )
+from scripts.ollija.incidents import IncidentStore
 from scripts.ollija.tasks import TaskRegistry
 from tests.ollija.test_tasks import _grant
 
@@ -76,6 +77,9 @@ def test_failing_gate_preserves_uncommitted_diff(tmp_path: Path) -> None:
     assert result.failure_code == "verification_failed"
     assert _git(root, "rev-parse", "HEAD") == armed.starting_sha
     assert "feature.txt" in _git(root, "status", "--porcelain")
+    incidents = IncidentStore(registry.path.parent).for_task(armed.task_id)
+    assert incidents[-1].phase == "checkpoint.verify"
+    assert incidents[-1].routes == ("ce-debug", "ce-compound")
 
 
 def test_zero_exit_without_task_diff_is_incomplete(tmp_path: Path) -> None:

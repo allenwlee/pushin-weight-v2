@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from scripts.ollija.adapters.base import AuthorityObservation
 from scripts.ollija.agents.base import AgentProbe
 from scripts.ollija.config import (
     AuthorityConfig,
@@ -12,16 +14,19 @@ from scripts.ollija.config import (
     StateConfig,
 )
 from scripts.ollija.git import CommandOutcome, GitObservation
+from scripts.ollija.incidents import record_task_incident
+from scripts.ollija.results import CommandResult, NextAction
 from scripts.ollija.status import StatusFacts
-from scripts.ollija.adapters.base import AuthorityObservation
 from scripts.ollija.task_control import (
     GoRequest,
     TaskControlError,
     build_task_status_result,
     go_task,
+    task_registry_path,
     with_task_status,
 )
-from scripts.ollija.results import CommandResult, NextAction
+from scripts.ollija.tasks import TaskRegistry
+from scripts.ollija.workspaces import WorkspaceError
 
 
 class _Runner:
@@ -163,14 +168,55 @@ def test_go_rejects_untracked_source_and_duplicate_active_task(tmp_path: Path) -
             launcher=lambda **_kwargs: "unused",
         )
 
-    kwargs = dict(
-        runner=_Runner(CommandOutcome(0, "docs/plans/task.md\n", "")),
-        driver=_Driver(),
-        launcher=lambda **_kwargs: "session",
-    )
+    kwargs = {
+        "runner": _Runner(CommandOutcome(0, "docs/plans/task.md\n", "")),
+        "driver": _Driver(),
+        "launcher": lambda **_kwargs: "session",
+    }
     go_task(config, facts, request, **kwargs)
     with pytest.raises(Exception, match="active"):
         go_task(config, facts, request, **kwargs)
+
+
+def test_only_same_terminal_task_can_rearm_its_preserved_dirty_diff(
+    tmp_path: Path,
+) -> None:
+    canonical, workspace = _setup(tmp_path)
+    config = _config(canonical, workspace)
+    facts = _facts(canonical, workspace)
+    request = GoRequest(
+        task_id="task-1",
+        parent_task_id=None,
+        source_path="docs/plans/task.md",
+        agent_kind="codex",
+        endpoint="commit",
+        verification_argv=(("pytest",),),
+        no_test_reason=None,
+    )
+    kwargs = {
+        "runner": _Runner(CommandOutcome(0, "docs/plans/task.md\n", "")),
+        "driver": _Driver(),
+        "launcher": lambda **_kwargs: "session",
+    }
+    first = go_task(config, facts, request, **kwargs)
+    registry = TaskRegistry(task_registry_path(config))
+    registry.pause(first.task_id, first.generation, failure_code="verification_failed")
+    dirty_facts = StatusFacts(
+        authority=facts.authority,
+        git=replace(facts.git, dirty_paths=("feature.py",)),
+        lifecycle_state=facts.lifecycle_state,
+        package_version=facts.package_version,
+        checks=facts.checks,
+    )
+
+    recovered = go_task(config, dirty_facts, request, **kwargs)
+
+    assert recovered.generation == 2
+    assert recovered.state == "armed"
+
+    fresh = replace(request, task_id="task-2")
+    with pytest.raises(WorkspaceError, match="dirty"):
+        go_task(config, dirty_facts, fresh, **kwargs)
 
 
 def test_task_status_is_read_only_and_reports_one_next_action(tmp_path: Path) -> None:
@@ -220,3 +266,46 @@ def test_task_status_is_read_only_and_reports_one_next_action(tmp_path: Path) ->
     assert combined.state == "armed"
     assert combined.next_action.command == "ollija task-status task-1"
     assert combined.details["release_state"] == "blocked"
+
+
+def test_paused_task_status_routes_failure_and_projects_safe_incident(
+    tmp_path: Path,
+) -> None:
+    canonical, workspace = _setup(tmp_path)
+    config = _config(canonical, workspace)
+    go_task(
+        config,
+        _facts(canonical, workspace),
+        GoRequest(
+            task_id="task-1",
+            parent_task_id=None,
+            source_path="docs/plans/task.md",
+            agent_kind="codex",
+            endpoint="commit",
+            verification_argv=(("pytest",),),
+            no_test_reason=None,
+        ),
+        runner=_Runner(CommandOutcome(0, "", "")),
+        driver=_Driver(),
+        launcher=lambda **_kwargs: "session",
+    )
+    registry = TaskRegistry(task_registry_path(config))
+    paused = registry.pause(
+        "task-1",
+        1,
+        failure_code="verification_failed",
+    )
+    record_task_incident(
+        registry,
+        paused,
+        phase="checkpoint.verify",
+    )
+
+    result = build_task_status_result(config, task_id="task-1")
+
+    assert result.next_action is not None
+    assert result.next_action.command == "ce-debug"
+    assert result.details["incidents"][0]["routes"] == [
+        "ce-debug",
+        "ce-compound",
+    ]

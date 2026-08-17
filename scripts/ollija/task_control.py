@@ -8,10 +8,17 @@ from .agents.base import AgentDriver
 from .agents.claude import ClaudeDriver
 from .config import ProjectConfig
 from .git import CommandRunner
+from .incidents import IncidentStore, guidance_for_failure, record_task_incident
 from .processes import start_detached_supervisor, stop_task_processes
 from .results import CommandResult, NextAction
 from .status import StatusFacts
-from .tasks import TaskGrant, TaskRegistry, TaskSnapshot, digest_task_source
+from .tasks import (
+    TaskGrant,
+    TaskRegistry,
+    TaskSnapshot,
+    TaskValidationError,
+    digest_task_source,
+)
 from .workspaces import prepare_runtime_links, validate_task_workspace
 
 
@@ -51,10 +58,34 @@ def go_task(
 ) -> TaskSnapshot:
     if not facts.authority.mutation_allowed:
         raise TaskControlError("task_authority_blocked")
-    workspace = validate_task_workspace(config, facts.git)
     source = Path(request.source_path)
     if source.is_absolute() or ".." in source.parts:
         raise TaskControlError("task_source_path_invalid")
+    source_digest = digest_task_source(
+        facts.git.repository_root,
+        request.source_path,
+    )
+    existing_registry = TaskRegistry.open_if_exists(task_registry_path(config))
+    prior = None
+    if existing_registry is not None:
+        try:
+            prior = existing_registry.get(request.task_id)
+        except TaskValidationError as exc:
+            if str(exc) != "task_missing":
+                raise
+    recoverable = bool(
+        prior is not None
+        and prior.state in {"paused", "cancelled", "lost", "failed"}
+        and prior.workspace == str(facts.git.repository_root.resolve())
+        and prior.branch == facts.git.branch
+        and prior.source_path == request.source_path
+        and prior.source_digest == source_digest
+    )
+    workspace = validate_task_workspace(
+        config,
+        facts.git,
+        allow_dirty_recovery=recoverable,
+    )
     tracked = runner.run(
         ("git", "ls-files", "--error-unmatch", "--", request.source_path),
         cwd=workspace,
@@ -68,13 +99,13 @@ def go_task(
     if not probe.available or probe.version is None:
         raise TaskControlError(probe.reason or "task_agent_unavailable")
     prepare_runtime_links(config)
-    registry = TaskRegistry(task_registry_path(config))
+    registry = existing_registry or TaskRegistry(task_registry_path(config))
     snapshot = registry.arm(
         TaskGrant(
             task_id=request.task_id,
             parent_task_id=request.parent_task_id,
             source_path=request.source_path,
-            source_digest=digest_task_source(workspace, request.source_path),
+            source_digest=source_digest,
             workspace=workspace,
             branch=str(facts.git.branch),
             starting_sha=str(facts.git.head_sha),
@@ -105,10 +136,15 @@ def go_task(
             workspace=workspace,
         )
     except Exception as exc:
-        registry.pause(
+        paused = registry.pause(
             snapshot.task_id,
             snapshot.generation,
             failure_code="supervisor_launch_failed",
+        )
+        record_task_incident(
+            registry,
+            paused,
+            phase="supervisor.launch",
         )
         raise TaskControlError("supervisor_launch_failed") from exc
     return registry.get(snapshot.task_id)
@@ -132,7 +168,13 @@ def _next_action(task: TaskSnapshot) -> NextAction:
         )
     if task.state == "awaiting_approval":
         return NextAction("ollija status", "Complete the reported owner approval.")
-    if task.state in {"paused", "cancelled", "lost", "failed"}:
+    if task.state in {"paused", "lost", "failed"} and task.failure_code:
+        guidance = guidance_for_failure(task.failure_code)
+        return NextAction(
+            guidance.routes[0],
+            "Diagnose the preserved failure, then explicitly re-arm with ollija go.",
+        )
+    if task.state == "cancelled":
         return NextAction(
             "ollija go --help",
             "Inspect preserved work, then explicitly re-arm a new generation.",
@@ -154,9 +196,15 @@ def build_task_status_result(
             details={"tasks": []},
         )
     tasks = registry.list_tasks()
-    selected = registry.get(task_id) if task_id else next(
-        (task for task in tasks if task.state not in {"succeeded", "failed", "cancelled", "lost", "paused"}),
-        tasks[-1] if tasks else None,
+    active = tuple(
+        task
+        for task in tasks
+        if task.state not in {"succeeded", "failed", "cancelled", "lost", "paused"}
+    )
+    selected = (
+        registry.get(task_id)
+        if task_id
+        else max(active or tasks, key=lambda task: task.updated_at, default=None)
     )
     if selected is None:
         return CommandResult(
@@ -168,6 +216,7 @@ def build_task_status_result(
             details={"tasks": []},
         )
     attempt = registry.current_attempt(selected.task_id, selected.generation)
+    incidents = IncidentStore(registry.path.parent).for_task(selected.task_id)
     return CommandResult(
         command="task-status",
         status="ok",
@@ -180,6 +229,7 @@ def build_task_status_result(
         details={
             "task": selected.to_dict(),
             "attempt": attempt.to_dict() if attempt else None,
+            "incidents": [incident.to_dict() for incident in incidents],
             "tasks": [task.to_dict() for task in tasks],
         },
     )
@@ -206,23 +256,26 @@ def with_task_status(base: CommandResult, config: ProjectConfig) -> CommandResul
     if registry is None:
         return base
     tasks = registry.list_tasks()
-    active = next(
+    active = max(
         (
             task
             for task in tasks
             if task.state
             in {"armed", "running", "restarting", "committing", "awaiting_approval", "releasing"}
         ),
-        None,
+        key=lambda task: task.updated_at,
+        default=None,
     )
     details = {**base.details, "tasks": [task.to_dict() for task in tasks]}
     if active is None:
         return replace(base, details=details)
     attempt = registry.current_attempt(active.task_id, active.generation)
+    incidents = IncidentStore(registry.path.parent).for_task(active.task_id)
     details.update(
         {
             "task": active.to_dict(),
             "attempt": attempt.to_dict() if attempt else None,
+            "incidents": [incident.to_dict() for incident in incidents],
             "release_state": base.state,
         }
     )
