@@ -946,12 +946,17 @@ def _persist_attribution(
 # ============================================================================
 
 
-def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
+def plan_calls_for_cycle(
+    cfg: Config | None = None,
+    *,
+    brand_filter: list[str] | None = None,
+) -> list[PlannedCall]:
     """Plan harvest calls from settings — shared by CycleRunner and backfill.
 
-    Reads X_MONITOR_LIST_ID, brand filter, primary keywords, and
-    x_query_specs from Django settings. Returns empty list when the
-    list ID is not configured.
+    Reads X_MONITOR_LIST_ID, primary keywords, and x_query_specs from the
+    shared config sources. ``brand_filter`` is explicit for durable backfill
+    jobs; when omitted, the scheduled-cycle settings fallback is preserved.
+    Returns empty list when the list ID is not configured.
 
     The optional `cfg` parameter exists so production callers can pass
     the loaded Config (avoids a second disk read for callers that
@@ -986,14 +991,23 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
     else:
         primary_keywords = _load_primary_keywords()
 
-    brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
-    if brand_filter_raw and isinstance(brand_filter_raw, str):
-        brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
-        if brand_filter:
-            primary_keywords = {
-                k: v for k, v in primary_keywords.items() if k in brand_filter
-            }
-            logger.info("plan_calls_for_cycle: brand filter active — %s", brand_filter)
+    effective_brand_filter = brand_filter
+    if effective_brand_filter is None:
+        brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
+        if brand_filter_raw and isinstance(brand_filter_raw, str):
+            effective_brand_filter = [
+                b.strip() for b in brand_filter_raw.split(",") if b.strip()
+            ]
+    if effective_brand_filter:
+        primary_keywords = {
+            k: v
+            for k, v in primary_keywords.items()
+            if k in effective_brand_filter
+        }
+        logger.info(
+            "plan_calls_for_cycle: brand filter active — %s",
+            effective_brand_filter,
+        )
 
     return plan_calls(
         list_id,
