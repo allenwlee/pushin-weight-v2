@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .git import CommandRunner, SubprocessRunner
-from .tasks import TaskRegistry, TaskSnapshot
+from .tasks import AttemptSnapshot, TaskRegistry, TaskSnapshot
 
 
 class ProcessControlError(ValueError):
@@ -34,6 +34,26 @@ def supervisor_session_name(task_id: str, generation: int) -> str:
     return f"ollija-{safe_task}-g{generation}"
 
 
+def supervisor_session_exists(
+    task_id: str,
+    generation: int,
+    *,
+    workspace: Path,
+    runner: CommandRunner | None = None,
+) -> bool:
+    session = supervisor_session_name(task_id, generation)
+    result = (runner or SubprocessRunner()).run(
+        ("tmux", "has-session", "-t", f"={session}"),
+        cwd=workspace,
+        timeout=5,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    raise ProcessControlError("tmux_status_unavailable")
+
+
 def start_detached_supervisor(
     *,
     registry_path: Path,
@@ -45,15 +65,13 @@ def start_detached_supervisor(
 ) -> str:
     session = supervisor_session_name(task_id, generation)
     active_runner = runner or SubprocessRunner()
-    existing = active_runner.run(
-        ("tmux", "has-session", "-t", f"={session}"),
-        cwd=workspace,
-        timeout=5,
-    )
-    if existing.returncode == 0:
+    if supervisor_session_exists(
+        task_id,
+        generation,
+        workspace=workspace,
+        runner=active_runner,
+    ):
         return session
-    if existing.returncode not in {1}:
-        raise ProcessControlError("tmux_status_unavailable")
     command = (
         "tmux",
         "new-session",
@@ -96,6 +114,23 @@ def observe_process(pid: int) -> ProcessIdentity | None:
         pgid=int(fields[1]),
         birth=" ".join(fields[2:7]),
         command=fields[7],
+    )
+
+
+def attempt_process_is_alive(attempt: AttemptSnapshot) -> bool:
+    if (
+        attempt.pid is None
+        or attempt.pgid is None
+        or attempt.process_birth is None
+    ):
+        return False
+    observed = observe_process(attempt.pid)
+    return bool(
+        observed is not None
+        and observed.pid == attempt.pid
+        and observed.pgid == attempt.pgid
+        and observed.birth == attempt.process_birth
+        and attempt.pid == attempt.pgid
     )
 
 
@@ -157,6 +192,8 @@ def stop_task_processes(
     registry: TaskRegistry,
     task_id: str,
     generation: int,
+    *,
+    runner: CommandRunner | None = None,
 ) -> TaskSnapshot:
     """Seal cancellation before sending any process signal."""
 
@@ -164,16 +201,29 @@ def stop_task_processes(
     if stopped.state != "cancelled":
         return stopped
     attempt = registry.current_attempt(task_id, generation)
+    process_error: ProcessControlError | None = None
     if (
-        attempt is None
-        or attempt.pid is None
-        or attempt.pgid is None
-        or attempt.process_birth is None
+        attempt is not None
+        and attempt.pid is not None
+        and attempt.pgid is not None
+        and attempt.process_birth is not None
     ):
-        return stopped
-    terminate_owned_process(
-        pid=attempt.pid,
-        pgid=attempt.pgid,
-        process_birth=attempt.process_birth,
+        try:
+            terminate_owned_process(
+                pid=attempt.pid,
+                pgid=attempt.pgid,
+                process_birth=attempt.process_birth,
+            )
+        except ProcessControlError as exc:
+            process_error = exc
+    session = supervisor_session_name(task_id, generation)
+    closed = (runner or SubprocessRunner()).run(
+        ("tmux", "kill-session", "-t", f"={session}"),
+        cwd=Path(stopped.workspace),
+        timeout=5,
     )
+    if closed.returncode not in {0, 1}:
+        raise ProcessControlError("tmux_supervisor_stop_failed")
+    if process_error is not None:
+        raise process_error
     return stopped

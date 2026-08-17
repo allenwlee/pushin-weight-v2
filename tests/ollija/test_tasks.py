@@ -164,6 +164,32 @@ def test_attempt_process_identity_and_exit_are_durable(tmp_path: Path) -> None:
     assert reopened == finished
 
 
+def test_cancellation_rejects_process_identity_recorded_after_stop(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    registry = TaskRegistry(tmp_path / "state" / "tasks.sqlite3")
+    armed = registry.arm(_grant(workspace))
+    attempt = registry.start_attempt(armed.task_id, armed.generation)
+
+    registry.cancel(armed.task_id, armed.generation)
+
+    with pytest.raises(TaskConflict, match="process_record_state_invalid"):
+        registry.record_process(
+            armed.task_id,
+            armed.generation,
+            attempt.attempt,
+            pid=1234,
+            pgid=1234,
+            process_birth="Mon Aug 17 12:00:00 2026",
+        )
+    stored = registry.current_attempt(armed.task_id, armed.generation)
+    assert stored is not None
+    assert stored.state == "starting"
+    assert stored.pid is None
+
+
 def test_rearm_creates_new_generation_without_erasing_cancelled_history(
     tmp_path: Path,
 ) -> None:

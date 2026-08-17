@@ -63,7 +63,11 @@ from .task_control import (
     with_task_status,
 )
 from .tasks import TaskError
-from .verification import VerificationError, production_browser_probe
+from .verification import (
+    VerificationError,
+    observe_configured_headline,
+    production_browser_probe,
+)
 from .versioning import VersionError, parse_beta_version
 from .workspaces import WorkspaceError
 
@@ -709,7 +713,8 @@ def _release(config, facts) -> CommandResult:
         return blocked
     # A release must not make main live unless production verification can
     # actually run in this same environment afterward.
-    production_browser_probe(config.verification)
+    browser_probe = production_browser_probe(config.verification)
+    observe_configured_headline(config.verification, browser_probe)
     evidence, last_known_good = promote_candidate(
         config=config,
         git=facts.git,

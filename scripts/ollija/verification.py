@@ -128,6 +128,22 @@ def production_browser_probe(
     return CdpBrowserProbe(selected_cdp)
 
 
+def observe_configured_headline(
+    verification: Mapping[str, object],
+    browser_probe: BrowserProbe,
+) -> BrowserObservation:
+    base_url = _required_string(verification, "production_base_url")
+    headline_path = _required_string(verification, "headline_path")
+    return browser_probe.observe_headline(
+        url=urljoin(base_url.rstrip("/") + "/", headline_path.lstrip("/")),
+        selector=_required_string(verification, "headline_selector"),
+        unavailable_text=_required_string(
+            verification,
+            "headline_unavailable_text",
+        ),
+    )
+
+
 class PlaywrightBrowserProbe:
     """Exercise the real authenticated page with an ignored storage-state file."""
 

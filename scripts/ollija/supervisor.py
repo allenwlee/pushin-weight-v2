@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from .incidents import record_task_incident
-from .processes import observe_process
+from .processes import observe_process, terminate_owned_process
 from .tasks import (
     AttemptSnapshot,
     TaskConflict,
@@ -137,14 +137,33 @@ def run_supervisor(
                 phase="supervisor.process_identity",
                 attempt=attempt,
             )
-        registry.record_process(
-            task_id,
-            generation,
-            attempt.attempt,
-            pid=identity.pid,
-            pgid=identity.pgid,
-            process_birth=identity.birth,
-        )
+        try:
+            registry.record_process(
+                task_id,
+                generation,
+                attempt.attempt,
+                pid=identity.pid,
+                pgid=identity.pgid,
+                process_birth=identity.birth,
+            )
+        except TaskConflict:
+            terminate_owned_process(
+                pid=identity.pid,
+                pgid=identity.pgid,
+                process_birth=identity.birth,
+            )
+            process.wait(timeout=5)
+            current = registry.get(task_id)
+            if not current.is_active:
+                return current
+            return _pause(
+                registry,
+                task_id,
+                generation,
+                code="child_process_registration_failed",
+                phase="supervisor.process_identity",
+                attempt=attempt,
+            )
         while True:
             try:
                 exit_code = process.wait(timeout=heartbeat_interval)

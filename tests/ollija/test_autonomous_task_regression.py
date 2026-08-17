@@ -203,6 +203,14 @@ def test_detached_stop_preserves_dirty_work_and_never_restarts(
         assert registry.current_attempt(armed.task_id, armed.generation).attempt == 1
         assert output.is_file()
         assert "feature.txt" in _git(workspace, "status", "--porcelain")
+        assert observe_process(attempt.pid or -1) is None
+        assert subprocess.run(
+            ["tmux", "has-session", "-t", f"={session}"],
+            cwd=workspace,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).returncode != 0
     finally:
         _kill_session(session, workspace)
         shutil.rmtree(socket_root, ignore_errors=True)

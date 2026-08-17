@@ -496,3 +496,33 @@ def test_release_refuses_to_advance_main_without_browser_prerequisite(
         _release(config, SimpleNamespace())
 
     assert advanced == []
+
+
+def test_release_refuses_to_advance_main_when_browser_session_cannot_observe_dom(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _configured(tmp_path)
+    monkeypatch.setattr(
+        "scripts.ollija.cli._preflight_mutation",
+        lambda _command, _facts: None,
+    )
+
+    class _FailingBrowser:
+        def observe_headline(self, **_kwargs):
+            raise VerificationError("production_browser_probe_failed")
+
+    monkeypatch.setattr(
+        "scripts.ollija.cli.production_browser_probe",
+        lambda _verification: _FailingBrowser(),
+    )
+    advanced: list[bool] = []
+    monkeypatch.setattr(
+        "scripts.ollija.cli.promote_candidate",
+        lambda **_kwargs: advanced.append(True),
+    )
+
+    with pytest.raises(VerificationError, match="production_browser_probe_failed"):
+        _release(config, SimpleNamespace())
+
+    assert advanced == []

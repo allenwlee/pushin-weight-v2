@@ -742,13 +742,21 @@ class TaskRegistry:
         if pid < 2 or pgid < 2 or not process_birth or len(process_birth) > 100:
             raise TaskValidationError("task_process_identity_invalid")
         with self._transaction() as connection:
-            self._require_current(connection, task_id, generation)
-            connection.execute(
+            current = self._require_current(connection, task_id, generation)
+            if str(current["state"]) != "running":
+                raise TaskConflict("process_record_state_invalid")
+            stored_attempt = self._attempt(connection, task_id, generation, attempt)
+            if stored_attempt.state != "starting":
+                raise TaskConflict("process_record_attempt_invalid")
+            updated = connection.execute(
                 """UPDATE attempts
                       SET state = 'running', pid = ?, pgid = ?, process_birth = ?
-                    WHERE task_id = ? AND generation = ? AND attempt = ?""",
+                    WHERE task_id = ? AND generation = ? AND attempt = ?
+                      AND state = 'starting'""",
                 (pid, pgid, process_birth, task_id, generation, attempt),
             )
+            if updated.rowcount != 1:
+                raise TaskConflict("process_record_attempt_invalid")
             return self._attempt(connection, task_id, generation, attempt)
 
     def current_attempt(self, task_id: str, generation: int) -> AttemptSnapshot | None:

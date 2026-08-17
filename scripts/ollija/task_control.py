@@ -9,9 +9,15 @@ from .agents.claude import ClaudeDriver
 from .config import ProjectConfig
 from .git import CommandRunner
 from .incidents import IncidentStore, guidance_for_failure, record_task_incident
-from .processes import start_detached_supervisor, stop_task_processes
+from .processes import (
+    attempt_process_is_alive,
+    start_detached_supervisor,
+    stop_task_processes,
+    supervisor_session_exists,
+)
 from .results import CommandResult, NextAction
 from .status import StatusFacts
+from .supervisor import reconcile_missing_supervisor
 from .tasks import (
     TaskGrant,
     TaskRegistry,
@@ -38,10 +44,34 @@ class GoRequest:
 
 
 SupervisorLauncher = Callable[..., str]
+TaskReconciler = Callable[[TaskRegistry, TaskSnapshot], str]
 
 
 def task_registry_path(config: ProjectConfig) -> Path:
     return config.state_root / "tasks.sqlite3"
+
+
+def reconcile_active_task(
+    registry: TaskRegistry,
+    task: TaskSnapshot,
+    *,
+    session_probe: Callable[..., bool] = supervisor_session_exists,
+    process_probe: Callable[..., bool] = attempt_process_is_alive,
+) -> str:
+    if not task.is_active:
+        return task.state
+    if session_probe(
+        task.task_id,
+        task.generation,
+        workspace=Path(task.workspace),
+    ):
+        return task.state
+    return reconcile_missing_supervisor(
+        registry,
+        task.task_id,
+        task.generation,
+        process_alive=process_probe,
+    )
 
 
 def go_task(
@@ -52,6 +82,7 @@ def go_task(
     runner: CommandRunner,
     driver: AgentDriver,
     launcher: SupervisorLauncher = start_detached_supervisor,
+    reconciler: TaskReconciler = reconcile_active_task,
     origin_host: str = "fuchitalee",
     origin_terminal: str = "unknown",
     execution_host: str = "fuchitalee",
@@ -73,6 +104,9 @@ def go_task(
         except TaskValidationError as exc:
             if str(exc) != "task_missing":
                 raise
+    if prior is not None and prior.is_active:
+        reconciler(existing_registry, prior)
+        prior = existing_registry.get(request.task_id)
     recoverable = bool(
         prior is not None
         and prior.state in {"paused", "cancelled", "lost", "failed"}

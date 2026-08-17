@@ -112,11 +112,20 @@ def test_stop_commits_cancellation_then_kills_only_owned_process_group(
             process_birth=identity.birth,
         )
 
-        stopped = stop_task_processes(registry, armed.task_id, armed.generation)
+        runner = _Runner([CommandOutcome(1, "", "missing")])
+        stopped = stop_task_processes(
+            registry,
+            armed.task_id,
+            armed.generation,
+            runner=runner,
+        )
 
         assert stopped.state == "cancelled"
         owned.wait(timeout=5)
         assert observe_process(unrelated.pid) is not None
+        assert runner.commands == [
+            ("tmux", "kill-session", "-t", "=ollija-task-1-g1")
+        ]
     finally:
         if owned.poll() is None:
             os.killpg(owned.pid, 9)
@@ -124,3 +133,26 @@ def test_stop_commits_cancellation_then_kills_only_owned_process_group(
         if unrelated.poll() is None:
             os.killpg(unrelated.pid, 9)
             unrelated.wait(timeout=5)
+
+
+def test_stop_terminates_exact_supervisor_before_process_is_recorded(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    registry = TaskRegistry(tmp_path / "state" / "tasks.sqlite3")
+    armed = registry.arm(_grant(workspace))
+    registry.start_attempt(armed.task_id, armed.generation)
+    runner = _Runner([CommandOutcome(0, "", "")])
+
+    stopped = stop_task_processes(
+        registry,
+        armed.task_id,
+        armed.generation,
+        runner=runner,
+    )
+
+    assert stopped.state == "cancelled"
+    assert runner.commands == [
+        ("tmux", "kill-session", "-t", "=ollija-task-1-g1")
+    ]

@@ -22,6 +22,7 @@ from scripts.ollija.task_control import (
     TaskControlError,
     build_task_status_result,
     go_task,
+    reconcile_active_task,
     task_registry_path,
     with_task_status,
 )
@@ -172,10 +173,48 @@ def test_go_rejects_untracked_source_and_duplicate_active_task(tmp_path: Path) -
         "runner": _Runner(CommandOutcome(0, "docs/plans/task.md\n", "")),
         "driver": _Driver(),
         "launcher": lambda **_kwargs: "session",
+        "reconciler": lambda _registry, task: task.state,
     }
     go_task(config, facts, request, **kwargs)
     with pytest.raises(Exception, match="active"):
         go_task(config, facts, request, **kwargs)
+
+
+def test_go_reconciles_a_missing_supervisor_then_arms_a_new_generation(
+    tmp_path: Path,
+) -> None:
+    canonical, workspace = _setup(tmp_path)
+    config = _config(canonical, workspace)
+    facts = _facts(canonical, workspace)
+    request = GoRequest(
+        task_id="task-1",
+        parent_task_id=None,
+        source_path="docs/plans/task.md",
+        agent_kind="codex",
+        endpoint="commit",
+        verification_argv=(("pytest",),),
+        no_test_reason=None,
+    )
+    kwargs = {
+        "runner": _Runner(CommandOutcome(0, "docs/plans/task.md\n", "")),
+        "driver": _Driver(),
+        "launcher": lambda **_kwargs: "session",
+    }
+    first = go_task(config, facts, request, **kwargs)
+    registry = TaskRegistry(task_registry_path(config))
+
+    reconciled = reconcile_active_task(
+        registry,
+        first,
+        session_probe=lambda *_args, **_kwargs: False,
+        process_probe=lambda _attempt: False,
+    )
+    recovered = go_task(config, facts, request, **kwargs)
+
+    assert reconciled == "lost"
+    assert registry.get_generation(first.task_id, first.generation).state == "lost"
+    assert recovered.generation == 2
+    assert recovered.state == "armed"
 
 
 def test_only_same_terminal_task_can_rearm_its_preserved_dirty_diff(

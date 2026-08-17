@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from scripts.ollija.incidents import IncidentStore
+from scripts.ollija.processes import observe_process
 from scripts.ollija.supervisor import reconcile_missing_supervisor, run_supervisor
 from scripts.ollija.tasks import TaskRegistry
 from tests.ollija.test_tasks import _grant
@@ -91,6 +92,48 @@ def test_cancellation_after_exit_prevents_retry(tmp_path: Path) -> None:
 
     assert result.state == "cancelled"
     assert registry.current_attempt(armed.task_id, armed.generation).attempt == 1
+
+
+def test_cancellation_between_launch_and_registration_terminates_child(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    registry = TaskRegistry(tmp_path / "state" / "tasks.sqlite3")
+    armed = registry.arm(_grant(workspace))
+    original = registry.record_process
+    launched_pids: list[int] = []
+
+    def cancel_before_record(task_id, generation, attempt, *, pid, pgid, process_birth):
+        launched_pids.append(pid)
+        registry.cancel(task_id, generation)
+        return original(
+            task_id,
+            generation,
+            attempt,
+            pid=pid,
+            pgid=pgid,
+            process_birth=process_birth,
+        )
+
+    registry.record_process = cancel_before_record  # type: ignore[method-assign]
+
+    result = run_supervisor(
+        registry,
+        armed.task_id,
+        armed.generation,
+        command_factory=lambda _task, _attempt: (
+            sys.executable,
+            str(FAKE_AGENT),
+            "--mode",
+            "sleep",
+        ),
+        on_ready=_ready,
+    )
+
+    assert result.state == "cancelled"
+    assert len(launched_pids) == 1
+    assert observe_process(launched_pids[0]) is None
 
 
 def test_missing_tmux_never_marks_lost_while_owned_child_survives(
