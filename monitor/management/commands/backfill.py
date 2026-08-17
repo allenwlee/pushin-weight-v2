@@ -29,13 +29,7 @@ def _parse_brands(raw: str | None) -> list[str]:
 
 
 def _intervals_from_job(job) -> tuple[CoverageInterval, ...]:
-    return tuple(
-        CoverageInterval(
-            parse_utc(interval["since"]),
-            parse_utc(interval["until"]),
-        )
-        for interval in job.selected_intervals
-    )
+    return tuple(CoverageInterval.from_dict(value) for value in job.selected_intervals)
 
 
 def _state_counts(job) -> Counter:
@@ -143,7 +137,7 @@ class Command(BaseCommand):
         if options["quarantined"]:
             return self._handle_scheduled_quarantine(options)
 
-        plan, rates = self._preflight(options)
+        cfg, plan, rates = self._preflight(options)
 
         from core.models import BackfillJob
 
@@ -186,7 +180,7 @@ class Command(BaseCommand):
             self.stdout.write("Backfill job is already complete.")
             return
 
-        self._execute_job(job, plan, options)
+        self._execute_job(job, plan, cfg, options)
 
     def _validate_options(self, options) -> None:
         if options["status"] and options["reset"]:
@@ -241,7 +235,7 @@ class Command(BaseCommand):
                     f"TwitterAPI pricing preflight failed: {exc}"
                 ) from exc
             raise
-        return plan, rates
+        return cfg, plan, rates
 
     def _print_plan(self, plan, job, rates, options) -> None:
         intervals = _intervals_from_job(job) if job is not None else plan.intervals
@@ -302,12 +296,11 @@ class Command(BaseCommand):
             "each request is capped at one page / 20 returned tweets."
         )
 
-    def _build_runner(self, plan, options):
+    def _build_runner(self, plan, cfg, options):
         from monitor.cycle import CycleRunner
         from x_monitor.reattribute import build_relevancy_client_from_env
         from x_monitor.relevancy import build_binary_relevancy_llm_call
 
-        cfg = load_config(Path("config.yaml"))
         relevancy_client = build_relevancy_client_from_env(cfg)
         relevancy_llm_call = build_binary_relevancy_llm_call(
             client=relevancy_client,
@@ -323,11 +316,11 @@ class Command(BaseCommand):
             _relevancy_llm_call=relevancy_llm_call,
         )
 
-    def _execute_job(self, job, plan, options) -> None:
+    def _execute_job(self, job, plan, cfg, options) -> None:
         from core.models import BackfillJob
         from monitor.run_lock import harvest_writer_lock
 
-        runner = self._build_runner(plan, options)
+        runner = self._build_runner(plan, cfg, options)
         requests_run = 0
         llm_calls = 0
         for request_index in range(options["batch_size"]):

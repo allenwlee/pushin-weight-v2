@@ -73,6 +73,10 @@ class CoverageInterval:
     def as_dict(self) -> dict[str, str]:
         return {"since": _iso(self.since), "until": _iso(self.until)}
 
+    @classmethod
+    def from_dict(cls, value: dict[str, str]) -> CoverageInterval:
+        return cls(parse_utc(value["since"]), parse_utc(value["until"]))
+
 
 def _bucket_floor(value: datetime, bucket: timedelta) -> datetime:
     epoch = int(_as_utc(value).timestamp())
@@ -303,7 +307,9 @@ def build_plan(
     )
 
 
-def _assert_matching_job(job, plan: BackfillPlan) -> None:
+def validate_job_plan(job, plan: BackfillPlan) -> None:
+    """Refuse resume when stored identity no longer matches current planning."""
+
     expected = {
         "requested_since": plan.since,
         "requested_until": plan.until,
@@ -320,12 +326,6 @@ def _assert_matching_job(job, plan: BackfillPlan) -> None:
             "Existing backfill job no longer matches the current plan: "
             + ", ".join(mismatches)
         )
-
-
-def validate_job_plan(job, plan: BackfillPlan) -> None:
-    """Refuse resume when stored identity no longer matches current planning."""
-
-    _assert_matching_job(job, plan)
 
 
 def persist_plan(plan: BackfillPlan):
@@ -348,17 +348,14 @@ def persist_plan(plan: BackfillPlan):
             },
         )
         job = BackfillJob.objects.select_for_update().get(pk=job.pk)
-        _assert_matching_job(job, plan)
+        validate_job_plan(job, plan)
         if job.state == BackfillJob.State.COMPLETED:
             return job
 
         # Stored intervals are authoritative on resume: posts inserted by an
         # earlier slice must not silently shrink a detected-gap recovery.
         for raw_interval in job.selected_intervals:
-            interval = CoverageInterval(
-                parse_utc(raw_interval["since"]),
-                parse_utc(raw_interval["until"]),
-            )
+            interval = CoverageInterval.from_dict(raw_interval)
             for call in plan.calls:
                 identity = _call_identity(call)
                 HarvestBacklogWindow.objects.get_or_create(

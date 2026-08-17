@@ -1058,7 +1058,6 @@ class CycleRunner:
             list(_brand_filter) if _brand_filter is not None else None
         )
         # Hard cap on actual outbound LLM requests. None means no cap.
-        self._max_llm_calls = _max_llm_calls
         self._llm_budget = LlmCallBudget(max_calls=_max_llm_calls)
         # U6 runtime wire-in: injected llm_call(system, user) -> str
         # dependency for the binary relevancy gate (R19a +
@@ -1782,9 +1781,9 @@ class CycleRunner:
 
         Guardrails:
           - Pause between classifier batches (X_MONITOR_LLM_PAUSE_SECONDS).
-          - Hard cap on LLM batches (self._max_llm_calls).  When reached,
-            classification stops — remaining posts are persisted without
-            labels and will be picked up by the next invocation.
+          - One shared cap on actual outbound LLM calls, including retries and
+            repair calls. When reached, remaining posts stay eligible for a
+            later invocation.
 
         Lazy imports are used so the module loads without LLM deps.
         """
@@ -2005,8 +2004,10 @@ class CycleRunner:
         counters["n_enrichment_quarantined"] += newly_failed
 
         # ---- Stage 2: classify ----
-        from x_monitor.attribution import classify_batch_pragmatics_full
-        from x_monitor.attribution import _resolve_thinking_default
+        from x_monitor.attribution import (
+            _resolve_thinking_default,
+            classify_batch_pragmatics_full,
+        )
 
         pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
 
@@ -2157,11 +2158,14 @@ class CycleRunner:
 
             # Preserve the configured inter-batch pause while the shared
             # client wrapper owns exact pre-call accounting.
-            if (i + 1) % _CLASSIFY_BATCH_SIZE == 0 and i + 1 < len(tweets):
-                if pause_sec > 0:
-                    import time as _time
+            if (
+                (i + 1) % _CLASSIFY_BATCH_SIZE == 0
+                and i + 1 < len(tweets)
+                and pause_sec > 0
+            ):
+                import time as _time
 
-                    _time.sleep(pause_sec)
+                _time.sleep(pause_sec)
 
         newly_failed += _finish_enrichment_stage(
             post_ids=claimed_post_ids,
