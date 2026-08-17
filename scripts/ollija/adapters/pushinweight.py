@@ -36,6 +36,8 @@ class PushinWeightAdapter:
         hostname: str,
         repository_root: Path,
         repository_slug: str,
+        registered_worktree: bool = True,
+        common_git_directory: Path | None = None,
     ) -> AuthorityObservation:
         actual_host = _short_hostname(hostname)
         canonical_host = _short_hostname(self.config.authority.canonical_host)
@@ -46,13 +48,27 @@ class PushinWeightAdapter:
         expected_root = self.config.authority.repository_root
         actual_slug = _repository_slug(repository_slug)
         expected_slug = _repository_slug(self.config.authority.repository_slug)
+        worktree_root = expected_root / ".worktrees"
+        common_git = (
+            common_git_directory.expanduser().resolve()
+            if common_git_directory is not None
+            else None
+        )
+        canonical_git = (expected_root / ".git").resolve()
+        is_canonical = actual_root == expected_root
+        is_allowed_worktree = (
+            actual_root != worktree_root
+            and actual_root.is_relative_to(worktree_root)
+            and registered_worktree
+            and common_git == canonical_git
+        )
 
         reasons: list[str] = []
         if actual_host in forbidden_hosts:
             reasons.append("forbidden_host")
         if actual_host != canonical_host:
             reasons.append("host_mismatch")
-        if actual_root != expected_root:
+        if not is_canonical and not is_allowed_worktree:
             reasons.append("repository_root_mismatch")
         if actual_slug != expected_slug:
             reasons.append("repository_slug_mismatch")

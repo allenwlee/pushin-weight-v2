@@ -76,6 +76,7 @@ def test_real_project_contract_loads_from_a_nested_working_directory() -> None:
     assert config.authority.canonical_host == "fuchitalee"
     assert config.git.production_branch == "main"
     assert config.git.staging_branch == "staging"
+    assert config.state_root == config.authority.repository_root / ".ollija" / "state"
 
 
 def test_missing_project_contract_is_actionable_and_read_only(tmp_path: Path) -> None:
@@ -124,6 +125,50 @@ def test_host_and_repository_mismatch_are_observed_without_writing_state(
         "repository_slug_mismatch",
     }
     assert not (tmp_path / ".ollija" / "state").exists()
+
+
+def test_registered_repository_local_worktree_is_authorized(tmp_path: Path) -> None:
+    config_path = _write_config(tmp_path)
+    config = load_project_config(config_path)
+    adapter = PushinWeightAdapter(config)
+    worktree = tmp_path / ".worktrees" / "feat" / "example"
+    worktree.mkdir(parents=True)
+
+    observation = adapter.assess_authority(
+        hostname="fuchitalee",
+        repository_root=worktree,
+        repository_slug="allenwlee/pushin-weight-v2",
+        registered_worktree=True,
+        common_git_directory=tmp_path / ".git",
+    )
+
+    assert observation.mutation_allowed is True
+    assert observation.reason_codes == ()
+    assert config.state_root == tmp_path / ".ollija" / "state"
+
+
+def test_foreign_or_unregistered_worktree_is_rejected(tmp_path: Path) -> None:
+    config_path = _write_config(tmp_path)
+    config = load_project_config(config_path)
+    adapter = PushinWeightAdapter(config)
+    allowed_shape = tmp_path / ".worktrees" / "feat" / "example"
+    allowed_shape.mkdir(parents=True)
+
+    cases = (
+        (allowed_shape, False, tmp_path / ".git"),
+        (tmp_path / "worktrees" / "feat" / "example", True, tmp_path / ".git"),
+        (allowed_shape, True, tmp_path / "other.git"),
+    )
+    for root, registered, common_git in cases:
+        observation = adapter.assess_authority(
+            hostname="fuchitalee",
+            repository_root=root,
+            repository_slug="allenwlee/pushin-weight-v2",
+            registered_worktree=registered,
+            common_git_directory=common_git,
+        )
+        assert observation.mutation_allowed is False
+        assert "repository_root_mismatch" in observation.reason_codes
 
 
 def test_contract_rejects_secret_shaped_fields(tmp_path: Path) -> None:

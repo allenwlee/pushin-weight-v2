@@ -6,6 +6,10 @@ OLLIJA_REPO_ROOT="$(cd "$OLLIJA_BIN_DIR/.." && pwd)"
 
 if [[ -x "$OLLIJA_REPO_ROOT/.venv/bin/python" ]]; then
   OLLIJA_PYTHON="$OLLIJA_REPO_ROOT/.venv/bin/python"
+elif OLLIJA_GIT_COMMON_DIR="$(git -C "$OLLIJA_REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+  && [[ "$(basename "$OLLIJA_GIT_COMMON_DIR")" == ".git" ]] \
+  && [[ -x "$(dirname "$OLLIJA_GIT_COMMON_DIR")/.venv/bin/python" ]]; then
+  OLLIJA_PYTHON="$(dirname "$OLLIJA_GIT_COMMON_DIR")/.venv/bin/python"
 else
   OLLIJA_PYTHON="${PYTHON:-python3}"
 fi

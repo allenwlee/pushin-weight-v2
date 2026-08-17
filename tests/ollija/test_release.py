@@ -31,7 +31,12 @@ def _configured(tmp_path: Path):
     environments = {key: dict(value) for key, value in source.environments.items()}
     environments["staging"]["database_resource_id"] = "dpg-stage"
     environments["staging"]["web_service_id"] = "srv-stage"
-    return replace(source, root=tmp_path, environments=environments)
+    return replace(
+        source,
+        root=tmp_path,
+        authority=replace(source.authority, repository_root=tmp_path),
+        environments=environments,
+    )
 
 
 def _candidate() -> CandidateIdentity:
@@ -44,7 +49,7 @@ def _candidate() -> CandidateIdentity:
 
 
 def _write_ready_receipts(config) -> None:
-    store = ReceiptStore(config.root / config.state.directory)
+    store = ReceiptStore(config.state_root)
     candidate = Receipt.create(
         kind="candidate",
         candidate=_candidate(),
@@ -140,7 +145,7 @@ def _write_ready_receipts(config) -> None:
 
 
 def _write_last_known_good(config) -> None:
-    store = ReceiptStore(config.root / config.state.directory)
+    store = ReceiptStore(config.state_root)
     receipt = Receipt.create(
         kind="last_known_good",
         candidate=_candidate(),
@@ -207,7 +212,7 @@ def test_hosted_refresh_must_derive_from_the_current_local_refresh(
 ) -> None:
     config = _configured(tmp_path)
     _write_ready_receipts(config)
-    store = ReceiptStore(config.root / config.state.directory)
+    store = ReceiptStore(config.state_root)
     receipts = store.iter_receipts()
     candidate = next(item for item in receipts if item.kind == "candidate")
     hosted = Receipt.create(

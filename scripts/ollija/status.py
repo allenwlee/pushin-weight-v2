@@ -263,7 +263,7 @@ def _receipt_state(
     runner: CommandRunner,
 ) -> tuple[str, tuple[str, ...]]:
     store = ReceiptStore(
-        config.root / config.state.directory,
+        config.state_root,
         retention_days=config.state.retention_days,
     )
     if not store.root.exists():
@@ -411,6 +411,8 @@ def collect_status_facts(
         hostname=socket.gethostname(),
         repository_root=git.repository_root,
         repository_slug=git.repository_slug,
+        registered_worktree=git.registered_worktree,
+        common_git_directory=git.common_git_directory,
     )
     if not authority.mutation_allowed:
         return StatusFacts(
@@ -502,6 +504,9 @@ def _git_details(git: GitObservation) -> dict[str, Any]:
         "staging_sha": git.staging_sha,
         "branch_relationship": git.branch_relationship,
         "remote_reachable": git.remote_reachable,
+        "common_git_directory": (
+            str(git.common_git_directory) if git.common_git_directory else None
+        ),
     }
 
 

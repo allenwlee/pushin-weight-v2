@@ -165,7 +165,7 @@ def tailscale_dns_name() -> str:
 
 
 def _runtime_path(config: ProjectConfig) -> Path:
-    return config.root / config.state.directory / "runtime" / "preview.json"
+    return config.state_root / "runtime" / "preview.json"
 
 
 def _write_runtime(path: Path, runtime: PreviewRuntime) -> None:
@@ -274,7 +274,7 @@ def start_preview(config: ProjectConfig, plan: PreviewPlan) -> PreviewRuntime:
         "OLLIJA_STAGING_GOOGLE_CLIENT_SECRET", ""
     )
 
-    logs = config.root / config.state.directory / "logs"
+    logs = config.state_root / "logs"
     logs.mkdir(parents=True, exist_ok=True, mode=0o700)
     logs.chmod(0o700)
     log_path = logs / "preview.log"
@@ -282,7 +282,7 @@ def start_preview(config: ProjectConfig, plan: PreviewPlan) -> PreviewRuntime:
     os.chmod(log_path, 0o600)
     process = subprocess.Popen(
         [
-            str(config.root / ".venv" / "bin" / "python"),
+            str(config.canonical_virtualenv / "bin" / "python"),
             str(config.root / "manage.py"),
             "runserver",
             "--noreload",

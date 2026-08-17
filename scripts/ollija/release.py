@@ -168,7 +168,7 @@ class GitPublisher:
 
 def _store(config: ProjectConfig) -> ReceiptStore:
     return ReceiptStore(
-        config.root / config.state.directory,
+        config.state_root,
         retention_days=config.state.retention_days,
     )
 

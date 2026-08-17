@@ -199,7 +199,7 @@ def _active_candidate_for_refresh(
     facts,
 ) -> tuple[ReceiptStore, tuple[Receipt, ...], Receipt]:
     store = ReceiptStore(
-        config.root / config.state.directory,
+        config.state_root,
         retention_days=config.state.retention_days,
     )
     candidate_id = store.read_reference("active_candidate")
@@ -268,7 +268,7 @@ def _start_candidate(config, facts) -> CommandResult:
         },
     )
     store = ReceiptStore(
-        config.root / config.state.directory,
+        config.state_root,
         retention_days=config.state.retention_days,
     )
     store.write_receipt(receipt)
@@ -295,7 +295,7 @@ def _start_candidate(config, facts) -> CommandResult:
 
 def _active_candidate_and_stage(config) -> tuple[ReceiptStore, Receipt, Receipt]:
     store = ReceiptStore(
-        config.root / config.state.directory,
+        config.state_root,
         retention_days=config.state.retention_days,
     )
     candidate_id = store.read_reference("active_candidate")

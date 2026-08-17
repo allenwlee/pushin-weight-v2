@@ -28,4 +28,6 @@ class ProjectAdapter(Protocol):
         hostname: str,
         repository_root: Path,
         repository_slug: str,
+        registered_worktree: bool = True,
+        common_git_directory: Path | None = None,
     ) -> AuthorityObservation: ...

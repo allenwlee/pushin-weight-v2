@@ -67,6 +67,7 @@ class GitObservation:
     branch_relationship: str
     remote_reachable: bool
     repository_slug: str = ""
+    common_git_directory: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +157,9 @@ def observe_git(
     status_result = _git(runner, root, "status", "--porcelain=v1", "-z")
     worktree_result = _git(runner, root, "worktree", "list", "--porcelain")
     remote_result = _git(runner, root, "remote", "get-url", "origin")
+    common_git_result = _git(
+        runner, root, "rev-parse", "--path-format=absolute", "--git-common-dir"
+    )
     heads_result = _git(
         runner,
         root,
@@ -194,6 +198,12 @@ def observe_git(
         remote_reachable=remote_reachable,
         repository_slug=(
             remote_result.stdout.strip() if remote_result.returncode == 0 else ""
+        ),
+        common_git_directory=(
+            Path(common_git_result.stdout.strip()).resolve()
+            if common_git_result.returncode == 0
+            and common_git_result.stdout.strip()
+            else None
         ),
     )
 

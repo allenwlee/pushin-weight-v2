@@ -52,6 +52,16 @@ class ProjectConfig:
     bridgewright: Mapping[str, Any]
     tooling: Mapping[str, Any]
 
+    @property
+    def state_root(self) -> Path:
+        """One shared state root, independent of the active worktree."""
+
+        return (self.authority.repository_root / self.state.directory).resolve()
+
+    @property
+    def canonical_virtualenv(self) -> Path:
+        return (self.authority.repository_root / ".venv").resolve()
+
 
 _REQUIRED_TOP_LEVEL = {
     "schema_version",
