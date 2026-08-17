@@ -52,7 +52,11 @@ def run_supervisor(
 ) -> TaskSnapshot:
     while True:
         task = registry.verify_source(task_id, generation)
-        attempt = registry.start_attempt(task_id, generation)
+        attempt = registry.start_attempt(
+            task_id,
+            generation,
+            driver_session_id=task.agent_session_id,
+        )
         command = tuple(str(item) for item in command_factory(task, attempt))
         if not command or any(not item for item in command):
             return registry.pause(task_id, generation, failure_code="agent_command_invalid")
