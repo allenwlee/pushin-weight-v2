@@ -48,10 +48,10 @@ from __future__ import annotations
 import json
 import logging
 import time
+from typing import Any, Protocol
 
 from ._json_parser import parse_llm_response
 from .llm_budget import LlmBudgetExhausted
-from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 

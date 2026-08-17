@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from io import StringIO
+from types import SimpleNamespace
 
 import pytest
 from django.core.management import call_command
@@ -81,7 +82,7 @@ def test_closing_owner_connection_releases_advisory_lock():
         assert recovered.acquired
 
 
-def test_all_write_entrypoints_stop_before_calls_or_state_writes_on_contention(
+def test_live_write_entrypoints_stop_before_calls_or_state_writes_on_contention(
     monkeypatch,
 ):
     from monitor.run_lock import WriterLockContention, WriterLockLease
@@ -119,59 +120,73 @@ def test_all_write_entrypoints_stop_before_calls_or_state_writes_on_contention(
     monkeypatch.setattr("monitor.cycle.CycleRunner", forbidden)
     monkeypatch.setattr("x_monitor.config.load_config", forbidden)
 
-    import monitor.management.commands.backfill as backfill_module
     import monitor.tasks as tasks_module
 
-    monkeypatch.setattr(backfill_module, "load_config", forbidden)
-    monkeypatch.setattr(backfill_module, "_save_state", forbidden)
     monkeypatch.setattr(tasks_module, "load_config", forbidden)
 
     call_command("run_cycle", stdout=StringIO(), stderr=StringIO())
     tasks_module.run_cycle.run(dry_run=False)
-    call_command(
-        "backfill",
-        "--since",
-        "2026-08-01",
-        "--until",
-        "2026-08-02",
-        stdout=StringIO(),
-        stderr=StringIO(),
-    )
 
     assert [call["entrypoint"] for call in invocations] == [
         "management.run_cycle",
         "celery.run_cycle",
-        "management.backfill",
     ]
     assert [call["execution_mode"] for call in invocations] == [
         "live",
         "live",
-        "backfill",
     ]
 
 
-def test_backfill_dry_run_is_truly_read_only(monkeypatch, tmp_path):
-    import monitor.management.commands.backfill as backfill_module
+def test_backfill_contention_keeps_durable_job_pending_without_http(monkeypatch):
+    from core.models import BackfillJob, HarvestBacklogWindow
 
-    state_file = tmp_path / "backfill-state.json"
-    state_file.write_text("{}")
+    api = SimpleNamespace(max_retries=2, calls=[])
 
-    monkeypatch.setattr(backfill_module, "_state_path", lambda *_: state_file)
-    monkeypatch.setattr(backfill_module, "load_config", lambda *_: object())
+    @contextmanager
+    def contended_lock(**kwargs):
+        yield SimpleNamespace(acquired=False, contention=None)
+
+    monkeypatch.setattr("monitor.run_lock.harvest_writer_lock", contended_lock)
+    monkeypatch.setattr("x_monitor.apify.TwitterApiClient.from_env", lambda: api)
     monkeypatch.setattr(
-        "monitor.cycle.plan_calls_for_cycle", lambda _cfg: []
+        "x_monitor.reattribute.build_relevancy_client_from_env", lambda cfg: None
+    )
+
+    stdout = StringIO()
+    call_command(
+        "backfill",
+        since="2026-08-01",
+        until="2026-08-02",
+        batch_size=1,
+        pause=0,
+        stdout=stdout,
+        stderr=StringIO(),
+    )
+
+    job = BackfillJob.objects.get()
+    assert "shared harvest writer lock is held" in stdout.getvalue()
+    assert api.max_retries == 0
+    assert api.calls == []
+    assert job.windows.count() == 7
+    assert not job.windows.exclude(state=HarvestBacklogWindow.State.PENDING).exists()
+
+
+def test_backfill_dry_run_is_truly_read_only(monkeypatch):
+    from core.models import BackfillJob, HarvestBacklogWindow
+
+    monkeypatch.setattr(
+        "x_monitor.apify.TwitterApiClient.from_env",
+        lambda: pytest.fail("dry-run must not construct a provider client"),
     )
 
     call_command(
         "backfill",
-        "--since",
-        "2026-08-01",
-        "--until",
-        "2026-08-02",
-        "--dry-run",
-        "--reset",
+        since="2026-08-01",
+        until="2026-08-02",
+        dry_run=True,
         stdout=StringIO(),
         stderr=StringIO(),
     )
 
-    assert state_file.read_text() == "{}"
+    assert not BackfillJob.objects.exists()
+    assert not HarvestBacklogWindow.objects.exists()

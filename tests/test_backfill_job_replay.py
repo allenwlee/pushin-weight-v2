@@ -88,7 +88,15 @@ class CapturingApi:
         return self.response
 
 
-def _replay(runner, *, call, api, job, kept_all=None):
+def _replay(
+    runner,
+    *,
+    call,
+    api,
+    job,
+    kept_all=None,
+    include_quarantined=False,
+):
     return runner._replay_backlog(
         calls=[call],
         api=api,
@@ -97,6 +105,8 @@ def _replay(runner, *, call, api, job, kept_all=None):
         kept_all=kept_all if kept_all is not None else [],
         run_id="job-replay",
         deadline=Deadline(),
+        include_quarantined=include_quarantined,
+        quarantined_only=include_quarantined,
         backfill_job=job,
         replay_limit=1,
         single_page=True,
@@ -165,6 +175,43 @@ def test_job_truncation_narrows_only_job_row_and_never_mutates_live_cursor(monke
     assert job.state == BackfillJob.State.ACTIVE
     live.refresh_from_db()
     assert live.last_completed_at == live_cursor_at
+
+
+def test_provider_failure_quarantines_at_ceiling_and_explicit_retry_completes():
+    from x_monitor.apify import TwitterApiAuthError
+
+    call = _call()
+    job = _job()
+    owned = _window(call, job=job)
+    HarvestBacklogWindow.objects.filter(pk=owned.pk).update(attempts=7)
+
+    class AuthFailure(CapturingApi):
+        def run_search(self, query, **kwargs):
+            self.calls.append((query, kwargs))
+            raise TwitterApiAuthError("tokens exhausted")
+
+    failed = _replay(_runner(), call=call, api=AuthFailure(), job=job)
+
+    assert failed[0]["status"] == "quarantined"
+    owned.refresh_from_db()
+    assert owned.state == HarvestBacklogWindow.State.QUARANTINED
+    assert owned.quarantine_reason == "error"
+    job.refresh_from_db()
+    assert job.state == BackfillJob.State.ACTIVE
+
+    retried = _replay(
+        _runner(),
+        call=call,
+        api=CapturingApi(),
+        job=job,
+        include_quarantined=True,
+    )
+
+    assert retried[0]["status"] == "completed"
+    owned.refresh_from_db()
+    assert owned.state == HarvestBacklogWindow.State.COMPLETED
+    job.refresh_from_db()
+    assert job.state == BackfillJob.State.COMPLETED
 
 
 def test_scheduled_success_still_deletes_its_row(monkeypatch):

@@ -131,6 +131,14 @@ class Command(BaseCommand):
             action="store_true",
             help="Replay only scheduled (non-job) quarantined recall-debt rows.",
         )
+        parser.add_argument(
+            "--retry-quarantined",
+            action="store_true",
+            help=(
+                "Replay only quarantined rows owned by the exact matching "
+                "backfill job; --since and --until are required."
+            ),
+        )
 
     def handle(self, *args, **options) -> None:
         self._validate_options(options)
@@ -161,13 +169,13 @@ class Command(BaseCommand):
             if options["dry_run"]:
                 self.stdout.write(f"Would reset job {job.key} (dry-run).")
             else:
-                job_key = job.key
-                job.delete()
-                self.stdout.write(f"Reset job {job_key} and only its owned windows.")
+                self._reset_job(job)
             return
 
         if options["dry_run"]:
             return
+        if options["retry_quarantined"] and job is None:
+            raise CommandError("No matching durable backfill job to retry")
         if not plan.intervals and job is None:
             self.stdout.write("No qualifying inferred gaps; no job was created.")
             return
@@ -180,11 +188,19 @@ class Command(BaseCommand):
             self.stdout.write("Backfill job is already complete.")
             return
 
-        self._execute_job(job, plan, cfg, options)
+        self._execute_job(
+            job,
+            plan,
+            cfg,
+            options,
+            retry_quarantined=options["retry_quarantined"],
+        )
 
     def _validate_options(self, options) -> None:
         if options["status"] and options["reset"]:
             raise CommandError("--status and --reset cannot be combined")
+        if options["retry_quarantined"] and options["reset"]:
+            raise CommandError("--retry-quarantined and --reset cannot be combined")
         if options["batch_size"] <= 0:
             raise CommandError("--batch-size must be positive")
         if options["max_llm_calls"] < 0:
@@ -196,6 +212,24 @@ class Command(BaseCommand):
         if options["min_gap_minutes"] <= 0:
             raise CommandError("--min-gap-minutes must be positive")
         if options["quarantined"]:
+            conflicts = [
+                flag
+                for flag in (
+                    "since",
+                    "until",
+                    "brands",
+                    "detect_gaps",
+                    "reset",
+                    "retry_quarantined",
+                )
+                if options.get(flag)
+            ]
+            if conflicts:
+                rendered = ", ".join(f"--{flag.replace('_', '-')}" for flag in conflicts)
+                raise CommandError(
+                    "--quarantined is scheduled-ledger-only and cannot be combined "
+                    f"with {rendered}"
+                )
             return
         if not options.get("since"):
             raise CommandError("--since is required unless --quarantined is used")
@@ -296,7 +330,7 @@ class Command(BaseCommand):
             "each request is capped at one page / 20 returned tweets."
         )
 
-    def _build_runner(self, plan, cfg, options):
+    def _build_runner(self, cfg, options, *, brand_filter=None):
         from monitor.cycle import CycleRunner
         from x_monitor.reattribute import build_relevancy_client_from_env
         from x_monitor.relevancy import build_binary_relevancy_llm_call
@@ -311,17 +345,36 @@ class Command(BaseCommand):
             cfg=cfg,
             dry_run=False,
             cycle_kind="backfill",
-            _brand_filter=list(plan.brand_filter),
+            _brand_filter=(list(brand_filter) if brand_filter is not None else None),
             _max_llm_calls=options["max_llm_calls"],
             _relevancy_llm_call=relevancy_llm_call,
         )
 
-    def _execute_job(self, job, plan, cfg, options) -> None:
-        from core.models import BackfillJob
+    @staticmethod
+    def _build_api():
+        from x_monitor.apify import TwitterApiClient
+
+        api = TwitterApiClient.from_env()
+        # Durable work owns retries. A --batch-size N invocation therefore
+        # makes at most N actual advanced-search HTTP attempts.
+        api.max_retries = 0
+        return api
+
+    def _run_bounded_requests(
+        self,
+        *,
+        runner,
+        api,
+        options,
+        entrypoint: str,
+        label: str,
+        job=None,
+        include_quarantined: bool = False,
+    ) -> dict[str, int]:
         from monitor.run_lock import harvest_writer_lock
 
-        runner = self._build_runner(plan, cfg, options)
         requests_run = 0
+        completed = 0
         llm_calls = 0
         for request_index in range(options["batch_size"]):
             if request_index and options["pause"]:
@@ -329,7 +382,7 @@ class Command(BaseCommand):
 
             with harvest_writer_lock(
                 execution_mode="backfill",
-                entrypoint="management.backfill",
+                entrypoint=entrypoint,
             ) as lease:
                 if not lease.acquired:
                     owner = (
@@ -338,18 +391,18 @@ class Command(BaseCommand):
                         else "unknown owner"
                     )
                     self.stdout.write(
-                        f"Backfill paused: shared harvest writer lock is held ({owner})."
+                        f"{label} paused: shared harvest writer lock is held ({owner})."
                     )
                     break
                 try:
                     result = runner.replay_backlog_only(
                         backfill_job=job,
+                        include_quarantined=include_quarantined,
                         request_limit=1,
+                        api=api,
                     )
                 except (RuntimeError, ValueError) as exc:
-                    self.stderr.write(
-                        f"Backfill request stopped before completion: {exc}"
-                    )
+                    self.stderr.write(f"{label} stopped before completion: {exc}")
                     break
 
             reports = result.get("backlog_replays", [])
@@ -358,25 +411,77 @@ class Command(BaseCommand):
             report = reports[0]
             llm_calls = int(result.get("llm_calls", llm_calls))
             if report.get("status") == "deadline_exhausted":
-                self.stdout.write("Backfill deadline guard deferred the next request.")
+                self.stdout.write(f"{label} deadline guard deferred the next request.")
                 break
             requests_run += 1
+            completed += report.get("status") == "completed"
             self.stdout.write(
-                f"Request {requests_run}/{options['batch_size']}: "
+                f"{label} {requests_run}/{options['batch_size']}: "
                 f"{report.get('call_id', '?')} → {report.get('status', 'unknown')}"
             )
-            job.refresh_from_db()
-            if job.state == BackfillJob.State.COMPLETED:
-                break
+            if job is not None:
+                job.refresh_from_db()
+                if job.state == "completed":
+                    break
+
+        return {
+            "requests": requests_run,
+            "completed": completed,
+            "llm_calls": llm_calls,
+        }
+
+    def _execute_job(
+        self,
+        job,
+        plan,
+        cfg,
+        options,
+        *,
+        retry_quarantined: bool,
+    ) -> None:
+        try:
+            api = self._build_api()
+        except RuntimeError as exc:
+            self.stderr.write(f"Backfill stopped before provider setup: {exc}")
+            return
+        runner = self._build_runner(
+            cfg,
+            options,
+            brand_filter=plan.brand_filter,
+        )
+        run = self._run_bounded_requests(
+            runner=runner,
+            api=api,
+            options=options,
+            entrypoint="management.backfill",
+            label="Backfill request",
+            job=job,
+            include_quarantined=retry_quarantined,
+        )
 
         job.refresh_from_db()
         counts = _state_counts(job)
         remaining = job.windows.exclude(state="completed").count()
         self.stdout.write(
-            f"Backfill job {job.state}: requests={requests_run}, "
-            f"remaining_rows={remaining}, llm_calls={llm_calls}; "
+            f"Backfill job {job.state}: requests={run['requests']}, "
+            f"remaining_rows={remaining}, llm_calls={run['llm_calls']}; "
             + ", ".join(f"{state}={count}" for state, count in sorted(counts.items()))
         )
+
+    def _reset_job(self, job) -> None:
+        from monitor.run_lock import harvest_writer_lock
+
+        with harvest_writer_lock(
+            execution_mode="backfill",
+            entrypoint="management.backfill.reset",
+        ) as lease:
+            if not lease.acquired:
+                raise CommandError(
+                    "Backfill reset deferred: the shared harvest writer lock is held"
+                )
+            job_key = job.key
+            job.delete()
+        self.stdout.write(f"Reset job {job_key} and only its owned windows.")
 
     def _handle_scheduled_quarantine(self, options) -> None:
         from core.models import HarvestBacklogWindow
@@ -393,27 +498,23 @@ class Command(BaseCommand):
             self.stdout.write("No scheduled quarantined harvest intervals to replay.")
             return
 
-        from monitor.cycle import CycleRunner
-        from monitor.run_lock import harvest_writer_lock
-
         cfg = load_config(Path("config.yaml"))
-        with harvest_writer_lock(
-            execution_mode="backfill",
+        try:
+            api = self._build_api()
+        except RuntimeError as exc:
+            self.stderr.write(f"Scheduled quarantine stopped before provider setup: {exc}")
+            return
+        runner = self._build_runner(cfg, options)
+        run = self._run_bounded_requests(
+            runner=runner,
+            api=api,
+            options=options,
             entrypoint="management.backfill.quarantined",
-        ) as lease:
-            if not lease.acquired:
-                self.stdout.write("Quarantined replay deferred by the writer lock.")
-                return
-            result = CycleRunner(
-                cfg=cfg,
-                cycle_kind="backfill",
-                _max_llm_calls=options["max_llm_calls"],
-            ).replay_backlog_only(
-                include_quarantined=True,
-                request_limit=options["batch_size"],
-            )
-        completed = sum(
-            report.get("status") == "completed"
-            for report in result.get("backlog_replays", [])
+            label="Scheduled quarantine request",
+            include_quarantined=True,
         )
-        self.stdout.write(f"Scheduled quarantined replay: {completed} completed.")
+        self.stdout.write(
+            "Scheduled quarantined replay: "
+            f"requests={run['requests']}, completed={run['completed']}, "
+            f"llm_calls={run['llm_calls']}."
+        )

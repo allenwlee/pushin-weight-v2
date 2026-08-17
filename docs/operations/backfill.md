@@ -44,10 +44,12 @@ the work row remains pending with a narrower upper bound.
 ## Execute or resume automatic recovery
 
 Run the same selection arguments without `--dry-run`. `--batch-size` is a hard
-TwitterAPI search-request budget, not a planned-call count. The default is
-three one-page requests. `--max-llm-calls` is a shared pre-call ceiling across
-relevance, translation, classification, retries, language repair, and
-classifier fallback; the default is 20.
+TwitterAPI search-request budget, not a planned-call count. The command disables
+transport-level TwitterAPI retries, so the default of three means at most three
+actual advanced-search HTTP attempts. A failed durable row remains available to
+a later invocation. `--max-llm-calls` is a shared pre-call ceiling across
+relevance, translation, classification, LLM-client retries, language repair,
+and classifier fallback; the default is 20.
 
 ```bash
 python manage.py backfill \
@@ -68,6 +70,24 @@ Each request acquires the shared harvest writer lock, completes one replay step,
 and releases the lock before `--pause`. Lock contention leaves the work pending
 for the next invocation. Backfill never reads or advances live `CallState`
 cursors, refreshes one-shot metrics, or dispatches trend headlines.
+
+If provider credentials are unavailable or a request repeatedly fails, the row
+eventually becomes `quarantined`. Restore the provider first, then resume only
+the quarantined rows belonging to that exact job:
+
+```bash
+python manage.py backfill \
+  --since 2026-08-10T00:00:00Z \
+  --until 2026-08-17T00:00:00Z \
+  --detect-gaps \
+  --retry-quarantined \
+  --batch-size 3
+```
+
+Job identity includes all selection arguments, so repeat `--bucket-minutes`,
+`--min-gap-minutes`, and `--brands` too when they differed from the defaults.
+Ordinary resume processes pending or expired claimed rows; quarantined rows are
+eligible only with the explicit `--retry-quarantined` flag.
 
 ## Recover a known partial outage
 
@@ -130,16 +150,28 @@ python manage.py backfill \
   --reset
 ```
 
-Reset deletes only that job and its owned windows. It cannot delete scheduled
-recall debt or another recovery job.
+Reset takes the shared writer lock, then deletes only that job and its owned
+windows. It cannot race a replay request, delete scheduled recall debt, or
+delete another recovery job. Lock contention defers the reset without mutation.
 
 Scheduled quarantined recall debt remains a separate workflow and never claims
-job-owned rows:
+job-owned rows. It uses the same one-request lock boundary and transport-retry
+policy as job recovery. Range, detection, brand, reset, and job-retry flags are
+rejected in this scheduled-ledger-only mode:
 
 ```bash
 python manage.py backfill --quarantined --dry-run
 python manage.py backfill --quarantined --batch-size 1
 ```
+
+## Dense-window limitation
+
+The provider returns at most 20 tweets per request. When a page is full, the
+backfiller time-slides toward older results and keeps the durable row pending.
+If more than 20 matching tweets have the same oldest timestamp, second-level
+time bounds may make no further progress. The existing attempt ceiling then
+quarantines the row rather than marking incomplete coverage as complete. Review
+the range manually before retrying or resetting that job.
 
 ## Production boundary
 

@@ -1188,10 +1188,15 @@ class CycleRunner:
     def _plan_calls(self) -> list[PlannedCall]:
         """Build the per-cycle call list via plan_calls_for_cycle()."""
         try:
-            calls = plan_calls_for_cycle(
-                self.cfg,
-                brand_filter=self._brand_filter,
-            )
+            if self._brand_filter is None:
+                # Preserve the scheduled runner's original planner call shape;
+                # explicit filtering is a backfill-only extension.
+                calls = plan_calls_for_cycle(self.cfg)
+            else:
+                calls = plan_calls_for_cycle(
+                    self.cfg,
+                    brand_filter=self._brand_filter,
+                )
         except (TypeError, ValueError) as exc:
             logger.warning("CycleRunner._plan_calls: plan_calls failed: %s", exc)
             self._errors.append(f"plan: {exc}")

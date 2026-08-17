@@ -80,17 +80,31 @@ for known downtime with sparse surviving posts.
 
 Each job replay is exactly one TwitterAPI advanced-search page with at most 20
 returned tweets. `--batch-size` therefore maps directly to the maximum provider
-requests in one invocation. A truncated result narrows the remaining upper
-bound to one second after the oldest returned tweet and leaves the row pending.
+HTTP attempts in one invocation: transport-level TwitterAPI retries are
+disabled because the durable row is the retry boundary. A truncated result
+narrows the remaining upper bound to one second after the oldest returned tweet
+and leaves the row pending.
 
 The command acquires the shared PostgreSQL advisory writer lock for one replay
-step and releases it before pausing. Contention is deferred work, not a failed
-or completed range.
+step and releases it before pausing. Job replay, scheduled quarantined replay,
+and exact-job reset all use this ownership seam. Contention is deferred work,
+not a failed or completed range.
+
+Quarantined recovery rows are fail-closed: ordinary resume does not claim them.
+After the provider issue is repaired, `--retry-quarantined` makes only the exact
+matching job's quarantined rows eligible. Scheduled quarantined debt remains a
+separate `--quarantined` workflow, and incompatible job-selection flags are
+rejected before provider setup.
+
+Second-precision time sliding has one known provider-bound limit. If more than
+20 matching tweets share the oldest returned timestamp, the next upper bound
+may not expose the remaining same-second results. The row reaches the existing
+attempt ceiling and quarantines instead of falsely completing.
 
 ### LLM cost ownership
 
 One shared pre-call counter covers relevance, translation, classification,
-provider retries, language repair, and per-post classifier fallback. The
+LLM-client retries, language repair, and per-post classifier fallback. The
 budgeted client consumes immediately before `messages_create`. Budget
 exhaustion is re-raised through helper retry loops so it cannot cause another
 retry or be mistaken for a provider failure; durable enrichment remains
