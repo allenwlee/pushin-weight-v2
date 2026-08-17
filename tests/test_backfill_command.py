@@ -17,6 +17,39 @@ SINCE = "2026-08-10T00:00"
 UNTIL = "2026-08-10T04:00"
 
 
+def test_help_documents_utc_request_caps_and_detection_limit():
+    from monitor.management.commands.backfill import Command
+
+    help_text = " ".join(
+        Command().create_parser("manage.py", "backfill").format_help().split()
+    )
+
+    assert "ISO-8601" in help_text
+    assert "naive values are UTC" in help_text
+    assert "one-page TwitterAPI search requests" in help_text
+    assert "cannot detect partial outages" in help_text
+    assert "retries and repairs" in help_text
+
+
+def test_seven_day_zero_coverage_preview_is_supported_without_creating_a_job():
+    from core.models import BackfillJob
+
+    stdout = StringIO()
+    call_command(
+        "backfill",
+        since="2026-08-10T00:00:00Z",
+        until="2026-08-17T00:00:00Z",
+        detect_gaps=True,
+        dry_run=True,
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert "2026-08-10T00:00:00+00:00 → 2026-08-17T00:00:00+00:00" in output
+    assert "Work rows: 7 planned" in output
+    assert BackfillJob.objects.count() == 0
+
+
 def test_explicit_dry_run_shows_current_fanout_and_cost_without_writes_or_clients(
     monkeypatch,
 ):
@@ -224,3 +257,83 @@ def test_exact_reset_removes_only_matching_job_and_never_scheduled_rows():
     assert not BackfillJob.objects.filter(pk=first.pk).exists()
     assert BackfillJob.objects.filter(pk=second.pk).exists()
     assert HarvestBacklogWindow.objects.filter(pk=scheduled.pk).exists()
+
+
+def test_full_command_uses_current_plan_and_shared_provider_to_persistence_path(
+    monkeypatch,
+):
+    from core.models import BackfillJob, Brand, CallState, Post, PostBrand
+    from monitor.cycle import plan_calls_for_cycle
+    from x_monitor.config import load_config
+
+    Brand.objects.get_or_create(
+        nickname="deepseek", defaults={"display_name": "DeepSeek"}
+    )
+
+    class FakeApi:
+        timeout_s = 1
+        max_retries = 0
+
+        def __init__(self):
+            self.calls = []
+
+        def run_search(self, query, **kwargs):
+            self.calls.append((query, kwargs))
+            if len(self.calls) == 1:
+                return [], False
+            return [
+                {
+                    "id": "recovered-tweet",
+                    "text": "DeepSeek release",
+                    "created_at": "2026-08-10T01:15:00+00:00",
+                    "created_at_epoch": 1786324500,
+                }
+            ], False
+
+    api = FakeApi()
+    monkeypatch.setattr("monitor.cycle.TwitterApiClient.from_env", lambda: api)
+    monkeypatch.setattr(
+        "x_monitor.reattribute.build_relevancy_client_from_env",
+        lambda cfg: object(),
+    )
+    monkeypatch.setattr(
+        "monitor.metrics_refresh.run_metrics_refresh",
+        lambda *args, **kwargs: pytest.fail("backfill must not refresh metrics"),
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_dispatch.dispatch_harvest_completion",
+        lambda *args, **kwargs: pytest.fail("backfill must not dispatch headlines"),
+    )
+
+    call_command(
+        "backfill",
+        since=SINCE,
+        until=UNTIL,
+        brands="deepseek",
+        batch_size=2,
+        max_llm_calls=0,
+        pause=0,
+        stdout=StringIO(),
+    )
+
+    cfg = load_config(Path("config.yaml"))
+    expected_calls = plan_calls_for_cycle(cfg, brand_filter=["deepseek"])
+    job = BackfillJob.objects.get()
+    assert list(job.windows.order_by("pk").values_list("call_id", flat=True)) == [
+        call.call_id for call in expected_calls
+    ]
+    assert len(expected_calls) == 7
+    assert len(api.calls) == 2
+    for _query, kwargs in api.calls:
+        assert kwargs["max_results"] == 20
+        assert kwargs["max_pages"] == 1
+        assert kwargs["max_per_page"] == 20
+        assert kwargs["since_time"] < kwargs["until_time"]
+    assert Post.objects.filter(tweet_id="recovered-tweet").exists()
+    assert PostBrand.objects.filter(
+        post_id="recovered-tweet",
+        brand_id="deepseek",
+    ).exists()
+    assert job.windows.filter(state="completed").count() == 2
+    assert job.windows.filter(state="pending").count() == 5
+    assert not CallState.objects.exists()

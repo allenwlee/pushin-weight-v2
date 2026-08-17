@@ -464,6 +464,14 @@ x-monitor review dismiss <tweet_id>
 # Backfill classifications for newly-classified posts
 x-monitor backfill unsanctioned-flags --limit 500 --yes
 
+# Preview selective historical harvest recovery (durable PostgreSQL state)
+python manage.py backfill \
+  --since 2026-08-10T00:00:00Z \
+  --until 2026-08-17T00:00:00Z \
+  --detect-gaps \
+  --dry-run
+# Runbook: docs/operations/backfill.md
+
 # Pause all runs (operator kill switch — both agents honor it)
 touch /tmp/x-monitor-paused
 # Resume
