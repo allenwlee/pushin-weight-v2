@@ -148,6 +148,7 @@ def test_attempt_process_identity_and_exit_are_durable(tmp_path: Path) -> None:
         attempt.attempt,
         pid=1234,
         pgid=1234,
+        process_birth="Mon Aug 17 12:00:00 2026",
     )
     finished = registry.finish_attempt(
         armed.task_id,

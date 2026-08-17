@@ -100,6 +100,7 @@ class AttemptSnapshot:
     state: str
     pid: int | None
     pgid: int | None
+    process_birth: str | None
     driver_session_id: str | None
     started_at: str
     heartbeat_at: str
@@ -290,6 +291,7 @@ class TaskRegistry:
                 state TEXT NOT NULL,
                 pid INTEGER,
                 pgid INTEGER,
+                process_birth TEXT,
                 driver_session_id TEXT,
                 started_at TEXT NOT NULL,
                 heartbeat_at TEXT NOT NULL,
@@ -662,6 +664,7 @@ class TaskRegistry:
             state=str(row["state"]),
             pid=row["pid"],
             pgid=row["pgid"],
+            process_birth=row["process_birth"],
             driver_session_id=row["driver_session_id"],
             started_at=str(row["started_at"]),
             heartbeat_at=str(row["heartbeat_at"]),
@@ -678,15 +681,17 @@ class TaskRegistry:
         *,
         pid: int,
         pgid: int,
+        process_birth: str,
     ) -> AttemptSnapshot:
-        if pid < 2 or pgid < 2:
+        if pid < 2 or pgid < 2 or not process_birth or len(process_birth) > 100:
             raise TaskValidationError("task_process_identity_invalid")
         with self._transaction() as connection:
             self._require_current(connection, task_id, generation)
             connection.execute(
-                """UPDATE attempts SET state = 'running', pid = ?, pgid = ?
+                """UPDATE attempts
+                      SET state = 'running', pid = ?, pgid = ?, process_birth = ?
                     WHERE task_id = ? AND generation = ? AND attempt = ?""",
-                (pid, pgid, task_id, generation, attempt),
+                (pid, pgid, process_birth, task_id, generation, attempt),
             )
             return self._attempt(connection, task_id, generation, attempt)
 
