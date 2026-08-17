@@ -60,34 +60,41 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     from core.models import Post, PostEnrichmentState, PostUnsanctionedFlag
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
-    from x_monitor.config import Config
+    from x_monitor.config import Config, LlmConfig
 
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
     PostEnrichmentState.objects.create(post=post)
     client = object()
+    captured = {}
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
     monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
-    monkeypatch.setattr(
-        translator,
-        "translate_batch_pragmatics",
-        lambda tweets, locales, client, **kwargs: [
+    def translate(tweets, locales, client, **kwargs):
+        captured["translator_kwargs"] = kwargs
+        return [
             {
                 "tweet_id": post.pk,
                 "text_en": post.text,
                 "text_zh_cn": "深度求索发布",
                 "lang_detected": "en",
             }
-        ],
-    )
-    monkeypatch.setattr(
-        attribution,
-        "classify_batch_pragmatics_full",
-        lambda tweets, brands, client, **kwargs: [
-            {"by_brand": {}, "unsanctioned_flags": ["scam"]}
-        ],
-    )
+        ]
 
-    runner = CycleRunner(cfg=Config(enabled_models=["deepseek"], daily_ceiling=100))
+    def classify(tweets, brands, client, **kwargs):
+        captured["classifier_kwargs"] = kwargs
+        return [{"by_brand": {}, "unsanctioned_flags": ["scam"]}]
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    runner = CycleRunner(
+        cfg=Config(
+            enabled_models=["deepseek"],
+            daily_ceiling=100,
+            llm=LlmConfig(
+                classifier_base_url="https://api.deepseek.com/anthropic"
+            ),
+        )
+    )
     counters = runner._run_post_fetch([], run_id="run-flags")
 
     state = PostEnrichmentState.objects.get(post=post)
@@ -97,6 +104,9 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
     assert state.claim_run_id == ""
     assert PostUnsanctionedFlag.objects.filter(post=post).exists()
+    assert captured["translator_kwargs"]["cfg"] is runner.cfg
+    assert captured["classifier_kwargs"]["model"] == runner.cfg.llm.classifier_model
+    assert captured["classifier_kwargs"]["thinking"] == {"type": "disabled"}
 
 
 @pytest.mark.requires_postgres
@@ -128,3 +138,36 @@ def test_missing_clients_degrade_only_when_durable_work_exists(monkeypatch):
     assert work["n_enrichment_pending"] == 1
     assert any("translator_unavailable" in error for error in work_runner._errors)
     assert any("classifier_unavailable" in error for error in work_runner._errors)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_zero_llm_budget_defers_without_claiming_or_incrementing_attempts(monkeypatch):
+    _django_setup()
+    from core.models import Post, PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import reattribute
+    from x_monitor.config import Config
+
+    post = Post.objects.create(tweet_id="post-fetch-budget", text="DeepSeek")
+    state = PostEnrichmentState.objects.create(post=post)
+    monkeypatch.setattr(
+        reattribute,
+        "build_translator_client_from_env",
+        lambda cfg: pytest.fail("budget should stop before client construction"),
+    )
+
+    runner = CycleRunner(
+        cfg=Config(enabled_models=["deepseek"], daily_ceiling=100),
+        _max_llm_calls=0,
+    )
+    counters = runner._run_post_fetch([], run_id="run-budget")
+
+    state.refresh_from_db()
+    assert counters["n_enrichment_deferred"] == 1
+    assert counters["n_llm_calls"] == 0
+    assert state.translation_attempts == 0
+    assert state.classification_attempts == 0
+    assert state.claim_run_id == ""
+    assert state.translation_status == PostEnrichmentState.Status.PENDING
+    assert state.classification_status == PostEnrichmentState.Status.PENDING

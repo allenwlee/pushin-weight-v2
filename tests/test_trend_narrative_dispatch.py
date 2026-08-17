@@ -145,7 +145,7 @@ def test_both_live_harvest_entrypoints_call_the_isolated_dispatch(monkeypatch):
     monkeypatch.setattr("x_monitor.config.load_config", lambda _path: cfg)
     monkeypatch.setattr("monitor.cycle.CycleRunner", Runner)
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda _cfg: None,
     )
     monkeypatch.setattr(

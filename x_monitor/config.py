@@ -272,9 +272,17 @@ class LlmConfig(BaseModel):
         default="deepseek-v4-pro",
         description="Model name for the classifier stage. Default matches the 2026-07-15 swap plan.",
     )
+    classifier_base_url: str | None = Field(
+        default=None,
+        description="Explicit Anthropic-compatible endpoint for classification.",
+    )
     relevancy_model: str = Field(
         default="claude-haiku-4-5",
         description="Model name for the relevancy gate. Default matches x_monitor/relevancy.py::DEFAULT_RELEVANCY_MODEL.",
+    )
+    relevancy_base_url: str | None = Field(
+        default=None,
+        description="Explicit Anthropic-compatible endpoint for the relevancy gate.",
     )
     signal_model: str = Field(
         default="claude-haiku-4-5",
@@ -575,6 +583,8 @@ def load_config(path: Path) -> Config:
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
+            "classifier_base_url": os.environ.get("X_MONITOR_CLASSIFIER_BASE_URL"),
+            "relevancy_base_url": os.environ.get("X_MONITOR_RELEVANCY_BASE_URL"),
         }.items() if v is not None
     }
     if env_llm_overrides:

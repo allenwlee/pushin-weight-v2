@@ -145,9 +145,9 @@ class Command(BaseCommand):
         relevancy_client = None
         try:
             from x_monitor.reattribute import (
-                build_anthropic_client_from_env,
+                build_relevancy_client_from_env,
             )
-            relevancy_client = build_anthropic_client_from_env(cfg)
+            relevancy_client = build_relevancy_client_from_env(cfg)
         except Exception as exc:
             self.stderr.write(
                 f"warn: failed to build relevancy client: {exc}; "

@@ -9,7 +9,7 @@ from typing import Literal
 from django.db import transaction
 from django.utils import timezone as django_timezone
 
-from core.models import CallState, HarvestBacklogWindow
+from core.models import BackfillJob, CallState, HarvestBacklogWindow
 
 TransferOutcome = Literal[
     "transferred",
@@ -127,12 +127,36 @@ def transfer_truncated_coverage(
 
 
 def finish_claim(window_id: int) -> bool:
-    """Delete a successfully replayed claim; false means ownership changed."""
+    """Finish a claim while retaining job-owned recovery audit rows."""
 
-    deleted, _ = HarvestBacklogWindow.objects.filter(
-        pk=window_id, state=HarvestBacklogWindow.State.CLAIMED
-    ).delete()
-    return deleted == 1
+    with transaction.atomic():
+        window = (
+            HarvestBacklogWindow.objects.select_for_update()
+            .filter(pk=window_id, state=HarvestBacklogWindow.State.CLAIMED)
+            .first()
+        )
+        if window is None:
+            return False
+        if window.backfill_job_id is None:
+            window.delete()
+            return True
+
+        job = BackfillJob.objects.select_for_update().get(pk=window.backfill_job_id)
+        window.state = HarvestBacklogWindow.State.COMPLETED
+        window.claim_owner = ""
+        window.claim_run_id = ""
+        window.claimed_at = None
+        window.claim_expires_at = None
+        window.save()
+        unfinished = job.windows.exclude(
+            state=HarvestBacklogWindow.State.COMPLETED
+        ).exists()
+        if not unfinished:
+            completed_at = django_timezone.now()
+            job.state = BackfillJob.State.COMPLETED
+            job.completed_at = completed_at
+            job.save(update_fields=["state", "completed_at", "updated_at"])
+        return True
 
 
 def return_claim(

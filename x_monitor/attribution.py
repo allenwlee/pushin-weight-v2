@@ -39,6 +39,7 @@ import re
 import time
 
 from ._json_parser import parse_llm_response
+from .llm_budget import LlmBudgetExhausted
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
@@ -1011,6 +1012,7 @@ def _call_signal_with_retry(
     *,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential backoff (mirrors translator).
 
@@ -1029,7 +1031,7 @@ def _call_signal_with_retry(
     """
     last_exc: Exception | None = None
     create_kwargs: dict[str, Any] = {
-        "model": _SIGNAL_MODEL,
+        "model": model or _SIGNAL_MODEL,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
@@ -1038,6 +1040,8 @@ def _call_signal_with_retry(
     for attempt in range(_MAX_RETRIES):
         try:
             return client.messages_create(**create_kwargs)
+        except LlmBudgetExhausted:
+            raise
         except Exception as e:
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
@@ -1082,6 +1086,8 @@ def classify_post(
     prompt = build_signal_prompt(text, brand_ids)
     try:
         response = _call_signal_with_retry(anthropic_client, prompt)
+    except LlmBudgetExhausted:
+        raise
     except Exception as e:
         logger.warning(
             "classify_post: LLM call failed after %d retries: %s",
@@ -1699,6 +1705,9 @@ def classify_pragmatics_full(
     brand_ids: list[str],
     brand_registry: list,
     anthropic_client: "ClaudeClient | None" = None,
+    *,
+    model: str | None = None,
+    thinking: "dict | None" = None,
 ) -> dict[str, Any]:
     """U4 (U2a): per-brand classification + top-level unsanctioned_flags.
 
@@ -1720,7 +1729,14 @@ def classify_pragmatics_full(
         registry_ids = set(brand_ids)
     prompt = build_pragmatics_full_prompt(text, brand_ids)
     try:
-        response = _call_signal_with_retry(anthropic_client, prompt)
+        response = _call_signal_with_retry(
+            anthropic_client,
+            prompt,
+            model=model,
+            thinking=thinking,
+        )
+    except LlmBudgetExhausted:
+        raise
     except Exception as e:
         logger.warning(
             "classify_pragmatics_full: LLM call failed after %d retries: %s",
@@ -1943,6 +1959,7 @@ def classify_batch_pragmatics_full(
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
+    model: str | None = None,
 ) -> list[dict[str, Any]]:
     """U4 (batched): per-post classification across N tweets, one LLM call per batch.
 
@@ -2031,7 +2048,10 @@ def classify_batch_pragmatics_full(
             response = _call_signal_with_retry(
                 anthropic_client, prompt,
                 max_tokens=max_tokens, thinking=thinking,
+                model=model,
             )
+        except LlmBudgetExhausted:
+            raise
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
             # fails to classify, fall back to per-post retries so a
@@ -2055,10 +2075,14 @@ def classify_batch_pragmatics_full(
                         brand_ids=list(t.get("brand_ids") or []),
                         brand_registry=list(brand_registry) if brand_registry else [],
                         anthropic_client=anthropic_client,
+                        model=model,
+                        thinking=thinking,
                     )
                     results.append(
                         single if isinstance(single, dict) else dict(empty),
                     )
+                except LlmBudgetExhausted:
+                    raise
                 except Exception as single_exc:
                     logger.warning(
                         "classify_batch_pragmatics_full: per-post fallback "
