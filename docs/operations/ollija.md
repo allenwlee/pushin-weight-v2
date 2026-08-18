@@ -86,6 +86,16 @@ records coding driver, origin host/terminal, execution host, process identity,
 heartbeat, endpoint, restart use, and outcome without requiring agents to add
 authorship lines to documents.
 
+### Lightweight Ollija change record
+
+Every material change to Ollija's behavior or operating rules must update
+`docs/ollija/CHANGES.md`. Each entry is deliberately shorter than a plan or a
+solution article and states the problem, new behavior, proof, and release
+impact. Ollija checks this before it creates a task checkpoint commit and again
+before it freezes a release candidate. Product changes outside Ollija do not
+need an entry. Agent and machine attribution comes from the task ledger, not
+handwritten document metadata.
+
 ### Failure routes
 
 Ollija writes only bounded incident facts under `.ollija/state/incidents/`—no
@@ -102,6 +112,12 @@ diagnostic workflow:
   and `ce-compound`.
 
 ## Local production-derived data
+
+This section applies when the candidate changes PushinWeight product behavior,
+database behavior, or any path Ollija cannot safely classify. A candidate made
+only of Ollija implementation, tests, rules, or documentation skips both data
+refresh commands and proceeds directly to hosted staging. The classifier is
+conservative: one unknown or product-facing path restores the full sequence.
 
 The source credential is a dedicated `ollija_dump` PostgreSQL login. It has
 `CONNECT`, schema `USAGE`, and `SELECT` privileges only, has no inherited

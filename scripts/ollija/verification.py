@@ -79,6 +79,51 @@ def _required_string(values: Mapping[str, object], key: str) -> str:
     return value.strip()
 
 
+def _same_origin_url(base_url: str, path: str, *, error_code: str) -> str:
+    try:
+        parsed_base = urlsplit(base_url)
+        base_port = parsed_base.port
+    except ValueError as exc:
+        raise VerificationError(
+            "production_verification_production_base_url_invalid"
+        ) from exc
+    try:
+        parsed_path = urlsplit(path)
+        stripped_path = urlsplit(path.lstrip("/"))
+    except ValueError as exc:
+        raise VerificationError(error_code) from exc
+    if (
+        parsed_base.scheme != "https"
+        or not parsed_base.hostname
+        or parsed_base.username
+        or parsed_base.password
+    ):
+        raise VerificationError("production_verification_production_base_url_invalid")
+    if (
+        not path.startswith("/")
+        or parsed_path.scheme
+        or parsed_path.netloc
+        or stripped_path.scheme
+        or stripped_path.netloc
+        or "\\" in path
+        or any(ord(char) < 32 or ord(char) == 127 for char in path)
+    ):
+        raise VerificationError(error_code)
+    url = urljoin(base_url.rstrip("/") + "/", path)
+    parsed_url = urlsplit(url)
+    if (
+        parsed_url.scheme,
+        parsed_url.hostname,
+        parsed_url.port,
+    ) != (
+        parsed_base.scheme,
+        parsed_base.hostname,
+        base_port,
+    ):
+        raise VerificationError(error_code)
+    return url
+
+
 def production_browser_probe(
     verification: Mapping[str, object],
     *,
@@ -88,18 +133,12 @@ def production_browser_probe(
     """Validate the production browser contract before production mutation."""
 
     base_url = _required_string(verification, "production_base_url")
-    parsed_base = urlsplit(base_url)
-    if (
-        parsed_base.scheme != "https"
-        or not parsed_base.hostname
-        or parsed_base.username
-        or parsed_base.password
-    ):
-        raise VerificationError("production_verification_production_base_url_invalid")
     for key in ("health_path", "smoke_path", "headline_path"):
-        value = _required_string(verification, key)
-        if not value.startswith("/") or urlsplit(value).netloc:
-            raise VerificationError(f"production_verification_{key}_invalid")
+        _same_origin_url(
+            base_url,
+            _required_string(verification, key),
+            error_code=f"production_verification_{key}_invalid",
+        )
     _required_string(verification, "headline_selector")
     _required_string(verification, "headline_unavailable_text")
 
@@ -135,7 +174,11 @@ def observe_configured_headline(
     base_url = _required_string(verification, "production_base_url")
     headline_path = _required_string(verification, "headline_path")
     return browser_probe.observe_headline(
-        url=urljoin(base_url.rstrip("/") + "/", headline_path.lstrip("/")),
+        url=_same_origin_url(
+            base_url,
+            headline_path,
+            error_code="production_verification_headline_path_invalid",
+        ),
         selector=_required_string(verification, "headline_selector"),
         unavailable_text=_required_string(
             verification,
@@ -246,7 +289,11 @@ def probe_route(
     *,
     timeout_seconds: int = 30,
 ) -> RouteObservation:
-    url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+    url = _same_origin_url(
+        base_url,
+        path,
+        error_code="production_verification_route_path_invalid",
+    )
     try:
         response = requests.get(url, timeout=timeout_seconds, allow_redirects=True)
     except requests.RequestException as exc:
@@ -333,7 +380,11 @@ def verify_production(
     model = verify_dsv4_configuration(root)
     health = probe_route(base_url, health_path)
     smoke = probe_route(base_url, smoke_path)
-    headline_url = urljoin(base_url.rstrip("/") + "/", headline_path.lstrip("/"))
+    headline_url = _same_origin_url(
+        base_url,
+        headline_path,
+        error_code="production_verification_headline_path_invalid",
+    )
     browser = browser_probe.observe_headline(
         url=headline_url,
         selector=headline_selector,

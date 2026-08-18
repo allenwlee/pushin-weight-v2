@@ -20,6 +20,12 @@ from .approvals import (
     owner_override_receipt,
 )
 from .bridgewright import BridgewrightError, collect_bridgewright_evidence
+from .changes import (
+    ChangeLedgerError,
+    load_change_ledger_baseline,
+    require_ollija_change_ledger,
+    requires_production_data_refresh,
+)
 from .config import ConfigError, load_project_config
 from .database import (
     DatabaseGuardError,
@@ -44,6 +50,7 @@ from .redaction import UnsafeOutputError, redact_text
 from .release import (
     GitPublisher,
     ReleaseError,
+    candidate_requires_data_refresh,
     inspect_refresh_readiness,
     promote_candidate,
     stage_candidate,
@@ -265,10 +272,10 @@ def _candidate_identity(config, facts) -> CandidateIdentity:
     )
 
 
-def _active_candidate_for_refresh(
+def _active_candidate(
     config,
     facts,
-) -> tuple[ReceiptStore, tuple[Receipt, ...], Receipt]:
+) -> tuple[ReceiptStore, Receipt]:
     store = ReceiptStore(
         config.state_root,
         retention_days=config.state.retention_days,
@@ -276,19 +283,21 @@ def _active_candidate_for_refresh(
     candidate_id = store.read_reference("active_candidate")
     if not candidate_id:
         raise RefreshError("active_candidate_missing")
-    receipts = store.iter_receipts()
-    candidate = next(
-        (
-            receipt
-            for receipt in receipts
-            if receipt.kind == "candidate" and receipt.receipt_id == candidate_id
-        ),
-        None,
-    )
-    if candidate is None:
-        raise RefreshError("active_candidate_receipt_missing")
+    try:
+        candidate = store.load_receipt("candidate", candidate_id)
+    except ReceiptError as exc:
+        raise RefreshError("active_candidate_receipt_missing") from exc
     if candidate.candidate != _candidate_identity(config, facts):
         raise RefreshError("active_candidate_identity_mismatch")
+    return store, candidate
+
+
+def _active_candidate_for_refresh(
+    config,
+    facts,
+) -> tuple[ReceiptStore, tuple[Receipt, ...], Receipt]:
+    store, candidate = _active_candidate(config, facts)
+    receipts = store.iter_receipts()
     return store, receipts, candidate
 
 
@@ -315,9 +324,21 @@ def _start_candidate(config, facts) -> CommandResult:
     blocked = _preflight_mutation("start", facts)
     if blocked:
         return blocked
+    changed_paths = _changed_paths(config)
+    baseline_text = load_change_ledger_baseline(
+        config.root,
+        f"origin/{config.git.production_branch}",
+        runner=SubprocessRunner(),
+    )
+    require_ollija_change_ledger(
+        config.root,
+        changed_paths,
+        baseline_text=baseline_text,
+    )
+    data_refresh_required = requires_production_data_refresh(changed_paths)
     beta = parse_beta_version(facts.package_version)
     GitPublisher(config.root).assert_tag_absent(beta.release_tag)
-    impact = assess_ui_impact(config, _changed_paths(config))
+    impact = assess_ui_impact(config, changed_paths)
     if not facts.git.head_sha:
         raise VersionError("candidate_sha_unavailable")
     candidate = CandidateIdentity(
@@ -336,6 +357,7 @@ def _start_candidate(config, facts) -> CommandResult:
             "changed_paths": list(impact.changed_paths),
             "required_approvals": list(impact.required_approvals),
             "required_evidence": list(impact.required_evidence),
+            "data_refresh_required": data_refresh_required,
         },
     )
     store = ReceiptStore(
@@ -356,10 +378,18 @@ def _start_candidate(config, facts) -> CommandResult:
             "ui_required": impact.ui_required,
             "required_approvals": list(impact.required_approvals),
             "required_evidence": list(impact.required_evidence),
+            "data_refresh_required": data_refresh_required,
         },
-        next_action=NextAction(
-            "ollija refresh-local",
-            "Refresh data evidence for this exact candidate before staging.",
+        next_action=(
+            NextAction(
+                "ollija refresh-local",
+                "Refresh data evidence for this exact candidate before staging.",
+            )
+            if data_refresh_required
+            else NextAction(
+                "ollija stage",
+                "This workflow-only candidate needs no production-derived data.",
+            )
         ),
     )
 
@@ -521,16 +551,35 @@ def _refresh_local(config, facts) -> CommandResult:
     blocked = _preflight_mutation("refresh-local", facts)
     if blocked:
         return blocked
+    store, candidate_receipt = _active_candidate(
+        config,
+        facts,
+    )
+    if not candidate_requires_data_refresh(candidate_receipt):
+        return CommandResult(
+            command="refresh-local",
+            status="ok",
+            state="ready_to_stage",
+            summary="Production-derived data is not required for this candidate.",
+            evidence=(
+                EvidenceRef(
+                    "git_commit",
+                    candidate_receipt.candidate.sha,
+                    candidate_receipt.candidate.sha,
+                ),
+            ),
+            details={"data_refresh_required": False},
+            next_action=NextAction(
+                "ollija stage",
+                "Deploy the workflow-only candidate without copying production data.",
+            ),
+        )
     source_url = os.environ.get("OLLIJA_PROD_READONLY_DATABASE_URL", "")
     if not source_url:
         return _mutation_failure(
             "refresh-local",
             "production_readonly_database_url_missing",
         )
-    store, _receipts, candidate_receipt = _active_candidate_for_refresh(
-        config,
-        facts,
-    )
     backend = PostgresRefreshBackend(
         config=config,
         source_database_url=source_url,
@@ -598,6 +647,30 @@ def _refresh_staging(config, facts) -> CommandResult:
     blocked = _preflight_mutation("refresh-staging", facts)
     if blocked:
         return blocked
+    store, candidate_receipt = _active_candidate(
+        config,
+        facts,
+    )
+    if not candidate_requires_data_refresh(candidate_receipt):
+        return CommandResult(
+            command="refresh-staging",
+            status="ok",
+            state="ready_to_stage",
+            summary="Hosted data refresh is not required for this candidate.",
+            evidence=(
+                EvidenceRef(
+                    "git_commit",
+                    candidate_receipt.candidate.sha,
+                    candidate_receipt.candidate.sha,
+                ),
+            ),
+            details={"data_refresh_required": False},
+            next_action=NextAction(
+                "ollija stage",
+                "Deploy the workflow-only candidate without replacing staging data.",
+            ),
+        )
+    receipts = store.iter_receipts()
     target_url = os.environ.get("OLLIJA_STAGING_DATABASE_URL", "")
     staging = config.environments.get("staging", {})
     resource_id = staging.get("database_resource_id")
@@ -608,10 +681,6 @@ def _refresh_staging(config, facts) -> CommandResult:
             "refresh-staging",
             "staging_database_resource_identity_missing",
         )
-    store, receipts, candidate_receipt = _active_candidate_for_refresh(
-        config,
-        facts,
-    )
     readiness = inspect_refresh_readiness(
         config,
         store,
@@ -895,6 +964,7 @@ def main(
     except (
         ApprovalError,
         BridgewrightError,
+        ChangeLedgerError,
         DatabaseGuardError,
         PreviewError,
         ProcessControlError,

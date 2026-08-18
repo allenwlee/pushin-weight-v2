@@ -30,8 +30,7 @@ class ProcessIdentity:
 def supervisor_session_name(task_id: str, generation: int) -> str:
     if not _TASK_ID.fullmatch(task_id) or generation < 1:
         raise ProcessControlError("task_identity_invalid")
-    safe_task = task_id.replace(".", "_")
-    return f"ollija-{safe_task}-g{generation}"
+    return f"ollija-{task_id}-g{generation}"
 
 
 def supervisor_session_exists(

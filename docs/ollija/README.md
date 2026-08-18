@@ -2,6 +2,11 @@ yes add a readme, with plenty of technical details, but written so that a nontec
 
 # Ollija
 
+Material Ollija fixes and rule changes are summarized in
+[`CHANGES.md`](CHANGES.md). This concise ledger is the first place to look for
+what changed and why; plans and solution documents remain optional deeper
+records.
+
 Ollija is PushinWeight’s release-control system. It guides one developer through
 the path from a code change to a reviewed staging release and, finally, a
 production release.

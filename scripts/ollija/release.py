@@ -28,8 +28,8 @@ class ReleaseError(ValueError):
 @dataclass(frozen=True, slots=True)
 class ReleaseEvidence:
     candidate: Receipt
-    local_refresh: Receipt
-    hosted_refresh: Receipt
+    local_refresh: Receipt | None
+    hosted_refresh: Receipt | None
     staging_deploy: Receipt | None = None
     approvals: tuple[Receipt, ...] = ()
     bridgewright_evidence: tuple[Receipt, ...] = ()
@@ -207,6 +207,9 @@ def inspect_refresh_readiness(
 ) -> RefreshReadiness:
     """Return the next refresh transition using the same gates as release."""
 
+    if not candidate_requires_data_refresh(candidate):
+        return RefreshReadiness("ready_to_stage")
+
     try:
         local = _referenced_receipt(
             store,
@@ -333,6 +336,10 @@ def _active_candidate(
     return candidate
 
 
+def candidate_requires_data_refresh(candidate: Receipt) -> bool:
+    return candidate.payload.get("data_refresh_required") is not False
+
+
 def _require_refreshes(
     config: ProjectConfig,
     store: ReceiptStore,
@@ -340,7 +347,7 @@ def _require_refreshes(
     candidate: Receipt,
     *,
     now: datetime,
-) -> tuple[Receipt, Receipt]:
+) -> tuple[Receipt | None, Receipt | None]:
     readiness = inspect_refresh_readiness(
         config,
         store,
@@ -350,7 +357,9 @@ def _require_refreshes(
     )
     if readiness.error_code:
         raise ReleaseError(readiness.error_code)
-    if readiness.local is None or readiness.hosted is None:
+    if candidate_requires_data_refresh(candidate) and (
+        readiness.local is None or readiness.hosted is None
+    ):
         raise ReleaseError("refresh_evidence_incomplete")
     return readiness.local, readiness.hosted
 
@@ -429,8 +438,13 @@ def stage_candidate(
         payload={
             **deployment.to_receipt_payload(),
             "environment": "staging",
-            "local_refresh_receipt_id": local_refresh.receipt_id,
-            "hosted_refresh_receipt_id": hosted_refresh.receipt_id,
+            "data_refresh_required": candidate_requires_data_refresh(candidate),
+            "local_refresh_receipt_id": (
+                local_refresh.receipt_id if local_refresh is not None else None
+            ),
+            "hosted_refresh_receipt_id": (
+                hosted_refresh.receipt_id if hosted_refresh is not None else None
+            ),
         },
     )
     store.write_receipt(receipt)

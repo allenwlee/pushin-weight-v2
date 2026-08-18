@@ -25,6 +25,12 @@ grant continues automatically when checks pass, but it waits for any desktop
 or physical-iPhone approval required by the exact candidate. No ordinary
 session, status read, shell login, or machine startup grants work authority.
 
+Production-derived local and hosted data refreshes are required for product or
+unknown candidate paths. A candidate containing only Ollija implementation,
+tests, rules, or documentation goes directly to hosted staging without copying
+production data. Staging review, candidate-specific owner approval, release,
+and production verification still apply.
+
 ## Enforce host, workspace, and Git placement strictly
 
 - `fuchitalee` is the sole writable authority. `allenwlee` is a keyboard and
@@ -45,6 +51,11 @@ session, status read, shell login, or machine startup grants work authority.
   creates the checkpoint commit.
 - Never substitute direct Git, Render, PostgreSQL, receipt, or tag mutations
   for the Ollija command surface.
+- Record every material Ollija behavior or rule change in
+  `docs/ollija/CHANGES.md`. Keep the entry concise: problem, new behavior,
+  proof, and release impact. Do not add manual authorship; the task ledger owns
+  agent, machine, generation, and commit attribution. Ollija refuses its
+  checkpoint and candidate freeze when the entry is missing or malformed.
 
 ## Begin from observed state
 

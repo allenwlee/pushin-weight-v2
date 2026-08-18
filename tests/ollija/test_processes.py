@@ -14,6 +14,7 @@ from scripts.ollija.processes import (
     observe_process,
     start_detached_supervisor,
     stop_task_processes,
+    supervisor_session_name,
 )
 from scripts.ollija.tasks import TaskRegistry
 from tests.ollija.test_tasks import _grant
@@ -76,6 +77,12 @@ def test_tmux_launch_uses_fixed_tokens_and_rejects_metacharacters(tmp_path: Path
             workspace=tmp_path,
             runner=_Runner([]),
         )
+
+
+def test_tmux_session_names_preserve_distinct_task_ids() -> None:
+    assert supervisor_session_name("release.1", 1) != supervisor_session_name(
+        "release_1", 1
+    )
 
 
 def test_stop_commits_cancellation_then_kills_only_owned_process_group(

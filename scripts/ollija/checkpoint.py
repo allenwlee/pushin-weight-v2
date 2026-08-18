@@ -8,6 +8,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .changes import (
+    ChangeLedgerError,
+    load_change_ledger_baseline,
+    require_ollija_change_ledger,
+)
 from .git import CommandRunner, SubprocessRunner
 from .incidents import record_task_incident
 from .tasks import TaskConflict, TaskRegistry, TaskSnapshot, TaskValidationError
@@ -88,6 +93,14 @@ def _changed_paths(runner: CommandRunner, workspace: Path) -> tuple[str, ...]:
         if candidate.is_absolute() or ".." in candidate.parts:
             raise CheckpointError("task_diff_path_invalid")
     return tuple(sorted(paths))
+
+
+def _documentation_only(paths: tuple[str, ...]) -> bool:
+    return bool(paths) and all(
+        path.startswith("docs/")
+        or ("/" not in path and path.casefold().endswith((".md", ".rst", ".txt")))
+        for path in paths
+    )
 
 
 def _default_release_executor(workspace: Path) -> ReleaseExecutor:
@@ -279,6 +292,33 @@ def checkpoint_task(
             code="task_diff_missing",
             phase="checkpoint.diff",
         )
+    if task.no_test_reason and not _documentation_only(paths):
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code="verification_required_for_behavior_change",
+            phase="checkpoint.verify",
+        )
+    try:
+        baseline_text = load_change_ledger_baseline(
+            workspace,
+            task.starting_sha,
+            runner=active_runner,
+        )
+        require_ollija_change_ledger(
+            workspace,
+            paths,
+            baseline_text=baseline_text,
+        )
+    except ChangeLedgerError as exc:
+        return _pause(
+            registry,
+            task_id,
+            generation,
+            code=str(exc),
+            phase="checkpoint.change_ledger",
+        )
     for command in task.verification_argv:
         result = _run(active_runner, workspace, command, timeout=3600)
         if result.returncode != 0:
@@ -337,6 +377,7 @@ def checkpoint_task(
             code="checkpoint_sha_unchanged",
             phase="checkpoint.identity",
         )
+    registry.record_checkpoint(task_id, generation, outcome_sha=outcome_sha)
     if task.endpoint == "commit":
         return registry.complete(task_id, generation, outcome_sha=outcome_sha)
     return production_tail(

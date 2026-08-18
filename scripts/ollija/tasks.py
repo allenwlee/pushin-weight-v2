@@ -532,7 +532,9 @@ class TaskRegistry:
                 raise TaskConflict(f"task_transition_invalid:{current_state}:{state}")
             connection.execute(
                 """UPDATE generations
-                      SET state = ?, updated_at = ?, outcome_sha = ?, failure_code = ?
+                      SET state = ?, updated_at = ?,
+                          outcome_sha = COALESCE(?, outcome_sha),
+                          failure_code = ?
                     WHERE task_id = ? AND generation = ?""",
                 (state, now, outcome_sha, failure_code, task_id, generation),
             )
@@ -554,6 +556,19 @@ class TaskRegistry:
             generation,
             "committing",
             allowed=frozenset({"running", "committing"}),
+        )
+
+    def record_checkpoint(
+        self, task_id: str, generation: int, *, outcome_sha: str
+    ) -> TaskSnapshot:
+        if not _SHA.fullmatch(outcome_sha):
+            raise TaskValidationError("task_outcome_sha_invalid")
+        return self._set_state(
+            task_id,
+            generation,
+            "committing",
+            allowed=frozenset({"committing"}),
+            outcome_sha=outcome_sha,
         )
 
     def mark_awaiting_approval(

@@ -17,6 +17,7 @@ from scripts.ollija.release import (
     ReleaseError,
     inspect_refresh_readiness,
     require_release_readiness,
+    stage_candidate,
     verify_and_tag_candidate,
 )
 from scripts.ollija.render import RenderDeployment
@@ -60,6 +61,7 @@ def _write_ready_receipts(
     *,
     include_bridgewright: bool = True,
     include_override: bool = False,
+    data_refresh_required: bool = True,
 ) -> None:
     store = ReceiptStore(config.state_root)
     candidate = Receipt.create(
@@ -69,6 +71,7 @@ def _write_ready_receipts(
         payload={
             "required_approvals": ["desktop", "iphone"],
             "required_evidence": ["bridgewright"],
+            "data_refresh_required": data_refresh_required,
         },
     )
     local = Receipt.create(
@@ -140,14 +143,9 @@ def _write_ready_receipts(
             "source_revision": "bridgewright-revision",
         },
     )
-    ready_receipts = [
-        candidate,
-        local,
-        hosted,
-        stage,
-        desktop,
-        iphone,
-    ]
+    ready_receipts = [candidate, stage, desktop, iphone]
+    if data_refresh_required:
+        ready_receipts[1:1] = [local, hosted]
     if include_bridgewright:
         ready_receipts.append(bridgewright)
     if include_override:
@@ -164,8 +162,9 @@ def _write_ready_receipts(
     for receipt in ready_receipts:
         store.write_receipt(receipt)
     store.set_reference("active_candidate", candidate.receipt_id)
-    store.set_reference("active_refresh", local.receipt_id)
-    store.set_reference("hosted_refresh", hosted.receipt_id)
+    if data_refresh_required:
+        store.set_reference("active_refresh", local.receipt_id)
+        store.set_reference("hosted_refresh", hosted.receipt_id)
     store.set_reference("active_staging", stage.receipt_id)
 
 
@@ -255,6 +254,35 @@ def test_release_readiness_preserves_explicit_override_provenance(
     assert evidence.owner_overrides[0].payload["owner"] == "allenwlee"
 
 
+def test_workflow_only_candidate_needs_no_refresh_receipts(tmp_path: Path) -> None:
+    config = _configured(tmp_path)
+    _write_ready_receipts(config, data_refresh_required=False)
+    store = ReceiptStore(config.state_root)
+    receipts = store.iter_receipts()
+    candidate = next(item for item in receipts if item.kind == "candidate")
+
+    readiness = inspect_refresh_readiness(
+        config,
+        store,
+        receipts,
+        candidate,
+        now=NOW,
+    )
+    evidence = require_release_readiness(
+        config=config,
+        git=_git(),
+        package_version="0.2.0b1",
+        staging_live=_stage(),
+        now=NOW,
+    )
+
+    assert readiness.state == "ready_to_stage"
+    assert readiness.local is None
+    assert readiness.hosted is None
+    assert evidence.local_refresh is None
+    assert evidence.hosted_refresh is None
+
+
 def test_hosted_refresh_must_derive_from_the_current_local_refresh(
     tmp_path: Path,
 ) -> None:
@@ -336,6 +364,39 @@ class _Publisher:
 
     def tag_and_push(self, *, sha: str, tag: str) -> None:
         self.tags.append((sha, tag))
+
+
+class _StagePublisher:
+    def __init__(self) -> None:
+        self.pushed: list[tuple[str, str]] = []
+
+    def assert_tag_absent(self, _tag: str) -> None:
+        return None
+
+    def push_exact(self, *, sha: str, branch: str) -> None:
+        self.pushed.append((sha, branch))
+
+
+def test_stage_workflow_only_candidate_without_refresh_receipts(
+    tmp_path: Path,
+) -> None:
+    config = _configured(tmp_path)
+    _write_ready_receipts(config, data_refresh_required=False)
+    publisher = _StagePublisher()
+
+    receipt = stage_candidate(
+        config=config,
+        git=_git(),
+        package_version="0.2.0b1",
+        render=_Render(_stage()),
+        publisher=publisher,
+        now=NOW,
+    )
+
+    assert publisher.pushed == [(SHA, config.git.staging_branch)]
+    assert receipt.payload["data_refresh_required"] is False
+    assert receipt.payload["local_refresh_receipt_id"] is None
+    assert receipt.payload["hosted_refresh_receipt_id"] is None
 
 
 class _Browser:

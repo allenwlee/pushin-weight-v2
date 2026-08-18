@@ -206,3 +206,23 @@ def test_browser_prerequisites_reject_bad_production_route(
 
     with pytest.raises(VerificationError, match="headline_path_invalid"):
         production_browser_probe(verification)
+
+
+def test_browser_prerequisites_reject_leading_slash_absolute_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verification = {
+        "production_base_url": "https://example.invalid",
+        "health_path": "/health/",
+        "smoke_path": "/login/",
+        "headline_path": "/https://attacker.invalid/feed/",
+        "headline_selector": "[data-headline]",
+        "headline_unavailable_text": "Unavailable",
+        "browser_storage_state_env": "TEST_STORAGE_STATE",
+        "browser_cdp_url_env": "TEST_CDP_URL",
+    }
+    monkeypatch.delenv("TEST_STORAGE_STATE", raising=False)
+    monkeypatch.setenv("TEST_CDP_URL", "http://localhost:9222")
+
+    with pytest.raises(VerificationError, match="headline_path_invalid"):
+        production_browser_probe(verification)
