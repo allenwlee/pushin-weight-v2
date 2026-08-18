@@ -1120,6 +1120,47 @@ class CallState(models.Model):
         ]
 
 
+class BackfillJob(models.Model):
+    """Durable operator-owned historical recovery plan."""
+
+    class SelectionMode(models.TextChoices):
+        EXPLICIT = "explicit", "Explicit range"
+        DETECTED_GAPS = "detected_gaps", "Detected zero-coverage gaps"
+
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+
+    key = models.CharField(max_length=64, unique=True)
+    requested_since = models.DateTimeField()
+    requested_until = models.DateTimeField()
+    selection_mode = models.CharField(max_length=24, choices=SelectionMode.choices)
+    selection_params = models.JSONField(default=dict, blank=True)
+    selected_intervals = models.JSONField(default=list, blank=True)
+    brand_filter = models.JSONField(default=list, blank=True)
+    plan_signature = models.CharField(max_length=64)
+    state = models.CharField(
+        max_length=16,
+        choices=State.choices,
+        default=State.ACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "backfill_jobs"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(requested_since__lt=models.F("requested_until")),
+                name="ck_backfill_job_interval",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["state", "created_at"], name="idx_bfj_state_created"),
+        ]
+
+
 @dataclass(frozen=True)
 class BacklogNormalizationResult:
     """Durable ownership result consumed by the later cursor-transfer unit."""
@@ -1183,7 +1224,10 @@ class HarvestBacklogWindowManager(models.Manager):
             if pending_limit <= 0 or quarantined_limit <= 0:
                 raise ValueError("backlog row ceilings must be positive")
 
-            identity_rows = self.select_for_update().filter(**call_identity)
+            identity_rows = self.select_for_update().filter(
+                backfill_job__isnull=True,
+                **call_identity,
+            )
             exact = identity_rows.filter(
                 remaining_since=remaining_since,
                 remaining_until=remaining_until,
@@ -1279,11 +1323,17 @@ class HarvestBacklogWindowManager(models.Manager):
                 window_id=window.pk,
             )
 
-    def recover_expired_claims(self, *, now=None) -> int:
+    @staticmethod
+    def _job_scope(backfill_job):
+        if backfill_job is None:
+            return models.Q(backfill_job__isnull=True)
+        return models.Q(backfill_job=backfill_job)
+
+    def recover_expired_claims(self, *, now=None, backfill_job=None) -> int:
         now = now or timezone.now()
         return self.filter(
             state="claimed", claim_expires_at__lte=now
-        ).update(
+        ).filter(self._job_scope(backfill_job)).update(
             state="pending",
             claim_owner="",
             claim_run_id="",
@@ -1301,18 +1351,19 @@ class HarvestBacklogWindowManager(models.Manager):
         call_identity: dict[str, str] | None = None,
         include_quarantined: bool = False,
         only_quarantined: bool = False,
+        backfill_job=None,
     ):
         """Claim one due interval with PostgreSQL skip-locked semantics."""
 
         now = now or timezone.now()
         with transaction.atomic():
-            self.recover_expired_claims(now=now)
+            self.recover_expired_claims(now=now, backfill_job=backfill_job)
             states = ["quarantined"] if only_quarantined else ["pending"]
             if include_quarantined and not only_quarantined:
                 states.append("quarantined")
             candidates = self.select_for_update(skip_locked=True).filter(
                 state__in=states
-            ).filter(
+            ).filter(self._job_scope(backfill_job)).filter(
                 models.Q(next_attempt_at__isnull=True)
                 | models.Q(next_attempt_at__lte=now)
             )
@@ -1349,7 +1400,15 @@ class HarvestBacklogWindow(models.Model):
         CLAIMED = "claimed", "Claimed"
         QUARANTINED = "quarantined", "Quarantined"
         WAIVED = "waived", "Waived"
+        COMPLETED = "completed", "Completed"
 
+    backfill_job = models.ForeignKey(
+        BackfillJob,
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
+        related_name="windows",
+    )
     brand_id = models.TextField()
     call_id = models.TextField()
     call_kind = models.TextField()
@@ -1407,7 +1466,22 @@ class HarvestBacklogWindow(models.Model):
                     "remaining_since",
                     "remaining_until",
                 ],
-                name="uq_hbw_call_remaining",
+                condition=models.Q(backfill_job__isnull=True),
+                name="uq_hbw_scheduled_remaining",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "backfill_job",
+                    "brand_id",
+                    "call_id",
+                    "call_kind",
+                    "bucket",
+                    "query_id",
+                    "remaining_since",
+                    "remaining_until",
+                ],
+                condition=models.Q(backfill_job__isnull=False),
+                name="uq_hbw_job_remaining",
             ),
         ]
         indexes = [
@@ -1425,6 +1499,10 @@ class HarvestBacklogWindow(models.Model):
             ),
             models.Index(
                 fields=["state", "next_attempt_at"], name="idx_hbw_state_due"
+            ),
+            models.Index(
+                fields=["backfill_job", "state", "remaining_since"],
+                name="idx_hbw_job_state_since",
             ),
             models.Index(fields=["claim_expires_at"], name="idx_hbw_claim_expiry"),
         ]

@@ -19,7 +19,8 @@ The cycle flow:
 
 LLM guardrails (U2):
   - Pause between classifier batches via X_MONITOR_LLM_PAUSE_SECONDS
-  - Hard cap via _max_llm_calls (None = no cap, used by backfill command)
+  - Shared pre-call cap across relevance, translation, classification,
+    retries, repairs, and fallbacks (None = no cap)
 
 Key constraint (KTD2): The legacy x_monitor/run.py and macOS launchd
 agents MUST remain untouched. This is a NEW entry point.
@@ -79,6 +80,11 @@ from x_monitor.attribution import (
     compile_keyword_index,
 )
 from x_monitor.config import KNOWN_MODELS, Config, CycleConfig, load_config
+from x_monitor.llm_budget import (
+    BudgetedLlmClient,
+    LlmBudgetExhausted,
+    LlmCallBudget,
+)
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 
@@ -946,12 +952,17 @@ def _persist_attribution(
 # ============================================================================
 
 
-def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
+def plan_calls_for_cycle(
+    cfg: Config | None = None,
+    *,
+    brand_filter: list[str] | None = None,
+) -> list[PlannedCall]:
     """Plan harvest calls from settings — shared by CycleRunner and backfill.
 
-    Reads X_MONITOR_LIST_ID, brand filter, primary keywords, and
-    x_query_specs from Django settings. Returns empty list when the
-    list ID is not configured.
+    Reads X_MONITOR_LIST_ID, primary keywords, and x_query_specs from the
+    shared config sources. ``brand_filter`` is explicit for durable backfill
+    jobs; when omitted, the scheduled-cycle settings fallback is preserved.
+    Returns empty list when the list ID is not configured.
 
     The optional `cfg` parameter exists so production callers can pass
     the loaded Config (avoids a second disk read for callers that
@@ -986,14 +997,23 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
     else:
         primary_keywords = _load_primary_keywords()
 
-    brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
-    if brand_filter_raw and isinstance(brand_filter_raw, str):
-        brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
-        if brand_filter:
-            primary_keywords = {
-                k: v for k, v in primary_keywords.items() if k in brand_filter
-            }
-            logger.info("plan_calls_for_cycle: brand filter active — %s", brand_filter)
+    effective_brand_filter = brand_filter
+    if effective_brand_filter is None:
+        brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
+        if brand_filter_raw and isinstance(brand_filter_raw, str):
+            effective_brand_filter = [
+                b.strip() for b in brand_filter_raw.split(",") if b.strip()
+            ]
+    if effective_brand_filter:
+        primary_keywords = {
+            k: v
+            for k, v in primary_keywords.items()
+            if k in effective_brand_filter
+        }
+        logger.info(
+            "plan_calls_for_cycle: brand filter active — %s",
+            effective_brand_filter,
+        )
 
     return plan_calls(
         list_id,
@@ -1017,6 +1037,7 @@ class CycleRunner:
         dry_run: bool = False,
         cycle_kind: str = "manual",
         _backfill_call_ids: list[str] | None = None,
+        _brand_filter: list[str] | None = None,
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
         _clock=None,
@@ -1033,9 +1054,11 @@ class CycleRunner:
         # If set, only execute these call IDs (all must be in the plan).
         # Used by the backfill command for batched, resumable execution.
         self._backfill_call_ids = _backfill_call_ids
-        # Hard cap on LLM batches per invocation.  None = no cap.
-        # Used by the backfill command to limit API spend on large windows.
-        self._max_llm_calls = _max_llm_calls
+        self._brand_filter = (
+            list(_brand_filter) if _brand_filter is not None else None
+        )
+        # Hard cap on actual outbound LLM requests. None means no cap.
+        self._llm_budget = LlmCallBudget(max_calls=_max_llm_calls)
         # U6 runtime wire-in: injected llm_call(system, user) -> str
         # dependency for the binary relevancy gate (R19a +
         # x_monitor/relevancy.py). Default None → gate is a no-op (KEEP).
@@ -1045,7 +1068,6 @@ class CycleRunner:
         # proof. Production defaults remain the wall/monotonic clocks.
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
         self._monotonic = _monotonic or time.monotonic
-        self._llm_call_count: int = 0
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
         self._posts_inserted: int = 0
@@ -1166,7 +1188,15 @@ class CycleRunner:
     def _plan_calls(self) -> list[PlannedCall]:
         """Build the per-cycle call list via plan_calls_for_cycle()."""
         try:
-            calls = plan_calls_for_cycle(self.cfg)
+            if self._brand_filter is None:
+                # Preserve the scheduled runner's original planner call shape;
+                # explicit filtering is a backfill-only extension.
+                calls = plan_calls_for_cycle(self.cfg)
+            else:
+                calls = plan_calls_for_cycle(
+                    self.cfg,
+                    brand_filter=self._brand_filter,
+                )
         except (TypeError, ValueError) as exc:
             logger.warning("CycleRunner._plan_calls: plan_calls failed: %s", exc)
             self._errors.append(f"plan: {exc}")
@@ -1217,6 +1247,7 @@ class CycleRunner:
         *,
         window: tuple[int, int],
         tip_only: bool = False,
+        single_page: bool = False,
         deadline: Any | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """Fetch tweets for one PlannedCall via TwitterAPI.io.
@@ -1259,7 +1290,11 @@ class CycleRunner:
             if max_per_page_cfg is not None
             else self.cfg.search.max_per_page
         )
-        if tip_only:
+        if single_page:
+            max_results_cap = 20
+            max_pages_cap = 1
+            max_per_page_cap = 20
+        elif tip_only:
             # Scheduled delivery is breadth-first: admit one fresh page for
             # every logical call before bounded backlog/deep-page work starts.
             max_results_cap = min(max_results_cap, max_per_page_cap)
@@ -1328,7 +1363,7 @@ class CycleRunner:
 
         max_walks = (
             1
-            if tip_only or deadline is not None
+            if tip_only or single_page or deadline is not None
             else self.cfg.cycle.max_truncation_walks
         )
         for walk in range(max_walks):
@@ -1551,6 +1586,7 @@ class CycleRunner:
             else:
                 started = self._monotonic()
                 try:
+                    self._llm_budget.consume()
                     verdict = call_binary_relevancy_llm(
                         post_text=item.get("text") or "",
                         call_id="A",
@@ -1564,6 +1600,8 @@ class CycleRunner:
                         keep = verdict.decision != "DROP"
                         if verdict.parse_failed:
                             degraded.append(f"relevancy_parse_fail_open:{tweet_id}")
+                except LlmBudgetExhausted:
+                    degraded.append(f"relevancy_budget_deferred:{tweet_id}")
                 except Exception as exc:
                     degraded.append(f"relevancy_error_fail_open:{tweet_id}:{exc}")
             if not keep:
@@ -1748,9 +1786,9 @@ class CycleRunner:
 
         Guardrails:
           - Pause between classifier batches (X_MONITOR_LLM_PAUSE_SECONDS).
-          - Hard cap on LLM batches (self._max_llm_calls).  When reached,
-            classification stops — remaining posts are persisted without
-            labels and will be picked up by the next invocation.
+          - One shared cap on actual outbound LLM calls, including retries and
+            repair calls. When reached, remaining posts stay eligible for a
+            later invocation.
 
         Lazy imports are used so the module loads without LLM deps.
         """
@@ -1773,6 +1811,13 @@ class CycleRunner:
         }
 
         enrichment_cfg = self.cfg.harvest.enrichment
+        if self._llm_budget.remaining == 0:
+            counters["n_enrichment_deferred"] = PostEnrichmentState.objects.filter(
+                Q(translation_status=PostEnrichmentState.Status.PENDING)
+                | Q(classification_status=PostEnrichmentState.Status.PENDING)
+            ).count()
+            counters["n_llm_calls"] = self._llm_budget.used
+            return counters
         if deadline is not None and not deadline.can_start(
             enrichment_cfg.attempt_budget_seconds
         ):
@@ -1813,6 +1858,16 @@ class CycleRunner:
 
         translator_client = build_translator_client_from_env(self.cfg)
         classifier_client = build_anthropic_client_from_env(self.cfg)
+        if translator_client is not None:
+            translator_client = BudgetedLlmClient(
+                translator_client,
+                self._llm_budget,
+            )
+        if classifier_client is not None:
+            classifier_client = BudgetedLlmClient(
+                classifier_client,
+                self._llm_budget,
+            )
         # Normalize claimed Django rows to v1 format. ``kept_posts`` remains
         # in the signature for caller compatibility; durable state is the
         # queue authority so retries survive later cycles and processes.
@@ -1876,6 +1931,15 @@ class CycleRunner:
                     ),
                     cfg=self.cfg,
                 )
+            except LlmBudgetExhausted:
+                logger.info(
+                    "_run_post_fetch: LLM budget exhausted during translation"
+                )
+                counters["n_enrichment_deferred"] = len(claimed_states)
+                counters["n_llm_calls"] = self._llm_budget.used
+                for state in claimed_states:
+                    _release_enrichment_claim(state.pk, run_id=run_id)
+                return counters
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
                 self._error_counts["translator_batch_failed"] += 1
@@ -1945,7 +2009,10 @@ class CycleRunner:
         counters["n_enrichment_quarantined"] += newly_failed
 
         # ---- Stage 2: classify ----
-        from x_monitor.attribution import classify_batch_pragmatics_full
+        from x_monitor.attribution import (
+            _resolve_thinking_default,
+            classify_batch_pragmatics_full,
+        )
 
         pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
 
@@ -1967,7 +2034,20 @@ class CycleRunner:
                         "classifier_batch_failed",
                         self._error_counts["classifier_batch_failed"] + 1,
                     ),
+                    model=self.cfg.llm.classifier_model,
+                    thinking=_resolve_thinking_default(
+                        self.cfg.llm.classifier_base_url or "",
+                    ),
                 )
+            except LlmBudgetExhausted:
+                logger.info(
+                    "_run_post_fetch: LLM budget exhausted during classification"
+                )
+                counters["n_enrichment_deferred"] = len(claimed_states)
+                counters["n_llm_calls"] = self._llm_budget.used
+                for state in claimed_states:
+                    _release_enrichment_claim(state.pk, run_id=run_id)
+                return counters
             except Exception as exc:
                 logger.warning(
                     "_run_post_fetch: classify failed: %s", exc, exc_info=True
@@ -2081,28 +2161,16 @@ class CycleRunner:
                     )
                     counters["n_nationalism"] += 1
 
-            # Guard: pause / cap at batch boundaries.
-            # classify_batch_pragmatics_full batches 20 posts per LLM call
-            # internally.  We track boundaries in the result loop so the
-            # max_llm_calls cap can stop processing past a boundary.
-            if (i + 1) % _CLASSIFY_BATCH_SIZE == 0 and i + 1 < len(tweets):
-                if pause_sec > 0:
-                    import time as _time
+            # Preserve the configured inter-batch pause while the shared
+            # client wrapper owns exact pre-call accounting.
+            if (
+                (i + 1) % _CLASSIFY_BATCH_SIZE == 0
+                and i + 1 < len(tweets)
+                and pause_sec > 0
+            ):
+                import time as _time
 
-                    _time.sleep(pause_sec)
-                self._llm_call_count += 1
-                if (
-                    self._max_llm_calls is not None
-                    and self._llm_call_count >= self._max_llm_calls
-                ):
-                    logger.info(
-                        "_run_post_fetch: max_llm_calls (%d) reached — "
-                        "stopping classification",
-                        self._max_llm_calls,
-                    )
-                    break
-            elif (i + 1) % _CLASSIFY_BATCH_SIZE == 0:
-                self._llm_call_count += 1
+                _time.sleep(pause_sec)
 
         newly_failed += _finish_enrichment_stage(
             post_ids=claimed_post_ids,
@@ -2139,6 +2207,7 @@ class CycleRunner:
         if newly_failed:
             self._error_counts["enrichment_quarantined"] += newly_failed
             self._errors.append(f"post_fetch.enrichment_quarantined:{newly_failed}")
+        counters["n_llm_calls"] = self._llm_budget.used
         return counters
 
     def _replay_backlog(
@@ -2154,6 +2223,9 @@ class CycleRunner:
         include_quarantined: bool = False,
         quarantined_only: bool = False,
         cycle_started_monotonic: float | None = None,
+        backfill_job=None,
+        replay_limit: int | None = None,
+        single_page: bool = False,
     ) -> list[dict[str, Any]]:
         """Replay a bounded number of oldest pending residual windows."""
 
@@ -2173,7 +2245,14 @@ class CycleRunner:
         )
         backlog_cfg = self.cfg.harvest.backlog
 
-        for _ in range(backlog_cfg.replays_per_cycle):
+        limit = (
+            backlog_cfg.replays_per_cycle
+            if replay_limit is None
+            else replay_limit
+        )
+        if limit < 0:
+            raise ValueError("replay_limit must be non-negative")
+        for _ in range(limit):
             if not deadline.can_start(request_envelope):
                 reports.append({"status": "deadline_exhausted"})
                 break
@@ -2184,6 +2263,7 @@ class CycleRunner:
                 + timedelta(seconds=max(int(request_envelope * 2), 60)),
                 include_quarantined=include_quarantined,
                 only_quarantined=quarantined_only,
+                backfill_job=backfill_job,
             )
             if claim is None:
                 break
@@ -2221,6 +2301,7 @@ class CycleRunner:
                         int(claim.remaining_since.timestamp()),
                         int(claim.remaining_until.timestamp()),
                     ),
+                    single_page=single_page,
                     deadline=deadline,
                 )
                 replay_finished = self._monotonic()
@@ -2355,13 +2436,20 @@ class CycleRunner:
             reports.append(report)
         return reports
 
-    def replay_backlog_only(self, *, include_quarantined: bool = False) -> dict[str, Any]:
+    def replay_backlog_only(
+        self,
+        *,
+        include_quarantined: bool = False,
+        backfill_job=None,
+        request_limit: int | None = None,
+        api: TwitterApiClient | None = None,
+    ) -> dict[str, Any]:
         """Run explicit recovery without reading or advancing live cursors."""
 
         run_id = f"backlog-{uuid.uuid4().hex[:12]}"
         calls = self._plan_calls()
-        api = TwitterApiClient.from_env()
-        enabled_models = _resolve_enabled_models(self.cfg, None)
+        api = api or TwitterApiClient.from_env()
+        enabled_models = _resolve_enabled_models(self.cfg, self._brand_filter)
         index, search_terms = _build_brand_index(enabled_models)
         search_terms = {**search_terms, **_load_brand_search_terms()}
         kept_all: list[dict[str, Any]] = []
@@ -2378,6 +2466,9 @@ class CycleRunner:
             include_quarantined=include_quarantined,
             quarantined_only=include_quarantined,
             cycle_started_monotonic=replay_started_monotonic,
+            backfill_job=backfill_job,
+            replay_limit=request_limit,
+            single_page=backfill_job is not None,
         )
         post_fetch = self._run_post_fetch(
             kept_all,
@@ -2389,6 +2480,7 @@ class CycleRunner:
             "status": "completed" if not self._errors else "degraded",
             "backlog_replays": reports,
             "post_fetch": post_fetch,
+            "llm_calls": self._llm_budget.used,
             "errors": list(self._errors),
         }
 
@@ -2927,7 +3019,7 @@ class CycleRunner:
         # ---- One-shot metrics refresh (plan 2026-08-10-002) ----
         # Replaces continuous official/staff + daily QT recheck. Never
         # aborts the cycle — refresh failures are degraded stats.
-        if summary["status"] != "aborted":
+        if summary["status"] != "aborted" and self.cycle_kind != "backfill":
             try:
                 from monitor.metrics_refresh import run_metrics_refresh
 

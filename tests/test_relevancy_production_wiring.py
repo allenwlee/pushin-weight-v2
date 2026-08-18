@@ -15,7 +15,7 @@ def test_scheduled_entrypoint_threads_configured_model_and_timeout(monkeypatch):
 
     monkeypatch.setattr(tasks, "load_config", lambda path: cfg)
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda config: object(),
     )
 

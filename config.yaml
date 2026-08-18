@@ -128,17 +128,15 @@ metrics_refresh:
   per_cycle_cap: 200
 
 
-# LLM routing (plan 2026-08-01-002 U6). Defaults mirror the values
-# the v1 + v2 stacks used prior to this change; operators can
-# override per-env via X_MONITOR_<role>_MODEL without editing
-# config.yaml. The translator_base_url defaults to the
-# ANTHROPIC_BASE_URL env var (preserves the proxy path the v1
-# shell already configures).
+# Explicit per-role LLM routing. Runtime callers pass these exact models and
+# endpoints so unrelated process environment cannot cross-wire roles.
 llm:
-  translator_model: "deepseek-v4-pro"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
-  translator_base_url: null    # uses ANTHROPIC_BASE_URL env when null
+  translator_model: "deepseek-v4-pro"
+  translator_base_url: "https://api.deepseek.com/anthropic"
   classifier_model: "deepseek-v4-pro"
+  classifier_base_url: "https://api.deepseek.com/anthropic"
   relevancy_model: "claude-haiku-4-5"
+  relevancy_base_url: "https://api.anthropic.com"
   signal_model: "claude-haiku-4-5"
 
 # Shared V22 trend-narrative generation. This role never inherits the

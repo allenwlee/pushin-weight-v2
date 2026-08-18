@@ -48,9 +48,10 @@ from __future__ import annotations
 import json
 import logging
 import time
+from typing import Any, Protocol
 
 from ._json_parser import parse_llm_response
-from typing import Any, Protocol
+from .llm_budget import LlmBudgetExhausted
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +240,11 @@ def _call_with_retry(
     # call is actually routing to, not the operator's other env config.
     # The helper reads X_MONITOR_TRANSLATOR_BASE_URL first (per-role
     # override) when role="translator", else ANTHROPIC_BASE_URL.
-    thinking = _resolve_thinking_default(role="translator")
+    translator_base_url = cfg.llm.translator_base_url if cfg is not None else ""
+    thinking = _resolve_thinking_default(
+        translator_base_url or "",
+        role="translator",
+    )
     # Plan 2026-08-04-001: per-batch output budget sized by
     # _max_tokens_for_batch_size. The prior 4096 was too tight for
     # 20-tweet M3 batches (proxy-side cap truncated responses
@@ -259,6 +264,8 @@ def _call_with_retry(
             if thinking is not None:
                 kwargs["thinking"] = thinking
             return client.messages_create(**kwargs)
+        except LlmBudgetExhausted:
+            raise
         except Exception as e:
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
@@ -850,6 +857,8 @@ def translate_batch_pragmatics(
         )
         try:
             response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
+        except LlmBudgetExhausted:
+            raise
         except Exception as exc:
             logger.warning(
                 "translator_batch_failed",
@@ -897,6 +906,8 @@ def translate_batch_pragmatics(
                     client, repair_prompt, n_tweets=len(bad_tweets), cfg=cfg
                 )
                 repair_parsed = _parse_pragmatics_response(repair_resp, bad_tweets)
+            except LlmBudgetExhausted:
+                raise
             except Exception as exc:
                 logger.warning(
                     "translator_lang_repair_failed",
