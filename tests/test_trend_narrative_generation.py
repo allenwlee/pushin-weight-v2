@@ -967,6 +967,32 @@ def test_concrete_event_requires_a_supported_shared_anchor():
     assert captured.value.code == "headline_output_event_anchor_unsupported"
 
 
+def test_server_assembles_missing_event_anchor_from_cited_evidence():
+    snapshot = _snapshot(two_candidates=False)
+    snapshot["candidates"][0]["evidence"] = [
+        _evidence("e_one", "MiniMax announced the Aurora release today."),
+        _evidence("e_two", "Developers discussed the Aurora release from MiniMax."),
+    ]
+    payload = _valid_payload()
+    payload["body_en"] = (
+        "MiniMax draws attention after the Aurora release, with post volume up 100%."
+    )
+    payload["body_zh_cn"] = (
+        "MiniMax 在 Aurora release 发布后受到更多关注，帖子量上升100%。"
+    )
+    payload["claims"][0].update(
+        families=["volume", "evidence"],
+        evidence_ids=["e_one", "e_two"],
+        event_anchor="",
+        explanation_type="recurring_content",
+        evidence_confidence="recurring_independent",
+    )
+
+    result, _ = _generate(payload, snapshot=snapshot)
+
+    assert result.claims[0]["event_anchor"] == "the Aurora release"
+
+
 def test_event_language_without_anchor_fails_closed():
     payload = _valid_payload()
     payload["body_en"] = (

@@ -9,6 +9,7 @@ import re
 import time
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Literal
@@ -487,6 +488,205 @@ def generation_fingerprint(
     return hashlib.sha256(_canonical_json(contract).encode("utf-8")).hexdigest()
 
 
+def _assemble_server_metadata(
+    parsed: object,
+    packet: Mapping[str, Any],
+) -> object:
+    """Complete mechanical claim metadata from the validated input packet.
+
+    The provider remains responsible for the editorial prose and for choosing
+    evidence.  Metadata that is mechanically recoverable from that prose and
+    the cited packet rows is completed here, so a good story is not rejected
+    merely because the model omitted a redundant ID/family/anchor field.
+    Unsupported claims still fail the normal contract validators below.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    output = deepcopy(parsed)
+    candidates = {
+        str(candidate.get("candidate_id") or ""): candidate
+        for candidate in packet.get("candidates", [])
+        if candidate.get("candidate_id")
+    }
+    evidence_rows: dict[str, list[Mapping[str, Any]]] = {}
+    evidence_owners: dict[str, set[str]] = {}
+    quantitative_facts: dict[str, Mapping[str, Any]] = {}
+    for candidate_id, candidate in candidates.items():
+        for evidence in candidate.get("evidence", []):
+            evidence_id = str(evidence.get("evidence_id") or "")
+            if not evidence_id:
+                continue
+            evidence_rows.setdefault(evidence_id, []).append(evidence)
+            evidence_owners.setdefault(evidence_id, set()).add(candidate_id)
+        for fact in candidate.get("quantitative_facts", []):
+            fact_id = str(fact.get("fact_id") or "")
+            if fact_id:
+                quantitative_facts[fact_id] = fact
+
+    selected_ids = output.get("selected_candidate_ids")
+    if not isinstance(selected_ids, list):
+        selected_ids = []
+        output["selected_candidate_ids"] = selected_ids
+
+    subjects = output.get("subjects")
+    if not isinstance(subjects, list):
+        output["subjects"] = [
+            {
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "candidate_id": candidate_id,
+                "observed_name": "",
+                "evidence_ids": [],
+            }
+            for candidate_id in selected_ids
+            if candidate_id in candidates
+        ]
+
+    claims = output.get("claims")
+    if not isinstance(claims, list):
+        return output
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        claim_candidate_ids = claim.get("candidate_ids")
+        if not isinstance(claim_candidate_ids, list) or not claim_candidate_ids:
+            evidence_ids = claim.get("evidence_ids")
+            owners = {
+                owner
+                for evidence_id in evidence_ids or []
+                for owner in evidence_owners.get(str(evidence_id), set())
+            }
+            claim_candidate_ids = (
+                list(selected_ids)
+                if claim.get("observation_index") == -1
+                else sorted(owners)
+            )
+            if claim_candidate_ids:
+                claim["candidate_ids"] = claim_candidate_ids
+
+        evidence_ids = claim.get("evidence_ids")
+        if not isinstance(evidence_ids, list):
+            evidence_ids = []
+            claim["evidence_ids"] = evidence_ids
+        fact_ids = claim.get("quantitative_fact_ids")
+        derive_fact_ids = not isinstance(fact_ids, list)
+        if derive_fact_ids:
+            fact_ids = []
+            claim["quantitative_fact_ids"] = fact_ids
+
+        claim_en, claim_zh_cn = _claim_text_from_payload(output, claim)
+        if derive_fact_ids:
+            for fact_id, fact in quantitative_facts.items():
+                if (
+                    str(fact.get("candidate_id") or "") in claim_candidate_ids
+                    and str(fact.get("display_en") or "") in claim_en
+                    and str(fact.get("display_zh_cn") or "") in claim_zh_cn
+                ):
+                    fact_ids.append(fact_id)
+        families = claim.get("families")
+        derive_families = not isinstance(families, list)
+        if derive_families:
+            families = []
+            claim["families"] = families
+        if derive_families:
+            for fact_id in fact_ids:
+                family = str(quantitative_facts.get(fact_id, {}).get("family") or "")
+                if family and family not in families:
+                    families.append(family)
+            if evidence_ids:
+                families.append("evidence")
+
+        if (
+            _EVENT_LANGUAGE_EN_RE.search(claim_en)
+            or _EVENT_LANGUAGE_ZH_RE.search(claim_zh_cn)
+        ) and not claim.get("event_anchor"):
+            anchor = _derive_event_anchor(
+                evidence_ids,
+                evidence_rows,
+            )
+            if anchor:
+                claim["event_anchor"] = anchor
+    return output
+
+
+def _claim_text_from_payload(
+    output: Mapping[str, Any],
+    claim: Mapping[str, Any],
+) -> tuple[str, str]:
+    index = claim.get("observation_index")
+    if index == -1:
+        return str(output.get("body_en") or ""), str(output.get("body_zh_cn") or "")
+    try:
+        position = int(index)
+    except (TypeError, ValueError):
+        return "", ""
+    observations_en = output.get("observations_en")
+    observations_zh_cn = output.get("observations_zh_cn")
+    if not isinstance(observations_en, list) or not isinstance(observations_zh_cn, list):
+        return "", ""
+    if position < 0 or position >= len(observations_en) or position >= len(observations_zh_cn):
+        return "", ""
+    return str(observations_en[position]), str(observations_zh_cn[position])
+
+
+def _derive_event_anchor(
+    evidence_ids: Sequence[object],
+    evidence_rows: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> str:
+    event_pattern = re.compile(
+        r"(?:announc\w*|launch\w*|releas\w*|unveil\w*|debut\w*|"
+        r"open[- ](?:source|weight)\w*|publish\w*|发布|宣布|推出|上线|开源|亮相)",
+        re.IGNORECASE,
+    )
+    rows = [
+        evidence
+        for evidence_id in evidence_ids
+        for evidence in evidence_rows.get(str(evidence_id), ())
+    ]
+    for evidence in rows:
+        if not evidence.get("source_flags", {}).get("official"):
+            continue
+        excerpt = str(evidence.get("excerpt") or "")
+        for sentence in re.split(r"(?<=[.!?。！？])\s+|\n+", excerpt):
+            normalized = _normalized_span(sentence)
+            if normalized and event_pattern.search(normalized):
+                if len(normalized) <= 160:
+                    return normalized
+                match = event_pattern.search(normalized)
+                if match:
+                    return _normalized_span(match.group(0))
+
+    excerpts = [str(evidence.get("excerpt") or "") for evidence in rows]
+    if len(excerpts) >= 2:
+        phrase_candidates: set[str] = set()
+        for excerpt in excerpts:
+            words = re.findall(r"[\w][\w'.-]*", excerpt, flags=re.UNICODE)
+            for index, word in enumerate(words):
+                if not event_pattern.search(word):
+                    continue
+                for start in range(max(0, index - 4), index + 1):
+                    for end in range(index + 1, min(len(words), index + 5) + 1):
+                        phrase = _normalized_span(" ".join(words[start:end]))
+                        if phrase and event_pattern.search(phrase):
+                            phrase_candidates.add(phrase)
+        shared = [
+            phrase
+            for phrase in phrase_candidates
+            if sum(
+                phrase.casefold() in excerpt.casefold() for excerpt in excerpts
+            ) >= 2
+        ]
+        if shared:
+            return max(shared, key=len)[:160]
+
+    for excerpt in excerpts:
+        for sentence in re.split(r"(?<=[.!?。！？])\s+|\n+", excerpt):
+            normalized = _normalized_span(sentence)
+            if normalized and event_pattern.search(normalized):
+                return normalized[:160]
+    return ""
+
+
 def generate_trend_narrative(
     snapshot: dict[str, Any],
     config: HeadlineNarrativeConfig,
@@ -529,6 +729,7 @@ def generate_trend_narrative(
         raise HeadlineGenerationError(
             str(exc), transport_completed=True
         ) from None
+    parsed = _assemble_server_metadata(parsed, packet)
     try:
         output = _GenerationOutput.model_validate(parsed)
     except ValidationError:
