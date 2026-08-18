@@ -57,6 +57,13 @@ and production verification still apply.
   agent, machine, generation, and commit attribution. Ollija refuses its
   checkpoint and candidate freeze when the entry is missing or malformed.
 
+Development worktrees intended for release belong in the **Ollija release
+worktree area** at `.worktrees/` relative to the repository. Install the
+shared guard with `./bin/ollija worktree install-hook`. If an agent creates a
+worktree elsewhere, the guard asks whether to move it. Answering `N` leaves it
+usable for development but it is not release-eligible until moved with
+`./bin/ollija worktree move`.
+
 ## Begin from observed state
 
 Run this read-only command first:

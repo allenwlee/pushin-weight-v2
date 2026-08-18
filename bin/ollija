@@ -3,6 +3,7 @@ set -euo pipefail
 
 OLLIJA_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OLLIJA_REPO_ROOT="$(cd "$OLLIJA_BIN_DIR/.." && pwd)"
+OLLIJA_CALLER_DIRECTORY="$(pwd -P)"
 
 if [[ -x "$OLLIJA_REPO_ROOT/.venv/bin/python" ]]; then
   OLLIJA_PYTHON="$OLLIJA_REPO_ROOT/.venv/bin/python"
@@ -11,8 +12,19 @@ elif OLLIJA_GIT_COMMON_DIR="$(git -C "$OLLIJA_REPO_ROOT" rev-parse --path-format
   && [[ -x "$(dirname "$OLLIJA_GIT_COMMON_DIR")/.venv/bin/python" ]]; then
   OLLIJA_PYTHON="$(dirname "$OLLIJA_GIT_COMMON_DIR")/.venv/bin/python"
 else
-  OLLIJA_PYTHON="${PYTHON:-python3}"
+  OLLIJA_COMMON_GIT_DIR="$(git -C "$OLLIJA_REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [[ -x "$(dirname "$OLLIJA_COMMON_GIT_DIR")/.venv/bin/python" ]]; then
+    OLLIJA_PYTHON="$(dirname "$OLLIJA_COMMON_GIT_DIR")/.venv/bin/python"
+  else
+    OLLIJA_PYTHON="${PYTHON:-python3}"
+  fi
 fi
 
+if [[ -n "${PYTHONPATH:-}" ]]; then
+  export PYTHONPATH="$OLLIJA_REPO_ROOT:$PYTHONPATH"
+else
+  export PYTHONPATH="$OLLIJA_REPO_ROOT"
+fi
+export OLLIJA_WORKTREE_CWD="${OLLIJA_WORKTREE_CWD:-$OLLIJA_CALLER_DIRECTORY}"
 cd "$OLLIJA_REPO_ROOT"
 exec "$OLLIJA_PYTHON" -m scripts.ollija "$@"

@@ -7,6 +7,8 @@ authority:
     - allenwlee
   repository_root: /Users/fuchitalee/development/pushin-weight-v2
   repository_slug: allenwlee/pushin-weight-v2
+  release_worktree_label: Ollija release worktree area
+  release_worktree_path: .worktrees
 
 git:
   staging_branch: staging

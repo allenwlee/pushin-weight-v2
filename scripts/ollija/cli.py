@@ -6,6 +6,7 @@ import os
 import socket
 import subprocess
 import sys
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
@@ -76,6 +77,13 @@ from .verification import (
 )
 from .versioning import VersionError, parse_beta_version
 from .workspaces import WorkspaceError
+from .worktrees import (
+    WorktreeError,
+    guard_worktree,
+    install_hook,
+    is_release_worktree,
+    move_worktree,
+)
 
 _COACHING = """common prompts:
   what's next?          ollija status
@@ -92,6 +100,7 @@ _COACHING = """common prompts:
   record phone approval ollija approve iphone
   release next beta     ollija release
   verify production     ollija verify-production
+  manage worktrees      ollija worktree --help
 """
 
 
@@ -176,6 +185,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     task_status.add_argument("task", nargs="?")
     task_status.add_argument("--json", action="store_true", dest="json_output")
+    worktree = subparsers.add_parser(
+        "worktree", help="Guard or move a development worktree."
+    )
+    worktree_subparsers = worktree.add_subparsers(
+        dest="worktree_action", required=True
+    )
+    guard = worktree_subparsers.add_parser(
+        "guard", help="Warn about worktrees outside the release worktree area."
+    )
+    guard.add_argument("--hook", action="store_true", help=argparse.SUPPRESS)
+    guard.add_argument(
+        "--leave-as-is",
+        action="store_true",
+        help="Honor an explicit owner decision to keep the worktree outside the release area.",
+    )
+    guard.add_argument("--json", action="store_true", dest="json_output")
+    move = worktree_subparsers.add_parser(
+        "move", help="Move the current worktree into the release worktree area."
+    )
+    move.add_argument("path", nargs="?", type=Path)
+    move.add_argument("--name", help="Optional destination directory name.")
+    move.add_argument("--json", action="store_true", dest="json_output")
+    install = worktree_subparsers.add_parser(
+        "install-hook", help="Install the shared post-checkout worktree guard."
+    )
+    install.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
 
@@ -262,7 +297,7 @@ def _candidate_identity(config, facts) -> CandidateIdentity:
     if not sha:
         raise RefreshError("candidate_sha_unavailable")
     beta = parse_beta_version(facts.package_version)
-    impact = assess_ui_impact(config, _changed_paths(config))
+    impact = assess_ui_impact(config, _changed_paths(config, facts.git.repository_root))
     return CandidateIdentity(
         sha=sha,
         package_version=facts.package_version,
@@ -300,7 +335,7 @@ def _active_candidate_for_refresh(
     return store, receipts, candidate
 
 
-def _changed_paths(config) -> tuple[str, ...]:
+def _changed_paths(config, root: Path | None = None) -> tuple[str, ...]:
     completed = subprocess.run(
         [
             "git",
@@ -308,7 +343,7 @@ def _changed_paths(config) -> tuple[str, ...]:
             "--name-only",
             f"origin/{config.git.production_branch}...HEAD",
         ],
-        cwd=config.root,
+        cwd=root or config.root,
         text=True,
         capture_output=True,
         timeout=15,
@@ -323,7 +358,7 @@ def _start_candidate(config, facts) -> CommandResult:
     blocked = _preflight_mutation("start", facts)
     if blocked:
         return blocked
-    changed_paths = _changed_paths(config)
+    changed_paths = _changed_paths(config, facts.git.repository_root)
     baseline_text = load_change_ledger_baseline(
         config.root,
         f"origin/{config.git.production_branch}",
@@ -860,19 +895,105 @@ def _verify_production(
     )
 
 
+def _worktree_command(config, args, working_directory, input_stream) -> CommandResult:
+    action = args.worktree_action
+    if action == "guard":
+        moved = guard_worktree(
+            config,
+            cwd=working_directory,
+            input_stream=input_stream,
+            output_stream=sys.stderr,
+            leave_as_is=args.leave_as_is,
+        )
+        details = {
+            "release_worktree_label": config.authority.release_worktree_label,
+            "release_worktree_path": config.authority.release_worktree_path.as_posix(),
+        }
+        in_release_area = moved is not None and (
+            moved == config.root.resolve() or is_release_worktree(config, moved)
+        )
+        if moved is not None:
+            details["worktree_path"] = str(moved)
+        return CommandResult(
+            command="worktree guard",
+            status="ok",
+            state="worktree",
+            summary=(
+                "The worktree is in the Ollija release worktree area."
+                if in_release_area
+                else "The outside worktree was left as-is; it is not release-eligible."
+            ),
+            details=details,
+            next_action=NextAction(
+                "ollija worktree move",
+                "Move this worktree later if it should enter the release cycle.",
+            ),
+        )
+    if action == "move":
+        source = (args.path or working_directory).resolve()
+        destination = move_worktree(config, source=source, name=args.name)
+        return CommandResult(
+            command="worktree move",
+            status="ok",
+            state="worktree",
+            summary="The worktree moved into the Ollija release worktree area.",
+            details={
+                "worktree_path": str(destination),
+                "release_worktree_label": config.authority.release_worktree_label,
+                "release_worktree_path": config.authority.release_worktree_path.as_posix(),
+            },
+            next_action=NextAction(
+                "ollija status",
+                "Re-check the moved worktree before starting the release candidate.",
+            ),
+        )
+    hook_path = install_hook(config)
+    return CommandResult(
+        command="worktree install-hook",
+        status="ok",
+        state="worktree",
+        summary="The shared Ollija post-checkout worktree guard is installed.",
+        details={"hooks_path": hook_path},
+        next_action=NextAction(
+            "ollija status", "Confirm the repository and worktree authorities."
+        ),
+    )
+
+
 def main(
     argv: list[str] | None = None,
     *,
     cwd: Path | None = None,
     stream: TextIO | None = None,
+    input_stream: TextIO | None = None,
 ) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     output = stream or sys.stdout
-    working_directory = (cwd or Path.cwd()).resolve()
+    input_source = input_stream or sys.stdin
+    requested_directory = os.environ.get("OLLIJA_WORKTREE_CWD")
+    working_directory = Path(requested_directory or cwd or Path.cwd()).resolve()
     try:
         config = load_project_config(working_directory)
         _load_local_environment(config.root)
+        if args.command == "worktree":
+            with ExitStack() as resources:
+                tty_input = None
+                if args.worktree_action == "guard" and args.hook:
+                    try:
+                        tty_input = resources.enter_context(
+                            open("/dev/tty", encoding="utf-8")
+                        )
+                    except OSError:
+                        tty_input = None
+                result = _worktree_command(
+                    config,
+                    args,
+                    working_directory,
+                    tty_input or input_source,
+                )
+            emit_result(result, json_output=args.json_output, stream=output)
+            return {"ok": 0, "blocked": 2, "failed": 1}[result.status]
         if args.command == "task-status":
             result = build_task_status_result(config, task_id=args.task)
         else:
@@ -973,6 +1094,7 @@ def main(
         VerificationError,
         VersionError,
         WorkspaceError,
+        WorktreeError,
     ) as exc:
         result = _mutation_failure(args.command, redact_text(str(exc)))
         emit_result(result, json_output=args.json_output, stream=output)

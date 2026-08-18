@@ -48,7 +48,9 @@ class PushinWeightAdapter:
         expected_root = self.config.authority.repository_root
         actual_slug = _repository_slug(repository_slug)
         expected_slug = _repository_slug(self.config.authority.repository_slug)
-        worktree_root = expected_root / ".worktrees"
+        worktree_root = (
+            expected_root / self.config.authority.release_worktree_path
+        ).resolve()
         common_git = (
             common_git_directory.expanduser().resolve()
             if common_git_directory is not None

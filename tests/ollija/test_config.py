@@ -74,6 +74,8 @@ def test_real_project_contract_loads_from_a_nested_working_directory() -> None:
     assert config.schema_version == 1
     assert config.adapter == "pushinweight"
     assert config.authority.canonical_host == "fuchitalee"
+    assert config.authority.release_worktree_label == "Ollija release worktree area"
+    assert config.authority.release_worktree_path == Path(".worktrees")
     assert config.git.production_branch == "main"
     assert config.git.staging_branch == "staging"
     assert config.state_root == config.authority.repository_root / ".ollija" / "state"

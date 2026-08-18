@@ -267,6 +267,30 @@ validated scrubbed snapshot. Never copy staging data back to production.
 
 ## Candidate, staging, and approval loop
 
+### Ollija release worktree area
+
+Development worktrees intended for the Ollija release cycle belong under the
+repository-relative **Ollija release worktree area**: `.worktrees/`. The
+shared post-checkout guard asks before leaving a worktree elsewhere. Choosing
+`N` leaves the worktree usable for development, but Ollija will not freeze it
+as a release candidate until it is moved into the release worktree area.
+
+Install the guard once on the authoritative checkout:
+
+```bash
+./bin/ollija worktree install-hook
+```
+
+To move an existing linked worktree later without rewriting its branch or
+commits, run this from that worktree:
+
+```bash
+./bin/ollija worktree move
+```
+
+The move preserves uncommitted files. Ollija still requires the moved
+worktree to be clean before `start`, `stage`, or `release`.
+
 Finish and commit the intended change, including its beta version, before
 freezing it. For the first beta the package/version pair is `0.2.0b1` and
 `v0.2.0-beta.1`.

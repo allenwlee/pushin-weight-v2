@@ -15,12 +15,18 @@ class ConfigError(ValueError):
     """An actionable project-contract error."""
 
 
+DEFAULT_RELEASE_WORKTREE_LABEL = "Ollija release worktree area"
+DEFAULT_RELEASE_WORKTREE_PATH = Path(".worktrees")
+
+
 @dataclass(frozen=True, slots=True)
 class AuthorityConfig:
     canonical_host: str
     forbidden_hosts: tuple[str, ...]
     repository_root: Path
     repository_slug: str
+    release_worktree_label: str = DEFAULT_RELEASE_WORKTREE_LABEL
+    release_worktree_path: Path = DEFAULT_RELEASE_WORKTREE_PATH
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +146,6 @@ def load_project_config(start: str | Path = ".") -> ProjectConfig:
     if unknown:
         raise ConfigError("Project contract has unknown fields: " + ", ".join(unknown))
 
-    root = path.parent.parent.resolve()
     authority = _mapping(raw, "authority")
     git = _mapping(raw, "git")
     state = _mapping(raw, "state")
@@ -156,8 +161,34 @@ def load_project_config(start: str | Path = ".") -> ProjectConfig:
 
     repository_root = Path(_string(authority, "repository_root", parent="authority"))
     state_directory = Path(_string(state, "directory", parent="state"))
+    release_worktree_label = authority.get(
+        "release_worktree_label", DEFAULT_RELEASE_WORKTREE_LABEL
+    )
+    raw_release_worktree_path = authority.get(
+        "release_worktree_path", DEFAULT_RELEASE_WORKTREE_PATH.as_posix()
+    )
+    if not isinstance(release_worktree_label, str) or not release_worktree_label.strip():
+        raise ConfigError(
+            "Project contract field authority.release_worktree_label must be a string"
+        )
+    if (
+        not isinstance(raw_release_worktree_path, str)
+        or not raw_release_worktree_path.strip()
+    ):
+        raise ConfigError(
+            "Project contract field authority.release_worktree_path must be a string"
+        )
+    release_worktree_path = Path(raw_release_worktree_path)
+    if release_worktree_path.is_absolute() or ".." in release_worktree_path.parts:
+        raise ConfigError(
+            "authority.release_worktree_path must be a repository-relative path"
+        )
     if not repository_root.is_absolute():
         raise ConfigError("authority.repository_root must be absolute")
+    # All Ollija state and release mutations belong to the configured
+    # authority checkout, even when the command was invoked from a linked
+    # worktree containing the same project contract.
+    root = repository_root.resolve()
     if state_directory.is_absolute() or ".." in state_directory.parts:
         raise ConfigError("state.directory must be a repository-relative path")
 
@@ -178,6 +209,8 @@ def load_project_config(start: str | Path = ".") -> ProjectConfig:
             forbidden_hosts=tuple(forbidden),
             repository_root=repository_root.resolve(),
             repository_slug=_string(authority, "repository_slug", parent="authority"),
+            release_worktree_label=release_worktree_label.strip(),
+            release_worktree_path=release_worktree_path,
         ),
         git=GitConfig(
             staging_branch=_string(git, "staging_branch", parent="git"),
