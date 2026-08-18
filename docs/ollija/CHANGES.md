@@ -93,3 +93,21 @@ requires its candidate-specific owner approval, and follows the ordinary
 production release and verification path.
 
 Related: `docs/operations/ollija.md`
+
+## 2026-08-18 — Make owner approval the production release gate
+
+Type: Rule
+
+Problem: Release was blocked by an authenticated production browser session even
+after the owner had reviewed and approved the exact hosted staging deployment.
+
+New behavior: Exact-SHA staging, required machine checks, and explicit owner
+approval authorize promotion to `main`. Browser-based production verification
+is no longer a prerequisite; it remains an optional post-release sealing check.
+
+Proof: `pytest tests/ollija/test_release.py`
+
+Release impact: Production promotion no longer requires browser storage or CDP
+credentials. Render/Git identity and staging approval gates remain enforced.
+
+Related: `docs/operations/ollija.md`

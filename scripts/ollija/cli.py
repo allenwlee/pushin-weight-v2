@@ -72,7 +72,6 @@ from .task_control import (
 from .tasks import TaskError
 from .verification import (
     VerificationError,
-    observe_configured_headline,
     production_browser_probe,
 )
 from .versioning import VersionError, parse_beta_version
@@ -780,10 +779,6 @@ def _release(config, facts) -> CommandResult:
     blocked = _preflight_mutation("release", facts)
     if blocked:
         return blocked
-    # A release must not make main live unless production verification can
-    # actually run in this same environment afterward.
-    browser_probe = production_browser_probe(config.verification)
-    observe_configured_headline(config.verification, browser_probe)
     evidence, last_known_good = promote_candidate(
         config=config,
         git=facts.git,
@@ -815,7 +810,7 @@ def _release(config, facts) -> CommandResult:
         },
         next_action=NextAction(
             "ollija verify-production",
-            "Wait for every Render resource and verify the visible headline before tagging.",
+            "Optionally verify the production deployment and seal its beta tag.",
         ),
     )
 

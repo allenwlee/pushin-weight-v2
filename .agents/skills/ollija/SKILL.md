@@ -136,14 +136,15 @@ after it and report the one next action.
   release, or replace owner review. If the adapter itself is defective, an
   explicit candidate-bound owner override records owner, failed assessment,
   and reason without pretending automated evidence passed.
-- `release` first verifies that a usable authenticated browser session and all
-  production route/selector contracts exist. It must fail before advancing
-  `main` if later production verification could not run.
-- A candidate already live but not sealed resumes at `verify-production`; it
+- `release` requires the exact hosted staging deployment and explicit owner
+  approval, then advances `main`. An authenticated production browser session
+  is not required for promotion; `verify-production` remains an optional
+  post-release sealing check.
+- A candidate already live but not sealed may run `verify-production` later; it
   must never release the same SHA twice.
-- Do not report success until every configured Render service is at the exact
-  SHA, the authenticated headline is visible, DSV4 is configured, the beta tag
-  exists, and the final receipt is sealed.
+- Report promotion and post-release sealing separately. Sealing still requires
+  every configured Render service at the exact SHA, the authenticated headline,
+  DSV4 configuration, the beta tag, and a final receipt.
 - Never print connection URLs, provider keys, OAuth secrets, browser storage,
   prompt bodies, provider responses, or private post content.
 

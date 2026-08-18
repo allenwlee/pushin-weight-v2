@@ -25,7 +25,6 @@ from scripts.ollija.state import CandidateIdentity, Receipt, ReceiptStore
 from scripts.ollija.verification import (
     BrowserObservation,
     RouteObservation,
-    VerificationError,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -534,32 +533,7 @@ def test_existing_remote_tag_is_rejected_before_release(
         publisher.assert_tag_absent("v0.2.0-beta.1")
 
 
-def test_release_refuses_to_advance_main_without_browser_prerequisite(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config = _configured(tmp_path)
-    storage_env = str(config.verification["browser_storage_state_env"])
-    cdp_env = str(config.verification["browser_cdp_url_env"])
-    monkeypatch.delenv(storage_env, raising=False)
-    monkeypatch.delenv(cdp_env, raising=False)
-    monkeypatch.setattr(
-        "scripts.ollija.cli._preflight_mutation",
-        lambda _command, _facts: None,
-    )
-    advanced: list[bool] = []
-    monkeypatch.setattr(
-        "scripts.ollija.cli.promote_candidate",
-        lambda **_kwargs: advanced.append(True),
-    )
-
-    with pytest.raises(VerificationError, match="session_missing"):
-        _release(config, SimpleNamespace())
-
-    assert advanced == []
-
-
-def test_release_refuses_to_advance_main_when_browser_session_cannot_observe_dom(
+def test_release_uses_owner_approval_without_browser_prerequisite(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -568,22 +542,25 @@ def test_release_refuses_to_advance_main_when_browser_session_cannot_observe_dom
         "scripts.ollija.cli._preflight_mutation",
         lambda _command, _facts: None,
     )
-
-    class _FailingBrowser:
-        def observe_headline(self, **_kwargs):
-            raise VerificationError("production_browser_probe_failed")
-
-    monkeypatch.setattr(
-        "scripts.ollija.cli.production_browser_probe",
-        lambda _verification: _FailingBrowser(),
+    candidate = _candidate()
+    evidence = SimpleNamespace(
+        candidate=SimpleNamespace(receipt_id="candidate-receipt", candidate=candidate)
     )
-    advanced: list[bool] = []
+    previous = Receipt.create(
+        kind="last_known_good",
+        candidate=candidate,
+        created_at=NOW,
+        payload={},
+    )
     monkeypatch.setattr(
         "scripts.ollija.cli.promote_candidate",
-        lambda **_kwargs: advanced.append(True),
+        lambda **_kwargs: (evidence, previous),
     )
 
-    with pytest.raises(VerificationError, match="production_browser_probe_failed"):
-        _release(config, SimpleNamespace())
+    result = _release(
+        config,
+        SimpleNamespace(git=_git(), package_version="0.2.0b1"),
+    )
 
-    assert advanced == []
+    assert result.status == "ok"
+    assert result.state == "releasing"

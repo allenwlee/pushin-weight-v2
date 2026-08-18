@@ -321,17 +321,19 @@ desktop or physical-iPhone approval.
 
 ## Exact-SHA production release
 
-Release is deliberately two commands. Before changing `main`, the first
-command verifies that the configured production routes/selectors and exactly
-one usable authenticated browser mode are available. It then re-reads Git, Render,
-refresh, migration/recovery, Bridgewright, desktop, and iPhone authorities. It
-records the currently live production service set, then asks the Git server to
-fast-forward `main` to the exact approved SHA. There is no force push or merge
-commit.
+The owner approval on the exact hosted staging deployment is the production
+release gate. Ollija re-reads Git, Render, refresh, migration/recovery,
+Bridgewright, desktop, and iPhone authorities, records the currently live
+production service set, and asks the Git server to fast-forward `main` to the
+exact approved SHA. There is no force push or merge commit, and no authenticated
+production browser session is required.
 
 ```bash
 ./bin/ollija release
 ```
+
+This promotes the approved candidate. Production browser verification and beta
+tag sealing are optional afterward:
 
 Before production verification, create an ignored Playwright storage-state
 file by opening production in a headed browser and completing Google login:

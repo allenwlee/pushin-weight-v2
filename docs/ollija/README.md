@@ -290,14 +290,13 @@ physical-device approval.
 
 This is the first command that can change production. It rechecks the candidate,
 refresh receipts, staging identity, deployment identity, Bridgewright evidence,
-both owner approvals, production routes/selectors, and one usable authenticated
-browser session. If later verification could not run, it stops before changing
-production. It then fast-forwards `main` (moves the production
+and both owner approvals. It then fast-forwards `main` (moves the production
 branch forward without rewriting history) to the exact approved commit and
-starts the production deployment.
+starts the production deployment. An authenticated production browser session
+is not required.
 
-It does not create the beta tag yet. Tagging waits for final production
-verification.
+It does not create the beta tag yet. Tagging and optional production verification
+can be run afterward.
 
 ### 8. Verify production and seal the release
 
