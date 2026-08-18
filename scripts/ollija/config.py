@@ -185,10 +185,11 @@ def load_project_config(start: str | Path = ".") -> ProjectConfig:
         )
     if not repository_root.is_absolute():
         raise ConfigError("authority.repository_root must be absolute")
-    # All Ollija state and release mutations belong to the configured
-    # authority checkout, even when the command was invoked from a linked
-    # worktree containing the same project contract.
-    root = repository_root.resolve()
+    # The selected checkout owns source files and Git operations. Durable
+    # Ollija state remains anchored separately by ``state_root`` below, so a
+    # linked release worktree can be evaluated without reading a different
+    # checkout's ledger or code.
+    root = path.parent.parent.resolve()
     if state_directory.is_absolute() or ".." in state_directory.parts:
         raise ConfigError("state.directory must be a repository-relative path")
 

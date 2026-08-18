@@ -111,3 +111,24 @@ Release impact: Production promotion no longer requires browser storage or CDP
 credentials. Render/Git identity and staging approval gates remain enforced.
 
 Related: `docs/operations/ollija.md`
+
+## 2026-08-18 — Guard release worktree location
+
+Type: Fix
+
+Problem: Agents could create linked worktrees outside the repository's shared
+release area, leaving Ollija unable to determine whether the checkout was
+eligible for staging and release.
+
+New behavior: Ollija names `.worktrees/` the Ollija release worktree area,
+warns at worktree creation, asks whether to move an outside worktree, and
+provides a deterministic move command for later adoption. The shared Git hook
+and command surface keep the owner decision explicit.
+
+Proof: `pytest tests/ollija` plus interactive and noninteractive worktree-hook
+checks.
+
+Release impact: Workflow controls only. This changes no PushinWeight
+application schema, production data, or hosted service topology.
+
+Related: `docs/operations/ollija.md`

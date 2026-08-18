@@ -355,7 +355,7 @@ class HostedStagingRefresh:
         return path, checksum, path.stat().st_size
 
     def _run_django(self, database: str, *args: str) -> None:
-        python = self.config.root / ".venv" / "bin" / "python"
+        python = self.config.canonical_virtualenv / "bin" / "python"
         environment = _safe_child_environment(
             {"DATABASE_URL": self._django_database_url(database)}
         )

@@ -297,7 +297,14 @@ def _candidate_identity(config, facts) -> CandidateIdentity:
     if not sha:
         raise RefreshError("candidate_sha_unavailable")
     beta = parse_beta_version(facts.package_version)
-    impact = assess_ui_impact(config, _changed_paths(config, facts.git.repository_root))
+    fact_git = getattr(facts, "git", None)
+    repository_root = getattr(fact_git, "repository_root", None)
+    changed_paths = (
+        _changed_paths(config, repository_root)
+        if repository_root is not None
+        else _changed_paths(config)
+    )
+    impact = assess_ui_impact(config, changed_paths)
     return CandidateIdentity(
         sha=sha,
         package_version=facts.package_version,
@@ -358,7 +365,13 @@ def _start_candidate(config, facts) -> CommandResult:
     blocked = _preflight_mutation("start", facts)
     if blocked:
         return blocked
-    changed_paths = _changed_paths(config, facts.git.repository_root)
+    fact_git = getattr(facts, "git", None)
+    repository_root = getattr(fact_git, "repository_root", None)
+    changed_paths = (
+        _changed_paths(config, repository_root)
+        if repository_root is not None
+        else _changed_paths(config)
+    )
     baseline_text = load_change_ledger_baseline(
         config.root,
         f"origin/{config.git.production_branch}",
@@ -976,6 +989,8 @@ def main(
     try:
         config = load_project_config(working_directory)
         _load_local_environment(config.root)
+        if config.root != config.authority.repository_root:
+            _load_local_environment(config.authority.repository_root)
         if args.command == "worktree":
             with ExitStack() as resources:
                 tty_input = None

@@ -801,7 +801,7 @@ class PostgresRefreshBackend:
         )
 
     def _run_django(self, database: str, *args: str) -> None:
-        python = self.config.root / ".venv" / "bin" / "python"
+        python = self.config.canonical_virtualenv / "bin" / "python"
         if not python.is_file():
             raise RefreshError("project_python_unavailable")
         environment = _safe_child_environment(
@@ -855,7 +855,7 @@ class PostgresRefreshBackend:
             )
             if extracted.returncode != 0:
                 return False
-            python = self.config.root / ".venv" / "bin" / "python"
+            python = self.config.canonical_virtualenv / "bin" / "python"
             environment = _safe_child_environment(
                 {"DATABASE_URL": self._local_database_url(database)}
             )
