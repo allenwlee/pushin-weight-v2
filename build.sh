@@ -32,6 +32,6 @@ python manage.py compilemessages
 python manage.py collectstatic --no-input --clear
 
 # Acquire the migration advisory lock on the same connection that Django uses.
-# New Ollija staging databases intentionally skip this step until their guarded
-# production-derived snapshot is active.
+# Every environment, including a fresh isolated staging database, migrates
+# during its build.
 DJANGO_SETTINGS_MODULE=project.settings python scripts/render_migrate.py

@@ -5,16 +5,6 @@ from collections.abc import Collection
 from django.core.exceptions import ImproperlyConfigured
 
 
-def should_run_build_migrations(
-    *,
-    staging_enabled: bool,
-    marker_status: str | None,
-) -> bool:
-    """Keep a new staging database empty until Ollija activates its snapshot."""
-
-    return not staging_enabled or marker_status == "active"
-
-
 def validate_staging_environment(
     *,
     enabled: bool,

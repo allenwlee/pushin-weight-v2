@@ -1,5 +1,3 @@
-"""Deterministic staging and release workflow for PushinWeight."""
+"""Deterministic PushinWeight plan annotation."""
 
 PROJECT_CONTRACT_VERSION = 1
-RECEIPT_SCHEMA_VERSION = 1
-RESULT_SCHEMA_VERSION = 1

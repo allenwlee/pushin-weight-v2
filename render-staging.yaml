@@ -52,8 +52,4 @@ databases:
     region: oregon
     plan: basic-256mb
     postgresMajorVersion: "18"
-    # External direct PostgreSQL is needed only for guarded snapshot refreshes
-    # from fuchitalee. Credentials remain random and are never logged.
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: ollija guarded refresh
+    ipAllowList: []

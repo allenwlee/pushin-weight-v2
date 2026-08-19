@@ -83,6 +83,77 @@ def test_claude_policy_imports_canonical_agent_rules() -> None:
     assert (REPO_ROOT / "CLAUDE.md").read_text().strip() == "@AGENTS.md"
 
 
+def test_current_ollija_boundary_has_no_retired_runtime_or_command_paths() -> None:
+    retained_runtime = {
+        "__init__.py",
+        "__main__.py",
+        "annotate_plan.py",
+        "cli.py",
+        "config.py",
+        "worktrees.py",
+    }
+    runtime = REPO_ROOT / "scripts" / "ollija"
+    assert {path.name for path in runtime.glob("*.py")} == retained_runtime
+    assert not (runtime / "agents").exists()
+    assert not (runtime / "adapters").exists()
+
+    retired_modules = {
+        "approvals",
+        "bridgewright",
+        "checkpoint",
+        "changes",
+        "database",
+        "git",
+        "hosted_database",
+        "impact",
+        "incidents",
+        "preview",
+        "processes",
+        "redaction",
+        "release",
+        "render",
+        "results",
+        "state",
+        "status",
+        "supervisor",
+        "task_control",
+        "tasks",
+        "verification",
+        "versioning",
+        "workspaces",
+    }
+    retired_commands = {
+        "approve",
+        "doctor",
+        "go",
+        "preview",
+        "refresh-local",
+        "refresh-staging",
+        "release",
+        "stage",
+        "status",
+        "stop",
+        "worktree",
+    }
+    current_paths = [
+        REPO_ROOT / "AGENTS.md",
+        REPO_ROOT / "bin" / "ollija",
+        REPO_ROOT / "build.sh",
+        REPO_ROOT / "render-staging.yaml",
+        REPO_ROOT / "scripts" / "render_migrate.py",
+        REPO_ROOT / "project" / "staging.py",
+        REPO_ROOT / ".ollija" / "hooks" / "post-checkout",
+        *(runtime.glob("*.py")),
+    ]
+
+    for path in current_paths:
+        text = path.read_text(encoding="utf-8")
+        for module in retired_modules:
+            assert f"scripts.ollija.{module}" not in text, path
+        for command in retired_commands:
+            assert f"./bin/ollija {command}" not in text, path
+
+
 def test_tracked_text_contains_no_literal_credentials() -> None:
     findings: list[str] = []
 
