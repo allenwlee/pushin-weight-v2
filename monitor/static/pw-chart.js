@@ -213,9 +213,9 @@
     var zh = isZhLocale(region.getAttribute('data-pw-locale'));
     var newText = region.getAttribute('data-pw-pulse-new-text') || 'NEW';
     var filters = activeFilters();
-    var selectedBrand = Array.isArray(filters.brands) && filters.brands.length === 1
-      ? filters.brands[0]
-      : null;
+    var selectedBrands = window.pwFilter && typeof window.pwFilter.getPulseBrands === 'function'
+      ? window.pwFilter.getPulseBrands()
+      : (Array.isArray(filters.brands) ? filters.brands : []);
     bar.innerHTML = pulse.entries.map(function (entry) {
       var name = zh
         ? (entry.display_name_zh_cn || entry.display_name || entry.nickname)
@@ -236,7 +236,7 @@
       }
       return '<li><button type="button" class="pulse-chip" data-pw-pulse-entry="' +
         escapeHtml(entry.nickname) + '" aria-label="' + escapeHtml(name + ', ' + accessibleTrend) +
-        '" aria-pressed="' + (selectedBrand === entry.nickname ? 'true' : 'false') +
+        '" aria-pressed="' + (selectedBrands.indexOf(entry.nickname) !== -1 ? 'true' : 'false') +
         '" style="--chip-color:' + escapeHtml(entry.accent_color || '#9ca3af') + '">' +
         '<span class="pulse-chip-name">' + escapeHtml(name) + '</span>' + trend + '</button></li>';
     }).join('');

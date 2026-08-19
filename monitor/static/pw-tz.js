@@ -1,4 +1,4 @@
-// v22 timezone pill: browser-local time ⇄ America/Los_Angeles.
+// V24 split timezone pill: browser-local and America/Los_Angeles clocks.
 (function () {
   'use strict';
 
@@ -39,8 +39,8 @@
     return formattersFor(timezone).time.format(date);
   }
 
-  function zoneHour(timezone) {
-    var hour = formattersFor(timezone).hour.formatToParts(new Date()).find(function (part) {
+  function zoneHour(date, timezone) {
+    var hour = formattersFor(timezone).hour.formatToParts(date).find(function (part) {
       return part.type === 'hour';
     });
     return hour ? Number(hour.value) : 0;
@@ -83,22 +83,23 @@
   }
 
   function render() {
-    var timezone = activeTimezone();
-    var time = zoneTime(new Date(), timezone);
+    var now = new Date();
     root.setAttribute('data-tz-active', active);
     document.documentElement.setAttribute('data-tz-mode', active);
-    var emoji = root.querySelector('[data-tz-emoji]');
-    var timeElement = root.querySelector('[data-tz-time]');
-    var zone = root.querySelector('[data-tz-zone]');
-    var pair = root.querySelector('[data-tz-pair]');
-    if (emoji) setText(emoji, dayEmoji(zoneHour(timezone)));
-    if (timeElement) setText(timeElement, time);
-    if (zone) {
-      zone.classList.toggle('is-ca', active === 'ca');
-      if (active === 'ca') zone.innerHTML = CA_ICON_HTML;
-      else setText(zone, localLabel());
-    }
-    if (pair) setHTML(pair, active === 'ca' ? '⇄ ' + localLabel() : '⇄ ' + CA_ICON_HTML);
+    var localChoice = root.querySelector('[data-tz-choice="local"]');
+    var caChoice = root.querySelector('[data-tz-choice="ca"]');
+    var localEmoji = root.querySelector('[data-tz-local-emoji]');
+    var caEmoji = root.querySelector('[data-tz-ca-emoji]');
+    var localTime = root.querySelector('[data-tz-local-time]');
+    var caTime = root.querySelector('[data-tz-ca-time]');
+    var localLabelElement = root.querySelector('[data-tz-local-label]');
+    if (localChoice) localChoice.classList.toggle('is-selected', active === 'local');
+    if (caChoice) caChoice.classList.toggle('is-selected', active === 'ca');
+    if (localEmoji) setText(localEmoji, dayEmoji(zoneHour(now)));
+    if (caEmoji) setText(caEmoji, dayEmoji(zoneHour(now, CA_TIMEZONE)));
+    if (localTime) setText(localTime, zoneTime(now));
+    if (caTime) setText(caTime, zoneTime(now, CA_TIMEZONE));
+    if (localLabelElement) setText(localLabelElement, localLabel());
     renderFeedStamps();
   }
 

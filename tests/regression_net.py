@@ -34,8 +34,8 @@ except ImportError:
 # Pinned assertions from docs/iterations/002-scenario-a
 EXPECTED_HEADER = "走个量 Pushin' Weight"
 EXPECTED_FILTER_BUTTONS = 7
-EXPECTED_TIME_WINDOWS_EN = ["24h", "7d", "30d", "365d"]
-EXPECTED_TIME_WINDOWS_ZH = ["24小时", "7天", "30天", "365天"]
+EXPECTED_TIME_WINDOWS_EN = ["1d", "7d", "30d", "365d"]
+EXPECTED_TIME_WINDOWS_ZH = ["1天", "7天", "30天", "365天"]
 EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
 
 # Each section's required text.

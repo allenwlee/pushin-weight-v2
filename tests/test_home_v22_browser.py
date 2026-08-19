@@ -1,4 +1,4 @@
-"""Browser fidelity net for the fixture-backed v22 root route.
+"""Browser fidelity net for the fixture-backed public root route.
 
 This is deliberately not a screenshot baseline: the canonical mockup is served
 over HTTP beside Django's static live server and remains the comparison source.
@@ -268,7 +268,7 @@ def _assert_parser_regions(page: Page, spec: MockupSpec, *, locale: str, viewpor
 
 @override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
 class HomeV22BrowserTests(StaticLiveServerTestCase):
-    """Root-route, real-PostgreSQL browser proof for v22's visible shell."""
+    """Root-route, real-PostgreSQL browser proof for the visible shell."""
 
     def setUp(self) -> None:
         """Rebuild browser-visible fixtures after TransactionTestCase flushes."""
@@ -834,7 +834,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         lambda response: "/chart.html?" in response.url
                     ) as chart_info:
                         page.locator(
-                            '[data-group="sentiment"] input[value="positive"]'
+                            'body > .filter-dropdown.is-portaled input[value="positive"]'
                         ).uncheck()
                     self.assertIn(
                         "Both trajectories rise and then hold.",
@@ -1050,6 +1050,270 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_v24_locale_and_window_controls_keep_geometry_and_copy(self) -> None:
+        """V24 control labels change without moving or resizing the controls."""
+        cookies_by_locale = {
+            locale: self._anonymous_cookies(locale) for locale in LOCALES
+        }
+        expected_labels = {
+            "en": ["1d", "7d", "30d", "365d"],
+            "zh_cn": ["1天", "7天", "30天", "365天"],
+            "original": ["1d", "7d", "30d", "365d"],
+        }
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport_name, viewport in {
+                    "desktop": VIEWPORTS["desktop"],
+                    "mobile-320": {"width": 320, "height": 844},
+                }.items():
+                    baseline = None
+                    for locale in LOCALES:
+                        with self.subTest(viewport=viewport_name, locale=locale):
+                            context = self._context_with_cookies(
+                                browser, cookies_by_locale[locale], viewport
+                            )
+                            page = context.new_page()
+                            try:
+                                page.goto(
+                                    f"{self.live_server_url}/",
+                                    wait_until="networkidle",
+                                )
+                                page.wait_for_function("() => window.__pwTz")
+                                geometry = page.evaluate(
+                                    """() => {
+                                      const rect = (element) => {
+                                        const box = element.getBoundingClientRect();
+                                        return {x: box.x, width: box.width, height: box.height, right: box.right};
+                                      };
+                                      const controls = document.querySelector('.topbar-controls');
+                                      return {
+                                        controls: rect(controls),
+                                        locale: [...document.querySelectorAll('[data-pw-locale-btn]')].map(rect),
+                                        windows: [...document.querySelectorAll('[data-pw-window-btn]')].map(rect),
+                                        timezone: rect(document.querySelector('[data-tz-widget]')),
+                                      };
+                                    }"""
+                                )
+                                locale_widths = [
+                                    item["width"] for item in geometry["locale"]
+                                ]
+                                window_widths = [
+                                    item["width"] for item in geometry["windows"]
+                                ]
+                                self.assertLessEqual(
+                                    max(locale_widths) - min(locale_widths), 0.5
+                                )
+                                self.assertLessEqual(
+                                    max(window_widths) - min(window_widths), 0.5
+                                )
+                                self.assertLessEqual(
+                                    geometry["timezone"]["right"],
+                                    geometry["controls"]["right"] + 0.5,
+                                )
+                                self.assertEqual(
+                                    page.locator("[data-pw-window-btn]").all_inner_texts(),
+                                    expected_labels[locale],
+                                )
+                                signature = {
+                                    "controls": geometry["controls"],
+                                    "locale": geometry["locale"],
+                                    "windows": geometry["windows"],
+                                    "timezone": geometry["timezone"],
+                                }
+                                if baseline is None:
+                                    baseline = signature
+                                else:
+                                    for group in ("locale", "windows"):
+                                        for actual, expected in zip(
+                                            signature[group], baseline[group], strict=True
+                                        ):
+                                            self.assertAlmostEqual(
+                                                actual["width"], expected["width"], delta=0.5
+                                            )
+                                            self.assertAlmostEqual(
+                                                actual["height"], expected["height"], delta=0.5
+                                            )
+                                    for key in ("width", "height"):
+                                        self.assertAlmostEqual(
+                                            signature["timezone"][key],
+                                            baseline["timezone"][key],
+                                            delta=0.5,
+                                        )
+                            finally:
+                                context.close()
+            finally:
+                browser.close()
+
+    def test_v24_pulse_chips_multiselect_the_live_chart_and_feed(self) -> None:
+        """Pulse toggles send one shared brand union without replacing renderers."""
+
+        def response_filters(response) -> dict[str, object]:
+            query = parse_qs(urlparse(response.url).query)
+            return json.loads(query["filters"][0])
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo"
+                )
+                _freeze_clock(context)
+                page = context.new_page()
+                try:
+                    page.goto(
+                        f"{self.live_server_url}/?locale=en",
+                        wait_until="networkidle",
+                    )
+                    page.wait_for_function(
+                        "() => window.pwFilter && document.querySelectorAll('[data-pw-pulse-entry]').length >= 2"
+                    )
+                    nicknames = page.locator(
+                        "[data-pw-pulse-entry]"
+                    ).evaluate_all(
+                        "buttons => buttons.slice(0, 2).map(button => button.dataset.pwPulseEntry)"
+                    )
+                    self.assertEqual(len(nicknames), 2)
+
+                    def toggle(nickname: str) -> tuple[dict[str, object], dict[str, object]]:
+                        with page.expect_response(
+                            lambda response: "/feed/?" in response.url
+                        ) as feed_info, page.expect_response(
+                            lambda response: "/chart.html?" in response.url
+                        ) as chart_info:
+                            page.locator(
+                                f'[data-pw-pulse-entry="{nickname}"]'
+                            ).click()
+                        self.assertEqual(feed_info.value.status, 200)
+                        self.assertEqual(chart_info.value.status, 200)
+                        return (
+                            response_filters(feed_info.value),
+                            response_filters(chart_info.value),
+                        )
+
+                    first_feed, first_chart = toggle(nicknames[0])
+                    self.assertEqual(first_feed, first_chart)
+                    self.assertEqual(first_feed["brands"], [nicknames[0]])
+
+                    second_feed, second_chart = toggle(nicknames[1])
+                    self.assertEqual(second_feed, second_chart)
+                    self.assertEqual(
+                        set(second_feed["brands"]), set(nicknames)
+                    )
+                    for nickname in nicknames:
+                        self.assertEqual(
+                            page.locator(
+                                f'[data-pw-pulse-entry="{nickname}"]'
+                            ).get_attribute("aria-pressed"),
+                            "true",
+                        )
+                    selected_background = page.locator(
+                        f'[data-pw-pulse-entry="{nicknames[0]}"]'
+                    ).evaluate("element => getComputedStyle(element).backgroundColor")
+                    active_window_background = page.locator(
+                        "[data-pw-window-btn].is-active"
+                    ).evaluate("element => getComputedStyle(element).backgroundColor")
+                    self.assertEqual(selected_background, active_window_background)
+
+                    chart_runtime = page.evaluate(
+                        """() => {
+                          const canvas = document.querySelector('canvas.home-chart');
+                          const chart = window.Chart && Chart.getChart(canvas);
+                          return {
+                            canvasCount: document.querySelectorAll('canvas.home-chart').length,
+                            mockupSvgCount: document.querySelectorAll('svg.home-chart').length,
+                            liveDatasetCount: chart ? chart.data.datasets.length : 0,
+                            payloadSeriesCount: Object.keys(JSON.parse(canvas.dataset.home).series).length,
+                            feedRegionCount: document.querySelectorAll('[data-pw-feed]').length,
+                          };
+                        }"""
+                    )
+                    self.assertEqual(chart_runtime["canvasCount"], 1)
+                    self.assertEqual(chart_runtime["mockupSvgCount"], 0)
+                    self.assertGreater(chart_runtime["liveDatasetCount"], 0)
+                    self.assertEqual(chart_runtime["payloadSeriesCount"], 2)
+                    self.assertEqual(chart_runtime["feedRegionCount"], 1)
+
+                    remaining_feed, remaining_chart = toggle(nicknames[0])
+                    self.assertEqual(remaining_feed, remaining_chart)
+                    self.assertEqual(remaining_feed["brands"], [nicknames[1]])
+                    all_feed, all_chart = toggle(nicknames[1])
+                    self.assertEqual(all_feed, all_chart)
+                    self.assertEqual(all_feed["brands"], "__all__")
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_v24_timezone_pill_keeps_both_clocks_and_geometry(self) -> None:
+        """The split pill toggles selection while feed timestamps follow it."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport_name, viewport in {
+                    "desktop": VIEWPORTS["desktop"],
+                    "mobile-320": {"width": 320, "height": 844},
+                }.items():
+                    with self.subTest(viewport=viewport_name):
+                        context = browser.new_context(
+                            viewport=viewport, timezone_id="Asia/Tokyo"
+                        )
+                        _freeze_clock(context)
+                        page = context.new_page()
+                        try:
+                            page.goto(
+                                f"{self.live_server_url}/?locale=en",
+                                wait_until="networkidle",
+                            )
+                            page.wait_for_function("() => window.__pwTz")
+                            pill = page.locator("[data-tz-widget]")
+                            local_choice = pill.locator(
+                                '[data-tz-choice="local"]'
+                            )
+                            ca_choice = pill.locator('[data-tz-choice="ca"]')
+                            self.assertEqual(local_choice.count(), 1)
+                            self.assertEqual(ca_choice.count(), 1)
+                            self.assertRegex(
+                                pill.locator("[data-tz-local-time]").inner_text(),
+                                r"^\d{2}:\d{2}$",
+                            )
+                            self.assertRegex(
+                                pill.locator("[data-tz-ca-time]").inner_text(),
+                                r"^\d{2}:\d{2}$",
+                            )
+                            self.assertTrue(local_choice.evaluate("element => element.classList.contains('is-selected')"))
+                            self.assertFalse(ca_choice.evaluate("element => element.classList.contains('is-selected')"))
+                            initial_pill = pill.bounding_box()
+                            initial_controls = page.locator(
+                                ".topbar-controls"
+                            ).bounding_box()
+                            initial_stamp = page.locator(
+                                ".feed-row[data-created-at-iso] .ts-abs"
+                            ).first.inner_text()
+
+                            pill.click()
+                            page.wait_for_function(
+                                "() => window.__pwTz?.mode === 'ca'"
+                            )
+                            self.assertFalse(local_choice.evaluate("element => element.classList.contains('is-selected')"))
+                            self.assertTrue(ca_choice.evaluate("element => element.classList.contains('is-selected')"))
+                            self.assertEqual(pill.bounding_box(), initial_pill)
+                            self.assertEqual(
+                                page.locator(".topbar-controls").bounding_box(),
+                                initial_controls,
+                            )
+                            self.assertNotEqual(
+                                page.locator(
+                                    ".feed-row[data-created-at-iso] .ts-abs"
+                                ).first.inner_text(),
+                                initial_stamp,
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_internal_window_button_retains_legacy_post_and_reload(self) -> None:
         cookies = self._authenticated_cookies("en")
         with sync_playwright() as playwright:
@@ -1145,8 +1409,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 f"v22 computed-style mismatch: region='topbar'; property='display'; locale={locale!r}; viewport={viewport_name!r}; oracle_source={str(spec.source)!r}",
                             )
                             self.assertEqual(
-                                actual_styles["timezone"]["display"], reference_styles["timezone"]["display"],
-                                f"v22 computed-style mismatch: region='timezone'; property='display'; locale={locale!r}; viewport={viewport_name!r}; oracle_source={str(spec.source)!r}",
+                                actual_styles["timezone"]["display"],
+                                "grid",
+                                f"V24 split-timezone layout missing: locale={locale!r}; viewport={viewport_name!r}",
                             )
 
                             actual_geometry = _relative_geometry(page, ".app-shell")

@@ -88,15 +88,15 @@
   }
 
   var state = hydrateFromControlPanel(readInitialFromBody());
+  var pulseBrands = [];
 
   function updatePulsePressed() {
-    var selected = Array.isArray(state.brands) && state.brands.length === 1
-      ? state.brands[0]
-      : null;
     document.querySelectorAll('[data-pw-pulse-entry]').forEach(function (button) {
       button.setAttribute(
         'aria-pressed',
-        selected && button.getAttribute('data-pw-pulse-entry') === selected ? 'true' : 'false'
+        pulseBrands.indexOf(button.getAttribute('data-pw-pulse-entry')) !== -1
+          ? 'true'
+          : 'false'
       );
     });
   }
@@ -141,6 +141,7 @@
 
   function setFilter(key, value) {
     if (key === 'window') value = Number(value);
+    if (key === 'brands') pulseBrands = [];
     state[key] = clone(value);
     syncControlPanelGroup(key);
     emitChange(key);
@@ -151,6 +152,7 @@
     if (!panel) return;
     var value = valueFromControls(panel, group);
     if (value === undefined) return;
+    if (group === 'brands') pulseBrands = [];
     state[group] = value;
     emitChange(group);
   }
@@ -197,9 +199,12 @@
         : null;
       if (!button) return;
       var nickname = button.getAttribute('data-pw-pulse-entry');
-      var isSoleSelection = Array.isArray(state.brands) &&
-        state.brands.length === 1 && state.brands[0] === nickname;
-      setFilter('brands', isSoleSelection ? '__all__' : [nickname]);
+      var selectedIndex = pulseBrands.indexOf(nickname);
+      if (selectedIndex === -1) pulseBrands.push(nickname);
+      else pulseBrands.splice(selectedIndex, 1);
+      state.brands = pulseBrands.length ? clone(pulseBrands) : '__all__';
+      syncControlPanelGroup('brands');
+      emitChange('brands');
     });
 
     syncWindowControls();
@@ -208,6 +213,7 @@
 
   window.pwFilter = {
     get: function () { return clone(state); },
+    getPulseBrands: function () { return clone(pulseBrands); },
     set: setFilter,
     syncFromControls: syncFromControls,
     on: function (event, handler) {

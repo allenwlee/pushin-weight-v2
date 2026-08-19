@@ -88,7 +88,7 @@
     min-height: 28px;
   }
   .topbar-controls .window-toggle {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     margin: 0;
   }
@@ -100,14 +100,13 @@
     white-space: nowrap;
   }
   .topbar-controls .tz-pill {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
-    max-width: 44%;
     margin-left: auto;
     height: 28px;
     box-sizing: border-box;
-    padding: 0 10px;
-    display: inline-flex;
+    padding: 0;
+    display: grid;
     align-items: center;
     overflow: hidden;
     white-space: nowrap;
@@ -124,7 +123,9 @@
     justify-content: center;
     height: 28px;
     line-height: 1;
-    padding: 0 10px;
+    width: 32px;
+    flex: 0 0 32px;
+    padding: 0;
     box-sizing: border-box;
   }
 
@@ -134,11 +135,14 @@
     align-items: center;
   }
   .topbar .tz-pill {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
     align-items: center;
-    gap: 4px;
+    gap: 0;
     margin: 0;
-    padding: 3px 8px;
+    padding: 0;
+    width: 164px;
+    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: #0f172a;
@@ -154,17 +158,31 @@
   }
   .topbar .tz-pill:hover { border-color: var(--accent); }
   .topbar .tz-pill:focus { outline: none; border-color: var(--accent); }
-  .topbar .tz-pill .tz-emoji { font-size: 12px; }
+  .topbar .tz-pill .tz-choice {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    align-self: stretch;
+    min-width: 0;
+    padding: 0 4px;
+    color: var(--muted);
+  }
+  .topbar .tz-pill .tz-choice.is-selected {
+    background: var(--accent);
+    color: white;
+  }
+  .topbar .tz-pill .tz-divider {
+    width: 1px;
+    height: 62%;
+    background: var(--border);
+  }
+  .topbar .tz-pill .tz-emoji { font-size: 11px; }
   .topbar .tz-pill .tz-time {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
   }
-  .topbar .tz-pill .tz-city { color: var(--muted); }
-  .topbar .tz-pill .tz-pair {
-    color: var(--accent);
-    font-weight: 600;
-    font-size: 10px;
-  }
+  .topbar .tz-pill .tz-label { font-size: 9px; font-weight: 600; }
 
   /* 2. Pulse bar */
   .pulse-bar-wrap {
@@ -224,6 +242,15 @@
   .pulse-chip .delta.down { color: var(--down); }
   .pulse-chip .delta.flat { color: var(--muted); }
   .pulse-chip .delta.new { color: var(--up); }
+  .pulse-chip[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .pulse-chip[aria-pressed="true"] .pulse-chip-name,
+  .pulse-chip[aria-pressed="true"] .delta {
+    color: white;
+  }
   .pulse-chip .delta.up::before { content: "▲ "; }
   .pulse-chip .delta.down::before { content: "▼ "; }
   .pulse-chip .delta.flat::before { content: "→ "; }
@@ -704,6 +731,7 @@
     color: var(--muted);
     font-weight: 500;
   }
+  .topbar .tz-pill .tz-choice.is-selected .tz-zone { color: white; }
   .topbar .tz-pill .tz-zone.is-ca { color: #fbbf24; }
   .topbar .tz-pill .tz-pair {
     display: inline-flex;
@@ -761,7 +789,13 @@
   body.desktop-shell .topbar h1.app-name .en { font-size: 15px; }
   body.desktop-shell .topbar .window-toggle { font-size: 12px; }
   body.desktop-shell .topbar .window-toggle button { padding: 5px 12px; font-size: 12px; }
-  body.desktop-shell .tz-pill { font-size: 12px; padding: 5px 12px; }
+  body.desktop-shell .topbar .window-toggle:not(.locale-toggle) button {
+    width: 52px;
+    flex-basis: 52px;
+    padding-inline: 0;
+  }
+  body.desktop-shell .tz-pill { font-size: 12px; padding: 0; width: 190px; }
+  body.desktop-shell .topbar .tz-pill .tz-choice { padding: 0 8px; }
   body.desktop-shell .pulse-chip { font-size: 12px; padding: 6px 10px; }
   body.desktop-shell .filter-pill { font-size: 12px; padding: 5px 12px; }
   body.desktop-shell .filter-dropdown { max-height: min(60vh, 480px); }
@@ -1042,15 +1076,15 @@ body.desktop-shell .desktop-grid .feed-strip {
   min-width: 0;
 }
 .topbar-title-row .locale-toggle {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
-  max-width: 72%;
   margin: 0;
   overflow: hidden;
 }
 .topbar-title-row .locale-toggle button {
   display: block;
-  flex: 1 1 0;
+  width: 64px;
+  flex: 0 0 64px;
   min-width: 0;
   text-align: center;
   height: 28px;
@@ -1063,3 +1097,17 @@ body.desktop-shell .desktop-grid .feed-strip {
 }
 body.desktop-shell .topbar-title-row .locale-toggle { font-size: 12px; }
 body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; font-size: 12px; height: auto; }
+
+@media (max-width: 340px) {
+  body.desktop-shell .topbar .window-toggle:not(.locale-toggle) button {
+    width: 30px;
+    flex-basis: 30px;
+    padding-inline: 0;
+  }
+  body.desktop-shell .topbar .tz-pill {
+    width: 136px;
+  }
+  body.desktop-shell .topbar .tz-pill .tz-choice {
+    padding: 0 2px;
+  }
+}

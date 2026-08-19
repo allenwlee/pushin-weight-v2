@@ -79,9 +79,7 @@
     var timezone = document.querySelector('[data-tz-widget]');
     if (timezone) {
       timezone.setAttribute('title', dict.tz_title);
-      if ((timezone.getAttribute('data-tz-active') || 'local') === 'local') {
-        timezone.setAttribute('aria-label', dict.tz_title);
-      }
+      timezone.setAttribute('aria-label', dict.tz_title);
     }
     document.dispatchEvent(new CustomEvent('pw:chrome-change', { detail: { locale: locale } }));
   }

@@ -11,9 +11,9 @@ Per docs/ideation/mockups/06-tier1-composed.v22-master.html L846-849:
 Pins mockup-canon topbar layout on /. Bypasses the live DB via the same
 DB-free mock path used in iter 14.
 """
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
-from datetime import datetime, timezone
 
 import pytest
 
@@ -41,7 +41,20 @@ FAKE_ROW = {
     "account": {"handle": "@kimi_moonshot", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
 }
 
-CHART_PAYLOAD = {"days": [], "series": {}, "colors": {}, "totals": {}, "granularity": "day", "stacked": True, "window_days": 1, "fetched_at": datetime.now(timezone.utc).isoformat(), "applied_filters": {}}
+CHART_PAYLOAD = {
+    "days": [],
+    "series": {},
+    "colors": {},
+    "totals": {},
+    "granularity": "day",
+    "stacked": True,
+    "window_days": 1,
+    "fetched_at": datetime.now(UTC).isoformat(),
+    "applied_filters": {},
+    "pulse": {"entries": [], "window_days": 1, "computed_at": ""},
+    "top_voices": {"entries": []},
+    "trend_narrative": {},
+}
 
 
 def _patches_active():

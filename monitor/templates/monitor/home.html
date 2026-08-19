@@ -6,15 +6,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=filter-portal1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=v24-controls1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
-  <script src="{% static 'pw-filter-store.js' %}?v=filter-portal1" defer></script>
+  <script src="{% static 'pw-filter-store.js' %}?v=v24-controls1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=filter-portal1" defer></script>
-  <script src="{% static 'pw-chart.js' %}" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=v24-controls1" defer></script>
   <script src="{% static 'pw-feed.js' %}" defer></script>
-  <script src="{% static 'pw-tz.js' %}" defer></script>
-  <script src="{% static 'pw-locale-toggle.js' %}" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=v24-controls1" defer></script>
+  <script src="{% static 'pw-locale-toggle.js' %}?v=v24-controls1" defer></script>
 </head>
 {% csrf_token %}
 <!-- pw-shell:v20 -->
@@ -55,11 +55,11 @@
           <button type="button"
                   {% if home_window_days == n %}class="is-active"{% endif %}
                   data-pw-window-btn="{{ n }}" data-window="{{ n }}"
-                  {% if n == 1 %}data-label-en="24h" data-label-zh="24小时"{% elif n == 7 %}data-label-en="7d" data-label-zh="7天"{% elif n == 30 %}data-label-en="30d" data-label-zh="30天"{% elif n == 365 %}data-label-en="365d" data-label-zh="365天"{% else %}data-label-en="{{ n }}d" data-label-zh="{{ n }}d"{% endif %}>
+                  {% if n == 1 %}data-label-en="1d" data-label-zh="1天"{% elif n == 7 %}data-label-en="7d" data-label-zh="7天"{% elif n == 30 %}data-label-en="30d" data-label-zh="30天"{% elif n == 365 %}data-label-en="365d" data-label-zh="365天"{% else %}data-label-en="{{ n }}d" data-label-zh="{{ n }}d"{% endif %}>
             {% if active_locale == 'en' or active_locale == 'original' %}
-              {% if n == 1 %}24h{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
+              {% if n == 1 %}1d{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
             {% else %}
-              {% if n == 1 %}24小时{% elif n == 7 %}7天{% elif n == 30 %}30天{% elif n == 365 %}365天{% else %}{{ n }}d{% endif %}
+              {% if n == 1 %}1天{% elif n == 7 %}7天{% elif n == 30 %}30天{% elif n == 365 %}365天{% else %}{{ n }}d{% endif %}
             {% endif %}
           </button>
         {% endfor %}
@@ -67,10 +67,17 @@
       <button type="button" class="tz-pill" data-tz-widget data-tz-idea="c" data-tz-active="local"
               title="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% else %}Toggle local ⇄ California time{% endif %}"
               aria-label="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% else %}Toggle local ⇄ California time{% endif %}">
-        <span class="tz-emoji" data-tz-emoji>☀️</span>
-        <span class="tz-time" data-tz-time>00:00</span>
-        <span class="tz-zone" data-tz-zone data-i18n-tz-local="1">本地</span>
-        <span class="tz-pair" data-tz-pair>⇄ <span class="tz-ca-icon" title="California" aria-label="California">CA</span></span>
+        <span class="tz-choice is-selected" data-tz-choice="local">
+          <span class="tz-emoji" data-tz-local-emoji>☀️</span>
+          <span class="tz-time" data-tz-local-time data-tz-time>00:00</span>
+          <span class="tz-label tz-zone" data-tz-local-label data-tz-zone data-i18n-tz-local="1">{% if is_zh_chrome %}本地{% else %}local{% endif %}</span>
+        </span>
+        <span class="tz-divider" aria-hidden="true"></span>
+        <span class="tz-choice" data-tz-choice="ca">
+          <span class="tz-emoji" data-tz-ca-emoji>🌙</span>
+          <span class="tz-time" data-tz-ca-time>00:00</span>
+          <span class="tz-ca-icon" title="California" aria-label="California">CA</span>
+        </span>
       </button>
     </div>
   </header>
