@@ -220,6 +220,8 @@ def _resolve_plan(config: ProjectConfig, args: argparse.Namespace, active_worktr
     if args.plan_path is not None:
         path = _validate_explicit_path(args.plan_path, directory, active_worktree)
         content, metadata = _read_plan(path)
+        if metadata.branch != branch:
+            raise PlanDiscoveryError("explicit_plan_branch_must_match_active_branch")
         return ResolvedPlan(path, content, metadata, False)
     matches = _matching_plans(directory, branch)
     if len(matches) > 1:

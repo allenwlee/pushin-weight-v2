@@ -135,6 +135,19 @@ def test_one_match_is_reused_but_multiple_matches_fail_without_writing(tmp_path:
     assert {path: path.read_bytes() for path in (first, second)} == before
 
 
+def test_explicit_plan_for_another_branch_is_rejected_without_writing(tmp_path: Path) -> None:
+    root = write_repository(tmp_path, branch="feat/current")
+    foreign = _plan(root, "foreign.md", "feat/other")
+    before = foreign.read_bytes()
+
+    for arguments in ((str(foreign),), ("--check", str(foreign))):
+        code, result = invoke(root, *arguments)
+
+        assert code == 2
+        assert result["error"] == "explicit_plan_branch_must_match_active_branch"
+        assert foreign.read_bytes() == before
+
+
 def test_concurrent_no_path_invocations_create_one_plan(tmp_path: Path) -> None:
     root = write_repository(tmp_path, branch="feat/concurrent")
     environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
@@ -161,7 +174,7 @@ def test_check_is_write_free_for_current_stale_missing_and_malformed_inputs(tmp_
     assert path.read_bytes() == current
     assert {item.relative_to(root) for item in root.rglob("*")} == before_check
 
-    path.write_text(_plan(root, "replacement.md", "feat/other").read_text(encoding="utf-8"), encoding="utf-8")
+    path.write_text(_plan(root, "replacement.md", "feat/check").read_text(encoding="utf-8"), encoding="utf-8")
     stale = path.read_bytes()
     code, result = invoke(root, "--check", str(path))
     assert code == 2 and result["error"] == "plan_annotation_stale_run_annotate_plan"
