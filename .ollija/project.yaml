@@ -1,135 +1,33 @@
 schema_version: 1
-adapter: pushinweight
 
 authority:
   canonical_host: fuchitalee
-  forbidden_hosts:
-    - allenwlee
   repository_root: /Users/fuchitalee/development/pushin-weight-v2
   repository_slug: allenwlee/pushin-weight-v2
   release_worktree_label: Ollija release worktree area
   release_worktree_path: .worktrees
 
+plans:
+  directory: docs/plans
+
 git:
+  remote: origin
   staging_branch: staging
   production_branch: main
 
-versioning:
-  source: pyproject.toml
-  field: project.version
-  prerelease: beta
-
-state:
-  directory: .ollija/state
-  retention_days: 30
-
 environments:
-  local:
-    database_name: pushinweight_staging
-    database_resource_id: local:fuchitalee
-    preview_host: 127.0.0.1
-    preview_port: 8011
-    tailscale_hostname: fuchitalee
   staging:
     blueprint: render-staging.yaml
-    branch: staging
-    web_service_name: pushinweight-staging-web
-    web_service_id: srv-d9vb8t49v7es738lf2ng
-    database_name: pushinweight_staging
-    database_resource_id: dpg-d9vb8ds9v7es738lepsg-a
-    owner_allowlist_env: OLLIJA_STAGING_ALLOWED_EMAILS
+    url: https://pushinweight-staging-web.onrender.com
+    service: pushinweight-staging-web
   production:
     blueprint: render.yaml
-    branch: main
-    web_service_name: pushinweight-web
-    web_service_id: srv-d9go2breo5us73cg6vqg
-    database_name: pushinweight_shadow
-    database_resource_id: dpg-d9koekqjobas73fvjqng-a
-    deploy_services:
-      - name: pushinweight-web
-        id: srv-d9go2breo5us73cg6vqg
-        kind: web
-      - name: pushinweight-headlines
-        id: srv-d9ufj4e417fc73d93g20
-        kind: worker
-      - name: pushinweight-harvest
-        id: crn-d9gv94o4n6ts739tqaug
-        kind: cron
+    url: https://pushinweight-web.onrender.com
+    service: pushinweight-web
 
-database_safety:
-  production_resource_ids:
-    - dpg-d9koekqjobas73fvjqng-a
-    - dpg-d9go1njeo5us73cg5u00-a
-  production_database_names:
-    - pushinweight_shadow
-    - pushinweight
-  staging_name_prefix: pushinweight_staging
-  source_readonly_role: ollija_dump
-  local_hosts:
-    - local_socket
-    - localhost
-    - 127.0.0.1
-    - "::1"
-  marker_table: ollija_environment_marker
-  marker_environment: staging
-
-verification:
-  production_base_url: https://pushinweight-web.onrender.com
-  health_path: /accounts/login/
-  smoke_path: /accounts/login/
-  authenticated_home_path: /feed/
-  headline_path: /feed/
-  headline_selector: "[data-pw-headline-body]"
-  headline_unavailable_text: Trend summary is unavailable.
-  browser_storage_state_env: OLLIJA_PRODUCTION_BROWSER_STORAGE_STATE
-  browser_cdp_url_env: OLLIJA_PRODUCTION_BROWSER_CDP_URL
-  deploy_timeout_seconds: 1800
-  poll_interval_seconds: 10
-  refresh_max_age_seconds: 86400
-
-ui_impact:
-  path_patterns:
-    - monitor/views.py
-    - core/context_processors.py
-    - project/middleware.py
-    - project/settings.py
-    - render-staging.yaml
-    - "**/templates/**"
-    - "**/static/**"
-    - locale/**
-    - core/templatetags/**
-    - tests/mockups/**
-    - docs/ideation/mockups/**
-    - bridgewright.yaml
-    - .bridgewright/**
-
-bridgewright:
-  config_path: bridgewright.yaml
-  required_project: pushin-weight-v2
-
-tooling:
-  render:
-    executable: render
-    version_args: [--version]
-    minimum_version: 2.22.0
-    probe_args: [whoami]
-  tailscale:
-    executable: tailscale
-    version_args: [version]
-    minimum_version: 1.90.0
-    probe_args: [status, --json]
-    probe_json_path: BackendState
-    probe_json_equals: Running
-  psql:
-    executable: psql
-    version_args: [--version]
-    minimum_version: 18.0.0
-  pg_dump:
-    executable: pg_dump
-    version_args: [--version]
-    minimum_version: 18.0.0
-  bridgewright:
-    executable: /Users/fuchitalee/development/bridgewright/.venv/bin/bridgewright
-    version_args: [capabilities]
-    minimum_version: 0.1.0
-    version_json_path: capability_contract.build_identity.version
+delivery:
+  template: .ollija/templates/delivery-guide.md
+  test_commands:
+    - pytest tests/ollija
+  code_failure_route: parent implementation workflow
+  infra_failure_route: repository infra/multi-machine skill
