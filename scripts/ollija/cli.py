@@ -7,7 +7,9 @@ import fcntl
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -161,6 +163,12 @@ def _metadata_with_inputs(metadata: PlanMetadata, args: argparse.Namespace) -> P
     target = metadata.delivery_target if args.delivery_target is None else args.delivery_target
     selected = metadata.delivery_selected_by_user
     if args.delivery_target is not None:
+        if (
+            metadata.delivery_selected_by_user
+            and metadata.delivery_target in {"staging", "production"}
+            and args.delivery_target == "on-request"
+        ):
+            raise PlanDiscoveryError("selected_delivery_target_cannot_be_reset_to_on_request")
         selected = args.delivery_selected_by_user
     if target in {"staging", "production"} and not selected:
         raise PlanDiscoveryError("delivery_target_requires_explicit_user_selection")
@@ -215,6 +223,28 @@ def _exclusive_create(path: Path, content: str) -> bool:
     return True
 
 
+def _atomic_replace(path: Path, content: str) -> None:
+    """Replace an existing plan only after its complete new bytes are durable."""
+
+    mode = stat.S_IMODE(path.stat().st_mode)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content.encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def _resolve_plan(config: ProjectConfig, args: argparse.Namespace, active_worktree: Path, branch: str, *, write: bool) -> ResolvedPlan:
     directory = _plan_directory(config, active_worktree)
     if args.plan_path is not None:
@@ -246,11 +276,16 @@ def _resolve_plan(config: ProjectConfig, args: argparse.Namespace, active_worktr
     raise PlanDiscoveryError("could_not_create_unique_plan_stub")
 
 
-def _lock(common_git_dir: Path):
+def _lock(common_git_dir: Path, *, nonblocking: bool = False):
     # HEAD is a stable, shared Git file. Locking it avoids persistent Ollija
     # state while making no-path creation converge across linked worktrees.
     stream = (common_git_dir / "HEAD").open("r")
-    fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+    try:
+        operation = fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0)
+        fcntl.flock(stream.fileno(), operation)
+    except BlockingIOError as exc:
+        stream.close()
+        raise PlanDiscoveryError("annotation_lock_busy_rerun_annotate_plan") from exc
     return stream
 
 
@@ -268,9 +303,11 @@ def _result(*, state: str, plan: ResolvedPlan, active_worktree: Path, config: Pr
 
 
 def _annotate(args: argparse.Namespace, *, cwd: Path) -> dict[str, str]:
-    config = load_project_config(cwd)
+    project_root = os.environ.get("OLLIJA_PROJECT_ROOT")
+    config = load_project_config(project_root or cwd)
     facts = active_worktree_facts(cwd)
-    lock_stream = None if args.check else _lock(facts.common_git_dir)
+    hook_mode = os.environ.get("OLLIJA_HOOK_NONBLOCKING_LOCK") == "1"
+    lock_stream = None if args.check else _lock(facts.common_git_dir, nonblocking=hook_mode)
     try:
         plan = _resolve_plan(config, args, facts.active_worktree, facts.branch, write=not args.check)
         metadata = _metadata_with_inputs(plan.metadata, args)
@@ -289,7 +326,7 @@ def _annotate(args: argparse.Namespace, *, cwd: Path) -> dict[str, str]:
                 if not _exclusive_create(plan.path, annotated):
                     raise PlanDiscoveryError("plan_stub_path_collision_retry_command")
             elif changed:
-                plan.path.write_bytes(annotated.encode("utf-8"))
+                _atomic_replace(plan.path, annotated)
             state = "created" if plan.created else ("updated" if changed else "unchanged")
         return _result(state=state, plan=plan, active_worktree=facts.active_worktree, config=config, branch=facts.branch, target=metadata.delivery_target)
     finally:

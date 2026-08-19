@@ -59,6 +59,16 @@ worktree it runs the same annotation command to create or reuse the shared
 stub; primary and detached checkouts are skipped. If annotation fails, Git
 continues and the hook prints the recovery command.
 
+Enable that tracked hook once in every fresh clone, from its primary checkout:
+
+```bash
+git config core.hooksPath "$(git rev-parse --show-toplevel)/.ollija/hooks"
+```
+
+This only makes Git find the tracked hook. It neither creates a background
+process nor changes how worktrees are allowed to proceed after an annotation
+failure.
+
 ## Delivery choices
 
 Ordinary planning is `on-request`: making a plan does not authorize a commit,

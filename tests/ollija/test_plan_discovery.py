@@ -7,6 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from scripts.ollija import cli
 from scripts.ollija.cli import main
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -71,7 +74,15 @@ def invoke(root: Path, *args: str) -> tuple[int, dict[str, str]]:
     return code, json.loads(stream.getvalue())
 
 
-def _plan(root: Path, name: str, branch: str, *, marker: str = "") -> Path:
+def _plan(
+    root: Path,
+    name: str,
+    branch: str,
+    *,
+    marker: str = "",
+    target: str = "on-request",
+    selected: bool = False,
+) -> Path:
     path = root / "docs" / "plans" / name
     path.parent.mkdir(parents=True, exist_ok=True)
     content = "\n".join(
@@ -85,8 +96,8 @@ def _plan(root: Path, name: str, branch: str, *, marker: str = "") -> Path:
             "  change_id: existing",
             f"  branch: {branch}",
             "  workflow: plan",
-            "  delivery_target: on-request",
-            "  delivery_selected_by_user: false",
+            f"  delivery_target: {target}",
+            f"  delivery_selected_by_user: {str(selected).lower()}",
             "---",
             "",
             "# Goal",
@@ -148,6 +159,47 @@ def test_explicit_plan_for_another_branch_is_rejected_without_writing(tmp_path: 
         assert foreign.read_bytes() == before
 
 
+def test_selected_delivery_target_cannot_be_reset_without_a_new_plan(tmp_path: Path) -> None:
+    root = write_repository(tmp_path, branch="feat/delivery-target")
+    plan = _plan(root, "selected.md", "feat/delivery-target", target="production", selected=True)
+    before = plan.read_bytes()
+
+    code, result = invoke(root, str(plan), "--delivery-target", "on-request")
+
+    assert code == 2
+    assert result["error"] == "selected_delivery_target_cannot_be_reset_to_on_request"
+    assert plan.read_bytes() == before
+
+
+def test_selected_delivery_target_can_change_between_staging_and_production(tmp_path: Path) -> None:
+    root = write_repository(tmp_path, branch="feat/delivery-target-change")
+    plan = _plan(root, "selected.md", "feat/delivery-target-change", target="staging", selected=True)
+
+    code, result = invoke(
+        root,
+        str(plan),
+        "--delivery-target",
+        "production",
+        "--delivery-selected-by-user",
+    )
+    assert code == 0
+    assert result["delivery_target"] == "production"
+    assert "delivery_target: production" in plan.read_text(encoding="utf-8")
+    assert "delivery_selected_by_user: true" in plan.read_text(encoding="utf-8")
+
+    code, result = invoke(
+        root,
+        str(plan),
+        "--delivery-target",
+        "staging",
+        "--delivery-selected-by-user",
+    )
+    assert code == 0
+    assert result["delivery_target"] == "staging"
+    assert "delivery_target: staging" in plan.read_text(encoding="utf-8")
+    assert "delivery_selected_by_user: true" in plan.read_text(encoding="utf-8")
+
+
 def test_concurrent_no_path_invocations_create_one_plan(tmp_path: Path) -> None:
     root = write_repository(tmp_path, branch="feat/concurrent")
     environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
@@ -191,6 +243,28 @@ def test_check_is_write_free_for_current_stale_missing_and_malformed_inputs(tmp_
     assert malformed.read_bytes() == malformed_before
 
 
+@pytest.mark.parametrize("failure", ("fsync", "replace"))
+def test_atomic_refresh_preserves_existing_plan_when_write_commit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    root = write_repository(tmp_path, branch="feat/atomic-refresh")
+    plan = _plan(root, "existing.md", "feat/atomic-refresh")
+    plan.chmod(0o640)
+    before = plan.read_bytes()
+
+    def fail(*_args, **_kwargs):
+        raise OSError(f"simulated_{failure}_failure")
+
+    monkeypatch.setattr(cli.os, failure, fail)
+    code, result = invoke(root, str(plan))
+
+    assert code == 2
+    assert result["error"] == f"simulated_{failure}_failure"
+    assert plan.read_bytes() == before
+    assert plan.stat().st_mode & 0o777 == 0o640
+    assert not list(plan.parent.glob(f".{plan.name}.*.tmp"))
+
+
 def test_explicit_escape_detached_head_and_unselected_autonomous_target_do_not_write(tmp_path: Path) -> None:
     root = write_repository(tmp_path, branch="feat/safe")
     outside = root.parent / "outside.md"
@@ -220,3 +294,66 @@ def test_explicit_escape_detached_head_and_unselected_autonomous_target_do_not_w
     _git(root, "checkout", "--detach")
     code, result = invoke(root)
     assert code == 2 and result["error"] == "detached_head_requires_named_branch"
+
+
+def test_trusted_project_root_supplies_config_for_an_active_linked_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    primary = write_repository(tmp_path, branch="primary-trusted-config")
+    linked = tmp_path / "linked-worktree"
+    _git(primary, "worktree", "add", "-b", "feat/trusted-config", str(linked))
+    assert not (linked / ".ollija" / "project.yaml").exists()
+
+    monkeypatch.setenv("OLLIJA_PROJECT_ROOT", str(primary))
+    monkeypatch.setenv("OLLIJA_WORKTREE_CWD", str(linked))
+    code, result = invoke(linked)
+
+    assert code == 0
+    assert result["authoritative_root"] == str(primary)
+    assert result["active_worktree"] == str(linked)
+    assert Path(result["plan_path"]).is_relative_to(linked / "docs" / "plans")
+
+
+def test_hook_mode_lock_contention_returns_promptly(tmp_path: Path) -> None:
+    root = write_repository(tmp_path, branch="feat/hook-lock")
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import fcntl, sys; "
+                "stream = open(sys.argv[1]); "
+                "fcntl.flock(stream.fileno(), fcntl.LOCK_EX); "
+                "print('locked', flush=True); "
+                "sys.stdin.read()"
+            ),
+            str(root / ".git" / "HEAD"),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert holder.stdout is not None
+    assert holder.stdin is not None
+    assert holder.stdout.readline().strip() == "locked"
+    try:
+        environment = {
+            **os.environ,
+            "PYTHONPATH": str(SOURCE_ROOT),
+            "OLLIJA_HOOK_NONBLOCKING_LOCK": "1",
+        }
+        completed = subprocess.run(
+            [sys.executable, "-m", "scripts.ollija", "annotate-plan"],
+            cwd=root,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=1,
+        )
+    finally:
+        holder.stdin.close()
+        holder.wait(timeout=1)
+
+    assert completed.returncode == 2
+    assert json.loads(completed.stdout)["error"] == "annotation_lock_busy_rerun_annotate_plan"

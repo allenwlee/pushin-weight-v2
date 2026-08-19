@@ -51,6 +51,27 @@ def test_build_migrations_always_run_under_the_advisory_lock() -> None:
     ]
 
 
+def test_failed_build_migration_releases_the_advisory_lock() -> None:
+    operations: list[Operation] = []
+    connection = _Connection(operations)
+
+    def fail_migration() -> None:
+        operations.append("migrate")
+        raise RuntimeError("migration failed")
+
+    with pytest.raises(RuntimeError, match="migration failed"):
+        render_migrate.run_migrations(
+            connection=connection,
+            execute_migrate=fail_migration,
+        )
+
+    assert operations == [
+        ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
+        "migrate",
+        ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
+    ]
+
+
 def test_staging_boot_fails_closed_for_missing_credentials_or_owner_allowlist() -> None:
     with pytest.raises(ImproperlyConfigured) as caught:
         validate_staging_environment(

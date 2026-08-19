@@ -23,6 +23,20 @@ stub in place, then rerun annotation after the final plan write or review.
 The generated Ollija Delivery Guide is read-only. Add an owner-directed change
 under `## Delivery Exceptions`; do not edit between its markers.
 
+## Enable the tracked worktree hook
+
+Once per fresh clone, from its primary checkout, configure Git to use the
+tracked nonblocking hook:
+
+```bash
+git config core.hooksPath "$(git rev-parse --show-toplevel)/.ollija/hooks"
+```
+
+Thereafter a named linked worktree starts or refreshes its shared plan stub.
+The hook uses the trusted primary checkout's Ollija code and configuration,
+passes the linked worktree only as the target, and never blocks Git if
+annotation cannot run.
+
 ## Set delivery authority once
 
 Ordinary plans remain `delivery_target: on-request` and require a later

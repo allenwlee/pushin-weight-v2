@@ -6,13 +6,14 @@ common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/n
 git_dir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)" || exit 0
 active_worktree="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 git symbolic-ref --quiet --short HEAD >/dev/null 2>&1 || exit 0
+repository_root="$(dirname "$common_git_dir")"
 
 if [ "$git_dir" = "$common_git_dir" ]; then
   exit 0
 fi
 
-if ! OLLIJA_WORKTREE_CWD="$active_worktree" "$active_worktree/bin/ollija" annotate-plan </dev/null; then
-  printf '%s\n' "Ollija annotation failed. Recover with: cd $active_worktree && $active_worktree/bin/ollija annotate-plan" >&2
+if ! OLLIJA_WORKTREE_CWD="$active_worktree" OLLIJA_PROJECT_ROOT="$repository_root" OLLIJA_HOOK_NONBLOCKING_LOCK=1 "$repository_root/bin/ollija" annotate-plan </dev/null; then
+  printf '%s\n' "Ollija annotation failed. Recover with: cd $active_worktree && $repository_root/bin/ollija annotate-plan" >&2
 fi
 
 exit 0

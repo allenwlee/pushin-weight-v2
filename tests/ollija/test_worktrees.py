@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 
 from scripts.ollija.config import load_project_config
@@ -30,7 +31,7 @@ def _write_wrapper(worktree: Path, *, log: Path, label: str, exit_code: int = 0)
     wrapper.write_text(
         "#!/bin/sh\n"
         "stdin_payload=$(cat)\n"
-        f"printf '%s|%s|%s|%s|%s\\n' {shlex.quote(label)} \"$PWD\" \"$*\" \"$stdin_payload\" \"$OLLIJA_WORKTREE_CWD\" >> {shlex.quote(str(log))}\n"
+        f"printf '%s|%s|%s|%s|%s|%s|%s\\n' {shlex.quote(label)} \"$PWD\" \"$*\" \"$stdin_payload\" \"$OLLIJA_WORKTREE_CWD\" \"$OLLIJA_PROJECT_ROOT\" \"$OLLIJA_HOOK_NONBLOCKING_LOCK\" >> {shlex.quote(str(log))}\n"
         f"exit {exit_code}\n",
         encoding="utf-8",
     )
@@ -47,6 +48,13 @@ def _run_hook(worktree: Path, *, log: Path) -> subprocess.CompletedProcess[str]:
         check=False,
         env={**os.environ, "OLLIJA_TEST_LOG": str(log)},
     )
+
+
+def _configure_tracked_hook(primary: Path) -> None:
+    hook_path = primary / ".ollija" / "hooks"
+    hook_path.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(HOOK, hook_path / "post-checkout")
+    _git(primary, "config", "core.hooksPath", str(hook_path))
 
 
 def test_canonical_worktree_requires_the_exact_branch_path(tmp_path) -> None:
@@ -77,7 +85,7 @@ def test_post_checkout_skips_primary_and_detached_worktrees(tmp_path) -> None:
     assert not log.exists()
 
 
-def test_post_checkout_uses_active_linked_wrapper_with_empty_stdin(tmp_path) -> None:
+def test_post_checkout_uses_trusted_primary_wrapper_with_linked_worktree_facts(tmp_path) -> None:
     primary, linked = _linked_worktree(tmp_path)
     log = tmp_path / "ollija.log"
     _write_wrapper(primary, log=log, label="primary")
@@ -88,23 +96,37 @@ def test_post_checkout_uses_active_linked_wrapper_with_empty_stdin(tmp_path) -> 
     assert result.returncode == 0
     assert result.stderr == ""
     assert log.read_text(encoding="utf-8").splitlines() == [
-        f"linked|{linked}|annotate-plan||{linked}"
+        f"primary|{linked}|annotate-plan||{linked}|{primary}|1"
     ]
 
 
-def test_post_checkout_failure_is_nonblocking_and_names_active_recovery_path(tmp_path) -> None:
-    _, linked = _linked_worktree(tmp_path)
+def test_post_checkout_failure_is_nonblocking_and_names_trusted_recovery_path(tmp_path) -> None:
+    primary, linked = _linked_worktree(tmp_path)
     log = tmp_path / "ollija.log"
-    _write_wrapper(linked, log=log, label="linked", exit_code=17)
+    _write_wrapper(primary, log=log, label="primary", exit_code=17)
 
     result = _run_hook(linked, log=log)
 
     assert result.returncode == 0
     assert (
-        f"Recover with: cd {linked} && {linked}/bin/ollija annotate-plan" in result.stderr
+        f"Recover with: cd {linked} && {primary}/bin/ollija annotate-plan" in result.stderr
     )
     assert log.read_text(encoding="utf-8").splitlines() == [
-        f"linked|{linked}|annotate-plan||{linked}"
+        f"primary|{linked}|annotate-plan||{linked}|{primary}|1"
+    ]
+
+
+def test_configured_hook_runs_during_actual_git_worktree_add(tmp_path) -> None:
+    primary = write_repository(tmp_path, branch="primary-hook-install")
+    log = tmp_path / "ollija.log"
+    _write_wrapper(primary, log=log, label="primary")
+    _configure_tracked_hook(primary)
+    linked = tmp_path / "actual-linked-worktree"
+
+    _git(primary, "worktree", "add", "-b", "feat/actual-hook", str(linked))
+
+    assert log.read_text(encoding="utf-8").splitlines() == [
+        f"primary|{linked}|annotate-plan||{linked}|{primary}|1"
     ]
 
 

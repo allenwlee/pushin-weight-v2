@@ -26,5 +26,12 @@ else
   export PYTHONPATH="$OLLIJA_REPO_ROOT"
 fi
 export OLLIJA_WORKTREE_CWD="${OLLIJA_WORKTREE_CWD:-$OLLIJA_CALLER_DIRECTORY}"
+# The post-checkout hook passes this only when it deliberately runs the trusted
+# primary checkout's wrapper for a newly created linked worktree. Ordinary
+# manual calls and module tests keep resolving configuration from their cwd.
+if [[ -n "${OLLIJA_PROJECT_ROOT:-}" ]]; then
+  OLLIJA_PROJECT_ROOT="$(cd "$OLLIJA_PROJECT_ROOT" && pwd -P)"
+  export OLLIJA_PROJECT_ROOT
+fi
 cd "$OLLIJA_REPO_ROOT"
 exec "$OLLIJA_PYTHON" -m scripts.ollija "$@"
