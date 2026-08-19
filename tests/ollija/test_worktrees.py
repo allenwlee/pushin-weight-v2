@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
+from pathlib import Path
 
 from scripts.ollija.config import load_project_config
 from scripts.ollija.worktrees import canonical_worktree_path, is_canonical_worktree

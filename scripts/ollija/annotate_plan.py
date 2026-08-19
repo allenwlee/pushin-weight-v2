@@ -13,7 +13,6 @@ import yaml
 from .config import ProjectConfig
 from .worktrees import canonical_worktree_path, is_canonical_worktree
 
-
 BEGIN_MARKER = "<!-- BEGIN OLLIJA DELIVERY GUIDE -->"
 END_MARKER = "<!-- END OLLIJA DELIVERY GUIDE -->"
 DELIVERY_EXCEPTIONS_HEADING = "## Delivery Exceptions"

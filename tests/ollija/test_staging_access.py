@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Self
 from unittest.mock import patch
 
 import pytest
@@ -17,7 +18,7 @@ class _Cursor:
     def __init__(self, operations: list[Operation]) -> None:
         self.operations = operations
 
-    def __enter__(self) -> _Cursor:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_args: object) -> None:

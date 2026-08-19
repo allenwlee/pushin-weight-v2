@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import io
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-from scripts.ollija.cli import build_parser, main
+from scripts.ollija.cli import build_parser
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

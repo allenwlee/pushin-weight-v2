@@ -15,7 +15,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-from .annotate_plan import AnnotationError, PlanMetadata, parse_plan_metadata, render_annotated_plan
+from .annotate_plan import (
+    AnnotationError,
+    PlanMetadata,
+    parse_plan_metadata,
+    render_annotated_plan,
+)
 from .config import ConfigError, ProjectConfig, load_project_config
 from .worktrees import WorktreeError, active_worktree_facts, canonical_worktree_path
 
