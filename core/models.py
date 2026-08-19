@@ -475,6 +475,8 @@ class Post(models.Model):
     headline_source = models.TextField(blank=True, null=True)
     text_en = models.TextField(blank=True, null=True)
     text_zh_cn = models.TextField(blank=True, null=True)
+    commentary_en = models.TextField(blank=True, null=True)
+    commentary_zh_cn = models.TextField(blank=True, null=True)
     lang_detected = models.TextField(blank=True, null=True)
     quoted_text = models.TextField(blank=True, null=True)
     last_quote_count_seen = models.IntegerField(blank=True, null=True)

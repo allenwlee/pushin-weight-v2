@@ -31,7 +31,8 @@ def _fake_row():
         "created_at": "2026-08-09T01:51:00Z",
         "created_at_iso": "2026-08-09T01:51:00Z",
         "lang_detected": "en",
-        "text_en": "Mock en", "text_translated": "Mock en",
+        "text_en": "Mock en", "text_zh_cn": "模拟直译", "text_translated": "模拟直译",
+        "commentary_en": None, "commentary_zh_cn": "模拟综合",
         "text_original": "Mock", "text": "Mock",
         "is_translated": True, "like_count": 1200,
         "sentiment_keys": ["positive"], "post_type_keys": ["buzz_releases"],
@@ -66,6 +67,8 @@ def _fake_chart_payload():
             "computed_at": computed_at,
             "entries": [],
         },
+        "top_voices": {"entries": []},
+        "trend_narrative": {},
     }
 
 
@@ -154,6 +157,15 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         # The JS signal painter needs these data-* attrs on every row
         for attr in ("data-sentiments=", "data-post-types=", "data-nat-cn=", "data-nat-us=", "data-unsanctioned="):
             self.assertIn(attr, body, f"missing {attr} — JS painter won't run")
+
+    def test_feed_row_carries_text_layers_and_guarded_x_post_url(self):
+        body = self._get_home().content.decode("utf-8")
+        for attr in (
+            'data-commentary-zh-cn="模拟综合"', 'data-commentary-en=""',
+            'data-literal-cn="模拟直译"', 'data-text-en="Mock en"',
+            'data-x-url="https://x.com/i/web/status/1"',
+        ):
+            self.assertIn(attr, body)
 
     def test_home_internal_unchanged(self):
         """Regression: /internal/ (Net F legacy) must still render the legacy chrome."""

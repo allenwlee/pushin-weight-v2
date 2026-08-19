@@ -118,6 +118,16 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _commentary_or_none(value: Any) -> str | None:
+    """Normalize the translator's explicit no-commentary sentinel to NULL."""
+    if not isinstance(value, str):
+        return None
+    commentary = value.strip()
+    if not commentary or commentary.casefold() in {"n/a", "na"}:
+        return None
+    return commentary
+
+
 @dataclass(frozen=True)
 class EnrichmentClaimBatch:
     states: tuple[PostEnrichmentState, ...]
@@ -1777,7 +1787,7 @@ class CycleRunner:
         """Drain a bounded durable translation/classification claim batch.
 
         Stage 1 (translate): calls translate_batch_pragmatics to produce
-        text_en / text_zh_cn / lang_detected for each post.
+        text_en / text_zh_cn / commentary_zh_cn / lang_detected for each post.
 
         Stage 2 (classify): calls classify_batch_pragmatics_full to produce
         PostBrandSignal and PostBrandDiscourse rows for each post.
@@ -1947,6 +1957,7 @@ class CycleRunner:
                 source_text = source_text_by_tid.get(str(tid), "")
                 text_zh_cn = r.get("text_zh_cn") or r.get("literal_zh") or None
                 text_en = r.get("text_en") or None
+                commentary_zh_cn = _commentary_or_none(r.get("cn_equivalent"))
                 # Invariant: Chinese-detected posts must have text_zh_cn
                 # populated (use the source text if the LLM didn't emit one).
                 if lang_detected in CHINESE_LANG_CODES and not text_zh_cn:
@@ -1957,6 +1968,7 @@ class CycleRunner:
                 PostModel.objects.filter(tweet_id=tid).update(
                     text_en=text_en,
                     text_zh_cn=text_zh_cn,
+                    commentary_zh_cn=commentary_zh_cn,
                     lang_detected=lang_detected or None,
                 )
                 if not r.get("translation_failed") and lang_detected:

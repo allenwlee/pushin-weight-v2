@@ -925,6 +925,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     for selector in (
                         '[data-tier-grid="open"] input[data-pw-filter-group="brands"]',
                         '[data-tier-grid="closed"] input[data-pw-filter-group="brands"]',
+                        '[data-group="post_types"] input[data-pw-filter-group="post_types"]',
                         '[data-group="discourse"] input[data-pw-filter-group="discourse"]',
                         '[data-group="role"] input[data-pw-filter-group="role"]',
                         '[data-group="lang"] input[data-pw-filter-group="lang"]',
@@ -1553,6 +1554,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "text_translated",
             "text_en",
             "text_zh_cn",
+            "commentary_en",
+            "commentary_zh_cn",
             "account",
             "engagement_pretty",
             "avatar_initials",
@@ -1589,6 +1592,91 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             self.assertGreater(box["width"], 0, f"marker has zero width: {selector}")
             self.assertGreater(box["height"], 0, f"marker has zero height: {selector}")
             self.assertTrue((marker.text_content() or "").strip(), f"marker is blank: {selector}")
+
+    def test_locale_text_cycle_and_row_link_targets_are_independent(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                page = context.new_page()
+                try:
+                    page.goto(
+                        f"{self.live_server_url}/?locale=zh_hans",
+                        wait_until="networkidle",
+                    )
+                    page.wait_for_function("() => window.pwFilter && window.pwApplyChrome")
+
+                    page.evaluate("window.pwApplyChrome('en')")
+                    self.assertEqual(
+                        page.locator("[data-pw-locale-btn].is-active").all_inner_texts(),
+                        ["en"],
+                    )
+                    page.evaluate("window.pwApplyChrome('original')")
+                    self.assertEqual(
+                        page.locator("[data-pw-locale-btn].is-active").all_inner_texts(),
+                        ["original"],
+                    )
+                    page.evaluate("window.pwApplyChrome('zh_cn')")
+
+                    row = page.locator(".feed-row[data-pw-feed-row]").first
+                    text = row.locator(".text[data-text-cycle]")
+                    self.assertEqual(text.get_attribute("data-layer-key"), "synthesis")
+                    self.assertIn("综合", text.inner_text())
+                    text.click()
+                    self.assertEqual(text.get_attribute("data-layer-key"), "literal_cn")
+                    self.assertIn("直译", text.inner_text())
+                    text.click()
+                    self.assertEqual(text.get_attribute("data-layer-key"), "en")
+                    self.assertIn("en", text.inner_text().lower())
+                    text.click()
+                    self.assertEqual(text.get_attribute("data-layer-key"), "synthesis")
+
+                    page.evaluate(
+                        """() => {
+                          window.__pwOpenedUrls = [];
+                          window.open = (url) => {
+                            window.__pwOpenedUrls.push(url);
+                            return { opener: null };
+                          };
+                        }"""
+                    )
+                    row.locator(".feed-row-shell").dispatch_event("click")
+                    self.assertEqual(
+                        page.evaluate("window.__pwOpenedUrls.length"),
+                        1,
+                    )
+                    self.assertRegex(
+                        page.evaluate("window.__pwOpenedUrls[0]"),
+                        r"^https://x\.com/i/web/status/",
+                    )
+
+                    text.dispatch_event("click")
+                    row.locator(".feed-handle-link").evaluate(
+                        "element => element.addEventListener('click', event => event.preventDefault(), {once: true})"
+                    )
+                    row.locator(".feed-handle-link").dispatch_event("click")
+                    row.locator(".handle").dispatch_event("click")
+                    row.locator(".feed-signals").dispatch_event("click")
+                    self.assertEqual(page.evaluate("window.__pwOpenedUrls.length"), 1)
+
+                    with page.expect_response(lambda response: "/feed/?" in response.url):
+                        page.evaluate("window.pwFilter.set('sentiment', '__all__')")
+                    refreshed_text = page.locator(
+                        ".feed-row[data-pw-feed-row] .text[data-text-cycle]"
+                    ).first
+                    self.assertEqual(
+                        refreshed_text.get_attribute("data-layer-key"),
+                        "synthesis",
+                    )
+                    refreshed_text.click()
+                    self.assertEqual(
+                        refreshed_text.get_attribute("data-layer-key"),
+                        "literal_cn",
+                    )
+                finally:
+                    context.close()
+            finally:
+                browser.close()
 
     def test_exact_ae11_pulse_projection_is_visible_and_accessible(self) -> None:
         """The deterministic integrated fixture reaches the browser unchanged."""

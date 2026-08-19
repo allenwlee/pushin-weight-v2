@@ -48,6 +48,8 @@ GOAL_COLUMNS: list[tuple[str, bool, str]] = [
     ("headline_source", True, "text"),
     ("text_en", True, "text"),
     ("text_zh_cn", True, "text"),
+    ("commentary_en", True, "text"),
+    ("commentary_zh_cn", True, "text"),
     ("lang_detected", True, "text"),
     ("quoted_text", True, "text"),
     ("last_quote_count_seen", True, "integer"),

@@ -32,6 +32,7 @@ const {
   formatRelative,
   formatLocalTooltip,
   enrichmentStatusHtml,
+  textLayers,
   hydrateRows,
   replaceRows,
   isFeedPayload,
@@ -236,6 +237,49 @@ assertEq(
   isFeedPayload({ rows: [{ tweet_id: 'optional-only' }], next_cursor: null }),
   true,
   'optional row data remains valid'
+);
+
+console.log('\n--- commentary text layers ---');
+const textElement = (attrs) => ({
+  getAttribute: (name) => Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null,
+});
+global.document.body = { getAttribute: (name) => name === 'data-pw-locale' ? 'zh_cn' : null };
+let layers = textLayers(textElement({
+  'data-commentary-zh-cn': '中文综合',
+  'data-commentary-en': '',
+  'data-literal-cn': '中文直译',
+  'data-text-en': 'English',
+  'data-text-source': 'English source',
+}));
+assertEq(
+  layers.map((layer) => layer.key).join(','),
+  'synthesis,literal_cn,en',
+  'zh-CN cycles commentary, literal translation, then English'
+);
+layers = textLayers(textElement({
+  'data-commentary-zh-cn': '',
+  'data-commentary-en': '',
+  'data-literal-cn': 'same text',
+  'data-text-en': 'same text',
+  'data-text-source': 'same text',
+}));
+assertEq(
+  layers.map((layer) => layer.key).join(','),
+  'literal_cn',
+  'missing commentary and duplicate translations do not create fake layers'
+);
+global.document.body = { getAttribute: (name) => name === 'data-pw-locale' ? 'en' : null };
+layers = textLayers(textElement({
+  'data-commentary-zh-cn': '中文综合',
+  'data-commentary-en': '',
+  'data-literal-cn': '中文直译',
+  'data-text-en': 'English',
+  'data-text-source': 'Source',
+}));
+assertEq(
+  layers.map((layer) => layer.key).join(','),
+  'en,source',
+  'blank commentary_en leaves the English cycle unchanged'
 );
 assertEq(
   isFeedPayload({ rows: [], next_cursor: { stale: true } }),

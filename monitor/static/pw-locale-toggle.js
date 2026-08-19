@@ -19,12 +19,18 @@
       locale_aria: '显示语言',
       window_aria: '时间窗口',
       pill_brands: '品牌',
+      pill_post_type: '帖子类型',
       pill_discourse: '话语',
       pill_role: '角色',
       pill_lang: '语言',
       pill_sentiment: '情绪',
       pill_nationalism: '民族主义',
       pill_unsanctioned: '未授权',
+      lens_open: '开源',
+      lens_closed: '闭源',
+      btn_all: '全选',
+      btn_clear: '清空',
+      feed_title: '本窗口最新',
       tz_local: '本地',
       tz_title: '切换 本地 ⇄ 加州时间'
     },
@@ -32,12 +38,18 @@
       locale_aria: 'Display language',
       window_aria: 'Time-period selector',
       pill_brands: 'Brands',
+      pill_post_type: 'Post Type',
       pill_discourse: 'Discourse',
       pill_role: 'Role',
       pill_lang: 'Lang',
       pill_sentiment: 'Sentiment',
       pill_nationalism: 'Nationalism',
       pill_unsanctioned: 'Unsanctioned',
+      lens_open: 'Open',
+      lens_closed: 'Closed',
+      btn_all: 'all',
+      btn_clear: 'clear',
+      feed_title: 'Latest in window',
       tz_local: 'local',
       tz_title: 'Toggle local ⇄ California time'
     }
@@ -47,8 +59,14 @@
     return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh-cn' || locale === 'zh_hans' || locale === 'zh-hans' ? 'zh_cn' : 'en';
   }
 
+  function selectedLocale(locale) {
+    if (chromeLocale(locale) === 'zh_cn') return 'zh_cn';
+    return locale === 'original' ? 'original' : 'en';
+  }
+
   function applyChrome(locale) {
     var key = chromeLocale(locale);
+    var activeLocale = selectedLocale(locale);
     var dict = CHROME[key];
     var useZh = key === 'zh_cn';
     document.body.setAttribute('data-pw-locale', locale);
@@ -65,7 +83,10 @@
       localeNav.setAttribute('aria-label', dict.locale_aria);
       localeNav.querySelectorAll('[data-pw-locale-btn]').forEach(function (button) {
         button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
-        button.classList.toggle('is-active', chromeLocale(button.getAttribute('data-pw-locale-btn')) === key);
+        button.classList.toggle(
+          'is-active',
+          selectedLocale(button.getAttribute('data-pw-locale-btn')) === activeLocale
+        );
       });
     }
 

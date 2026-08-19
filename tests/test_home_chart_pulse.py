@@ -243,6 +243,58 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             with self.subTest(axis=axis):
                 self.assertFalse(_post_matches_filter(sample, {axis: []}))
 
+    def test_uncategorized_discourse_matches_missing_rows_in_feed_and_chart(self):
+        DiscourseKey.objects.get_or_create(key="absurdist_meme")
+        brand = Brand.objects.create(
+            nickname="discourse-bucket",
+            display_name="Discourse Bucket",
+            display_name_en="Discourse Bucket",
+            display_name_zh_cn="话语桶",
+            accent_color="#123456",
+        )
+        missing = Post.objects.create(
+            tweet_id="discourse-missing",
+            created_at=ANCHOR - timedelta(minutes=10),
+        )
+        classified = Post.objects.create(
+            tweet_id="discourse-classified",
+            created_at=ANCHOR - timedelta(minutes=5),
+        )
+        PostBrand.objects.create(post=missing, brand=brand)
+        PostBrand.objects.create(post=classified, brand=brand)
+        PostBrandDiscourse.objects.create(
+            post=classified,
+            brand=brand,
+            discourse_id="absurdist_meme",
+            act_id=1,
+        )
+
+        missing_row = {"brand_nicknames": [brand.nickname], "discourse": []}
+        classified_row = {
+            "brand_nicknames": [brand.nickname],
+            "discourse": ["absurdist_meme"],
+        }
+        only_uncategorized = {
+            "brands": [brand.nickname],
+            "discourse": ["uncategorized"],
+            "unsanctioned": "off",
+        }
+        mixed = {
+            **only_uncategorized,
+            "discourse": ["uncategorized", "absurdist_meme"],
+        }
+
+        self.assertTrue(_post_matches_filter(missing_row, only_uncategorized))
+        self.assertFalse(_post_matches_filter(classified_row, only_uncategorized))
+        self.assertEqual(
+            _build_home_chart_payload(1, only_uncategorized, now=ANCHOR)["totals"][brand.nickname],
+            1,
+        )
+        self.assertEqual(
+            _build_home_chart_payload(1, mixed, now=ANCHOR + timedelta(seconds=1))["totals"][brand.nickname],
+            2,
+        )
+
     def test_role_filter_matches_feed_and_chart_for_multi_brand_posts(self):
         role, _ = Role.objects.get_or_create(key="official")
         account = Account.objects.create(author_id="role-account", handle="role-account")

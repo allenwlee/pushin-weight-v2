@@ -115,6 +115,10 @@
     div.className = 'feed-row';
     div.setAttribute('data-pw-feed-row', '');
     div.setAttribute('data-tweet-id', row.tweet_id || '');
+    div.setAttribute(
+      'data-x-url',
+      row.tweet_id ? 'https://x.com/i/web/status/' + encodeURIComponent(row.tweet_id) : ''
+    );
     div.setAttribute('data-created-at-iso', row.created_at_iso || '');
     div.setAttribute('data-sentiments', (row.sentiment_keys || []).join(','));
     div.setAttribute('data-post-types', (row.post_type_keys || []).join(','));
@@ -166,6 +170,17 @@
     var tint = row.tint_class || 'tint-neutral';
     var metaText = row.meta_text || '';
     var tsAbs = row.ts_abs_text || '';
+    var sourceText = row.text_original || row.text || '';
+    var commentaryZhCn = row.commentary_zh_cn || '';
+    var commentaryEn = row.commentary_en || '';
+    var literalCnText = row.text_zh_cn || '';
+    var englishText = row.text_en || '';
+    var locale = currentLocale();
+    var initialText = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
+      ? (commentaryZhCn || literalCnText || englishText || sourceText)
+      : locale === 'original'
+        ? sourceText
+        : (commentaryEn || englishText || sourceText);
     return (
       '<div class="feed-row-shell ' + escapeHtml(tint) + '">' +
         '<div class="feed-main">' +
@@ -175,8 +190,13 @@
               '<span class="handle">' + handleHtml + '</span>' +
               '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + '</span>' +
             '</div>' +
-            '<div class="text" data-text-cycle role="button" tabindex="0">' +
-              escapeHtml((row.text_translated || row.text_en || row.text || '').toString().slice(0, 600)) +
+            '<div class="text" data-text-cycle role="button" tabindex="0"' +
+              ' data-commentary-zh-cn="' + escapeHtml(commentaryZhCn) + '"' +
+              ' data-commentary-en="' + escapeHtml(commentaryEn) + '"' +
+              ' data-literal-cn="' + escapeHtml(literalCnText) + '"' +
+              ' data-text-en="' + escapeHtml(englishText) + '"' +
+              ' data-text-source="' + escapeHtml(sourceText) + '">' +
+              escapeHtml((initialText || '').toString().slice(0, 600)) +
             '</div>' +
             '<div class="engagement">' +
               '<span class="followers">' + escapeHtml(eng.followers || '') + '</span>' +
@@ -268,11 +288,97 @@
     $$('.feed-row[data-pw-feed-row]', root).forEach(paintSignals);
   }
 
+  // Reuses the V24 mockup's text-layer interaction on real feed rows.
+  function textValue(el, name) {
+    var value = el.getAttribute('data-' + name);
+    return value == null || value === '' ? null : value;
+  }
+
+  function uniqueTextLayers(layers) {
+    var seen = Object.create(null);
+    return layers.filter(function (layer) {
+      if (!layer.value || seen[layer.value]) return false;
+      seen[layer.value] = true;
+      return true;
+    });
+  }
+
+  function textLayers(el) {
+    var locale = currentLocale();
+    var source = textValue(el, 'text-source');
+    var english = textValue(el, 'text-en');
+    if (locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans') {
+      var zhLayers = uniqueTextLayers([
+        { key: 'synthesis', label: '综合', value: textValue(el, 'commentary-zh-cn') },
+        { key: 'literal_cn', label: '直译', value: textValue(el, 'literal-cn') },
+        { key: 'en', label: 'en', value: english },
+      ]);
+      return zhLayers.length ? zhLayers : [
+        { key: 'source', label: 'src', value: source },
+      ].filter(function (layer) { return layer.value; });
+    }
+    if (locale === 'original') {
+      return uniqueTextLayers([
+        { key: 'source', label: 'src', value: source },
+        { key: 'en', label: 'en', value: english },
+      ]);
+    }
+    return uniqueTextLayers([
+      { key: 'synthesis', label: 'synthesis', value: textValue(el, 'commentary-en') },
+      { key: 'en', label: 'en', value: english },
+      { key: 'source', label: 'src', value: source },
+    ]);
+  }
+
+  function renderTextLayer(el) {
+    var layers = textLayers(el);
+    if (!layers.length) {
+      el.textContent = '';
+      el.removeAttribute('data-layer-key');
+      return;
+    }
+    var index = parseInt(el.getAttribute('data-layer-idx') || '0', 10);
+    if (isNaN(index) || index < 0 || index >= layers.length) index = 0;
+    var layer = layers[index];
+    el.setAttribute('data-layer-idx', String(index));
+    el.setAttribute('data-layer-key', layer.key);
+    el.innerHTML = '<span class="text-layer-tag">' + escapeHtml(layer.label) + '</span>' +
+      escapeHtml(layer.value);
+  }
+
+  function advanceTextLayer(el) {
+    var layers = textLayers(el);
+    if (layers.length < 2) return;
+    var index = parseInt(el.getAttribute('data-layer-idx') || '0', 10);
+    if (isNaN(index)) index = 0;
+    el.setAttribute('data-layer-idx', String((index + 1) % layers.length));
+    renderTextLayer(el);
+  }
+
+  function attachRowLink(row) {
+    if (!row || typeof row.getAttribute !== 'function' ||
+        typeof row.addEventListener !== 'function' ||
+        row.getAttribute('data-row-link-bound') === '1') return;
+    row.setAttribute('data-row-link-bound', '1');
+    row.addEventListener('click', function (event) {
+      if (event.defaultPrevented || !event.target || !event.target.closest) return;
+      var excluded = event.target.closest(
+        '.text[data-text-cycle], .handle, .feed-signals, a, button, input, label'
+      );
+      if (excluded && row.contains(excluded)) return;
+      var url = row.getAttribute('data-x-url');
+      if (!url) return;
+      var opened = window.open(url, '_blank', 'noopener,noreferrer');
+      if (opened) opened.opener = null;
+    });
+  }
+
   function hydrateRows(rows) {
     var now = new Date();
     rows.forEach(function (row) {
       paintSignals(row);
       attachCellClickHandlers(row);
+      attachRowLink(row);
       formatRowTimestamp(row, now);
     });
   }
@@ -369,13 +475,26 @@
     // and is handled by its own template (unaffected by this function).
     $$('.text.is-expanded', root).forEach(function (t) { t.classList.remove('is-expanded'); });
     $$('.feed-row .text[data-text-cycle]', root).forEach(function (el) {
-      el.onclick = function (e) {
+      if (el.getAttribute('data-text-bound') === '1') {
+        renderTextLayer(el);
+        return;
+      }
+      el.setAttribute('data-text-bound', '1');
+      el.setAttribute('data-layer-idx', '0');
+      renderTextLayer(el);
+      el.addEventListener('click', function (e) {
         var row = el.closest('.feed-row');
         if (!row) return;
         $$('.text.is-expanded', row).forEach(function (other) { other.classList.remove('is-expanded'); });
         el.classList.add('is-expanded');
+        advanceTextLayer(el);
         e.stopPropagation();
-      };
+      });
+      el.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        el.click();
+      });
     });
   }
 
@@ -665,6 +784,7 @@
       formatRelative: formatRelative,
       formatLocalTooltip: formatLocalTooltip,
       enrichmentStatusHtml: enrichmentStatusHtml,
+      textLayers: textLayers,
       hydrateRows: hydrateRows,
       paintSignals: paintSignals,
       replaceRows: replaceRows,

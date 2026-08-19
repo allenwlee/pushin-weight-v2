@@ -52,6 +52,15 @@ def test_error_counter_increments_are_visible():
     assert summary["n_errors_by_type"]["translator_batch_failed"] == 4
 
 
+def test_commentary_normalization_treats_translator_sentinel_as_missing():
+    from monitor.cycle import _commentary_or_none
+
+    assert _commentary_or_none("  Chinese commentary  ") == "Chinese commentary"
+    assert _commentary_or_none("N/A") is None
+    assert _commentary_or_none("  ") is None
+    assert _commentary_or_none(None) is None
+
+
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeypatch):
@@ -65,26 +74,36 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
     PostEnrichmentState.objects.create(post=post)
     client = object()
+    translator_calls = []
+    classifier_calls = []
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
     monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
-    monkeypatch.setattr(
-        translator,
-        "translate_batch_pragmatics",
-        lambda tweets, locales, client, **kwargs: [
+
+    def translate(tweets, locales, translator_client, **kwargs):
+        translator_calls.append((tweets, locales, translator_client))
+        return [
             {
                 "tweet_id": post.pk,
                 "text_en": post.text,
                 "text_zh_cn": "深度求索发布",
+                "cn_equivalent": "深度求索这波很能打",
                 "lang_detected": "en",
             }
-        ],
+        ]
+
+    def classify(tweets, brands, classifier_client, **kwargs):
+        classifier_calls.append((tweets, brands, classifier_client))
+        return [{"by_brand": {}, "unsanctioned_flags": ["scam"]}]
+
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        translate,
     )
     monkeypatch.setattr(
         attribution,
         "classify_batch_pragmatics_full",
-        lambda tweets, brands, client, **kwargs: [
-            {"by_brand": {}, "unsanctioned_flags": ["scam"]}
-        ],
+        classify,
     )
 
     runner = CycleRunner(cfg=Config(enabled_models=["deepseek"], daily_ceiling=100))
@@ -96,6 +115,12 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
     assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
     assert state.claim_run_id == ""
+    assert len(translator_calls) == 1
+    assert translator_calls[0][1:] == (["en", "zh_cn"], client)
+    assert len(classifier_calls) == 1
+    post.refresh_from_db()
+    assert post.commentary_zh_cn == "深度求索这波很能打"
+    assert post.commentary_en is None
     assert PostUnsanctionedFlag.objects.filter(post=post).exists()
 
 

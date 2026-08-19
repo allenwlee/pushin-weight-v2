@@ -11,6 +11,7 @@
   <div class="feed-row"
        data-pw-feed-row
        data-tweet-id="{{ row.tweet_id }}"
+       data-x-url="https://x.com/i/web/status/{{ row.tweet_id }}"
        data-created-at-iso="{{ row.created_at_iso|default:'' }}"
        data-sentiments="{{ row.sentiment_keys|join:',' }}"
        data-post-types="{{ row.post_type_keys|join:',' }}"
@@ -39,13 +40,30 @@
               {% endif %}
             </span>
           </div>
-          <div class="text" data-text-cycle role="button" tabindex="0">
-            {% if active_locale == 'zh_cn' %}
-              <span class="text-layer-tag">{% trans "综合" %}</span>{{ row.text_translated|default:row.text_original|default:row.text|default:'NULL' }}
+          <div class="text" data-text-cycle role="button" tabindex="0"
+               data-commentary-zh-cn="{{ row.commentary_zh_cn|default:'' }}"
+               data-commentary-en="{{ row.commentary_en|default:'' }}"
+               data-literal-cn="{{ row.text_zh_cn|default:'' }}"
+               data-text-en="{{ row.text_en|default:'' }}"
+               data-text-source="{{ row.text_original|default:row.text }}">
+            {% if is_zh_chrome %}
+              {% if row.commentary_zh_cn %}
+                <span class="text-layer-tag">{% trans "综合" %}</span>{{ row.commentary_zh_cn }}
+              {% elif row.text_zh_cn %}
+                <span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
+              {% elif row.text_en %}
+                <span class="text-layer-tag">en</span>{{ row.text_en }}
+              {% else %}
+                {{ row.text_original|default:row.text|default:'NULL' }}
+              {% endif %}
             {% elif active_locale == 'original' %}
               {{ row.text_original|default:row.text|default:'NULL' }}
+            {% elif row.commentary_en %}
+              <span class="text-layer-tag">synthesis</span>{{ row.commentary_en }}
+            {% elif row.text_en %}
+              <span class="text-layer-tag">en</span>{{ row.text_en }}
             {% else %}
-              <span class="text-layer-tag">{% trans "synthesis" %}</span>{{ row.text_en|default:row.text_translated|default:row.text|default:'NULL' }}
+              {{ row.text_original|default:row.text|default:'NULL' }}
             {% endif %}
           </div>
           <div class="engagement">

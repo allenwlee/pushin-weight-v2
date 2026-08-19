@@ -12,9 +12,9 @@
   <script src="{% static 'pw-filter-store.js' %}?v=v24-controls1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=filter-portal1" defer></script>
   <script src="{% static 'pw-chart.js' %}?v=v24-controls1" defer></script>
-  <script src="{% static 'pw-feed.js' %}" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=filter-feed1" defer></script>
   <script src="{% static 'pw-tz.js' %}?v=v24-controls1" defer></script>
-  <script src="{% static 'pw-locale-toggle.js' %}?v=v24-controls1" defer></script>
+  <script src="{% static 'pw-locale-toggle.js' %}?v=filter-feed1" defer></script>
 </head>
 {% csrf_token %}
 <!-- pw-shell:v20 -->
@@ -108,15 +108,15 @@
     <span class="pulse-state muted" data-pw-pulse-status hidden></span>
   </section>
 
-  <nav class="filter-bar" aria-label="Filter groups">
+  <nav class="filter-bar" aria-label="{% if is_zh_chrome %}筛选组{% else %}Filter groups{% endif %}">
     <div class="filter-bar-scroller" id="filter-bar-scroller">
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="brands">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_brands">{% if is_zh_chrome %}品牌{% else %}Brands{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Brands" data-idea="b" data-lens-pair="open,closed">
-          <div class="dd-segment" role="tablist" aria-label="Brand tier">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}品牌{% else %}Brands{% endif %}" data-idea="b" data-lens-pair="open,closed">
+          <div class="dd-segment" role="tablist" aria-label="{% if is_zh_chrome %}品牌类型{% else %}Brand tier{% endif %}">
             <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true"><span data-i18n="lens_open">{% if is_zh_chrome %}开源{% else %}Open{% endif %}</span> <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
             <button type="button" role="tab" data-lens="closed" aria-selected="false"><span data-i18n="lens_closed">{% if is_zh_chrome %}闭源{% else %}Closed{% endif %}</span> <span class="n" data-lens-count="closed">· {{ closed_brands|length }}</span></button>
           </div>
@@ -127,14 +127,14 @@
           <div class="dd-lens-body" data-active-lens="open">
             <div class="dd-grid cols-3" data-tier-grid="open">
               {% for brand in open_brands %}
-                <label><input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}" checked><span>{{ brand.display_name }}</span></label>
+                <label><input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}" checked><span>{% if is_zh_chrome %}{{ brand.display_name_zh_cn }}{% else %}{{ brand.display_name_en }}{% endif %}</span></label>
               {% empty %}
                 <span class="muted">{% trans "none" %}</span>
               {% endfor %}
             </div>
             <div class="dd-grid cols-2" data-tier-grid="closed">
               {% for brand in closed_brands %}
-                <label><input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}"><span>{{ brand.display_name }}</span></label>
+                <label><input type="checkbox" data-pw-filter-group="brands" value="{{ brand.nickname }}"><span>{% if is_zh_chrome %}{{ brand.display_name_zh_cn }}{% else %}{{ brand.display_name_en }}{% endif %}</span></label>
               {% empty %}
                 <span class="muted">{% trans "none" %}</span>
               {% endfor %}
@@ -143,27 +143,27 @@
         </div>
       </div>
 
-      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="sentiment">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_discourse">{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}</span>
+        <span class="title" data-i18n="pill_sentiment">{% if is_zh_chrome %}情绪{% else %}Sentiment{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Discourse">
-          <div class="dd-grid cols-3">
-            {% for key in discourse_keys %}
-              <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked><span>{{ key }}</span></label>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}情绪{% else %}Sentiment{% endif %}">
+          <div class="dd-grid cols-2">
+            {% for entry in sentiment_entries %}
+              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
       </div>
 
-      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="role">
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="post_types">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_role">{% if is_zh_chrome %}角色{% else %}Role{% endif %}</span>
+        <span class="title" data-i18n="pill_post_type">{% if is_zh_chrome %}帖子类型{% else %}Post Type{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Role">
-          <div class="dd-grid cols-2">
-            {% for key in role_keys %}
-              <label><input type="checkbox" data-pw-filter-group="role" value="{{ key }}" checked><span>{{ key }}</span></label>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}帖子类型{% else %}Post Type{% endif %}">
+          <div class="dd-grid cols-3">
+            {% for entry in post_type_entries %}
+              <label><input type="checkbox" data-pw-filter-group="post_types" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -173,7 +173,7 @@
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_lang">{% if is_zh_chrome %}语言{% else %}Lang{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Lang">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}语言{% else %}Lang{% endif %}">
           <div class="dd-toolbar">
             <button type="button" data-dd-action="all" data-i18n="btn_all">{% if is_zh_chrome %}全选{% else %}all{% endif %}</button>
             <button type="button" data-dd-action="clear" data-i18n="btn_clear">{% if is_zh_chrome %}清空{% else %}clear{% endif %}</button>
@@ -186,14 +186,14 @@
         </div>
       </div>
 
-      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="sentiment">
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="role">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_sentiment">{% if is_zh_chrome %}情绪{% else %}Sentiment{% endif %}</span>
+        <span class="title" data-i18n="pill_role">{% if is_zh_chrome %}角色{% else %}Role{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Sentiment">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}角色{% else %}Role{% endif %}">
           <div class="dd-grid cols-2">
-            {% for key in sentiment_keys %}
-              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ key }}" checked><span>{{ key }}</span></label>
+            {% for entry in role_entries %}
+              <label><input type="checkbox" data-pw-filter-group="role" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -203,10 +203,10 @@
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_nationalism">{% if is_zh_chrome %}民族主义{% else %}Nationalism{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Nationalism" data-idea="b" data-lens-pair="us,cn">
-          <div class="dd-segment" role="tablist" aria-label="Nationalism region">
-            <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">美 <span class="n" data-lens-count="us">· {{ nationalism_keys|length }}</span></button>
-            <button type="button" role="tab" data-lens="cn" aria-selected="false">中 <span class="n" data-lens-count="cn">· {{ nationalism_keys|length }}</span></button>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}民族主义{% else %}Nationalism{% endif %}" data-idea="b" data-lens-pair="us,cn">
+          <div class="dd-segment" role="tablist" aria-label="{% if is_zh_chrome %}民族主义地区{% else %}Nationalism region{% endif %}">
+            <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">美 <span class="n" data-lens-count="us">· {{ nationalism_entries|length }}</span></button>
+            <button type="button" role="tab" data-lens="cn" aria-selected="false">中 <span class="n" data-lens-count="cn">· {{ nationalism_entries|length }}</span></button>
           </div>
           <div class="dd-toolbar">
             <button type="button" data-dd-action="all" data-dd-scope="visible" data-i18n="btn_all">{% if is_zh_chrome %}全选{% else %}all{% endif %}</button>
@@ -214,15 +214,28 @@
           </div>
           <div class="dd-lens-body" data-active-lens="us">
             <div class="dd-grid cols-3" data-tier-grid="us">
-              {% for key in nationalism_keys %}
-                <label><input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ key }}" checked><span>{{ key }}</span></label>
+              {% for entry in nationalism_entries %}
+                <label><input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
               {% endfor %}
             </div>
             <div class="dd-grid cols-3" data-tier-grid="cn">
-              {% for key in nationalism_keys %}
-                <label><input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ key }}" checked><span>{{ key }}</span></label>
+              {% for entry in nationalism_entries %}
+                <label><input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
               {% endfor %}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title" data-i18n="pill_discourse">{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}</span>
+        <span class="carat" aria-hidden="true">▾</span>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}">
+          <div class="dd-grid cols-3">
+            {% for entry in discourse_entries %}
+              <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -231,7 +244,7 @@
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_unsanctioned">{% if is_zh_chrome %}未授权{% else %}Unsanctioned{% endif %}</span>
         <span class="carat" aria-hidden="true">▾</span>
-        <div class="filter-dropdown" role="group" aria-label="Unsanctioned">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}未授权{% else %}Unsanctioned{% endif %}">
           <div class="dd-grid cols-1">
             <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span>{% trans "show only flagged posts" %}</span></label>
           </div>

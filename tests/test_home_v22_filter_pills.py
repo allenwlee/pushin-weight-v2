@@ -14,6 +14,7 @@ from unittest.mock import patch
 from datetime import datetime, timezone
 
 import pytest
+from django.core.management import call_command
 
 from core.models import SentimentKey
 from monitor.views import _post_matches_filter
@@ -66,6 +67,8 @@ CHART_PAYLOAD = {
             "delta_magnitude": 50,
         }],
     },
+    "top_voices": {"entries": []},
+    "trend_narrative": {},
     "applied_filters": {},
 }
 
@@ -106,12 +109,13 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         super().setUpTestData()
         SentimentKey.objects.create(key="positive")
         SentimentKey.objects.create(key="mixed")
+        call_command("seed_i18n_labels", verbosity=0)
 
-    def _get_home(self):
+    def _get_home(self, locale="en"):
         patches = _patches_active()
         for p in patches: p.start()
         try:
-            return self.client.get("/?locale=en")
+            return self.client.get(f"/?locale={locale}")
         finally:
             for p in patches: p.stop()
 
@@ -172,13 +176,47 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         # The filter-bar nav has aria-label (used by screen readers)
         self.assertIn('aria-label="Filter groups"', body)
 
-    def test_all_seven_filter_pills_present(self):
-        """Mockup L914-1078: Brands, Discourse, Role, Lang, Sentiment, Nationalism, Unsanctioned."""
+    def test_all_eight_filter_pills_present_in_approved_order(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
-        for group in ("brands", "discourse", "role", "lang", "sentiment", "nationalism", "unsanctioned"):
+        groups = (
+            "brands", "sentiment", "post_types", "lang", "role",
+            "nationalism", "discourse", "unsanctioned",
+        )
+        for group in groups:
             self.assertIn(f'data-group="{group}"', body,
                           f"filter-pill for {group} missing")
+        positions = [body.index(f'data-group="{group}"') for group in groups]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_post_type_and_uncategorized_controls_use_stable_machine_values(self):
+        body = self._get_home().content.decode("utf-8")
+        post_type = body.split('data-group="post_types"', 1)[1].split(
+            'data-group="lang"', 1
+        )[0]
+        self.assertIn('data-pw-filter-group="post_types"', post_type)
+        self.assertIn('value="hands_on_usage"', post_type)
+        discourse = body.split('data-group="discourse"', 1)[1].split(
+            'data-group="unsanctioned"', 1
+        )[0]
+        self.assertIn('value="uncategorized"', discourse)
+
+    def test_zh_cn_filter_dropdown_options_are_localized(self):
+        body = self._get_home("zh_hans").content.decode("utf-8")
+        expected = (
+            "正面", "混合", "实际使用", "英语", "未检测", "官方", "其他",
+            "温和支持", "荒诞梗", "未分类", "仅显示标记帖子",
+        )
+        for label in expected:
+            self.assertIn(f"<span>{label}</span>", body)
+
+        visible_raw_labels = (
+            ">positive</span>", ">hands_on_usage</span>",
+            ">official</span>", ">mild_pro</span>",
+            ">absurdist_meme</span>", ">uncategorized</span>",
+        )
+        for raw in visible_raw_labels:
+            self.assertNotIn(raw, body)
 
     def test_fixture_backed_brand_lenses_and_sentiment_grid_are_populated(self):
         body = self._get_home().content.decode("utf-8")
@@ -218,6 +256,20 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertFalse(_post_matches_filter(sample, {"lang": ["en"]}))
         self.assertFalse(_post_matches_filter(sample, {"sentiment": []}))
         self.assertTrue(_post_matches_filter({**sample, "unsanctioned": True}, {"unsanctioned": "any"}))
+
+        without_discourse = {**sample, "discourse": []}
+        self.assertTrue(
+            _post_matches_filter(without_discourse, {"discourse": ["uncategorized"]})
+        )
+        self.assertFalse(
+            _post_matches_filter(sample, {"discourse": ["uncategorized"]})
+        )
+        self.assertTrue(
+            _post_matches_filter(
+                sample,
+                {"discourse": ["uncategorized", "genuine_hype"]},
+            )
+        )
 
     def test_filter_matrix_all_partial_empty_or_within_and_across_axes(self):
         sample = {

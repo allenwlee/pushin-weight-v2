@@ -6,6 +6,7 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
+      - docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md
       - docs/reference/2026-08-19-132714-v24-bridgewright-target.md
       - docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md
       - docs/plans/2026-08-12-121455-feat-v22-headline-trend-narratives.md
@@ -14,7 +15,7 @@ configuration:
       - monitor/static
       - project
     adapter: .bridgewright/adapter.yaml
-    last_approved_contract: docs/reference/2026-08-19-132714-v24-bridgewright-target.md
+    last_approved_contract: docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md
   source_boundaries:
     - monitor/templates
     - monitor/static
@@ -23,6 +24,8 @@ configuration:
   semantic_anchors:
     - key: v24.home
       description: Owner-approved partial V24 dashboard target.
+    - key: production.home.filter-feed
+      description: Owner-approved production filter and feed interaction delta.
     - key: trend.headline
       description: Shared analytical trend narrative surface.
   scenarios: []

@@ -46,6 +46,7 @@ from core.models import (
     PostEnrichmentState,
     PostTypeLabel,
     PostUnsanctionedFlag,
+    RoleLabel,
     SentimentKey,
     SentimentLabel,
 )
@@ -124,6 +125,11 @@ _DASHBOARD_DISCOURSE_KEYS: tuple[str, ...] = (
     "absurdist_meme", "advertising-marketing",
 )
 
+_DASHBOARD_DISCOURSE_FILTER_KEYS: tuple[str, ...] = (
+    *_DASHBOARD_DISCOURSE_KEYS,
+    "uncategorized",
+)
+
 _DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = (
     "buzz_releases", "hands_on_usage",
     "performance_comparisons", "feedback_questions",
@@ -158,6 +164,22 @@ _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
     "pl": "Polski",
     "undetected": "undetected",
     "other": "other",
+}
+
+_DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN: dict[str, str] = {
+    "en": "英语",
+    "zh-hans": "简体中文",
+    "ja": "日语",
+    "es": "西班牙语",
+    "tr": "土耳其语",
+    "fr": "法语",
+    "pt": "葡萄牙语",
+    "ko": "韩语",
+    "id": "印度尼西亚语",
+    "ar": "阿拉伯语",
+    "pl": "波兰语",
+    "undetected": "未检测",
+    "other": "其他",
 }
 
 # Presentation-only V22 lens. Brand has no open/closed schema field, and these
@@ -253,6 +275,7 @@ _LABEL_MODEL_BY_FAMILY: dict[str, type] = {
     "discourse": DiscourseLabel,
     "sentiment": SentimentLabel,
     "nationalism": NationalismLabel,
+    "role": RoleLabel,
 }
 
 # Lang-code lookup order. zh-cn (current seed) takes precedence over zh_cn
@@ -311,8 +334,8 @@ def _build_label_cache(
 ) -> "dict[tuple[str, str, str], str]":
     """Bulk-load label rows for the given keys across lang codes for a locale.
 
-    One query per (family, lang) - at most 3 queries per family under zh_cn
-    (zh-cn, zh_cn, zh-hans) and 1 under en. Returns a dict keyed by
+    One query per family across the locale's accepted language aliases.
+    Returns a dict keyed by
     (family, key, lang) so the helper can iterate langs without re-querying.
     """
     cache: "dict[tuple[str, str, str], str]" = {}
@@ -321,14 +344,64 @@ def _build_label_cache(
         if not keys:
             continue
         model = _LABEL_MODEL_BY_FAMILY[family]
-        for lang in lang_codes:
-            qs = model.objects.filter(
-                **{f"{family}_id__in": list(keys)},
-                lang=lang,
-            ).values(f"{family}_id", "label")
-            for row in qs:
-                cache[(family, row[f"{family}_id"], lang)] = row["label"]
+        qs = model.objects.filter(
+            **{f"{family}_id__in": list(keys)},
+            lang__in=lang_codes,
+        ).values(f"{family}_id", "lang", "label")
+        for row in qs:
+            cache[(family, row[f"{family}_id"], row["lang"])] = row["label"]
     return cache
+
+
+def _dashboard_filter_entries(
+    locale: str,
+    sentiment_keys: list[str],
+) -> dict[str, list[dict[str, str]]]:
+    """Project stable filter keys to request-localized display labels."""
+    keys_by_family = {
+        "discourse": set(_DASHBOARD_DISCOURSE_KEYS),
+        "post_type": set(_DASHBOARD_POST_TYPE_KEYS),
+        "role": set(_DASHBOARD_ROLE_FILTER_KEYS[:3]),
+        "sentiment": set(sentiment_keys),
+        "nationalism": set(_DASHBOARD_NATIONALISM_KEYS),
+    }
+    label_cache = _build_label_cache(keys_by_family, locale)
+    use_zh = _is_zh_locale(locale)
+
+    def localized(family: str, keys: tuple[str, ...] | list[str]) -> list[dict[str, str]]:
+        entries: list[dict[str, str]] = []
+        for key in keys:
+            if family == "discourse" and key == "uncategorized":
+                label = "未分类" if use_zh else "Uncategorized"
+            elif family == "role" and key == "other":
+                label = "其他" if use_zh else "Other"
+            else:
+                label = _localize_classification_value(
+                    family, key, locale, label_cache
+                ) or key
+            entries.append({"key": key, "label": label})
+        return entries
+
+    lang_names = (
+        _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN
+        if use_zh
+        else _DASHBOARD_LANG_DISPLAY_NAMES
+    )
+    return {
+        "discourse_entries": localized(
+            "discourse", _DASHBOARD_DISCOURSE_FILTER_KEYS
+        ),
+        "post_type_entries": localized("post_type", _DASHBOARD_POST_TYPE_KEYS),
+        "role_entries": localized("role", _DASHBOARD_ROLE_FILTER_KEYS),
+        "lang_entries": [
+            {"key": key, "label": lang_names.get(key, key)}
+            for key in _DASHBOARD_LANG_FILTER_KEYS
+        ],
+        "sentiment_entries": localized("sentiment", sentiment_keys),
+        "nationalism_entries": localized(
+            "nationalism", _DASHBOARD_NATIONALISM_KEYS
+        ),
+    }
 
 
 def _resolve_locale(request: HttpRequest) -> str:
@@ -830,6 +903,8 @@ def _post_to_wire(
         "is_translated": is_translated,
         "text_en": post.text_en,
         "text_zh_cn": post.text_zh_cn,
+        "commentary_en": post.commentary_en,
+        "commentary_zh_cn": post.commentary_zh_cn,
         "like_count": post.like_count or 0,
         "retweet_count": post.retweet_count or 0,
         "reply_count": post.reply_count or 0,
@@ -991,6 +1066,8 @@ def _enrich_posts_with_classifications(
             "text": post.text,
             "text_en": post.text_en,
             "text_zh_cn": post.text_zh_cn,
+            "commentary_en": post.commentary_en,
+            "commentary_zh_cn": post.commentary_zh_cn,
             "like_count": post.like_count or 0,
             "retweet_count": post.retweet_count or 0,
             "reply_count": post.reply_count or 0,
@@ -1168,7 +1245,9 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
         if not discourse:
             return False
         post_disc = post.get("discourse") or []
-        if not any(d in discourse for d in post_disc):
+        matches_uncategorized = "uncategorized" in discourse and not post_disc
+        matches_classified = any(d in discourse for d in post_disc)
+        if not matches_uncategorized and not matches_classified:
             return False
 
     # Post types
@@ -1264,7 +1343,6 @@ def _filter_home_posts_queryset(
 
     relation_filters = {
         "brands": "brands__brand_id__in",
-        "discourse": "discourse_signals__discourse_id__in",
         "post_types": "signals__post_type_id__in",
         "sentiment": "signals__sentiment_id__in",
         "lang": "lang_detected__in",
@@ -1289,6 +1367,20 @@ def _filter_home_posts_queryset(
             queryset = queryset.filter(condition)
         else:
             queryset = queryset.filter(**{lookup: active})
+
+    active_discourse = normalized_filters.get("discourse")
+    if active_discourse is not None and active_discourse != "__all__":
+        if not active_discourse:
+            return queryset.none()
+        classified_keys = [
+            value for value in active_discourse if value != "uncategorized"
+        ]
+        discourse_condition = Q(
+            discourse_signals__discourse_id__in=classified_keys
+        )
+        if "uncategorized" in active_discourse:
+            discourse_condition |= Q(discourse_signals__isnull=True)
+        queryset = queryset.filter(discourse_condition)
 
     for axis, field_name in (
         ("cn_nationalism", "china_nationalism_id"),
@@ -1749,6 +1841,10 @@ def home(request: HttpRequest) -> HttpResponse:
         locale=locale,
     )
     initial_chart_payload["applied_filters"] = initial_filters
+    sentiment_keys = list(
+        SentimentKey.objects.order_by("key").values_list("key", flat=True)
+    )
+    filter_entries = _dashboard_filter_entries(locale, sentiment_keys)
 
     context = {
         "brands": brands_data,
@@ -1767,12 +1863,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
         "app_title_zh": APP_TITLE_ZH,
-        "discourse_keys": _DASHBOARD_DISCOURSE_KEYS,
-        "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
-        "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
-        "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
-        "sentiment_keys": list(SentimentKey.objects.order_by("key").values_list("key", flat=True)),
-        "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
+        **filter_entries,
         "pulse": initial_chart_payload["pulse"],
         "payload": json.dumps(initial_chart_payload),
     }
@@ -2014,6 +2105,8 @@ def _serialize_feed_row(
         "is_translated": is_translated,
         "text_en": post.get("text_en"),
         "text_zh_cn": post.get("text_zh_cn"),
+        "commentary_en": post.get("commentary_en"),
+        "commentary_zh_cn": post.get("commentary_zh_cn"),
         "like_count": post.get("like_count", 0),
         "retweet_count": post.get("retweet_count", 0),
         "reply_count": post.get("reply_count", 0),
