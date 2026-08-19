@@ -171,6 +171,10 @@ def test_canonical_and_noncanonical_guidance_show_resolved_paths(tmp_path: Path)
     assert "This worktree is inside the Ollija release worktree area" in canonical_guide
     assert "Move this worktree" not in canonical_guide
 
+    annotate_plan(plan_path, config=config, active_worktree=required / "nested")
+    nested_guide = plan_path.read_text(encoding="utf-8")
+    assert "Move this worktree" in nested_guide
+
 
 @pytest.mark.parametrize(
     ("target", "selected", "expected", "unexpected"),

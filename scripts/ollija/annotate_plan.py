@@ -114,18 +114,15 @@ def _has_delivery_exceptions(content: str) -> bool:
     return any(line.rstrip("\r\n") == DELIVERY_EXCEPTIONS_HEADING for line in content.splitlines())
 
 
-def _is_canonical_worktree(config: ProjectConfig, active_worktree: Path) -> bool:
-    area = config.authority.release_worktree_area
-    try:
-        active_worktree.relative_to(area)
-    except ValueError:
-        return False
-    return active_worktree != area
+def _is_canonical_worktree(
+    config: ProjectConfig, active_worktree: Path, metadata: PlanMetadata
+) -> bool:
+    return active_worktree == (config.authority.release_worktree_area / metadata.branch).resolve()
 
 
 def _placement(config: ProjectConfig, metadata: PlanMetadata, active_worktree: Path) -> str:
     area = config.authority.release_worktree_area
-    if _is_canonical_worktree(config, active_worktree):
+    if _is_canonical_worktree(config, active_worktree, metadata):
         return (
             f"This worktree is inside the {config.authority.release_worktree_label}. "
             "Reuse it for the whole change. Do not create a second worktree or plan for this branch."
@@ -227,20 +224,17 @@ def render_delivery_guide(
     return f"{BEGIN_MARKER}\n{body}\n{END_MARKER}"
 
 
-def annotate_plan(
-    plan_path: str | Path,
+def render_annotated_plan(
+    original: str,
     *,
     config: ProjectConfig,
+    plan_path: str | Path,
     active_worktree: str | Path,
-) -> AnnotationResult:
-    """Replace one valid generated span without changing any other existing bytes."""
+) -> tuple[str, PlanMetadata]:
+    """Return annotated content without writing it, for check-mode callers."""
 
     resolved_plan = Path(plan_path).expanduser().resolve()
     worktree = Path(active_worktree).expanduser().resolve()
-    try:
-        original = resolved_plan.read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise AnnotationError(f"could not read plan: {exc}") from exc
     metadata = parse_plan_metadata(original)
     span = _marker_span(original)
     guide = render_delivery_guide(
@@ -257,6 +251,28 @@ def annotate_plan(
         if not _has_delivery_exceptions(annotated):
             annotated = annotated[: len(original[:start]) + len(guide)] + "\n\n## Delivery Exceptions\n\nNone.\n" + annotated[len(original[:start]) + len(guide) :]
 
+    return annotated, metadata
+
+
+def annotate_plan(
+    plan_path: str | Path,
+    *,
+    config: ProjectConfig,
+    active_worktree: str | Path,
+) -> AnnotationResult:
+    """Replace one valid generated span without changing any other existing bytes."""
+
+    resolved_plan = Path(plan_path).expanduser().resolve()
+    try:
+        original = resolved_plan.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise AnnotationError(f"could not read plan: {exc}") from exc
+    annotated, metadata = render_annotated_plan(
+        original,
+        config=config,
+        plan_path=resolved_plan,
+        active_worktree=active_worktree,
+    )
     if annotated != original:
         try:
             resolved_plan.write_bytes(annotated.encode("utf-8"))

@@ -1,1117 +1,311 @@
+"""The deliberately small public Ollija command surface."""
+
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
-import socket
-import subprocess
+import re
 import sys
-from contextlib import ExitStack
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-import environ
+from .annotate_plan import AnnotationError, PlanMetadata, parse_plan_metadata, render_annotated_plan
+from .config import ConfigError, ProjectConfig, load_project_config
+from .worktrees import WorktreeError, active_worktree_facts, canonical_worktree_path
 
-from .agents.registry import AgentDriverError, driver_for
-from .approvals import (
-    ApprovalError,
-    bridgewright_evidence_receipt,
-    owner_approval_receipt,
-    owner_override_receipt,
-)
-from .bridgewright import BridgewrightError, collect_bridgewright_evidence
-from .changes import (
-    ChangeLedgerError,
-    load_change_ledger_baseline,
-    require_ollija_change_ledger,
-    requires_production_data_refresh,
-)
-from .config import ConfigError, load_project_config
-from .database import (
-    DatabaseGuardError,
-    PostgresRefreshBackend,
-    RefreshError,
-    RefreshPipeline,
-    safety_policy_from_config,
-)
-from .git import SubprocessRunner, mutation_preflight
-from .hosted_database import HostedStagingRefresh
-from .impact import assess_ui_impact
-from .preview import (
-    PreviewError,
-    build_preview_plan,
-    port_is_available,
-    start_preview,
-    stop_preview,
-    tailscale_dns_name,
-)
-from .processes import ProcessControlError
-from .redaction import UnsafeOutputError, redact_text
-from .release import (
-    GitPublisher,
-    ReleaseError,
-    candidate_requires_data_refresh,
-    inspect_refresh_readiness,
-    promote_candidate,
-    stage_candidate,
-    verify_and_tag_candidate,
-)
-from .render import RenderClient, RenderObservationError
-from .results import CommandError, CommandResult, EvidenceRef, NextAction
-from .state import CandidateIdentity, Receipt, ReceiptError, ReceiptStore
-from .status import build_doctor_result, build_status_result, collect_status_facts
-from .task_control import (
-    GoRequest,
-    TaskControlError,
-    build_task_status_result,
-    go_task,
-    stop_task,
-    task_command_result,
-    with_task_status,
-)
-from .tasks import TaskError
-from .verification import (
-    VerificationError,
-    production_browser_probe,
-)
-from .versioning import VersionError, parse_beta_version
-from .workspaces import WorkspaceError
-from .worktrees import (
-    WorktreeError,
-    guard_worktree,
-    install_hook,
-    is_release_worktree,
-    move_worktree,
-)
 
-_COACHING = """common prompts:
-  what's next?          ollija status
-  check my setup        ollija doctor
-  refresh review data   ollija refresh-local
-  refresh hosted data   ollija refresh-staging
-  start bounded work    ollija go --help
-  stop bounded work     ollija stop <task>
-  inspect bounded work  ollija task-status [task]
-  freeze beta candidate ollija start
-  show local preview    ollija preview
-  stop local preview    ollija preview-stop
-  stage this            ollija stage
-  record phone approval ollija approve iphone
-  release next beta     ollija release
-  verify production     ollija verify-production
-  manage worktrees      ollija worktree --help
-"""
+class PlanDiscoveryError(ValueError):
+    """A plan cannot be selected without risking a different change's plan."""
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPlan:
+    path: Path
+    content: str
+    metadata: PlanMetadata
+    created: bool
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ollija",
-        description="PushinWeight staging and release coach.",
-        epilog=_COACHING,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Resolve and annotate the one shared plan for this branch.",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    for command, help_text in (
-        ("status", "Read live authorities and recommend exactly one next action."),
-        ("doctor", "Check the authoritative host, tools, auth, Git, and databases."),
-        ("refresh-local", "Refresh a guarded local production-derived snapshot."),
-        ("refresh-staging", "Copy the active scrubbed snapshot to hosted staging."),
-        ("preview", "Start the local PostgreSQL preview on private tailnet HTTPS."),
-        ("preview-stop", "Stop only the scoped ollija preview process."),
-        ("start", "Freeze the clean beta commit as the active candidate."),
-        ("assess-ui", "Record clean Bridgewright assessment evidence."),
-        ("stage", "Deploy the frozen candidate to isolated hosted staging."),
-        ("release", "Fast-forward production to the approved candidate."),
-    ):
-        subparser = subparsers.add_parser(command, help=help_text)
-        subparser.add_argument(
-            "--json",
-            action="store_true",
-            dest="json_output",
-            help="Emit the versioned structured result envelope.",
-        )
-    verification = subparsers.add_parser(
-        "verify-production",
-        help="Verify every production service and the visible headline, then tag.",
+    commands = parser.add_subparsers(dest="command", required=True)
+    annotate = commands.add_parser(
+        "annotate-plan", help="Resolve or create, validate, and annotate one shared plan."
     )
-    verification.add_argument(
-        "--browser-storage-state",
-        type=Path,
-        help="Ignored Playwright storage-state file for the owner's Google session.",
+    annotate.add_argument("plan_path", nargs="?", type=Path, metavar="PLAN")
+    annotate.add_argument("--check", action="store_true", help="Verify current content without writing.")
+    annotate.add_argument("--workflow", help="Persist the selected workflow in plan metadata.")
+    annotate.add_argument(
+        "--delivery-target", choices=("on-request", "staging", "production"),
+        help="Persist the owner-selected delivery target.",
     )
-    verification.add_argument(
-        "--browser-cdp-url",
-        help="Chrome DevTools Protocol URL for an authenticated remote browser.",
-    )
-    verification.add_argument("--json", action="store_true", dest="json_output")
-    approval = subparsers.add_parser(
-        "approve",
-        help="Record an explicit owner review against the staged deployment.",
-    )
-    approval.add_argument("approval_kind", choices=("desktop", "iphone"))
-    approval.add_argument("--json", action="store_true", dest="json_output")
-    override = subparsers.add_parser(
-        "override",
-        help="Record an explicit owner exception for a defective assessment tool.",
-    )
-    override.add_argument("assessment_kind", choices=("bridgewright",))
-    override.add_argument("--owner", required=True)
-    override.add_argument("--reason", required=True)
-    override.add_argument("--json", action="store_true", dest="json_output")
-    go = subparsers.add_parser(
-        "go", help="Explicitly arm one bounded task generation on fuchitalee."
-    )
-    go.add_argument("--task", required=True)
-    go.add_argument("--parent-task")
-    go.add_argument("--source", required=True, type=Path)
-    go.add_argument("--agent", required=True, choices=("codex", "claude"))
-    go.add_argument("--endpoint", required=True, choices=("commit", "production"))
-    go.add_argument(
-        "--verify-argv",
-        action="append",
-        default=[],
-        help='Repeat a JSON argv array, e.g. \'["pytest","tests/ollija"]\'.',
-    )
-    go.add_argument("--no-test-reason")
-    go.add_argument("--json", action="store_true", dest="json_output")
-    stop = subparsers.add_parser(
-        "stop", help="Durably cancel one task before stopping its process tree."
-    )
-    stop.add_argument("task")
-    stop.add_argument("--json", action="store_true", dest="json_output")
-    task_status = subparsers.add_parser(
-        "task-status", help="Read durable task state without extending authority."
-    )
-    task_status.add_argument("task", nargs="?")
-    task_status.add_argument("--json", action="store_true", dest="json_output")
-    worktree = subparsers.add_parser(
-        "worktree", help="Guard or move a development worktree."
-    )
-    worktree_subparsers = worktree.add_subparsers(
-        dest="worktree_action", required=True
-    )
-    guard = worktree_subparsers.add_parser(
-        "guard", help="Warn about worktrees outside the release worktree area."
-    )
-    guard.add_argument("--hook", action="store_true", help=argparse.SUPPRESS)
-    guard.add_argument(
-        "--leave-as-is",
+    annotate.add_argument(
+        "--delivery-selected-by-user",
         action="store_true",
-        help="Honor an explicit owner decision to keep the worktree outside the release area.",
+        help="Required with a staging or production delivery target.",
     )
-    guard.add_argument("--json", action="store_true", dest="json_output")
-    move = worktree_subparsers.add_parser(
-        "move", help="Move the current worktree into the release worktree area."
-    )
-    move.add_argument("path", nargs="?", type=Path)
-    move.add_argument("--name", help="Optional destination directory name.")
-    move.add_argument("--json", action="store_true", dest="json_output")
-    install = worktree_subparsers.add_parser(
-        "install-hook", help="Install the shared post-checkout worktree guard."
-    )
-    install.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
 
-def _verification_argv(values: list[str]) -> tuple[tuple[str, ...], ...]:
-    commands: list[tuple[str, ...]] = []
-    for value in values:
-        try:
-            body = json.loads(value)
-        except json.JSONDecodeError as exc:
-            raise TaskControlError("verification_argv_invalid") from exc
-        if not isinstance(body, list) or not body or not all(
-            isinstance(item, str) and item for item in body
-        ):
-            raise TaskControlError("verification_argv_invalid")
-        commands.append(tuple(body))
-    return tuple(commands)
+def _line(value: str | None, *, option: str) -> str:
+    if not isinstance(value, str) or not value.strip() or "\n" in value or "\r" in value:
+        raise PlanDiscoveryError(f"{option}_must_be_a_non_empty_line")
+    return value.strip()
 
 
-def render_human(result: CommandResult) -> str:
-    lines = [
-        f"ollija {redact_text(result.command)}: {redact_text(result.status)}",
-        redact_text(result.summary),
-        f"State: {redact_text(result.state)}",
-    ]
-    for warning in result.warnings:
-        lines.append(f"Warning: {redact_text(warning)}")
-    for error in result.errors:
-        lines.append(f"Error [{error.code}]: {redact_text(error.message)}")
-    if result.next_action:
-        lines.append(
-            "Next: "
-            f"{redact_text(result.next_action.command)} — "
-            f"{redact_text(result.next_action.reason)}"
-        )
-    return "\n".join(lines)
+def _plan_directory(config: ProjectConfig, active_worktree: Path) -> Path:
+    directory = (active_worktree / config.plans.directory).resolve()
+    if not directory.is_relative_to(active_worktree):
+        raise PlanDiscoveryError("configured_plan_directory_outside_active_worktree")
+    return directory
 
 
-def emit_result(
-    result: CommandResult,
-    *,
-    json_output: bool,
-    stream: TextIO,
-) -> None:
-    if json_output:
-        stream.write(json.dumps(result.to_dict(), sort_keys=True) + "\n")
-    else:
-        stream.write(render_human(result) + "\n")
+def _validate_explicit_path(path: Path, plan_directory: Path, active_worktree: Path) -> Path:
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = active_worktree / candidate
+    candidate = candidate.resolve()
+    if candidate.suffix != ".md" or not candidate.is_relative_to(plan_directory):
+        raise PlanDiscoveryError("explicit_plan_path_must_be_under_active_plan_directory")
+    if not candidate.is_file():
+        raise PlanDiscoveryError("explicit_plan_path_missing")
+    return candidate
 
 
-def _config_failure(command: str, exc: Exception) -> CommandResult:
-    return CommandResult(
-        command=command,
-        status="failed",
-        state="blocked",
-        summary="ollija could not load the project contract.",
-        errors=(
-            CommandError(
-                code="project_contract_invalid",
-                message=redact_text(str(exc)),
-            ),
-        ),
-    )
+def _looks_like_ollija_plan(content: str) -> bool:
+    return content.startswith("---") and re.search(r"(?m)^ollija:\s*(?:#.*)?$", content) is not None
 
 
-def _load_local_environment(root: Path) -> None:
-    path = root / ".env"
-    if path.is_file():
-        environ.Env.read_env(str(path), overwrite=False)
-
-
-def _mutation_failure(command: str, code: str) -> CommandResult:
-    return CommandResult(
-        command=command,
-        status="failed",
-        state="blocked",
-        summary=f"ollija {command} stopped before changing the active environment.",
-        errors=(CommandError(code=code, message=code),),
-        next_action=NextAction("ollija doctor", "Resolve the reported safety check."),
-    )
-
-
-def _candidate_identity(config, facts) -> CandidateIdentity:
-    sha = facts.git.head_sha
-    if not sha:
-        raise RefreshError("candidate_sha_unavailable")
-    beta = parse_beta_version(facts.package_version)
-    fact_git = getattr(facts, "git", None)
-    repository_root = getattr(fact_git, "repository_root", None)
-    changed_paths = (
-        _changed_paths(config, repository_root)
-        if repository_root is not None
-        else _changed_paths(config)
-    )
-    impact = assess_ui_impact(config, changed_paths)
-    return CandidateIdentity(
-        sha=sha,
-        package_version=facts.package_version,
-        release_tag=beta.release_tag,
-        surface_fingerprint=impact.surface_fingerprint,
-    )
-
-
-def _active_candidate(
-    config,
-    facts,
-) -> tuple[ReceiptStore, Receipt]:
-    store = ReceiptStore(
-        config.state_root,
-        retention_days=config.state.retention_days,
-    )
-    candidate_id = store.read_reference("active_candidate")
-    if not candidate_id:
-        raise RefreshError("active_candidate_missing")
+def _read_plan(path: Path) -> tuple[str, PlanMetadata]:
     try:
-        candidate = store.load_receipt("candidate", candidate_id)
-    except ReceiptError as exc:
-        raise RefreshError("active_candidate_receipt_missing") from exc
-    if candidate.candidate != _candidate_identity(config, facts):
-        raise RefreshError("active_candidate_identity_mismatch")
-    return store, candidate
+        content = path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PlanDiscoveryError(f"could_not_read_plan:{path}") from exc
+    try:
+        return content, parse_plan_metadata(content)
+    except AnnotationError as exc:
+        raise PlanDiscoveryError(f"malformed_plan:{path}:{exc}") from exc
 
 
-def _active_candidate_for_refresh(
-    config,
-    facts,
-) -> tuple[ReceiptStore, tuple[Receipt, ...], Receipt]:
-    store, candidate = _active_candidate(config, facts)
-    receipts = store.iter_receipts()
-    return store, receipts, candidate
+def _matching_plans(plan_directory: Path, branch: str) -> list[ResolvedPlan]:
+    if not plan_directory.exists():
+        return []
+    if not plan_directory.is_dir():
+        raise PlanDiscoveryError("configured_plan_directory_is_not_a_directory")
+    matches: list[ResolvedPlan] = []
+    for candidate in sorted(plan_directory.rglob("*.md")):
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(plan_directory):
+            raise PlanDiscoveryError(f"unsafe_plan_path:{candidate}")
+        try:
+            content = resolved.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise PlanDiscoveryError(f"could_not_read_plan:{resolved}") from exc
+        if not _looks_like_ollija_plan(content):
+            continue
+        try:
+            metadata = parse_plan_metadata(content)
+        except AnnotationError as exc:
+            raise PlanDiscoveryError(f"malformed_plan:{resolved}:{exc}") from exc
+        if metadata.branch == branch:
+            matches.append(ResolvedPlan(resolved, content, metadata, False))
+    return matches
 
 
-def _changed_paths(config, root: Path | None = None) -> tuple[str, ...]:
-    completed = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--name-only",
-            f"origin/{config.git.production_branch}...HEAD",
-        ],
-        cwd=root or config.root,
-        text=True,
-        capture_output=True,
-        timeout=15,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RefreshError("candidate_surface_unknown")
-    return tuple(sorted(set(completed.stdout.splitlines())))
+def _stub(branch: str, *, workflow: str, target: str, selected: bool) -> tuple[str, PlanMetadata]:
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+    change_id = f"{branch.replace('/', '-')}-{timestamp}"
+    metadata = PlanMetadata(change_id, branch, workflow, target, selected)
+    content = f"""---
+title: {branch} plan
+artifact_contract: ce-unified-plan/v1
+artifact_readiness: requirements-only
+product_contract_source: ollija-annotate-plan
+execution: code
+ollija:
+  change_id: {change_id}
+  branch: {branch}
+  workflow: {workflow}
+  delivery_target: {target}
+  delivery_selected_by_user: {str(selected).lower()}
+---
+
+# Goal
+
+<!-- Planner: replace this requirements-only placeholder with the change goal. -->
+
+## Product Contract
+
+<!-- Planner: define the user-visible contract, acceptance cases, and verification. -->
+"""
+    return content, metadata
 
 
-def _start_candidate(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("start", facts)
-    if blocked:
-        return blocked
-    fact_git = getattr(facts, "git", None)
-    repository_root = getattr(fact_git, "repository_root", None)
-    changed_paths = (
-        _changed_paths(config, repository_root)
-        if repository_root is not None
-        else _changed_paths(config)
-    )
-    baseline_text = load_change_ledger_baseline(
-        config.root,
-        f"origin/{config.git.production_branch}",
-        runner=SubprocessRunner(),
-    )
-    require_ollija_change_ledger(
-        config.root,
-        changed_paths,
-        baseline_text=baseline_text,
-    )
-    data_refresh_required = requires_production_data_refresh(changed_paths)
-    beta = parse_beta_version(facts.package_version)
-    GitPublisher(config.root).assert_tag_absent(beta.release_tag)
-    impact = assess_ui_impact(config, changed_paths)
-    if not facts.git.head_sha:
-        raise VersionError("candidate_sha_unavailable")
-    candidate = CandidateIdentity(
-        sha=facts.git.head_sha,
-        package_version=beta.package_version,
-        release_tag=beta.release_tag,
-        surface_fingerprint=impact.surface_fingerprint,
-    )
-    receipt = Receipt.create(
-        kind="candidate",
-        candidate=candidate,
-        created_at=datetime.now(UTC),
-        payload={
-            "ui_required": impact.ui_required,
-            "matched_paths": list(impact.matched_paths),
-            "changed_paths": list(impact.changed_paths),
-            "required_approvals": list(impact.required_approvals),
-            "required_evidence": list(impact.required_evidence),
-            "data_refresh_required": data_refresh_required,
-        },
-    )
-    store = ReceiptStore(
-        config.state_root,
-        retention_days=config.state.retention_days,
-    )
-    store.write_receipt(receipt)
-    store.set_reference("active_candidate", receipt.receipt_id)
-    return CommandResult(
-        command="start",
-        status="ok",
-        state="candidate",
-        summary=f"Candidate {candidate.release_tag} is frozen at the current commit.",
-        evidence=(EvidenceRef("candidate", receipt.receipt_id, candidate.sha),),
-        details={
-            "package_version": candidate.package_version,
-            "release_tag": candidate.release_tag,
-            "ui_required": impact.ui_required,
-            "required_approvals": list(impact.required_approvals),
-            "required_evidence": list(impact.required_evidence),
-            "data_refresh_required": data_refresh_required,
-        },
-        next_action=(
-            NextAction(
-                "ollija refresh-local",
-                "Refresh data evidence for this exact candidate before staging.",
-            )
-            if data_refresh_required
-            else NextAction(
-                "ollija stage",
-                "This workflow-only candidate needs no production-derived data.",
-            )
-        ),
-    )
+def _stub_name(branch: str, timestamp: str, attempt: int = 0) -> str:
+    description = re.sub(r"[^a-z0-9]+", "-", branch.lower()).strip("-") or "plan"
+    suffix = "" if attempt == 0 else f"-{attempt}"
+    return f"{timestamp}-{description}-plan{suffix}.md"
 
 
-def _active_candidate_and_stage(config) -> tuple[ReceiptStore, Receipt, Receipt]:
-    store = ReceiptStore(
-        config.state_root,
-        retention_days=config.state.retention_days,
-    )
-    candidate_id = store.read_reference("active_candidate")
-    if not candidate_id:
-        raise ApprovalError("active_candidate_missing")
-    receipts = store.iter_receipts()
-    candidate_receipt = next(
-        (
-            receipt
-            for receipt in receipts
-            if receipt.kind == "candidate" and receipt.receipt_id == candidate_id
-        ),
-        None,
-    )
-    if candidate_receipt is None:
-        raise ApprovalError("active_candidate_receipt_missing")
-    stages = [
-        receipt
-        for receipt in receipts
-        if receipt.kind == "staging_deploy"
-        and receipt.candidate == candidate_receipt.candidate
-        and receipt.payload.get("status") == "live"
-        and receipt.payload.get("deployed_sha") == candidate_receipt.candidate.sha
-    ]
-    if not stages:
-        raise ApprovalError("live_staging_receipt_missing")
-    return store, candidate_receipt, max(stages, key=lambda receipt: receipt.created_at)
+def _metadata_with_inputs(metadata: PlanMetadata, args: argparse.Namespace) -> PlanMetadata:
+    workflow = metadata.workflow if args.workflow is None else _line(args.workflow, option="workflow")
+    if args.delivery_selected_by_user and args.delivery_target is None:
+        raise PlanDiscoveryError("delivery_selected_by_user_requires_delivery_target")
+    target = metadata.delivery_target if args.delivery_target is None else args.delivery_target
+    selected = metadata.delivery_selected_by_user
+    if args.delivery_target is not None:
+        selected = args.delivery_selected_by_user
+    if target in {"staging", "production"} and not selected:
+        raise PlanDiscoveryError("delivery_target_requires_explicit_user_selection")
+    if target == "on-request" and selected:
+        raise PlanDiscoveryError("on_request_delivery_target_cannot_be_user_selected")
+    return replace(metadata, workflow=workflow, delivery_target=target, delivery_selected_by_user=selected)
 
 
-def _assess_ui(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("assess-ui", facts)
-    if blocked:
-        return blocked
-    store, candidate_receipt, stage = _active_candidate_and_stage(config)
-    evidence = collect_bridgewright_evidence(config)
-    receipt = bridgewright_evidence_receipt(
-        candidate=candidate_receipt.candidate,
-        deployment_id=str(stage.payload["deployment_id"]),
-        evidence=evidence,
-        created_at=datetime.now(UTC),
-    )
-    store.write_receipt(receipt)
-    return CommandResult(
-        command="assess-ui",
-        status="ok",
-        state="staged",
-        summary="Bridgewright recorded clean assessment evidence without approval authority.",
-        evidence=(
-            EvidenceRef(
-                "bridgewright_evidence",
-                receipt.receipt_id,
-                candidate_receipt.candidate.sha,
-            ),
-        ),
-        next_action=NextAction(
-            "ollija approve desktop",
-            "The owner must inspect this exact staged deployment.",
-        ),
-    )
-
-
-def _approve(config, facts, approval_kind: str) -> CommandResult:
-    blocked = _preflight_mutation("approve", facts)
-    if blocked:
-        return blocked
-    store, candidate_receipt, stage = _active_candidate_and_stage(config)
-    receipt = owner_approval_receipt(
-        candidate=candidate_receipt.candidate,
-        approval_kind=approval_kind,
-        deployment_id=str(stage.payload["deployment_id"]),
-        created_at=datetime.now(UTC),
-    )
-    store.write_receipt(receipt)
-    next_command = (
-        "ollija approve iphone" if approval_kind == "desktop" else "ollija status"
-    )
-    return CommandResult(
-        command=f"approve {approval_kind}",
-        status="ok",
-        state="staged",
-        summary=f"Owner {approval_kind} approval is bound to the staged candidate.",
-        evidence=(
-            EvidenceRef("approval", receipt.receipt_id, candidate_receipt.candidate.sha),
-        ),
-        next_action=NextAction(
-            next_command,
-            "Complete the remaining candidate-bound review evidence.",
-        ),
-    )
-
-
-def _override(
-    config,
-    facts,
-    assessment_kind: str,
-    owner: str,
-    reason: str,
-) -> CommandResult:
-    blocked = _preflight_mutation("override", facts)
-    if blocked:
-        return blocked
-    store, candidate_receipt, stage = _active_candidate_and_stage(config)
-    receipt = owner_override_receipt(
-        candidate=candidate_receipt.candidate,
-        assessment_kind=assessment_kind,
-        deployment_id=str(stage.payload["deployment_id"]),
-        owner=owner,
-        reason=reason,
-        created_at=datetime.now(UTC),
-    )
-    store.write_receipt(receipt)
-    return CommandResult(
-        command=f"override {assessment_kind}",
-        status="ok",
-        state="staged",
-        summary="Owner override is bound to this candidate and remains distinct from automated evidence.",
-        evidence=(
-            EvidenceRef(
-                "owner_override",
-                receipt.receipt_id,
-                candidate_receipt.candidate.sha,
-            ),
-        ),
-        next_action=NextAction(
-            "ollija status",
-            "Recompute the exact-candidate release state.",
-        ),
-    )
-
-
-def _preflight_mutation(command: str, facts) -> CommandResult | None:
-    operation = "release" if command in {"release", "verify-production"} else "stage"
-    decision = mutation_preflight(facts.authority, facts.git, operation=operation)
-    failing_checks = [check for check in facts.checks if check.status != "passed"]
-    if decision.allowed and not failing_checks:
-        return None
-    reasons = list(decision.reason_codes)
-    reasons.extend(f"{check.name}_{check.status}" for check in failing_checks)
-    return CommandResult(
-        command=command,
-        status="blocked",
-        state="blocked",
-        summary=f"ollija {command} refused an unsafe or incomplete preflight.",
-        errors=tuple(
-            CommandError(code=reason, message=reason) for reason in dict.fromkeys(reasons)
-        ),
-        next_action=NextAction("ollija doctor", "Resolve preflight before retrying."),
-    )
-
-
-def _refresh_local(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("refresh-local", facts)
-    if blocked:
-        return blocked
-    store, candidate_receipt = _active_candidate(
-        config,
-        facts,
-    )
-    if not candidate_requires_data_refresh(candidate_receipt):
-        return CommandResult(
-            command="refresh-local",
-            status="ok",
-            state="ready_to_stage",
-            summary="Production-derived data is not required for this candidate.",
-            evidence=(
-                EvidenceRef(
-                    "git_commit",
-                    candidate_receipt.candidate.sha,
-                    candidate_receipt.candidate.sha,
-                ),
-            ),
-            details={"data_refresh_required": False},
-            next_action=NextAction(
-                "ollija stage",
-                "Deploy the workflow-only candidate without copying production data.",
-            ),
-        )
-    source_url = os.environ.get("OLLIJA_PROD_READONLY_DATABASE_URL", "")
-    if not source_url:
-        return _mutation_failure(
-            "refresh-local",
-            "production_readonly_database_url_missing",
-        )
-    backend = PostgresRefreshBackend(
-        config=config,
-        source_database_url=source_url,
-    )
-    report = RefreshPipeline(
-        backend=backend,
-        policy=safety_policy_from_config(config),
-    ).run()
-    candidate = candidate_receipt.candidate
-    receipt = Receipt.create(
-        kind="refresh",
-        candidate=candidate,
-        created_at=datetime.now(UTC),
-        payload=report.to_receipt_payload(),
-    )
-    store.write_receipt(receipt)
-    store.set_reference("active_refresh", receipt.receipt_id)
-    return CommandResult(
-        command="refresh-local",
-        status="ok",
-        state=facts.lifecycle_state,
-        summary="Local staging data was restored, scrubbed, validated, and activated.",
-        evidence=(
-            EvidenceRef("refresh", receipt.receipt_id, candidate.sha),
-            EvidenceRef("git_commit", candidate.sha, candidate.sha),
-        ),
-        details=report.to_receipt_payload(),
-        next_action=NextAction("ollija preview", "Review the active local snapshot."),
-    )
-
-
-def _preview(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("preview", facts)
-    if blocked:
-        return blocked
-    backend = PostgresRefreshBackend(
-        config=config,
-        source_database_url="postgresql:///unused",
-    )
-    database = backend.discover_active_local_database()
-    database_url = f"postgresql:///{database.database}"
-    plan = build_preview_plan(
-        config,
-        database_url=database_url,
-        database=database,
-        policy=safety_policy_from_config(config),
-        port_available=port_is_available,
-        tailscale_dns_name=tailscale_dns_name(),
-    )
-    runtime = start_preview(config, plan)
-    return CommandResult(
-        command="preview",
-        status="ok",
-        state=facts.lifecycle_state,
-        summary="Local preview is running on loopback and private tailnet HTTPS.",
-        details=runtime.to_dict(),
-        next_action=NextAction(
-            runtime.private_url,
-            "Open this private URL on desktop Chrome or the physical iPhone.",
-        ),
-    )
-
-
-def _refresh_staging(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("refresh-staging", facts)
-    if blocked:
-        return blocked
-    store, candidate_receipt = _active_candidate(
-        config,
-        facts,
-    )
-    if not candidate_requires_data_refresh(candidate_receipt):
-        return CommandResult(
-            command="refresh-staging",
-            status="ok",
-            state="ready_to_stage",
-            summary="Hosted data refresh is not required for this candidate.",
-            evidence=(
-                EvidenceRef(
-                    "git_commit",
-                    candidate_receipt.candidate.sha,
-                    candidate_receipt.candidate.sha,
-                ),
-            ),
-            details={"data_refresh_required": False},
-            next_action=NextAction(
-                "ollija stage",
-                "Deploy the workflow-only candidate without replacing staging data.",
-            ),
-        )
-    receipts = store.iter_receipts()
-    target_url = os.environ.get("OLLIJA_STAGING_DATABASE_URL", "")
-    staging = config.environments.get("staging", {})
-    resource_id = staging.get("database_resource_id")
-    if not target_url:
-        return _mutation_failure("refresh-staging", "staging_database_url_missing")
-    if not isinstance(resource_id, str) or not resource_id:
-        return _mutation_failure(
-            "refresh-staging",
-            "staging_database_resource_identity_missing",
-        )
-    readiness = inspect_refresh_readiness(
-        config,
-        store,
-        receipts,
-        candidate_receipt,
-        now=datetime.now(UTC),
-    )
-    if readiness.local is None:
-        raise RefreshError(readiness.error_code or "local_refresh_missing")
-    report = HostedStagingRefresh(
-        config=config,
-        target_database_url=target_url,
-        target_resource_id=resource_id,
-    ).run()
-    local = readiness.local
-    if (
-        report.source_database != local.payload.get("target_database")
-        or report.source_resource_id != local.payload.get("target_resource_id")
-        or dict(report.row_counts) != local.payload.get("row_counts")
-    ):
-        raise RefreshError("hosted_refresh_local_source_mismatch")
-    candidate = candidate_receipt.candidate
-    payload = {
-        **report.to_receipt_payload(),
-        "local_refresh_receipt_id": local.receipt_id,
+def _replace_metadata(content: str, original: PlanMetadata, updated: PlanMetadata) -> str:
+    if original == updated:
+        return content
+    closing = re.search(r"(?m)^(---|\.\.\.)\r?$", content[4:])
+    if closing is None:
+        raise PlanDiscoveryError("malformed_plan_frontmatter")
+    frontmatter_end = 4 + closing.end()
+    frontmatter = content[:frontmatter_end]
+    lines = frontmatter.splitlines(keepends=True)
+    start = next((index for index, line in enumerate(lines) if line.rstrip("\r\n") == "ollija:"), None)
+    if start is None:
+        raise PlanDiscoveryError("malformed_plan_ollija_mapping")
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line and line[0] not in " \t\r\n":
+            end = index
+            break
+    replacements = {
+        "workflow": updated.workflow,
+        "delivery_target": updated.delivery_target,
+        "delivery_selected_by_user": str(updated.delivery_selected_by_user).lower(),
     }
-    receipt = Receipt.create(
-        kind="refresh",
-        candidate=candidate,
-        created_at=datetime.now(UTC),
-        payload=payload,
-    )
-    store.write_receipt(receipt)
-    store.set_reference("hosted_refresh", receipt.receipt_id)
-    return CommandResult(
-        command="refresh-staging",
-        status="ok",
-        state=facts.lifecycle_state,
-        summary="Hosted staging received the scrubbed, validated local snapshot.",
-        evidence=(EvidenceRef("refresh", receipt.receipt_id, candidate.sha),),
-        details=payload,
-        next_action=NextAction(
-            "ollija stage",
-            "Deploy the exact candidate against the active hosted snapshot.",
-        ),
-    )
+    seen: set[str] = set()
+    for index in range(start + 1, end):
+        match = re.match(r"^(\s+)(workflow|delivery_target|delivery_selected_by_user):[^\r\n]*(\r?\n?)$", lines[index])
+        if match:
+            indent, key, newline = match.groups()
+            lines[index] = f"{indent}{key}: {replacements[key]}{newline}"
+            seen.add(key)
+    if seen != replacements.keys():
+        raise PlanDiscoveryError("malformed_plan_ollija_mapping")
+    return "".join(lines) + content[frontmatter_end:]
 
 
-def _preview_stop(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("preview-stop", facts)
-    if blocked:
-        return blocked
-    runtime = stop_preview(config)
-    return CommandResult(
-        command="preview-stop",
-        status="ok",
-        state=facts.lifecycle_state,
-        summary="The scoped local preview and its Tailscale Serve route were stopped.",
-        details=runtime.to_dict(),
-        next_action=NextAction("ollija status", "Continue from live workflow state."),
-    )
+def _exclusive_create(path: Path, content: str) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        return False
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(content.encode("utf-8"))
+    return True
 
 
-def _stage(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("stage", facts)
-    if blocked:
-        return blocked
-    receipt = stage_candidate(
-        config=config,
-        git=facts.git,
-        package_version=facts.package_version,
-        render=RenderClient(root=config.root),
-        publisher=GitPublisher(config.root),
-        now=datetime.now(UTC),
-    )
-    return CommandResult(
-        command="stage",
-        status="ok",
-        state="staged",
-        summary="The exact candidate is live on isolated hosted staging.",
-        evidence=(
-            EvidenceRef("staging_deploy", receipt.receipt_id, receipt.candidate.sha),
-        ),
-        details={
-            "deployment_id": receipt.payload.get("deployment_id"),
-            "deployed_sha": receipt.payload.get("deployed_sha"),
-            "status": receipt.payload.get("status"),
-        },
-        next_action=NextAction(
-            "ollija assess-ui",
-            "Collect assessment evidence before owner desktop and iPhone review.",
-        ),
-    )
+def _resolve_plan(config: ProjectConfig, args: argparse.Namespace, active_worktree: Path, branch: str, *, write: bool) -> ResolvedPlan:
+    directory = _plan_directory(config, active_worktree)
+    if args.plan_path is not None:
+        path = _validate_explicit_path(args.plan_path, directory, active_worktree)
+        content, metadata = _read_plan(path)
+        return ResolvedPlan(path, content, metadata, False)
+    matches = _matching_plans(directory, branch)
+    if len(matches) > 1:
+        raise PlanDiscoveryError("ambiguous_branch_plans_require_explicit_path")
+    if matches:
+        return matches[0]
+    if not write:
+        raise PlanDiscoveryError("plan_missing_for_branch")
+    workflow = "plan" if args.workflow is None else _line(args.workflow, option="workflow")
+    target = args.delivery_target or "on-request"
+    selected = args.delivery_selected_by_user
+    provisional = PlanMetadata("new", branch, workflow, target, selected)
+    _metadata_with_inputs(provisional, args)
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+    for attempt in range(100):
+        path = directory / _stub_name(branch, timestamp, attempt)
+        if not path.exists():
+            content, metadata = _stub(
+                branch, workflow=workflow, target=target, selected=selected
+            )
+            return ResolvedPlan(path.resolve(), content, metadata, True)
+    raise PlanDiscoveryError("could_not_create_unique_plan_stub")
 
 
-def _release(config, facts) -> CommandResult:
-    blocked = _preflight_mutation("release", facts)
-    if blocked:
-        return blocked
-    evidence, last_known_good = promote_candidate(
-        config=config,
-        git=facts.git,
-        package_version=facts.package_version,
-        render=RenderClient(root=config.root),
-        publisher=GitPublisher(config.root),
-        now=datetime.now(UTC),
-    )
-    return CommandResult(
-        command="release",
-        status="ok",
-        state="releasing",
-        summary="Production main now points to the exact approved candidate.",
-        evidence=(
-            EvidenceRef(
-                "candidate",
-                evidence.candidate.receipt_id,
-                evidence.candidate.candidate.sha,
-            ),
-            EvidenceRef(
-                "last_known_good",
-                last_known_good.receipt_id,
-                evidence.candidate.candidate.sha,
-            ),
-        ),
-        details={
-            "deployed_sha": evidence.candidate.candidate.sha,
-            "release_tag": evidence.candidate.candidate.release_tag,
-        },
-        next_action=NextAction(
-            "ollija verify-production",
-            "Optionally verify the production deployment and seal its beta tag.",
-        ),
-    )
+def _lock(common_git_dir: Path):
+    # HEAD is a stable, shared Git file. Locking it avoids persistent Ollija
+    # state while making no-path creation converge across linked worktrees.
+    stream = (common_git_dir / "HEAD").open("r")
+    fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+    return stream
 
 
-def _verify_production(
-    config,
-    facts,
-    storage_state: Path | None,
-    browser_cdp_url: str | None,
-) -> CommandResult:
-    blocked = _preflight_mutation("verify-production", facts)
-    if blocked:
-        return blocked
-    browser_probe = production_browser_probe(
-        config.verification,
-        storage_state=storage_state,
-        browser_cdp_url=browser_cdp_url,
-    )
-    receipt, report = verify_and_tag_candidate(
-        config=config,
-        git=facts.git,
-        package_version=facts.package_version,
-        render=RenderClient(root=config.root),
-        publisher=GitPublisher(config.root),
-        browser_probe=browser_probe,
-        now=datetime.now(UTC),
-    )
-    return CommandResult(
-        command="verify-production",
-        status="ok",
-        state="verified",
-        summary="The approved beta is live, visibly serving a headline, and tagged.",
-        evidence=(
-            EvidenceRef("production_deploy", receipt.receipt_id, receipt.candidate.sha),
-        ),
-        details={
-            "deployment_id": receipt.payload.get("deployment_id"),
-            "deployed_sha": receipt.candidate.sha,
-            "release_tag": receipt.candidate.release_tag,
-            "headline_visible": report.browser.visible,
-            "headline_model": report.headline_model,
-        },
-        next_action=NextAction(
-            "ollija status",
-            "Confirm the sealed release state and begin the next change from staging.",
-        ),
-    )
+def _result(*, state: str, plan: ResolvedPlan, active_worktree: Path, config: ProjectConfig, branch: str, target: str) -> dict[str, str]:
+    return {
+        "status": state,
+        "result": state,
+        "plan_path": str(plan.path),
+        "active_worktree": str(active_worktree),
+        "authoritative_root": str(config.authority.repository_root),
+        "branch": branch,
+        "canonical_required_path": str(canonical_worktree_path(config, branch)),
+        "delivery_target": target,
+    }
 
 
-def _worktree_command(config, args, working_directory, input_stream) -> CommandResult:
-    action = args.worktree_action
-    if action == "guard":
-        moved = guard_worktree(
-            config,
-            cwd=working_directory,
-            input_stream=input_stream,
-            output_stream=sys.stderr,
-            leave_as_is=args.leave_as_is,
-        )
-        details = {
-            "release_worktree_label": config.authority.release_worktree_label,
-            "release_worktree_path": config.authority.release_worktree_path.as_posix(),
-        }
-        in_release_area = moved is not None and (
-            moved == config.root.resolve() or is_release_worktree(config, moved)
-        )
-        if moved is not None:
-            details["worktree_path"] = str(moved)
-        return CommandResult(
-            command="worktree guard",
-            status="ok",
-            state="worktree",
-            summary=(
-                "The worktree is in the Ollija release worktree area."
-                if in_release_area
-                else "The outside worktree was left as-is; it is not release-eligible."
-            ),
-            details=details,
-            next_action=NextAction(
-                "ollija worktree move",
-                "Move this worktree later if it should enter the release cycle.",
-            ),
-        )
-    if action == "move":
-        source = (args.path or working_directory).resolve()
-        destination = move_worktree(config, source=source, name=args.name)
-        return CommandResult(
-            command="worktree move",
-            status="ok",
-            state="worktree",
-            summary="The worktree moved into the Ollija release worktree area.",
-            details={
-                "worktree_path": str(destination),
-                "release_worktree_label": config.authority.release_worktree_label,
-                "release_worktree_path": config.authority.release_worktree_path.as_posix(),
-            },
-            next_action=NextAction(
-                "ollija status",
-                "Re-check the moved worktree before starting the release candidate.",
-            ),
-        )
-    hook_path = install_hook(config)
-    return CommandResult(
-        command="worktree install-hook",
-        status="ok",
-        state="worktree",
-        summary="The shared Ollija post-checkout worktree guard is installed.",
-        details={"hooks_path": hook_path},
-        next_action=NextAction(
-            "ollija status", "Confirm the repository and worktree authorities."
-        ),
-    )
+def _annotate(args: argparse.Namespace, *, cwd: Path) -> dict[str, str]:
+    config = load_project_config(cwd)
+    facts = active_worktree_facts(cwd)
+    lock_stream = None if args.check else _lock(facts.common_git_dir)
+    try:
+        plan = _resolve_plan(config, args, facts.active_worktree, facts.branch, write=not args.check)
+        metadata = _metadata_with_inputs(plan.metadata, args)
+        base = _replace_metadata(plan.content, plan.metadata, metadata)
+        try:
+            annotated, _ = render_annotated_plan(base, config=config, plan_path=plan.path, active_worktree=facts.active_worktree)
+        except AnnotationError as exc:
+            raise PlanDiscoveryError(str(exc)) from exc
+        changed = annotated != plan.content
+        if args.check:
+            if changed:
+                raise PlanDiscoveryError("plan_annotation_stale_run_annotate_plan")
+            state = "unchanged"
+        else:
+            if plan.created:
+                if not _exclusive_create(plan.path, annotated):
+                    raise PlanDiscoveryError("plan_stub_path_collision_retry_command")
+            elif changed:
+                plan.path.write_bytes(annotated.encode("utf-8"))
+            state = "created" if plan.created else ("updated" if changed else "unchanged")
+        return _result(state=state, plan=plan, active_worktree=facts.active_worktree, config=config, branch=facts.branch, target=metadata.delivery_target)
+    finally:
+        if lock_stream is not None:
+            fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN)
+            lock_stream.close()
 
 
-def main(
-    argv: list[str] | None = None,
-    *,
-    cwd: Path | None = None,
-    stream: TextIO | None = None,
-    input_stream: TextIO | None = None,
-) -> int:
+def main(argv: list[str] | None = None, *, cwd: Path | None = None, stream: TextIO | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     output = stream or sys.stdout
-    input_source = input_stream or sys.stdin
-    requested_directory = os.environ.get("OLLIJA_WORKTREE_CWD")
-    working_directory = Path(requested_directory or cwd or Path.cwd()).resolve()
+    requested = os.environ.get("OLLIJA_WORKTREE_CWD")
+    working_directory = Path(requested or cwd or Path.cwd()).resolve()
     try:
-        config = load_project_config(working_directory)
-        _load_local_environment(config.root)
-        if config.root != config.authority.repository_root:
-            _load_local_environment(config.authority.repository_root)
-        if args.command == "worktree":
-            with ExitStack() as resources:
-                tty_input = None
-                if args.worktree_action == "guard" and args.hook:
-                    try:
-                        tty_input = resources.enter_context(
-                            open("/dev/tty", encoding="utf-8")
-                        )
-                    except OSError:
-                        tty_input = None
-                result = _worktree_command(
-                    config,
-                    args,
-                    working_directory,
-                    tty_input or input_source,
-                )
-            emit_result(result, json_output=args.json_output, stream=output)
-            return {"ok": 0, "blocked": 2, "failed": 1}[result.status]
-        if args.command == "task-status":
-            result = build_task_status_result(config, task_id=args.task)
-        else:
-            facts = collect_status_facts(config, cwd=working_directory)
-        if args.command == "status":
-            release_status = build_status_result(facts)
-            result = (
-                release_status
-                if os.environ.get("OLLIJA_RELEASE_ONLY") == "1"
-                else with_task_status(release_status, config)
-            )
-        elif args.command == "doctor":
-            result = build_doctor_result(facts)
-        elif args.command == "go":
-            origin_host = os.environ.get("OLLIJA_ORIGIN_HOST") or socket.gethostname()
-            origin_terminal = (
-                os.environ.get("OLLIJA_ORIGIN_TERMINAL")
-                or os.environ.get("TERM_PROGRAM")
-                or os.environ.get("SSH_TTY")
-                or "unknown"
-            )
-            snapshot = go_task(
-                config,
-                facts,
-                GoRequest(
-                    task_id=args.task,
-                    parent_task_id=args.parent_task,
-                    source_path=args.source.as_posix(),
-                    agent_kind=args.agent,
-                    endpoint=args.endpoint,
-                    verification_argv=_verification_argv(args.verify_argv),
-                    no_test_reason=args.no_test_reason,
-                ),
-                runner=SubprocessRunner(),
-                driver=driver_for(args.agent),
-                origin_host=origin_host,
-                origin_terminal=origin_terminal,
-                execution_host=socket.gethostname(),
-            )
-            result = task_command_result("go", snapshot)
-        elif args.command == "stop":
-            result = task_command_result(
-                f"stop {args.task}", stop_task(config, facts, args.task)
-            )
-        elif args.command == "task-status":
-            pass
-        elif args.command == "refresh-local":
-            result = _refresh_local(config, facts)
-        elif args.command == "refresh-staging":
-            result = _refresh_staging(config, facts)
-        elif args.command == "start":
-            result = _start_candidate(config, facts)
-        elif args.command == "assess-ui":
-            result = _assess_ui(config, facts)
-        elif args.command == "approve":
-            result = _approve(config, facts, args.approval_kind)
-        elif args.command == "override":
-            result = _override(
-                config,
-                facts,
-                args.assessment_kind,
-                args.owner,
-                args.reason,
-            )
-        elif args.command == "stage":
-            result = _stage(config, facts)
-        elif args.command == "release":
-            result = _release(config, facts)
-        elif args.command == "verify-production":
-            result = _verify_production(
-                config,
-                facts,
-                args.browser_storage_state,
-                args.browser_cdp_url,
-            )
-        elif args.command == "preview":
-            result = _preview(config, facts)
-        else:
-            result = _preview_stop(config, facts)
-        emit_result(result, json_output=args.json_output, stream=output)
-    except (ConfigError, UnsafeOutputError) as exc:
-        result = _config_failure(args.command, exc)
-        emit_result(result, json_output=args.json_output, stream=output)
-    except (
-        ApprovalError,
-        BridgewrightError,
-        ChangeLedgerError,
-        DatabaseGuardError,
-        PreviewError,
-        ProcessControlError,
-        RefreshError,
-        ReceiptError,
-        ReleaseError,
-        RenderObservationError,
-        AgentDriverError,
-        TaskControlError,
-        TaskError,
-        VerificationError,
-        VersionError,
-        WorkspaceError,
-        WorktreeError,
-    ) as exc:
-        result = _mutation_failure(args.command, redact_text(str(exc)))
-        emit_result(result, json_output=args.json_output, stream=output)
-
-    return {"ok": 0, "blocked": 2, "failed": 1}[result.status]
+        result = _annotate(args, cwd=working_directory)
+    except (AnnotationError, ConfigError, PlanDiscoveryError, WorktreeError, OSError) as exc:
+        output.write(json.dumps({"status": "failed", "error": str(exc)}, sort_keys=True) + "\n")
+        return 2
+    output.write(json.dumps(result, sort_keys=True) + "\n")
+    return 0
