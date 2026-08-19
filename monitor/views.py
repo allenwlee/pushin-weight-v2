@@ -1392,15 +1392,32 @@ def _build_home_chart_payload(
         brand: {} for brand in brand_nicknames
     }
 
-    eligible_posts = _filter_home_posts_queryset(
-        window_days,
-        normalized_filters,
-        now=now,
-    ).values("tweet_id")
-    links = PostBrand.objects.filter(
-        brand_id__in=brand_nicknames,
-        post_id__in=Subquery(eligible_posts),
+    has_post_filters = any(
+        axis != "brands"
+        and normalized_filters.get(axis) not in (None, "__all__")
+        for axis in _HOME_MULTI_VALUE_FILTERS
     )
+    if has_post_filters:
+        eligible_posts = _filter_home_posts_queryset(
+            window_days,
+            normalized_filters,
+            now=now,
+        ).values("tweet_id")
+        links = PostBrand.objects.filter(
+            brand_id__in=brand_nicknames,
+            post_id__in=Subquery(eligible_posts),
+        )
+    else:
+        links = PostBrand.objects.filter(
+            brand_id__in=brand_nicknames,
+            post__created_at__gte=now - timedelta(days=window_days),
+            post__created_at__lt=now,
+        )
+        unsanctioned = normalized_filters.get("unsanctioned", "off")
+        if unsanctioned == "off":
+            links = links.filter(post__unsanctioned_flags__isnull=True)
+        elif unsanctioned == "only":
+            links = links.filter(post__unsanctioned_flags__isnull=False)
 
     if window_days == 1:
         # Minute granularity: 288 5-minute buckets, oldest-first labels

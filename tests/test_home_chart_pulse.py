@@ -8,7 +8,9 @@ from html.parser import HTMLParser
 from unittest.mock import patch
 
 import pytest
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 
 from core.models import (
     Account,
@@ -192,6 +194,38 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(empty["totals"], {"up": 0})
         self.assertEqual(empty["pulse"], payload["pulse"], "ordinary filters must not change market-wide pulse")
         self.assertEqual(empty["computed_at"], empty["pulse"]["computed_at"])
+
+    def test_default_chart_uses_one_bounded_post_join(self):
+        """The common chart path must not rescan posts through a subquery."""
+        with CaptureQueriesContext(connection) as captured:
+            payload = _build_home_chart_payload(
+                30,
+                {"unsanctioned": "off"},
+                now=ANCHOR,
+            )
+
+        chart_queries = [
+            query["sql"]
+            for query in captured.captured_queries
+            if 'FROM "posts_brands"' in query["sql"] and ' AS "day"' in query["sql"]
+        ]
+        self.assertEqual(len(chart_queries), 1)
+        self.assertNotIn(" IN (SELECT ", chart_queries[0].upper())
+        self.assertEqual(payload["window_days"], 30)
+
+    def test_posts_date_index_covers_chart_and_top_voice_keys(self):
+        index = next(
+            (
+                candidate
+                for candidate in Post._meta.indexes
+                if candidate.name == "idx_posts_created_cover"
+            ),
+            None,
+        )
+
+        self.assertIsNotNone(index)
+        self.assertEqual(index.fields, ["created_at"])
+        self.assertEqual(index.include, ("tweet_id", "author"))
 
     def test_in_memory_empty_axes_match_set_based_zero_semantics(self):
         sample = {

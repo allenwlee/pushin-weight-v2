@@ -543,6 +543,11 @@ class Post(models.Model):
         indexes = [
             models.Index(fields=["author"], name="idx_posts_author_id"),
             models.Index(fields=["created_at"], name="idx_posts_created_at"),
+            models.Index(
+                fields=["created_at"],
+                name="idx_posts_created_cover",
+                include=["tweet_id", "author"],
+            ),
             models.Index(fields=["lang"], name="idx_posts_lang"),
             models.Index(fields=["lang_detected"], name="idx_posts_lang_detected"),
             models.Index(fields=["source_query_id"], name="idx_posts_source_query_id"),
