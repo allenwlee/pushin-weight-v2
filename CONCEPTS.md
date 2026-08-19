@@ -2,75 +2,34 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
-## Ollija task and release control
+## Ollija plan guidance
 
 ### Authoritative host
 
-`fuchitalee`, the only machine allowed to contain or mutate PushinWeight
-checkouts, worktrees, task state, receipts, database snapshots, and release
-artifacts. `allenwlee` is a keyboard/browser endpoint; originating a request
-there does not make it an execution or storage authority.
+`fuchitalee`, the authoritative host for PushinWeight's repository and Ollija
+configuration. `allenwlee` is a keyboard/browser endpoint, not a second
+authoritative checkout.
 
-### Bounded task generation
+### Ollija delivery guide
 
-One explicit Ollija `go` grant for a stable task ID, tracked task source,
-registered worktree, coding driver, outcome endpoint, verification contract,
-and one automatic child-crash retry. A later `go` creates another generation;
-it never erases the cancelled, paused, lost, or successful generation that
-preceded it.
+The generated, read-only block in one shared Markdown plan, created by
+`./bin/ollija annotate-plan`. It resolves the worktree, Git branch,
+environment paths, delivery target, and parent-owned staging/production
+sequence from tracked configuration. Human changes belong in the plan's
+separate Delivery Exceptions section.
 
-### Attempt
+### Ollija release worktree area
 
-One coding-agent process inside a task generation. Attempts record driver
-session, PID/process group, process birth identity, heartbeat, exit code, and
-classification. A task may have at most two automatic attempts: its initial
-attempt and one crash retry.
+The repository's designated path for delivery worktrees:
+`<authoritative-repo>/.worktrees/<branch>`. A worktree outside it receives
+relocation guidance in its delivery guide; Ollija does not move or reject it.
 
-### Dirty worktree
+### Delivery target
 
-A Git worktree containing uncommitted changes. Fresh Ollija tasks and release
-mutations reject dirty trees. A paused, cancelled, failed, or lost task keeps
-its dirty worktree as recovery evidence; only that same task may reclaim the
-diff through another explicit `go`.
-
-### Checkpoint commit
-
-The commit Ollija creates after the coding agent returns an uncommitted diff,
-the tracked task source still matches its original digest, and Ollija's own
-declared verification commands pass. An agent-created commit or success message
-is not a checkpoint.
-
-### Commit endpoint
-
-A task grant that ends after the verified checkpoint commit. It carries no
-staging, production, Render, or tag authority.
-
-### Production endpoint
-
-A task grant that treats the checkpoint as an intermediate result and then
-uses the existing production-through-staging workflow. Machine-checkable green
-steps continue automatically; required candidate-bound owner approvals still
-pause the task.
-
-### Durable stop
-
-Cancellation written to the shared task ledger before Ollija signals the
-recorded process group. Cancellation wins over late completion and cannot be
-cleared by a heartbeat, shell login, status read, client reconnection, or host
-startup. A new explicit `go` is required.
-
-### Incident route
-
-A safe local classification and ordered list of diagnostic skills, not a new
-autonomous agent. Multi-machine/shell failures route to `infra-shell`; code
-failures route to `ce-debug` then `ce-compound`; UI assessment failures include
-Bridgewright; release defects first preserve and recompute Ollija state.
-
-### Live but unsealed
-
-The exact candidate SHA is already live in production, but the final production
-verification receipt and tag are absent. The only valid forward action is
-`verify-production`; releasing the same SHA again is forbidden.
+The preserved plan choice controlling delivery scope: `on-request` for normal
+planning, or `staging` or `production` when an LFG or goal owner selected one
+upfront. The parent workflow follows the selected target; Ollija does not
+approve or execute the delivery.
 
 ## x-monitor pipeline
 

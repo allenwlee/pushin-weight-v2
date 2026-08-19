@@ -10,6 +10,10 @@ execution: code
 deepened: 2026-08-14
 ---
 
+> **Superseded Ollija workflow — historical plan.** This plan records the
+> retired stateful release controller. For current behavior, read the
+> [Ollija plan guide](../ollija/README.md).
+
 # ollija Staging and Release Workflow - Plan
 
 ## Goal Capsule

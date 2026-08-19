@@ -10,6 +10,10 @@ problem_type: workflow_issue
 date: 2026-08-17
 ---
 
+> **Superseded Ollija workflow — historical record.** This solution preserves
+> the former task-supervisor recovery design. For current behavior, read the
+> [Ollija plan guide](../../ollija/README.md).
+
 # Bounded Ollija task recovery without agent resurrection
 
 ## Problem

@@ -5,6 +5,10 @@ type: solution
 component: ollija
 ---
 
+> **Superseded Ollija workflow — historical record.** This document preserves
+> the 2026-08-15 incident and its former commands. For current behavior, read
+> the [Ollija plan guide](README.md).
+
 # Repeatable hosted staging refresh
 
 ## Problem

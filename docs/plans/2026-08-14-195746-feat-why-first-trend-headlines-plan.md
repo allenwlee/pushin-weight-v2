@@ -417,17 +417,17 @@ sequenceDiagram
 - **Test scenarios:** Both locales show the same supported reason and number; client-side replacement is awaited; quiet language stays quiet; absent support does not display a fabricated leader; page source alone is insufficient to pass; locale headers and catalogs agree.
 - **Verification:** Browser suite passes in both locales; reference content matches code and frozen config; a repository search finds no active shape-first instruction or stale four-excerpt claim outside historical plans/solutions.
 
-### U8 — Stage, approve, release, and verify through Ollija
+### U8 — Stage and promote through the parent delivery workflow
 
-- **Goal:** Release only the exact reviewed candidate and verify production behavior without bypassing authority or safeguards.
+- **Goal:** Deliver only the exact staging-verified candidate and verify production behavior using the current plan guide.
 - **Covers:** R25, R27, R28, R29, R30, R31, R32; F4; AE9, AE10, AE11, AE12, AE13.
 - **Decisions:** KTD10, KTD11.
 - **Dependencies:** U1-U7 complete on a clean committed candidate.
-- **Files:** `.agents/skills/ollija/SKILL.md`, `docs/operations/ollija.md`, `docs/operations/ollija-rollout-baseline.md`.
-- **Approach:** On authoritative host `fuchitalee`, begin with `./bin/ollija status --json` and follow only the reported Ollija next action. Refresh evidence, review the exact SHA and evaluation artifact, stage the candidate, collect explicit desktop and physical-iPhone approval when Ollija requires them, and release only after owner instruction. Verify the production worker uses the reviewed explicit provider route and that authenticated English and Chinese windows render why-first, quiet, and fallback behavior as applicable. Use Ollija recovery commands if a guard or release step fails; do not substitute direct Git, Render, or database mutations.
-- **Patterns:** Ollija receipts and state are authoritative. `allenwlee` remains keyboard/browser-only. Production queries, if requested by the runbook, route through the documented Render CLI path on `fuchitalee`.
-- **Test scenarios:** Dirty-tree and stale-evidence guards block progress; staged SHA matches the reviewed commit; required approvals are attached to that candidate; production verification checks provider identity and rendered output; failed release recovery preserves the candidate and receipts.
-- **Verification:** Ollija reports the exact candidate released and verified; authenticated production proof exists for both locales; no direct release mutation was used.
+- **Files:** `docs/operations/ollija.md`, `docs/deploy/render.md`, and the shared delivery plan.
+- **Approach:** On authoritative host `fuchitalee`, run `./bin/ollija annotate-plan <plan-path> --check`, then read the shared plan guide, delivery target, and Delivery Exceptions before Git or Render mutations. The parent workflow stages the exact candidate SHA, verifies the staging deployment and reviewed provider route, then promotes that unchanged SHA to production only when the plan's recorded target is production. It verifies authenticated English and Chinese windows render why-first, quiet, and fallback behavior as applicable. Shell or multi-machine failures use the repository infra route; no Ollija state or approval command controls recovery.
+- **Patterns:** The shared plan guide is authoritative for delivery scope. `allenwlee` remains keyboard/browser-only. Production queries, if requested by the runbook, route through the documented Render CLI path on `fuchitalee`.
+- **Test scenarios:** The parent workflow preserves candidate identity from staging through production; staging failure prevents production promotion; production verification checks provider identity and rendered output; delivery exceptions are read before mutation.
+- **Verification:** The parent workflow reports the exact staged and promoted candidate; authenticated production proof exists for both locales; no retired Ollija command is used.
 
 ---
 
@@ -447,18 +447,18 @@ sequenceDiagram
 
 ### Manual and Live Gates
 
-- **Workspace gate:** Before implementation and release, inspect branch divergence, registered worktrees, dirty paths, and overlapping headline diffs. Stop on ambiguity.
+- **Workspace gate:** Before implementation and delivery, inspect branch divergence, registered worktrees, dirty paths, and overlapping headline diffs. Stop on ambiguity.
 - **Evaluation preflight:** The management command's dry-run emits scenario count, exact model, fixed concurrency one, maximum calls, input-token budget, dollar budget, packet-size estimates, and current pricing timestamp without transport.
 - **Live editorial gate:** The owner explicitly authorizes the finite manifest. Every result receives the R21 bilingual rubric. Any unsupported why/number, missing supported why, quiet-window exaggeration, wrong leader, or divergent locale judgment is critical and blocks policy freeze.
 - **Calibration gate:** Each activated window/family band has sufficient sample and coverage evidence in the report; otherwise retain the prior safe wording policy and stop release.
-- **Rendered UX gate:** A reviewer sees the expected why-first, quiet, and candid-fallback states in authenticated desktop and physical-iPhone flows when required by Ollija.
-- **Release gate:** `./bin/ollija status --json` determines the next action; the exact reviewed SHA and approvals must match before owner-authorized beta release.
-- **Production gate:** Ollija verification confirms the explicit provider configuration, current narrative freshness, and bilingual rendered result without direct infrastructure or database mutation.
+- **Rendered UX gate:** A reviewer sees the expected why-first, quiet, and candid-fallback states in authenticated desktop and physical-iPhone flows when required by the product verification contract.
+- **Release gate:** The parent workflow reads the refreshed plan guide, selected delivery target, and Delivery Exceptions; the exact reviewed SHA must match the staging and production candidate identity.
+- **Production gate:** The parent workflow confirms the explicit provider configuration, current narrative freshness, and bilingual rendered result.
 
 ### Rollback and Failure Handling
 
 - Before release, reject the candidate and retain the current V22 behavior if evaluation or browser gates fail.
-- After release, use the Ollija-reported recovery path to restore the last verified candidate or disable the headline feature according to the runbook; do not improvise direct rollback commands.
+- After release, use the parent workflow and deployment runbook to restore the last verified candidate or disable the headline feature according to the runbook; do not invent an unreviewed rollback path.
 - Provider or schema-three validation failures preserve last-good candidate-present narratives. Explicit no-candidate state remains candid and does not revive an older story.
 - Keep output-schema readers for versions one and two until production history has aged out under a separately reviewed cleanup plan.
 
@@ -480,4 +480,4 @@ sequenceDiagram
 - Both locale catalogs, `CONCEPTS.md`, the operation guide, and `docs/reference/headline-trend-narratives.md` describe only the shipped current contract.
 - No harvest, scheduler, taxonomy, provider-family, dashboard-layout, or off-list-discovery behavior changed.
 - Abandoned experimental code, obsolete shape-first active instructions, temporary raw artifacts, and dead configuration branches are removed; durable historical plans and solutions remain intact.
-- Ollija verifies the exact approved candidate and production result on `fuchitalee`, with all required owner approvals and no direct Git, Render, or database release mutations.
+- The parent workflow confirms the exact staged and promoted candidate and production result on `fuchitalee`, following the shared plan guide and deployment runbook.

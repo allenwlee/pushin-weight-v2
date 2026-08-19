@@ -4,6 +4,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLACEHOLDER_PASSWORDS = {
     "change-me",
@@ -152,6 +154,85 @@ def test_current_ollija_boundary_has_no_retired_runtime_or_command_paths() -> No
             assert f"scripts.ollija.{module}" not in text, path
         for command in retired_commands:
             assert f"./bin/ollija {command}" not in text, path
+
+
+def test_ollija_documentation_classifies_current_guidance_and_superseded_history() -> None:
+    current_paths = (
+        ".agents/skills/ollija/SKILL.md",
+        ".ollija/templates/delivery-guide.md",
+        "AGENTS.md",
+        "docs/ollija/README.md",
+        "docs/ollija/CHANGES.md",
+        "docs/operations/ollija.md",
+        "docs/deploy/render.md",
+        "CONCEPTS.md",
+        "docs/plans/2026-08-14-195746-feat-why-first-trend-headlines-plan.md",
+    )
+    historical_paths = (
+        "docs/ollija/2026-08-15-repeatable-hosted-refresh-fix.md",
+        "docs/ollija/readme-test-prompt.md",
+        "docs/ollija/test-prompt-2.md",
+        "docs/operations/ollija-rollout-baseline.md",
+        "docs/solutions/workflow-issues/2026-08-17-190429-ollija-task-recovery.md",
+        "docs/plans/2026-08-14-120533-feat-ollija-staging-release-workflow-plan.md",
+        "docs/plans/2026-08-17-175832-ollija-autonomous-task-control.md",
+    )
+    retired_commands = (
+        "approve",
+        "doctor",
+        "go",
+        "preview",
+        "refresh-local",
+        "refresh-staging",
+        "release",
+        "stage",
+        "status",
+        "stop",
+        "verify-production",
+        "worktree",
+    )
+
+    for relative_path in current_paths:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "annotate-plan" in text, relative_path
+        for command in retired_commands:
+            assert f"./bin/ollija {command}" not in text, relative_path
+
+    for relative_path in historical_paths:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        if text.startswith("---\n"):
+            _, frontmatter, remainder = text.split("---", 2)
+            assert isinstance(yaml.safe_load(frontmatter), dict), relative_path
+            opening = remainder.lstrip("\n")
+        else:
+            opening = text
+        assert opening.startswith("> **Superseded Ollija workflow"), relative_path
+        opening = "\n".join(opening.splitlines()[:5])
+        assert "README.md" in opening, relative_path
+
+
+def test_change_history_is_advisory_and_concepts_describe_the_guide_model() -> None:
+    changes = (REPO_ROOT / "docs/ollija/CHANGES.md").read_text(encoding="utf-8")
+    concepts = (REPO_ROOT / "CONCEPTS.md").read_text(encoding="utf-8")
+    runtime_sources = (REPO_ROOT / "scripts" / "ollija").glob("*.py")
+
+    assert "Retire the stateful release engine" in changes
+    assert "advisory human history" in changes
+    assert "validates, or enforces this file" in changes
+    assert all("CHANGES.md" not in path.read_text(encoding="utf-8") for path in runtime_sources)
+    for required in (
+        "Ollija delivery guide",
+        "Ollija release worktree area",
+        "Delivery target",
+    ):
+        assert required in concepts
+    for retired in (
+        "Bounded task generation",
+        "Checkpoint commit",
+        "Durable stop",
+        "Live but unsealed",
+    ):
+        assert retired not in concepts
 
 
 def test_tracked_text_contains_no_literal_credentials() -> None:

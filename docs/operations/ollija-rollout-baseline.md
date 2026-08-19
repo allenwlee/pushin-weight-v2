@@ -1,3 +1,7 @@
+> **Superseded Ollija workflow — historical record.** This baseline preserves
+> the former stateful-release rollout. For current behavior, read the
+> [Ollija plan guide](../ollija/README.md).
+
 # ollija rollout baseline
 
 Recorded on 2026-08-14 while establishing the safety baseline for ollija.

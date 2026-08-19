@@ -9,6 +9,10 @@ product_contract_source: ce-plan-bootstrap
 execution: code
 ---
 
+> **Superseded Ollija workflow — historical plan.** This plan records the
+> retired task-supervisor design. For current behavior, read the
+> [Ollija plan guide](../ollija/README.md).
+
 # Ollija Autonomous Task Control - Plan
 
 ## Goal Capsule

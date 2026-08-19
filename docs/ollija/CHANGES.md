@@ -1,16 +1,9 @@
 # Ollija change ledger
 
-This is Ollija's lightweight, durable record of material behavior and rule
-changes. It explains why the change was necessary, what is different now, how
-the change was proved, and whether releasing it affects the application,
-databases, or production data. It complements Git history; it does not replace
-a plan or a longer `docs/solutions/` article when either is genuinely useful.
-
-Ollija requires a new entry whenever a task changes its implementation,
-operator rules, skill instructions, or release runbook. Correcting this ledger
-alone does not require a second entry. Do not add handwritten authorship: the
-Ollija task ledger records the coding agent, originating terminal, execution
-host, task generation, and checkpoint commit.
+This is Ollija's lightweight, advisory human history of material behavior and
+rule changes. It explains why a change was necessary, what changed, how it was
+proved, and its delivery impact. It complements Git history and plans; no
+Ollija command reads, validates, or enforces this file.
 
 Use this compact template:
 
@@ -132,3 +125,24 @@ Release impact: Workflow controls only. This changes no PushinWeight
 application schema, production data, or hosted service topology.
 
 Related: `docs/operations/ollija.md`
+
+## 2026-08-19 — Retire the stateful release engine
+
+Type: Rule
+
+Problem: Ollija accumulated approvals, receipts, browser checks, task
+supervision, database refreshes, and release state that duplicated parent
+workflow responsibilities and made routine work difficult to stop.
+
+New behavior: Ollija has one deterministic `annotate-plan` command. It writes
+a delivery guide into one shared plan; the parent workflow owns implementation,
+Git, staging, promotion, and diagnosis.
+
+Proof: Focused Ollija tests cover deterministic annotation, hook reuse,
+agent-parity guidance, retired-surface hygiene, and isolated staging migration
+configuration.
+
+Release impact: No application schema or production data change. Delivery now
+uses the plan's selected staging or production target without Ollija gates.
+
+Related: `docs/plans/2026-08-19-105405-feat-ollija-plan-annotator-plan.md`

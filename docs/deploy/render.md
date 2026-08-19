@@ -6,15 +6,18 @@ The isolated owner-review stack is defined separately in
 `render-staging.yaml`. It contains one web service and one PostgreSQL database
 on branch `staging`; it must never be merged into this production Blueprint or
 share production resource names, database bindings, secret groups, workers,
-cron jobs, brokers, or provider credentials. Setup and verification are in
-`docs/operations/ollija.md`.
+cron jobs, brokers, or provider credentials. This runbook owns the Render
+topology and service verification; the Ollija plan guide owns delivery
+coordination only.
 
-Production promotion is performed through `./bin/ollija release`, which
-fast-forwards `main` to the exact approved staging SHA. The separate
-`./bin/ollija verify-production` command observes all three configured deploy
-resources, exercises the authenticated headline DOM, confirms the DSV4 route,
-and creates the beta tag only after those checks pass. Do not manually tag a
-green Render build; green build status alone is not the release condition.
+The parent delivery workflow reads the selected target and current Ollija
+Delivery Guide from its plan before making Git or Render changes, and refreshes
+it with `./bin/ollija annotate-plan <plan-path> --check`. It pushes the exact
+candidate SHA to `staging`, confirms the staging deployment reports that same
+SHA, and, only when the plan's recorded target is production, promotes the
+unchanged SHA to `main` after staging passes. The workflow confirms the
+configured Render services and health route for that candidate. A green build
+alone is not sufficient evidence of the intended deployment identity.
 
 ## Deployed reality
 
