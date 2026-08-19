@@ -21,13 +21,26 @@ fetch-vs-insert anomalies), read and follow
 M12, M17, M18). This applies to every agent working in this repository,
 including Claude Code and Codex.
 
-## Staging and releases
+## Plans and delivery
 
-Before coaching or performing a PushinWeight staging, approval, beta release,
-production verification, or failed-release recovery action, read and follow
-`.agents/skills/ollija/SKILL.md`. Begin with `./bin/ollija status --json` and
-use the Ollija command surface; do not substitute direct Git/Render/database
-mutations. Desktop and physical-iPhone approvals remain explicit owner actions.
+Before selecting or creating a PushinWeight plan, run
+`./bin/ollija annotate-plan`. Use the exact `plan_path` it returns and enrich
+that same plan; do not create a parallel plan. After the final plan write or
+document review, rerun `./bin/ollija annotate-plan <plan-path>`.
+
+For LFG and goal, ask the owner once before implementation whether to stop
+after staging or continue through production. Persist that explicit choice in
+the plan's Ollija metadata (`delivery_target: staging|production` and
+`delivery_selected_by_user: true`) and annotate the same plan. Ordinary plans
+remain `delivery_target: on-request` and ask nothing.
+
+Before any Git or deployment mutation, the parent workflow must read the
+selected delivery target, generated Ollija Delivery Guide, and editable
+`Delivery Exceptions`, then run `./bin/ollija annotate-plan <plan-path>
+--check`. Resolve conflicts instead of silently bypassing the guide. Ollija is
+guidance only: it does not approve, commit, push, deploy, move worktrees, or
+run a persistent release process. Read `.agents/skills/ollija/SKILL.md` for the
+same portable contract.
 
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules

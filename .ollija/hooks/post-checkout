@@ -1,14 +1,18 @@
 #!/bin/sh
-set -eu
 
-# Git has no pre-worktree-add hook. post-checkout is the earliest portable
-# point at which Ollija can warn about a linked worktree created elsewhere.
-common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-repo_root="$(dirname "$common_git_dir")"
-top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [ -z "$common_git_dir" ] || [ -z "$top" ] || [ ! -x "$repo_root/.venv/bin/python" ]; then
+# Git runs post-checkout for ordinary checkouts too. Only a named linked
+# worktree gets a plan stub; the primary checkout and detached HEAD do nothing.
+common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || exit 0
+git_dir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)" || exit 0
+active_worktree="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" || exit 0
+
+if [ "$git_dir" = "$common_git_dir" ]; then
   exit 0
 fi
 
-cd "$repo_root"
-OLLIJA_WORKTREE_CWD="$top" exec "$repo_root/bin/ollija" worktree guard --hook
+if ! OLLIJA_WORKTREE_CWD="$active_worktree" "$active_worktree/bin/ollija" annotate-plan </dev/null; then
+  printf '%s\n' "Ollija annotation failed. Recover with: cd $active_worktree && $active_worktree/bin/ollija annotate-plan" >&2
+fi
+
+exit 0

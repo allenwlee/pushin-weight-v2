@@ -1,4 +1,4 @@
 interface:
   display_name: "Ollija"
-  short_description: "Control bounded PushinWeight work and releases"
-  default_prompt: "Use $ollija to inspect authoritative task/release state, keep work in the canonical fuchitalee worktree hierarchy, and guide the next bounded task, staging, or production action."
+  short_description: "Annotate one shared PushinWeight delivery plan"
+  default_prompt: "Use $ollija to run ./bin/ollija annotate-plan before selecting or creating a plan, enrich the returned plan_path, and refresh its delivery guide after planning or review."
