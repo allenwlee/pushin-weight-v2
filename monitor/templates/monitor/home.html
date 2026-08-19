@@ -84,8 +84,8 @@
 
   <section class="pulse-bar-wrap" aria-label="{% trans 'Trending models' %}" data-pw-pulse-shell>
     <div class="pulse-bar-head">
-      <strong>{% trans "脉冲" %}</strong>
-      <span class="muted">{% trans "窗口内热度" %}</span>
+      <strong>{% trans "Trending" %}</strong>
+      <span class="muted">{% trans "· 1d heat" %}</span>
     </div>
     <div class="pulse-bar" role="list" data-pw-pulse data-pw-window="{{ pulse.window_days }}" data-pw-computed-at="{{ pulse.computed_at }}">
       {% for entry in pulse.entries %}

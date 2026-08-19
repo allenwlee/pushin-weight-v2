@@ -54,6 +54,8 @@ FEED_COLUMNS_PIN: dict[str, str] = {
 }
 
 TOPBAR_PIN: dict[str, str] = {
+    "Trending": "脉冲",
+    "· 1d heat": "· 1天热度",
     "window:": "窗口:",
     "lang:": "语言:",
     "24h window": "24小时窗口",

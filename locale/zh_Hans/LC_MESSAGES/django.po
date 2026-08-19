@@ -125,11 +125,11 @@ msgstr "仅"
 msgid "all"
 msgstr "全部"
 
-msgid "脉冲"
-msgstr "Trending"
+msgid "Trending"
+msgstr "脉冲"
 
-msgid "窗口内热度"
-msgstr "· 24h heat"
+msgid "· 1d heat"
+msgstr "· 1天热度"
 
 msgid "本窗口最新"
 msgstr "Latest in window"

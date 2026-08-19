@@ -1098,10 +1098,21 @@ body.desktop-shell .desktop-grid .feed-strip {
 body.desktop-shell .topbar-title-row .locale-toggle { font-size: 12px; }
 body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; font-size: 12px; height: auto; }
 
+@media (max-width: 899px) {
+  body.desktop-shell .topbar-controls .window-toggle:not(.locale-toggle) {
+    width: 220px;
+    flex: 0 1 220px;
+  }
+  body.desktop-shell .topbar .window-toggle:not(.locale-toggle) button {
+    width: auto;
+    flex: 1 1 0;
+  }
+}
+
 @media (max-width: 340px) {
   body.desktop-shell .topbar .window-toggle:not(.locale-toggle) button {
-    width: 30px;
-    flex-basis: 30px;
+    width: auto;
+    flex: 1 1 0;
     padding-inline: 0;
   }
   body.desktop-shell .topbar .tz-pill {

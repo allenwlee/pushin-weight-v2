@@ -1060,12 +1060,19 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             "zh_cn": ["1天", "7天", "30天", "365天"],
             "original": ["1d", "7d", "30d", "365d"],
         }
+        expected_pulse_headers = {
+            "en": "Trending\n· 1d heat",
+            "zh_cn": "脉冲\n· 1天热度",
+            "original": "Trending\n· 1d heat",
+        }
 
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
                 for viewport_name, viewport in {
                     "desktop": VIEWPORTS["desktop"],
+                    "compressed-520": {"width": 520, "height": 844},
+                    "mobile-393": {"width": 393, "height": 852},
                     "mobile-320": {"width": 320, "height": 844},
                 }.items():
                     baseline = None
@@ -1085,7 +1092,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     """() => {
                                       const rect = (element) => {
                                         const box = element.getBoundingClientRect();
-                                        return {x: box.x, width: box.width, height: box.height, right: box.right};
+                                        return {x: box.x, left: box.left, width: box.width, height: box.height, right: box.right};
                                       };
                                       const controls = document.querySelector('.topbar-controls');
                                       return {
@@ -1112,9 +1119,21 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     geometry["timezone"]["right"],
                                     geometry["controls"]["right"] + 0.5,
                                 )
+                                self.assertGreaterEqual(
+                                    geometry["windows"][0]["left"],
+                                    geometry["controls"]["left"] - 0.5,
+                                )
+                                self.assertLessEqual(
+                                    geometry["windows"][-1]["right"],
+                                    geometry["timezone"]["left"] + 0.5,
+                                )
                                 self.assertEqual(
                                     page.locator("[data-pw-window-btn]").all_inner_texts(),
                                     expected_labels[locale],
+                                )
+                                self.assertEqual(
+                                    page.locator(".pulse-bar-head").inner_text(),
+                                    expected_pulse_headers[locale],
                                 )
                                 signature = {
                                     "controls": geometry["controls"],
