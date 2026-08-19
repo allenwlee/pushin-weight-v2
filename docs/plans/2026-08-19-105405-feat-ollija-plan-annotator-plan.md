@@ -19,7 +19,7 @@ ollija:
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
 
-This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or the delivery template, then rerun `./bin/ollija annotate-plan`. Put a user-directed exception in the editable Delivery Exceptions section below.
+This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or this template, then rerun `./bin/ollija annotate-plan`. Put a user-directed exception in the editable Delivery Exceptions section below.
 
 ### Resolved locations
 
@@ -28,6 +28,7 @@ This block is generated guidance. Do not edit it directly. Correct durable facts
 - Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
 - Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ollija-plan-annotator`
 - Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ollija-plan-annotator/docs/plans/2026-08-19-105405-feat-ollija-plan-annotator-plan.md`
+- Change: `ollija-plan-annotator-20260819`
 - Branch: `feat/ollija-plan-annotator`
 - Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ollija-plan-annotator/render-staging.yaml`
 - Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ollija-plan-annotator/render.yaml`
@@ -41,19 +42,27 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- User-selected target: `production`
-- Complete implementation and the plan's verification contract before committing.
-- Commit only this plan's changes, push the feature branch, and retain the candidate commit identity.
-- Fetch the remote `staging` ref, require the candidate to be an unchanged fast-forward update, push the exact candidate SHA to `refs/heads/staging`, and verify both the remote ref and the Render deployment report that SHA.
-- After staging passes, fetch the remote `main` ref, require the same candidate to be an unchanged fast-forward update, push its exact SHA to `refs/heads/main`, and verify both the remote ref and the production deployment report that SHA before reporting completion.
-- Do not ask for an Ollija approval, browser code, receipt, or second delivery authorization.
+- Delivery target: `production`
+- Owner selection recorded: `true`
+
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
 
 ### Failure handling
 
 - Never promote a staging candidate whose automated checks failed.
-- Implementation failures return to the parent LFG workflow for diagnosis, correction, recommit, and restaging.
-- SSH, shell, environment, or multi-machine failures use the repository's infra/multi-machine skill first.
-- Record reusable Ollija corrections in `docs/ollija/CHANGES.md` without turning the ledger into a gate.
+- Implementation failures return to the parent implementation workflow for diagnosis, correction, recommit, and restaging.
+- SSH, shell, environment, or multi-machine failures use the repository infra/multi-machine skill first.
+- The change ledger is advisory; do not validate or enforce it.
 - Do not run an endless retry loop or start a persistent Ollija process.
 <!-- END OLLIJA DELIVERY GUIDE -->
 
