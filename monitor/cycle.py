@@ -37,7 +37,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, F, Q, Value, When
 from django.utils import timezone as django_timezone
 
 from core.models import (
@@ -130,13 +130,15 @@ def _claim_enrichment_states(
     run_id: str,
     now: datetime | None = None,
 ) -> EnrichmentClaimBatch:
-    """Claim a bounded oldest-first enrichment batch on PostgreSQL.
+    """Quarantine aged debt, then claim a bounded freshest-first batch.
 
     Active leases are excluded, expired leases are recoverable, and attempt/
     age exhaustion becomes an explicit failed state instead of an immortal
-    pending row.  ``skip_locked`` lets a second writer avoid rows currently
-    owned by another transaction even though the outer writer lock normally
-    serializes production entrypoints.
+    pending row. Aged rows are transitioned outside the claim budget so they
+    cannot consume every slot before live work reaches the classifier.
+    ``skip_locked`` lets a second writer avoid rows currently owned by another
+    transaction even though the outer writer lock normally serializes
+    production entrypoints.
     """
 
     now = now or django_timezone.now()
@@ -146,26 +148,60 @@ def _claim_enrichment_states(
         | Q(classification_status=PostEnrichmentState.Status.PENDING)
     ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
     claimed: list[PostEnrichmentState] = []
-    quarantined = 0
 
     with transaction.atomic():
+        expired_due = due & Q(created_at__lte=age_cutoff)
+        quarantined = PostEnrichmentState.objects.filter(expired_due).update(
+            translation_status=Case(
+                When(
+                    translation_status=PostEnrichmentState.Status.PENDING,
+                    then=Value(PostEnrichmentState.Status.FAILED),
+                ),
+                default=F("translation_status"),
+            ),
+            translation_error_code=Case(
+                When(
+                    translation_status=PostEnrichmentState.Status.PENDING,
+                    then=Value("age_exhausted"),
+                ),
+                default=F("translation_error_code"),
+            ),
+            classification_status=Case(
+                When(
+                    classification_status=PostEnrichmentState.Status.PENDING,
+                    then=Value(PostEnrichmentState.Status.FAILED),
+                ),
+                default=F("classification_status"),
+            ),
+            classification_error_code=Case(
+                When(
+                    classification_status=PostEnrichmentState.Status.PENDING,
+                    then=Value("age_exhausted"),
+                ),
+                default=F("classification_error_code"),
+            ),
+            claim_owner="",
+            claim_run_id="",
+            claimed_at=None,
+            claim_expires_at=None,
+        )
         candidates = list(
             PostEnrichmentState.objects.select_for_update(skip_locked=True)
             .select_related("post")
-            .filter(due)
-            .order_by("created_at", "post_id")[: cfg.claim_per_cycle]
+            .filter(due, created_at__gt=age_cutoff)
+            # Preserve live-feed progress when arrivals temporarily exceed the
+            # bounded LLM budget; older unfinished work remains durable until
+            # it succeeds or reaches the explicit age limit above.
+            .order_by("-created_at", "post_id")[: cfg.claim_per_cycle]
         )
         for state in candidates:
-            age_exhausted = state.created_at <= age_cutoff
             for prefix in ("translation", "classification"):
                 status_name = f"{prefix}_status"
                 attempts_name = f"{prefix}_attempts"
                 if getattr(state, status_name) != PostEnrichmentState.Status.PENDING:
                     continue
                 error_code = ""
-                if age_exhausted:
-                    error_code = "age_exhausted"
-                elif getattr(state, attempts_name) >= cfg.max_attempts:
+                if getattr(state, attempts_name) >= cfg.max_attempts:
                     error_code = "attempts_exhausted"
                 if error_code:
                     setattr(state, status_name, PostEnrichmentState.Status.FAILED)

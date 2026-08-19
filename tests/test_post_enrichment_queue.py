@@ -86,6 +86,70 @@ def test_attempt_and_age_exhaustion_transition_to_failed_without_claiming():
     assert aged.classification_error_code == "age_exhausted"
 
 
+def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
+    monkeypatch,
+):
+    """Expired debt must not consume every bounded production claim slot."""
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    expired = [_state(f"expired-debt-{index:02d}") for index in range(25)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in expired]).update(
+        created_at=timezone.now() - timedelta(hours=25)
+    )
+    older_due = [_state(f"older-due-{index:02d}") for index in range(20)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in older_due]).update(
+        created_at=timezone.now() - timedelta(hours=23)
+    )
+    fresh = _state("fresh-after-expired-debt")
+
+    client = object()
+    classified_ids: list[str] = []
+    monkeypatch.setattr(
+        reattribute,
+        "build_translator_client_from_env",
+        lambda cfg: client,
+    )
+    monkeypatch.setattr(
+        reattribute,
+        "build_anthropic_client_from_env",
+        lambda cfg: client,
+    )
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        lambda tweets, locales, client, **kwargs: [
+            {
+                "tweet_id": tweet["tweet_id"],
+                "text_en": tweet["text"],
+                "text_zh_cn": "深度求索发布",
+                "lang_detected": "en",
+            }
+            for tweet in tweets
+        ],
+    )
+
+    def classify(tweets, brands, client, **kwargs):
+        classified_ids.extend(tweet["tweet_id"] for tweet in tweets)
+        return [{"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets]
+
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+        [],
+        run_id="run-after-expired-debt",
+    )
+
+    fresh.refresh_from_db()
+    assert fresh.pk in classified_ids
+    assert len(classified_ids) == 20
+    assert counters["n_enrichment_claimed"] == 20
+    assert counters["n_enrichment_quarantined"] == 25
+    assert fresh.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert fresh.classification_status == PostEnrichmentState.Status.SUCCEEDED
+
+
 def test_releasing_a_claim_preserves_stage_status_and_clears_lease():
     from core.models import PostEnrichmentState
     from monitor.cycle import _claim_enrichment_states, _release_enrichment_claim
