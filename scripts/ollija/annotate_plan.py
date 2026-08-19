@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from .config import ProjectConfig
+from .worktrees import canonical_worktree_path, is_canonical_worktree
 
 
 BEGIN_MARKER = "<!-- BEGIN OLLIJA DELIVERY GUIDE -->"
@@ -29,13 +30,6 @@ class PlanMetadata:
     workflow: str
     delivery_target: str
     delivery_selected_by_user: bool
-
-
-@dataclass(frozen=True, slots=True)
-class AnnotationResult:
-    path: Path
-    changed: bool
-    metadata: PlanMetadata
 
 
 def _line(value: Any, *, field: str) -> str:
@@ -114,20 +108,13 @@ def _has_delivery_exceptions(content: str) -> bool:
     return any(line.rstrip("\r\n") == DELIVERY_EXCEPTIONS_HEADING for line in content.splitlines())
 
 
-def _is_canonical_worktree(
-    config: ProjectConfig, active_worktree: Path, metadata: PlanMetadata
-) -> bool:
-    return active_worktree == (config.authority.release_worktree_area / metadata.branch).resolve()
-
-
 def _placement(config: ProjectConfig, metadata: PlanMetadata, active_worktree: Path) -> str:
-    area = config.authority.release_worktree_area
-    if _is_canonical_worktree(config, active_worktree, metadata):
+    if is_canonical_worktree(config, active_worktree, metadata.branch):
         return (
             f"This worktree is inside the {config.authority.release_worktree_label}. "
             "Reuse it for the whole change. Do not create a second worktree or plan for this branch."
         )
-    required = (area / metadata.branch).resolve()
+    required = canonical_worktree_path(config, metadata.branch)
     return (
         f"1. Move this worktree from `{active_worktree}` to `{required}` before any other delivery action.\n"
         "2. Rerun `./bin/ollija annotate-plan` after the move; this guide contains stale active-worktree paths until then.\n"
@@ -252,30 +239,3 @@ def render_annotated_plan(
             annotated = annotated[: len(original[:start]) + len(guide)] + "\n\n## Delivery Exceptions\n\nNone.\n" + annotated[len(original[:start]) + len(guide) :]
 
     return annotated, metadata
-
-
-def annotate_plan(
-    plan_path: str | Path,
-    *,
-    config: ProjectConfig,
-    active_worktree: str | Path,
-) -> AnnotationResult:
-    """Replace one valid generated span without changing any other existing bytes."""
-
-    resolved_plan = Path(plan_path).expanduser().resolve()
-    try:
-        original = resolved_plan.read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise AnnotationError(f"could not read plan: {exc}") from exc
-    annotated, metadata = render_annotated_plan(
-        original,
-        config=config,
-        plan_path=resolved_plan,
-        active_worktree=active_worktree,
-    )
-    if annotated != original:
-        try:
-            resolved_plan.write_bytes(annotated.encode("utf-8"))
-        except OSError as exc:
-            raise AnnotationError(f"could not write plan: {exc}") from exc
-    return AnnotationResult(path=resolved_plan, changed=annotated != original, metadata=metadata)
