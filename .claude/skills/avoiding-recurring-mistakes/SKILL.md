@@ -1,7 +1,6 @@
 ---
 name: avoiding-recurring-mistakes
-description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of 257 real user prompts across 12 sessions (Jul 2026), with amendments on 2026-08-05 (cursor vs insert gap, pause-resume protocol).
-latest_update: 2026-08-10
+description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "migration", "concurrent index", "advisory lock", "deadlock", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of real project corrections, with amendments through 2026-08-19.
 ---
 
 # Avoiding Recurring Mistakes — pushin-weight-v2 (x-monitor)
@@ -161,7 +160,7 @@ rg -l 'run_cycle|classify|attribute_to_brands' core/ monitor/ x_monitor/
 
 ---
 
-## M8 — Guard against LLM / DB over-taxing **upfront**
+## M8 — Guard shared-resource concurrency **upfront**
 
 **Pattern the user kept correcting.** Agent built a feature, then user had to ask "ok but do we have guards against overtaxing the LLM? remember we had issues with sending too many concurrent calls" and "the max results and pages should be higher than the calculation, just in case."
 
@@ -169,7 +168,7 @@ rg -l 'run_cycle|classify|attribute_to_brands' core/ monitor/ x_monitor/
 > "ok but do we have guards against overtaxing the LLM? remember we had issues with sending too many concurrent calls"
 > "the max results and pages should be higher than the calculation, just in case. also, if we run this now, is it basically just 1 really big run, and will that interfere with the existing harvest runner"
 
-**Rule.** When designing any cycle that hits external APIs (TwitterAPI.io, LLM, Apify) or runs long DB writes, the design must specify upfront:
+**Rule.** When work can overlap on an external API, database, scheduler, or deploy, specify the concurrency guard and test the real production topology upfront:
 
 | Guard | Where it lives |
 |---|---|
@@ -177,8 +176,9 @@ rg -l 'run_cycle|classify|attribute_to_brands' core/ monitor/ x_monitor/
 | Page / result cap = `calc * 1.5` (or whatever headroom user named) | the cycle's `_fetch` step |
 | Distinct from the live harvest runner: separate scheduler entry, not a replacement | ops runbook |
 | Watchdog: cycle must check `paused` sentinel and bail cleanly | see `CONCEPTS.md` → Pause sentinel |
+| Multi-service migration gate: poll `pg_try_advisory_lock`; never block on `pg_advisory_lock` around concurrent DDL | `scripts/render_migrate.py` |
 
-If the plan does not name these guards, the plan is incomplete.
+For concurrent indexes, simulate multiple migration runners; one-service staging is not concurrency proof. After a failed deploy, inspect both `django_migrations` and `pg_index.indisvalid/indisready` before retrying or removing only the invalid index. If the plan does not name the applicable guards, it is incomplete.
 
 ---
 
@@ -405,7 +405,7 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 | M5 | Verification as retrofit | Name risk-specific proof; public UI needs real rendered route/DOM evidence |
 | M6 | False choice | Recommend the right option; don't ask permission for the obvious |
 | M7 | Re-inventing harvest/cycle | Refactor shared code; don't write parallel pipelines |
-| M8 | Missing rate/concurrency guards | Name the LLM/DB guards in the plan body |
+| M8 | Missing shared-resource concurrency guards | Cap API work; test multi-runner DB/deploy behavior; never block advisory-lock waiters around concurrent DDL |
 | M9 | v1 URL prefix or dot-path | `/api/v2/<resource>/<id>`, slash-separated |
 | M10 | i18n drift | Pin translated column to NOT NULL after backfill |
 | M11 | Reference-doc remnants | Current state only; git is the archive |
