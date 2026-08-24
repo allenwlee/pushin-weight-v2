@@ -125,6 +125,7 @@ _GENERIC_ENTITY_TOKENS = frozenset(
         "English",
         "Evidence",
         "Growth",
+        "In",
         "Independent",
         "I",
         "Interest",
@@ -488,6 +489,48 @@ def generation_fingerprint(
     return hashlib.sha256(_canonical_json(contract).encode("utf-8")).hexdigest()
 
 
+def _evidence_support_profile(
+    evidence_ids: Sequence[object],
+    evidence_rows: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> tuple[list[Mapping[str, Any]], bool, bool]:
+    """Return cited, non-repost rows plus deterministic support strength."""
+    rows = [
+        evidence
+        for evidence_id in evidence_ids
+        for evidence in evidence_rows.get(str(evidence_id), ())
+        if evidence.get("source_flags", {}).get("post_kind") != "repost"
+    ]
+    theme_rows: dict[str, list[Mapping[str, Any]]] = {}
+    for evidence in rows:
+        theme_cluster_id = str(evidence.get("theme_cluster_id") or "")
+        if theme_cluster_id:
+            theme_rows.setdefault(theme_cluster_id, []).append(evidence)
+    recurring = any(
+        len(
+            {
+                str(evidence.get("author_group_id") or "")
+                for evidence in themed
+                if evidence.get("author_group_id")
+            }
+        )
+        >= 2
+        and len(
+            {
+                str(evidence.get("source_cluster_id") or "")
+                for evidence in themed
+                if evidence.get("source_cluster_id")
+            }
+        )
+        >= 2
+        for themed in theme_rows.values()
+    )
+    official = any(
+        bool(evidence.get("source_flags", {}).get("official"))
+        for evidence in rows
+    )
+    return rows, recurring, official
+
+
 def _assemble_server_metadata(
     parsed: object,
     packet: Mapping[str, Any],
@@ -606,6 +649,33 @@ def _assemble_server_metadata(
             )
             if anchor:
                 claim["event_anchor"] = anchor
+
+        rows, recurring, official = _evidence_support_profile(
+            evidence_ids,
+            evidence_rows,
+        )
+        mix_families = {"post_type", "discourse", "sentiment"}
+        if recurring:
+            claim["explanation_type"] = (
+                "structured_mix"
+                if mix_families.intersection(families)
+                else "recurring_content"
+            )
+        elif claim.get("event_anchor"):
+            claim["explanation_type"] = "isolated_event"
+        elif claim.get("explanation_type") != "quiet_relative_leader":
+            claim["explanation_type"] = "aggregate_trajectory"
+
+        if recurring and official:
+            claim["evidence_confidence"] = "official_and_recurring"
+        elif recurring:
+            claim["evidence_confidence"] = "recurring_independent"
+        elif official:
+            claim["evidence_confidence"] = "official_only"
+        elif rows:
+            claim["evidence_confidence"] = "isolated"
+        else:
+            claim["evidence_confidence"] = "aggregate_only"
     return output
 
 
@@ -629,6 +699,33 @@ def _claim_text_from_payload(
     return str(observations_en[position]), str(observations_zh_cn[position])
 
 
+def _safe_derived_event_anchor(value: str, event_pattern: re.Pattern) -> str:
+    """Keep a bounded, exact evidence span while excluding URL payloads."""
+    normalized = _normalized_span(value)
+    url_match = _URL_RE.search(normalized)
+    if url_match:
+        normalized = normalized[: url_match.start()].rstrip()
+    event_match = event_pattern.search(normalized)
+    if not normalized or event_match is None:
+        return ""
+    if any(_unsafe_unicode_character(character) for character in normalized):
+        return ""
+    if len(normalized) <= 160:
+        return normalized
+
+    start = max(0, event_match.start() - 64)
+    end = min(len(normalized), event_match.end() + 88)
+    if start:
+        next_space = normalized.find(" ", start)
+        if next_space >= 0 and next_space < event_match.start():
+            start = next_space + 1
+    if end < len(normalized):
+        previous_space = normalized.rfind(" ", event_match.end(), end)
+        if previous_space > event_match.end():
+            end = previous_space
+    return normalized[start:end].strip()[:160].rstrip()
+
+
 def _derive_event_anchor(
     evidence_ids: Sequence[object],
     evidence_rows: Mapping[str, Sequence[Mapping[str, Any]]],
@@ -648,13 +745,9 @@ def _derive_event_anchor(
             continue
         excerpt = str(evidence.get("excerpt") or "")
         for sentence in re.split(r"(?<=[.!?。！？])\s+|\n+", excerpt):
-            normalized = _normalized_span(sentence)
-            if normalized and event_pattern.search(normalized):
-                if len(normalized) <= 160:
-                    return normalized
-                match = event_pattern.search(normalized)
-                if match:
-                    return _normalized_span(match.group(0))
+            anchor = _safe_derived_event_anchor(sentence, event_pattern)
+            if anchor:
+                return anchor
 
     excerpts = [str(evidence.get("excerpt") or "") for evidence in rows]
     if len(excerpts) >= 2:
@@ -677,13 +770,18 @@ def _derive_event_anchor(
             ) >= 2
         ]
         if shared:
-            return max(shared, key=len)[:160]
+            anchor = _safe_derived_event_anchor(
+                max(shared, key=len),
+                event_pattern,
+            )
+            if anchor:
+                return anchor
 
     for excerpt in excerpts:
         for sentence in re.split(r"(?<=[.!?。！？])\s+|\n+", excerpt):
-            normalized = _normalized_span(sentence)
-            if normalized and event_pattern.search(normalized):
-                return normalized[:160]
+            anchor = _safe_derived_event_anchor(sentence, event_pattern)
+            if anchor:
+                return anchor
     return ""
 
 
@@ -1271,39 +1369,9 @@ def _validate_explanation_support(
     *,
     evidence_rows: Mapping[str, Sequence[Mapping[str, Any]]],
 ) -> None:
-    rows = [
-        evidence
-        for evidence_id in claim.evidence_ids
-        for evidence in evidence_rows.get(evidence_id, [])
-        if evidence.get("source_flags", {}).get("post_kind") != "repost"
-    ]
-    theme_rows: dict[str, list[Mapping[str, Any]]] = {}
-    for evidence in rows:
-        theme_cluster_id = str(evidence.get("theme_cluster_id") or "")
-        if theme_cluster_id:
-            theme_rows.setdefault(theme_cluster_id, []).append(evidence)
-    recurring = any(
-        len(
-            {
-                str(evidence.get("author_group_id") or "")
-                for evidence in themed
-                if evidence.get("author_group_id")
-            }
-        )
-        >= 2
-        and len(
-            {
-                str(evidence.get("source_cluster_id") or "")
-                for evidence in themed
-                if evidence.get("source_cluster_id")
-            }
-        )
-        >= 2
-        for themed in theme_rows.values()
-    )
-    official = any(
-        bool(evidence.get("source_flags", {}).get("official"))
-        for evidence in rows
+    rows, recurring, official = _evidence_support_profile(
+        claim.evidence_ids,
+        evidence_rows,
     )
     if (
         claim.explanation_type in {"recurring_content", "structured_mix"}
@@ -1358,9 +1426,12 @@ def _validate_text(
         if subject.get("name_zh_cn_snapshot")
     }
     primary = subjects[0]
-    if not _starts_with_name(output.body_en, str(primary["name_en_snapshot"])):
+    if not _name_appears_in_lead(
+        output.body_en,
+        str(primary["name_en_snapshot"]),
+    ):
         raise _OutputContractError("headline_output_en_primary_not_leading")
-    if not _starts_with_name(
+    if not _name_appears_in_lead(
         output.body_zh_cn,
         str(primary["name_zh_cn_snapshot"]),
     ):
@@ -1569,11 +1640,22 @@ def _claim_text_pair(
     )
 
 
-def _starts_with_name(body: str, name: str) -> bool:
-    if not name or not body.casefold().startswith(name.casefold()):
+def _name_appears_in_lead(body: str, name: str) -> bool:
+    """Allow a short framing phrase while keeping the primary brand upfront."""
+    if not name:
         return False
-    boundary = body[len(name) : len(name) + 1]
-    return not boundary or not boundary.isalnum()
+    normalized = _normalized_span(body)
+    escaped = re.escape(name)
+    if name.isascii() and all(
+        character.isalnum() or character in ".-_" for character in name
+    ):
+        match = re.search(
+            rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])",
+            normalized,
+            re.IGNORECASE,
+        )
+        return bool(match and match.start() <= 48)
+    return 0 <= normalized.casefold().find(name.casefold()) <= 48
 
 
 def _has_unsupported_digits(body: str, allowed_names: set[str]) -> bool:

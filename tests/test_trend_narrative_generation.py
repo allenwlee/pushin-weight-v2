@@ -656,8 +656,11 @@ def test_quiet_relative_leader_accepts_a_cited_tenth_percent():
     )
     payload = _valid_payload()
     payload.update(
-        body_en="MiniMax led a quiet week with a small 0.1% rise in post volume.",
-        body_zh_cn="MiniMax 在平静的一周中领先，帖子声量仅小幅上升0.1%。",
+        body_en=(
+            "In a mostly unremarkable week, MiniMax led with a small 0.1% rise "
+            "in post volume."
+        ),
+        body_zh_cn="在整体平淡的一周中，MiniMax 以帖子声量小幅上升0.1%领先。",
         observations_en=[],
         observations_zh_cn=[],
     )
@@ -673,7 +676,20 @@ def test_quiet_relative_leader_accepts_a_cited_tenth_percent():
     result, _client = _generate(payload, snapshot=snapshot)
 
     assert fact["display_en"] == fact["display_zh_cn"] == "0.1%"
-    assert "quiet" in result.body_en
+    assert "unremarkable" in result.body_en
+
+
+def test_primary_brand_cannot_be_buried_after_the_lead():
+    payload = _valid_payload()
+    payload["body_en"] = (
+        "Across the full window, several unrelated topics competed for attention "
+        "before MiniMax post volume rose 100%."
+    )
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        _generate(payload)
+
+    assert captured.value.code == "headline_output_en_primary_not_leading"
 
 
 @pytest.mark.parametrize(
@@ -993,6 +1009,38 @@ def test_server_assembles_missing_event_anchor_from_cited_evidence():
     assert result.claims[0]["event_anchor"] == "the Aurora release"
 
 
+def test_server_assembled_event_anchor_omits_cited_url():
+    snapshot = _snapshot(two_candidates=False)
+    official = _evidence(
+        "e_one",
+        "MiniMax Releases Robotics Model to Support Physical AI — "
+        "learn more: https://example.com/release",
+    )
+    official["source_flags"]["official"] = True
+    snapshot["candidates"][0]["evidence"] = [official]
+    payload = _valid_payload(snapshot)
+    payload["body_en"] = (
+        "MiniMax drew attention with a robotics release, with post volume up 100%."
+    )
+    payload["body_zh_cn"] = "MiniMax 机器人模型发布受到关注，帖子量上升100%。"
+    payload["claims"][0].update(
+        families=["volume", "evidence"],
+        evidence_ids=["e_one"],
+        event_anchor="",
+        explanation_type="recurring_content",
+        evidence_confidence="recurring_independent",
+    )
+
+    result, _ = _generate(payload, snapshot=snapshot)
+
+    assert result.claims[0]["event_anchor"] == (
+        "MiniMax Releases Robotics Model to Support Physical AI — learn more:"
+    )
+    assert "http" not in result.claims[0]["event_anchor"]
+    assert result.claims[0]["explanation_type"] == "isolated_event"
+    assert result.claims[0]["evidence_confidence"] == "official_only"
+
+
 def test_event_language_without_anchor_fails_closed():
     payload = _valid_payload()
     payload["body_en"] = (
@@ -1023,16 +1071,32 @@ def test_chinese_user_posting_language_is_not_mistaken_for_a_release_event():
     assert result.body_zh_cn == payload["body_zh_cn"]
 
 
-def test_recurring_explanation_requires_a_shared_theme_across_sources():
+def test_server_reclassifies_nonrecurring_citations_as_isolated_context():
     snapshot = _snapshot(two_candidates=False)
     snapshot["candidates"][0]["evidence"][0]["theme_cluster_id"] = "theme_one"
     snapshot["candidates"][0]["evidence"][1]["theme_cluster_id"] = "theme_two"
     payload = _evidence_entity_payload()
 
-    with pytest.raises(HeadlineGenerationError) as captured:
-        _generate(payload, snapshot=snapshot)
+    result, _ = _generate(payload, snapshot=snapshot)
 
-    assert captured.value.code == "headline_output_explanation_support_weak"
+    assert result.claims[0]["explanation_type"] == "aggregate_trajectory"
+    assert result.claims[0]["evidence_confidence"] == "isolated"
+    assert result.claims[1]["explanation_type"] == "aggregate_trajectory"
+    assert result.claims[1]["evidence_confidence"] == "isolated"
+
+
+def test_server_reclassifies_shared_theme_as_recurring_support():
+    payload = _evidence_entity_payload()
+    for claim in payload["claims"]:
+        claim["explanation_type"] = "aggregate_trajectory"
+        claim["evidence_confidence"] = "isolated"
+
+    result, _ = _generate(payload, snapshot=_snapshot(two_candidates=False))
+
+    assert result.claims[0]["explanation_type"] == "recurring_content"
+    assert result.claims[0]["evidence_confidence"] == "recurring_independent"
+    assert result.claims[1]["explanation_type"] == "recurring_content"
+    assert result.claims[1]["evidence_confidence"] == "recurring_independent"
 
 
 def test_nationalism_claim_rejects_causal_wording_in_either_locale():

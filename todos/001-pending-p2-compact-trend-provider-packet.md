@@ -46,6 +46,32 @@ on the same real windows.
 
 ## Work Log
 
+### 2026-08-24 - Measured server assembly on current shadow data
+
+**By:** Codex on `fuchitalee`
+
+**Actions:**
+
+- Built the latest complete 24-hour packet read-only from Render's
+  `pushinweight-db-shadow` database at `2026-08-24T07:30:09Z`.
+- Ran two bounded `deepseek-v4-pro` attempts against the same 125,115-byte
+  canonical packet and replayed both raw responses after deterministic
+  server-side metadata assembly.
+- Recorded the exact packet, bilingual outputs, validator transitions, and
+  complete cited post text in
+  `docs/analysis/2026-08-24-165302-why-first-shadow-24h-evaluation.md`.
+
+**Learnings:**
+
+- Server assembly removes metadata-only support-class failures, but a large
+  packet still produced unsupported recurring and event language in both live
+  attempts.
+- One response used 40,549 input tokens. The second benefited from
+  provider-side caching, so its 101 reported input tokens must not be treated as
+  the uncached packet cost.
+- The next A/B should hold this exact snapshot fixed and compare the full packet
+  with a compact summary before changing evidence thresholds or validators.
+
 ### 2026-08-18 - Deferred after real-data study
 
 **By:** Codex
