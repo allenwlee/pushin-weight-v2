@@ -273,7 +273,18 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
         episode_peak_ratio=Decimal(1),
     )
 
-    with CaptureQueriesContext(connection) as queries:
+    evidence_queries = []
+
+    def capture_evidence_query(execute, sql, params, many, context):
+        normalized = sql.casefold()
+        if "with requested_bounds as" in normalized and "official_accounts as" in normalized:
+            evidence_queries.append((sql, params))
+        return execute(sql, params, many, context)
+
+    with (
+        connection.execute_wrapper(capture_evidence_query),
+        CaptureQueriesContext(connection) as queries,
+    ):
         snapshot = build_trend_analysis_snapshot(
             1,
             as_of=AS_OF,
@@ -294,6 +305,36 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     )
     assert str(SNAPSHOT_STATEMENT_TIMEOUT_MS) in timeout_statement
     assert str(SNAPSHOT_LOCK_TIMEOUT_MS) in timeout_statement
+    assert len(evidence_queries) == 1
+    evidence_sql, evidence_params = evidence_queries[0]
+    normalized_evidence_sql = " ".join(evidence_sql.upper().split())
+    union_position = normalized_evidence_sql.index("STREAM_ROWS AS")
+    assert "ROW_NUMBER" not in normalized_evidence_sql
+    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 5
+    assert normalized_evidence_sql.count("LIMIT R.RANK_LIMIT") == 5
+    stream_names = (
+        "OFFICIAL_STREAM AS",
+        "CATALYST_STREAM AS",
+        "ORIGINAL_STREAM AS",
+        "DISCOURSE_STREAM AS",
+        "CONTRAST_STREAM AS",
+    )
+    for index, stream_name in enumerate(stream_names):
+        stream_position = normalized_evidence_sql.index(stream_name)
+        next_position = (
+            normalized_evidence_sql.index(stream_names[index + 1])
+            if index + 1 < len(stream_names)
+            else union_position
+        )
+        stream_sql = normalized_evidence_sql[stream_position:next_position]
+        assert stream_position < union_position
+        assert stream_sql.count("CROSS JOIN LATERAL") == 1
+        assert stream_sql.count("ORDER BY") == 1
+        assert stream_sql.count("LIMIT R.RANK_LIMIT") == 1
+        assert stream_sql.index("ORDER BY") < stream_sql.index("LIMIT R.RANK_LIMIT")
+    assert len(evidence_params) == 6
+    assert evidence_params[1] == [brand.nickname]
+    assert tuple(evidence_params[-2:]) == (AS_OF, 32)
     analysis_statements = [
         sql
         for sql in statements
@@ -396,6 +437,123 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
         ]
     assert len(two_brand_statements) == len(analysis_statements) == 10
     assert len({row["brand_key"] for row in two_brand_snapshot["candidates"]}) == 2
+
+
+def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
+    brand = Brand.objects.create(nickname="bounded_evidence_brand")
+    official_role = Role.objects.create(key="official")
+    PostTypeKey.objects.create(key="bounded_reaction")
+    SentimentKey.objects.bulk_create(
+        [SentimentKey(key="bounded_positive"), SentimentKey(key="bounded_negative")]
+    )
+    DiscourseKey.objects.bulk_create(
+        [
+            DiscourseKey(key="bounded_technical"),
+            DiscourseKey(key="bounded_release"),
+        ]
+    )
+    accounts = [
+        Account.objects.create(
+            author_id=f"bounded-author-{index:02d}",
+            handle=f"bounded-handle-{index:02d}",
+        )
+        for index in range(12)
+    ]
+    BrandAccount.objects.create(brand=brand, account=accounts[0], role=official_role)
+    posts = [
+        Post(
+            tweet_id=f"bounded-post-{index:02d}",
+            author=accounts[index],
+            created_at=AS_OF - timedelta(hours=12 - index),
+            text=f"Bounded evidence post {index:02d}",
+            like_count=index * 10,
+            metrics_refreshed_at=AS_OF - timedelta(minutes=1),
+            is_quote=index % 4 == 0,
+        )
+        for index in range(12)
+    ]
+    Post.objects.bulk_create(posts)
+    PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
+    for index, post in enumerate(posts):
+        PostBrandSignal.objects.create(
+            post=post,
+            brand=brand,
+            post_type_id="bounded_reaction",
+            sentiment_id=(
+                "bounded_positive" if index < 8 else "bounded_negative"
+            ),
+        )
+        PostBrandDiscourse.objects.create(
+            post=post,
+            brand=brand,
+            discourse_id=(
+                "bounded_technical" if index < 8 else "bounded_release"
+            ),
+            act_id=1,
+        )
+
+    candidate = {
+        "candidate_id": "bounded_evidence_brand:full_window",
+        "brand_key": brand.nickname,
+        "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+        "end_at": AS_OF.isoformat(),
+    }
+
+    rows = trend_candidates._fetch_evidence_rows(
+        [candidate],
+        as_of=AS_OF,
+        rank_limit=4,
+    )
+    repeated = trend_candidates._fetch_evidence_rows(
+        [candidate],
+        as_of=AS_OF,
+        rank_limit=4,
+    )
+
+    rank_fields = (
+        "official_rank",
+        "catalyst_rank",
+        "original_rank",
+        "discourse_rank",
+        "contrast_rank",
+    )
+    assert repeated == rows
+    assert len(rows) <= 4 * len(rank_fields)
+    assert all(
+        min(int(row[field]) for field in rank_fields) <= 4 for row in rows
+    )
+    assert all(
+        1 <= int(row[field]) <= 5 for row in rows for field in rank_fields
+    )
+    for field in rank_fields:
+        assert sorted(
+            int(row[field]) for row in rows if int(row[field]) <= 4
+        ) == [1, 2, 3, 4]
+    assert {row["dominant_discourse"] for row in rows} == {
+        "bounded_technical"
+    }
+    assert {row["dominant_sentiment"] for row in rows} == {
+        "bounded_positive"
+    }
+
+    episode_rows = trend_candidates._fetch_evidence_rows(
+        [
+            {
+                **candidate,
+                "candidate_id": "bounded_evidence_brand:episode",
+                "start_at": (AS_OF - timedelta(hours=4)).isoformat(),
+            }
+        ],
+        as_of=AS_OF,
+        rank_limit=4,
+    )
+
+    assert {row["dominant_discourse"] for row in episode_rows} == {
+        "bounded_release"
+    }
+    assert {row["dominant_sentiment"] for row in episode_rows} == {
+        "bounded_negative"
+    }
 
 
 def test_near_duplicate_source_clusters_cannot_fill_two_evidence_roles():
