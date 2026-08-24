@@ -8,7 +8,56 @@ artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-brainstorm
 execution: code
+ollija:
+  change_id: why-first-trend-headlines-20260814
+  branch: integrate/why-first-trend-headlines-20260824
+  workflow: lfg
+  delivery_target: on-request
+  delivery_selected_by_user: false
 ---
+<!-- BEGIN OLLIJA DELIVERY GUIDE -->
+## Ollija Delivery Guide
+
+This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or this template, then rerun `./bin/ollija annotate-plan`. Put a user-directed exception in the editable Delivery Exceptions section below.
+
+### Resolved locations
+
+- Authoritative host: `fuchitalee`
+- Authoritative repository: `/Users/fuchitalee/development/pushin-weight-v2`
+- Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
+- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/integrate/why-first-trend-headlines-20260824`
+- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/integrate/why-first-trend-headlines-20260824/docs/plans/2026-08-14-195746-feat-why-first-trend-headlines-plan.md`
+- Change: `why-first-trend-headlines-20260814`
+- Branch: `integrate/why-first-trend-headlines-20260824`
+- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/integrate/why-first-trend-headlines-20260824/render-staging.yaml`
+- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/integrate/why-first-trend-headlines-20260824/render.yaml`
+- Staging URL: `https://pushinweight-staging-web.onrender.com`
+- Production URL: `https://pushinweight-web.onrender.com`
+
+### Placement
+
+This worktree is inside the Ollija release worktree area. Reuse it for the whole change. Do not create a second worktree or plan for this branch.
+
+### Delivery scope
+
+- Workflow: `lfg`
+- Delivery target: `on-request`
+- Owner selection recorded: `false`
+
+Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+
+### Failure handling
+
+- Never promote a staging candidate whose automated checks failed.
+- Implementation failures return to the parent implementation workflow for diagnosis, correction, recommit, and restaging.
+- SSH, shell, environment, or multi-machine failures use the repository infra/multi-machine skill first.
+- The change ledger is advisory; do not validate or enforce it.
+- Do not run an endless retry loop or start a persistent Ollija process.
+<!-- END OLLIJA DELIVERY GUIDE -->
+
+## Delivery Exceptions
+
+None.
 
 # Why-First Trend Headlines - Plan
 
