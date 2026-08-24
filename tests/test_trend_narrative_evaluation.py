@@ -48,7 +48,7 @@ def _manifest(**overrides) -> EvaluationManifest:
     return EvaluationManifest.from_mapping(values)
 
 
-def _valid_payload() -> dict:
+def _headline_quantitative_fact() -> dict:
     quiet_call = next(
         call
         for call in build_evaluation_calls(load_evaluation_scenarios(SCENARIOS))
@@ -60,6 +60,11 @@ def _valid_payload() -> dict:
         for fact in quiet_packet["candidates"][0]["quantitative_facts"]
         if fact["family"] == "volume" and fact["metric"] == "change_pct"
     )
+    return volume_fact
+
+
+def _valid_payload() -> dict:
+    volume_fact = _headline_quantitative_fact()
     return {
         "body_en": (
             "DeepSeek conversation showed the clearest sustained shift in this "
@@ -72,25 +77,10 @@ def _valid_payload() -> dict:
         "observations_en": [],
         "observations_zh_cn": [],
         "selected_candidate_ids": ["deepseek:full_window"],
-        "subjects": [
-            {
-                "support_type": "measured_candidate",
-                "entity_type": "brand",
-                "candidate_id": "deepseek:full_window",
-                "observed_name": "",
-                "evidence_ids": [],
-            }
-        ],
+        "subjects": [],
         "claims": [
             {
-                "observation_index": -1,
-                "candidate_ids": ["deepseek:full_window"],
-                "families": ["volume"],
                 "evidence_ids": [],
-                "quantitative_fact_ids": [volume_fact["fact_id"]],
-                "event_anchor": "",
-                "explanation_type": "aggregate_trajectory",
-                "evidence_confidence": "aggregate_only",
             }
         ],
     }
@@ -385,7 +375,9 @@ def test_runner_is_sequential_exact_model_and_records_complete_artifact():
     result = artifact["results"][0]
     assert result["packet_bytes"] > 0
     assert result["quantitative_fact_count"] >= 2
-    assert len(result["headline_quantitative_fact_ids"]) >= 1
+    assert result["headline_quantitative_fact_ids"] == [
+        _headline_quantitative_fact()["fact_id"]
+    ]
     assert result["provider_usage"] == {
         "reported": True,
         "input_tokens": 500,

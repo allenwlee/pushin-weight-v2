@@ -365,6 +365,26 @@ def _quantitative_fact(
     )
 
 
+def _candidate_quantitative_fact(
+    snapshot: dict,
+    *,
+    candidate_id: str,
+    family: str,
+    metric: str,
+    label_key: str = "",
+) -> dict:
+    packet = project_provider_packet(snapshot)
+    return next(
+        fact
+        for candidate in packet["candidates"]
+        if candidate["candidate_id"] == candidate_id
+        for fact in candidate["quantitative_facts"]
+        if fact["family"] == family
+        and fact["metric"] == metric
+        and fact["label_key"] == label_key
+    )
+
+
 def _flat_volume_mix_snapshot() -> dict:
     snapshot = _snapshot(two_candidates=False)
     candidate = snapshot["candidates"][0]
@@ -830,6 +850,100 @@ def test_one_or_two_measured_candidates_are_valid_outputs():
         "minimax",
         "deepseek",
     ]
+
+
+def test_server_resolves_cross_candidate_display_collision_from_bilingual_context():
+    snapshot = _snapshot()
+    minimax_volume = _candidate_quantitative_fact(
+        snapshot,
+        candidate_id="minimax:full_window",
+        family="volume",
+        metric="change_pct",
+    )
+    deepseek_volume = _candidate_quantitative_fact(
+        snapshot,
+        candidate_id="deepseek:episode:one",
+        family="volume",
+        metric="change_pct",
+    )
+
+    result, _ = _generate(_two_candidate_payload(), snapshot=snapshot)
+
+    assert minimax_volume["display_en"] == deepseek_volume["display_en"] == "100%"
+    assert minimax_volume["display_zh_cn"] == deepseek_volume["display_zh_cn"] == "100%"
+    assert result.claims[0]["quantitative_fact_ids"] == [minimax_volume["fact_id"]]
+    assert result.claims[0]["families"] == ["volume"]
+
+
+def test_server_resolves_same_candidate_cross_family_display_collision_from_context():
+    snapshot = _snapshot(two_candidates=False)
+    snapshot["candidates"][0]["family_facts"]["sentiment"] = {
+        "selected_coverage_ratio": "1.000000",
+        "prior_coverage_ratio": "1.000000",
+        "labels": [
+            {
+                "key": "positive",
+                "prior_count": 10,
+                "selected_count": 20,
+                "brand_change_pp": None,
+            }
+        ],
+    }
+    volume = _quantitative_fact(
+        snapshot,
+        family="volume",
+        metric="change_pct",
+    )
+    sentiment = _quantitative_fact(
+        snapshot,
+        family="sentiment",
+        metric="count_change_pct",
+        label_key="positive",
+    )
+    payload = _valid_payload(snapshot)
+    payload.update(
+        body_en="MiniMax post volume rose 100%.",
+        body_zh_cn="MiniMax 帖子量上升100%。",
+        observations_en=[],
+        observations_zh_cn=[],
+    )
+    payload["claims"] = [{"evidence_ids": []}]
+
+    result, _ = _generate(payload, snapshot=snapshot)
+
+    assert volume["display_en"] == sentiment["display_en"] == "100%"
+    assert volume["display_zh_cn"] == sentiment["display_zh_cn"] == "100%"
+    assert result.claims[0]["quantitative_fact_ids"] == [volume["fact_id"]]
+    assert result.claims[0]["families"] == ["volume"]
+
+
+def test_server_rejects_unresolved_quantitative_display_collision():
+    snapshot = _snapshot(two_candidates=False)
+    snapshot["candidates"][0]["family_facts"]["sentiment"] = {
+        "selected_coverage_ratio": "1.000000",
+        "prior_coverage_ratio": "1.000000",
+        "labels": [
+            {
+                "key": "positive",
+                "prior_count": 10,
+                "selected_count": 20,
+                "brand_change_pp": None,
+            }
+        ],
+    }
+    payload = _valid_payload(snapshot)
+    payload.update(
+        body_en="MiniMax conversation changed 100%.",
+        body_zh_cn="MiniMax 的讨论出现明显变化100%。",
+        observations_en=[],
+        observations_zh_cn=[],
+    )
+    payload["claims"] = [{"evidence_ids": []}]
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        _generate(payload, snapshot=snapshot)
+
+    assert captured.value.code == "headline_output_quantitative_fact_required"
 
 
 def test_server_normalizes_string_subjects_and_missing_claim_metadata():

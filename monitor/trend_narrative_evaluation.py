@@ -742,7 +742,28 @@ def run_synthetic_evaluation(
         accounted_cost += actual_cost
         raw_output = str(capture.get("raw_output") or "")
         parsed = _parse_bilingual(raw_output)
-        headline_quantitative_fact_ids = _headline_quantitative_fact_ids(raw_output)
+        if generated is not None:
+            headline_claim = next(
+                (
+                    claim
+                    for claim in generated.claims
+                    if isinstance(claim, Mapping)
+                    and claim.get("observation_index") == -1
+                ),
+                None,
+            )
+            fact_ids = (
+                headline_claim.get("quantitative_fact_ids", [])
+                if headline_claim is not None
+                else []
+            )
+            headline_quantitative_fact_ids = (
+                [str(fact_id) for fact_id in fact_ids]
+                if isinstance(fact_ids, list)
+                else []
+            )
+        else:
+            headline_quantitative_fact_ids = _headline_quantitative_fact_ids(raw_output)
         results.append(
             {
                 "call_id": call.call_id,

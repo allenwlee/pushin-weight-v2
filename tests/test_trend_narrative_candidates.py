@@ -308,30 +308,31 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     assert len(evidence_queries) == 1
     evidence_sql, evidence_params = evidence_queries[0]
     normalized_evidence_sql = " ".join(evidence_sql.upper().split())
-    union_position = normalized_evidence_sql.index("STREAM_ROWS AS")
     assert "ROW_NUMBER" not in normalized_evidence_sql
     assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 5
     assert normalized_evidence_sql.count("LIMIT R.RANK_LIMIT") == 5
-    stream_names = (
-        "OFFICIAL_STREAM AS",
-        "CATALYST_STREAM AS",
-        "ORIGINAL_STREAM AS",
-        "DISCOURSE_STREAM AS",
-        "CONTRAST_STREAM AS",
+    stream_bounds = (
+        ("OFFICIAL_STREAM AS", "CATALYST_STREAM AS"),
+        ("CATALYST_STREAM AS", "ORIGINAL_STREAM AS"),
+        ("ORIGINAL_STREAM AS", "EVIDENCE_SEED AS"),
+        ("DISCOURSE_STREAM AS", "CONTRAST_STREAM AS"),
+        ("CONTRAST_STREAM AS", "STREAM_ROWS AS"),
     )
-    for index, stream_name in enumerate(stream_names):
+    for stream_name, next_name in stream_bounds:
         stream_position = normalized_evidence_sql.index(stream_name)
-        next_position = (
-            normalized_evidence_sql.index(stream_names[index + 1])
-            if index + 1 < len(stream_names)
-            else union_position
-        )
+        next_position = normalized_evidence_sql.index(next_name)
         stream_sql = normalized_evidence_sql[stream_position:next_position]
-        assert stream_position < union_position
         assert stream_sql.count("CROSS JOIN LATERAL") == 1
         assert stream_sql.count("ORDER BY") == 1
         assert stream_sql.count("LIMIT R.RANK_LIMIT") == 1
         assert stream_sql.index("ORDER BY") < stream_sql.index("LIMIT R.RANK_LIMIT")
+    mode_sql = normalized_evidence_sql[
+        normalized_evidence_sql.index("REQUESTED AS") : normalized_evidence_sql.index(
+            "SEED_ROWS AS"
+        )
+    ]
+    assert mode_sql.count("FROM EVIDENCE_SEED SEED") == 2
+    assert "FROM POSTS_BRANDS PB" not in mode_sql
     assert len(evidence_params) == 6
     assert evidence_params[1] == [brand.nickname]
     assert tuple(evidence_params[-2:]) == (AS_OF, 32)
@@ -457,20 +458,24 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
             author_id=f"bounded-author-{index:02d}",
             handle=f"bounded-handle-{index:02d}",
         )
-        for index in range(12)
+        for index in range(60)
     ]
     BrandAccount.objects.create(brand=brand, account=accounts[0], role=official_role)
     posts = [
         Post(
             tweet_id=f"bounded-post-{index:02d}",
             author=accounts[index],
-            created_at=AS_OF - timedelta(hours=12 - index),
+            created_at=(
+                AS_OF - timedelta(hours=12 - index)
+                if index < 12
+                else AS_OF - timedelta(minutes=60 - index)
+            ),
             text=f"Bounded evidence post {index:02d}",
-            like_count=index * 10,
+            like_count=500 if index == 7 else index * 10 if index < 12 else 0,
             metrics_refreshed_at=AS_OF - timedelta(minutes=1),
             is_quote=index % 4 == 0,
         )
-        for index in range(12)
+        for index in range(60)
     ]
     Post.objects.bulk_create(posts)
     PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])

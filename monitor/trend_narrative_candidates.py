@@ -1020,80 +1020,10 @@ def _fetch_evidence_rows(
                 SELECT %s::timestamptz AS as_of, %s::bigint AS rank_limit
             ) bounds
         ),
-        requested AS (
-            SELECT
-                r.*,
-                discourse.dominant_discourse,
-                sentiment.dominant_sentiment
-            FROM requested_bounds r
-            LEFT JOIN LATERAL (
-                SELECT d.discourse_key::text AS dominant_discourse
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
-                JOIN posts_brands_discourse d
-                  ON d.post_id = p.tweet_id
-                 AND d.brand_id::text = r.brand_key
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
-                GROUP BY d.discourse_key::text
-                ORDER BY
-                    count(DISTINCT p.tweet_id) DESC,
-                    lower(d.discourse_key::text),
-                    d.discourse_key::text
-                LIMIT 1
-            ) discourse ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT s.sentiment::text AS dominant_sentiment
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
-                JOIN posts_brands_signals s
-                  ON s.post_id = p.tweet_id
-                 AND s.brand_id::text = r.brand_key
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND s.sentiment IS NOT NULL
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
-                GROUP BY s.sentiment::text
-                ORDER BY
-                    count(DISTINCT p.tweet_id) DESC,
-                    lower(s.sentiment::text),
-                    s.sentiment::text
-                LIMIT 1
-            ) sentiment ON TRUE
-        ),
         official_accounts AS (
             SELECT DISTINCT ba.brand_id::text AS brand_key, ba.accounts_id
             FROM brands_accounts ba
-            JOIN requested r ON r.brand_key = ba.brand_id::text
+            JOIN requested_bounds r ON r.brand_key = ba.brand_id::text
             WHERE ba.role_id = 'official'
         ),
         official_stream AS (
@@ -1101,15 +1031,15 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                r.dominant_discourse,
-                r.dominant_sentiment,
+                NULL::text AS dominant_discourse,
+                NULL::text AS dominant_sentiment,
                 ranked.tweet_id,
                 ranked.stream_rank::bigint AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
                 r.rank_limit + 1 AS discourse_rank,
                 r.rank_limit + 1 AS contrast_rank
-            FROM requested r
+            FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
                 FROM posts_brands pb
@@ -1159,15 +1089,15 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                r.dominant_discourse,
-                r.dominant_sentiment,
+                NULL::text AS dominant_discourse,
+                NULL::text AS dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 ranked.stream_rank::bigint AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
                 r.rank_limit + 1 AS discourse_rank,
                 r.rank_limit + 1 AS contrast_rank
-            FROM requested r
+            FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
                 FROM posts_brands pb
@@ -1209,15 +1139,15 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                r.dominant_discourse,
-                r.dominant_sentiment,
+                NULL::text AS dominant_discourse,
+                NULL::text AS dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 ranked.stream_rank::bigint AS original_rank,
                 r.rank_limit + 1 AS discourse_rank,
                 r.rank_limit + 1 AS contrast_rank
-            FROM requested r
+            FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
                 FROM posts_brands pb
@@ -1258,6 +1188,78 @@ def _fetch_evidence_rows(
                     p.tweet_id ASC
                 LIMIT r.rank_limit
             )) WITH ORDINALITY AS ranked(tweet_id, stream_rank)
+        ),
+        evidence_seed AS (
+            SELECT
+                position,
+                candidate_id,
+                brand_key,
+                tweet_id,
+                min(official_rank) AS official_rank,
+                min(catalyst_rank) AS catalyst_rank,
+                min(original_rank) AS original_rank,
+                min(discourse_rank) AS discourse_rank,
+                min(contrast_rank) AS contrast_rank
+            FROM (
+                SELECT * FROM official_stream
+                UNION ALL
+                SELECT * FROM catalyst_stream
+                UNION ALL
+                SELECT * FROM original_stream
+            ) seed_stream_rows
+            GROUP BY position, candidate_id, brand_key, tweet_id
+        ),
+        requested AS (
+            SELECT
+                r.*,
+                discourse.dominant_discourse,
+                sentiment.dominant_sentiment
+            FROM requested_bounds r
+            LEFT JOIN LATERAL (
+                SELECT d.discourse_key::text AS dominant_discourse
+                FROM evidence_seed seed
+                JOIN posts_brands_discourse d
+                  ON d.post_id = seed.tweet_id
+                 AND d.brand_id::text = seed.brand_key
+                WHERE seed.position = r.position
+                GROUP BY d.discourse_key::text
+                ORDER BY
+                    count(DISTINCT seed.tweet_id) DESC,
+                    lower(d.discourse_key::text),
+                    d.discourse_key::text
+                LIMIT 1
+            ) discourse ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT s.sentiment::text AS dominant_sentiment
+                FROM evidence_seed seed
+                JOIN posts_brands_signals s
+                  ON s.post_id = seed.tweet_id
+                 AND s.brand_id::text = seed.brand_key
+                WHERE seed.position = r.position
+                  AND s.sentiment IS NOT NULL
+                GROUP BY s.sentiment::text
+                ORDER BY
+                    count(DISTINCT seed.tweet_id) DESC,
+                    lower(s.sentiment::text),
+                    s.sentiment::text
+                LIMIT 1
+            ) sentiment ON TRUE
+        ),
+        seed_rows AS (
+            SELECT
+                seed.position,
+                seed.candidate_id,
+                seed.brand_key,
+                requested.dominant_discourse,
+                requested.dominant_sentiment,
+                seed.tweet_id,
+                seed.official_rank,
+                seed.catalyst_rank,
+                seed.original_rank,
+                seed.discourse_rank,
+                seed.contrast_rank
+            FROM evidence_seed seed
+            JOIN requested ON requested.position = seed.position
         ),
         discourse_stream AS (
             SELECT
@@ -1395,11 +1397,7 @@ def _fetch_evidence_rows(
             )) WITH ORDINALITY AS ranked(tweet_id, stream_rank)
         ),
         stream_rows AS (
-            SELECT * FROM official_stream
-            UNION ALL
-            SELECT * FROM catalyst_stream
-            UNION ALL
-            SELECT * FROM original_stream
+            SELECT * FROM seed_rows
             UNION ALL
             SELECT * FROM discourse_stream
             UNION ALL

@@ -177,6 +177,26 @@ _ORGANIZATION_NAME_MARKERS = frozenset(
 _FORBIDDEN_INPUT_KEYS = frozenset(
     {"raw_text", "post_text", "tweet_text", "url", "urls", "tweet_id", "author_id"}
 )
+_FACT_FAMILY_CONTEXT = {
+    "volume": (
+        ("post volume", "post count"),
+        ("帖子量", "帖子声量", "帖子数量"),
+    ),
+    "engagement": (
+        ("engagement", "interactions"),
+        ("互动", "参与度"),
+    ),
+    "post_type": (("post type", "post-type"), ("帖子类型",)),
+    "discourse": (("discourse",), ("话语",)),
+    "sentiment": (("sentiment",), ("情绪",)),
+    "china_nationalism": (("China nationalism",), ("中国民族主义",)),
+    "us_nationalism": (("US nationalism",), ("美国民族主义",)),
+}
+_FACT_LABEL_CONTEXT = {
+    "hands_on": (("hands-on", "hands on"), ("动手体验",)),
+    "positive": (("positive",), ("正面",)),
+    "negative": (("negative",), ("负面",)),
+}
 
 
 class HeadlineGenerationError(ValueError):
@@ -620,17 +640,12 @@ def _assemble_server_metadata(
         )
         evidence_ids = claim.get("evidence_ids", [])
         cited_evidence_ids = evidence_ids if isinstance(evidence_ids, list) else []
-        displayed_facts = sorted(
-            (
-                fact
-                for fact in quantitative_facts.values()
-                if str(fact.get("candidate_id") or "") in selected_ids
-                and _fact_is_displayed(fact, claim_en, claim_zh_cn)
-            ),
-            key=lambda fact: (
-                _display_span_start(claim_en, str(fact["display_en"])),
-                _display_span_start(claim_zh_cn, str(fact["display_zh_cn"])),
-            ),
+        displayed_facts = _resolve_displayed_quantitative_facts(
+            quantitative_facts.values(),
+            selected_ids=selected_ids,
+            candidates=candidates,
+            claim_en=claim_en,
+            claim_zh_cn=claim_zh_cn,
         )
         claim_candidate_ids = _server_owned_claim_candidate_ids(
             observation_index=observation_index,
@@ -811,6 +826,145 @@ def _fact_is_displayed(
         and _display_span_start(claim_en, display_en) is not None
         and _display_span_start(claim_zh_cn, display_zh_cn) is not None
     )
+
+
+def _resolve_displayed_quantitative_facts(
+    facts: Sequence[Mapping[str, Any]],
+    *,
+    selected_ids: Sequence[object],
+    candidates: Mapping[str, Mapping[str, Any]],
+    claim_en: str,
+    claim_zh_cn: str,
+) -> list[Mapping[str, Any]]:
+    """Return only facts whose displayed number is unambiguous in claim context."""
+    displayed: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    for fact in facts:
+        if (
+            str(fact.get("candidate_id") or "") in selected_ids
+            and _fact_is_displayed(fact, claim_en, claim_zh_cn)
+        ):
+            display_pair = (
+                str(fact.get("display_en") or ""),
+                str(fact.get("display_zh_cn") or ""),
+            )
+            displayed.setdefault(display_pair, []).append(fact)
+
+    resolved: list[Mapping[str, Any]] = []
+    for matching_facts in displayed.values():
+        if len(matching_facts) == 1:
+            resolved.extend(matching_facts)
+            continue
+        candidate_id = _nearest_candidate_id_for_display(
+            matching_facts,
+            candidates=candidates,
+            claim_en=claim_en,
+            claim_zh_cn=claim_zh_cn,
+        )
+        if candidate_id is None:
+            continue
+        contextual_facts = [
+            fact
+            for fact in matching_facts
+            if str(fact.get("candidate_id") or "") == candidate_id
+            and _fact_context_uniquely_identifies(
+                fact,
+                candidates=candidates,
+                claim_en=claim_en,
+                claim_zh_cn=claim_zh_cn,
+            )
+        ]
+        if len(contextual_facts) == 1:
+            resolved.extend(contextual_facts)
+    return sorted(
+        resolved,
+        key=lambda fact: (
+            _display_span_start(claim_en, str(fact["display_en"])),
+            _display_span_start(claim_zh_cn, str(fact["display_zh_cn"])),
+        ),
+    )
+
+
+def _nearest_candidate_id_for_display(
+    facts: Sequence[Mapping[str, Any]],
+    *,
+    candidates: Mapping[str, Mapping[str, Any]],
+    claim_en: str,
+    claim_zh_cn: str,
+) -> str | None:
+    """Find the one candidate locally associated with a duplicated display."""
+    display_en = str(facts[0].get("display_en") or "")
+    display_zh_cn = str(facts[0].get("display_zh_cn") or "")
+    display_en_start = _display_span_start(claim_en, display_en)
+    display_zh_cn_start = _display_span_start(claim_zh_cn, display_zh_cn)
+    if display_en_start is None or display_zh_cn_start is None:
+        return None
+    distances: dict[str, tuple[int, int]] = {}
+    for fact in facts:
+        candidate_id = str(fact.get("candidate_id") or "")
+        candidate = candidates.get(candidate_id, {})
+        name_en = str(candidate.get("display_name_en") or "")
+        name_zh_cn = str(candidate.get("display_name_zh_cn") or "")
+        starts_en = _name_span_starts(claim_en, name_en)
+        starts_zh_cn = _name_span_starts(claim_zh_cn, name_zh_cn)
+        if not starts_en or not starts_zh_cn:
+            continue
+        distances[candidate_id] = (
+            min(abs(display_en_start - start) for start in starts_en),
+            min(abs(display_zh_cn_start - start) for start in starts_zh_cn),
+        )
+    if not distances:
+        return None
+    nearest_en = min(distance[0] for distance in distances.values())
+    nearest_zh_cn = min(distance[1] for distance in distances.values())
+    closest = [
+        candidate_id
+        for candidate_id, distance in distances.items()
+        if distance == (nearest_en, nearest_zh_cn)
+    ]
+    return closest[0] if len(closest) == 1 else None
+
+
+def _name_span_starts(text: str, name: str) -> list[int]:
+    if not name:
+        return []
+    escaped = re.escape(name)
+    if name.isascii() and all(
+        character.isalnum() or character in ".-_" for character in name
+    ):
+        pattern = rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])"
+    else:
+        pattern = escaped
+    return [match.start() for match in re.finditer(pattern, text, re.IGNORECASE)]
+
+
+def _fact_context_uniquely_identifies(
+    fact: Mapping[str, Any],
+    *,
+    candidates: Mapping[str, Mapping[str, Any]],
+    claim_en: str,
+    claim_zh_cn: str,
+) -> bool:
+    candidate = candidates.get(str(fact.get("candidate_id") or ""), {})
+    if not (
+        _mentions_name(claim_en, str(candidate.get("display_name_en") or ""))
+        and _mentions_name(
+            claim_zh_cn,
+            str(candidate.get("display_name_zh_cn") or ""),
+        )
+    ):
+        return False
+    family = str(fact.get("family") or "")
+    family_context = _FACT_FAMILY_CONTEXT.get(family)
+    label_context = _FACT_LABEL_CONTEXT.get(str(fact.get("label_key") or ""))
+    for context in (family_context, label_context):
+        if context is None:
+            continue
+        terms_en, terms_zh_cn = context
+        if any(term.casefold() in claim_en.casefold() for term in terms_en) and any(
+            term in claim_zh_cn for term in terms_zh_cn
+        ):
+            return True
+    return False
 
 
 def _display_span_start(text: str, display: str) -> int | None:
