@@ -21,6 +21,7 @@
 set -o errexit
 
 pip install -e ".[dev]"
+python scripts/verify_headline_worker_boundary.py
 
 # Compile i18n message files for zh_CN. Render's Python image is
 # Debian-slim which does not include gettext by default.

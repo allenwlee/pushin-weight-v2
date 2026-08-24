@@ -275,6 +275,13 @@ Credentials resolve only from `DEEPSEEK_API_KEY` or
 `DEEPSEEK_API_TOKEN`. The request passes the exact model explicitly. An
 unsupported route cannot fall back to an environment-inferred model.
 
+`build.sh` installs the exact direct `anthropic` pin from `pyproject.toml`,
+then runs `scripts/verify_headline_worker_boundary.py`. The verifier constructs
+the production request with `HeadlineNarrativeConfig`, binds it to the real
+installed `client.messages.create` signature, and stops before transport. A
+version or request-signature mismatch fails the build without reading provider
+credentials or touching the database.
+
 ### Literal system prompt
 
 The following block must match `HEADLINE_SYSTEM_PROMPT_V3` exactly:
@@ -487,6 +494,7 @@ current official documentation before a live evaluation.
 | Aggregates, coverage, series, episodes | `tests/test_trend_narrative_facts.py` |
 | Candidate and adaptive evidence bounds | `tests/test_trend_narrative_candidates.py`, `tests/test_trend_narrative_schema_expansion.py` |
 | Why-first prompt, citations, evidence support | `tests/test_trend_narrative_generation.py` |
+| Installed SDK and exact worker request binding | `tests/test_verify_headline_worker_boundary.py` |
 | Schema compatibility and publication | `tests/test_trend_narrative_lifecycle.py` |
 | Scheduled call chain and skip semantics | `tests/test_trend_narrative_tasks.py` |
 | Empty/failure/brand-position projection | `tests/test_trend_narrative_projection.py` |
