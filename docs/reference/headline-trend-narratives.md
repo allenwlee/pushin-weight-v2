@@ -262,7 +262,7 @@ classifier, or ambient SDK model settings:
 | Anthropic-compatible base URL | `https://api.deepseek.com/anthropic` |
 | Exact model | `deepseek-v4-pro` |
 | Thinking | disabled |
-| Temperature | 0 |
+| Temperature | omitted |
 | Maximum output | 1,600 tokens |
 | Timeout | 45 seconds |
 | SDK retries | 0 |

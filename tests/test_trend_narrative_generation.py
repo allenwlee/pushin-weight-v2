@@ -8,6 +8,8 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
+import anthropic
+import httpx
 import pytest
 from billiard.exceptions import SoftTimeLimitExceeded
 from pydantic import ValidationError
@@ -506,7 +508,7 @@ def test_real_boundary_pins_dsv4_route_and_sends_bounded_analysis_packet(
     ]
     call = client.messages.calls[0]
     assert call["model"] == "deepseek-v4-pro"
-    assert call["temperature"] == 0
+    assert "temperature" not in call
     assert call["max_tokens"] == 1_600
     assert call["thinking"] == {"type": "disabled"}
     assert call["system"] == HEADLINE_SYSTEM_PROMPT_V3
@@ -1319,6 +1321,86 @@ def test_celery_soft_timeout_escapes_the_provider_boundary():
         )
 
 
+def _provider_status_error(error_type, status_code: int):
+    request = httpx.Request("POST", "https://provider.invalid/messages")
+    response = httpx.Response(status_code, request=request)
+    return error_type(
+        "unsafe provider response must not become a diagnostic",
+        response=response,
+        body={"credential": "unsafe-secret", "post": "unsafe excerpt"},
+    )
+
+
+@pytest.mark.parametrize(
+    ("provider_error", "expected_code"),
+    [
+        (
+            TypeError("messages.create rejected unsafe-secret"),
+            "headline_provider_request_binding_failed",
+        ),
+        (
+            anthropic.APITimeoutError(
+                httpx.Request("POST", "https://provider.invalid/messages")
+            ),
+            "headline_provider_timeout",
+        ),
+        (
+            _provider_status_error(anthropic.AuthenticationError, 401),
+            "headline_provider_authentication_failed",
+        ),
+        (
+            _provider_status_error(anthropic.RateLimitError, 429),
+            "headline_provider_rate_limited",
+        ),
+        (
+            _provider_status_error(anthropic.BadRequestError, 400),
+            "headline_provider_request_rejected",
+        ),
+        (
+            _provider_status_error(anthropic.InternalServerError, 503),
+            "headline_provider_unavailable",
+        ),
+        (
+            anthropic.APIConnectionError(
+                request=httpx.Request(
+                    "POST", "https://provider.invalid/messages"
+                )
+            ),
+            "headline_provider_unavailable",
+        ),
+        (
+            RuntimeError("unknown unsafe-secret and post excerpt"),
+            "headline_provider_request_failed",
+        ),
+    ],
+)
+def test_provider_failures_use_bounded_safe_categories(
+    provider_error,
+    expected_code,
+):
+    client = _FakeClient(_valid_payload())
+
+    def fail(**_kwargs):
+        raise provider_error
+
+    client.messages.create = fail
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        generate_trend_narrative(
+            _snapshot(),
+            HeadlineNarrativeConfig(),
+            api_key="headline-secret",
+            client_factory=lambda **_kwargs: client,
+        )
+
+    assert captured.value.code == expected_code
+    assert captured.value.transport_completed is False
+    assert "unsafe" not in str(captured.value)
+    assert "secret" not in str(captured.value)
+    assert captured.value.__cause__ is None
+    assert captured.value.__suppress_context__ is True
+
+
 def test_json_code_fence_is_normalized_but_trailing_prose_is_rejected():
     payload = json.dumps(_valid_payload(), ensure_ascii=False)
     result, client = _generate(f"```json\n{payload}\n```")
@@ -1395,7 +1477,7 @@ def test_generation_fingerprint_changes_with_provider_request_version(monkeypatc
     monkeypatch.setattr(
         trend_generation,
         "HEADLINE_REQUEST_VERSION",
-        "dsv4-json-nonthinking-v3",
+        "dsv4-json-nonthinking-v4",
     )
 
     assert generation_fingerprint(snapshot, config) != fingerprint
