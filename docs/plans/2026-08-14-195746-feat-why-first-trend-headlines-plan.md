@@ -12,8 +12,8 @@ ollija:
   change_id: why-first-trend-headlines-20260814
   branch: integrate/why-first-trend-headlines-20260824
   workflow: lfg
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -41,10 +41,20 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
 
 ### Failure handling
 
@@ -57,7 +67,12 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 
 ## Delivery Exceptions
 
-None.
+- **2026-08-24 owner override:** The owner reviewed the real shadow-data
+  evaluation, explicitly overrode its editorial NO-GO recommendation, and
+  authorized delivery through staging to production. Keep the evidence
+  validators and default-disabled activation policy unchanged; this exception
+  authorizes deployment of the committed implementation, not weakening its
+  evidence rules.
 
 # Why-First Trend Headlines - Plan
 
