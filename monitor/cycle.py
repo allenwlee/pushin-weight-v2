@@ -1999,6 +1999,7 @@ class CycleRunner:
                     tweets,
                     brand_registry,
                     classifier_client,
+                    model=self.cfg.llm.classifier_model,
                     on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
                         "classifier_batch_failed",
                         self._error_counts["classifier_batch_failed"] + 1,

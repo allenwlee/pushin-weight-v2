@@ -128,16 +128,14 @@ metrics_refresh:
   per_cycle_cap: 200
 
 
-# LLM routing (plan 2026-08-01-002 U6). Defaults mirror the values
-# the v1 + v2 stacks used prior to this change; operators can
-# override per-env via X_MONITOR_<role>_MODEL without editing
-# config.yaml. The translator_base_url defaults to the
-# ANTHROPIC_BASE_URL env var (preserves the proxy path the v1
-# shell already configures).
+# LLM routing (plan 2026-08-01-002 U6). Non-null yaml model values win
+# over role-specific environment values. Environment values apply when
+# the corresponding yaml field is omitted or null. translator_base_url
+# falls back to ANTHROPIC_BASE_URL when null.
 llm:
-  translator_model: "deepseek-v4-pro"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
+  translator_model: "deepseek-v4-flash"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
   translator_base_url: null    # uses ANTHROPIC_BASE_URL env when null
-  classifier_model: "deepseek-v4-pro"
+  classifier_model: "deepseek-v4-flash"
   relevancy_model: "claude-haiku-4-5"
   signal_model: "claude-haiku-4-5"
 

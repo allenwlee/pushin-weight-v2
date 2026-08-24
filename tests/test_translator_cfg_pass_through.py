@@ -23,7 +23,7 @@ These tests pin:
     _resolve_translator_model(cfg) returns that model name
     REGARDLESS of the active ANTHROPIC_BASE_URL env (the regression).
   - When cfg is None and ANTHROPIC_BASE_URL contains "deepseek.com",
-    _resolve_translator_model(None) returns "deepseek-v4-pro"
+    _resolve_translator_model(None) returns "deepseek-v4-flash"
     (preexisting behavior — must NOT regress).
 """
 from __future__ import annotations
@@ -85,20 +85,68 @@ def test_signature_accepts_cfg_kwarg(fn):
 class _CfgStub:
     """Minimal Config stand-in. _resolve_translator_model reads only cfg.llm.translator_model."""
     class _Llm:
-        translator_model: str | None = "deepseek-v4-pro"
-    llm = _Llm()
+        def __init__(self, translator_model: str | None):
+            self.translator_model = translator_model
+
+    def __init__(self, translator_model: str | None = "deepseek-v4-flash"):
+        self.llm = self._Llm(translator_model)
 
 
 def test_cfg_first_resolves_to_canonical_model_when_env_disagrees(monkeypatch):
-    """Regression: ANTHROPIC_BASE_URL=api.minimax.io + cfg.translator_model=deepseek-v4-pro
-    must return deepseek-v4-pro, not MiniMax-M3.0. This is the bug that caused
-    the 2026-08-06 08:47 UTC translator_batch_failed."""
+    """Regression: a cfg-pinned Flash model wins over ambient MiniMax."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
-    cfg = _CfgStub()
-    cfg.llm.translator_model = "deepseek-v4-pro"
-    assert _resolve_translator_model(cfg) == "deepseek-v4-pro"
+    cfg = _CfgStub("deepseek-v4-flash")
+    assert _resolve_translator_model(cfg) == "deepseek-v4-flash"
+
+
+def test_explicit_pro_config_rollback_still_wins(monkeypatch):
+    """An explicit config change can roll the translator back to V4 Pro."""
+    monkeypatch.setenv("ANTHROPIC_MODEL", "ambient-model")
+    assert _resolve_translator_model(_CfgStub("deepseek-v4-pro")) == "deepseek-v4-pro"
+
+
+def test_cfg_threaded_batch_call_sends_flash_and_disables_thinking(monkeypatch):
+    """The real translator batch call sends cfg Flash despite ambient mismatch."""
+    monkeypatch.setenv("ANTHROPIC_MODEL", "ambient-model")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.setenv(
+        "X_MONITOR_TRANSLATOR_BASE_URL",
+        "https://api.deepseek.com/anthropic",
+    )
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def messages_create(self, **kwargs):
+            self.calls.append(kwargs)
+            return {
+                "results": [{
+                    "tweet_id": "translator-flash",
+                    "lang_detected": "en",
+                    "text_en": "DeepSeek release",
+                    "text_zh_cn": "深度求索发布",
+                    "literal_zh": "深度求索发布",
+                    "cn_equivalent": "深度求索发布",
+                    "annotation": "",
+                    "noop_en": True,
+                    "noop_zh": False,
+                }]
+            }
+
+    client = FakeClient()
+    translate_batch_pragmatics(
+        [{"tweet_id": "translator-flash", "text": "DeepSeek release"}],
+        ["en", "zh_cn"],
+        client,
+        few_shot_examples=[],
+        cfg=_CfgStub("deepseek-v4-flash"),
+    )
+
+    assert client.calls[0]["model"] == "deepseek-v4-flash"
+    assert client.calls[0]["thinking"] == {"type": "disabled"}
 
 
 def test_cfg_falls_back_to_env_when_translator_model_unset(monkeypatch):
@@ -107,15 +155,14 @@ def test_cfg_falls_back_to_env_when_translator_model_unset(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
-    cfg = _CfgStub()
-    cfg.llm.translator_model = None  # not set
-    assert _resolve_translator_model(cfg) == "deepseek-v4-pro"
+    cfg = _CfgStub(None)
+    assert _resolve_translator_model(cfg) == "deepseek-v4-flash"
 
 
 def test_no_cfg_env_only_still_works(monkeypatch):
     """Preexisting env-only path. Must NOT regress: cf=None + base_url with
-    'deepseek.com' returns deepseek-v4-pro."""
+    'deepseek.com' returns deepseek-v4-flash."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
-    assert _resolve_translator_model(None) == "deepseek-v4-pro"
+    assert _resolve_translator_model(None) == "deepseek-v4-flash"

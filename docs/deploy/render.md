@@ -113,8 +113,9 @@ URL was applied directly and all three services were redeployed. Never use
 deploy status alone as the retirement gate.
 
 The headline route is pinned to DeepSeek V4 via
-`https://api.deepseek.com/anthropic` + `deepseek-v4-pro`, matching the
-translation/classification route. Anthropic is a separate explicit route using
+`https://api.deepseek.com/anthropic` + `deepseek-v4-pro`. Translation and
+classification use the same endpoint and credential but are pinned to
+`deepseek-v4-flash`. Anthropic is a separate explicit route using
 `https://api.anthropic.com` + `claude-haiku-4-5-20251001`; MiniMax is a
 separate explicit/evaluated route using
 `https://api.minimax.io/anthropic` + `MiniMax-M3`; legacy M3 model names and

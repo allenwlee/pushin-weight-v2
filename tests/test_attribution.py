@@ -636,10 +636,13 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
 
       1. ANTHROPIC_MODEL env wins always.
       2. else, MiniMax-M3.0 if ANTHROPIC_BASE_URL routes through minimax.io.
-      3. else, deepseek-v4-pro if ANTHROPIC_BASE_URL routes through deepseek.com.
+      3. else, deepseek-v4-flash if ANTHROPIC_BASE_URL routes through deepseek.com.
       4. else, claude-haiku-4-5 (direct api.anthropic.com).
     """
     from x_monitor.attribution import _resolve_signal_model
+
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_MODEL", raising=False)
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
 
     # (env unset, no proxy) -> claude-haiku-4-5
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
@@ -662,20 +665,20 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     assert _resolve_signal_model() == "claude-haiku-4-5"
 
-    # (env unset, deepseek proxy) -> deepseek-v4-pro (Plan 2026-07-15-002)
+    # (env unset, deepseek proxy) -> deepseek-v4-flash
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
-    assert _resolve_signal_model() == "deepseek-v4-pro"
+    assert _resolve_signal_model() == "deepseek-v4-flash"
 
     # (env=override, deepseek) -> override wins
     monkeypatch.setenv("ANTHROPIC_MODEL", "custom-deepseek-model")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
     assert _resolve_signal_model() == "custom-deepseek-model"
 
-    # (env unset, deepseek wins over direct-haiku) -> deepseek-v4-pro
+    # (env unset, deepseek wins over direct-haiku) -> deepseek-v4-flash
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
-    assert _resolve_signal_model() == "deepseek-v4-pro"
+    assert _resolve_signal_model() == "deepseek-v4-flash"
 
     # X_MONITOR_CLASSIFIER_BASE_URL overrides ANTHROPIC_BASE_URL when set.
     # Plan 2026-07-15-003: lets M3 stay as the process-wide default while
@@ -686,7 +689,7 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
     monkeypatch.setenv(
         "X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic"
     )
-    assert _resolve_signal_model() == "deepseek-v4-pro"
+    assert _resolve_signal_model() == "deepseek-v4-flash"
 
     # Override unset -> falls back to ANTHROPIC_BASE_URL.
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
@@ -883,13 +886,14 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
     """
     from x_monitor.attribution import classify_batch_pragmatics_full
 
+    monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
     captured = {}
 
     class FakeClient:
         def messages_create(self, **kwargs):
             captured.update(kwargs)
             # Return valid wire format with one entry per input tweet
-            tweets = kwargs["messages"][0]["content"][0]["text"]
+            tweets = kwargs["messages"][0]["content"]
             # Crude: count tweet_ids in the user prompt
             import re
             n = len(re.findall(r'"tweet_id":', tweets))

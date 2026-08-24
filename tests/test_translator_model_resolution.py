@@ -21,13 +21,13 @@ from x_monitor.attribution import _resolve_translator_model
 
 def test_x_monitor_translator_base_url_drives_deepseek_model_name(monkeypatch):
     """When X_MONITOR_TRANSLATOR_BASE_URL points at deepseek.com,
-    the translator model name must be 'deepseek-v4-pro' (NOT 'MiniMax-M3.0')."""
+    the translator model name must be 'deepseek-v4-flash' (NOT 'MiniMax-M3.0')."""
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
     monkeypatch.setenv(
         "X_MONITOR_TRANSLATOR_BASE_URL", "https://api.deepseek.com/anthropic"
     )
-    assert _resolve_translator_model() == "deepseek-v4-pro", (
+    assert _resolve_translator_model() == "deepseek-v4-flash", (
         "Model-name inference must honor X_MONITOR_TRANSLATOR_BASE_URL "
         "(parallel to _resolve_thinking_default). Got the legacy MiniMax-M3.0 "
         "because the env-group's ANTHROPIC_BASE_URL=api.minimax.io leaked through."
@@ -44,11 +44,11 @@ def test_anthropic_base_url_still_drives_minimax_when_no_override(monkeypatch):
 
 def test_anthropic_base_url_drives_deepseek_when_no_override(monkeypatch):
     """When no X_MONITOR_TRANSLATOR_BASE_URL is set, ANTHROPIC_BASE_URL
-    routing to deepseek.com yields 'deepseek-v4-pro'."""
+    routing to deepseek.com yields 'deepseek-v4-flash'."""
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
-    assert _resolve_translator_model() == "deepseek-v4-pro"
+    assert _resolve_translator_model() == "deepseek-v4-flash"
 
 
 def test_anthropic_model_env_var_overrides_inference(monkeypatch):
