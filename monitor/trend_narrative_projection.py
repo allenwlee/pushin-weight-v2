@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +42,7 @@ def project_trend_narrative(
         "state": "unavailable",
         "state_label": _state_label("unavailable", is_zh=is_zh),
         "body": fallback_body,
+        "body_prefix": "",
         "body_remainder": fallback_body,
         "observations": [],
         "subjects": [],
@@ -68,6 +70,26 @@ def project_trend_narrative(
         .prefetch_related("subjects")
         .first()
     )
+    no_story = (
+        TrendNarrative.objects.filter(
+            window_days=window_days,
+            status=TrendNarrative.Status.CHECKED,
+            error_code="insufficient_data",
+        )
+        .order_by("-facts_as_of", "-latest_checked_at", "-created_at", "-pk")
+        .first()
+    )
+    if no_story is not None and (
+        current is None or _freshness_key(no_story) > _freshness_key(current)
+    ):
+        return _no_story_projection(
+            base,
+            no_story=no_story,
+            is_zh=is_zh,
+            window_days=window_days,
+            config=active_config,
+            now=requested_at,
+        )
     if current is None:
         return base
     state, checked_at = trend_narrative_state(
@@ -84,7 +106,7 @@ def project_trend_narrative(
         body = f"{body} {_coverage_context(current, is_zh=is_zh)}"
     subjects = _subject_projection(current, is_zh=is_zh)
     primary_brand = subjects[0] if subjects else None
-    body_remainder = _body_remainder(
+    body_prefix, body_remainder = _body_parts(
         body,
         primary_brand["display_name"] if primary_brand else "",
     )
@@ -93,6 +115,7 @@ def project_trend_narrative(
         "state": state,
         "state_label": _state_label(state, is_zh=is_zh),
         "body": body,
+        "body_prefix": body_prefix,
         "body_remainder": body_remainder,
         "observations": observations,
         "subjects": subjects,
@@ -101,6 +124,45 @@ def project_trend_narrative(
         "checked_at": _iso(checked_at),
         "facts_as_of": _iso(current.facts_as_of),
         "coverage_state": current.coverage_state or "unknown",
+    }
+
+
+def _freshness_key(row: TrendNarrative) -> tuple[Any, Any, int]:
+    return (
+        row.latest_checked_as_of or row.facts_as_of,
+        row.latest_checked_at or row.generated_at or row.created_at,
+        int(row.pk),
+    )
+
+
+def _no_story_projection(
+    base: dict[str, Any],
+    *,
+    no_story: TrendNarrative,
+    is_zh: bool,
+    window_days: int,
+    config: HeadlineNarrativeConfig,
+    now,
+) -> dict[str, Any]:
+    state, checked_at = trend_narrative_state(
+        no_story,
+        window_days=window_days,
+        config=config,
+        now=now,
+    )
+    body = _localized(
+        "No clear conversation story emerged in this window.",
+        is_zh=is_zh,
+    )
+    return {
+        **base,
+        "state": state,
+        "state_label": _state_label(state, is_zh=is_zh),
+        "body": body,
+        "body_remainder": body,
+        "checked_at": _iso(checked_at),
+        "facts_as_of": _iso(no_story.facts_as_of),
+        "coverage_state": no_story.coverage_state or "unknown",
     }
 
 
@@ -168,8 +230,12 @@ def _state_label(state: str, *, is_zh: bool) -> str:
         "unavailable": "Warming up",
         "disabled": "Disabled",
     }
+    return _localized(labels[state], is_zh=is_zh)
+
+
+def _localized(message: str, *, is_zh: bool) -> str:
     with override("zh-hans" if is_zh else "en"):
-        return gettext(labels[state])
+        return gettext(message)
 
 
 def _subject_projection(
@@ -234,15 +300,19 @@ def _subject_projection(
     ]
 
 
-def _body_remainder(body: str, leading_name: str) -> str:
-    if not leading_name or not body.casefold().startswith(leading_name.casefold()):
-        return body
-    boundary = body[len(leading_name) : len(leading_name) + 1]
-    if boundary and boundary.isalnum():
-        return body
-    return body[len(leading_name) :].lstrip()
-
-
+def _body_parts(body: str, primary_name: str) -> tuple[str, str]:
+    """Split around the first subject occurrence so its link stays in place."""
+    if not primary_name:
+        return "", body
+    for match in re.finditer(re.escape(primary_name), body, flags=re.IGNORECASE):
+        preceding = body[match.start() - 1 : match.start()]
+        following = body[match.end() : match.end() + 1]
+        if (preceding and preceding.isalnum()) or (
+            following and following.isalnum()
+        ):
+            continue
+        return body[: match.start()], body[match.end() :]
+    return "", body
 def _public_observations(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []

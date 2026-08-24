@@ -276,14 +276,7 @@
           <span class="headline-state" data-pw-headline-state>{{ trend_narrative.state_label }}</span>
         </div>
         <div class="body">
-          {% if trend_narrative.primary_brand %}
-            {% if trend_narrative.primary_brand.url %}
-              <a class="brand" data-pw-headline-brand href="{{ trend_narrative.primary_brand.url }}">{{ trend_narrative.primary_brand.display_name }}</a>
-            {% else %}
-              <span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>
-            {% endif %}
-          {% endif %}
-          <span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
+          <span data-pw-headline-prefix>{{ trend_narrative.body_prefix }}</span>{% if trend_narrative.primary_brand %}{% if trend_narrative.primary_brand.url %}<a class="brand" data-pw-headline-brand href="{{ trend_narrative.primary_brand.url }}">{{ trend_narrative.primary_brand.display_name }}</a>{% else %}<span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>{% endif %}{% endif %}<span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
         </div>
         <ul class="headline-observations" data-pw-headline-observations{% if not trend_narrative.observations %} hidden{% endif %}>
           {% for observation in trend_narrative.observations %}

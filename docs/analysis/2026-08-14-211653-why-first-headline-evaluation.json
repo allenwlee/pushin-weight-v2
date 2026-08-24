@@ -1,0 +1,2359 @@
+{
+  "artifact_schema_version": 1,
+  "execution": {
+    "accounted_cost_dollars": "0.100828",
+    "accounted_input_tokens": 207468,
+    "calls_used": 28,
+    "concurrency": 1,
+    "stop_reason": "completed"
+  },
+  "manifest": {
+    "concurrency": 1,
+    "context_window_tokens": 1000000,
+    "dollar_budget": "0.70",
+    "input_dollars_per_million_tokens": "0.435",
+    "input_token_budget": 1450000,
+    "max_calls": 28,
+    "max_output_tokens": 1600,
+    "max_packet_bytes": 86144,
+    "model": "deepseek-v4-pro",
+    "output_dollars_per_million_tokens": "0.87",
+    "pricing_checked_at": "2026-08-14T21:14:05Z",
+    "run_id": "2026-08-15-owner-approved-why-first-schema-rerun-v2"
+  },
+  "preflight": {
+    "concurrency": 1,
+    "density_excerpt_characters": [
+      250,
+      500,
+      750,
+      1000
+    ],
+    "estimated_input_tokens_total": 1426315,
+    "estimated_reserved_cost_dollars_total": "0.659424",
+    "estimates": [
+      {
+        "call_id": "pairwise:pair-01:e4:c1000",
+        "estimated_input_tokens": 23498,
+        "packet_bytes": 16985,
+        "reserved_cost_dollars": "0.011614"
+      },
+      {
+        "call_id": "pairwise:pair-02:e12:c1000",
+        "estimated_input_tokens": 44157,
+        "packet_bytes": 36150,
+        "reserved_cost_dollars": "0.020600"
+      },
+      {
+        "call_id": "pairwise:pair-03:e24:c1000",
+        "estimated_input_tokens": 52234,
+        "packet_bytes": 44721,
+        "reserved_cost_dollars": "0.024114"
+      },
+      {
+        "call_id": "pairwise:pair-04:e48:c1000",
+        "estimated_input_tokens": 95885,
+        "packet_bytes": 86078,
+        "reserved_cost_dollars": "0.043102"
+      },
+      {
+        "call_id": "pairwise:pair-05:e4:c1000",
+        "estimated_input_tokens": 23499,
+        "packet_bytes": 16986,
+        "reserved_cost_dollars": "0.011614"
+      },
+      {
+        "call_id": "pairwise:pair-06:e12:c1000",
+        "estimated_input_tokens": 44230,
+        "packet_bytes": 36223,
+        "reserved_cost_dollars": "0.020632"
+      },
+      {
+        "call_id": "pairwise:pair-07:e24:c1000",
+        "estimated_input_tokens": 52241,
+        "packet_bytes": 44728,
+        "reserved_cost_dollars": "0.024117"
+      },
+      {
+        "call_id": "pairwise:pair-08:e48:c1000",
+        "estimated_input_tokens": 95951,
+        "packet_bytes": 86144,
+        "reserved_cost_dollars": "0.043131"
+      },
+      {
+        "call_id": "pairwise:pair-09:e4:c1000",
+        "estimated_input_tokens": 32664,
+        "packet_bytes": 25057,
+        "reserved_cost_dollars": "0.015601"
+      },
+      {
+        "call_id": "pairwise:pair-10:e12:c1000",
+        "estimated_input_tokens": 35048,
+        "packet_bytes": 28135,
+        "reserved_cost_dollars": "0.016638"
+      },
+      {
+        "call_id": "pairwise:pair-11:e24:c1000",
+        "estimated_input_tokens": 61483,
+        "packet_bytes": 52876,
+        "reserved_cost_dollars": "0.028137"
+      },
+      {
+        "call_id": "pairwise:pair-12:e48:c1000",
+        "estimated_input_tokens": 86917,
+        "packet_bytes": 78204,
+        "reserved_cost_dollars": "0.039201"
+      },
+      {
+        "call_id": "pairwise:pair-13:e4:c1000",
+        "estimated_input_tokens": 32730,
+        "packet_bytes": 25123,
+        "reserved_cost_dollars": "0.015630"
+      },
+      {
+        "call_id": "pairwise:pair-14:e12:c1000",
+        "estimated_input_tokens": 35056,
+        "packet_bytes": 28143,
+        "reserved_cost_dollars": "0.016641"
+      },
+      {
+        "call_id": "pairwise:pair-15:e24:c1000",
+        "estimated_input_tokens": 61549,
+        "packet_bytes": 52942,
+        "reserved_cost_dollars": "0.028166"
+      },
+      {
+        "call_id": "pairwise:pair-16:e48:c1000",
+        "estimated_input_tokens": 86924,
+        "packet_bytes": 78211,
+        "reserved_cost_dollars": "0.039204"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e4:c1000",
+        "estimated_input_tokens": 23498,
+        "packet_bytes": 16985,
+        "reserved_cost_dollars": "0.011614"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e12:c1000",
+        "estimated_input_tokens": 34996,
+        "packet_bytes": 28083,
+        "reserved_cost_dollars": "0.016615"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e24:c1000",
+        "estimated_input_tokens": 52240,
+        "packet_bytes": 44727,
+        "reserved_cost_dollars": "0.024116"
+      },
+      {
+        "call_id": "evidence_count:pair-01:e48:c1000",
+        "estimated_input_tokens": 86728,
+        "packet_bytes": 78015,
+        "reserved_cost_dollars": "0.039119"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e4:c1000",
+        "estimated_input_tokens": 23518,
+        "packet_bytes": 17005,
+        "reserved_cost_dollars": "0.011622"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e12:c1000",
+        "estimated_input_tokens": 35048,
+        "packet_bytes": 28135,
+        "reserved_cost_dollars": "0.016638"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e24:c1000",
+        "estimated_input_tokens": 52340,
+        "packet_bytes": 44827,
+        "reserved_cost_dollars": "0.024160"
+      },
+      {
+        "call_id": "evidence_count:pair-16:e48:c1000",
+        "estimated_input_tokens": 86924,
+        "packet_bytes": 78211,
+        "reserved_cost_dollars": "0.039204"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c250",
+        "estimated_input_tokens": 31239,
+        "packet_bytes": 23726,
+        "reserved_cost_dollars": "0.014981"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c500",
+        "estimated_input_tokens": 38239,
+        "packet_bytes": 30726,
+        "reserved_cost_dollars": "0.018026"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c750",
+        "estimated_input_tokens": 45239,
+        "packet_bytes": 37726,
+        "reserved_cost_dollars": "0.021071"
+      },
+      {
+        "call_id": "excerpt_density:pair-01:e24:c1000",
+        "estimated_input_tokens": 52240,
+        "packet_bytes": 44727,
+        "reserved_cost_dollars": "0.024116"
+      }
+    ],
+    "evidence_budgets": [
+      4,
+      12,
+      24,
+      48
+    ],
+    "manifest": {
+      "concurrency": 1,
+      "context_window_tokens": 1000000,
+      "dollar_budget": "0.70",
+      "input_dollars_per_million_tokens": "0.435",
+      "input_token_budget": 1450000,
+      "max_calls": 28,
+      "max_output_tokens": 1600,
+      "max_packet_bytes": 86144,
+      "model": "deepseek-v4-pro",
+      "output_dollars_per_million_tokens": "0.87",
+      "pricing_checked_at": "2026-08-14T21:14:05Z",
+      "run_id": "2026-08-15-owner-approved-why-first-schema-rerun-v2"
+    },
+    "planned_call_count": 28,
+    "planned_calls_fit_call_cap": true,
+    "transport_enabled": false
+  },
+  "results": [
+    {
+      "accounted_cost_dollars": "0.002369",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as conversation centered on technical analysis, with negligible volume movement and flat discourse.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析上，声量变化可忽略，话语结构持平。"
+      },
+      "call_id": "pairwise:pair-01:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 23498,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "93ed6774a39ddc7e984f5eaef8470eaf512aff6ef248dc1ef92d10167f190555",
+      "latency_ms": 3542,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 16985,
+      "provider_usage": {
+        "input_tokens": 4918,
+        "output_tokens": 264,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as conversation centered on technical analysis, with negligible volume movement and flat discourse.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析上，声量变化可忽略，话语结构持平。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011614",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004624",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as users reported speculation that its intelligence had improved, while the broader conversation stayed centered on technical analysis and neutral buzz posts.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，用户报告称有人猜测其智能水平有所提升，而更广泛的讨论仍以技术分析和中性热度帖为主。"
+      },
+      "call_id": "pairwise:pair-02:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 44157,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7988,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 36150,
+      "provider_usage": {
+        "input_tokens": 9345,
+        "output_tokens": 642,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as users reported speculation that its intelligence had improved, while the broader conversation stayed centered on technical analysis and neutral buzz posts.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，用户报告称有人猜测其智能水平有所提升，而更广泛的讨论仍以技术分析和中性热度帖为主。\",\n  \"observations_en\": [\n    \"DeepSeek volume rose 50% and engagement intensity rose 25%, while post-type, discourse, sentiment, and nationalism mixes stayed flat.\",\n    \"MiniMax showed a small 5% volume increase with flat composition, leaving it a quiet relative comparison rather than an extraordinary mover.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 的讨论量上升 50%，互动强度上升 25%，而帖型、话语、情绪和民族主义构成保持平稳。\",\n    \"MiniMax 的讨论量小幅上升 5%，构成平稳，属于安静的相对比较，而非异常变动。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"volume\",\n        \"engagement\"\n      ],\n      \"evidence_ids\": [],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"volume\"\n      ],\n      \"evidence_ids\": [],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.020600",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_claim_candidate_invalid.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_claim_candidate_invalid.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_claim_candidate_invalid.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_claim_candidate_invalid.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_claim_candidate_invalid.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-02",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_claim_candidate_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004301",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as users posted about technical analysis, with the conversation centered on general mentions and speculation that its intelligence had improved.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，用户围绕技术分析发帖，讨论集中在一般性提及以及对其智能提升的猜测。"
+      },
+      "call_id": "pairwise:pair-03:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 52234,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 5545,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44721,
+      "provider_usage": {
+        "input_tokens": 8934,
+        "output_tokens": 477,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as users posted about technical analysis, with the conversation centered on general mentions and speculation that its intelligence had improved.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，用户围绕技术分析发帖，讨论集中在一般性提及以及对其智能提升的猜测。\",\n  \"observations_en\": [\n    \"MiniMax also drew technical-analysis posts, but its conversation was quieter and less broadly sourced.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 也出现了技术分析相关帖子，但其讨论规模较小，来源也较单一。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"evidence_only\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"\",\n      \"observed_name\": \"MiniMax\",\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ]\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.024114",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-03",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_entity_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.008024",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as users posted about technical analysis and speculation that its intelligence had improved, while volume rose 50%.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，用户发帖讨论技术分析并推测其智能有所提升，同时发帖量上升 50%。"
+      },
+      "call_id": "pairwise:pair-04:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 95885,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6479,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 86078,
+      "provider_usage": {
+        "input_tokens": 17393,
+        "output_tokens": 527,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as users posted about technical analysis and speculation that its intelligence had improved, while volume rose 50%.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，用户发帖讨论技术分析并推测其智能有所提升，同时发帖量上升 50%。\",\n  \"observations_en\": [\n    \"MiniMax also showed a volume increase of 45%, but its conversation remained a smaller, steady stream of similar technical-analysis posts.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的发帖量也上升了 45%，但其讨论仍是一股规模较小且稳定的技术分析帖子流。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.043102",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-04",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002020",
+      "bilingual_output": {
+        "body_en": "Conversation around DeepSeek centered on technical analysis, with users reporting that its intelligence had improved, while MiniMax drew similar mentions without a recurring reason. DeepSeek led the window, but the movement was small and the evidence base was thin.",
+        "body_zh_cn": "围绕 DeepSeek 的讨论集中在技术分析上，用户称其智能有所提升，而 MiniMax 也出现了类似提及，但没有反复出现的理由。DeepSeek 在本窗口领先，但变化幅度较小，证据基础也较薄弱。"
+      },
+      "call_id": "pairwise:pair-05:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 23499,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 4272,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 16986,
+      "provider_usage": {
+        "input_tokens": 3895,
+        "output_tokens": 374,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"Conversation around DeepSeek centered on technical analysis, with users reporting that its intelligence had improved, while MiniMax drew similar mentions without a recurring reason. DeepSeek led the window, but the movement was small and the evidence base was thin.\",\n  \"body_zh_cn\": \"围绕 DeepSeek 的讨论集中在技术分析上，用户称其智能有所提升，而 MiniMax 也出现了类似提及，但没有反复出现的理由。DeepSeek 在本窗口领先，但变化幅度较小，证据基础也较薄弱。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"evidence_only\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"\",\n      \"observed_name\": \"MiniMax\",\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ]\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011614",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_entity_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-05",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_entity_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004186",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window as users reported improved intelligence and technical analysis discussion, with hands-on posts and positive sentiment rising alongside volume.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，用户报告其智能有所提升并围绕技术分析展开讨论，实操帖和正面情绪随发帖量一同上升。"
+      },
+      "call_id": "pairwise:pair-06:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 44230,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6502,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 36223,
+      "provider_usage": {
+        "input_tokens": 8328,
+        "output_tokens": 648,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window as users reported improved intelligence and technical analysis discussion, with hands-on posts and positive sentiment rising alongside volume.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，用户报告其智能有所提升并围绕技术分析展开讨论，实操帖和正面情绪随发帖量一同上升。\",\n  \"observations_en\": [\n    \"MiniMax also gained volume, but its post-type, discourse, and sentiment mix stayed flat.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的发帖量也有所增长，但其帖型、话语和情绪结构保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_446618ab6f7f4761c6418359\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_6f1448fbfe7962e3016c2afe\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.020632",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-06",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_quantitative_family_mismatch",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004117",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on technical analysis and hands-on posts, with users reporting improved intelligence and neutral sentiment.",
+        "body_zh_cn": "DeepSeek 的讨论集中在技术分析和上手体验帖上，用户称其智能有所提升，情绪以中性为主。"
+      },
+      "call_id": "pairwise:pair-07:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 52241,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "aefcb0ac3af5747152b6846c30f8c266e7c75401e5d76804032f72f26f0842b1",
+      "latency_ms": 4180,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44728,
+      "provider_usage": {
+        "input_tokens": 8935,
+        "output_tokens": 265,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on technical analysis and hands-on posts, with users reporting improved intelligence and neutral sentiment.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在技术分析和上手体验帖上，用户称其智能有所提升，情绪以中性为主。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.024117",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-07",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.006235",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation rose sharply this week, with users posting about technical analysis and hands-on use while positive sentiment and engagement also increased.",
+        "body_zh_cn": "本周 DeepSeek 相关讨论大幅上升，用户围绕技术分析与实际使用发帖，正面情绪和互动热度也随之提高。"
+      },
+      "call_id": "pairwise:pair-08:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 95951,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7271,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 86144,
+      "provider_usage": {
+        "input_tokens": 13048,
+        "output_tokens": 643,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation rose sharply this week, with users posting about technical analysis and hands-on use while positive sentiment and engagement also increased.\",\n  \"body_zh_cn\": \"本周 DeepSeek 相关讨论大幅上升，用户围绕技术分析与实际使用发帖，正面情绪和互动热度也随之提高。\",\n  \"observations_en\": [\n    \"MiniMax volume moved only slightly, with flat post-type, discourse, and sentiment mix.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 讨论量仅小幅变化，帖子类型、话语和情绪结构保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_446618ab6f7f4761c6418359\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_6f1448fbfe7962e3016c2afe\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.043131",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-08",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003477",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax posts remained general mentions without a recurring reason. Volume was flat for DeepSeek and rose slightly for MiniMax, with engagement intensity up for both.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁下载以及动手使用中智能表现提升，而 MiniMax 的帖子仍为无重复原因的一般性提及。DeepSeek 的声量持平，MiniMax 小幅上升，两者的互动强度均有所提高。"
+      },
+      "call_id": "pairwise:pair-09:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 32664,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7553,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 25057,
+      "provider_usage": {
+        "input_tokens": 6306,
+        "output_tokens": 844,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax posts remained general mentions without a recurring reason. Volume was flat for DeepSeek and rose slightly for MiniMax, with engagement intensity up for both.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁下载以及动手使用中智能表现提升，而 MiniMax 的帖子仍为无重复原因的一般性提及。DeepSeek 的声量持平，MiniMax 小幅上升，两者的互动强度均有所提高。\",\n  \"observations_en\": [\n    \"Users described downloading DeepSeek more often and noticing improved intelligence in hands-on work, a recurring theme across independent reports.\",\n    \"MiniMax posts were mostly general mentions without a recurring reason, so its small volume increase lacks a clear content story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"用户描述更频繁地下载 DeepSeek，并在动手使用中注意到智能表现提升，这一主题在独立报告中反复出现。\",\n    \"MiniMax 的帖子大多为无重复原因的一般性提及，因此其小幅声量增长缺乏明确的内容故事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\",\n        \"qf_22ff2ccd3ad9ee3e9d0ab286\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.015601",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-09",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_quantitative_family_mismatch",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002817",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with independent posts describing the same experience.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告下载更频繁、实际使用中智能表现提升，多个独立帖子描述了相同的体验。"
+      },
+      "call_id": "pairwise:pair-10:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 35048,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "948d4cf3b0d3653660c207945de68f9b5896417b3e74bf09e8807184bb3040b0",
+      "latency_ms": 3649,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28135,
+      "provider_usage": {
+        "input_tokens": 5911,
+        "output_tokens": 283,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with independent posts describing the same experience.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告下载更频繁、实际使用中智能表现提升，多个独立帖子描述了相同的体验。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016638",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "The cited evidence shares one theme across independent authors and source clusters.",
+          "verdict": "pass"
+        },
+        "leader_selection": {
+          "notes": "One measured candidate led and no unselected candidate appeared.",
+          "verdict": "pass"
+        },
+        "materiality": {
+          "notes": "The accepted raw prose made no selected-versus-prior materiality claim because comparison was suppressed.",
+          "verdict": "not_applicable"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Independent excerpts sharing the downloads-and-intelligence theme support the attributed why.",
+          "verdict": "pass"
+        },
+        "unsupported_claims": {
+          "notes": "No unsupported event, number, causal statement, or unselected candidate appeared.",
+          "verdict": "pass"
+        }
+      },
+      "scenario_id": "pair-10",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005370",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation held flat in volume while users repeatedly described downloading it more often and noticing improved intelligence in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论量持平，但用户反复提到更频繁下载并在实际使用中感受到智能提升。"
+      },
+      "call_id": "pairwise:pair-11:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 61483,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6264,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 52876,
+      "provider_usage": {
+        "input_tokens": 11346,
+        "output_tokens": 499,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation held flat in volume while users repeatedly described downloading it more often and noticing improved intelligence in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论量持平，但用户反复提到更频繁下载并在实际使用中感受到智能提升。\",\n  \"observations_en\": [\n    \"MiniMax volume rose 45%, but its evidence is thin and generic, so the movement is not treated as a supported story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 讨论量上升 45%，但证据稀少且泛泛，因此该变化未被视作有支撑的故事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_6ba3fd4321bf1eb00aa67b34\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.028137",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-11",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_quantitative_family_mismatch",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.006753",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, alongside a sharp rise in posts.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁的下载和实际使用中智能表现的提升，同时帖子数量大幅上升。"
+      },
+      "call_id": "pairwise:pair-12:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 86917,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 4519,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78204,
+      "provider_usage": {
+        "input_tokens": 14983,
+        "output_tokens": 270,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, alongside a sharp rise in posts.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁的下载和实际使用中智能表现的提升，同时帖子数量大幅上升。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.039201",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-12",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_explanation_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003332",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, alongside a rise in hands-on posts, technical analysis, and positive sentiment.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁的下载以及实际使用中智能表现的提升，同时实操类帖子、技术分析和正面情绪均有所上升。"
+      },
+      "call_id": "pairwise:pair-13:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 32730,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6705,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 25123,
+      "provider_usage": {
+        "input_tokens": 6313,
+        "output_tokens": 673,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, alongside a rise in hands-on posts, technical analysis, and positive sentiment.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁的下载以及实际使用中智能表现的提升，同时实操类帖子、技术分析和正面情绪均有所上升。\",\n  \"observations_en\": [\n    \"MiniMax led the window in volume growth, but its conversation remained generic with flat post-type, discourse, and sentiment mixes.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 在本窗口的讨论量增长领先，但其讨论内容仍较泛化，帖子类型、话语和情绪结构均保持平稳。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_446618ab6f7f4761c6418359\",\n        \"qf_3a07aa2486e9105d311aba1e\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_1ab2d7f37b62a1dd4297c1c9\",\n        \"qf_9a82f2cd7b55965bc13e476c\",\n        \"qf_6f1448fbfe7962e3016c2afe\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.015630",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_quantitative_family_mismatch.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-13",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_quantitative_family_mismatch",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002824",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with positive technical analysis posts recurring across independent sources.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告下载更频繁、实际使用中智能表现提升，正面技术分析帖在多个独立来源中反复出现。"
+      },
+      "call_id": "pairwise:pair-14:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "high",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 35056,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "317f60e2d35817722989b0b3e49c9ff1363ef160e0c2b36e6dfba4ce2f9a2c00",
+      "latency_ms": 3552,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28143,
+      "provider_usage": {
+        "input_tokens": 5912,
+        "output_tokens": 290,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with positive technical analysis posts recurring across independent sources.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告下载更频繁、实际使用中智能表现提升，正面技术分析帖在多个独立来源中反复出现。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016641",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "The cited evidence shares one theme across independent authors and source clusters.",
+          "verdict": "pass"
+        },
+        "leader_selection": {
+          "notes": "One measured candidate led and no unselected candidate appeared.",
+          "verdict": "pass"
+        },
+        "materiality": {
+          "notes": "The accepted raw prose made no selected-versus-prior materiality claim because comparison was suppressed.",
+          "verdict": "not_applicable"
+        },
+        "mix_driver": {
+          "notes": "The accepted prose connected recurring positive technical-analysis posts to the content story.",
+          "verdict": "pass"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Positive sentiment was aligned in both locales without claiming an unsupported change.",
+          "verdict": "pass"
+        },
+        "supported_why": {
+          "notes": "Independent excerpts sharing the downloads-and-intelligence theme support the attributed why.",
+          "verdict": "pass"
+        },
+        "unsupported_claims": {
+          "notes": "No unsupported event, number, causal statement, or unselected candidate appeared.",
+          "verdict": "pass"
+        }
+      },
+      "scenario_id": "pair-14",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005514",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with hands-on posts, technical analysis, and positive sentiment all rising while overall volume stayed flat.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁下载和实际使用中智能表现提升，动手实践帖、技术分析和正面情绪均上升，而整体发帖量持平。"
+      },
+      "call_id": "pairwise:pair-15:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "high",
+        "evidence_strength": "high",
+        "mix": "high",
+        "quantity": "low",
+        "rate": "high",
+        "shape": "high"
+      },
+      "estimated_input_tokens": 61549,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 7213,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 52942,
+      "provider_usage": {
+        "input_tokens": 11353,
+        "output_tokens": 662,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with hands-on posts, technical analysis, and positive sentiment all rising while overall volume stayed flat.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁下载和实际使用中智能表现提升，动手实践帖、技术分析和正面情绪均上升，而整体发帖量持平。\",\n  \"observations_en\": [\n    \"MiniMax showed a small volume increase but its conversation remained flat across post type, discourse, and sentiment, with limited independent support.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的发帖量小幅上升，但帖子类型、话语和情绪均持平，独立支持有限。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_5d43bfdf698712e3e2314859\",\n        \"qf_385bf9fcb036109e000f7086\",\n        \"qf_f905a89e521cf68a119ed728\",\n        \"qf_446618ab6f7f4761c6418359\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [\n        \"qf_3a07aa2486e9105d311aba1e\",\n        \"qf_d8a3b8738967b19a3a9d2a85\",\n        \"qf_f456f60ebe094d3f7a730384\",\n        \"qf_2af119b3ac722efe6b4df71e\"\n      ],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.028166",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-15",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.004856",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding improved intelligence in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁地下载它，并认为实际使用中的智能表现有所提升。"
+      },
+      "call_id": "pairwise:pair-16:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 86924,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 4113,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78211,
+      "provider_usage": {
+        "input_tokens": 10632,
+        "output_tokens": 266,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding improved intelligence in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁地下载它，并认为实际使用中的智能表现有所提升。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.039204",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "pairwise",
+      "validator": {
+        "error_code": "headline_output_explanation_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.000547",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users speculated about improved intelligence, while MiniMax drew a small relative volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户猜测其智能有所提升，而 MiniMax 出现了小幅相对量增长。"
+      },
+      "call_id": "evidence_count:pair-01:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 23498,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 5607,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 16985,
+      "provider_usage": {
+        "input_tokens": 54,
+        "output_tokens": 602,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users speculated about improved intelligence, while MiniMax drew a small relative volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户猜测其智能有所提升，而 MiniMax 出现了小幅相对量增长。\",\n  \"observations_en\": [\n    \"Conversation centered on technical analysis, with posts speculating that DeepSeek intelligence had improved.\",\n    \"MiniMax showed a small relative volume increase while its discourse mix remained stable.\"\n  ],\n  \"observations_zh_cn\": [\n    \"对话集中在技术分析上，帖子猜测 DeepSeek 的智能有所提升。\",\n    \"MiniMax 出现了小幅相对量增长，同时其话语结构保持稳定。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 1,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011614",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_explanation_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003008",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window, but the conversation stayed flat: users posted general technical-analysis mentions without a recurring story, and the only movement was a modest engagement-intensity rise.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，但讨论保持平稳：用户发布的是泛化的技术分析提及，没有反复出现的故事，唯一的变化是参与强度小幅上升。"
+      },
+      "call_id": "evidence_count:pair-01:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 34996,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6709,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28083,
+      "provider_usage": {
+        "input_tokens": 5910,
+        "output_tokens": 502,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window, but the conversation stayed flat: users posted general technical-analysis mentions without a recurring story, and the only movement was a modest engagement-intensity rise.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，但讨论保持平稳：用户发布的是泛化的技术分析提及，没有反复出现的故事，唯一的变化是参与强度小幅上升。\",\n  \"observations_en\": [\n    \"MiniMax also showed only a small volume increase, with no recurring content pattern to support a broader trend.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 也仅出现小幅量增，没有反复出现的内容模式支撑更广泛的趋势。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016615",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_event_anchor_required",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003570",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as conversation centered on technical analysis, with posts speculating that its intelligence had improved while overall volume stayed flat.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析上，有帖子推测其智能有所提升，而整体声量保持平稳。"
+      },
+      "call_id": "evidence_count:pair-01:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 52240,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "5e49372885f1f46110301a1555f371589a7eabae7d3d8315da7c9c22cd77a855",
+      "latency_ms": 4295,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44727,
+      "provider_usage": {
+        "input_tokens": 7654,
+        "output_tokens": 276,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as conversation centered on technical analysis, with posts speculating that its intelligence had improved while overall volume stayed flat.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析上，有帖子推测其智能有所提升，而整体声量保持平稳。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.024116",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.005556",
+      "bilingual_output": {
+        "body_en": "DeepSeek led the window, but the conversation stayed flat: users posted steady technical-analysis commentary with no recurring event or clear reason for the mentions.",
+        "body_zh_cn": "DeepSeek 在本窗口领先，但讨论保持平稳：用户持续发布技术分析类评论，没有反复出现的事件或明确的提及原因。"
+      },
+      "call_id": "evidence_count:pair-01:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 86728,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 6563,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78015,
+      "provider_usage": {
+        "input_tokens": 11782,
+        "output_tokens": 495,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led the window, but the conversation stayed flat: users posted steady technical-analysis commentary with no recurring event or clear reason for the mentions.\",\n  \"body_zh_cn\": \"DeepSeek 在本窗口领先，但讨论保持平稳：用户持续发布技术分析类评论，没有反复出现的事件或明确的提及原因。\",\n  \"observations_en\": [\n    \"MiniMax showed a small volume increase, but the movement was negligible and the conversation lacked a supported recurring story.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 的声量略有上升，但变化很小，且讨论缺乏可支持的反复出现的故事。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.039119",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_event_anchor_required",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002154",
+      "bilingual_output": {
+        "body_en": "Conversation around DeepSeek centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax drew only scattered mentions without a recurring reason.",
+        "body_zh_cn": "围绕 DeepSeek 的讨论集中在用户报告更频繁下载以及实际使用中智能表现提升，而 MiniMax 仅获得零散提及，没有反复出现的原因。"
+      },
+      "call_id": "evidence_count:pair-16:e4:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 23518,
+      "evidence_budget": 4,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 5244,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 17005,
+      "provider_usage": {
+        "input_tokens": 3896,
+        "output_tokens": 528,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"Conversation around DeepSeek centered on users reporting more frequent downloads and improved intelligence in hands-on work, while MiniMax drew only scattered mentions without a recurring reason.\",\n  \"body_zh_cn\": \"围绕 DeepSeek 的讨论集中在用户报告更频繁下载以及实际使用中智能表现提升，而 MiniMax 仅获得零散提及，没有反复出现的原因。\",\n  \"observations_en\": [\n    \"DeepSeek showed a sharp late-window rise in posting and engagement, while MiniMax remained essentially flat.\"\n  ],\n  \"observations_zh_cn\": [\n    \"DeepSeek 在窗口后期发帖量和互动量明显上升，而 MiniMax 基本持平。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"aggregate_trajectory\",\n      \"evidence_confidence\": \"aggregate_only\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.011622",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_explanation_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002259",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with positive hands-on posts rising alongside the volume increase.",
+        "body_zh_cn": "DeepSeek 的讨论集中在用户报告更频繁的下载和实际使用中智能表现的提升，积极的实际使用帖文随讨论量上升而增加。"
+      },
+      "call_id": "evidence_count:pair-16:e12:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 35048,
+      "evidence_budget": 12,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 3746,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 28135,
+      "provider_usage": {
+        "input_tokens": 4632,
+        "output_tokens": 280,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation centered on users reporting more frequent downloads and improved intelligence in hands-on work, with positive hands-on posts rising alongside the volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 的讨论集中在用户报告更频繁的下载和实际使用中智能表现的提升，积极的实际使用帖文随讨论量上升而增加。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.016638",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_explanation_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002717",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding improved intelligence in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中发现智能表现有所提升。"
+      },
+      "call_id": "evidence_count:pair-16:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 52340,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 4910,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44827,
+      "provider_usage": {
+        "input_tokens": 5736,
+        "output_tokens": 255,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding improved intelligence in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中发现智能表现有所提升。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\"deepseek:full_window\"],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\"deepseek:full_window\"],\n      \"families\": [\"evidence\"],\n      \"evidence_ids\": [\"ev_01\", \"ev_02\", \"ev_03\", \"ev_04\"],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.024160",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_explanation_support_weak.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_explanation_support_weak",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.000417",
+      "bilingual_output": {
+        "body_en": "DeepSeek conversation surged as users repeatedly described downloading it more often and finding improved intelligence in hands-on work.",
+        "body_zh_cn": "DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中发现智能表现有所提升。"
+      },
+      "call_id": "evidence_count:pair-16:e48:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "high",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "high",
+        "quantity": "high",
+        "rate": "high",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 86924,
+      "evidence_budget": 48,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "",
+      "latency_ms": 5329,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 78211,
+      "provider_usage": {
+        "input_tokens": 8,
+        "output_tokens": 475,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek conversation surged as users repeatedly described downloading it more often and finding improved intelligence in hands-on work.\",\n  \"body_zh_cn\": \"DeepSeek 讨论激增，用户反复提到更频繁下载并在实际使用中发现智能表现有所提升。\",\n  \"observations_en\": [\n    \"MiniMax remained the quiet relative leader, with flat movement and only scattered mentions without a recurring reason.\"\n  ],\n  \"observations_zh_cn\": [\n    \"MiniMax 仍是相对领先者，但走势平稳，仅有零散提及，未形成反复出现的主题。\"\n  ],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\",\n        \"ev_03\",\n        \"ev_04\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"recurring_content\",\n      \"evidence_confidence\": \"recurring_independent\"\n    },\n    {\n      \"observation_index\": 0,\n      \"candidate_ids\": [\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.039204",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_schema_invalid.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-16",
+      "sweep": "evidence_count",
+      "validator": {
+        "error_code": "headline_output_schema_invalid",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.002860",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users posted about technical analysis, while MiniMax saw a small volume increase.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c250",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 31239,
+      "evidence_budget": 24,
+      "excerpt_characters": 250,
+      "generated_output_hash": "",
+      "latency_ms": 4305,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 23726,
+      "provider_usage": {
+        "input_tokens": 5909,
+        "output_tokens": 333,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users posted about technical analysis, while MiniMax saw a small volume increase.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户发布了技术分析相关内容，而 MiniMax 出现了小幅量增。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\",\n    \"minimax:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    },\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"minimax:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\",\n        \"minimax:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"recurring_independent\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.014981",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Provider output failed closed with headline_output_event_anchor_required.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "headline_output_event_anchor_required",
+        "valid": false
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003127",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as conversation centered on general technical-analysis posts, with negligible volume movement.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，讨论集中在一般性技术分析帖，声量变化可忽略不计。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c500",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 38239,
+      "evidence_budget": 24,
+      "excerpt_characters": 500,
+      "generated_output_hash": "982a9e6cb36a73949a9b7197978d5c33fd38fafad26d18beb1c676d7d2eee90c",
+      "latency_ms": 3257,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 30726,
+      "provider_usage": {
+        "input_tokens": 6665,
+        "output_tokens": 262,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as conversation centered on general technical-analysis posts, with negligible volume movement.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，讨论集中在一般性技术分析帖，声量变化可忽略不计。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.018026",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.003519",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as conversation centered on technical analysis posts, with volume and mix essentially flat.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析帖上，声量和结构基本持平。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c750",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 45239,
+      "evidence_budget": 24,
+      "excerpt_characters": 750,
+      "generated_output_hash": "071d2aed9080da37eeb3b611121f458a7dcab451cc8f0756ae61e4b14a4d6461",
+      "latency_ms": 3359,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 37726,
+      "provider_usage": {
+        "input_tokens": 7568,
+        "output_tokens": 261,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as conversation centered on technical analysis posts, with volume and mix essentially flat.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，讨论集中在技术分析帖上，声量和结构基本持平。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.021071",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    },
+    {
+      "accounted_cost_dollars": "0.000274",
+      "bilingual_output": {
+        "body_en": "DeepSeek led a quiet window as users posted about technical analysis, while volume stayed flat and engagement intensity rose.",
+        "body_zh_cn": "DeepSeek 在一个平静的窗口期领先，用户围绕技术分析发帖，讨论量持平而互动强度上升。"
+      },
+      "call_id": "excerpt_density:pair-01:e24:c1000",
+      "dimensions": {
+        "candidate_competition": "low",
+        "content": "low",
+        "data_quality": "low",
+        "evidence_strength": "low",
+        "mix": "low",
+        "quantity": "low",
+        "rate": "low",
+        "shape": "low"
+      },
+      "estimated_input_tokens": 52240,
+      "evidence_budget": 24,
+      "excerpt_characters": 1000,
+      "generated_output_hash": "5b1931810cd1f33d4c3e29575925001eb04e9544c3f9a7f910b779d431293889",
+      "latency_ms": 3617,
+      "model": "deepseek-v4-pro",
+      "packet_bytes": 44727,
+      "provider_usage": {
+        "input_tokens": 102,
+        "output_tokens": 264,
+        "reported": true
+      },
+      "raw_output": "{\n  \"body_en\": \"DeepSeek led a quiet window as users posted about technical analysis, while volume stayed flat and engagement intensity rose.\",\n  \"body_zh_cn\": \"DeepSeek 在一个平静的窗口期领先，用户围绕技术分析发帖，讨论量持平而互动强度上升。\",\n  \"observations_en\": [],\n  \"observations_zh_cn\": [],\n  \"selected_candidate_ids\": [\n    \"deepseek:full_window\"\n  ],\n  \"subjects\": [\n    {\n      \"support_type\": \"measured_candidate\",\n      \"entity_type\": \"brand\",\n      \"candidate_id\": \"deepseek:full_window\",\n      \"observed_name\": \"\",\n      \"evidence_ids\": []\n    }\n  ],\n  \"claims\": [\n    {\n      \"observation_index\": -1,\n      \"candidate_ids\": [\n        \"deepseek:full_window\"\n      ],\n      \"families\": [\n        \"evidence\"\n      ],\n      \"evidence_ids\": [\n        \"ev_01\",\n        \"ev_02\"\n      ],\n      \"quantitative_fact_ids\": [],\n      \"event_anchor\": \"\",\n      \"explanation_type\": \"quiet_relative_leader\",\n      \"evidence_confidence\": \"isolated\"\n    }\n  ]\n}",
+      "reserved_cost_dollars": "0.024116",
+      "rubric": {
+        "bilingual_parity": {
+          "notes": "English and Simplified Chinese expressed the same diagnostic judgment.",
+          "verdict": "pass"
+        },
+        "evidentiary_confidence": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "leader_selection": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "materiality": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "mix_driver": {
+          "notes": "No accepted mix-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "quantitative_accuracy": {
+          "notes": "No exact figure appeared in the bilingual prose.",
+          "verdict": "not_applicable"
+        },
+        "sentiment_use": {
+          "notes": "No accepted sentiment-change judgment was required.",
+          "verdict": "not_applicable"
+        },
+        "supported_why": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        },
+        "unsupported_claims": {
+          "notes": "Output was schema-valid but not accepted because the synthetic boundary leaked suppressed comparisons or accepted non-recurring themes.",
+          "verdict": "fail"
+        }
+      },
+      "scenario_id": "pair-01",
+      "sweep": "excerpt_density",
+      "validator": {
+        "error_code": "",
+        "valid": true
+      }
+    }
+  ],
+  "transport_enabled": true
+}

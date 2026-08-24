@@ -147,8 +147,9 @@ headline_narrative:
   base_url: "https://api.deepseek.com/anthropic"
   model: "deepseek-v4-pro"
   timeout_seconds: 45
-  prompt_version: "headline-v5-analytical"
-  publication_epoch: 5
+  prompt_version: "headline-v10-why-first-quantitative-color"
+  publication_epoch: 10
+  materiality_policy_version: "pending-live-review-v1"
   cadence_minutes: {1: 30, 7: 60, 30: 360, 365: 1440}
   stale_minutes: {1: 60, 7: 120, 30: 720, 365: 2880}
   min_posts: 20
@@ -160,6 +161,13 @@ headline_narrative:
   steady_ratio: "0.85"
   episode_peak_ratio: "3.0"
   fingerprint_band_percent: 5
+  evidence_policy_version: "adaptive-v1"
+  evidence_reservoir_rank_limit: 32
+  evidence_floor: 4
+  evidence_lead_ceiling: 48
+  evidence_comparison_ceiling: 12
+  evidence_excerpt_characters: 1000
+  evidence_provider_packet_bytes: 131072
   call_cap: 4
   max_body_en_chars: 240
   max_body_zh_cn_chars: 120

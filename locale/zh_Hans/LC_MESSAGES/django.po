@@ -157,3 +157,6 @@ msgstr "准备中"
 
 msgid "Disabled"
 msgstr "已停用"
+
+msgid "No clear conversation story emerged in this window."
+msgstr "这一时间段内没有出现明确的讨论主题。"

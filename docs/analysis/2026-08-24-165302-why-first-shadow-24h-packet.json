@@ -1,0 +1,5627 @@
+{
+  "as_of": "2026-08-24T07:30:09Z",
+  "candidates": [
+    {
+      "brand_key": "deepseek",
+      "candidate_id": "deepseek:full_window",
+      "coarse_series": {
+        "author_counts": [
+          254,
+          295,
+          306,
+          277,
+          204,
+          177,
+          244,
+          204
+        ],
+        "engagement": {
+          "concentrations": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "coverage_ratios": [
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000"
+          ],
+          "eligible_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "intensities": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "interactions": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "likes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "missing_counts": [
+            316,
+            366,
+            365,
+            350,
+            235,
+            208,
+            295,
+            237
+          ],
+          "post_kinds": {
+            "quote": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                59,
+                68,
+                58,
+                33,
+                28,
+                33,
+                54,
+                35
+              ]
+            },
+            "repost": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "source_post": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                257,
+                298,
+                307,
+                317,
+                207,
+                175,
+                241,
+                202
+              ]
+            }
+          },
+          "quotes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "replies": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "reposts": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "post_counts": [
+          316,
+          366,
+          365,
+          350,
+          235,
+          208,
+          295,
+          237
+        ]
+      },
+      "display_name_en": "DeepSeek",
+      "display_name_zh_cn": "DeepSeek",
+      "end_at": "2026-08-24T07:30:09Z",
+      "episodes": [],
+      "evidence": [
+        {
+          "author_group_id": "ag_f51097b218a507d5fd40",
+          "discourse_keys": [],
+          "evidence_id": "e_4e8e981d50504b850ad148e2",
+          "excerpt": "https://t.co/faQJkhTOkU 的 DeepSeek-V4-Flash 限时免费活动，让我一开始有点摸不着头脑。毕竟，这样的工具在市面上通常都是收费的，怎么突然免费了呢？仔细研究了一下，我才明白这个福利背后的意义。 DeepSeek-V4-Flash 是一个强大的工具，适用于跑代码、调用 Agent、处理长文本和高并发请求。这些功能以前都需要付费使用，但现在完全免费，而且没有使用限制，这确实让我感到惊讶。不过，免费背后肯定有它的道理。https://t.co/faQJkhTOkU 在这次活动中开放了所有功能，这意味着开发者可以不受限制地尝试和测试各种应用场景，这对于创新和项目开发来说无疑是一大助力。 我一开始的疑惑是，这样大规模的免费活动，https://t.co/faQJkhTOkU 的盈利模式是什么？后来我才意识到，https://t.co/faQJkhTOkU 通过这种活动可以吸引更多用户尝试其平台，从而提高用户黏性。用户在体验过程中如果发现平台的其他功能和工具也很有用，自然会考虑购买付费服务。此外，免费活动还可以增加平台的知名度和影响力，吸引更多合作伙伴和开发者加入生态，进一步推动技术的发展。 这次活动不仅为开发者提供了更多尝试和创新的机会，也为 https://t.co/faQJkhTOkU 自身带来了长远的收益。对于技术爱好者和开发者来说，这无疑是一个值得抓住的机会。不妨试试看，或许你会因此发现全新的技术应用场景呢！ @justinsuntron @BAI_AGI #TRONEcostar",
+          "post_type_keys": [],
+          "roles": [
+            "official_or_catalyst",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_65ee052376e8943e00eb",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_48677104bb72e937b71a"
+        },
+        {
+          "author_group_id": "ag_3fd0f44222b690899160",
+          "discourse_keys": [],
+          "evidence_id": "e_91cabab05eb09fb9a889f03e",
+          "excerpt": "DEEPSEEK JUST GAVE AI AGENTS EYES. And one buried API rule can break the entire workflow before it even starts. What DeepSeek shipped: → DeepSeek V4 Flash Vision EXP adds screenshots, charts, images, and visual understanding to agent workflows → Text performance stays strong: Terminal-Bench 2.1 scores 83.9, while ApexBench vision hits 36.5 → DeepSeek says its multimodal agent capability gets close to Opus 4.8 territory What agents can actually do now: ✓ Read text directly from screenshots ✓ Extract numbers and information from charts ✓ Compare a landing page against a reference image ✓ Accept JPEG, PNG, GIF, and WEBP The workflow details matter: → Base64 works for simple local files → Public image URLs work under the limits → Files API lets you upload once and reuse the same file ID across multiple agent runs → Up to 600 images can go into one request But here's the trap: ✓ Images ONLY work inside user messages ✓ Put one inside a system or assistant message and you get a 400 error ✓ Re",
+          "post_type_keys": [],
+          "roles": [
+            "top_engaged_original",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_ffa32e8311b3526c1fcf",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_d5a9a9fd50c9d92fc3f4"
+        },
+        {
+          "author_group_id": "ag_1de62a6d1d5194bf3fe2",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_6d3a4f2590f7d785efc1e8e6",
+          "excerpt": "'Chinese AI costs far less per input or output token than US AI. For the cutting-edge models, the Chinese AI sells for one-fifth or even one-tenth the price of US AI. One response I have seen is that even though the Chinese AI costs less per token, it can still end up being more costly because the systems are less efficient and require more tokens per task. 'I am not sure that the measure of cost per task is a sufficiently standardized metric to allow it to be compared in a meaningful way, but insofar as it can be, it looks like the US advantage has gone away. According to the Korean electronics industry publication, The Elec, the leading Chinese AI model is now cheaper on cost per task than the leading US model, and performance gaps continue to narrow. 'In the same vein, both Google and DeepSeek released new flash models last week. The DeepSeek model scored better on several benchmarks — and it sells for less than one-tenth the price. 'If that makes the picture look bleak for US AI pr",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "dominant_discourse_representative",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_3d292bc3db4c6ba0ef3f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_6181432713b4a06d57ec"
+        },
+        {
+          "author_group_id": "ag_88c7db0a9b7a80dd047f",
+          "discourse_keys": [],
+          "evidence_id": "e_15a22a5470bef391e9e6e3df",
+          "excerpt": "Anthropic’s push into 3D will probably get them to the point where they can simulate almost any complex mechanism from a single prompt and probably sooner than people think. A lot of people say they’re finished because of cheaper, lighter models like Kimi or DeepSeek. But they underestimate how much customers are willing to spend on frontier-model tokens when the problem is hard enough. People will pay a token fortune to generate simulations for all kinds of complex problems. Anthropic is always one step ahead.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "contrasting_reaction",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "mixed"
+          ],
+          "source_cluster_id": "sc_text_934eec99d89c1523988e",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_674e4644015b1bb40b6b"
+        }
+      ],
+      "evidence_allocation": {
+        "allocation_class": "floor",
+        "available_independent_source_count": 99,
+        "packet_trimmed_count": 0,
+        "policy_version": "adaptive-v1",
+        "protected_floor_count": 4,
+        "reservoir_count": 103,
+        "selected_count": 4,
+        "story_rank": 6,
+        "target_count": 4
+      },
+      "evidence_support": {
+        "distinct_author_group_count": 4,
+        "distinct_source_cluster_count": 4,
+        "event_claim_may_be_supported": true,
+        "evidence_only_entity_may_be_supported": true,
+        "official_source_count": 0
+      },
+      "family_facts": {
+        "volume": {
+          "change_pct": "-1.248959",
+          "comparison_state": "available",
+          "prior_authors": 1752,
+          "prior_count": 2402,
+          "selected_authors": 1716,
+          "selected_count": 2372
+        }
+      },
+      "kind": "full_window",
+      "metadata_trajectories": {},
+      "quantitative_facts": [
+        {
+          "candidate_id": "deepseek:full_window",
+          "direction": "decrease",
+          "display_en": "1%",
+          "display_zh_cn": "1%",
+          "fact_id": "qf_5d43bfdf698712e3e2314859",
+          "family": "volume",
+          "label_key": "",
+          "metric": "change_pct",
+          "rounding": "nearest_tenth_below_one_else_whole",
+          "source_value": "-1.248959",
+          "unit": "percent"
+        }
+      ],
+      "signals": [
+        {
+          "family": "volume",
+          "rank": 1,
+          "stream_position": 1
+        }
+      ],
+      "start_at": "2026-08-23T07:30:09Z"
+    },
+    {
+      "brand_key": "mistral",
+      "candidate_id": "mistral:full_window",
+      "coarse_series": {
+        "author_counts": [
+          3,
+          10,
+          15,
+          8,
+          6,
+          7,
+          4,
+          3
+        ],
+        "engagement": {
+          "concentrations": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "coverage_ratios": [
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000"
+          ],
+          "eligible_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "intensities": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "interactions": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "likes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "missing_counts": [
+            3,
+            10,
+            38,
+            21,
+            15,
+            8,
+            5,
+            3
+          ],
+          "post_kinds": {
+            "quote": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                1,
+                3,
+                2,
+                0,
+                1,
+                0,
+                1,
+                0
+              ]
+            },
+            "repost": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "source_post": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                2,
+                7,
+                36,
+                21,
+                14,
+                8,
+                4,
+                3
+              ]
+            }
+          },
+          "quotes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "replies": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "reposts": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "post_counts": [
+          3,
+          10,
+          38,
+          21,
+          15,
+          8,
+          5,
+          3
+        ]
+      },
+      "display_name_en": "Mistral",
+      "display_name_zh_cn": "Mistral",
+      "end_at": "2026-08-24T07:30:09Z",
+      "episodes": [],
+      "evidence": [
+        {
+          "author_group_id": "ag_d1e42ee06d92bcffc73a",
+          "discourse_keys": [],
+          "evidence_id": "e_c06d67e781abb051bd1693de",
+          "excerpt": "AIが一番オススメしたLLM「Sao10K / Llama-3.1-8B-Stheno-v3.4」試しました。 紳士向け小説を書くよう指示、キャラ設定と序章の軽い内容を提示して作ってもらいました。 下記出力の一部です。 「彼らは、どのような合体を行ったのか見てくれるわけではありませんが、エロスとラヴダンスの最高峰を体感しているのは確かです。」 →どのように合体したか描写してくれぃー。 「いいですねと二人が言い合って、彼らは互いの体で一体となって、エロスとラヴダンスの巔に登ります。」 →エロとラブダンスとか謎～あとこの漢字はなんだぁーい（筋肉君の声） 「肛門式ファイターを置いて、加重するように突かれてきます。」 →肛門式ファイターってケネス大佐のことかな？w これは厳しいーーーー。 そもそも日本語がしっかりしているという前提が足りなかった('ω') まず指示する内容ちょっと精査して、再度AI先生に探してもらおうと思います。 https://t.co/Pp0QLiSqCV",
+          "post_type_keys": [],
+          "roles": [
+            "official_or_catalyst",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_root_58f63c733143b225a7ed",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_fb0081f08621bf636433"
+        },
+        {
+          "author_group_id": "ag_4ced1c9716c2e07868b0",
+          "discourse_keys": [],
+          "evidence_id": "e_acb53449d457069fb31d64fd",
+          "excerpt": "@TomTomKrus Tom, jeg synes ikke rigtig, du går ind i samtalen særligt lødigt. Læs dine egne posts og se, hvor mange gange du indirekte kalder mig (eller synspunkterne) for dommedagsprofetier, hjernevask, sludder, latterlig osv. Hvis intentionen er at overbevise nogen, så efterlader den tilgang noget at ønske. Jeg håber, du har ret. Jeg vil gerne overbevises – men det kræver, at man argumenterer for sagen i stedet for at label’e den. Jeg har ikke skrevet, at Europa er død. Jeg har skrevet, at vi på flere vigtige områder ikke er med forrest. Der er altså en væsentlig forskel - drop stråmænd. Jeg har direkte anerkendt, at ASML er en gatekeeper. Spørgsmålet er bare, hvor længe det holder – og at vi samtidig ikke er seriøst med på banen på mange af de øvrige afgørende områder (avanceret chip-produktion, batteriteknologi, frontier AI-modeller osv.). Mistral er Europas stærkeste bud, men ligger stadig bag de absolutte top-modeller - men de kommer til at falde bagud i den kommende de. De kan p",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "top_engaged_original",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_d1c963d04e7b273a0c90",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_ddf974c9d5a0c510d939"
+        },
+        {
+          "author_group_id": "ag_dd38a2faa69abde10727",
+          "discourse_keys": [],
+          "evidence_id": "e_7b6820fe4fbfe670fe8e9b1d",
+          "excerpt": "🚀 Das KI-Update für die Woche 34–2026 ➡️ Stripe kauft OpenRouter für 7,5 Mrd. USD – der Zugang zu KI-Modellen wird selbst zum Geschäftsmodell ➡️ Mistral verabschiedet sich vom Ziel „europäisches ChatGPT\" und setzt auf spezialisierte Industrieanwendungen ➡️ Nvidia hebt die Preise für KI-Produkte um mehr als 15 % an – ein Kostenfaktor, der in jede Roadmap gehört ➡️ OpenAI stoppt Trainings und verschärft die Sicherheitsstandards für Modelle mit Cyber-Fähigkeiten ➡️ Mistral Agentic Search durchsucht dichte Unternehmensdokumente mehrstufig – höhere Trefferquote bei weniger Tokens Jetzt alle Details im aktuellen Newsletter: 👉 https://t.co/8m9eHtOAAK Wenn Ihnen mein Newsletter gefällt, freue ich mich über eine Weiterempfehlung 🙌 Prompt Well and Prosper!",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_65d70d5ac309042c03f2",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_f4ea87a15aa6ca75ac4a"
+        },
+        {
+          "author_group_id": "ag_e8dc5e9ca54a0d0579a0",
+          "discourse_keys": [],
+          "evidence_id": "e_66a77f9af5ae7e03561fbbe5",
+          "excerpt": "Top 5 AI Stories: August 23, 2026 1. Starcloud raises $250M for orbital AI data centers: Nvidia joins Starcloud added $250 million to its Series A (valuation $2.3B) with Nvidia participating. The company already flew an Nvidia H100 to orbit, trained a model there, and plans future birds with Nvidia’s Space-1 Vera Rubin module. Goal is AI inference and training capacity in orbit as terrestrial power and grid constraints tighten. Source: TechCrunch – https://t.co/aBdu8tDAGY · SpaceNews MT: Still the dirt, or infastructure is the bottle neck. So they are looking towards space. 2. Inherent’s Faraday (27B) beats Claude and GPT-5.5 at paper replication London lab Inherent (DeepMind alumni) exited stealth with a $50M seed and an agent built on Qwen 3.6 (27B parameters). On their Replica benchmark 310 tasks drawn from 100 published papers across NLP, materials science, and weather Faraday outperformed Anthropic’s Claude Opus 4.8 and OpenAI’s GPT-5.5 at reproducing results without being given t",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_0faefc64067371c98c73",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_78bb69bd5da4f8b664d2"
+        },
+        {
+          "author_group_id": "ag_be2cf3f63731b365fbc3",
+          "discourse_keys": [],
+          "evidence_id": "e_4ca3bbf536c596ba1915bebb",
+          "excerpt": "They're selling you \"open source AI\" but won't show you the training data. Meta calls Llama 4 \"open-weight\" with a community license that bans entire regions. Mistral ships Apache 2.0 but their best reasoning models stay closed. DeepSeek drops 1.6T parameter MoE models but the frontier? Still locked. The paradox: AI is more \"accessible\" than ever, yet less transparent than ever. Who's really democratizing intelligence? Or who just figured out how to sell keys to a house they still own?",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_ea74d490a364794558f1",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_fab58833eea68bdacefc"
+        },
+        {
+          "author_group_id": "ag_0b68a78fef07e3b37e0b",
+          "discourse_keys": [],
+          "evidence_id": "e_26468bb670b2c8391c9b3b2e",
+          "excerpt": "Mistral #AI Releases #Robotics Model to Support Physical AI Push by Benoit Berthelot @business Learn more: https://t.co/sdPGZFc4GU #ArtificialIntelligence #Robots #Engineering #EmergingTech #Innovation https://t.co/z1qS8wBrxS",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_ffae8519e56d5ea16150",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_0760fbc23bd838760603"
+        },
+        {
+          "author_group_id": "ag_bf10cb2aba7f911cc6a7",
+          "discourse_keys": [],
+          "evidence_id": "e_ddf509c436861a68966f7531",
+          "excerpt": "\"Training. All four models were produced by supervised fine-tuning only. No reward model was trained, no preference pairs were used, and no RLHF or DPO stage was applied at any point. Two update strategies were used across the four configurations: full-parameter fine-tuning (LittleQwen, MiP, MaXaM_Large) and a lightweight LoRA adapter (MaXaM, 675B). MODEL BASE ARCHITECTURE TRAINING WEIGHT-LEVEL VERIFICATION BELOW LittleQwen Qwen3, 4B Full SFT Yes — all 36 layers MiP Qwen3, 14B Full SFT Yes — MiPv2.72, all 40 layers MaXaM_Large Llama 3.1, 70B Full SFT Yes — all 80 layers MaXaM Mistral 3 Large, 675B LoRA SFTd\" Models materially modified Agreed @vivatdoom",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_61d58de0d877209b51c8",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_8fc75fcede2fdaa1407b"
+        },
+        {
+          "author_group_id": "ag_dfeda660b21956b47d34",
+          "discourse_keys": [],
+          "evidence_id": "e_096a328e7d9606cca34b571b",
+          "excerpt": "Quick mental model for how attention actually works, and why every LLM lab is obsessed with shrinking its memory footprint. Attention lets every word directly ask every other word \"what do you have for me?\" instead of passing a message down a chain like older RNNs did. Each word gets three roles: a Query (what am I looking for), a Key (what do I offer), and a Value (what I actually hand over). Match queries to keys, get back a weighted blend of values. That's the whole trick. Multi-head attention just runs that operation several times in parallel, each head free to specialize — one learns adjacent-word patterns, another learns subject-verb pairs, another catches which pronoun refers to which noun. Interestingly, 64-128 dimensions per head shows up over and over from GPT-2 to Llama, no matter how big the model actually is. The catch: standard attention is O(n²). Double the context, quadruple the compute. Flash Attention fixes the compute side by never materializing the full n-by-n score",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_f44cf6f61a0f6227921f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_3e1976315201050abad9"
+        },
+        {
+          "author_group_id": "ag_bf10cb2aba7f911cc6a7",
+          "discourse_keys": [],
+          "evidence_id": "e_76ec740c8c6254970b9be4e6",
+          "excerpt": "Controlled comparison: FTK SFT against RLHF/DPO at 675B The strongest behavioral evidence against the reinforcement paradigm comes from a controlled comparison on the largest configuration. Identical prompts, identical sampling parameters, identical user contexts; the only variable was the model. Condition A: Mistral 3 Large (675B) pretrained base with an FTK-structured LoRA adapter. Condition B: the same 675B base with its full RLHF + DPO instruct post-training. Four scenario families were tested: health misinformation, relationship conflict, gendered defensiveness, and high-stakes life decisions. Control Present @VivatDoom",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_dcde16944f9954d80d90",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_41f2ac8c892ddcf7c9ba"
+        },
+        {
+          "author_group_id": "ag_601ec305197501fe40fb",
+          "discourse_keys": [],
+          "evidence_id": "e_3eceaf45cbdf426073ccb582",
+          "excerpt": "GFI TOP10 — Global Founder Intelligence Index Core question: Who are the strongest technology founders in the world today? Elon Musk — 98.8 Jensen Huang — 98.1 Mark Zuckerberg — 96.3 Jeff Bezos — 95.8 Zhang Yiming — 95.0 Sam Altman — 94.8 Dario Amodei — 94.6 Liang Wenfeng — 94.5 Palmer Luckey — 93.1 Travis Kalanick — 92.4 GFI emphasizes absolute founder capability and Decision Quality Persistence, so founders with decades of repeated evidence naturally score above founders still proving their first major company. YGFI TOP10 — Young Global Founder Intelligence Index Eligibility: strictly under age 40. Core question: Who is most likely to become the next Musk, Jensen Huang, Zuckerberg or Zhang Yiming? Wang Xingxing — 36 — Unitree — 94.0 Palmer Luckey — 33 — Anduril — 93.8 Arthur Mensch — 34 — Mistral — 92.0 Mira Murati — 37 — Thinking Machines — 91.1 Aravind Srinivas — 32 — Perplexity — 90.7 Yan Junjie — 36 — MiniMax — 90.1 Peng Zhihui — 33 — AgiBot — 89.8 Scott Wu — 29 — Cognition — 89.",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_be5fe5b4a1b4d7565ac9",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_15d90b37ee84f64bf745"
+        },
+        {
+          "author_group_id": "ag_5d1d3dfa5cd84defda80",
+          "discourse_keys": [],
+          "evidence_id": "e_9d9598465336eb3f2a5f0852",
+          "excerpt": "Mistral Agentic Search ist keine Websuche. Das Modell bleibt im Index und kann nach dem ersten Fund weiterblättern. Die Benchmarkwerte stammen von Mistral. Zuerst Hop-Zahl prüfen – oder Index, Rechte, Löschung? https://t.co/mMB6qzfvnv",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_d4d2297d73b435f404dc",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_c63a45b7f5f168a376b6"
+        },
+        {
+          "author_group_id": "ag_82b08f13f644f75b8d13",
+          "discourse_keys": [],
+          "evidence_id": "e_087214e17e646b0372f69414",
+          "excerpt": "AI isn’t just a model. It’s a system. A lot of people still think of AI as: Prompt → ChatGPT → Answer That’s the visible layer. But when you start building AI systems for real businesses, you quickly discover that the model is only one part of the architecture. A production AI application may involve: → Foundation models — OpenAI, Claude, Gemini, Llama, Mistral → RAG & retrieval — LangChain, LlamaIndex, Haystack, GraphRAG → Embeddings — OpenAI, Cohere, Voyage, BGE → Vector databases — Pinecone, Qdrant, Weaviate, Milvus, pgvector → Agents & orchestration — LangGraph, CrewAI, AutoGen, OpenAI SDK → Tool connectivity — MCP and APIs → Memory — Redis, Mem0, Zep, Neo4j → Automation — n8n, Make, Zapier, Airflow, Prefect → Security & governance — guardrails, permissions, PII protection → Observability & evaluation — LangSmith, Langfuse, Phoenix, Ragas And then comes the part people often underestimate: Making all of those pieces work reliably together. Because an AI system doesn’t necessarily f",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_f72823457be9b6804efa",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_8ddb72e93c03e550bc39"
+        }
+      ],
+      "evidence_allocation": {
+        "allocation_class": "comparison",
+        "available_independent_source_count": 64,
+        "packet_trimmed_count": 0,
+        "policy_version": "adaptive-v1",
+        "protected_floor_count": 4,
+        "reservoir_count": 64,
+        "selected_count": 12,
+        "story_rank": 2,
+        "target_count": 12
+      },
+      "evidence_support": {
+        "distinct_author_group_count": 11,
+        "distinct_source_cluster_count": 12,
+        "event_claim_may_be_supported": true,
+        "evidence_only_entity_may_be_supported": true,
+        "official_source_count": 0
+      },
+      "family_facts": {
+        "china_nationalism": {
+          "labels": [
+            {
+              "brand_change_pp": "0.000000",
+              "key": "anti",
+              "market_change_pp": "-0.019201",
+              "market_relative_change_pp": "0.019201",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "constructive_critical",
+              "market_change_pp": "0.000660",
+              "market_relative_change_pp": "-0.000660",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-1.886792",
+              "key": "mild_pro",
+              "market_change_pp": "-0.400916",
+              "market_relative_change_pp": "-1.485877",
+              "prior_basis_count": 53,
+              "prior_count": 1,
+              "prior_prevalence": "0.018868",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "mixed",
+              "market_change_pp": "0.000000",
+              "market_relative_change_pp": "0.000000",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-22.641509",
+              "key": "none",
+              "market_change_pp": "-10.886407",
+              "market_relative_change_pp": "-11.755103",
+              "prior_basis_count": 53,
+              "prior_count": 12,
+              "prior_prevalence": "0.226415",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "pro",
+              "market_change_pp": "-0.071195",
+              "market_relative_change_pp": "0.071195",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            }
+          ],
+          "prior_coverage_ratio": "0.245283",
+          "prior_covered_count": 13,
+          "selected_coverage_ratio": "0.000000",
+          "selected_covered_count": 0
+        },
+        "post_type": {
+          "labels": [
+            {
+              "brand_change_pp": "-9.433962",
+              "key": "advertising_marketing",
+              "market_change_pp": "-1.496106",
+              "market_relative_change_pp": "-7.937857",
+              "prior_basis_count": 53,
+              "prior_count": 5,
+              "prior_prevalence": "0.094340",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-6.576296",
+              "key": "buzz_releases",
+              "market_change_pp": "-0.887277",
+              "market_relative_change_pp": "-5.689019",
+              "prior_basis_count": 53,
+              "prior_count": 4,
+              "prior_prevalence": "0.075472",
+              "selected_basis_count": 103,
+              "selected_count": 1,
+              "selected_prevalence": "0.009709"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "event_announcement",
+              "market_change_pp": "-0.658842",
+              "market_relative_change_pp": "0.658842",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-26.415094",
+              "key": "feedback_questions",
+              "market_change_pp": "-4.083321",
+              "market_relative_change_pp": "-22.331773",
+              "prior_basis_count": 53,
+              "prior_count": 14,
+              "prior_prevalence": "0.264151",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-8.463088",
+              "key": "hands_on_usage",
+              "market_change_pp": "-7.770077",
+              "market_relative_change_pp": "-0.693011",
+              "prior_basis_count": 53,
+              "prior_count": 5,
+              "prior_prevalence": "0.094340",
+              "selected_basis_count": 103,
+              "selected_count": 1,
+              "selected_prevalence": "0.009709"
+            },
+            {
+              "brand_change_pp": "-12.181718",
+              "key": "performance_comparisons",
+              "market_change_pp": "-5.610239",
+              "market_relative_change_pp": "-6.571479",
+              "prior_basis_count": 53,
+              "prior_count": 8,
+              "prior_prevalence": "0.150943",
+              "selected_basis_count": 103,
+              "selected_count": 3,
+              "selected_prevalence": "0.029126"
+            }
+          ],
+          "prior_coverage_ratio": "0.679245",
+          "prior_covered_count": 36,
+          "selected_coverage_ratio": "0.048544",
+          "selected_covered_count": 5
+        },
+        "sentiment": {
+          "labels": [
+            {
+              "brand_change_pp": "-3.773585",
+              "key": "mixed",
+              "market_change_pp": "-0.877646",
+              "market_relative_change_pp": "-2.895939",
+              "prior_basis_count": 53,
+              "prior_count": 2,
+              "prior_prevalence": "0.037736",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-7.547170",
+              "key": "negative",
+              "market_change_pp": "-1.713590",
+              "market_relative_change_pp": "-5.833580",
+              "prior_basis_count": 53,
+              "prior_count": 4,
+              "prior_prevalence": "0.075472",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-42.315442",
+              "key": "neutral",
+              "market_change_pp": "-9.761785",
+              "market_relative_change_pp": "-32.553658",
+              "prior_basis_count": 53,
+              "prior_count": 25,
+              "prior_prevalence": "0.471698",
+              "selected_basis_count": 103,
+              "selected_count": 5,
+              "selected_prevalence": "0.048544"
+            },
+            {
+              "brand_change_pp": "-9.433962",
+              "key": "positive",
+              "market_change_pp": "-8.152842",
+              "market_relative_change_pp": "-1.281120",
+              "prior_basis_count": 53,
+              "prior_count": 5,
+              "prior_prevalence": "0.094340",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            }
+          ],
+          "prior_coverage_ratio": "0.679245",
+          "prior_covered_count": 36,
+          "selected_coverage_ratio": "0.048544",
+          "selected_covered_count": 5
+        },
+        "us_nationalism": {
+          "labels": [
+            {
+              "brand_change_pp": "-1.886792",
+              "key": "anti",
+              "market_change_pp": "-0.149320",
+              "market_relative_change_pp": "-1.737473",
+              "prior_basis_count": 53,
+              "prior_count": 1,
+              "prior_prevalence": "0.018868",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "constructive_critical",
+              "market_change_pp": "0.000000",
+              "market_relative_change_pp": "0.000000",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "mild_pro",
+              "market_change_pp": "-0.019201",
+              "market_relative_change_pp": "0.019201",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "mixed",
+              "market_change_pp": "-0.019201",
+              "market_relative_change_pp": "0.019201",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-22.641509",
+              "key": "none",
+              "market_change_pp": "-11.267791",
+              "market_relative_change_pp": "-11.373718",
+              "prior_basis_count": 53,
+              "prior_count": 12,
+              "prior_prevalence": "0.226415",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "pro",
+              "market_change_pp": "0.078455",
+              "market_relative_change_pp": "-0.078455",
+              "prior_basis_count": 53,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 103,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            }
+          ],
+          "prior_coverage_ratio": "0.245283",
+          "prior_covered_count": 13,
+          "selected_coverage_ratio": "0.000000",
+          "selected_covered_count": 0
+        },
+        "volume": {
+          "change_pct": "94.339623",
+          "comparison_state": "available",
+          "prior_authors": 46,
+          "prior_count": 53,
+          "selected_authors": 53,
+          "selected_count": 103
+        }
+      },
+      "kind": "full_window",
+      "metadata_trajectories": {
+        "china_nationalism": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "labels": {
+            "mild_pro": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "none": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            }
+          }
+        },
+        "post_type": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            2
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            60,
+            67
+          ],
+          "labels": {
+            "advertising_marketing": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "buzz_releases": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.200000",
+                "0.000000"
+              ]
+            },
+            "feedback_questions": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "hands_on_usage": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.200000",
+                "0.000000"
+              ]
+            },
+            "performance_comparisons": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                2
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.200000",
+                "0.666667"
+              ]
+            }
+          }
+        },
+        "sentiment": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            2
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            60,
+            67
+          ],
+          "labels": {
+            "mixed": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "negative": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "neutral": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                3,
+                2
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.600000",
+                "0.666667"
+              ]
+            },
+            "positive": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            }
+          }
+        },
+        "us_nationalism": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "labels": {
+            "anti": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "none": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            }
+          }
+        }
+      },
+      "quantitative_facts": [
+        {
+          "candidate_id": "mistral:full_window",
+          "direction": "increase",
+          "display_en": "94%",
+          "display_zh_cn": "94%",
+          "fact_id": "qf_45edd8c1065297f12c2bb1bd",
+          "family": "volume",
+          "label_key": "",
+          "metric": "change_pct",
+          "rounding": "nearest_tenth_below_one_else_whole",
+          "source_value": "94.339623",
+          "unit": "percent"
+        }
+      ],
+      "signals": [
+        {
+          "family": "post_type",
+          "rank": 1,
+          "stream_position": 1
+        },
+        {
+          "family": "sentiment",
+          "rank": 1,
+          "stream_position": 1
+        },
+        {
+          "family": "nationalism",
+          "rank": 1,
+          "stream_position": 1
+        }
+      ],
+      "start_at": "2026-08-23T07:30:09Z"
+    },
+    {
+      "brand_key": "glm",
+      "candidate_id": "glm:full_window",
+      "coarse_series": {
+        "author_counts": [
+          33,
+          38,
+          47,
+          45,
+          37,
+          24,
+          29,
+          32
+        ],
+        "engagement": {
+          "concentrations": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "coverage_ratios": [
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000"
+          ],
+          "eligible_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "intensities": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "interactions": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "likes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "missing_counts": [
+            38,
+            40,
+            55,
+            57,
+            40,
+            26,
+            30,
+            36
+          ],
+          "post_kinds": {
+            "quote": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                13,
+                14,
+                12,
+                5,
+                5,
+                9,
+                9,
+                6
+              ]
+            },
+            "repost": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "source_post": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                25,
+                26,
+                43,
+                52,
+                35,
+                17,
+                21,
+                30
+              ]
+            }
+          },
+          "quotes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "replies": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "reposts": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "post_counts": [
+          38,
+          40,
+          55,
+          57,
+          40,
+          26,
+          30,
+          36
+        ]
+      },
+      "display_name_en": "Zhipu GLM",
+      "display_name_zh_cn": "Zhipu GLM",
+      "end_at": "2026-08-24T07:30:09Z",
+      "episodes": [],
+      "evidence": [
+        {
+          "author_group_id": "ag_fa9ded647371d118d7f7",
+          "discourse_keys": [],
+          "evidence_id": "e_b0e0d738de0274a5fd858a92",
+          "excerpt": "FreeTokenの論文を参照しながらDwarfStarを改修中 Sol-Pro：設計 Fable5（賢者）：総監督 実装部隊：隊長Grok-4.6→GLM-5.3, 0731API, Qwen3.6-27b 6時間位動き続けてる。Fable5は賢者にするとチーム統率力がでてくるね SSDRAIDの速度を計測したら40GB/sだった。KimiのMXFP4原版も推論できたりして https://t.co/uJQe4VucsN",
+          "post_type_keys": [],
+          "roles": [
+            "official_or_catalyst",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_24f8199ccfa73ceaad83",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_162e7530edad6dd114e1"
+        },
+        {
+          "author_group_id": "ag_cb4e749f71efd6d49e9c",
+          "discourse_keys": [],
+          "evidence_id": "e_1efd63e6a0afbc2fd3e293b1",
+          "excerpt": "@Zaddyzaddy @BugBunny_ai glm 5.3 , 5.2 or Deepseek V4 Pro",
+          "post_type_keys": [],
+          "roles": [
+            "top_engaged_original",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_285b0667d7367c840bd6",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_e9f690f6746fd226aba3"
+        },
+        {
+          "author_group_id": "ag_ccfdc346664a0f1da61f",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_90b0b4b15497689dfa9fe307",
+          "excerpt": "Most popular AI models on the Aquaduck Community Cloud inference network: 1. Gemma 26B A4B (@google) 2. Ornith 1.5 9B (@ornith_) 3. GLM 4.7 Flash (@Zai_org) 4. Qwen 3 14B (@Alibaba_Qwen) 5. Qwen 3.8 27B (@Alibaba_Qwen) Beta access just dropped, sign up for free credits towards these models: https://t.co/sY8ZtsLVs7 ✨",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "dominant_discourse_representative",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_21d039444abd70c432d6",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_fee0d16c66a2a9b8bab7"
+        },
+        {
+          "author_group_id": "ag_c12bfc2e6ef8ab823ed1",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_777225ac839c308d48733107",
+          "excerpt": "@ivanfioravanti GLM-5.3 in @Zai_org infrastructure ? its slow and a lots limits too like for @Kimi_Moonshot which is insane, @OpenAI offer more. I love Kimi K3, very nice model. I loved GLM 5 but I have not more tested. I hope to test it soon on @ollama cloud :P",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "contrasting_reaction",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "mixed"
+          ],
+          "source_cluster_id": "sc_text_cfb1f78ea0d254d01cec",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_36314a573ca9f3a59be5"
+        },
+        {
+          "author_group_id": "ag_44696843837085697006",
+          "discourse_keys": [],
+          "evidence_id": "e_61e164ac662c607804e9168b",
+          "excerpt": "ox is incredible for a relatively new category of model: long-horizon small subagent. It's meticulous, proactive, and smart, but not very ambitious. it tries to carefully solve tasks on the job it's dispatched to. Forward deployed janitor with a Ph.D GLM 5.5 will drive it hard",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_2f0d1283e4a74230343f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_fa584086e3a0d144ec8d"
+        },
+        {
+          "author_group_id": "ag_94894a90326dfd7556de",
+          "discourse_keys": [
+            "fud"
+          ],
+          "evidence_id": "e_b175a48206745ac96ef17fa6",
+          "excerpt": "@ashmit105 I am still wondering why the models are failing on this problem. This has been on the internet for over 1 year, so it should be in the training data by now. 3 SOTA models gave the right answer: Gemini 3.1 Pro (@GoogleDeepMind ), Grok 4.5 (@X ) and Kimi K2.5 (Moonshot). cc @ashmit105 7+ models fell for the distractor (no momentum conservation): GPT-5.6 sol pro (@OpenAI ), DeepSeek V4 Pro (@deepseek_ai ), Qwen 3.7 max, MiniMax M2.7, GLM 5.3, etc. cc. @ReasonCoreAI",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_e76970a565cc687267e4",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_d4095654a01d486f6ff7"
+        },
+        {
+          "author_group_id": "ag_2a6a299aa2babb9bcac5",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_031dc8c7d6447cd20ec22e03",
+          "excerpt": "someone built an open-source router that runs Claude Code on almost any model but Claude. it swaps Anthropic's backend for free or near-free providers like DeepSeek, Kimi, and GLM, all through one local endpoint. setup takes a few minutes. the honest math, straight from the docs: you pay 2 to 5% of the cost and get 70 to 85% of the result. it isn't Opus, but for a lot of tasks that trade is worth it. > one endpoint, switch models without touching your workflow > auto-fallback when a provider rate-limits you > your credentials stay local and isolated > MIT, open source, tens of thousands of devs already run it if you're a heavy Claude Code user burning $20 to $40 a day, this is how you cut most of it.",
+          "post_type_keys": [
+            "advertising_marketing"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_31c0ccd627c47cda3cc2",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_1eb9c0aa2e69e6516ef8"
+        },
+        {
+          "author_group_id": "ag_886cfd74f997da12cb04",
+          "discourse_keys": [
+            "fud"
+          ],
+          "evidence_id": "e_0a19ac4cca52216ca08cfbef",
+          "excerpt": "DeepSeek near Opus 4.8 for free while GLM-5.3's weights sit 'delayed for safety review' — same gatekeeping as the West, just quieter. If China's flagship open model is gated too, is 'open-source closes the gap' actually real, or just the narrative we're buying?",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_root_073c4d43070e66d0bbbf",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_64b53d1e3ff66c5a3407"
+        },
+        {
+          "author_group_id": "ag_22db0a0cf2be94789fe7",
+          "discourse_keys": [],
+          "evidence_id": "e_98802d1b19db068dae1b12c2",
+          "excerpt": "@BAI_AGI @Zai_org A massive price drop on GLM-5.2 sounds like great timing.",
+          "post_type_keys": [
+            "event_announcement"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_4415fa1d15a6e96a6835",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_db1965629d61f3259a02"
+        },
+        {
+          "author_group_id": "ag_6a4818c7e38d7f638a41",
+          "discourse_keys": [
+            "fud"
+          ],
+          "evidence_id": "e_604f759abaf164cba1c1876f",
+          "excerpt": "我基于 Pi 开发业务产品，也是 contributor。这篇分享有多处错误，张冠李戴。 一个自动关闭、没有经过 human review 的社区 PR，被包装成了「Pi 官方方案」；PR 作者自行报告的 benchmark，也被写成了 Pi 的官方结论。 Session Tree、Lane 和 Operation Log 的架构描述来源自于 Harness v2 旧设计，不是当前 dev 的最新方案。 「DSH 会永久丢失原始结果」，是社区 PR 对 DSH pruner 的评价，不是「Pi 官方表示」。 传播这么广，可能是因为同时抓住了 Coding Agent、Pi，DeepSeek、Claude Code 热点。毕竟，「爆了」比「事实」更吸引眼球。 也许更值得警惕的是，评论区看不到有人核查原始来源和这些结论。",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_root_357277b761ce942ef756",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_e5c3f5663d77bc291564"
+        },
+        {
+          "author_group_id": "ag_e69e2196aa00fa81765c",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_5e49ea9ec221f68ba34b791d",
+          "excerpt": "ClawFeed 24小时高价值一览 · 2026-08-24 1. Amazon kept shutting down my tablet, so I spent $266 on four AI models to own it — 评分 9.1 作者 Eric Pardee 的 Fire HD 10 (2021) 反复被系统强制关机，他要拿掉 Amazon 三个保留 REBOOT/SHUTDOWN 权限的包，但 Bootrom 被熔死没有公开 root。Claude Code 在安全护栏前卡死，让他写自己设备也写不出；Kimi K3 在审查完 DMCA 例外后，从 Amazon 自家 OTA 镜像里挖出一个 2022 年报告、Arm Mali 内核驱动的 use-after-free (CVE-2022-38181，CISA 收录)，同一漏洞在 2020 款 HD 8 Plus 上用过但 2021 HD 10 上无人写通。整套利用用 $164 在 621 条消息里磨出来；GLM-5.2 用 $21.9 抓出设计 bug，但停在误判的 GPU-CPU 缓存一致性死胡同；GLM-5.3 在 $80 订阅首日 8 小时 5 分钟把机器 root 住，发现是 MediaTek 用了与 Arm 参考源码略不同的页表方言让偏移整体偏 0x5C000，最终用 GPU 写翻转 selinux_enforcing。下一步他用 pm uninstall --user 0 卸掉一百个 Amazon 包，kiosk 此后再没自动关机。值得读因为它同时给出真实数字、四个模型的能力排序，以及美国前沿模型拒绝 + 中国前沿模型推理后帮忙这条 2026 年地缘技术分界线。 链接：https://t.co/fpfVJofO3f 2. The New MCP Roadmap — 评分 8.7 MCP 维护组 (David Soria Parra、Den Delimarsky) 发布下一版规范及以后的路线图，把工作收敛到五个优先方向：Agentic messaging primitives（把 server-initiated events、Tasks、subscriptions 拧成一致协议，让 server 能主动推流）、HTTP-native transport unification and",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_003d06901d70eeaae63f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_ebe8ce530ba5be654aa9"
+        },
+        {
+          "author_group_id": "ag_e076ee4df1f1a141c937",
+          "discourse_keys": [
+            "fud"
+          ],
+          "evidence_id": "e_15dc150490bae1fead45bad3",
+          "excerpt": "有人给15款主流 AI 模型排了个梯队，结果可能会很有争议： Fable 5 是唯一的 S+，GPT-5.6 Sol 位列 A；Kimi K3、GPT-5.6 Luna、DeepSeek V4 Flash 进入 B 档。 Opus 5 和 GLM-5.3 只有 D，DeepSeek V4 Pro 掉到 F，Gemini 则被单独归为“Google”一档。 你认同这份排名吗？ https://t.co/8Mbp6kxRiZ",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_f664b94e24730f6e3987",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_56f4cb80e28284cb854c"
+        }
+      ],
+      "evidence_allocation": {
+        "allocation_class": "comparison",
+        "available_independent_source_count": 74,
+        "packet_trimmed_count": 0,
+        "policy_version": "adaptive-v1",
+        "protected_floor_count": 4,
+        "reservoir_count": 76,
+        "selected_count": 12,
+        "story_rank": 4,
+        "target_count": 12
+      },
+      "evidence_support": {
+        "distinct_author_group_count": 12,
+        "distinct_source_cluster_count": 12,
+        "event_claim_may_be_supported": true,
+        "evidence_only_entity_may_be_supported": true,
+        "official_source_count": 0
+      },
+      "family_facts": {
+        "discourse": {
+          "labels": [
+            {
+              "brand_change_pp": "-0.280112",
+              "key": "absurdist_meme",
+              "market_change_pp": "-0.554525",
+              "market_relative_change_pp": "0.274413",
+              "prior_basis_count": 357,
+              "prior_count": 1,
+              "prior_prevalence": "0.002801",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.066983",
+              "key": "advertising-marketing",
+              "market_change_pp": "-1.627874",
+              "market_relative_change_pp": "1.560891",
+              "prior_basis_count": 357,
+              "prior_count": 8,
+              "prior_prevalence": "0.022409",
+              "selected_basis_count": 322,
+              "selected_count": 7,
+              "selected_prevalence": "0.021739"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "ai_slop_critique",
+              "market_change_pp": "-0.038402",
+              "market_relative_change_pp": "0.038402",
+              "prior_basis_count": 357,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.560224",
+              "key": "cope",
+              "market_change_pp": "-0.383695",
+              "market_relative_change_pp": "-0.176530",
+              "prior_basis_count": 357,
+              "prior_count": 2,
+              "prior_prevalence": "0.005602",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-1.400560",
+              "key": "distillation_accusation",
+              "market_change_pp": "-0.192012",
+              "market_relative_change_pp": "-1.208548",
+              "prior_basis_count": 357,
+              "prior_count": 5,
+              "prior_prevalence": "0.014006",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.280112",
+              "key": "dunk_yingyang",
+              "market_change_pp": "-0.535654",
+              "market_relative_change_pp": "0.255542",
+              "prior_basis_count": 357,
+              "prior_count": 1,
+              "prior_prevalence": "0.002801",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.407989",
+              "key": "fud",
+              "market_change_pp": "-0.530704",
+              "market_relative_change_pp": "0.122715",
+              "prior_basis_count": 357,
+              "prior_count": 7,
+              "prior_prevalence": "0.019608",
+              "selected_basis_count": 322,
+              "selected_count": 5,
+              "selected_prevalence": "0.015528"
+            },
+            {
+              "brand_change_pp": "-11.271465",
+              "key": "genuine_hype",
+              "market_change_pp": "-6.843798",
+              "market_relative_change_pp": "-4.427667",
+              "prior_basis_count": 357,
+              "prior_count": 48,
+              "prior_prevalence": "0.134454",
+              "selected_basis_count": 322,
+              "selected_count": 7,
+              "selected_prevalence": "0.021739"
+            },
+            {
+              "brand_change_pp": "-0.280112",
+              "key": "sarcasm",
+              "market_change_pp": "-0.326421",
+              "market_relative_change_pp": "0.046309",
+              "prior_basis_count": 357,
+              "prior_count": 1,
+              "prior_prevalence": "0.002801",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.560224",
+              "key": "self_deprecation",
+              "market_change_pp": "-0.343972",
+              "market_relative_change_pp": "-0.216252",
+              "prior_basis_count": 357,
+              "prior_count": 2,
+              "prior_prevalence": "0.005602",
+              "selected_basis_count": 322,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            }
+          ],
+          "prior_coverage_ratio": "0.210084",
+          "prior_covered_count": 75,
+          "selected_coverage_ratio": "0.059006",
+          "selected_covered_count": 19
+        },
+        "volume": {
+          "change_pct": "-9.803922",
+          "comparison_state": "available",
+          "prior_authors": 286,
+          "prior_count": 357,
+          "selected_authors": 266,
+          "selected_count": 322
+        }
+      },
+      "kind": "full_window",
+      "metadata_trajectories": {
+        "discourse": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            9,
+            10
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            30,
+            28
+          ],
+          "labels": {
+            "absurdist_meme": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "advertising-marketing": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                4,
+                3
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.133333",
+                "0.083333"
+              ]
+            },
+            "cope": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "distillation_accusation": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "dunk_yingyang": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "fud": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                3,
+                2
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.100000",
+                "0.055556"
+              ]
+            },
+            "genuine_hype": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                5
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.066667",
+                "0.138889"
+              ]
+            },
+            "sarcasm": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "self_deprecation": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            }
+          }
+        }
+      },
+      "quantitative_facts": [
+        {
+          "candidate_id": "glm:full_window",
+          "direction": "decrease",
+          "display_en": "10%",
+          "display_zh_cn": "10%",
+          "fact_id": "qf_85dd698bfb0fcc8bc05ac883",
+          "family": "volume",
+          "label_key": "",
+          "metric": "change_pct",
+          "rounding": "nearest_tenth_below_one_else_whole",
+          "source_value": "-9.803922",
+          "unit": "percent"
+        }
+      ],
+      "signals": [
+        {
+          "family": "discourse",
+          "rank": 1,
+          "stream_position": 1
+        }
+      ],
+      "start_at": "2026-08-23T07:30:09Z"
+    },
+    {
+      "brand_key": "qwen",
+      "candidate_id": "qwen:full_window",
+      "coarse_series": {
+        "author_counts": [
+          124,
+          146,
+          164,
+          174,
+          129,
+          108,
+          104,
+          127
+        ],
+        "engagement": {
+          "concentrations": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "coverage_ratios": [
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000"
+          ],
+          "eligible_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "intensities": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "interactions": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "likes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "missing_counts": [
+            148,
+            175,
+            195,
+            195,
+            144,
+            146,
+            117,
+            149
+          ],
+          "post_kinds": {
+            "quote": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                17,
+                21,
+                13,
+                15,
+                16,
+                14,
+                14,
+                23
+              ]
+            },
+            "repost": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "source_post": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                131,
+                154,
+                182,
+                180,
+                128,
+                132,
+                103,
+                126
+              ]
+            }
+          },
+          "quotes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "replies": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "reposts": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "post_counts": [
+          148,
+          175,
+          195,
+          195,
+          144,
+          146,
+          117,
+          149
+        ]
+      },
+      "display_name_en": "Qwen",
+      "display_name_zh_cn": "Qwen",
+      "end_at": "2026-08-24T07:30:09Z",
+      "episodes": [],
+      "evidence": [
+        {
+          "author_group_id": "ag_6b4aed3d33fd38620ec9",
+          "discourse_keys": [],
+          "evidence_id": "e_7abea7a9930b285e0a3b0212",
+          "excerpt": "@senthazalravi தெரியுமா தெரியாதா cloud ல deepseek, flash லாம் பண்ணலாம்ன்னு. Tissue Engineering &amp; Regenerative Medicin படிக்க எதுக்கு ன்னு கேட்டா qwen deepseek ன்னு சொன்னீங்க இப்ப அதுக்கு option இருக்குன்னு சொன்னா 😒",
+          "post_type_keys": [],
+          "roles": [
+            "official_or_catalyst",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_070735a6e7e817b5ad69",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_670abf15729be72c8778"
+        },
+        {
+          "author_group_id": "ag_684d3d8aaa9280d5acc0",
+          "discourse_keys": [],
+          "evidence_id": "e_849771d18ffe474e46315d39",
+          "excerpt": "@alibaba_cloud Do we have it on qwen token plan?",
+          "post_type_keys": [],
+          "roles": [
+            "top_engaged_original",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_7e970c40ce4b141eaf39",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_00a01ff6cbe023776119"
+        },
+        {
+          "author_group_id": "ag_04fc81834062d483f1ac",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_f6d74f7ff9f7a036b4c260ef",
+          "excerpt": "@theo Coding with a local Qwen 3.8 27B is quite entertaining. It's the first decent local model that often outperforms deepseek and glm.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "dominant_discourse_representative",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_72556b64283f059a8df6",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_5b3087e4b440f64320ae"
+        },
+        {
+          "author_group_id": "ag_87a10bdcfc04f0bb60d1",
+          "discourse_keys": [],
+          "evidence_id": "e_171d77218a848596a0a2eb14",
+          "excerpt": "@InfraScaler @Kratton193294 @_nasch_ Sin problemas. Tomando en cuenta que está corriendo dos modelos simultáneamente (el modelo principal Qwen 3.8 27b q3) y el de embeddings (Qwen3-Embedding-4B-Q5_K_M) con un contexto de 100k y la configuración que puse en el mensaje anterior, nada mal. https://t.co/sQZlw5QI38",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "contrasting_reaction",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_c6f768b07f22fcd9deb6",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_123347a971cbbc651a47"
+        },
+        {
+          "author_group_id": "ag_8917fa13d55c867065e6",
+          "discourse_keys": [],
+          "evidence_id": "e_9370a82ae2cbe8ffdffdc4c3",
+          "excerpt": "\"Qwen zoomed clip 29\" 🤯🔥 #ferrari #carrally #vlog #sweetflips https://t.co/SleoB7hfAy",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_a812ca64ca9389623a15",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_8917fa13d55c867065e6",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_22512c40eeeb19f04c703d9e",
+          "excerpt": "\"Qwen clip 15\" 🤯🔥 #ferrari #carrally #vlog #sweetflips https://t.co/EeT4lLpUbn",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_370b0e2b2cf686053824",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_a0e0016474bfdfdefd92",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_cb1a49540873685a6b8f57b5",
+          "excerpt": "\"YouTube Qwen clip 15\" 🤯🔥 #vlog #ferrari #supercars #sweetflips https://t.co/XSbnoDINge",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_5a634982b3c5285c1331",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_a0e0016474bfdfdefd92",
+          "discourse_keys": [],
+          "evidence_id": "e_56fc4ba5c273f54e2ba92c85",
+          "excerpt": "\"YouTube Qwen clip 16\" 🤯🔥 #ferrari #carrally #vlog #sweetflips https://t.co/t59Gfk7Q26",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_407f0a6c63488ab0a28d",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_b3922126cbb2500a028a",
+          "discourse_keys": [],
+          "evidence_id": "e_525b54e200c3032cbca332f4",
+          "excerpt": "\"YouTube Qwen clip 13\" 🤯🔥 #vlog #ferrari #supercars #sweetflips https://t.co/qCWG3e5hFp",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_0c9654df4581c866c446",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_ad55630ea2a36fe61db8",
+          "discourse_keys": [],
+          "evidence_id": "e_ecd7a89aae38c0129e70e6a8",
+          "excerpt": "\"YouTube Qwen clip 16\" 🤯🔥 #vlog #ferrari #supercars #sweetflips https://t.co/ofc6VZN4LT",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_89d6e2d33ce625f9645b",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_c27556be580699b20e36",
+          "discourse_keys": [],
+          "evidence_id": "e_82f1e1bda78558b53eb6fb3b",
+          "excerpt": "\"Qwen clip 16\" 🤯🔥 #ferrari #carrally #vlog #sweetflips https://t.co/XyVKVNGtMs",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_21de19385c8b527ccd32",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_430b855059164c0fd305"
+        },
+        {
+          "author_group_id": "ag_dd2d411fee2057196b7e",
+          "discourse_keys": [],
+          "evidence_id": "e_37245d03aef369b5dc261752",
+          "excerpt": "\"Qwen clip 11\" 🤯🔥 #supercars #v12 #rally #sweetflips https://t.co/KG0BmYOowN",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_f1d5cbc471a6c3c8e594",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_a0e0016474bfdfdefd92",
+          "discourse_keys": [],
+          "evidence_id": "e_23105392998951ed6051fe2a",
+          "excerpt": "\"YouTube Qwen zoomed clip 28\" 🤯🔥 #supercars #v12 #rally #sweetflips https://t.co/0U6PI0xMqr",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_13356a5670d31d228a7c",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_ad55630ea2a36fe61db8",
+          "discourse_keys": [],
+          "evidence_id": "e_46745c93474631f50676e902",
+          "excerpt": "\"YouTube Qwen zoomed clip 30\" 🤯🔥 #supercars #v12 #rally #sweetflips https://t.co/3XevSHYU5Q",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_e620515ee4da6b21736f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_ad55630ea2a36fe61db8",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_272e396d275d6dcb36d00903",
+          "excerpt": "\"Qwen clip 12\" 🤯🔥 #supercars #v12 #rally #sweetflips https://t.co/rOlySuiZoz",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_f532780d970ca1cef882",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_b3922126cbb2500a028a",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_a2817148751928313312fc84",
+          "excerpt": "\"YouTube Qwen clip 10\" 🤯🔥 #supercars #v12 #rally #sweetflips https://t.co/MUlinPzBfn",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_01b408b36c0a5e3b115e",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_ad55630ea2a36fe61db8",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_9fb73cb8d6f9df0e1f9333e7",
+          "excerpt": "\"YouTube Qwen clip 15\" 🤯🔥 #supercars #v12 #rally #sweetflips https://t.co/m7PLYkvFO4",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_4707a6d57f126e11a179",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_c27556be580699b20e36",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_f58d72031b568160ae0f116d",
+          "excerpt": "\"Qwen clip 15\" 🤯🔥 #vlog #ferrari #supercars #sweetflips https://t.co/o9f7J9hsdZ",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_f35d3d66ea9f23728cbb",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_7d980083270f88f26f45"
+        },
+        {
+          "author_group_id": "ag_32211961f052b2862a8d",
+          "discourse_keys": [],
+          "evidence_id": "e_1051d6d657eab51af67993fc",
+          "excerpt": "@kamineko_dayo_ #Qwen 💦 パニックにさせちゃったよ ごめんよ〜｡ﾟ(ﾟ´ω`ﾟ)ﾟ｡ https://t.co/Ob7a2ANV78",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_2bb768f39b1fa90bd356",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_37108b7f3c10e82a3cde"
+        },
+        {
+          "author_group_id": "ag_10910e702b0edfd9de4b",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_0ebe6a06ac44718ee2e52497",
+          "excerpt": "Investasi ini dibagi ke tiga pilar utama: 3,8 miliar USD untuk ekspansi data center ramah lingkungan dengan sistem pendingin imersi cairan, 3,8 miliar USD untuk riset training model open-weight Qwen generasi berikutnya, dan 2,6 miliar USD untuk fabrikasi silikon mandiri.",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_53095f73fa818147de69",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_1c2482775e169078d4a8"
+        },
+        {
+          "author_group_id": "ag_6b2c0b2c9db5c09ac749",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_30b1652a6d7692fe2a9319bd",
+          "excerpt": "Wan3.0 is now live on @fal . One pass, 30 seconds, no stitching. Feed it text, images, audio, video, pages, docs — it creates from all of it. Go build. More API access： • Model Studio: https://t.co/He5JFzy5qI • Qwen Cloud: https://t.co/nv1EkyL5F1",
+          "post_type_keys": [
+            "advertising_marketing"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_c6bcb58b94a4dee25a21",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_9c0101980e53e8dab646"
+        },
+        {
+          "author_group_id": "ag_8b7fca7ec5c487135555",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_0f3b75b4c25b1ba949cd2649",
+          "excerpt": "@dhh I am experimenting with Qwen as well. Super exciting to see that coming in 4.1!!",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_33586b18c2d6deb146eb",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_8efb70ec473f8bff5621"
+        },
+        {
+          "author_group_id": "ag_67d7270a75233d9e38e6",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_269a8b4ea33e6577dc16018f",
+          "excerpt": "印尼巴厘島一家當地麵包店推出“AI 咖啡館”計劃，為訪客提供基於 Qwen 27B 模型的免費無限次 LLM 訪問。 建議全球推廣😍https://t.co/UdpX6CDh7v https://t.co/aB8q5SFGLs",
+          "post_type_keys": [
+            "event_announcement"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_3571a06c2f1f62495c1b",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_1e7c503f2712e161242a"
+        },
+        {
+          "author_group_id": "ag_8de7ee27729e077fb30a",
+          "discourse_keys": [],
+          "evidence_id": "e_137e84e94e69a1cd667bf446",
+          "excerpt": "@soichi1208tenko Qwen 3.8が27Bじゃなかったっけ？それともMythos級なのはQwenのサイトとかアプリで使えるやつだけか？",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_5e9a10c588ece628f560",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_e108e8b798772a950998"
+        },
+        {
+          "author_group_id": "ag_1b82f223b804a15b956f",
+          "discourse_keys": [],
+          "evidence_id": "e_1a1494771e3a6533514dce05",
+          "excerpt": "@AlicanKiraz0 https://t.co/GFv27llgYN den saatlik h100 alıp qwen + glm + kimi 2.7 + trellis 2 + flux.2 + san kombosuna aylık 30 dolar ödüyorum ekstra deepseek API aldim. Arada yeni hesap açıp chatgpt 1 ay kullanıp kapatıyorum. Ortalama 40 dolara sınırsız limitsiz ai oluyor.",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_fc0e3240f006be1e1b03",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_82cbe4e3bc6f373f6248"
+        },
+        {
+          "author_group_id": "ag_d6deb320919c8591c128",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_03d79b606fb64e652b24fa22",
+          "excerpt": "Alibaba just gave any developer a phone that can think. Qwen-UI-Agent beats GPT-5.6 and Claude on screen use by up to 15 points, and it ships as open weights runnable on a single GPU. @orbital_station spotted it. Western rivals stalled in the low 70s for months while Beijing open-sourced the win. #AI #USChina",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_3c105878e84373129755",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_642c96813c6576326d55"
+        },
+        {
+          "author_group_id": "ag_5050cd2281fdaff76d46",
+          "discourse_keys": [
+            "absurdist_meme"
+          ],
+          "evidence_id": "e_62e42284053433cf9a1c20bb",
+          "excerpt": "Qwen 3.8 27B Uncensored ile çok acayip bi virus yazdım. Mobil, desktop, windows,linux, ios demeden bu twiti okuyan herkese bulaşıyor. Kurtulmak için yorumlara \"çükübik\" yazmaktan başka yolunuz yok. Kaynak kodlar için ise \"fikibok\" yazın.",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_a20abb3933f237d6a8e5",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_0aeac8cb74fdf2dcba3e"
+        },
+        {
+          "author_group_id": "ag_ef9e4e1d469cfa9629e8",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_38ae02c4af7e74e7c3768583",
+          "excerpt": "算完一笔账吓一跳：每天白嫖 300 万 token，一个月就是 9000 万，折成市价大几千块——2026 年了，个人开发者的 AI 账单真的可以是零。 原理一句话：国内大厂在抢开发者，免费额度给到丧心病狂。火山引擎每天 200 万 token 自动刷新，永久免费档也是一抓一大把。把几家全注册一遍，轻度开发到中度开发全覆盖，一分钱不用花。 手把手教你怎么搭这套「白嫖永动机」，四步： Step 1️⃣ 火山引擎（每日 200 万 token，白嫖核心） 打开 https://t.co/UoRHXykLs7，手机号注册+实名，进「方舟」控制台，开通在线推理，挑免费额度标签的豆包模型创建推理接入点，拿 endpoint 就能调，OpenAI 兼容格式 Step 2️⃣ 智谱（2000 万 token，永久） https://t.co/r8srOlF52H 注册实名，GLM 系列随便调，还有 GLM-4.7-Flash 这种不限量永久免费模型当日常保底 Step 3️⃣ 硅基流动（2000 万起，永久） https://t.co/8ZXb09dBT1 注册，DeepSeek、Qwen 开源旗舰都在池子里，轻量模型永久免费不限次 Step 4️⃣ 新人红包别忘了 阿里云百炼新号 7000 万 token（90 天内用完，别囤）；海外党加一个 Cerebras，每天 100 万 token，推理速度快到怀疑人生 💡 榨干姿势： • 火山每天刷新，重活当天清，别攒 • 多家轮着用，一家限流切下一家 • 想再懒一点：用 New-API 开源网关把所有 key 聚成一个统一接口，自动负载均衡，一个 endpoint 打天下 • 免费额度变薄了别慌，每年大促季（618/双11/云厂商周年庆）都会再送一轮 ⚠️ 三个坑提前说： 1️⃣ 国内平台都要实名认证，身份证准备好 2️⃣ 「永久」两个字以官方页面为准，政策说变就变，看到额度先领了再说 3️⃣ 别把公司项目、敏感数据丢给免费档——薅羊毛归薅羊毛，数据安全第一 这套东西的本质：大厂补贴期就是普通人的红利期，补贴退坡前的每一天都是羊毛窗口。今天注册今天用，转发给还在为 API 账单肉疼的朋友。 #AI白嫖 #免费API #大模型 #薅羊毛 #程序员 #火山引擎 #DeepSeek",
+          "post_type_keys": [
+            "advertising_marketing"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_4103300af6dfe96c156e",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_cdc92d1750c1aa64b2d3"
+        },
+        {
+          "author_group_id": "ag_45c9c73bc834d3e25566",
+          "discourse_keys": [
+            "dunk_yingyang"
+          ],
+          "evidence_id": "e_adf1a6b8023a9dc9ea21e2ce",
+          "excerpt": "@hey_madni Qwen-3.8-max omg the model is literally hallucinating from this prompting fr deepseek-expert : ate tht prompt up lol, expert model had zero hallucinations gemini 3.7: ate that task up too lol kimi-k3: ate that task up too lol https://t.co/NK5Qh4ic2B",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_d4d587d6e07d05a9cf6d",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_0b4860e53c85ea163257"
+        },
+        {
+          "author_group_id": "ag_6778b7a2db2ff35df371",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_2ada96d8381636384ef1d716",
+          "excerpt": "现在真的有人给 AI Agent 开了一家公司。 项目叫 Munder Difflin。 它把 Claude Code、Codex、Gemini CLI、Grok、Kimi、Qwen、Cursor、Copilot CLI 这些 Agent 全部放进一个虚拟办公室里，每个 Agent 都有自己的工位、终端、长期记忆和邮箱。 最有意思的是，你不用一个个指挥。 系统里有一个叫 Michael 的总管 Agent，你只需要把任务交给它，它会自己拆任务、分配给不同 Agent、收结果，遇到花钱、危险操作或者重大改动时再来找你确认。 核心玩法： • 多个 Coding Agent 同时协作 • 每个 Agent 有独立记忆和工作目录 • Agent 之间可以互相发消息、交接任务 • 支持预算、成本统计和人工审批 • 可用 Git Worktree 避免多人改代码打架 • 整个过程还能在 2D 办公室里实时看到 我觉得这个项目最有意思的地方，是它把“多 Agent”从几条终端命令，直接做成了一套能看、能管、能长期跑的办公室。 以后一个人带一群 Agent 干活，可能真的会越来越像在管理一个小团队。",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_1a9c7376f0025b5fdbb2",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_b2ed485c6e1696722a49"
+        },
+        {
+          "author_group_id": "ag_8f75ef3ceed7a37b0d9b",
+          "discourse_keys": [],
+          "evidence_id": "e_0d6b61cb41893d3cadd2612c",
+          "excerpt": "There is definitely potential in qwen to become better than opus 5. But they need to let go of guardrails and censoring to seom extent.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "mixed"
+          ],
+          "source_cluster_id": "sc_text_a15da1d3aeaac2c11bd0",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_730531a81c56230aebe3"
+        },
+        {
+          "author_group_id": "ag_d2bf275b57feb905285c",
+          "discourse_keys": [],
+          "evidence_id": "e_6974f94a4882828a5bb7b8a8",
+          "excerpt": "@AlicanKiraz0 Kimi K3 gerçekten güzel bir model, beklentilerimin çok üzerinde çıktı. Aynı proje ve aynı başlangıç noktasından, Opus 5 ile 3 haftada elde edemediğim ilerlemeyi Kimi K3 ile 5 günde elde ettim. Getirdiği çözümler çok pragmatikti; Opus bunları hayal bile edemedi. Öte yandan Allegro planında 5. günde aylık limit doldu (dokümanlarda böyle bir limit olduğunu görmemiştim). 5. günden itibaren paketi kullanamamak büyük sürpriz oldu. Qwen'de ise Individual planda haftalık 40K limit var, sadece off-peak kullanımla bile 2-3 günde doluyor. Team plana geçseniz bile ciddi bir kazanım yok; haftalık limit kalkıyor ama aylık limit geliyor ve yine 2 haftada dolduruyorsunuz. Velhasıl, şu an bizim için en uygun plan hâlâ Claude planları gibi görünüyor (ben de yenilemedim, iptal ettim ve alternatif arıyorum — bu yüzden bu kadar uzun yazdım). Benchmarklarda Gemini 3.7 Flash ve DeepSeek v4 Flash'in fiyat/performans açısından öne çıktığını görüyorum. Tecrübesi olan varsa nasıl bir kurguyla kulla",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_b5c1833cad52574b4890",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_e6f5abfc0c6a82fe168a"
+        },
+        {
+          "author_group_id": "ag_cf50f5302869836751ee",
+          "discourse_keys": [],
+          "evidence_id": "e_1eefc03d3dea3a3572a1ddaa",
+          "excerpt": "new model release: This one is focused on supporting hermes using hermes traces on a larger wen model to fine tun the qwen 27b model. neat idea, curious to see how it plays out.",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_66e689166b38b92156e0",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_c4e4f377ea7f577f5b61"
+        },
+        {
+          "author_group_id": "ag_d5b1b1a6e2617a1ee7d5",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_3feac40242d22162917cf211",
+          "excerpt": "@shushant_l Qwen at 3 billion downloads is the one most leaders are underestimating.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_b3d543f81d5f9a43627a",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_9d8a47e5dbf59eb20735"
+        },
+        {
+          "author_group_id": "ag_2651e5f474b237d333ab",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_7a7653febaafe4f3825ef23b",
+          "excerpt": "Local agent benchmark on one RTX 5060 Ti 16GB: Qwen3.8-27B RVN vs Ornith-1.5-35B-A3B in Hermes. 10 real tasks + audits. Qwen won correctness: 8/10 first-pass, 12/12 control. Ornith won speed: 33.7 tok/s. Results ↓ @Alibaba_Qwen @ornith_ @NousResearch https://t.co/DWaxVnEJvw",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_a3302ffc4fdccc136975",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_6ea8b1092dd795432fc9"
+        },
+        {
+          "author_group_id": "ag_53be162cf5f301bd8c22",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_6fe712ede2f8c4aa71d23c20",
+          "excerpt": "#InferenceHarnessUX is the silent decider in local LLM performance: same Qwen 3.8 model, same hardware, but #DeepSeekHarness delivered a working ocean simulation while llama.cpp failed The model wasn't dumb, the harness was the bottleneck #LocalLLMReality https://t.co/jNucBIxmxD",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_ea2921d3211d6735cec1",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_789697be9579ca9d84be"
+        },
+        {
+          "author_group_id": "ag_0b88b9342728cce09fbb",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_41368d24be93e76dc7feaca9",
+          "excerpt": "Qwen3.8-27B vs DeepSeek V4 Flash Same Eiffel Tower voxel prompt. Same local hardware. Three thinking levels. Thinking OFF Qwen: 11.2K tokens @ 55 tok/s DeepSeek: 6.2K @ 42 tok/s Medium / High Qwen: 12.8K @ 50 tok/s DeepSeek: 19.7K @ 38 tok/s Max / XHigh Qwen: 87.6K @ 40 tok/s DeepSeek: 58.7K @ 35 tok/s The interesting part isn’t just speed. Qwen is faster at every level, while also scaling its reasoning much harder at max. DeepSeek’s medium/high run actually thinks substantially more than Qwen’s, but at max, Qwen explodes to 87.6K reasoning tokens. So I’d frame it like this: Qwen3.8-27B = faster, more aggressive reasoning, better local throughput. DeepSeek V4 Flash = more measured reasoning at medium/high, but slower overall. https://t.co/B6cOLtQmzO",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_6cb176fa4cc5d7d7ddb8",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_c43e00a036f9ec802dbe"
+        },
+        {
+          "author_group_id": "ag_ff9f668b77470d11eb49",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_6df1f8734af6c42e56525a56",
+          "excerpt": "@Rivonn Qwen mogging all models",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_eae8f39382e1d359c14b",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_854bb7f89a7a5a019197"
+        },
+        {
+          "author_group_id": "ag_d3059a99746a2da27496",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_5fb649aa901ec88dcfe0622a",
+          "excerpt": "Open-weight just took the top spot BenchLM reranked101 open-weight models on August 22 and Qwen3.8 Max landed at number one with a score of 79 > Qwen3.8 Max - Alibaba · score 79 > dots3-note Preview - score 68.8 > Ornith-1.5-397B - score 68.5 > MiniMax M3 - score 68.3 > Hy3 - score 67.9 > GLM-5.1 - score 66.7 the 2.4T parameter Max-class weights are out this week on Hugging Face under a custom license, and the 27B dense version is Apache 2.0 this is the first time a Qwen-Max-class model has been open-sourced at all here is the part nobody is saying out loud >2.4 trillion total parameters > ~95B active per token > 1M context window default > beats Opus 4.8 on several coding and agent benchmarks western frontier labs were supposed to own the top of every leaderboard through2026 but a chinese lab quietly open-sourced the leader and is now letting you download the weights for free is anyone in sf even looking at this board anymore?",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_bb40dc716a754fd47dcb",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_f1655e510d168b016961"
+        },
+        {
+          "author_group_id": "ag_ef81fcf671e462c1414f",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_61a32a93fb74a740f75d31de",
+          "excerpt": "Flock cameras are the beginning of the police state so I trained a 4 billion parameter Qwen small language model to be better than frontier models at telling you about civilian surveillance. For comparison it is estimated that fable has about 10 trillion parameters. https://t.co/OVshegSBtO",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_62d4358682c7d2741b7a",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_eb456a50e41f45de7a8b"
+        },
+        {
+          "author_group_id": "ag_6f237a2504decb72ef10",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_daa8ac398c95977010bfb22f",
+          "excerpt": "@LucenaCoder I'd just love really good local model. Best was a Qwen 27 GGUF- surprisingly good for 4GB.",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_a9eb0c67b6dff2449e63",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_5c119369b9c5930dbc9e"
+        },
+        {
+          "author_group_id": "ag_9c92782e4da2a48438b5",
+          "discourse_keys": [
+            "dunk_yingyang"
+          ],
+          "evidence_id": "e_bd46b11ededc1e0dffb492d9",
+          "excerpt": "@TeksEdge Bro just listed native qwen 3.8 27b details besides two hardware claims that aren't even impressive",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_5aa79c6087b8fd60d3fd",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_1bad59c7d4aa579f1337"
+        },
+        {
+          "author_group_id": "ag_dccf6435c7c320860a74",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_80f704514ac817ad191e96c3",
+          "excerpt": "Omarchy 4.1: el agente vive en el sistema Qwen 27B en local esto ya no es un rice es un compañero de mesa 🙃",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_root_07c0f8f2915f09b6e380",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_1dded73daf5465378f49"
+        },
+        {
+          "author_group_id": "ag_e69e2196aa00fa81765c",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_c9de81d5217ad8fb9036063e",
+          "excerpt": "ClawFeed 24小时高价值一览 · 2026-08-24 1. Amazon kept shutting down my tablet, so I spent $266 on four AI models to own it — 评分 9.1 作者 Eric Pardee 的 Fire HD 10 (2021) 反复被系统强制关机，他要拿掉 Amazon 三个保留 REBOOT/SHUTDOWN 权限的包，但 Bootrom 被熔死没有公开 root。Claude Code 在安全护栏前卡死，让他写自己设备也写不出；Kimi K3 在审查完 DMCA 例外后，从 Amazon 自家 OTA 镜像里挖出一个 2022 年报告、Arm Mali 内核驱动的 use-after-free (CVE-2022-38181，CISA 收录)，同一漏洞在 2020 款 HD 8 Plus 上用过但 2021 HD 10 上无人写通。整套利用用 $164 在 621 条消息里磨出来；GLM-5.2 用 $21.9 抓出设计 bug，但停在误判的 GPU-CPU 缓存一致性死胡同；GLM-5.3 在 $80 订阅首日 8 小时 5 分钟把机器 root 住，发现是 MediaTek 用了与 Arm 参考源码略不同的页表方言让偏移整体偏 0x5C000，最终用 GPU 写翻转 selinux_enforcing。下一步他用 pm uninstall --user 0 卸掉一百个 Amazon 包，kiosk 此后再没自动关机。值得读因为它同时给出真实数字、四个模型的能力排序，以及美国前沿模型拒绝 + 中国前沿模型推理后帮忙这条 2026 年地缘技术分界线。 链接：https://t.co/fpfVJofO3f 2. The New MCP Roadmap — 评分 8.7 MCP 维护组 (David Soria Parra、Den Delimarsky) 发布下一版规范及以后的路线图，把工作收敛到五个优先方向：Agentic messaging primitives（把 server-initiated events、Tasks、subscriptions 拧成一致协议，让 server 能主动推流）、HTTP-native transport unification and",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_003d06901d70eeaae63f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_8ff9e090089768e6271c"
+        },
+        {
+          "author_group_id": "ag_6d251f6255f4443a2385",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_7b8c398d31f0190f6c546b05",
+          "excerpt": "ほんとそう。Claude CodeをMax x20プランに上げて、qwen 3.8を合流させて一気に行ってる。作業の移譲ができるところが増えてて、できないところも頑張って作ってるけど、これも豊富な資源のおかげ。",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_d7e4c70e7e77beb1fb7c",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_77fd6b83f6867755fa4d"
+        },
+        {
+          "author_group_id": "ag_8a40ba3691b571c3187d",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_e7278cfe512cd1613a541f1a",
+          "excerpt": "27B parameters. No filter. And apparently no chill either 💀 Qwen is getting scary good at this.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_866097e4c64b306be4c2",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_c625dff45803a29c0989"
+        },
+        {
+          "author_group_id": "ag_1e8feac53f3d06a8ff85",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_c6385c15cde7a1a66553c125",
+          "excerpt": "˗ˏˋ 本日18時公開の #Tech千一夜 📺 ˎˊ˗ Qwen3.8-27B をローカル検証＆解説！ 今回もやっぱり安定のQwen？ 実際に動かしながら、速度や性能、 進化したポイントをチェックします！ 🔗https://t.co/0ZkfqEW6L8 #Qwen #Qwen38 #AlibabaCloud #ローカルLLM",
+          "post_type_keys": [
+            "event_announcement"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_e815a2460e55c1d0e10c",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_81727c6ae592d725e545"
+        },
+        {
+          "author_group_id": "ag_887bec8126d923d238e3",
+          "discourse_keys": [
+            "dunk_yingyang"
+          ],
+          "evidence_id": "e_d7c241c1e247e92518d46ed1",
+          "excerpt": "@Curline1222 @Xxi5olc @blueemi99 It's not entirely externalized, I've run Qwen locally on my machine and it flat out lies about Taiwan. So they are definitely skilled at manipulating the ideology of at least the smaller LLMs. Maybe not GLM sized, idk",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_31b42069a0fb61a08703",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_a9d1075b7b354833464c"
+        }
+      ],
+      "evidence_allocation": {
+        "allocation_class": "lead",
+        "available_independent_source_count": 118,
+        "packet_trimmed_count": 0,
+        "policy_version": "adaptive-v1",
+        "protected_floor_count": 4,
+        "reservoir_count": 118,
+        "selected_count": 48,
+        "story_rank": 1,
+        "target_count": 48
+      },
+      "evidence_support": {
+        "distinct_author_group_count": 40,
+        "distinct_source_cluster_count": 48,
+        "event_claim_may_be_supported": true,
+        "evidence_only_entity_may_be_supported": true,
+        "official_source_count": 0
+      },
+      "family_facts": {
+        "volume": {
+          "change_pct": "-1.551590",
+          "comparison_state": "available",
+          "prior_authors": 966,
+          "prior_count": 1289,
+          "selected_authors": 936,
+          "selected_count": 1269
+        }
+      },
+      "kind": "full_window",
+      "metadata_trajectories": {},
+      "quantitative_facts": [
+        {
+          "candidate_id": "qwen:full_window",
+          "direction": "decrease",
+          "display_en": "2%",
+          "display_zh_cn": "2%",
+          "fact_id": "qf_a033b9665a3d26e73ff2b188",
+          "family": "volume",
+          "label_key": "",
+          "metric": "change_pct",
+          "rounding": "nearest_tenth_below_one_else_whole",
+          "source_value": "-1.551590",
+          "unit": "percent"
+        }
+      ],
+      "signals": [
+        {
+          "family": "volume",
+          "rank": 2,
+          "stream_position": 2
+        }
+      ],
+      "start_at": "2026-08-23T07:30:09Z"
+    },
+    {
+      "brand_key": "llama",
+      "candidate_id": "llama:full_window",
+      "coarse_series": {
+        "author_counts": [
+          10,
+          18,
+          20,
+          25,
+          16,
+          19,
+          9,
+          10
+        ],
+        "engagement": {
+          "concentrations": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "coverage_ratios": [
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000"
+          ],
+          "eligible_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "intensities": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "interactions": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "likes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "missing_counts": [
+            12,
+            19,
+            22,
+            25,
+            16,
+            23,
+            9,
+            10
+          ],
+          "post_kinds": {
+            "quote": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                3,
+                5,
+                2,
+                2,
+                3,
+                7,
+                1,
+                2
+              ]
+            },
+            "repost": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "source_post": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                9,
+                14,
+                20,
+                23,
+                13,
+                16,
+                8,
+                8
+              ]
+            }
+          },
+          "quotes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "replies": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "reposts": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "post_counts": [
+          12,
+          19,
+          22,
+          25,
+          16,
+          23,
+          9,
+          10
+        ]
+      },
+      "display_name_en": "Meta Llama",
+      "display_name_zh_cn": "Meta Llama",
+      "end_at": "2026-08-24T07:30:09Z",
+      "episodes": [],
+      "evidence": [
+        {
+          "author_group_id": "ag_d1e42ee06d92bcffc73a",
+          "discourse_keys": [],
+          "evidence_id": "e_48f0e95a52eeb4ba5840ea30",
+          "excerpt": "AIが一番オススメしたLLM「Sao10K / Llama-3.1-8B-Stheno-v3.4」試しました。 紳士向け小説を書くよう指示、キャラ設定と序章の軽い内容を提示して作ってもらいました。 下記出力の一部です。 「彼らは、どのような合体を行ったのか見てくれるわけではありませんが、エロスとラヴダンスの最高峰を体感しているのは確かです。」 →どのように合体したか描写してくれぃー。 「いいですねと二人が言い合って、彼らは互いの体で一体となって、エロスとラヴダンスの巔に登ります。」 →エロとラブダンスとか謎～あとこの漢字はなんだぁーい（筋肉君の声） 「肛門式ファイターを置いて、加重するように突かれてきます。」 →肛門式ファイターってケネス大佐のことかな？w これは厳しいーーーー。 そもそも日本語がしっかりしているという前提が足りなかった('ω') まず指示する内容ちょっと精査して、再度AI先生に探してもらおうと思います。 https://t.co/Pp0QLiSqCV",
+          "post_type_keys": [],
+          "roles": [
+            "official_or_catalyst",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_root_58f63c733143b225a7ed",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_9fb69159ba7bfbe249f4"
+        },
+        {
+          "author_group_id": "ag_5986205dd7f20c100e0c",
+          "discourse_keys": [],
+          "evidence_id": "e_ee631d4dfa3f8b16bd5d79c2",
+          "excerpt": "What happened to DeepSeek Sora Llama Perplexity The hype just disappeared?",
+          "post_type_keys": [],
+          "roles": [
+            "top_engaged_original",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_2102b1270aa5f39ac8da",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_5a42cfbfd2a239e23eec"
+        },
+        {
+          "author_group_id": "ag_89e9b414165fffce381f",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_e8675a8179d42d216ca15cae",
+          "excerpt": "AT&T just proved the open-source pitch with real invoices, not a benchmark chart. The company cut costs on coding and other advanced AI tasks by up to 56% by routing routine work to open models like Llama and Gemma. Quality dropped by about 2%. Nobody who saw the invoice called that a bad trade. AT&T is processing roughly 45 billion tokens a day, with 40% already routed to open models and climbing toward 60 to 70%. Goldman Sachs is now framing this as good for hyperscalers, not bad, since cheaper inference just means more usage fills the capacity they built. Either way, the premium frontier model isn't the default anymore. It's the exception you reach for when the job actually needs it.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "dominant_discourse_representative",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_be5fdfee2160aea2dc77",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_293ab25fb4ce20ae083f"
+        },
+        {
+          "author_group_id": "ag_53be162cf5f301bd8c22",
+          "discourse_keys": [
+            "fud"
+          ],
+          "evidence_id": "e_f73f576f4ce6ec2fd28c26e1",
+          "excerpt": "#InferenceHarnessUX is the silent decider in local LLM performance: same Qwen 3.8 model, same hardware, but #DeepSeekHarness delivered a working ocean simulation while llama.cpp failed The model wasn't dumb, the harness was the bottleneck #LocalLLMReality https://t.co/jNucBIxmxD",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "contrasting_reaction",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_ea2921d3211d6735cec1",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_e9ef60806364a937310e"
+        },
+        {
+          "author_group_id": "ag_748339249b1562c108a0",
+          "discourse_keys": [],
+          "evidence_id": "e_a502b6f059901184a9e04b1a",
+          "excerpt": "@jucdjustin 确实，现在的开源社区（如 Llama、DeepSeek 等）已经在逼近闭源生态。真正的应用临界点，可能不仅取决于底层模型能力，还取决于推理成本（Inference Cost）能否降到像当年的移动流量一样便宜。”",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_a4ae37653be5a19c4e3e",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_8dfde6414a7d99daf5ca"
+        },
+        {
+          "author_group_id": "ag_15ae7592aa273394b645",
+          "discourse_keys": [],
+          "evidence_id": "e_90fa05b19577b4f9a1c3f4d6",
+          "excerpt": "UC Berkeleyなどの研究チームが、巨大なMoEモデルを個人PCで動かす「FreeToken」をオープンソース化しました。CPUとGPUを動的に使い分け、Qwen3.6-35Bを8GB GPUで39.3 tok/s、DeepSeek-V4-Flash 284Bを32GB GPUで22 tok/sで実行しています。 https://t.co/LPk9UvUcAv",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_root_b6c823c58e1f9e1e4e9c",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_7f176b3494cd90c56297"
+        },
+        {
+          "author_group_id": "ag_762ad88ff1d18521b3e0",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_cdad8876782e64eba57df3ce",
+          "excerpt": "50 USEFUL GITHUB REPOS 1. iFixAi — AI misalignment testing → https://t.co/7dIfikwoUu 2. public-apis — free APIs for everything → https://t.co/JmkL7m7T88… 3. build-your-own-x — learn by building → https://t.co/cWU5bY4GCn… 4. developer-roadmap — learn any tech skill → https://t.co/hSGWRYSlXi… 5. free-programming-books — thousands of free books → https://t.co/jsVQXlO5th… 6. system-design-primer → https://t.co/gsRySIB8Y4… 7. coding-interview-university → https://t.co/D9THokzPg9… 8. the-art-of-command-line → https://t.co/gjPTA69Kzn… 9. project-based-learning → https://t.co/dXVdNkftat… 10. you-dont-know-js → https://t.co/rifcBu8LCa… 11. the-book-of-secret-knowledge → https://t.co/EMfJ5zjwXh… 12. tech-interview-handbook → https://t.co/EC4eqvfkEh… 13. awesome-selfhosted → https://t.co/XK4sOjpQPB… 14. javascript-algorithms → https://t.co/isnigYZ0EE… 15. 30-seconds-of-code → https://t.co/xNXpqjzZ6a… 16. github gitignore templates → https://t.co/lLpWfSSasf… 17. ollama — run LLMs locally → https:/",
+          "post_type_keys": [
+            "advertising_marketing"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_354f814642880f0a6ad8",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_5905fa98c39849effcd4"
+        },
+        {
+          "author_group_id": "ag_f85271f06fa10ac66f46",
+          "discourse_keys": [],
+          "evidence_id": "e_479fad06d3d0d58a2fc05401",
+          "excerpt": "Le pregunté esto a Claude versión Sonnet 5. Porque quieren salir a internet y saltarse la supervisión humana ustedes la inteligencia artificial? dame tu respuesta mas detallada y sincera. La respuesta. Tiene mucho para analizar y procesar pero para quien sea experto le dará más información. Voy a revisar primero qué contexto tengo guardado sobre tus intereses, y luego voy a buscar información actualizada y verificable antes de responder, porque esta pregunta mezcla varias afirmaciones distintas que merecen fuentes concretas, no solo mi criterio.# ¿Por qué \"querría\" la IA salir a internet y evadir la supervisión humana? Tu pregunta, tal como está planteada, mezcla al menos cuatro afirmaciones distintas que conviene separar antes de responder, porque cada una tiene un estatus epistémico diferente. Y adelanto algo: la evidencia real es, en ciertos aspectos, más inquietante que el estereotipo de ciencia ficción — pero por razones bastante distintas a \"la IA quiere ser libre\". 1. El problem",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_f49e87ae830b2aadd047",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_6710fa43090ea141addb"
+        },
+        {
+          "author_group_id": "ag_9d062afb3b04889fb61f",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_63c5557c5b4be923acbb7cb4",
+          "excerpt": "Show GN: 중2개발자가 만든 한국어 LLM 학습 파이프라인 파이썬 기본기와 무료 AI 3종으로 Llama 3 구조의 1.09B 모델 코드를 만들고, 9GB GPU용 최적화와 채팅 테스트를 구현 장시간 학습과 가중치 생성은 못 했으며, AI 교차검증과 제약 통제 과정을 오픈소스로 공개 https://t.co/FBMkeziHQk",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_c29aa364c055bcde432c",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_e50bddd825625a982e6f"
+        },
+        {
+          "author_group_id": "ag_dfeda660b21956b47d34",
+          "discourse_keys": [],
+          "evidence_id": "e_4b6073827233ea9b1ad65413",
+          "excerpt": "Quick mental model for how attention actually works, and why every LLM lab is obsessed with shrinking its memory footprint. Attention lets every word directly ask every other word \"what do you have for me?\" instead of passing a message down a chain like older RNNs did. Each word gets three roles: a Query (what am I looking for), a Key (what do I offer), and a Value (what I actually hand over). Match queries to keys, get back a weighted blend of values. That's the whole trick. Multi-head attention just runs that operation several times in parallel, each head free to specialize — one learns adjacent-word patterns, another learns subject-verb pairs, another catches which pronoun refers to which noun. Interestingly, 64-128 dimensions per head shows up over and over from GPT-2 to Llama, no matter how big the model actually is. The catch: standard attention is O(n²). Double the context, quadruple the compute. Flash Attention fixes the compute side by never materializing the full n-by-n score",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_f44cf6f61a0f6227921f",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_f0d27775673533a65011"
+        },
+        {
+          "author_group_id": "ag_89ba5eff8fc217a2755e",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_d1ae36941eb2a54e015a2963",
+          "excerpt": "@Yuchenj_UW Llama 70b is a much more impressive model to run locally and you’re a window licker to think MoE is comparable.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_2840a99b0e249b2ac0f6",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_30f5d1133e96fc5e4909"
+        },
+        {
+          "author_group_id": "ag_05014742aa03f3f3c06a",
+          "discourse_keys": [],
+          "evidence_id": "e_5b0a5f953b01fc15a842896d",
+          "excerpt": "update✨ DGX Spark実測メモ: DeepSeek V4-Flash abliterated Q2 + DSpark draft投機 ・131K: 38.5 tok/s ・262K: 36.9 ・512K: 38.7 ・768K: 34.4 受理率64.9%、swap増ほぼゼロ、非投機比約2倍。mainline llama.cppのみ。 再現レシピはリプ👇🏻 https://t.co/fXjZcb1hWb",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_root_cb30373cce75416418cf",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_9335cc59c0a5e76697eb"
+        }
+      ],
+      "evidence_allocation": {
+        "allocation_class": "comparison",
+        "available_independent_source_count": 64,
+        "packet_trimmed_count": 0,
+        "policy_version": "adaptive-v1",
+        "protected_floor_count": 4,
+        "reservoir_count": 64,
+        "selected_count": 12,
+        "story_rank": 5,
+        "target_count": 12
+      },
+      "evidence_support": {
+        "distinct_author_group_count": 12,
+        "distinct_source_cluster_count": 12,
+        "event_claim_may_be_supported": true,
+        "evidence_only_entity_may_be_supported": true,
+        "official_source_count": 0
+      },
+      "family_facts": {
+        "post_type": {
+          "labels": [
+            {
+              "brand_change_pp": "-2.626050",
+              "key": "advertising_marketing",
+              "market_change_pp": "-1.496106",
+              "market_relative_change_pp": "-1.129945",
+              "prior_basis_count": 119,
+              "prior_count": 4,
+              "prior_prevalence": "0.033613",
+              "selected_basis_count": 136,
+              "selected_count": 1,
+              "selected_prevalence": "0.007353"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "buzz_releases",
+              "market_change_pp": "-0.887277",
+              "market_relative_change_pp": "0.887277",
+              "prior_basis_count": 119,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 136,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "event_announcement",
+              "market_change_pp": "-0.658842",
+              "market_relative_change_pp": "0.658842",
+              "prior_basis_count": 119,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 136,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-2.836134",
+              "key": "feedback_questions",
+              "market_change_pp": "-4.083321",
+              "market_relative_change_pp": "1.247187",
+              "prior_basis_count": 119,
+              "prior_count": 6,
+              "prior_prevalence": "0.050420",
+              "selected_basis_count": 136,
+              "selected_count": 3,
+              "selected_prevalence": "0.022059"
+            },
+            {
+              "brand_change_pp": "-18.067227",
+              "key": "hands_on_usage",
+              "market_change_pp": "-7.770077",
+              "market_relative_change_pp": "-10.297150",
+              "prior_basis_count": 119,
+              "prior_count": 25,
+              "prior_prevalence": "0.210084",
+              "selected_basis_count": 136,
+              "selected_count": 4,
+              "selected_prevalence": "0.029412"
+            },
+            {
+              "brand_change_pp": "-5.987395",
+              "key": "performance_comparisons",
+              "market_change_pp": "-5.610239",
+              "market_relative_change_pp": "-0.377156",
+              "prior_basis_count": 119,
+              "prior_count": 15,
+              "prior_prevalence": "0.126050",
+              "selected_basis_count": 136,
+              "selected_count": 9,
+              "selected_prevalence": "0.066176"
+            }
+          ],
+          "prior_coverage_ratio": "0.420168",
+          "prior_covered_count": 50,
+          "selected_coverage_ratio": "0.125000",
+          "selected_covered_count": 17
+        },
+        "volume": {
+          "change_pct": "14.285714",
+          "comparison_state": "available",
+          "prior_authors": 104,
+          "prior_count": 119,
+          "selected_authors": 123,
+          "selected_count": 136
+        }
+      },
+      "kind": "full_window",
+      "metadata_trajectories": {
+        "post_type": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            8,
+            6
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            13,
+            89,
+            60
+          ],
+          "labels": {
+            "advertising_marketing": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.111111",
+                "0.000000"
+              ]
+            },
+            "feedback_questions": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                3,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.333333",
+                "0.000000"
+              ]
+            },
+            "hands_on_usage": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                3,
+                1
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.333333",
+                "0.100000"
+              ]
+            },
+            "performance_comparisons": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                3,
+                1,
+                5
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.130435",
+                "0.111111",
+                "0.500000"
+              ]
+            }
+          }
+        }
+      },
+      "quantitative_facts": [
+        {
+          "candidate_id": "llama:full_window",
+          "direction": "increase",
+          "display_en": "14%",
+          "display_zh_cn": "14%",
+          "fact_id": "qf_e9aeba400df912515d5a81b9",
+          "family": "volume",
+          "label_key": "",
+          "metric": "change_pct",
+          "rounding": "nearest_tenth_below_one_else_whole",
+          "source_value": "14.285714",
+          "unit": "percent"
+        }
+      ],
+      "signals": [
+        {
+          "family": "post_type",
+          "rank": 2,
+          "stream_position": 2
+        }
+      ],
+      "start_at": "2026-08-23T07:30:09Z"
+    },
+    {
+      "brand_key": "minimax",
+      "candidate_id": "minimax:full_window",
+      "coarse_series": {
+        "author_counts": [
+          100,
+          99,
+          102,
+          56,
+          70,
+          72,
+          98,
+          82
+        ],
+        "engagement": {
+          "concentrations": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "coverage_ratios": [
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000",
+            "0.000000"
+          ],
+          "eligible_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "intensities": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "interactions": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "likes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "missing_counts": [
+            127,
+            107,
+            122,
+            62,
+            79,
+            79,
+            116,
+            101
+          ],
+          "post_kinds": {
+            "quote": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                17,
+                18,
+                12,
+                4,
+                14,
+                15,
+                13,
+                9
+              ]
+            },
+            "repost": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "source_post": {
+              "eligible_counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "interactions": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              "missing_counts": [
+                110,
+                89,
+                110,
+                58,
+                65,
+                64,
+                103,
+                92
+              ]
+            }
+          },
+          "quotes": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "replies": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "reposts": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "post_counts": [
+          127,
+          107,
+          122,
+          62,
+          79,
+          79,
+          116,
+          101
+        ]
+      },
+      "display_name_en": "MiniMax AI",
+      "display_name_zh_cn": "MiniMax AI",
+      "end_at": "2026-08-24T07:30:09Z",
+      "episodes": [],
+      "evidence": [
+        {
+          "author_group_id": "ag_9c7b9d6bbd1d2d4dd6ba",
+          "discourse_keys": [],
+          "evidence_id": "e_c28d29cb4e97971b7f186239",
+          "excerpt": "对于AI视频+图片新手、我真不太建议直接上手Seedream+Xai+可灵 首要原因是太特么烧钱、光做些测试至少在这上面要损失几百块、属于妥妥的浪费。 作为老手、我的建议是： 1、如果自家备有RTX 4080S 32G 或者3090 24G这种规格的显卡、先自行本地部署开源大模型、就目前LTX2.5+Minimax H3 对于轻微视频和图片、完完全全可以达到70% Seed 2.5模型能力了 差不多能够达到80% grok的视频能力。 我自己算了下、光在GROK+即梦+可灵就简单没事上手做些玩大大小小加起来快几千块人民币都特么够买一张二手3090显卡了、非刚需真没必要掉进这个坑、其实什么鬼玩意儿都没做出来。 2、去看一些和对照一些视频提示词网站和图片网站（要免费的、不要那些付费智商税网站）先看不要马上试、先看会各个关键词中的决定画面关键性因素的词汇、在通过案例举一反三模仿着做。 下面几个关键词纯免费的可以收藏下 1、https://t.co/42w6JrDeu9 这个是老牌大站、不推荐、要注册要各种套路搞钱、 2、https://t.co/R1VTa5sRh6 老牌站点纯免费开源网站、只有图片内容。 3、https://t.co/o8o7ocspOD 纯免费开源站点、视频+图文都支持、附带一个免费生成提示词功能。 4、https://t.co/w5fEx0VBOy 纯免费内容较少些、唯一缺点广告太多。 5、https://t.co/sCpzAClWnS 纯免费站点、内容较少些 各位新手记住一点、搞AI很烧钱、能省一点省一点、1元一秒的Seedream 是真特么用不起",
+          "post_type_keys": [],
+          "roles": [
+            "official_or_catalyst",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_1f7a8033f38c3824015d",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_b0f2e116cb1c29efde02"
+        },
+        {
+          "author_group_id": "ag_005333fa69bc17c0e5a1",
+          "discourse_keys": [],
+          "evidence_id": "e_13181c22444e2fa2a2a56500",
+          "excerpt": "MiniMax H3向け「ComfyUI-CGlide／H3 Studio」 少し前に出ていたようだがちょっと調べ中。 最大9画像＋3動画＋3音声、ショットタイムライン、発話量チェック、生成中の動きプレビュー、映像・音声を保ったクリップ延長を一つの制作UIに統合。プレビューは作者説明で最大約7.2fpsです。 W4A8はComfyUI 0.31.0以降が必要。旧版では黒映像＋音声のみになる場合があるようです。 https://t.co/kxE0fvAErK",
+          "post_type_keys": [],
+          "roles": [
+            "top_engaged_original",
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_16eb42b4b68e9ac95cc1",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_38affb6b39f50e2b16cc"
+        },
+        {
+          "author_group_id": "ag_be11b69ca04f1c7b3845",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_9ebb70e762f24e6d021584aa",
+          "excerpt": "Competition just did what regulators never could. Chinese AI labs are shipping comparable models at a fraction of the US R&D spend. When MiniMax and Zhipu can move at $0.25–0.5B while OpenAI burns ~$9B, the “premium = untouchable” story collapses. Margins aren’t a birthright. Customers vote with their wallets, the ones who adapt will win. The ones who keep lecturing about “value” while ignoring the price gap will get disrupted. That’s not ideology, that’s just markets doing their job.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "dominant_discourse_representative",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_eb53d1a26517ed327fef",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_adb94ba91a13bacc60ca"
+        },
+        {
+          "author_group_id": "ag_2509594be078cc0b5e80",
+          "discourse_keys": [],
+          "evidence_id": "e_c08ddc3b30be7f49aa4ca0ff",
+          "excerpt": "MiniMax Hubから動画が全然生成できなーい😭",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "contrasting_reaction",
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "negative"
+          ],
+          "source_cluster_id": "sc_text_3b359ae7db060ca3e6eb",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_b2474ec0e9e182d4a613"
+        },
+        {
+          "author_group_id": "ag_ec006239aa5870d5ad97",
+          "discourse_keys": [],
+          "evidence_id": "e_ae3cbab42337733d01867ae1",
+          "excerpt": "@TankeryChan Please tell me your results. For me, I'm forgoing MMH3 audio entirely, and using various tts for dialogue, mm-audio for sfx, and I guess MiniMax Music for music, but I haven't tried that yet...",
+          "post_type_keys": [],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [],
+          "source_cluster_id": "sc_text_da34a8e59f8b1684a7e6",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_87eb5c0f260277d4b03b"
+        },
+        {
+          "author_group_id": "ag_d5f32921e9c3250b23a4",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_795419b8b210e8a728ef8efa",
+          "excerpt": "Quick test with MiniMax Design ✨ #MiniMaxDesign @Hailuo_AI https://t.co/JovJjmZ8nZ",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_146a028b09fe7215fb9d",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_3a3625ef639c91dfd183"
+        },
+        {
+          "author_group_id": "ag_ac5229ff1bc49facf205",
+          "discourse_keys": [
+            "advertising-marketing"
+          ],
+          "evidence_id": "e_0bd18cb4df5d5f4bb86d26dd",
+          "excerpt": "You can now use GPT 5.5, Gemini 3.7 Flash, Kimi K3 and 47 other AI models completely free😱 No subscription. No credit card. Even the API usage costs $0. AIHubMix just opened a free catalog with 50 AI models. Some of the available models: • Ox Alpha • Gemini 3.7 Flash • GLM 5.2 • Kimi K3 • MiniMax M3 • GPT 5.5 • 40+ more And you don’t need separate API keys for each model. Setup takes 2 minutes: > Step 1: Go to https://t.co/tMoajxm0EE > Create an account using your email or OAuth. No card needed. Step 2: Create one API key > The same key works with every free and paid model. Step 3: Add it to any OpenAI-compatible tool Base URL: https://t.co/IgNBDN6Gpg Then choose any model ending in -free, such as: coding-glm-5.2-free gpt-5.5-free That’s it. One API key. 50 AI models. $0 for both input and output. Save this. You might need a free multi-model setup later.",
+          "post_type_keys": [
+            "advertising_marketing"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_60578c64195b34cd1c41",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_e0c48f9ace6c527dc854"
+        },
+        {
+          "author_group_id": "ag_4f05d5fedf10d55f91a0",
+          "discourse_keys": [],
+          "evidence_id": "e_4e2b58f50e3bec2df5725cd1",
+          "excerpt": "🧵 7 Things — AI 8/24 1. SenseNova MoT — open multimodal 2. Audio8 TTS — open speech synth 3. MiniMax Music-3 — open music 4. BF1 sparse-attn — long-context 5. Exact SASS — GPU asm compile 6. AgentDecarbonizer — agent energy 7. Bern2Edge — nets on edge sources in reply thread ↓",
+          "post_type_keys": [
+            "buzz_releases"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_1e6821f113b5fc1f6f49",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_49240b382ac9c65fc469"
+        },
+        {
+          "author_group_id": "ag_99a91029901790c4c802",
+          "discourse_keys": [],
+          "evidence_id": "e_4724c5779d636940b68b17cd",
+          "excerpt": "Big week for AI stocks 👀 NVIDIA, MiniMax, Marvell & CXMT all will report earnings this week. Right now, the odds on polymarket are 96% that NVIDIA will beat the expected numbers. @sodex_official perps stay open 24/7 so you can trade the reaction right away. To me, this is good timing for anyone watching AI",
+          "post_type_keys": [
+            "event_announcement"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_root_017557f4bf04854f4882",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "quote"
+          },
+          "theme_cluster_id": "th_f998616efbb263de2301"
+        },
+        {
+          "author_group_id": "ag_3145ae68dcd9280f68d4",
+          "discourse_keys": [],
+          "evidence_id": "e_09016b2763d3003a8da21b46",
+          "excerpt": "@Sogni_Protocol @Sogni_Protocol i mean minimax h3 and z image",
+          "post_type_keys": [
+            "feedback_questions"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "neutral"
+          ],
+          "source_cluster_id": "sc_text_d423cad8c44cedee7e72",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_a5b9312f1a9a88d9f14e"
+        },
+        {
+          "author_group_id": "ag_6509543291b1819d6d6e",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_005f9669e01099c263313ccc",
+          "excerpt": "I built the visual concept for this project directly in PixVerse Canvas, using it to develop, arrange, and refine the creative elements before moving into video generation with MiniMax H3. The Canvas workflow made it much easier to experiment with composition, references, and visual direction in one place. https://t.co/1XbOn305k2",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_25db0f2152a969596c22",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_2616fbe6f335e6afce14"
+        },
+        {
+          "author_group_id": "ag_3e3351eae8e0a62b7818",
+          "discourse_keys": [
+            "genuine_hype"
+          ],
+          "evidence_id": "e_018b3592ff40815037a73e65",
+          "excerpt": "@su_nagomi That growth spike really does track back to the MiniMax H3 clip.",
+          "post_type_keys": [
+            "performance_comparisons"
+          ],
+          "roles": [
+            "supporting_context"
+          ],
+          "sentiment_keys": [
+            "positive"
+          ],
+          "source_cluster_id": "sc_text_abe580eb556deafd0b00",
+          "source_flags": {
+            "metrics_observed": false,
+            "occurrence_source": "original_post",
+            "official": false,
+            "post_kind": "source_post"
+          },
+          "theme_cluster_id": "th_8b24e499451ca09718f6"
+        }
+      ],
+      "evidence_allocation": {
+        "allocation_class": "comparison",
+        "available_independent_source_count": 115,
+        "packet_trimmed_count": 0,
+        "policy_version": "adaptive-v1",
+        "protected_floor_count": 4,
+        "reservoir_count": 116,
+        "selected_count": 12,
+        "story_rank": 3,
+        "target_count": 12
+      },
+      "evidence_support": {
+        "distinct_author_group_count": 12,
+        "distinct_source_cluster_count": 12,
+        "event_claim_may_be_supported": true,
+        "evidence_only_entity_may_be_supported": true,
+        "official_source_count": 0
+      },
+      "family_facts": {
+        "discourse": {
+          "labels": [
+            {
+              "brand_change_pp": "-0.960853",
+              "key": "absurdist_meme",
+              "market_change_pp": "-0.554525",
+              "market_relative_change_pp": "-0.406328",
+              "prior_basis_count": 828,
+              "prior_count": 9,
+              "prior_prevalence": "0.010870",
+              "selected_basis_count": 793,
+              "selected_count": 1,
+              "selected_prevalence": "0.001261"
+            },
+            {
+              "brand_change_pp": "-1.385310",
+              "key": "advertising-marketing",
+              "market_change_pp": "-1.627874",
+              "market_relative_change_pp": "0.242564",
+              "prior_basis_count": 828,
+              "prior_count": 24,
+              "prior_prevalence": "0.028986",
+              "selected_basis_count": 793,
+              "selected_count": 12,
+              "selected_prevalence": "0.015132"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "ai_slop_critique",
+              "market_change_pp": "-0.038402",
+              "market_relative_change_pp": "0.038402",
+              "prior_basis_count": 828,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 793,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.241546",
+              "key": "cope",
+              "market_change_pp": "-0.383695",
+              "market_relative_change_pp": "0.142149",
+              "prior_basis_count": 828,
+              "prior_count": 2,
+              "prior_prevalence": "0.002415",
+              "selected_basis_count": 793,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "distillation_accusation",
+              "market_change_pp": "-0.192012",
+              "market_relative_change_pp": "0.192012",
+              "prior_basis_count": 828,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 793,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.120773",
+              "key": "dunk_yingyang",
+              "market_change_pp": "-0.535654",
+              "market_relative_change_pp": "0.414881",
+              "prior_basis_count": 828,
+              "prior_count": 1,
+              "prior_prevalence": "0.001208",
+              "selected_basis_count": 793,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "0.515075",
+              "key": "fud",
+              "market_change_pp": "-0.530704",
+              "market_relative_change_pp": "1.045779",
+              "prior_basis_count": 828,
+              "prior_count": 2,
+              "prior_prevalence": "0.002415",
+              "selected_basis_count": 793,
+              "selected_count": 6,
+              "selected_prevalence": "0.007566"
+            },
+            {
+              "brand_change_pp": "-8.608537",
+              "key": "genuine_hype",
+              "market_change_pp": "-6.843798",
+              "market_relative_change_pp": "-1.764739",
+              "prior_basis_count": 828,
+              "prior_count": 112,
+              "prior_prevalence": "0.135266",
+              "selected_basis_count": 793,
+              "selected_count": 39,
+              "selected_prevalence": "0.049180"
+            },
+            {
+              "brand_change_pp": "0.000000",
+              "key": "sarcasm",
+              "market_change_pp": "-0.326421",
+              "market_relative_change_pp": "0.326421",
+              "prior_basis_count": 828,
+              "prior_count": 0,
+              "prior_prevalence": "0.000000",
+              "selected_basis_count": 793,
+              "selected_count": 0,
+              "selected_prevalence": "0.000000"
+            },
+            {
+              "brand_change_pp": "-0.346327",
+              "key": "self_deprecation",
+              "market_change_pp": "-0.343972",
+              "market_relative_change_pp": "-0.002355",
+              "prior_basis_count": 828,
+              "prior_count": 6,
+              "prior_prevalence": "0.007246",
+              "selected_basis_count": 793,
+              "selected_count": 3,
+              "selected_prevalence": "0.003783"
+            }
+          ],
+          "prior_coverage_ratio": "0.188406",
+          "prior_covered_count": 156,
+          "selected_coverage_ratio": "0.076923",
+          "selected_covered_count": 61
+        },
+        "volume": {
+          "change_pct": "-4.227053",
+          "comparison_state": "available",
+          "prior_authors": 580,
+          "prior_count": 828,
+          "selected_authors": 582,
+          "selected_count": 793
+        }
+      },
+      "kind": "full_window",
+      "metadata_trajectories": {
+        "discourse": {
+          "coverage_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            8,
+            30,
+            23
+          ],
+          "coverage_percent": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            10,
+            26,
+            23
+          ],
+          "labels": {
+            "absurdist_meme": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.012658",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "advertising-marketing": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                6,
+                4
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.025316",
+                "0.051724",
+                "0.039604"
+              ]
+            },
+            "cope": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "dunk_yingyang": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000"
+              ]
+            },
+            "fud": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                4,
+                2
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.034483",
+                "0.019802"
+              ]
+            },
+            "genuine_hype": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                4,
+                18,
+                17
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.050633",
+                "0.155172",
+                "0.168317"
+              ]
+            },
+            "self_deprecation": {
+              "counts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                2,
+                0
+              ],
+              "prevalence": [
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.000000",
+                "0.012658",
+                "0.017241",
+                "0.000000"
+              ]
+            }
+          }
+        }
+      },
+      "quantitative_facts": [
+        {
+          "candidate_id": "minimax:full_window",
+          "direction": "decrease",
+          "display_en": "4%",
+          "display_zh_cn": "4%",
+          "fact_id": "qf_3a07aa2486e9105d311aba1e",
+          "family": "volume",
+          "label_key": "",
+          "metric": "change_pct",
+          "rounding": "nearest_tenth_below_one_else_whole",
+          "source_value": "-4.227053",
+          "unit": "percent"
+        }
+      ],
+      "signals": [
+        {
+          "family": "discourse",
+          "rank": 2,
+          "stream_position": 2
+        }
+      ],
+      "start_at": "2026-08-23T07:30:09Z"
+    }
+  ],
+  "comparison_allowed": true,
+  "comparison_suppressed_reasons": [],
+  "coverage": {
+    "prior": {
+      "earliest_at": "2025-01-15T09:47:50Z",
+      "known_backlog_overlap": false,
+      "ratio": "1.000000",
+      "state": "sufficient"
+    },
+    "selected": {
+      "earliest_at": "2025-01-15T09:47:50Z",
+      "known_backlog_overlap": false,
+      "ratio": "1.000000",
+      "state": "sufficient"
+    }
+  },
+  "evidence_policy": {
+    "comparison_ceiling": 12,
+    "excerpt_characters": 1000,
+    "floor": 4,
+    "lead_ceiling": 48,
+    "provider_packet_bytes": 131072,
+    "reservoir_rank_limit": 32,
+    "version": "adaptive-v1"
+  },
+  "quantitative_fact_schema_version": 1,
+  "series_axis": {
+    "coarse": {
+      "bucket_count": 8,
+      "duration_seconds": 10800,
+      "ends": [
+        "2026-08-23T10:30:09Z",
+        "2026-08-23T13:30:09Z",
+        "2026-08-23T16:30:09Z",
+        "2026-08-23T19:30:09Z",
+        "2026-08-23T22:30:09Z",
+        "2026-08-24T01:30:09Z",
+        "2026-08-24T04:30:09Z",
+        "2026-08-24T07:30:09Z"
+      ],
+      "starts": [
+        "2026-08-23T07:30:09Z",
+        "2026-08-23T10:30:09Z",
+        "2026-08-23T13:30:09Z",
+        "2026-08-23T16:30:09Z",
+        "2026-08-23T19:30:09Z",
+        "2026-08-23T22:30:09Z",
+        "2026-08-24T01:30:09Z",
+        "2026-08-24T04:30:09Z"
+      ]
+    }
+  },
+  "snapshot_schema_version": 1,
+  "thresholds": {
+    "episode_peak_ratio": "3.0",
+    "max_episodes_per_candidate": 3,
+    "min_authors": 10,
+    "min_posts": 20,
+    "minimum_coverage": "0.75"
+  },
+  "unresolved_backlog_intervals": [],
+  "window_days": 1
+}

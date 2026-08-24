@@ -14,6 +14,18 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 NOW = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
 
+def _restore_current_core_schema() -> None:
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    targets = [
+        node
+        for node in executor.loader.graph.leaf_nodes()
+        if node[0] == "core"
+    ]
+    executor.migrate(targets)
+
+
 def test_canonical_parent_and_subject_models_use_physical_table_names():
     narrative_model = core_models.TrendNarrative
     subject_model = core_models.TrendNarrativeSubject
@@ -322,9 +334,7 @@ def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
         assert subject.name_zh_cn_snapshot == "旧品牌"
         assert subject.candidate_id == "legacy-brand:legacy"
     finally:
-        MigrationExecutor(connection).migrate(
-            [("core", "0014_expand_trend_narrative")]
-        )
+        _restore_current_core_schema()
 
 
 def test_reverse_refuses_expansion_only_data_before_any_destructive_step():

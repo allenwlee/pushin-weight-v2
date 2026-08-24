@@ -9,6 +9,7 @@ import pytest
 from django.db import IntegrityError, close_old_connections, transaction
 
 from core.models import Brand, Product, TrendNarrative, TrendNarrativeSubject
+from monitor.trend_narrative_candidates import project_provider_packet
 from monitor.trend_narrative_lifecycle import (
     abandon_expired_attempts,
     advance_current_check,
@@ -111,6 +112,54 @@ def _complete_transport(
         fence=row.claim_fence,
         now=now,
     )
+
+
+def _schema_three_snapshot(brand: Brand) -> dict:
+    return {
+        "snapshot_schema_version": 1,
+        "window_days": 1,
+        "as_of": NOW.isoformat(),
+        "coverage": {
+            "selected": {"state": "sufficient", "ratio": "1.000000"},
+            "prior": {"state": "sufficient", "ratio": "1.000000"},
+        },
+        "unresolved_backlog_intervals": [],
+        "comparison_suppressed_reasons": [],
+        "comparison_allowed": True,
+        "thresholds": {"minimum_coverage": "0.800000"},
+        "series_axis": {"coarse": {"bucket_count": 1}},
+        "candidates": [
+            {
+                "candidate_id": "minimax:full_window",
+                "brand_key": brand.pk,
+                "display_name_en": brand.display_name_en,
+                "display_name_zh_cn": brand.display_name_zh_cn,
+                "kind": "full_window",
+                "start_at": "2026-08-12T11:00:00Z",
+                "end_at": "2026-08-12T12:00:00Z",
+                "signals": [{"family": "volume", "rank": 1}],
+                "family_facts": {
+                    "volume": {
+                        "selected_count": 30,
+                        "prior_count": 20,
+                        "change_pct": "50.000000",
+                    }
+                },
+                "metadata_trajectories": {},
+                "episodes": [],
+                "series": {"coarse": {"post_counts": [30]}},
+                "evidence_allocation": {},
+                "evidence_support": {
+                    "official_source_count": 0,
+                    "distinct_author_group_count": 0,
+                    "distinct_source_cluster_count": 0,
+                    "event_claim_may_be_supported": False,
+                    "evidence_only_entity_may_be_supported": False,
+                },
+                "evidence": [],
+            }
+        ],
+    }
 
 
 def _publish(
@@ -658,6 +707,122 @@ def test_invalid_schema_two_subjects_roll_back_the_whole_publication():
     assert row.status == TrendNarrative.Status.GENERATING
     assert row.body_en == ""
     assert not row.subjects.exists()
+
+
+def test_schema_three_persists_cited_quantitative_why_metadata():
+    brand = Brand.objects.filter(pk="minimax").first() or _brand()
+    snapshot = _schema_three_snapshot(brand)
+    fact = project_provider_packet(snapshot)["candidates"][0][
+        "quantitative_facts"
+    ][0]
+    row = _reserve(output_schema_version=3, generation_facts=snapshot)
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+
+    assert publish_generation(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        body_en="Minimax post volume rose 50% in the measured window.",
+        body_zh_cn="中minimax 在测量时段的帖子声量上升50%。",
+        output_hash="d" * 64,
+        input_tokens=100,
+        output_tokens=40,
+        latency_ms=250,
+        now=NOW + timedelta(seconds=1),
+        selected_candidate_ids=["minimax:full_window"],
+        claims=[
+            {
+                "observation_index": -1,
+                "candidate_ids": ["minimax:full_window"],
+                "families": ["volume"],
+                "evidence_ids": [],
+                "quantitative_fact_ids": [fact["fact_id"]],
+                "event_anchor": "",
+                "explanation_type": "aggregate_trajectory",
+                "evidence_confidence": "aggregate_only",
+            }
+        ],
+        subjects=[
+            {
+                "position": 0,
+                "support_type": "measured_candidate",
+                "entity_type": "brand",
+                "identity_type": "brand",
+                "canonical_key_snapshot": "minimax",
+                "name_en_snapshot": "Minimax",
+                "name_zh_cn_snapshot": "中minimax",
+                "candidate_id": "minimax:full_window",
+                "evidence_ids": [],
+            }
+        ],
+    )
+
+    row.refresh_from_db()
+    assert row.output_schema_version == 3
+    assert row.claims[0]["quantitative_fact_ids"] == [fact["fact_id"]]
+
+
+def test_schema_three_uncited_numeric_prose_rolls_back():
+    brand = Brand.objects.filter(pk="minimax").first() or _brand()
+    snapshot = _schema_three_snapshot(brand)
+    row = _reserve(output_schema_version=3, generation_facts=snapshot)
+    assert mark_transport_started(
+        row.pk,
+        owner="worker-a",
+        fence=row.claim_fence,
+        now=NOW,
+    )
+    _complete_transport(row)
+
+    with pytest.raises(ValueError, match="uncited digit"):
+        publish_generation(
+            row.pk,
+            owner="worker-a",
+            fence=row.claim_fence,
+            body_en="Minimax post volume rose 50% in the measured window.",
+            body_zh_cn="中minimax 在测量时段的帖子声量上升50%。",
+            output_hash="e" * 64,
+            input_tokens=100,
+            output_tokens=40,
+            latency_ms=250,
+            now=NOW + timedelta(seconds=1),
+            selected_candidate_ids=["minimax:full_window"],
+            claims=[
+                {
+                    "observation_index": -1,
+                    "candidate_ids": ["minimax:full_window"],
+                    "families": ["volume"],
+                    "evidence_ids": [],
+                    "quantitative_fact_ids": [],
+                    "event_anchor": "",
+                    "explanation_type": "aggregate_trajectory",
+                    "evidence_confidence": "aggregate_only",
+                }
+            ],
+            subjects=[
+                {
+                    "position": 0,
+                    "support_type": "measured_candidate",
+                    "entity_type": "brand",
+                    "identity_type": "brand",
+                    "canonical_key_snapshot": "minimax",
+                    "name_en_snapshot": "Minimax",
+                    "name_zh_cn_snapshot": "中minimax",
+                    "candidate_id": "minimax:full_window",
+                    "evidence_ids": [],
+                }
+            ],
+        )
+
+    row.refresh_from_db()
+    assert row.status == TrendNarrative.Status.GENERATING
+    assert row.body_en == ""
 
 
 def test_schema_two_rejects_cross_candidate_evidence_at_publication_boundary():

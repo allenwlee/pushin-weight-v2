@@ -13,6 +13,7 @@ from monitor.trend_narrative_lifecycle import (
     mark_transport_completed,
     mark_transport_started,
     publish_generation,
+    record_no_call_check,
     reserve_generation,
 )
 from monitor.trend_narrative_projection import project_trend_narrative
@@ -32,6 +33,9 @@ def _publish(
     window_days: int = 1,
     *,
     coverage_state: str = "sufficient",
+    output_schema_version: int = 2,
+    body_en: str = "MiniMax leads attention across the market.",
+    body_zh_cn: str = "MiniMax 当前在市场讨论中更受关注。",
 ):
     brand = Brand.objects.create(
         nickname="minimax",
@@ -55,12 +59,27 @@ def _publish(
                 "earliest_at": "2025-10-01T00:00:00+00:00",
             },
         },
+        "unresolved_backlog_intervals": [],
+        "comparison_suppressed_reasons": [],
+        "comparison_allowed": False,
+        "thresholds": {"minimum_coverage": "0.800000"},
+        "series_axis": {"coarse": {"bucket_count": 1}},
         "candidates": [
             {
                 "candidate_id": "minimax:full_window",
                 "brand_key": brand.pk,
                 "display_name_en": "MiniMax",
                 "display_name_zh_cn": "MiniMax",
+                "kind": "full_window",
+                "start_at": "2026-08-12T11:00:00Z",
+                "end_at": "2026-08-12T12:00:00Z",
+                "signals": [{"family": "volume", "rank": 1}],
+                "family_facts": {"volume": {"change_pct": None}},
+                "metadata_trajectories": {},
+                "episodes": [],
+                "series": {"coarse": {"post_counts": [1]}},
+                "evidence_allocation": {},
+                "evidence_support": {},
                 "evidence": [],
             }
         ],
@@ -84,7 +103,7 @@ def _publish(
         owner="worker-a",
         now=NOW,
         lease_seconds=90,
-        output_schema_version=2,
+        output_schema_version=output_schema_version,
     )
     assert row is not None
     assert mark_transport_started(
@@ -103,8 +122,8 @@ def _publish(
         row.pk,
         owner="worker-a",
         fence=row.claim_fence,
-        body_en="MiniMax leads attention across the market.",
-        body_zh_cn="MiniMax 当前在市场讨论中更受关注。",
+        body_en=body_en,
+        body_zh_cn=body_zh_cn,
         output_hash="b" * 64,
         input_tokens=100,
         output_tokens=40,
@@ -119,12 +138,30 @@ def _publish(
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["volume"],
                 "evidence_ids": [],
+                **(
+                    {
+                        "quantitative_fact_ids": [],
+                        "explanation_type": "aggregate_trajectory",
+                        "evidence_confidence": "aggregate_only",
+                    }
+                    if output_schema_version == 3
+                    else {}
+                ),
             },
             {
                 "observation_index": 0,
                 "candidate_ids": ["minimax:full_window"],
                 "families": ["volume"],
                 "evidence_ids": [],
+                **(
+                    {
+                        "quantitative_fact_ids": [],
+                        "explanation_type": "aggregate_trajectory",
+                        "evidence_confidence": "aggregate_only",
+                    }
+                    if output_schema_version == 3
+                    else {}
+                ),
             }
         ],
         subjects=[
@@ -143,6 +180,34 @@ def _publish(
     )
     row.refresh_from_db()
     return row
+
+
+def _record_no_story(
+    *,
+    window_days: int,
+    facts_as_of: datetime,
+    checked_at: datetime,
+    source_cycle_id: str = "no-story-cycle",
+):
+    return record_no_call_check(
+        source_cycle_id=source_cycle_id,
+        window_days=window_days,
+        facts_as_of=facts_as_of,
+        semantic_fingerprint="f" * 64,
+        facts={
+            "snapshot_schema_version": 1,
+            "window_days": window_days,
+            "as_of": facts_as_of.isoformat(),
+            "coverage": {
+                "selected": {"state": "sufficient", "ratio": "1.000000"},
+                "prior": {"state": "sufficient", "ratio": "1.000000"},
+            },
+            "candidates": [],
+        },
+        checked_at=checked_at,
+        status="checked",
+        reason_code="insufficient_data",
+    )
 
 
 @pytest.mark.parametrize(
@@ -172,7 +237,8 @@ def test_available_projection_selects_locale_and_public_brand_link(locale, expec
         "可用" if locale in {"zh_cn", "zh-CN", "zh_hans"} else "Available"
     )
     assert payload["body"] == expected
-    assert payload["body_remainder"] == expected.removeprefix("MiniMax ")
+    assert payload["body_prefix"] == ""
+    assert payload["body_remainder"] == expected[len("MiniMax") :]
     assert payload["observations"] == (
         ["讨论热度上升后保持稳定。"]
         if locale in {"zh_cn", "zh-CN", "zh_hans"}
@@ -194,6 +260,123 @@ def test_available_projection_selects_locale_and_public_brand_link(locale, expec
     assert "provider" not in payload
     assert "error" not in payload
     assert "claim" not in payload
+
+
+def test_projection_preserves_primary_brand_position_inside_quiet_context():
+    body = (
+        "In a mostly unremarkable week, MiniMax led with a small 0.1% rise "
+        "in post volume."
+    )
+    _publish(body_en=body)
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert payload["body"] == body
+    assert payload["body_prefix"] == "In a mostly unremarkable week, "
+    assert payload["body_remainder"] == " led with a small 0.1% rise in post volume."
+
+
+def test_schema_three_row_keeps_the_public_browser_dto_at_schema_two():
+    row = _publish(output_schema_version=3)
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert row.output_schema_version == 3
+    assert payload["schema_version"] == 2
+    assert payload["body"] == "MiniMax leads attention across the market."
+    assert "claims" not in payload
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [
+        ("en", "No clear conversation story emerged in this window."),
+        ("zh_hans", "这一时间段内没有出现明确的讨论主题。"),
+    ],
+)
+def test_newer_no_candidate_check_supersedes_an_older_story(locale, expected):
+    _publish()
+    no_story = _record_no_story(
+        window_days=1,
+        facts_as_of=NOW + timedelta(hours=1),
+        checked_at=NOW + timedelta(hours=1, seconds=1),
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale=locale,
+        now=NOW + timedelta(hours=1, minutes=1),
+        config=_config(),
+    )
+
+    assert payload["schema_version"] == 2
+    assert payload["state"] == "available"
+    assert payload["body"] == expected
+    assert payload["body_remainder"] == expected
+    assert payload["subjects"] == []
+    assert payload["primary_brand"] is None
+    assert payload["observations"] == []
+    assert payload["generated_at"] is None
+    assert payload["checked_at"] == no_story.latest_checked_at.isoformat()
+
+
+def test_older_no_candidate_check_and_newer_failure_preserve_last_good():
+    current = _publish()
+    _record_no_story(
+        window_days=1,
+        facts_as_of=NOW - timedelta(hours=1),
+        checked_at=NOW + timedelta(seconds=2),
+    )
+    record_no_call_check(
+        source_cycle_id="newer-provider-failure",
+        window_days=1,
+        facts_as_of=NOW + timedelta(hours=2),
+        semantic_fingerprint="9" * 64,
+        facts=current.generation_facts,
+        checked_at=NOW + timedelta(hours=2, seconds=1),
+        status="suppressed",
+        reason_code="provider_request_failed",
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(minutes=30),
+        config=_config(),
+    )
+
+    assert payload["body"] == current.body_en
+    assert payload["primary_brand"]["key"] == "minimax"
+
+
+def test_no_story_checked_time_breaks_an_equal_facts_as_of_tie():
+    _publish()
+    _record_no_story(
+        window_days=1,
+        facts_as_of=NOW,
+        checked_at=NOW + timedelta(seconds=2),
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW + timedelta(seconds=3),
+        config=_config(),
+    )
+
+    assert payload["body"] == (
+        "No clear conversation story emerged in this window."
+    )
 
 
 def test_stale_uses_last_good_body_and_deleted_brand_loses_only_link():

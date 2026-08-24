@@ -1,6 +1,6 @@
 {
   "schema_version": "trend-narrative-co-dominance-eval/v1",
-  "selection_rule": "Select one measured candidate when one story is clearly the most analytically important. Select two measured candidates when both independently show extraordinary movement in this window. Do not force a second candidate, and do not suppress a second extraordinary candidate merely because another candidate ranks first.",
+  "selection_rule": "Default to exactly one measured candidate. Select two only in the exceptional case where both independently show extraordinary, analytically important movement in this window; an ordinary comparison or small relative change is not extraordinary. Do not force a second candidate, and do not suppress a second extraordinary candidate merely because another candidate ranks first.",
   "cases": [
     {
       "id": "two-strong-same-family",

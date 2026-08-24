@@ -289,11 +289,16 @@ class HeadlineNarrativeConfig(BaseModel):
     model: str = "deepseek-v4-pro"
     timeout_seconds: int = Field(default=45, ge=5, le=120)
     prompt_version: str = Field(
-        default="headline-v5-analytical",
+        default="headline-v10-why-first-quantitative-color",
         min_length=1,
         max_length=64,
     )
-    publication_epoch: int = Field(default=5, ge=1)
+    publication_epoch: int = Field(default=10, ge=1)
+    materiality_policy_version: str = Field(
+        default="pending-live-review-v1",
+        min_length=1,
+        max_length=64,
+    )
     cadence_minutes: dict[int, int] = Field(
         default_factory=lambda: {1: 30, 7: 60, 30: 360, 365: 1440}
     )
@@ -309,6 +314,21 @@ class HeadlineNarrativeConfig(BaseModel):
     steady_ratio: Decimal = Field(default=Decimal("0.85"), ge=0)
     episode_peak_ratio: Decimal = Field(default=Decimal("3.0"), ge=1)
     fingerprint_band_percent: Literal[5] = 5
+    evidence_policy_version: str = Field(
+        default="adaptive-v1",
+        min_length=1,
+        max_length=64,
+    )
+    evidence_reservoir_rank_limit: int = Field(default=32, ge=4, le=64)
+    evidence_floor: int = Field(default=4, ge=1, le=64)
+    evidence_lead_ceiling: int = Field(default=48, ge=1, le=64)
+    evidence_comparison_ceiling: int = Field(default=12, ge=1, le=64)
+    evidence_excerpt_characters: int = Field(default=1_000, ge=200, le=1_000)
+    evidence_provider_packet_bytes: int = Field(
+        default=128 * 1024,
+        ge=32 * 1024,
+        le=128 * 1024,
+    )
     call_cap: Literal[4] = 4
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
@@ -356,6 +376,12 @@ class HeadlineNarrativeConfig(BaseModel):
             self.surging_ratio >= self.rising_ratio >= self.steady_ratio
         ):
             raise ValueError("headline momentum ratios must descend")
+        if not (
+            self.evidence_floor
+            <= self.evidence_comparison_ceiling
+            <= self.evidence_lead_ceiling
+        ):
+            raise ValueError("headline evidence allocation limits must ascend")
         if self.lease_seconds <= self.timeout_seconds:
             raise ValueError("headline lease must exceed provider timeout")
         return self
