@@ -40,9 +40,9 @@ services:
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED
         value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
-        value: pending
+        value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-analytical-live-v1
+        value: v22-why-first-owner-override-v1
       - fromGroup: pushinweight-secrets
 
   # --------------------------------------------------------------------------
@@ -82,9 +82,9 @@ services:
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
         value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
-        value: pending
+        value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-analytical-live-v1
+        value: v22-why-first-owner-override-v1
 
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
@@ -122,9 +122,9 @@ services:
       - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
         value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
-        value: pending
+        value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-analytical-live-v1
+        value: v22-why-first-owner-override-v1
       - fromGroup: pushinweight-secrets
 
 databases:

@@ -1,13 +1,14 @@
 # Why-first headline trend narratives
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
-**Status:** Implemented as a fail-closed release candidate. The checked-in
-activation state is `pending`, so serving, enqueueing, and provider calls are
-all effectively inactive even where a Render service still requests its raw
-control. The materiality policy is still `pending-live-review-v1`. The latest
-bounded quantitative evaluation did not clear the reviewed-policy gate, and
-the historical calibration remains under-sampled.
+**Status:** Implemented as an owner-authorized release candidate. The checked-in
+production activation state is `owner_override`, so the three requested Render
+controls become effective when this candidate is deployed. Staging remains
+fail-closed. The materiality policy is still `pending-live-review-v1`; the
+owner override records the explicit decision to proceed despite the latest
+bounded evaluation not clearing the reviewed-policy gate and the historical
+calibration remaining under-sampled.
 
 This is the current source-level contract for measuring, generating,
 persisting, and rendering the shared conversation headline. Superseded
@@ -496,10 +497,11 @@ other than `pending`.
   version that is no longer marked pending.
 
 `X_MONITOR_HEADLINE_ACTIVATION_STATE` applies through the same YAML-wins,
-null-permits-env configuration boundary as the other headline controls. Both
-Render blueprints explicitly set it to `pending` in the unresolved candidate.
-`headline_status` reports the activation state, raw requested controls, and
-effective active controls separately in JSON and plain-text output.
+null-permits-env configuration boundary as the other headline controls. The
+production blueprint explicitly sets `owner_override`; the staging blueprint
+remains `pending`. `headline_status` reports the activation state, raw requested
+controls, and effective active controls separately in JSON and plain-text
+output.
 
 Candidate staging, approval, beta release, recovery, and production
 verification use Ollija. Direct Git, Render, or database release mutations are
@@ -530,7 +532,8 @@ entity discovery. It does not send 48 excerpts for every candidate, define
 relevance by percentage magnitude, run live provider calls in tests, or expose
 evidence to browsers.
 
-Last reviewed: 2026-08-24 JST. The current candidate keeps raw service intent
-observable while `activation_state=pending` deterministically prevents public
-serving, queue dispatch, and provider transport. Materiality bands and reviewed
-activation remain unresolved.
+Last reviewed: 2026-08-25 JST. The owner explicitly selected
+`activation_state=owner_override`, so the current production candidate permits
+public serving, queue dispatch, and provider transport when deployed. Staging
+remains `pending`. Materiality-band review remains unresolved and is bypassed
+only by the recorded owner override.

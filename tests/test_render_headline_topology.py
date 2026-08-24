@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 
-def test_headline_blueprint_is_queue_isolated_with_pending_activation():
+def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
     blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
     services = {service["name"]: service for service in blueprint["services"]}
 
@@ -47,9 +47,9 @@ def test_headline_blueprint_is_queue_isolated_with_pending_activation():
             if "key" in entry
         }
         assert environment[control] == "True"
-        assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"] == "pending"
+        assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"] == "owner_override"
         assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"] == (
-            "v22-analytical-live-v1"
+            "v22-why-first-owner-override-v1"
         )
         database = next(
             entry["fromDatabase"]["name"]
