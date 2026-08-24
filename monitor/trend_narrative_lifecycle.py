@@ -285,6 +285,38 @@ def generation_failure_history(
     )
 
 
+def has_active_generation_backoff(
+    *,
+    window_days: int,
+    semantic_fingerprint: str,
+    publication_epoch: int,
+    prompt_version: str,
+    provider: str,
+    provider_host: str,
+    llm_model_name: str,
+    now,
+) -> bool:
+    """Check content-specific and transport-wide backoff in one query."""
+    content_scope = Q(
+        semantic_fingerprint=semantic_fingerprint,
+        transport_completed_at__isnull=False,
+    )
+    transport_scope = Q(
+        publication_epoch=publication_epoch,
+        prompt_version=prompt_version,
+        provider=provider,
+        provider_host=provider_host,
+        llm_model_name=llm_model_name,
+        transport_completed_at__isnull=True,
+    )
+    return TrendNarrative.objects.filter(
+        content_scope | transport_scope,
+        window_days=window_days,
+        status__in=_FAILURE_STATUSES,
+        next_attempt_at__gt=now,
+    ).exists()
+
+
 def attempt_failure_history(
     attempt: TrendNarrative,
     *,

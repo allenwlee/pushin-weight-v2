@@ -32,7 +32,7 @@ from monitor.trend_narrative_lifecycle import (
     advance_current_check,
     attempt_failure_history,
     fail_generation,
-    generation_failure_history,
+    has_active_generation_backoff,
     mark_transport_completed,
     mark_transport_started,
     next_failure_backoff,
@@ -200,7 +200,7 @@ def process_trend_narrative_envelope(
             continue
 
         provider_host = urlsplit(active_config.base_url).hostname or ""
-        content_failures = generation_failure_history(
+        if has_active_generation_backoff(
             window_days=window_days,
             semantic_fingerprint=fingerprint,
             publication_epoch=active_config.publication_epoch,
@@ -208,21 +208,7 @@ def process_trend_narrative_envelope(
             provider=active_config.provider,
             provider_host=provider_host,
             llm_model_name=active_config.model,
-            transport_completed=True,
-        )
-        transport_failures = generation_failure_history(
-            window_days=window_days,
-            semantic_fingerprint=fingerprint,
-            publication_epoch=active_config.publication_epoch,
-            prompt_version=active_config.prompt_version,
-            provider=active_config.provider,
-            provider_host=provider_host,
-            llm_model_name=active_config.model,
-            transport_completed=False,
-        )
-        if any(
-            failures.filter(next_attempt_at__gt=processed_at).exists()
-            for failures in (content_failures, transport_failures)
+            now=processed_at,
         ):
             _record_no_call(
                 source_cycle_id=source_cycle_id,
