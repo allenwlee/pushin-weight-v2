@@ -789,7 +789,7 @@ def _resolve_signal_model(cfg: "Config | None" = None) -> str:
       2. X_MONITOR_CLASSIFIER_MODEL env var (classifier-specific override)
       3. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
       4. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
-      5. "deepseek-v4-pro" if classifier base URL routes through api.deepseek.com
+      5. "deepseek-v4-flash" if classifier base URL routes through api.deepseek.com
       6. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
     """
     import os
@@ -805,15 +805,15 @@ def _resolve_signal_model(cfg: "Config | None" = None) -> str:
     if "minimax.io" in base_url:
         return "MiniMax-M3.0"
     if "deepseek.com" in base_url:
-        return "deepseek-v4-pro"
+        return "deepseek-v4-flash"
     return "claude-haiku-4-5"
 
 
 def _resolve_thinking_default(base_url: str = "", *, role: str = "classifier") -> "dict | None":
     """Return the `thinking` kwarg for the Anthropic SDK messages.create call.
 
-    When routing through the DeepSeek V4 Pro endpoint, the model is a
-    reasoning model that would consume the entire output budget on
+    When routing through the DeepSeek V4 endpoint, thinking defaults on and
+    can consume the entire output budget on
     internal deliberation unless `thinking={"type": "disabled"}` is
     passed. The MiniMax M3 path and direct Anthropic path do not need
     this — return `None` so the parameter is omitted from the SDK call
@@ -866,7 +866,7 @@ def _resolve_translator_model(cfg: "Config | None" = None) -> str:
          _resolve_thinking_default(role="translator").
 
     Inference rules:
-      - "deepseek.com" in base_url -> "deepseek-v4-pro"
+      - "deepseek.com" in base_url -> "deepseek-v4-flash"
       - "minimax.io"   in base_url -> "MiniMax-M3.0"
       - otherwise                  -> "claude-haiku-4-5"
     """
@@ -887,7 +887,7 @@ def _resolve_translator_model(cfg: "Config | None" = None) -> str:
         os.environ.get("ANTHROPIC_BASE_URL", ""),
     )
     if "deepseek.com" in base_url:
-        return "deepseek-v4-pro"
+        return "deepseek-v4-flash"
     if "minimax.io" in base_url:
         return "MiniMax-M3.0"
     return "claude-haiku-4-5"
@@ -1009,6 +1009,7 @@ def _call_signal_with_retry(
     client: ClaudeClient,
     prompt: str,
     *,
+    model: str | None = None,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
 ) -> dict[str, Any]:
@@ -1022,14 +1023,14 @@ def _call_signal_with_retry(
 
     `thinking` defaults to None (parameter omitted from the SDK call) for
     backward compatibility with the M3 and direct-Anthropic paths. When
-    routing through the DeepSeek V4 Pro endpoint, the caller passes
+    routing through the DeepSeek V4 endpoint, the caller passes
     `thinking={"type": "disabled"}` (resolved via
     `_resolve_thinking_default()`) to prevent the reasoning model from
     consuming the entire output budget on internal deliberation.
     """
     last_exc: Exception | None = None
     create_kwargs: dict[str, Any] = {
-        "model": _SIGNAL_MODEL,
+        "model": model if model is not None else _SIGNAL_MODEL,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
@@ -1699,6 +1700,9 @@ def classify_pragmatics_full(
     brand_ids: list[str],
     brand_registry: list,
     anthropic_client: "ClaudeClient | None" = None,
+    *,
+    model: str | None = None,
+    thinking: "dict | None" = None,
 ) -> dict[str, Any]:
     """U4 (U2a): per-brand classification + top-level unsanctioned_flags.
 
@@ -1720,7 +1724,12 @@ def classify_pragmatics_full(
         registry_ids = set(brand_ids)
     prompt = build_pragmatics_full_prompt(text, brand_ids)
     try:
-        response = _call_signal_with_retry(anthropic_client, prompt)
+        response = _call_signal_with_retry(
+            anthropic_client,
+            prompt,
+            model=model,
+            thinking=thinking,
+        )
     except Exception as e:
         logger.warning(
             "classify_pragmatics_full: LLM call failed after %d retries: %s",
@@ -1859,7 +1868,7 @@ def _validate_deepseek_response_shape(
 ) -> None:
     """Assert the wire format of a batched classifier response.
 
-    The DeepSeek V4 Pro endpoint (and the production prompt, per
+    The DeepSeek V4 endpoint (and the production prompt, per
     `_PRAGMATICS_FULL_SYSTEM_PROMPT`) emits a wire shape of:
         {
           "results": [
@@ -1940,6 +1949,7 @@ def classify_batch_pragmatics_full(
     brand_registry: list,
     anthropic_client: "ClaudeClient | None" = None,
     *,
+    model: str | None = None,
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
@@ -2030,7 +2040,7 @@ def classify_batch_pragmatics_full(
         try:
             response = _call_signal_with_retry(
                 anthropic_client, prompt,
-                max_tokens=max_tokens, thinking=thinking,
+                model=model, max_tokens=max_tokens, thinking=thinking,
             )
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
@@ -2055,6 +2065,8 @@ def classify_batch_pragmatics_full(
                         brand_ids=list(t.get("brand_ids") or []),
                         brand_registry=list(brand_registry) if brand_registry else [],
                         anthropic_client=anthropic_client,
+                        model=model,
+                        thinking=thinking,
                     )
                     results.append(
                         single if isinstance(single, dict) else dict(empty),
@@ -2144,7 +2156,7 @@ class AnthropicClaudeClient:
         import json as _json
 
         # Resolve the thinking default when not explicitly passed by the
-        # caller. DeepSeek V4 Pro is a reasoning model that emits
+        # caller. DeepSeek V4 defaults to thinking and emits
         # ThinkingBlocks (no .text) unless thinking={"type": "disabled"}
         # is set; the blocks are then invisible to the loops below, the
         # response body is empty, and json.loads("") raises. Inject the

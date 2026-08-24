@@ -253,24 +253,23 @@ class HarvestConfig(BaseModel):
 class LlmConfig(BaseModel):
     """LLM model-name configuration (plan 2026-08-01-002 U1).
 
-    Defaults mirror the values the v1 + v2 stacks used prior to this
-    change; operators can override per-env via X_MONITOR_<role>_MODEL
-    without editing config.yaml. The translator_base_url defaults to
-    ANTHROPIC_BASE_URL env var (preserves the proxy path the v1 shell
-    already configures).
+    Committed non-null yaml model values are authoritative. Role-specific
+    environment values apply when the corresponding yaml field is omitted or
+    null. The translator_base_url defaults to ANTHROPIC_BASE_URL when the
+    configured value is null.
     """
 
     translator_model: str = Field(
-        default="deepseek-v4-pro",
-        description="Model name for the translator stage. Default swapped to deepseek-v4-pro on 2026-08-04 (plan 2026-08-04-001) to lift the MiniMax M3 proxy-side response cap (~890-1800 tokens) that was truncating 12-50% of translator batches. Operators who need M3 back set X_MONITOR_TRANSLATOR_MODEL=minimax/MiniMax-M3.0[1m] and X_MONITOR_TRANSLATOR_BASE_URL=https://api.minimax.io/anthropic.",
+        default="deepseek-v4-flash",
+        description="Model name for the translator stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_TRANSLATOR_MODEL.",
     )
     translator_base_url: str | None = Field(
         default=None,
         description="Optional override for the translator's base URL. When None, falls back to ANTHROPIC_BASE_URL env (resolves to MiniMax proxy if set).",
     )
     classifier_model: str = Field(
-        default="deepseek-v4-pro",
-        description="Model name for the classifier stage. Default matches the 2026-07-15 swap plan.",
+        default="deepseek-v4-flash",
+        description="Model name for the classifier stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_CLASSIFIER_MODEL.",
     )
     relevancy_model: str = Field(
         default="claude-haiku-4-5",
@@ -577,18 +576,12 @@ def load_config(path: Path) -> Config:
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
         }.items() if v is not None
     }
-    if env_llm_overrides:
-        # Plan 2026-08-04-001: yaml wins over env, BUT a yaml `null` is
-        # not "set" — it's an explicit instruction to use the default
-        # path (which falls back to ANTHROPIC_BASE_URL). Filter nulls
-        # from yaml so the env override takes effect. Without this
-        # filter, a yaml like `translator_base_url: null` clobbers an
-        # env-set value and silently re-routes the translator to the
-        # M3 proxy with the DS V4 model name (timeout, lang_detected
-        # NULL on every post).
-        raw_llm_filtered = {
-            k: v for k, v in raw_llm.items() if v is not None
-        }
+    # Plan 2026-08-04-001: yaml wins over env, BUT a yaml `null` is
+    # not "set" — it uses the role-specific env value when present and
+    # otherwise the Pydantic default. Always filter nulls, including
+    # when no role-specific env value exists.
+    raw_llm_filtered = {k: v for k, v in raw_llm.items() if v is not None}
+    if raw_llm or env_llm_overrides:
         merged_llm = {**env_llm_overrides, **raw_llm_filtered}  # yaml wins over env (non-null only)
         raw = {**raw, "llm": merged_llm}
     raw_headline = (

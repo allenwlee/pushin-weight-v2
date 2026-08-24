@@ -435,15 +435,15 @@ def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaud
     in the shell to override just the classifier without flipping
     other LLM callers in the same process.
 
-    The model name comes from `cfg.llm.classifier_model` (default
-    `deepseek-v4-pro`).
+    The production caller passes `cfg.llm.classifier_model` explicitly
+    (committed default `deepseek-v4-flash`).
 
     Resolution:
       * If the classifier base URL contains "minimax.io", the operator is
         routing through the minimax proxy. The proxy accepts only
         MINIMAX_API_TOKEN (the `sk-cp-uh…` token from `~/.env.secrets`).
       * If the classifier base URL contains "deepseek.com", the operator is
-        routing through DeepSeek V4 Pro's Anthropic-compatible endpoint.
+        routing through DeepSeek V4's Anthropic-compatible endpoint.
         The endpoint accepts DEEPSEEK_API_KEY.
       * Otherwise, talk to api.anthropic.com directly using
         ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
@@ -469,8 +469,8 @@ def build_translator_client_from_env(cfg: Config | None = None) -> AnthropicClau
     Reads the base URL from `cfg.llm.translator_base_url` when set,
     otherwise falls back to the `ANTHROPIC_BASE_URL` env var. When
     `ANTHROPIC_BASE_URL` is also unset, defaults to direct Anthropic.
-    The model name comes from `cfg.llm.translator_model` (default
-    `minimax/MiniMax-M3.0[1m]`, the value the v1 shell exports).
+    The model name comes from `cfg.llm.translator_model` (committed default
+    `deepseek-v4-flash`).
 
     Reads the translator's base URL NOT the classifier's
     `X_MONITOR_CLASSIFIER_BASE_URL` override — the translator always

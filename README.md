@@ -240,7 +240,7 @@ Lifecycle of a cycle:
    produces one row per detected brand in `posts_brands*`. Replaces
    v1.7's first-match-wins single-brand classifier.
 6. **Classify** — `x_monitor/attribution.py:classify_pragmatics_full` calls
-   the configured LLM (DeepSeek V4 Pro via the direct Anthropic-compat
+   the configured LLM (DeepSeek V4 Flash via the direct Anthropic-compat
    endpoint by default) per post with the inline system prompt
    `_PRAGMATICS_FULL_SYSTEM_PROMPT`. Emits per-brand discourse
    (10 keys), sentiment (4), nationalism (6), post_type (6), and an

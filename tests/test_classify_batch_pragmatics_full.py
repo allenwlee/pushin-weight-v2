@@ -399,6 +399,53 @@ def test_classify_batch_llm_exception_yields_empty_shape():
     assert len(on_err_calls) == 1
 
 
+def test_batch_failure_fallback_keeps_explicit_model_and_thinking(monkeypatch):
+    """Every per-post fallback keeps the batch's explicit DeepSeek route."""
+    from x_monitor import attribution
+
+    monkeypatch.setattr(attribution, "_BACKOFF_BASE_SECONDS", 0)
+
+    class BatchFailsClient:
+        def __init__(self):
+            self.calls: list[dict[str, Any]] = []
+
+        def messages_create(self, **kwargs):
+            self.calls.append(kwargs)
+            prompt = kwargs["messages"][0]["content"]
+            if "Tweets (JSON array of" in prompt:
+                raise RuntimeError("force batch fallback")
+            return {
+                "results": [{
+                    "tweet_id": "_single_",
+                    "classifications": [],
+                    "unsanctioned_flags": [],
+                }]
+            }
+
+    client = BatchFailsClient()
+    tweets = [
+        {"tweet_id": "fallback-1", "text": "DeepSeek one", "brand_ids": ["deepseek"]},
+        {"tweet_id": "fallback-2", "text": "DeepSeek two", "brand_ids": ["deepseek"]},
+    ]
+
+    attribution.classify_batch_pragmatics_full(
+        tweets,
+        [FakeBrandRow(brand_id="deepseek")],
+        client,
+        model="deepseek-v4-flash",
+        thinking={"type": "disabled"},
+    )
+
+    fallback_calls = [
+        call for call in client.calls
+        if "Apply the rules and worked examples to this single tweet" in
+        call["messages"][0]["content"]
+    ]
+    assert len(fallback_calls) == 2
+    assert {call["model"] for call in fallback_calls} == {"deepseek-v4-flash"}
+    assert {call["thinking"]["type"] for call in fallback_calls} == {"disabled"}
+
+
 def test_classify_batch_no_brand_ids_post_yields_empty_shape():
     """A tweet with empty brand_ids still occupies a slot in the
     returned list — the empty shape is surfaced, NOT skipped."""

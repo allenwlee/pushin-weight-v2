@@ -61,7 +61,7 @@ The prompts themselves enumerate the taxonomy; the parsers use the
 | Function | File:Line | Invoked by |
 |---|---|---|
 | `classify_pragmatics_full` (per-post) | `attribution.py:1670` | per-post fallback path within `classify_batch_pragmatics_full` (fail-soft contract); builds prompt via `build_pragmatics_full_prompt`, returns `{by_brand, unsanctioned_flags}` |
-| `classify_batch_pragmatics_full` (batched) | `attribution.py:1911` | `monitor/cycle.py::CycleRunner._run_post_fetch` (U7 -- stubbed, pending LLM wire-up); builds prompt via `build_batch_pragmatics_full_prompt`, 20 posts/batch, returns a list index-aligned with input tweets |
+| `classify_batch_pragmatics_full` (batched) | `attribution.py:1911` | `monitor/cycle.py::CycleRunner._run_post_fetch`; builds prompt via `build_batch_pragmatics_full_prompt`, 20 posts/batch, returns a list index-aligned with input tweets |
 
 **v2 invocation chain:**
 
@@ -72,7 +72,7 @@ Django management command          Celery beat
          |                                |
          +--- monitor/cycle.py::CycleRunner.run()
                   |
-                  +--- _run_post_fetch()  [U7: STUBBED, pending LLM wire-up]
+                  +--- _run_post_fetch()
                   |     x_monitor.attribution.classify_batch_pragmatics_full()
                   |     x_monitor.translator.translate_batch_pragmatics()
                   |
@@ -80,22 +80,22 @@ Django management command          Celery beat
                         x_monitor.attribution.attribute_to_brands()
 ```
 
-> **Note (U7):** The `_run_post_fetch` method in `monitor/cycle.py` (lines 629-647)
-> is currently STUBBED -- the LLM-backed translate + classify steps return zero
-> counters so the cycle runs without LLM spend. The wire-up is planned for a
-> follow-up unit. When wired, it will call `classify_batch_pragmatics_full` and
-> `translate_batch_pragmatics` from `x_monitor.attribution` / `x_monitor.translator`.
+`_run_post_fetch` invokes both `classify_batch_pragmatics_full` and
+`translate_batch_pragmatics` after posts enter the durable enrichment queue.
 
-**Model resolution** (`attribution.py:777-802`, `_resolve_signal_model`):
+**Model resolution** (`monitor/cycle.py`, `classify_batch_pragmatics_full`):
 
-The current classifier deployment sets `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`, so the effective default is **DeepSeek V4 Pro** (`deepseek-v4-pro`). **MiniMax-M3.0** is the legacy classifier route. Resolution still permits explicit configuration and environment overrides before URL inference:
+The production cycle passes `cfg.llm.classifier_model` explicitly to the
+classifier, and the committed value is **DeepSeek V4 Flash**
+(`deepseek-v4-flash`). **MiniMax-M3.0** is the legacy classifier route. Calls
+without explicit config retain the compatibility resolution ladder:
 
 | Priority | Source | Resolved model |
 |---|---|---|
-| 1 | `cfg.llm.signal_model` | explicit configured override |
-| 2 | `X_MONITOR_CLASSIFIER_MODEL` or `ANTHROPIC_MODEL` | explicit environment override |
+| 1 | Production `cfg.llm.classifier_model` | explicit configured model (`deepseek-v4-flash` committed) |
+| 2 | `X_MONITOR_CLASSIFIER_MODEL` or `ANTHROPIC_MODEL` | compatibility environment override |
 | 3 | classifier base URL contains `minimax.io` | `MiniMax-M3.0` (legacy) |
-| 4 | classifier base URL contains `deepseek.com` | `deepseek-v4-pro` (current default deployment) |
+| 4 | classifier base URL contains `deepseek.com` | `deepseek-v4-flash` |
 | 5 | otherwise | `claude-haiku-4-5` (direct Anthropic fallback) |
 
 The DeepSeek path also passes `thinking={"type": "disabled"}` and threads `_max_tokens_for_batch` -- `min(8192, max(4096, 200 * batch_size))` -- so batch_size=20 gets 4096 tokens and batch_size=40 gets 8192.
@@ -844,7 +844,6 @@ checklist in its "How to add a new value" section.
                      │     PostBrandSignal, etc.)    │
                      │                               │
                      │  Step 6: _run_post_fetch()    │
-                     │    [U7: STUBBED]              │
                      │    x_monitor.attribution      │
                      │    .classify_batch_           │
                      │     pragmatics_full()         │
@@ -855,4 +854,3 @@ checklist in its "How to add a new value" section.
 ```
 
 ---
-
