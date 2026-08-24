@@ -30,7 +30,9 @@ from monitor.trend_narrative_generation import (
 from monitor.trend_narrative_lifecycle import (
     abandon_expired_attempts,
     advance_current_check,
+    attempt_failure_history,
     fail_generation,
+    generation_failure_history,
     mark_transport_completed,
     mark_transport_started,
     next_failure_backoff,
@@ -197,19 +199,30 @@ def process_trend_narrative_envelope(
             stats["suppressed"] += 1
             continue
 
-        failures = TrendNarrative.objects.filter(
+        provider_host = urlsplit(active_config.base_url).hostname or ""
+        content_failures = generation_failure_history(
             window_days=window_days,
             semantic_fingerprint=fingerprint,
-            status__in=[
-                TrendNarrative.Status.FAILED,
-                TrendNarrative.Status.ABANDONED,
-            ],
+            publication_epoch=active_config.publication_epoch,
+            prompt_version=active_config.prompt_version,
+            provider=active_config.provider,
+            provider_host=provider_host,
+            llm_model_name=active_config.model,
+            transport_completed=True,
         )
-        latest_failure = failures.order_by("-created_at", "-pk").first()
-        if (
-            latest_failure is not None
-            and latest_failure.next_attempt_at is not None
-            and latest_failure.next_attempt_at > processed_at
+        transport_failures = generation_failure_history(
+            window_days=window_days,
+            semantic_fingerprint=fingerprint,
+            publication_epoch=active_config.publication_epoch,
+            prompt_version=active_config.prompt_version,
+            provider=active_config.provider,
+            provider_host=provider_host,
+            llm_model_name=active_config.model,
+            transport_completed=False,
+        )
+        if any(
+            failures.filter(next_attempt_at__gt=processed_at).exists()
+            for failures in (content_failures, transport_failures)
         ):
             _record_no_call(
                 source_cycle_id=source_cycle_id,
@@ -235,7 +248,7 @@ def process_trend_narrative_envelope(
             publication_epoch=active_config.publication_epoch,
             prompt_version=active_config.prompt_version,
             provider=active_config.provider,
-            provider_host=urlsplit(active_config.base_url).hostname or "",
+            provider_host=provider_host,
             llm_model_name=active_config.model,
             owner=owner,
             now=attempt_started_at,
@@ -255,9 +268,10 @@ def process_trend_narrative_envelope(
             stats["errors"].append(f"{window_days}d:claim_lost")
             continue
         stats["transport_started"] += 1
+        transport_completed = False
         try:
             generated = generate_trend_narrative(snapshot, active_config)
-            mark_transport_completed(
+            transport_completed = mark_transport_completed(
                 attempt.pk,
                 owner=owner,
                 fence=attempt.claim_fence,
@@ -295,7 +309,7 @@ def process_trend_narrative_envelope(
                 exc,
             )
             if exc.transport_completed:
-                mark_transport_completed(
+                transport_completed = mark_transport_completed(
                     attempt.pk,
                     owner=owner,
                     fence=attempt.claim_fence,
@@ -304,10 +318,10 @@ def process_trend_narrative_envelope(
             _record_failure(
                 attempt=attempt,
                 owner=owner,
-                failures=failures,
                 config=active_config,
                 processed_at=(now or clock()),
                 error_code=exc.code,
+                transport_completed=transport_completed,
             )
             stats["failed"] += 1
             stats["errors"].append(f"{window_days}d:generation_failed")
@@ -325,10 +339,10 @@ def process_trend_narrative_envelope(
             _record_failure(
                 attempt=attempt,
                 owner=owner,
-                failures=failures,
                 config=active_config,
                 processed_at=(now or clock()),
                 error_code="headline_runtime_failure",
+                transport_completed=transport_completed,
             )
             stats["failed"] += 1
             stats["errors"].append(f"{window_days}d:generation_failed")
@@ -365,8 +379,18 @@ def _record_no_call(
 
 
 def _record_failure(
-    *, attempt, owner, failures, config, processed_at, error_code: str
+    *,
+    attempt,
+    owner,
+    config,
+    processed_at,
+    error_code: str,
+    transport_completed: bool,
 ) -> None:
+    failures = attempt_failure_history(
+        attempt,
+        transport_completed=transport_completed,
+    )
     consecutive_failures, next_attempt_at = next_failure_backoff(
         failures,
         window_days=attempt.window_days,

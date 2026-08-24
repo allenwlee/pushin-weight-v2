@@ -76,6 +76,10 @@ def _reserve(
     lease_seconds: int = 1_200,
     output_schema_version: int = 1,
     generation_facts: dict | None = None,
+    prompt_version: str = "headline-v1",
+    provider: str = "anthropic",
+    provider_host: str = "api.anthropic.com",
+    llm_model_name: str = "claude-haiku-4-5-20251001",
 ) -> TrendNarrative:
     brand = Brand.objects.filter(pk="minimax").first() or _brand()
     row = reserve_generation(
@@ -87,10 +91,10 @@ def _reserve(
             generation_facts or _facts(brand, as_of=facts_as_of)
         ),
         publication_epoch=epoch,
-        prompt_version="headline-v1",
-        provider="anthropic",
-        provider_host="api.anthropic.com",
-        llm_model_name="claude-haiku-4-5-20251001",
+        prompt_version=prompt_version,
+        provider=provider,
+        provider_host=provider_host,
+        llm_model_name=llm_model_name,
         owner=owner,
         now=NOW,
         lease_seconds=lease_seconds,
@@ -319,6 +323,69 @@ def test_repeated_expired_leases_escalate_same_fingerprint_backoff():
     assert first.consecutive_failures == 1
     assert second.consecutive_failures == 2
     assert second.next_attempt_at == second_expired_at + timedelta(minutes=60)
+
+
+def test_repeated_transport_incomplete_leases_escalate_across_fingerprints():
+    first = _reserve(lease_seconds=60, fingerprint="a" * 64)
+    first_expired_at = NOW + timedelta(minutes=2)
+    assert abandon_expired_attempts(
+        now=first_expired_at,
+        cadence_minutes={1: 30},
+        stale_minutes={1: 60},
+    ) == 1
+
+    second = _reserve(
+        source_cycle_id="cycle-b",
+        fingerprint="b" * 64,
+        owner="worker-b",
+        lease_seconds=60,
+    )
+    second_expired_at = NOW + timedelta(minutes=3)
+    assert abandon_expired_attempts(
+        now=second_expired_at,
+        cadence_minutes={1: 30},
+        stale_minutes={1: 60},
+    ) == 1
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.semantic_fingerprint != second.semantic_fingerprint
+    assert first.transport_completed_at is None
+    assert second.transport_completed_at is None
+    assert first.consecutive_failures == 1
+    assert second.consecutive_failures == 2
+    assert second.next_attempt_at == second_expired_at + timedelta(minutes=60)
+
+
+def test_transport_backoff_does_not_cross_provider_configuration_identity():
+    first = _reserve(lease_seconds=60)
+    assert abandon_expired_attempts(
+        now=NOW + timedelta(minutes=2),
+        cadence_minutes={1: 30},
+        stale_minutes={1: 60},
+    ) == 1
+
+    second = _reserve(
+        source_cycle_id="cycle-b",
+        owner="worker-b",
+        lease_seconds=60,
+        prompt_version="headline-v2",
+        provider="deepseek",
+        provider_host="api.deepseek.com",
+        llm_model_name="deepseek-v4-pro",
+    )
+    second_expired_at = NOW + timedelta(minutes=3)
+    assert abandon_expired_attempts(
+        now=second_expired_at,
+        cadence_minutes={1: 30},
+        stale_minutes={1: 60},
+    ) == 1
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.consecutive_failures == 1
+    assert second.consecutive_failures == 1
+    assert second.next_attempt_at == second_expired_at + timedelta(minutes=30)
 
 
 def test_expired_worker_cannot_publish_before_cleanup_marks_abandoned():

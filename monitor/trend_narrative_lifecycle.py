@@ -23,6 +23,10 @@ _TERMINAL_STATUSES = (
     TrendNarrative.Status.PUBLISHED,
     TrendNarrative.Status.SUPERSEDED,
 )
+_FAILURE_STATUSES = (
+    TrendNarrative.Status.FAILED,
+    TrendNarrative.Status.ABANDONED,
+)
 
 
 def record_no_call_check(
@@ -228,7 +232,7 @@ def next_failure_backoff(
     cadence_minutes: Mapping[int, int],
     stale_minutes: Mapping[int, int],
 ) -> tuple[int, Any]:
-    """Return the durable count and bounded retry time for one fingerprint."""
+    """Return the durable count and bounded retry time for one failure scope."""
     latest_failure = failures.order_by("-created_at", "-pk").first()
     previous_failures = (
         latest_failure.consecutive_failures
@@ -244,13 +248,68 @@ def next_failure_backoff(
     return consecutive_failures, now + timedelta(minutes=delay_minutes)
 
 
+def generation_failure_history(
+    *,
+    window_days: int,
+    semantic_fingerprint: str,
+    publication_epoch: int,
+    prompt_version: str,
+    provider: str,
+    provider_host: str,
+    llm_model_name: str,
+    transport_completed: bool,
+) -> QuerySet[TrendNarrative]:
+    """Select failures that share the applicable retry identity.
+
+    A provider response makes a failure content-specific, so its retry scope
+    stays on the semantic fingerprint. Failures before a response represent
+    transport/runtime availability and must survive changing harvested
+    evidence, while remaining isolated to the exact provider configuration.
+    """
+    failures = TrendNarrative.objects.filter(
+        window_days=window_days,
+        status__in=_FAILURE_STATUSES,
+    )
+    if transport_completed:
+        return failures.filter(
+            semantic_fingerprint=semantic_fingerprint,
+            transport_completed_at__isnull=False,
+        )
+    return failures.filter(
+        publication_epoch=publication_epoch,
+        prompt_version=prompt_version,
+        provider=provider,
+        provider_host=provider_host,
+        llm_model_name=llm_model_name,
+        transport_completed_at__isnull=True,
+    )
+
+
+def attempt_failure_history(
+    attempt: TrendNarrative,
+    *,
+    transport_completed: bool,
+) -> QuerySet[TrendNarrative]:
+    """Select retry history using the persisted attempt identity."""
+    return generation_failure_history(
+        window_days=attempt.window_days,
+        semantic_fingerprint=attempt.semantic_fingerprint,
+        publication_epoch=attempt.publication_epoch,
+        prompt_version=attempt.prompt_version,
+        provider=attempt.provider,
+        provider_host=attempt.provider_host,
+        llm_model_name=attempt.llm_model_name or attempt.model_name,
+        transport_completed=transport_completed,
+    )
+
+
 def abandon_expired_attempts(
     *,
     now,
     cadence_minutes: Mapping[int, int],
     stale_minutes: Mapping[int, int],
 ) -> int:
-    """Abandon expired leases without erasing same-fingerprint backoff."""
+    """Abandon expired leases without erasing their applicable backoff."""
     with transaction.atomic():
         expired = list(
             TrendNarrative.objects.select_for_update()
@@ -261,13 +320,9 @@ def abandon_expired_attempts(
             .order_by("claim_expires_at", "pk")
         )
         for row in expired:
-            prior_failures = TrendNarrative.objects.filter(
-                window_days=row.window_days,
-                semantic_fingerprint=row.semantic_fingerprint,
-                status__in=[
-                    TrendNarrative.Status.FAILED,
-                    TrendNarrative.Status.ABANDONED,
-                ],
+            prior_failures = attempt_failure_history(
+                row,
+                transport_completed=row.transport_completed_at is not None,
             ).exclude(pk=row.pk)
             failures, next_attempt_at = next_failure_backoff(
                 prior_failures,

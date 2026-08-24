@@ -11,6 +11,7 @@ from django.conf import settings
 
 from core.models import Brand, TrendNarrative, TrendNarrativeSubject
 from monitor.tasks import refresh_trend_narratives
+from monitor.trend_narrative_generation import HeadlineGenerationError
 from monitor.trend_narrative_tasks import process_trend_narrative_envelope
 from x_monitor.config import HeadlineNarrativeConfig
 
@@ -599,6 +600,81 @@ def test_failure_backoff_retries_at_window_cadence_boundary(
     assert first["failed"] == 1
     assert retried["slots_consumed"] == 1
     assert retried["published"] == 1
+
+
+def test_transport_failure_backoff_survives_changed_evidence_fingerprint(
+    monkeypatch,
+):
+    config, calls = _enable(monkeypatch, fail_window=365)
+    process_trend_narrative_envelope(_envelope(), now=NOW)
+    first_failure = TrendNarrative.objects.get(
+        window_days=365,
+        status=TrendNarrative.Status.FAILED,
+    )
+    calls.clear()
+
+    changed_at = NOW + timedelta(minutes=1)
+    _changed_config, changed_calls = _enable(monkeypatch, changed={365})
+    blocked = process_trend_narrative_envelope(
+        _envelope("cycle-b", completed_at=changed_at),
+        now=changed_at,
+    )
+
+    suppression = TrendNarrative.objects.get(
+        source_cycle_id="cycle-b",
+        window_days=365,
+    )
+    assert changed_at < first_failure.next_attempt_at
+    assert suppression.semantic_fingerprint != first_failure.semantic_fingerprint
+    assert suppression.status == TrendNarrative.Status.SUPPRESSED
+    assert suppression.error_code == "provider_backoff"
+    assert blocked["slots_consumed"] == 0
+    assert blocked["suppressed"] == 1
+    assert calls == []
+    assert changed_calls == []
+    assert config.provider == first_failure.provider
+
+
+def test_post_response_rejection_does_not_back_off_new_fingerprint(monkeypatch):
+    config, calls = _enable(monkeypatch)
+    normal_generate = __import__(
+        "monitor.trend_narrative_tasks", fromlist=["generate_trend_narrative"]
+    ).generate_trend_narrative
+
+    def reject_one_window(snapshot, active_config):
+        if snapshot["window_days"] == 365:
+            calls.append(365)
+            raise HeadlineGenerationError(
+                "headline_output_schema_invalid",
+                transport_completed=True,
+            )
+        return normal_generate(snapshot, active_config)
+
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.generate_trend_narrative",
+        reject_one_window,
+    )
+    process_trend_narrative_envelope(_envelope(), now=NOW)
+    rejection = TrendNarrative.objects.get(
+        window_days=365,
+        status=TrendNarrative.Status.FAILED,
+    )
+    calls.clear()
+
+    changed_at = NOW + timedelta(minutes=1)
+    _changed_config, changed_calls = _enable(monkeypatch, changed={365})
+    retried = process_trend_narrative_envelope(
+        _envelope("cycle-b", completed_at=changed_at),
+        now=changed_at,
+    )
+
+    assert changed_at < rejection.next_attempt_at
+    assert rejection.transport_completed_at is not None
+    assert retried["slots_consumed"] == 1
+    assert retried["published"] == 1
+    assert calls == []
+    assert changed_calls == [365]
+    assert config.provider == rejection.provider
 
 
 def test_consecutive_failure_counter_drives_bounded_backoff(monkeypatch):
