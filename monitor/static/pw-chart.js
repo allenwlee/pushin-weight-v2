@@ -88,6 +88,105 @@
       .getPropertyValue('--bar-' + discourseKey).trim() || '#9ca3af';
   }
 
+  function fixedHourlyTicks(labels) {
+    if (!Array.isArray(labels) || labels.length < 24) return [];
+    var timestamps = labels.map(function (label) { return Date.parse(label); });
+    if (timestamps.some(function (timestamp) { return !Number.isFinite(timestamp); })) return [];
+
+    var firstHour = new Date(timestamps[0]);
+    firstHour.setMinutes(0, 0, 0);
+    firstHour.setHours(firstHour.getHours() + 1);
+
+    return Array.from({ length: 24 }, function (_, hourIndex) {
+      var instant = firstHour.getTime() + hourIndex * 60 * 60 * 1000;
+      var closestIndex = 0;
+      var closestDistance = Infinity;
+      timestamps.forEach(function (timestamp, labelIndex) {
+        var distance = Math.abs(timestamp - instant);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = labelIndex;
+        }
+      });
+      return { instant: instant, value: closestIndex };
+    });
+  }
+
+  function californiaHour(timestamp) {
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(new Date(timestamp));
+    var hour = parts.find(function (part) { return part.type === 'hour'; });
+    return String(Number(hour ? hour.value : 0) % 24);
+  }
+
+  function oneDayScales(days) {
+    var hourlyTicks = fixedHourlyTicks(days);
+    if (hourlyTicks.length !== 24) return null;
+    var localColor = (Chart.defaults && Chart.defaults.color) || '#666666';
+
+    function hourlyScale(position, color, formatter) {
+      return {
+        type: 'category',
+        position: position,
+        labels: days,
+        offset: false,
+        afterBuildTicks: function (scale) {
+          scale.ticks = hourlyTicks.map(function (tick) { return { value: tick.value }; });
+        },
+        ticks: {
+          autoSkip: false,
+          color: color,
+          font: { size: 9 },
+          maxRotation: 0,
+          minRotation: 0,
+          padding: 3,
+          callback: function (_value, index) {
+            return formatter(hourlyTicks[index].instant);
+          },
+        },
+        grid: { display: false },
+        border: { color: color },
+      };
+    }
+
+    return {
+      x: hourlyScale('top', localColor, function (timestamp) {
+        return String(new Date(timestamp).getHours());
+      }),
+      xCalifornia: hourlyScale('bottom', '#fbbf24', californiaHour),
+    };
+  }
+
+  function chartScales(days, granularity) {
+    var xScales = granularity === 'minute' ? oneDayScales(days) : null;
+    return Object.assign(xScales || {
+      x: {
+        type: 'category',
+        labels: days,
+        ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+        grid: { display: false },
+      },
+    }, {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: granularity === 'minute' ? 'posts / 5min' : 'posts / day',
+          font: granularity === 'minute' ? { size: 9 } : undefined,
+          padding: granularity === 'minute' ? 0 : undefined,
+        },
+        ticks: {
+          precision: 0,
+          font: granularity === 'minute' ? { size: 9 } : undefined,
+          padding: granularity === 'minute' ? 2 : undefined,
+        },
+      },
+    });
+  }
+
   function renderOne(canvas) {
     var payload = readPayload(canvas);
     if (!validPayload(payload)) return null;
@@ -97,6 +196,10 @@
     var colors = payload.colors || {};
     var stacked = payload.stacked || {};
     var brandList = Object.keys(series);
+    var region = getHomeChartRegion();
+    if (region && chartIn(region) === canvas) {
+      region.setAttribute('data-pw-chart-granularity', granularity);
+    }
     var prior = Chart.getChart(canvas);
     if (prior) prior.destroy();
 
@@ -163,19 +266,7 @@
             },
           },
         },
-        scales: {
-          x: {
-            type: 'category',
-            labels: days,
-            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
-            grid: { display: false },
-          },
-          y: {
-            beginAtZero: true,
-            title: { display: true, text: granularity === 'minute' ? 'posts / 5min' : 'posts / day' },
-            ticks: { precision: 0 },
-          },
-        },
+        scales: chartScales(days, granularity),
         onHover: function () {},
       },
     });
@@ -203,8 +294,15 @@
       region.appendChild(legend);
     }
     if (!legend) return;
-    legend.innerHTML = Object.keys(payload.series).map(function (brand) {
-      return '<span><i style="background:' + escapeHtml((payload.colors || {})[brand] || '#9ca3af') + '"></i>' +
+    var seriesOrder = Object.keys(payload.series);
+    var pulseOrder = payload.pulse.entries.map(function (entry) { return entry.nickname; })
+      .filter(function (brand) { return seriesOrder.indexOf(brand) !== -1; });
+    var brandOrder = pulseOrder.concat(seriesOrder.filter(function (brand) {
+      return pulseOrder.indexOf(brand) === -1;
+    }));
+    legend.innerHTML = brandOrder.map(function (brand) {
+      return '<span data-pw-chart-brand="' + escapeHtml(brand) + '"><i style="background:' +
+        escapeHtml((payload.colors || {})[brand] || '#9ca3af') + '"></i>' +
         escapeHtml(BRAND_NAMES[brand] || brand) + '</span>';
     }).join('');
   }

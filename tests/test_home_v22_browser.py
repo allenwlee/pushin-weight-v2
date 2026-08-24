@@ -879,6 +879,135 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_one_day_chart_uses_dual_time_axes_and_full_width(self) -> None:
+        """The production canvas exposes the owner-approved 1d geometry contract."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport in (
+                    VIEWPORTS["desktop"],
+                    VIEWPORTS["mobile"],
+                    {"width": 320, "height": 844},
+                ):
+                    with self.subTest(viewport=viewport):
+                        context = browser.new_context(
+                            viewport=viewport,
+                            timezone_id="Asia/Tokyo",
+                        )
+                        page = context.new_page()
+                        console_errors: list[str] = []
+                        page_errors: list[str] = []
+                        page.on(
+                            "console",
+                            lambda message: console_errors.append(message.text)
+                            if message.type == "error"
+                            else None,
+                        )
+                        page.on("pageerror", lambda error: page_errors.append(str(error)))
+                        try:
+                            page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                            page.wait_for_function(
+                                "() => { const c = document.querySelector('canvas.home-chart'); return c && window.Chart?.getChart(c); }"
+                            )
+                            runtime = page.evaluate(
+                                """() => {
+                                  const region = document.querySelector('section.home-chart-wrap');
+                                  const canvas = region.querySelector('canvas.home-chart');
+                                  const chart = Chart.getChart(canvas);
+                                  const payload = JSON.parse(canvas.dataset.home);
+                                  const regionBox = region.getBoundingClientRect();
+                                  const canvasBox = canvas.getBoundingClientRect();
+                                  const totals = chart.data.datasets.filter((dataset) => dataset._isTotalLine);
+                                  const totalMeta = chart.getDatasetMeta(chart.data.datasets.indexOf(totals[0]));
+                                  const pulseOrder = payload.pulse.entries
+                                    .map((entry) => entry.nickname)
+                                    .filter((nickname) => Object.hasOwn(payload.series, nickname));
+                                  const chartOnly = Object.keys(payload.series)
+                                    .filter((nickname) => !pulseOrder.includes(nickname));
+                                  const firstHour = new Date(payload.days[0]);
+                                  firstHour.setMinutes(0, 0, 0);
+                                  firstHour.setHours(firstHour.getHours() + 1);
+                                  const instants = Array.from(
+                                    {length: 24},
+                                    (_, index) => new Date(firstHour.getTime() + index * 60 * 60 * 1000)
+                                  );
+                                  const californiaHour = new Intl.DateTimeFormat('en-US', {
+                                    timeZone: 'America/Los_Angeles',
+                                    hour: 'numeric',
+                                    hourCycle: 'h23',
+                                  });
+                                  const tickLabels = (scale) => scale.ticks.map((tick) => String(tick.label));
+                                  return {
+                                    scaleKeys: Object.keys(chart.scales).sort(),
+                                    localPosition: chart.scales.x?.position,
+                                    californiaPosition: chart.scales.xCalifornia?.position,
+                                    localLabels: chart.scales.x ? tickLabels(chart.scales.x) : [],
+                                    californiaLabels: chart.scales.xCalifornia
+                                      ? tickLabels(chart.scales.xCalifornia)
+                                      : [],
+                                    expectedLocal: instants.map((instant) => String(instant.getHours())),
+                                    expectedCalifornia: instants.map((instant) =>
+                                      String(Number(californiaHour.format(instant)))
+                                    ),
+                                    localColor: chart.scales.x?.options.ticks.color,
+                                    defaultColor: Chart.defaults.color,
+                                    californiaColor: chart.scales.xCalifornia?.options.ticks.color,
+                                    legendOrder: [...region.querySelectorAll('[data-pw-chart-legend] [data-pw-chart-brand]')]
+                                      .map((node) => node.dataset.pwChartBrand),
+                                    expectedLegendOrder: pulseOrder.concat(chartOnly),
+                                    plotWidthRatio: (chart.chartArea.right - chart.chartArea.left) / canvasBox.width,
+                                    firstPointOffset: Math.abs(totalMeta.data[0].x - chart.chartArea.left),
+                                    lastPointOffset: Math.abs(totalMeta.data.at(-1).x - chart.chartArea.right),
+                                    canvasLeftInset: canvasBox.left - regionBox.left,
+                                    yTitle: chart.scales.y?.options.title.text,
+                                    overflow: document.documentElement.scrollWidth > innerWidth,
+                                  };
+                                }"""
+                            )
+                            self.assertEqual(runtime["scaleKeys"], ["x", "xCalifornia", "y"])
+                            self.assertEqual(runtime["localPosition"], "top")
+                            self.assertEqual(runtime["californiaPosition"], "bottom")
+                            self.assertEqual(runtime["localLabels"], runtime["expectedLocal"])
+                            self.assertEqual(
+                                runtime["californiaLabels"],
+                                runtime["expectedCalifornia"],
+                            )
+                            self.assertEqual(len(runtime["localLabels"]), 24)
+                            self.assertEqual(len(runtime["californiaLabels"]), 24)
+                            self.assertEqual(runtime["localColor"], runtime["defaultColor"])
+                            self.assertEqual(runtime["californiaColor"].lower(), "#fbbf24")
+                            self.assertEqual(
+                                runtime["legendOrder"],
+                                runtime["expectedLegendOrder"],
+                            )
+                            self.assertGreaterEqual(runtime["plotWidthRatio"], 0.85)
+                            self.assertLessEqual(runtime["firstPointOffset"], 1)
+                            self.assertLessEqual(runtime["lastPointOffset"], 1)
+                            self.assertLessEqual(runtime["canvasLeftInset"], 2)
+                            self.assertEqual(runtime["yTitle"], "posts / 5min")
+                            self.assertFalse(runtime["overflow"])
+                            self.assertEqual(console_errors, [])
+                            self.assertEqual(page_errors, [])
+
+                            with page.expect_response(
+                                lambda response: "/chart.html?" in response.url
+                            ) as response_info:
+                                page.locator("[data-pw-window-btn='7']").click()
+                            self.assertEqual(response_info.value.status, 200)
+                            page.wait_for_function(
+                                "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).window_days === 7"
+                            )
+                            self.assertEqual(
+                                page.evaluate(
+                                    "() => Object.keys(Chart.getChart(document.querySelector('canvas.home-chart')).scales).sort()"
+                                ),
+                                ["x", "y"],
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_top_voices_refresh_keeps_separator_parity_on_mobile(self) -> None:
         """Client-rendered Top Voices remain readable at the narrow V22 width."""
         with sync_playwright() as playwright:

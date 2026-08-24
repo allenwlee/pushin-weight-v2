@@ -952,6 +952,17 @@ body.desktop-shell .desktop-grid .feed-strip {
   height: 220px !important;
   display: block;
 }
+.pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] {
+  padding-inline: 0;
+}
+.pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] .legend,
+.pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] .chart-state {
+  margin-inline: 10px;
+}
+body.desktop-shell .pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] .legend,
+body.desktop-shell .pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] .chart-state {
+  margin-inline: 14px;
+}
 @media (max-width: 899px) {
   .pw-v20 canvas.home-chart {
     height: 180px !important;

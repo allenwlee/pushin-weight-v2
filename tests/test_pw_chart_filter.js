@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+process.env.TZ = 'Asia/Tokyo';
+
 const src = fs.readFileSync(
   path.join(__dirname, '..', 'monitor', 'static', 'pw-chart.js'),
   'utf8'
@@ -23,10 +25,16 @@ function assert(condition, label) {
 }
 
 function payload(windowDays, count, pulseName) {
-  const computedAt = '2026-08-11T12:00:00+00:00';
+  const computedAt = '2026-08-10T20:34:00+00:00';
+  const days = windowDays === 1
+    ? Array.from({ length: 288 }, (_, index) =>
+      new Date(Date.parse(computedAt) - (288 - index) * 5 * 60 * 1000).toISOString())
+    : Array.from({ length: windowDays }, (_, index) =>
+      new Date(Date.parse(computedAt) - (windowDays - index - 1) * 24 * 60 * 60 * 1000)
+        .toISOString().slice(0, 10));
   return {
-    days: ['2026-08-11T00:00:00+00:00'],
-    series: { qwen: [count] },
+    days,
+    series: { qwen: days.map((_, index) => index === days.length - 1 ? count : 0) },
     stacked: { qwen: {} },
     colors: { qwen: '#f97316' },
     totals: { qwen: count },
@@ -108,7 +116,7 @@ function makeCanvas(data) {
   };
 }
 
-function makeRegion(data, isLegacy) {
+function makeRegion(data, isLegacy, legend) {
   const attrs = {
     'data-pw-chart-empty-text': 'No chart data',
     'data-pw-chart-error-text': 'Chart refresh failed',
@@ -131,7 +139,7 @@ function makeRegion(data, isLegacy) {
     querySelector(selector) {
       if (selector === 'canvas.home-chart') return canvas;
       if (selector === '[data-pw-chart-status]') return status;
-      if (selector === '[data-pw-chart-legend]') return null;
+      if (selector === '[data-pw-chart-legend]') return legend;
       return null;
     },
     get innerHTML() { return html; },
@@ -221,11 +229,11 @@ function deferred() {
 function makeSandbox(options = {}) {
   const listeners = {};
   const initial = options.initial || payload(1, 2, 'initial');
-  const region = makeRegion(initial, Boolean(options.legacy));
+  const legend = { innerHTML: '' };
+  const region = makeRegion(initial, Boolean(options.legacy), legend);
   const pulseBar = makePulseBar();
   const pulseStatus = { hidden: true, textContent: '' };
   const headline = makeHeadline();
-  const legend = { innerHTML: '' };
   const fetchCalls = [];
   const fetchQueue = [];
   const charts = [];
@@ -244,6 +252,7 @@ function makeSandbox(options = {}) {
   FakeChart.getChart = function (canvas) {
     return charts.find((chart) => chart.canvas === canvas) || null;
   };
+  FakeChart.defaults = { color: '#666666' };
 
   function FakeDOMParser() {}
   FakeDOMParser.prototype.parseFromString = function (html) {
@@ -328,6 +337,85 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(!src.includes('{{AGENT_ATTRIBUTION}}'), 'product source has no execution/meta placeholder');
   assert(!/home-brand-chart|brand-chart/.test(src),
     'shared home runtime does not compete with the dedicated brand-chart owner');
+
+  console.log('--- one-day axes + legend ordering ---');
+  const oneDay = payload(1, 4, 'deepseek');
+  oneDay.series = {
+    qwen: oneDay.days.map(() => 1),
+    deepseek: oneDay.days.map(() => 2),
+    minimax: oneDay.days.map(() => 3),
+    chart_only: oneDay.days.map(() => 4),
+  };
+  oneDay.stacked = { qwen: {}, deepseek: {}, minimax: {}, chart_only: {} };
+  oneDay.colors = {
+    qwen: '#f97316', deepseek: '#3b82f6', minimax: '#22c55e', chart_only: '#9ca3af',
+  };
+  oneDay.totals = { qwen: 1, deepseek: 2, minimax: 3, chart_only: 4 };
+  oneDay.pulse.entries = ['deepseek', 'minimax', 'qwen'].map((nickname, index) => ({
+    nickname,
+    display_name: nickname,
+    display_name_en: nickname,
+    display_name_zh_cn: nickname,
+    accent_color: oneDay.colors[nickname],
+    current_count: 10 - index,
+    prior_count: 1,
+    delta_percent: 50,
+    status: 'numeric',
+    direction: 'up',
+  }));
+  const axis = makeSandbox({ initial: oneDay });
+  const scales = axis.charts[0].config.options.scales;
+  assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xCalifornia', 'y']),
+    '1d config creates local, California, and y scales');
+  assert(scales.x.position === 'top' && scales.xCalifornia.position === 'bottom',
+    'local time is above the plot and California time is below it');
+  assert(scales.x.ticks.autoSkip === false && scales.xCalifornia.ticks.autoSkip === false,
+    'both 1d axes keep the fixed 24 ticks at narrow widths');
+  const localScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
+  const californiaScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
+  scales.x.afterBuildTicks(localScale);
+  scales.xCalifornia.afterBuildTicks(californiaScale);
+  assert(localScale.ticks.length === 24 && californiaScale.ticks.length === 24,
+    'both 1d scales build exactly 24 positions');
+  const localLabels = localScale.ticks.map((tick, index, ticks) =>
+    scales.x.ticks.callback.call(localScale, tick.value, index, ticks));
+  const californiaLabels = californiaScale.ticks.map((tick, index, ticks) =>
+    scales.xCalifornia.ticks.callback.call(californiaScale, tick.value, index, ticks));
+  assert(JSON.stringify(localLabels) === JSON.stringify([
+    '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
+    '18', '19', '20', '21', '22', '23', '0', '1', '2', '3', '4', '5',
+  ]), 'local labels cover the next whole hour through the current hour');
+  assert(californiaLabels.length === 24 && californiaLabels.every((label) => /^\d{1,2}$/.test(label)),
+    'California labels are hour-only values for the same fixed positions');
+  assert(scales.x.ticks.color === '#666666' && scales.xCalifornia.ticks.color === '#fbbf24',
+    'axis colors retain the chart default locally and use the CA pill tint below');
+  assert(
+    axis.legend.innerHTML.indexOf('data-pw-chart-brand="deepseek"') <
+      axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
+    axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') <
+      axis.legend.innerHTML.indexOf('data-pw-chart-brand="qwen"') &&
+    axis.legend.innerHTML.indexOf('data-pw-chart-brand="qwen"') <
+      axis.legend.innerHTML.indexOf('data-pw-chart-brand="chart_only"'),
+    'legend follows pulse ranking before deterministic chart-only brands'
+  );
+
+  const dstPayload = payload(1, 4, 'qwen');
+  const dstEnd = Date.parse('2026-11-01T12:34:00+00:00');
+  dstPayload.days = Array.from({ length: 288 }, (_, index) =>
+    new Date(dstEnd - (288 - index) * 5 * 60 * 1000).toISOString());
+  dstPayload.series.qwen = dstPayload.days.map(() => 1);
+  const dst = makeSandbox({ initial: dstPayload });
+  const dstScale = dst.charts[0].config.options.scales.xCalifornia;
+  const dstRuntime = { ticks: [] };
+  dstScale.afterBuildTicks(dstRuntime);
+  const dstLabels = dstRuntime.ticks.map((tick, index, ticks) =>
+    dstScale.ticks.callback.call(dstRuntime, tick.value, index, ticks));
+  assert(dstLabels.length === 24 && dstLabels.filter((label) => label === '1').length === 2,
+    'California fall-back keeps 24 real instants and repeats the wall-clock hour');
+
+  const sevenDay = makeSandbox({ initial: payload(7, 4, 'qwen') });
+  assert(JSON.stringify(Object.keys(sevenDay.charts[0].config.options.scales).sort()) === JSON.stringify(['x', 'y']),
+    'non-1d config keeps the existing single date axis');
 
   console.log('--- filter request + timed refresh ownership ---');
   const base = makeSandbox();
