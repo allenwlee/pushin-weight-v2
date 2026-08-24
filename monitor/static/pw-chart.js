@@ -8,6 +8,7 @@
   var REQUEST_TIMEOUT_MS = 12000;
   var generation = 0;
   var activeController = null;
+  var californiaHourFormatter = null;
 
   var BRAND_NAMES = {
     moonshot_kimi: 'Kimi',
@@ -113,11 +114,14 @@
   }
 
   function californiaHour(timestamp) {
-    var parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      hour: 'numeric',
-      hourCycle: 'h23',
-    }).formatToParts(new Date(timestamp));
+    if (!californiaHourFormatter) {
+      californiaHourFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        hour: 'numeric',
+        hourCycle: 'h23',
+      });
+    }
+    var parts = californiaHourFormatter.formatToParts(new Date(timestamp));
     var hour = parts.find(function (part) { return part.type === 'hour'; });
     return String(Number(hour ? hour.value : 0) % 24);
   }

@@ -899,11 +899,16 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         page_errors: list[str] = []
                         page.on(
                             "console",
-                            lambda message: console_errors.append(message.text)
+                            lambda message, errors=console_errors: errors.append(
+                                message.text
+                            )
                             if message.type == "error"
                             else None,
                         )
-                        page.on("pageerror", lambda error: page_errors.append(str(error)))
+                        page.on(
+                            "pageerror",
+                            lambda error, errors=page_errors: errors.append(str(error)),
+                        )
                         try:
                             page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
                             page.wait_for_function(
@@ -1058,6 +1063,80 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                     self.assertLess(timings[30][1], 2)
                     self.assertLess(timings[365][1], 2)
+                    self.assertEqual(console_errors, [])
+                    self.assertEqual(page_errors, [])
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_one_day_california_axis_keeps_fall_back_hours_in_browser(self) -> None:
+        """The production refresh path renders 24 real instants across CA DST."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport=VIEWPORTS["desktop"],
+                    timezone_id="Asia/Tokyo",
+                )
+                page = context.new_page()
+                console_errors: list[str] = []
+                page_errors: list[str] = []
+                page.on(
+                    "console",
+                    lambda message: console_errors.append(message.text)
+                    if message.type == "error"
+                    else None,
+                )
+                page.on("pageerror", lambda error: page_errors.append(str(error)))
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    page.wait_for_function("() => window.pwFilter")
+                    fixture_computed_at = "2026-11-01T12:34:00+00:00"
+                    page.evaluate(
+                        """fixtureComputedAt => {
+                          const canvas = document.querySelector('canvas.home-chart');
+                          const payload = JSON.parse(canvas.dataset.home);
+                          const end = Date.parse(fixtureComputedAt);
+                          payload.days = Array.from(
+                            {length: 288},
+                            (_, index) => new Date(end - (288 - index) * 5 * 60 * 1000).toISOString()
+                          );
+                          Object.keys(payload.series).forEach((brand) => {
+                            payload.series[brand] = payload.days.map(() => 1);
+                          });
+                          payload.computed_at = fixtureComputedAt;
+                          payload.fetched_at = fixtureComputedAt;
+                          [payload.pulse, payload.trend_narrative, payload.top_voices]
+                            .forEach((projection) => { projection.computed_at = fixtureComputedAt; });
+                          const replacement = document.createElement('canvas');
+                          replacement.className = 'home-chart';
+                          replacement.setAttribute('data-home', JSON.stringify(payload));
+                          const html = replacement.outerHTML +
+                            '<p class="chart-state" data-pw-chart-status hidden></p>';
+                          window.fetch = () => Promise.resolve({
+                            ok: true,
+                            text: () => Promise.resolve(html),
+                          });
+                          document.dispatchEvent(new CustomEvent('pw:filter-change', {
+                            detail: {filters: {window: 1}},
+                          }));
+                        }""",
+                        fixture_computed_at,
+                    )
+                    page.wait_for_function(
+                        "computedAt => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).computed_at === computedAt",
+                        arg=fixture_computed_at,
+                    )
+                    california_labels = page.evaluate(
+                        """() => {
+                          const canvas = document.querySelector('canvas.home-chart');
+                          return Chart.getChart(canvas).scales.xCalifornia.ticks
+                            .map((tick) => String(tick.label));
+                        }"""
+                    )
+                    self.assertEqual(len(california_labels), 24)
+                    self.assertEqual(california_labels.count("1"), 2)
                     self.assertEqual(console_errors, [])
                     self.assertEqual(page_errors, [])
                 finally:

@@ -1491,6 +1491,7 @@ def _build_home_chart_payload(
     requested_at = now or django_timezone.now()
     normalized_filters = _normalize_home_filters(filters)
     cache_key = None
+    cached_payload = None
     if now is None:
         cache_key = _home_chart_cache_key(window_days, normalized_filters, locale)
         cache_now = monotonic()
@@ -1498,9 +1499,11 @@ def _build_home_chart_payload(
             cached = _HOME_CHART_CACHE.get(cache_key)
             if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
                 _HOME_CHART_CACHE.move_to_end(cache_key)
-                return deepcopy(cached[1])
-            if cached:
+                cached_payload = cached[1]
+            elif cached:
                 del _HOME_CHART_CACHE[cache_key]
+        if cached_payload is not None:
+            return deepcopy(cached_payload)
 
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
@@ -1644,7 +1647,15 @@ def _build_home_chart_payload(
     }
     if cache_key is not None:
         with _HOME_PULSE_CACHE_LOCK:
-            _HOME_CHART_CACHE[cache_key] = (monotonic(), deepcopy(payload))
+            component_entries = (
+                _HOME_PULSE_CACHE.get(window_days),
+                _HOME_TOP_VOICES_CACHE.get((window_days, 3)),
+            )
+            cache_timestamp = min(
+                (entry[0] for entry in component_entries if entry is not None),
+                default=monotonic(),
+            )
+            _HOME_CHART_CACHE[cache_key] = (cache_timestamp, deepcopy(payload))
             _HOME_CHART_CACHE.move_to_end(cache_key)
             while len(_HOME_CHART_CACHE) > _HOME_CHART_CACHE_MAX_ENTRIES:
                 _HOME_CHART_CACHE.popitem(last=False)

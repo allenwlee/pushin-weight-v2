@@ -28,6 +28,8 @@ from core.models import (
 )
 from monitor.views import (
     _HOME_CHART_CACHE,
+    _HOME_PULSE_CACHE,
+    _HOME_TOP_VOICES_CACHE,
     _build_home_chart_payload,
     _build_home_pulse_payload,
     _clear_home_pulse_cache,
@@ -254,6 +256,22 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
                 _build_home_chart_payload(30, {"brands": [brand]})
 
         self.assertEqual(len(_HOME_CHART_CACHE), 2)
+
+    @patch("monitor.views.django_timezone.now", return_value=ANCHOR)
+    def test_complete_chart_cache_does_not_extend_component_cache_age(self, _now):
+        _build_home_chart_payload(30, {"brands": ["up"]})
+        pulse_cached_at = _HOME_PULSE_CACHE[30][0]
+        voices_cached_at = _HOME_TOP_VOICES_CACHE[(30, 3)][0]
+        _HOME_CHART_CACHE.clear()
+
+        _build_home_chart_payload(30, {"brands": ["down"]})
+        chart_cached_at = next(iter(_HOME_CHART_CACHE.values()))[0]
+
+        self.assertEqual(
+            chart_cached_at,
+            min(pulse_cached_at, voices_cached_at),
+            "the complete cache must not give older components a fresh TTL",
+        )
 
     def test_posts_date_index_covers_chart_and_top_voice_keys(self):
         index = next(

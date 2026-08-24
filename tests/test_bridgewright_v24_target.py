@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 V24_MOCKUP = "docs/ideation/mockups/v24.html"
 V24_CONTRACT = "docs/reference/2026-08-19-132714-v24-bridgewright-target.md"
