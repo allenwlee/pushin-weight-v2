@@ -35,7 +35,7 @@ def dispatch_harvest_completion(
     except Exception:
         logger.exception("headline dispatch config unavailable")
         return NarrativeDispatchResult(status="config_error")
-    if not config.enqueue_enabled:
+    if not config.enqueue_active:
         return NarrativeDispatchResult(status="disabled")
     if task is None:
         from monitor.tasks import refresh_trend_narratives

@@ -174,7 +174,10 @@ def _result(snapshot: dict, config: HeadlineNarrativeConfig):
 
 
 def _enable(monkeypatch, *, fail_window: int | None = None, changed=None):
-    config = HeadlineNarrativeConfig(provider_calls_enabled=True)
+    config = HeadlineNarrativeConfig(
+        provider_calls_enabled=True,
+        activation_state="owner_override",
+    )
     calls: list[int] = []
     changed = changed or set()
     for nickname in ("minimax", "qwen"):
@@ -351,9 +354,57 @@ def test_provider_disabled_consumes_envelope_with_zero_reservations(monkeypatch)
     assert TrendNarrative.objects.filter(status="suppressed").count() == 4
 
 
+def test_pending_activation_blocks_raw_provider_calls_until_override(monkeypatch):
+    pending = HeadlineNarrativeConfig(
+        provider_calls_enabled=True,
+        activation_state="pending",
+    )
+    generation_calls: list[int] = []
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._load_config",
+        lambda: pending,
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        lambda window_days, *, as_of, thresholds, evidence_policy: _snapshot(
+            window_days, as_of=as_of
+        ),
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.generate_trend_narrative",
+        lambda snapshot, config: generation_calls.append(snapshot["window_days"]),
+    )
+
+    blocked = process_trend_narrative_envelope(_envelope(), now=NOW)
+
+    assert pending.provider_calls_enabled
+    assert not pending.provider_calls_active
+    assert blocked["slots_consumed"] == 0
+    assert blocked["transport_started"] == 0
+    assert blocked["suppressed"] == 4
+    assert generation_calls == []
+    assert not TrendNarrative.objects.filter(call_slot_consumed=True).exists()
+    assert set(
+        TrendNarrative.objects.values_list("error_code", flat=True)
+    ) == {"provider_calls_disabled"}
+
+    _enabled, override_calls = _enable(monkeypatch)
+    later = NOW + timedelta(minutes=1)
+    resumed = process_trend_narrative_envelope(
+        _envelope("cycle-b", completed_at=later),
+        now=later,
+    )
+
+    assert resumed["slots_consumed"] == 4
+    assert resumed["published"] == 4
+    assert resumed["not_due"] == 0
+    assert override_calls == [1, 7, 30, 365]
+
+
 def test_provider_disable_after_envelope_start_consumes_zero_slots(monkeypatch):
     enabled = HeadlineNarrativeConfig(
         provider_calls_enabled=True,
+        activation_state="owner_override",
         control_revision="enabled-v1",
     )
     disabled = enabled.model_copy(
@@ -397,7 +448,10 @@ def test_provider_disable_after_envelope_start_consumes_zero_slots(monkeypatch):
 
 
 def test_snapshot_soft_timeout_stops_before_later_windows(monkeypatch):
-    config = HeadlineNarrativeConfig(provider_calls_enabled=True)
+    config = HeadlineNarrativeConfig(
+        provider_calls_enabled=True,
+        activation_state="owner_override",
+    )
     attempted_windows: list[int] = []
     monkeypatch.setattr(
         "monitor.trend_narrative_tasks._load_config",

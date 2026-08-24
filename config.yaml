@@ -140,8 +140,8 @@ llm:
   signal_model: "claude-haiku-4-5"
 
 # Shared V22 trend-narrative generation. This role never inherits the
-# translator/classifier route. The three rollout controls remain fail-closed
-# unless their service-specific environment variables explicitly enable them.
+# translator/classifier route. Service-specific environment variables request
+# each control; activation remains fail-closed until its state is explicit.
 headline_narrative:
   provider: "deepseek"
   base_url: "https://api.deepseek.com/anthropic"
@@ -175,6 +175,7 @@ headline_narrative:
   lease_seconds: 90
   retention_days: 90
   retention_rows_per_window: 20
+  activation_state: null
   serving_enabled: null
   enqueue_enabled: null
   provider_calls_enabled: null

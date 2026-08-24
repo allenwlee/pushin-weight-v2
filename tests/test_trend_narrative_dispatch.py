@@ -32,8 +32,16 @@ class _FakeTask:
         return SimpleNamespace(id="headline-task-a")
 
 
-def _config(monkeypatch, *, enqueue_enabled: bool = True):
-    config = HeadlineNarrativeConfig(enqueue_enabled=enqueue_enabled)
+def _config(
+    monkeypatch,
+    *,
+    enqueue_enabled: bool = True,
+    activation_state: str = "owner_override",
+):
+    config = HeadlineNarrativeConfig(
+        enqueue_enabled=enqueue_enabled,
+        activation_state=activation_state,
+    )
     monkeypatch.setattr(
         "monitor.trend_narrative_dispatch.load_config",
         lambda _path: SimpleNamespace(headline_narrative=config),
@@ -93,6 +101,18 @@ def test_enqueue_control_off_and_broker_failure_are_isolated(monkeypatch):
     )
     assert broken.status == "broker_error"
     assert len(broken_task.calls) == 1
+
+
+def test_pending_activation_blocks_raw_enabled_enqueue(monkeypatch):
+    config = _config(monkeypatch, activation_state="pending")
+    task = _FakeTask()
+
+    result = dispatch_harvest_completion(_stats(), dry_run=False, task=task)
+
+    assert config.enqueue_enabled
+    assert not config.enqueue_active
+    assert result.status == "disabled"
+    assert task.calls == []
 
 
 @pytest.mark.django_db(transaction=True)

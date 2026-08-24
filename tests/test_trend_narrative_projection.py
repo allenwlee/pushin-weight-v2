@@ -26,7 +26,10 @@ NOW = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
 
 def _config(*, enabled: bool = True) -> HeadlineNarrativeConfig:
-    return HeadlineNarrativeConfig(serving_enabled=enabled)
+    return HeadlineNarrativeConfig(
+        serving_enabled=enabled,
+        activation_state="owner_override",
+    )
 
 
 def _publish(
@@ -568,6 +571,27 @@ def test_serving_control_off_returns_disabled_copy_even_with_current_row():
     assert payload["state"] == "disabled"
     assert payload["state_label"] == "Disabled"
     assert payload["observations"] == []
+    assert payload["primary_brand"] is None
+    assert "unavailable" in payload["body"].lower()
+
+
+def test_pending_activation_blocks_raw_enabled_serving_with_current_row():
+    _publish()
+    config = HeadlineNarrativeConfig(
+        serving_enabled=True,
+        activation_state="pending",
+    )
+
+    payload = project_trend_narrative(
+        1,
+        locale="en",
+        now=NOW,
+        config=config,
+    )
+
+    assert config.serving_enabled
+    assert not config.serving_active
+    assert payload["state"] == "disabled"
     assert payload["primary_brand"] is None
     assert "unavailable" in payload["body"].lower()
 

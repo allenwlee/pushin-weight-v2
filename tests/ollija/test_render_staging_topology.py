@@ -33,6 +33,7 @@ def test_staging_blueprint_keeps_one_isolated_owner_only_web_service() -> None:
     assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"]["value"] == "False"
+    assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "pending"
     assert not {"DEEPSEEK_API_KEY", "TWITTERAPI_IO_API_KEY", "CELERY_BROKER_URL"} & set(environment)
 
 

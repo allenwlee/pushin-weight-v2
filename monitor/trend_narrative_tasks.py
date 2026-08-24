@@ -98,7 +98,7 @@ def process_trend_narrative_envelope(
             status=TrendNarrative.Status.SUPPRESSED,
             error_code="provider_backoff",
         )
-        if config.provider_calls_enabled:
+        if config.provider_calls_active:
             cadence_rows = cadence_rows.exclude(
                 status=TrendNarrative.Status.SUPPRESSED,
                 error_code="provider_calls_disabled",
@@ -185,7 +185,7 @@ def process_trend_narrative_envelope(
             )
             stats["suppressed"] += 1
             continue
-        if not active_config.provider_calls_enabled:
+        if not active_config.provider_calls_active:
             _record_no_call(
                 source_cycle_id=source_cycle_id,
                 window_days=window_days,

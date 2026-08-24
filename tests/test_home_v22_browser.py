@@ -1308,7 +1308,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             )
         )
 
-        config = HeadlineNarrativeConfig(serving_enabled=True)
+        config = HeadlineNarrativeConfig(
+            serving_enabled=True,
+            activation_state="owner_override",
+        )
         with (
             patch(
                 "monitor.trend_narrative_projection._load_config",
@@ -1447,7 +1450,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 )
             )
 
-        config = HeadlineNarrativeConfig(serving_enabled=True)
+        config = HeadlineNarrativeConfig(
+            serving_enabled=True,
+            activation_state="owner_override",
+        )
         with (
             patch(
                 "monitor.trend_narrative_projection._load_config",
@@ -1624,7 +1630,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         def normalized(page, selector="[data-pw-headline] .body"):
             return " ".join(page.locator(selector).inner_text().split())
 
-        config = HeadlineNarrativeConfig(serving_enabled=True)
+        config = HeadlineNarrativeConfig(
+            serving_enabled=True,
+            activation_state="owner_override",
+        )
         cookies = self._authenticated_cookies("en")
         with (
             patch(
@@ -1720,6 +1729,53 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 rendered_flat.index("下载"),
                                 rendered_flat.index("60%"),
                             )
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_pending_activation_blocks_raw_enabled_headline_in_browser(
+        self,
+    ) -> None:
+        """Requested serving stays visibly disabled until activation resolves."""
+        from x_monitor.config import HeadlineNarrativeConfig
+
+        config = HeadlineNarrativeConfig(
+            serving_enabled=True,
+            activation_state="pending",
+        )
+        cookies = self._authenticated_cookies("en")
+        with (
+            patch(
+                "monitor.trend_narrative_projection._load_config",
+                return_value=config,
+            ),
+            sync_playwright() as playwright,
+        ):
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(
+                    browser,
+                    cookies,
+                    VIEWPORTS["desktop"],
+                )
+                page = context.new_page()
+                try:
+                    response = page.goto(
+                        self.live_server_url,
+                        wait_until="networkidle",
+                    )
+                    self.assertIsNotNone(response)
+                    self.assertEqual(response.status, 200)
+                    state = page.locator("[data-pw-headline-state]")
+                    body = page.locator("[data-pw-headline-body]")
+                    self.assertEqual(state.inner_text(), "DISABLED")
+                    self.assertEqual(body.inner_text(), "Trend summary is unavailable.")
+                    for visible in (state, body):
+                        shape = visible.bounding_box()
+                        self.assertIsNotNone(shape)
+                        self.assertGreater(shape["width"], 0)
+                        self.assertGreater(shape["height"], 0)
                 finally:
                     context.close()
             finally:

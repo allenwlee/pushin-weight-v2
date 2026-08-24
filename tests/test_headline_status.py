@@ -22,6 +22,10 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 def test_empty_status_is_redacted_and_does_not_call_provider_or_queue(monkeypatch):
     monkeypatch.setenv("X_MONITOR_HEADLINE_API_KEY", "must-not-appear")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_SERVING_ENABLED", "True")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_ENQUEUE_ENABLED", "True")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED", "True")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_ACTIVATION_STATE", "pending")
     monkeypatch.setattr(
         "monitor.trend_narrative_generation.generate_trend_narrative",
         lambda *_args, **_kwargs: pytest.fail("status called provider"),
@@ -35,6 +39,13 @@ def test_empty_status_is_redacted_and_does_not_call_provider_or_queue(monkeypatc
     call_command("headline_status", "--json", stdout=stdout)
 
     payload = json.loads(stdout.getvalue())
+    assert payload["activation_state"] == "pending"
+    assert payload["serving_enabled"] is True
+    assert payload["enqueue_enabled"] is True
+    assert payload["provider_calls_enabled"] is True
+    assert payload["serving_active"] is False
+    assert payload["enqueue_active"] is False
+    assert payload["provider_calls_active"] is False
     assert [row["window_days"] for row in payload["windows"]] == [1, 7, 30, 365]
     assert all(row["state"] == "disabled" for row in payload["windows"])
     assert all(row["output_schema_version"] is None for row in payload["windows"])
@@ -43,6 +54,21 @@ def test_empty_status_is_redacted_and_does_not_call_provider_or_queue(monkeypatc
     assert all(row["consecutive_failures"] == 0 for row in payload["windows"])
     assert "must-not-appear" not in stdout.getvalue()
     assert TrendNarrative.objects.count() == 0
+
+
+def test_plain_status_distinguishes_requested_and_active_controls(monkeypatch):
+    monkeypatch.setenv("X_MONITOR_HEADLINE_SERVING_ENABLED", "True")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_ENQUEUE_ENABLED", "True")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED", "True")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_ACTIVATION_STATE", "pending")
+    stdout = StringIO()
+
+    call_command("headline_status", stdout=stdout)
+
+    first_line = stdout.getvalue().splitlines()[0]
+    assert "activation=pending" in first_line
+    assert "requested[serving=True enqueue=True provider=True]" in first_line
+    assert "active[serving=False enqueue=False provider=False]" in first_line
 
 
 def test_status_reports_schema_two_subjects_without_private_evidence():

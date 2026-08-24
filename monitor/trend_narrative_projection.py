@@ -52,7 +52,7 @@ def project_trend_narrative(
         "facts_as_of": None,
         "coverage_state": "unknown",
     }
-    if not active_config.serving_enabled:
+    if not active_config.serving_active:
         return {
             **base,
             "state": "disabled",
@@ -179,7 +179,7 @@ def trend_narrative_state(
         if current is not None
         else None
     )
-    if not config.serving_enabled:
+    if not config.serving_active:
         return "disabled", checked_at
     if current is None:
         return "unavailable", None

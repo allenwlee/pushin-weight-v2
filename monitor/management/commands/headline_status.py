@@ -109,9 +109,13 @@ class Command(BaseCommand):
             )
         payload = {
             "control_revision": config.control_revision,
+            "activation_state": config.activation_state,
             "serving_enabled": config.serving_enabled,
             "enqueue_enabled": config.enqueue_enabled,
             "provider_calls_enabled": config.provider_calls_enabled,
+            "serving_active": config.serving_active,
+            "enqueue_active": config.enqueue_active,
+            "provider_calls_active": config.provider_calls_active,
             "windows": windows,
         }
         if options["as_json"]:
@@ -120,9 +124,15 @@ class Command(BaseCommand):
         self.stdout.write(
             "headline controls "
             f"revision={config.control_revision} "
+            f"activation={config.activation_state} "
+            "requested["
             f"serving={config.serving_enabled} "
             f"enqueue={config.enqueue_enabled} "
-            f"provider={config.provider_calls_enabled}"
+            f"provider={config.provider_calls_enabled}] "
+            "active["
+            f"serving={config.serving_active} "
+            f"enqueue={config.enqueue_active} "
+            f"provider={config.provider_calls_active}]"
         )
         for row in windows:
             self.stdout.write(

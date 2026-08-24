@@ -1,12 +1,13 @@
 # Why-first headline trend narratives
 
-Last updated: 2026-08-15-13:38:57
+Last updated: 2026-08-24
 
-**Status:** Implemented as a fail-closed release candidate. Serving,
-enqueueing, and provider calls remain independent rollout controls. The checked
-in materiality policy is still `pending-live-review-v1`. The latest bounded
-quantitative evaluation has been reviewed and rejected for activation; the
-historical calibration also remains under-sampled.
+**Status:** Implemented as a fail-closed release candidate. The checked-in
+activation state is `pending`, so serving, enqueueing, and provider calls are
+all effectively inactive even where a Render service still requests its raw
+control. The materiality policy is still `pending-live-review-v1`. The latest
+bounded quantitative evaluation did not clear the reviewed-policy gate, and
+the historical calibration remains under-sampled.
 
 This is the current source-level contract for measuring, generating,
 persisting, and rendering the shared conversation headline. Superseded
@@ -476,11 +477,29 @@ the queue-isolated headline worker. The worker visits the four fixed windows
 sequentially and consumes at most one physical call slot per due changed
 candidate-present window. Headline work never runs harvesting or Celery beat.
 
-Three controls remain independent and fail closed:
+Three raw controls preserve each service's requested intent:
 
 - `serving_enabled` controls whether stored headlines are visible;
 - `enqueue_enabled` controls post-cycle dispatch; and
 - `provider_calls_enabled` controls new outbound requests.
+
+`activation_state` is the common master state. Production call sites use the
+effective `serving_active`, `enqueue_active`, and `provider_calls_active`
+properties, each of which requires its corresponding raw control and a state
+other than `pending`.
+
+- `pending` forces all three effective controls off without erasing the raw
+  requested values;
+- `owner_override` is the explicit owner bypass that permits the requested
+  controls while the materiality policy remains pending; and
+- `reviewed` permits the requested controls only with a materiality-policy
+  version that is no longer marked pending.
+
+`X_MONITOR_HEADLINE_ACTIVATION_STATE` applies through the same YAML-wins,
+null-permits-env configuration boundary as the other headline controls. Both
+Render blueprints explicitly set it to `pending` in the unresolved candidate.
+`headline_status` reports the activation state, raw requested controls, and
+effective active controls separately in JSON and plain-text output.
 
 Candidate staging, approval, beta release, recovery, and production
 verification use Ollija. Direct Git, Render, or database release mutations are
@@ -498,6 +517,7 @@ current official documentation before a live evaluation.
 | Schema compatibility and publication | `tests/test_trend_narrative_lifecycle.py` |
 | Scheduled call chain and skip semantics | `tests/test_trend_narrative_tasks.py` |
 | Empty/failure/brand-position projection | `tests/test_trend_narrative_projection.py` |
+| Activation guard and raw/effective controls | `tests/test_trend_narrative_dispatch.py`, `tests/test_trend_narrative_projection.py`, `tests/test_trend_narrative_tasks.py`, `tests/test_headline_status.py`, `tests/test_render_headline_topology.py` |
 | Pairwise evaluation and finite budgets | `tests/test_trend_narrative_evaluation.py`, `tests/test_evaluate_trend_headlines_command.py` |
 | Final bilingual DOM after replacement | `tests/test_home_v22_browser.py` |
 | Client atomic replacement and legacy DTO | `tests/test_pw_chart_filter.js` |
@@ -510,8 +530,7 @@ entity discovery. It does not send 48 excerpts for every candidate, define
 relevance by percentage magnitude, run live provider calls in tests, or expose
 evidence to browsers.
 
-Last reviewed: 2026-08-15-13:38:57 JST. Added the exact provider packet shape,
-the sole post-text path and excerpt bounds, comparison-suppression projection,
-per-candidate quantitative-fact cap, mandatory headline quantitative color,
-and the reviewed corrected synthetic-run result. Materiality bands and
-activation remain explicitly blocked by U6 evidence and editorial gates.
+Last reviewed: 2026-08-24 JST. The current candidate keeps raw service intent
+observable while `activation_state=pending` deterministically prevents public
+serving, queue dispatch, and provider transport. Materiality bands and reviewed
+activation remain unresolved.

@@ -336,10 +336,23 @@ class HeadlineNarrativeConfig(BaseModel):
     lease_seconds: int = Field(default=90, ge=30, le=300)
     retention_days: int = Field(default=90, ge=1)
     retention_rows_per_window: int = Field(default=20, ge=1)
+    activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
     serving_enabled: bool = False
     enqueue_enabled: bool = False
     provider_calls_enabled: bool = False
     control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
+
+    @property
+    def serving_active(self) -> bool:
+        return self.serving_enabled and self.activation_state != "pending"
+
+    @property
+    def enqueue_active(self) -> bool:
+        return self.enqueue_enabled and self.activation_state != "pending"
+
+    @property
+    def provider_calls_active(self) -> bool:
+        return self.provider_calls_enabled and self.activation_state != "pending"
 
     @model_validator(mode="after")
     def _validate_headline_route_and_cadence(self) -> HeadlineNarrativeConfig:
@@ -384,6 +397,13 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline evidence allocation limits must ascend")
         if self.lease_seconds <= self.timeout_seconds:
             raise ValueError("headline lease must exceed provider timeout")
+        if (
+            self.activation_state == "reviewed"
+            and self.materiality_policy_version.strip().casefold().startswith("pending")
+        ):
+            raise ValueError(
+                "reviewed headline activation requires a reviewed materiality policy"
+            )
         return self
 
 
@@ -622,6 +642,7 @@ def load_config(path: Path) -> Config:
         "timeout_seconds": "X_MONITOR_HEADLINE_TIMEOUT_SECONDS",
         "prompt_version": "X_MONITOR_HEADLINE_PROMPT_VERSION",
         "publication_epoch": "X_MONITOR_HEADLINE_PUBLICATION_EPOCH",
+        "activation_state": "X_MONITOR_HEADLINE_ACTIVATION_STATE",
         "serving_enabled": "X_MONITOR_HEADLINE_SERVING_ENABLED",
         "enqueue_enabled": "X_MONITOR_HEADLINE_ENQUEUE_ENABLED",
         "provider_calls_enabled": "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED",

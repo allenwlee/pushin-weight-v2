@@ -44,6 +44,8 @@ services:
         value: "False"
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
         value: "False"
+      - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
+        value: pending
 
 databases:
   - name: pushinweight-staging-db

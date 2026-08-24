@@ -452,6 +452,49 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert not config.serving_enabled
     assert not config.enqueue_enabled
     assert not config.provider_calls_enabled
+    assert config.activation_state == "pending"
+    assert not config.serving_active
+    assert not config.enqueue_active
+    assert not config.provider_calls_active
+
+
+def test_headline_activation_state_requires_reviewed_materiality_or_owner_override():
+    pending = HeadlineNarrativeConfig(
+        serving_enabled=True,
+        enqueue_enabled=True,
+        provider_calls_enabled=True,
+    )
+
+    assert pending.serving_enabled
+    assert pending.enqueue_enabled
+    assert pending.provider_calls_enabled
+    assert not pending.serving_active
+    assert not pending.enqueue_active
+    assert not pending.provider_calls_active
+
+    owner_override = HeadlineNarrativeConfig(
+        activation_state="owner_override",
+        serving_enabled=True,
+        enqueue_enabled=True,
+        provider_calls_enabled=True,
+    )
+    assert owner_override.serving_active
+    assert owner_override.enqueue_active
+    assert owner_override.provider_calls_active
+
+    reviewed = HeadlineNarrativeConfig(
+        activation_state="reviewed",
+        materiality_policy_version="reviewed-window-v2",
+        serving_enabled=True,
+        enqueue_enabled=True,
+        provider_calls_enabled=True,
+    )
+    assert reviewed.serving_active
+    assert reviewed.enqueue_active
+    assert reviewed.provider_calls_active
+
+    with pytest.raises(ValidationError, match="reviewed headline activation"):
+        HeadlineNarrativeConfig(activation_state="reviewed")
 
 
 def test_headline_config_yaml_non_null_wins_and_null_permits_env(
@@ -460,6 +503,7 @@ def test_headline_config_yaml_non_null_wins_and_null_permits_env(
 ):
     monkeypatch.setenv("X_MONITOR_HEADLINE_MODEL", "env-model")
     monkeypatch.setenv("X_MONITOR_HEADLINE_TIMEOUT_SECONDS", "33")
+    monkeypatch.setenv("X_MONITOR_HEADLINE_ACTIVATION_STATE", "owner_override")
     path = tmp_path / "config.yaml"
     path.write_text(
         """
@@ -468,6 +512,7 @@ daily_ceiling: 100
 headline_narrative:
   model: deepseek-v4-pro
   timeout_seconds: null
+  activation_state: null
 """,
         encoding="utf-8",
     )
@@ -476,6 +521,7 @@ headline_narrative:
 
     assert config.model == "deepseek-v4-pro"
     assert config.timeout_seconds == 33
+    assert config.activation_state == "owner_override"
 
 
 def test_real_boundary_pins_dsv4_route_and_sends_bounded_analysis_packet(
