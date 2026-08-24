@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 V24_MOCKUP = "docs/ideation/mockups/v24.html"
 V24_CONTRACT = "docs/reference/2026-08-19-132714-v24-bridgewright-target.md"
 PRODUCTION_CONTRACT = "docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md"
+CHART_CONTRACT = "docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md"
 
 
 def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
@@ -17,7 +18,8 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == PRODUCTION_CONTRACT
+    assert authorities["last_approved_contract"] == CHART_CONTRACT
+    assert CHART_CONTRACT in authorities["approved_product_intent"]
     assert PRODUCTION_CONTRACT in authorities["approved_product_intent"]
     assert V24_CONTRACT in authorities["approved_product_intent"]
     assert adapter["surface"] == "v24-home"
@@ -30,6 +32,10 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.filter-feed",
             "description": "Owner-approved production filter and feed interaction delta.",
+        },
+        {
+            "key": "production.home.chart-time-performance",
+            "description": "Owner-approved home-chart time-axis and performance delta.",
         },
         {
             "key": "trend.headline",
@@ -53,3 +59,15 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "`posts.commentary_zh_cn` and `posts.commentary_en`" in production_contract
     assert "Do not populate `commentary_en` yet" in production_contract
     assert "commentary -> literal Chinese -> English" in production_contract
+
+    chart_contract = (REPO_ROOT / CHART_CONTRACT).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in chart_contract
+    assert "e290ba67ef0cd382a34fc774cd3cc173e5a00b1f" in chart_contract
+    assert "30d and 365d" in chart_contract
+    assert "top local-time x-axis" in chart_contract
+    assert "bottom California-time x-axis" in chart_contract
+    assert "exactly 24 fixed hourly positions" in chart_contract
+    assert "#fbbf24" in chart_contract
+    assert "same order as the visible pulse chips" in chart_contract
+    assert "Do not replace the production Chart.js component" in chart_contract
+    assert "does not approve staging or production release" in chart_contract
