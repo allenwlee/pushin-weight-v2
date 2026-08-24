@@ -244,12 +244,13 @@ below one are rounded to a tenth; other values are rounded to a whole unit.
 Suppressed comparisons emit no quantitative facts. Projection emits at most
 24 quantitative facts per candidate.
 
-Every number in schema-three prose must exactly match the localized display
-string of a cited fact. The claim must cite the fact ID, its candidate, and its
-family. Altered, uncited, suppressed, or wrong-family values reject the entire
-response. If any selected candidate supplies quantitative facts, the headline
-claim must cite and visibly render at least one of them after the content-led
-explanation. Digits that belong to a validated subject name remain allowed.
+Every number in schema-three prose must exactly match both localized display
+strings of a packet fact. The server materializes the matching fact ID,
+candidate, and family before final validation. Altered, unsupported, or
+suppressed values reject the entire response. If any selected candidate
+supplies quantitative facts, the headline must visibly render at least one of
+them after the content-led explanation. Digits that belong to a validated
+subject name remain allowed.
 
 ## Provider request
 
@@ -287,30 +288,30 @@ Editorial order:
 1. Select the measured candidate with the strongest supported conversation story. Default to exactly one measured candidate. Select two only in the exceptional case where both independently show extraordinary, analytically important movement in this window; an ordinary comparison or small relative change is not extraordinary. Do not force a second candidate, and do not suppress a second extraordinary candidate merely because another candidate ranks first. Relevance may come from quantity, rate, post-type mix, discourse mix, sentiment mix, engagement, nationalism discourse, or a combination. A larger volume change does not automatically win.
 2. Lead with what people are concretely discussing and why the conversation appears notable. Prefer a recurring event, reported experience, concern, comparison, or usage pattern supported by independent excerpts. Use attributed or inferential wording such as users reported, posts described, or conversation centered on. Never claim causation.
 3. Connect that content explanation to a supported post-type, discourse, sentiment, or nationalism shift when available. Describe nationalism only as a coincident discourse change, without claiming that nationalism caused the trend.
-4. Use measurements only as supporting color. Exact analytical numbers may be copied only from quantitative_facts.display_en and display_zh_cn, and the claim must cite the matching fact_id. Preserve the supplied direction and unit. Do not calculate a new figure.
-Every headline must include at least one cited quantitative fact when any selected candidate supplies quantitative_facts. Put the content-derived explanation first, then use the strongest relevant percentage change as validation; a number never substitutes for the why.
+4. Use measurements only as supporting color. Exact analytical numbers may be copied only from quantitative_facts.display_en and display_zh_cn. Preserve the supplied direction and unit. Do not calculate a new figure or copy fact IDs; the server matches exact bilingual display strings to facts.
+Every headline must include at least one supplied quantitative fact when any selected candidate supplies quantitative_facts. Put the content-derived explanation first, then use the strongest relevant percentage change as validation; a number never substitutes for the why.
 5. Describe trajectory shape only when it materially helps explain the story. Do not organize the headline around shape merely because the arrays are precise.
 6. Keep relative leadership separate from materiality. In a quiet window, name the leader candidly and call negligible movement flat or small.
 
 Evidence rules:
 - Recurring-content or structured-mix explanations require at least two independent source clusters and authors. A single post may be an isolated signal or official event context, but cannot characterize the broader conversation.
-- Independence and recurrence are separate. Multiple excerpts support a recurring explanation only when at least two independent authors and source clusters share the same theme_cluster_id. If evidence_support reports fewer than two independent authors or source clusters, do not use recurring_content, structured_mix, recurring_independent, users reported, posts described, or repeatedly; excerpt count alone never creates recurrence.
+- Independence and recurrence are separate. Multiple excerpts support a recurring explanation only when at least two independent authors and source clusters share the same theme_cluster_id. If evidence_support reports fewer than two independent authors or source clusters, do not write users reported, posts described, repeatedly, or other recurring-pattern language; excerpt count alone never creates recurrence.
 - An evidence-only entity requires two independent evidence IDs that directly name it and remains context around a measured candidate, never a measured trend.
-- Never encode a packet candidate as evidence_only. Omit every unselected candidate from subjects, prose, observations, and claims. Every claim candidate_id must appear in selected_candidate_ids.
-- Concrete events require event_anchor plus linked evidence. Do not name undeclared entities, people, handles, URLs, or hashtags.
-- Use isolated_event only for a concrete event explicitly named by linked evidence, and always supply a nonempty event_anchor. Isolated speculation is not an event; use aggregate_trajectory or quiet_relative_leader with isolated confidence instead.
-- evidence_confidence aggregate_only requires an empty evidence_ids array. When evidence_ids is nonempty but the rows do not establish recurrence or official support, use isolated confidence.
+- Never encode a packet candidate as an evidence-only entity. Omit every unselected candidate from subjects, prose, observations, and claims.
+- Concrete events require linked evidence that explicitly names the event. Isolated speculation is not a concrete event. Do not name undeclared entities, people, handles, URLs, or hashtags.
 - Avoid causal verbs even in negated phrases such as no event drove the chatter; state that no recurring event was evident instead.
 - When comparison_allowed is false, do not describe selected-versus-prior increases, decreases, or flatness from family_facts. You may describe an explicit within-window series shape only with clear timing language such as late in the window.
 - English and Simplified Chinese must express the same explanation, materiality, cited figures, and confidence.
 
-Return raw JSON with exactly seven top-level keys: body_en, body_zh_cn, observations_en, observations_zh_cn, selected_candidate_ids, subjects, claims. Keep one concise headline and zero to two observations. Mention every subject in both headlines.
+Return raw JSON with exactly seven top-level keys: body_en, body_zh_cn, observations_en, observations_zh_cn, selected_candidate_ids, subjects, claims. Keep one concise headline and zero to two observations. Mention every selected measured candidate and evidence-only entity in both headlines.
 
-subjects is an array of objects, never names or strings. A measured subject object has exactly support_type, entity_type, candidate_id, observed_name, evidence_ids; use {"support_type":"measured_candidate","entity_type":"brand","candidate_id":"the exact selected candidate ID","observed_name":"","evidence_ids":[]}. An evidence-only subject uses exactly the same five keys; use {"support_type":"evidence_only","entity_type":"product","candidate_id":"","observed_name":"the exact observed name","evidence_ids":["first independent evidence ID","second independent evidence ID"]}. Put measured subjects first and in selected_candidate_ids order.
+The server derives measured subjects from selected_candidate_ids. Do not repeat measured candidates in subjects. Use subjects=[] unless the story names one supported evidence-only entity. For that entity, return exactly {"entity_type":"product","observed_name":"the exact observed name","evidence_ids":["first independent evidence ID","second independent evidence ID"]}. The entity_type must be company, brand, product, model, or organization. Its evidence IDs must directly name it, and every headline or observation that names it must cite those same IDs in claims.
 
-Each claim is an object with exactly observation_index, candidate_ids, families, evidence_ids, quantitative_fact_ids, event_anchor, explanation_type, and evidence_confidence. A headline claim has this shape: {"observation_index":-1,"candidate_ids":["an exact selected candidate ID"],"families":["evidence"],"evidence_ids":["first representative evidence ID","second representative evidence ID"],"quantitative_fact_ids":[],"event_anchor":"","explanation_type":"recurring_content","evidence_confidence":"recurring_independent"}. evidence_ids contains at most four representative IDs, quantitative_fact_ids contains at most eight IDs, and event_anchor is always a string: use "" when there is no concrete event, never null. Cite representative independent support instead of every supplied excerpt. For every quantitative_fact_id, include that fact's exact family in families; evidence is not a substitute for volume, engagement, post_type, discourse, sentiment, china_nationalism, or us_nationalism. explanation_type is one of recurring_content, structured_mix, aggregate_trajectory, quiet_relative_leader, or isolated_event. evidence_confidence is one of recurring_independent, official_and_recurring, official_only, isolated, or aggregate_only. Use observation_index -1 for the headline, then zero-based observation indexes. The headline claim must cover every selected candidate.
+Return one claims object for the headline followed by one for each observation in order. Each claims object has exactly one key: evidence_ids. Cite zero to four representative evidence IDs that directly support that bilingual claim; use [] when the claim uses no excerpt evidence. Do not infer recurrence from excerpt count and do not cite evidence merely because it was supplied.
 
-Outside cited quantitative display strings and valid subject names, do not output digits, exact counts, percentages, dates, times, rankings, markup, or candidate IDs in prose. Output no explanation or code fence.
+Do not return observation_index. Do not return candidate_ids. Do not return families. Do not return quantitative_fact_ids. Do not return event_anchor. Do not return explanation_type. Do not return evidence_confidence. The server derives that redundant metadata from claim order, selected candidates, cited evidence ownership and support, and exact bilingual quantitative display strings.
+
+Outside supplied quantitative display strings and valid subject names, do not output digits, exact counts, percentages, dates, times, rankings, markup, or candidate IDs in prose. Output no explanation or code fence.
 ```
 
 ## Output and validation
@@ -328,16 +329,27 @@ claims
 ```
 
 There is one bilingual headline, zero to two paired observations, one or two
-selected measured candidates, one or two subjects, and exactly one claim per
-headline/observation. Claims identify candidate IDs, fact families, evidence
-IDs, quantitative fact IDs, event anchor, explanation type, and evidence
-confidence.
+selected measured candidates, zero or one evidence-only subject choice, and
+exactly one citation object per headline/observation. The provider owns the
+prose, measured-candidate selection, any evidence-only entity name/type and its
+citations, and each claim's supplied `evidence_ids`. It does not reproduce
+measured-subject envelopes or deterministic claim metadata.
+
+Before final Pydantic validation, the server overwrites or materializes the
+measured subjects, claim order indexes, candidate ownership, quantitative fact
+IDs, families, safe event anchor, explanation type, and evidence confidence.
+Candidate ownership comes only from selected candidates, cited evidence,
+selected names in the paired prose, and exact bilingual quantitative display
+strings. Exact display strings are matched back to packet facts; evidence
+citations are never inferred. Historical provider output that redundantly
+returns measured subject objects, measured subject names as strings, or the
+full schema-three claim shape is normalized through the same boundary.
 
 Validation rejects the whole response for schema drift, missing locale parity,
-unknown candidates or evidence, evidence/candidate mismatch, weak recurring
-support, unsupported event anchors or entities, causal overstatement,
+unknown candidates or cited evidence, evidence/candidate mismatch, weak
+recurring support, unsupported events or entities, causal overstatement,
 unapproved names, URLs, handles, markup, contact-like text, unsafe Unicode,
-length overflow, or uncited digits. There is no repair request.
+length overflow, or unsupported digits. There is no repair request.
 
 An evidence-only entity remains contextual: it can be described only as
 mentioned, discussed, compared, or referenced around a measured candidate. It

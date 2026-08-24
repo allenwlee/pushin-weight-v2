@@ -534,31 +534,35 @@ def test_literal_prompt_requires_why_first_mix_context_and_two_winners():
         HEADLINE_SYSTEM_PROMPT_V3
     )
     assert "evidence-only entity" in HEADLINE_SYSTEM_PROMPT_V3
-    assert "subjects is an array of objects, never names or strings" in (
+    assert "Do not repeat measured candidates in subjects" in (
         HEADLINE_SYSTEM_PROMPT_V3
     )
-    assert 'event_anchor is always a string: use ""' in HEADLINE_SYSTEM_PROMPT_V3
-    assert "evidence_ids contains at most four representative IDs" in (
+    assert "Each claims object has exactly one key: evidence_ids" in (
         HEADLINE_SYSTEM_PROMPT_V3
     )
-    assert "quantitative_fact_ids contains at most eight IDs" in (
+    assert "server derives measured subjects" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "server matches exact bilingual display strings" in (
         HEADLINE_SYSTEM_PROMPT_V3
     )
     assert "share the same theme_cluster_id" in HEADLINE_SYSTEM_PROMPT_V3
-    assert "Never encode a packet candidate as evidence_only" in (
+    assert "Never encode a packet candidate as an evidence-only entity" in (
         HEADLINE_SYSTEM_PROMPT_V3
     )
-    assert "include that fact's exact family in families" in (
-        HEADLINE_SYSTEM_PROMPT_V3
-    )
-    assert "aggregate_only requires an empty evidence_ids array" in (
-        HEADLINE_SYSTEM_PROMPT_V3
-    )
-    assert "Isolated speculation is not an event" in HEADLINE_SYSTEM_PROMPT_V3
+    assert "Isolated speculation is not a concrete event" in HEADLINE_SYSTEM_PROMPT_V3
     assert "Avoid causal verbs even in negated phrases" in HEADLINE_SYSTEM_PROMPT_V3
-    assert "Every headline must include at least one cited quantitative fact" in (
+    assert "Every headline must include at least one supplied quantitative fact" in (
         HEADLINE_SYSTEM_PROMPT_V3
     )
+    for redundant_field in (
+        "observation_index",
+        "candidate_ids",
+        "families",
+        "quantitative_fact_ids",
+        "event_anchor",
+        "explanation_type",
+        "evidence_confidence",
+    ):
+        assert f"Do not return {redundant_field}" in HEADLINE_SYSTEM_PROMPT_V3
 
 
 def test_current_reference_literal_prompt_matches_active_contract_exactly():
@@ -694,18 +698,7 @@ def test_primary_brand_cannot_be_buried_after_the_lead():
     assert captured.value.code == "headline_output_en_primary_not_leading"
 
 
-@pytest.mark.parametrize(
-    ("mutation", "expected_code"),
-    [
-        ("altered", "headline_output_quantitative_fact_unused_or_unaligned"),
-        ("uncited", "headline_output_quantitative_fact_required"),
-        ("wrong_family", "headline_output_quantitative_family_mismatch"),
-    ],
-)
-def test_altered_uncited_and_wrong_family_quantities_fail_closed(
-    mutation,
-    expected_code,
-):
+def test_altered_quantity_fails_but_redundant_fact_metadata_is_overwritten():
     snapshot = _snapshot(two_candidates=False)
     fact = _quantitative_fact(
         snapshot,
@@ -726,17 +719,17 @@ def test_altered_uncited_and_wrong_family_quantities_fail_closed(
             "quantitative_fact_ids": [fact["fact_id"]],
         }
     ]
-    if mutation == "altered":
-        payload["body_en"] = payload["body_en"].replace("100%", "101%")
-    elif mutation == "uncited":
-        payload["claims"][0]["quantitative_fact_ids"] = []
-    else:
-        payload["claims"][0]["families"] = ["engagement"]
-
+    payload["body_en"] = payload["body_en"].replace("100%", "101%")
     with pytest.raises(HeadlineGenerationError) as captured:
         _generate(payload, snapshot=snapshot)
+    assert captured.value.code == "headline_output_quantitative_fact_required"
 
-    assert captured.value.code == expected_code
+    payload["body_en"] = payload["body_en"].replace("101%", "100%")
+    payload["claims"][0]["quantitative_fact_ids"] = []
+    payload["claims"][0]["families"] = ["engagement"]
+    result, _ = _generate(payload, snapshot=snapshot)
+    assert result.claims[0]["quantitative_fact_ids"] == [fact["fact_id"]]
+    assert result.claims[0]["families"] == ["volume"]
 
 
 def test_suppressed_comparison_cannot_supply_a_quantitative_fact():
@@ -765,7 +758,7 @@ def test_suppressed_comparison_cannot_supply_a_quantitative_fact():
     with pytest.raises(HeadlineGenerationError) as captured:
         _generate(payload, snapshot=snapshot)
 
-    assert captured.value.code == "headline_output_quantitative_fact_unknown"
+    assert captured.value.code == "headline_output_en_digits"
 
 
 def test_deepseek_route_uses_shared_dsv4_credential(monkeypatch):
@@ -791,6 +784,139 @@ def test_one_or_two_measured_candidates_are_valid_outputs():
         "minimax",
         "deepseek",
     ]
+
+
+def test_server_normalizes_string_subjects_and_missing_claim_metadata():
+    payload = _valid_payload()
+    payload["subjects"] = ["MiniMax"]
+    payload["claims"] = [
+        {"evidence_ids": claim["evidence_ids"]}
+        for claim in payload["claims"]
+    ]
+
+    result, _ = _generate(payload)
+
+    assert result.subjects[0]["candidate_id"] == "minimax:full_window"
+    assert [claim["observation_index"] for claim in result.claims] == [-1, 0]
+    assert result.claims[0]["candidate_ids"] == ["minimax:full_window"]
+    assert result.claims[0]["families"] == ["volume"]
+    assert len(result.claims[0]["quantitative_fact_ids"]) == 1
+    assert result.claims[0]["event_anchor"] == ""
+    assert result.claims[0]["explanation_type"] == "aggregate_trajectory"
+    assert result.claims[0]["evidence_confidence"] == "aggregate_only"
+    assert result.claims[1] == {
+        "observation_index": 0,
+        "candidate_ids": ["minimax:full_window"],
+        "families": [],
+        "evidence_ids": [],
+        "quantitative_fact_ids": [],
+        "event_anchor": "",
+        "explanation_type": "aggregate_trajectory",
+        "evidence_confidence": "aggregate_only",
+    }
+
+
+def test_server_overwrites_malformed_deterministic_claim_metadata():
+    payload = _valid_payload()
+    payload["subjects"] = [{"unexpected": "measured metadata"}]
+    for claim in payload["claims"]:
+        claim.update(
+            observation_index="wrong",
+            candidate_ids="wrong",
+            families={"wrong": True},
+            quantitative_fact_ids=["invented"],
+            event_anchor=None,
+            explanation_type=["wrong"],
+            evidence_confidence={"wrong": True},
+        )
+
+    result, _ = _generate(payload)
+
+    assert result.subjects[0]["candidate_id"] == "minimax:full_window"
+    assert [claim["observation_index"] for claim in result.claims] == [-1, 0]
+    assert result.claims[0]["candidate_ids"] == ["minimax:full_window"]
+    assert result.claims[0]["families"] == ["volume"]
+    assert result.claims[0]["quantitative_fact_ids"] != ["invented"]
+    assert result.claims[0]["event_anchor"] == ""
+    assert result.claims[0]["explanation_type"] == "aggregate_trajectory"
+    assert result.claims[0]["evidence_confidence"] == "aggregate_only"
+
+
+def test_server_fact_matching_respects_numeric_boundaries():
+    snapshot = _snapshot(two_candidates=False)
+    snapshot["candidates"][0]["family_facts"]["sentiment"] = {
+        "selected_coverage_ratio": "1.000000",
+        "prior_coverage_ratio": "1.000000",
+        "labels": [
+            {
+                "key": "positive",
+                "brand_change_pp": "0.000000",
+                "prior_count": 10,
+                "selected_count": 10,
+            }
+        ],
+    }
+    payload = _valid_payload(snapshot)
+    payload["subjects"] = []
+    payload["claims"] = [
+        {"evidence_ids": claim["evidence_ids"]}
+        for claim in payload["claims"]
+    ]
+
+    result, _ = _generate(payload, snapshot=snapshot)
+
+    assert result.claims[0]["families"] == ["volume"]
+    assert len(result.claims[0]["quantitative_fact_ids"]) == 1
+
+
+def test_server_preserves_valid_evidence_only_editorial_choice_and_citations():
+    payload = _evidence_entity_payload()
+    payload["subjects"] = [
+        "MiniMax",
+        {
+            "entity_type": "model",
+            "observed_name": "OffListModel",
+            "evidence_ids": ["e_one", "e_two"],
+        },
+    ]
+    payload["claims"] = [
+        {"evidence_ids": claim["evidence_ids"]}
+        for claim in payload["claims"]
+    ]
+
+    result, _ = _generate(payload, snapshot=_snapshot(two_candidates=False))
+
+    assert result.subjects[1]["support_type"] == "evidence_only"
+    assert result.subjects[1]["observed_name"] == "OffListModel"
+    assert result.subjects[1]["evidence_ids"] == ["e_one", "e_two"]
+    assert result.claims[0]["evidence_ids"] == ["e_one", "e_two"]
+    assert result.claims[0]["explanation_type"] == "recurring_content"
+
+
+def test_server_owned_metadata_does_not_mask_bad_editorial_citations_or_entities():
+    bad_citation = _valid_payload()
+    bad_citation["subjects"] = ["MiniMax"]
+    bad_citation["claims"] = [{"evidence_ids": ["invented_evidence"]}, {"evidence_ids": []}]
+    with pytest.raises(HeadlineGenerationError) as citation_error:
+        _generate(bad_citation)
+    assert citation_error.value.code == "headline_output_evidence_unknown"
+
+    bad_entity = _evidence_entity_payload()
+    bad_entity["subjects"] = [
+        "MiniMax",
+        {
+            "entity_type": "model",
+            "observed_name": "InventedModel",
+            "evidence_ids": ["e_one", "e_two"],
+        },
+    ]
+    bad_entity["claims"] = [
+        {"evidence_ids": claim["evidence_ids"]}
+        for claim in bad_entity["claims"]
+    ]
+    with pytest.raises(HeadlineGenerationError) as entity_error:
+        _generate(bad_entity, snapshot=_snapshot(two_candidates=False))
+    assert entity_error.value.code == "headline_output_entity_not_evidenced"
 
 
 def test_zero_to_two_observations_keep_a_headline_claim():
@@ -901,7 +1027,7 @@ def test_evidence_only_name_requires_exact_case_in_evidence_and_both_locales():
     assert captured.value.code == "headline_output_zh_subject_missing"
 
 
-def test_unknown_candidate_and_unlinked_evidence_claim_fail_closed():
+def test_unknown_candidate_fails_closed():
     unknown = _valid_payload()
     unknown["selected_candidate_ids"] = ["unknown:full_window"]
     unknown["subjects"][0]["candidate_id"] = "unknown:full_window"
@@ -910,22 +1036,14 @@ def test_unknown_candidate_and_unlinked_evidence_claim_fail_closed():
         _generate(unknown)
     assert candidate_error.value.code == "headline_output_candidate_unknown"
 
-    unlinked = _valid_payload()
-    unlinked["claims"][0]["families"] = ["evidence"]
-    with pytest.raises(HeadlineGenerationError) as evidence_error:
-        _generate(unlinked)
-    assert evidence_error.value.code == "headline_output_evidence_claim_unlinked"
-
-
-def test_headline_claim_must_cover_every_selected_and_evidence_only_subject():
+def test_server_restores_headline_candidates_and_requires_entity_citations():
     incomplete_candidates = _two_candidate_payload()
     incomplete_candidates["claims"][0]["candidate_ids"] = [
         "minimax:full_window"
     ]
-    with pytest.raises(HeadlineGenerationError) as candidates_error:
-        _generate(incomplete_candidates)
-    assert candidates_error.value.code == (
-        "headline_output_headline_candidates_incomplete"
+    result, _ = _generate(incomplete_candidates)
+    assert result.claims[0]["candidate_ids"] == (
+        incomplete_candidates["selected_candidate_ids"]
     )
 
     incomplete_evidence = _evidence_entity_payload()
@@ -941,10 +1059,8 @@ def test_headline_claim_must_cover_every_selected_and_evidence_only_subject():
 
 
 def test_evidence_must_belong_to_the_claimed_measured_candidate():
-    payload = _two_candidate_payload()
+    payload = _valid_payload()
     payload["claims"][0].update(
-        candidate_ids=["minimax:full_window"],
-        families=["evidence"],
         evidence_ids=["e_three"],
     )
 
@@ -976,13 +1092,12 @@ def test_concrete_event_requires_a_supported_shared_anchor():
     )
 
     result, _ = _generate(payload, snapshot=snapshot)
-    assert result.claims[0]["event_anchor"] == "Aurora release"
+    assert result.claims[0]["event_anchor"] == "the Aurora release"
 
     unsupported = deepcopy(payload)
     unsupported["claims"][0]["event_anchor"] = "Invented launch"
-    with pytest.raises(HeadlineGenerationError) as captured:
-        _generate(unsupported, snapshot=snapshot)
-    assert captured.value.code == "headline_output_event_anchor_unsupported"
+    corrected, _ = _generate(unsupported, snapshot=snapshot)
+    assert corrected.claims[0]["event_anchor"] == "the Aurora release"
 
 
 def test_server_assembles_missing_event_anchor_from_cited_evidence():
@@ -1477,7 +1592,7 @@ def test_generation_fingerprint_changes_with_provider_request_version(monkeypatc
     monkeypatch.setattr(
         trend_generation,
         "HEADLINE_REQUEST_VERSION",
-        "dsv4-json-nonthinking-v4",
+        "dsv4-json-nonthinking-v5",
     )
 
     assert generation_fingerprint(snapshot, config) != fingerprint
