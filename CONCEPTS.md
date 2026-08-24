@@ -102,7 +102,14 @@ The rule encodes the distinction between *an active pin* (yaml sets a value the 
 2. otherwise `ANTHROPIC_BASE_URL` env var (the process-wide default)
 3. otherwise direct Anthropic
 
-The model name resolves as: `cfg.llm.translator_model` (yaml-loaded, env-merged) → `X_MONITOR_TRANSLATOR_MODEL` env var → default `deepseek-v4-pro`. The model name and base URL are independent — a yaml `null` for one does NOT block the env override for the other.
+The production model name is `cfg.llm.translator_model`, whose committed yaml
+value is `deepseek-v4-flash`. A non-null yaml value wins over
+`X_MONITOR_TRANSLATOR_MODEL`; the environment value applies when the yaml field
+is omitted or null, and the Pydantic default is also `deepseek-v4-flash`. The
+model name and base URL are independent — a yaml `null` for one does not block
+the environment fallback for the other. Production classification follows the
+same committed-yaml rule through `cfg.llm.classifier_model`, also pinned to
+`deepseek-v4-flash`.
 
 ### Translator base URL
 
