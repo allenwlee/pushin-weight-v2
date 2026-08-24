@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -23,7 +24,15 @@ from typing import Any
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models import (
+    Count,
+    Exists,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+)
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
@@ -198,6 +207,10 @@ FEED_DEFAULT_LIMIT: int = 50
 
 _HOME_PULSE_CACHE_TTL_SECONDS = 60.0
 _HOME_PULSE_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
+_HOME_CHART_CACHE_MAX_ENTRIES = 64
+_HOME_CHART_CACHE: OrderedDict[
+    tuple[Any, ...], tuple[float, dict[str, Any]]
+] = OrderedDict()
 _HOME_TOP_VOICES_CACHE: dict[
     tuple[int, int], tuple[float, list[dict[str, Any]]]
 ] = {}
@@ -1223,6 +1236,23 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
     return normalized
 
 
+def _home_chart_cache_key(
+    window_days: int,
+    normalized_filters: dict[str, Any],
+    locale: str,
+) -> tuple[Any, ...]:
+    """Return a bounded semantic key for one complete home projection."""
+    normalized_locale = _normalize_locale(locale)
+    locale_key = "zh_cn" if _is_zh_locale(normalized_locale) else normalized_locale
+    filter_key = []
+    for key, value in sorted(normalized_filters.items()):
+        if key == "window":
+            continue
+        canonical_value = tuple(sorted(value)) if isinstance(value, list) else value
+        filter_key.append((key, canonical_value))
+    return (window_days, locale_key, tuple(filter_key))
+
+
 def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     """Return True when a single post satisfies the active control-panel filters.
 
@@ -1459,9 +1489,21 @@ def _build_home_chart_payload(
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
     requested_at = now or django_timezone.now()
+    normalized_filters = _normalize_home_filters(filters)
+    cache_key = None
+    if now is None:
+        cache_key = _home_chart_cache_key(window_days, normalized_filters, locale)
+        cache_now = monotonic()
+        with _HOME_PULSE_CACHE_LOCK:
+            cached = _HOME_CHART_CACHE.get(cache_key)
+            if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
+                _HOME_CHART_CACHE.move_to_end(cache_key)
+                return deepcopy(cached[1])
+            if cached:
+                del _HOME_CHART_CACHE[cache_key]
+
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
-    normalized_filters = _normalize_home_filters(filters)
 
     # Get enabled brands
     brand_nicknames = list(
@@ -1527,7 +1569,6 @@ def _build_home_chart_payload(
             links.annotate(bucket=TruncMinute("post__created_at"))
             .values("brand_id", "bucket")
             .annotate(count=Count("pk"))
-            .order_by("bucket", "brand_id")
         )
         for row in aggregate_rows:
             bucket = row["bucket"]
@@ -1558,7 +1599,6 @@ def _build_home_chart_payload(
             .annotate(day=TruncDate("post__created_at"))
             .values("brand_id", "day")
             .annotate(count=Count("pk"))
-            .order_by("day", "brand_id")
         )
 
         for row in agg_rows:
@@ -1588,7 +1628,7 @@ def _build_home_chart_payload(
             now=now,
         ),
     }
-    return {
+    payload = {
         "days": days,
         "series": series,
         "colors": colors,
@@ -1602,6 +1642,13 @@ def _build_home_chart_payload(
         "trend_narrative": trend_narrative,
         "top_voices": top_voices,
     }
+    if cache_key is not None:
+        with _HOME_PULSE_CACHE_LOCK:
+            _HOME_CHART_CACHE[cache_key] = (monotonic(), deepcopy(payload))
+            _HOME_CHART_CACHE.move_to_end(cache_key)
+            while len(_HOME_CHART_CACHE) > _HOME_CHART_CACHE_MAX_ENTRIES:
+                _HOME_CHART_CACHE.popitem(last=False)
+    return payload
 
 
 # ============================================================================
@@ -1620,6 +1667,7 @@ def _round_pulse_percent(current: int, prior: int) -> int | None:
 def _clear_home_pulse_cache() -> None:
     """Clear bounded shared home projections (used by deterministic tests)."""
     with _HOME_PULSE_CACHE_LOCK:
+        _HOME_CHART_CACHE.clear()
         _HOME_PULSE_CACHE.clear()
         _HOME_TOP_VOICES_CACHE.clear()
 

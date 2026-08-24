@@ -27,6 +27,7 @@ from core.models import (
     SentimentKey,
 )
 from monitor.views import (
+    _HOME_CHART_CACHE,
     _build_home_chart_payload,
     _build_home_pulse_payload,
     _clear_home_pulse_cache,
@@ -211,7 +212,48 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         ]
         self.assertEqual(len(chart_queries), 1)
         self.assertNotIn(" IN (SELECT ", chart_queries[0].upper())
+        self.assertNotIn("ORDER BY", chart_queries[0].upper())
         self.assertEqual(payload["window_days"], 30)
+
+    @patch("monitor.views.django_timezone.now", return_value=ANCHOR)
+    def test_complete_chart_projection_cache_is_canonical_and_isolated(self, _now):
+        first_filters = {"brands": ["up", "down"], "unsanctioned": "off"}
+        equivalent_filters = {"brands": ["down", "up"], "unsanctioned": "off"}
+
+        with CaptureQueriesContext(connection) as cold_queries:
+            cold = _build_home_chart_payload(30, first_filters)
+        with CaptureQueriesContext(connection) as warm_queries:
+            warm = _build_home_chart_payload(30, equivalent_filters)
+
+        self.assertGreater(len(cold_queries), 0)
+        self.assertEqual(len(warm_queries), 0)
+        self.assertEqual(warm, cold)
+        self.assertIsNot(warm, cold)
+
+        warm["totals"]["up"] = -1
+        cached_again = _build_home_chart_payload(30, first_filters)
+        self.assertNotEqual(cached_again["totals"]["up"], -1)
+
+        cache_key = next(iter(_HOME_CHART_CACHE))
+        cached_at, cached_payload = _HOME_CHART_CACHE[cache_key]
+        _HOME_CHART_CACHE[cache_key] = (cached_at - 61, cached_payload)
+        with CaptureQueriesContext(connection) as expired_queries:
+            _build_home_chart_payload(30, first_filters)
+        self.assertGreater(len(expired_queries), 0)
+
+        with CaptureQueriesContext(connection) as locale_miss:
+            _build_home_chart_payload(30, first_filters, locale="zh_cn")
+        with CaptureQueriesContext(connection) as filter_miss:
+            _build_home_chart_payload(30, {"brands": ["up"], "unsanctioned": "off"})
+        self.assertGreater(len(locale_miss), 0)
+        self.assertGreater(len(filter_miss), 0)
+
+    def test_complete_chart_projection_cache_has_a_fixed_entry_cap(self):
+        with patch("monitor.views._HOME_CHART_CACHE_MAX_ENTRIES", 2):
+            for brand in ("up", "down", "flat"):
+                _build_home_chart_payload(30, {"brands": [brand]})
+
+        self.assertEqual(len(_HOME_CHART_CACHE), 2)
 
     def test_posts_date_index_covers_chart_and_top_voice_keys(self):
         index = next(

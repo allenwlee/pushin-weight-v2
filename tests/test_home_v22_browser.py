@@ -1008,6 +1008,63 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_long_window_switches_commit_before_the_client_timeout(self) -> None:
+        """Cold and warm 30d/365d responses keep the atomic projection usable."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport=VIEWPORTS["desktop"],
+                    timezone_id="Asia/Tokyo",
+                )
+                page = context.new_page()
+                console_errors: list[str] = []
+                page_errors: list[str] = []
+                page.on(
+                    "console",
+                    lambda message: console_errors.append(message.text)
+                    if message.type == "error"
+                    else None,
+                )
+                page.on("pageerror", lambda error: page_errors.append(str(error)))
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    page.wait_for_function("() => window.pwFilter")
+                    timings: dict[int, list[float]] = {30: [], 365: []}
+                    for window_days in (30, 365, 30, 365):
+                        started_at = page.evaluate("performance.now()")
+                        with page.expect_response(
+                            lambda response: "/chart.html?" in response.url
+                        ) as response_info:
+                            page.locator(
+                                f"[data-pw-window-btn='{window_days}']"
+                            ).click()
+                        self.assertEqual(response_info.value.status, 200)
+                        page.wait_for_function(
+                            "windowDays => { const canvas = document.querySelector('canvas.home-chart'); const payload = JSON.parse(canvas.dataset.home); return payload.window_days === windowDays && document.querySelector('[data-pw-pulse]').dataset.pwWindow === String(windowDays); }",
+                            arg=window_days,
+                        )
+                        elapsed_seconds = (
+                            page.evaluate("performance.now()") - started_at
+                        ) / 1000
+                        timings[window_days].append(elapsed_seconds)
+                        self.assertLess(elapsed_seconds, 12)
+                        self.assertEqual(
+                            page.locator("section.home-chart-wrap").get_attribute(
+                                "data-pw-refresh-failed"
+                            ),
+                            "false",
+                        )
+
+                    self.assertLess(timings[30][1], 2)
+                    self.assertLess(timings[365][1], 2)
+                    self.assertEqual(console_errors, [])
+                    self.assertEqual(page_errors, [])
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_top_voices_refresh_keeps_separator_parity_on_mobile(self) -> None:
         """Client-rendered Top Voices remain readable at the narrow V22 width."""
         with sync_playwright() as playwright:
