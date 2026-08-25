@@ -34,7 +34,7 @@ else
   HEALTH_PYTHON="$(for candidate in python3 python; do command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import yaml' >/dev/null 2>&1 && { echo "$candidate"; break; }; done)"
 fi
 [ -n "$HEALTH_PYTHON" ] || { echo "No project Python with PyYAML is available" >&2; exit 2; }
-HEALTH_SCRIPT="$HEALTH_REPO_ROOT/.agents/skills/harvester-latest-n-health-check/scripts/check.py"
+HEALTH_SCRIPT="$HEALTH_REPO_ROOT/.claude/skills/harvester-latest-n-health-check/scripts/check.py"
 ```
 
 Keep these variables task-specific. Do not reuse system variables such as `HOME` or `CODEX_HOME`.

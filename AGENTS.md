@@ -39,7 +39,7 @@ selected delivery target, generated Ollija Delivery Guide, and editable
 `Delivery Exceptions`, then run `./bin/ollija annotate-plan <plan-path>
 --check`. Resolve conflicts instead of silently bypassing the guide. Ollija is
 guidance only: it does not approve, commit, push, deploy, move worktrees, or
-run a persistent release process. Read `.agents/skills/ollija/SKILL.md` for the
+run a persistent release process. Read `.claude/skills/ollija/SKILL.md` for the
 same portable contract.
 
 ## file names

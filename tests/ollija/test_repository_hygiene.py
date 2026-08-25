@@ -158,7 +158,7 @@ def test_current_ollija_boundary_has_no_retired_runtime_or_command_paths() -> No
 
 def test_ollija_documentation_classifies_current_guidance_and_superseded_history() -> None:
     current_paths = (
-        ".agents/skills/ollija/SKILL.md",
+        ".claude/skills/ollija/SKILL.md",
         ".ollija/templates/delivery-guide.md",
         "AGENTS.md",
         "docs/ollija/README.md",

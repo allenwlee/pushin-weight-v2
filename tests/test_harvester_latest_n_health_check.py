@@ -13,7 +13,7 @@ import pytest
 
 SCRIPT_PATH = (
     Path(__file__).parents[1]
-    / ".agents/skills/harvester-latest-n-health-check/scripts/check.py"
+    / ".claude/skills/harvester-latest-n-health-check/scripts/check.py"
 )
 SKILL_PATH = SCRIPT_PATH.parents[1] / "SKILL.md"
 OPENAI_YAML_PATH = SCRIPT_PATH.parents[1] / "agents/openai.yaml"

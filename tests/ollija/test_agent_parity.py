@@ -5,8 +5,10 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CANONICAL = REPO_ROOT / ".agents" / "skills" / "ollija" / "SKILL.md"
-CLAUDE_LINK = REPO_ROOT / ".claude" / "skills" / "ollija"
+CANONICAL_SKILLS = REPO_ROOT / ".claude" / "skills"
+AGENT_LINKS = REPO_ROOT / ".agents" / "skills"
+CANONICAL = CANONICAL_SKILLS / "ollija" / "SKILL.md"
+AGENT_LINK = AGENT_LINKS / "ollija"
 
 
 def test_ollija_skill_is_canonical_and_agent_neutral() -> None:
@@ -36,14 +38,27 @@ def test_ollija_skill_is_canonical_and_agent_neutral() -> None:
         assert retired not in body
 
 
-def test_claude_and_codex_resolve_the_same_skill_bytes() -> None:
-    assert CLAUDE_LINK.is_symlink()
-    assert CLAUDE_LINK.resolve() == CANONICAL.parent.resolve()
-    assert (CLAUDE_LINK / "SKILL.md").read_bytes() == CANONICAL.read_bytes()
+def test_claude_and_other_agents_resolve_the_same_skill_bytes() -> None:
+    assert AGENT_LINK.is_symlink()
+    assert AGENT_LINK.resolve() == CANONICAL.parent.resolve()
+    assert (AGENT_LINK / "SKILL.md").read_bytes() == CANONICAL.read_bytes()
     assert "@AGENTS.md" in (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    assert ".agents/skills/ollija/SKILL.md" in (
-        REPO_ROOT / "AGENTS.md"
-    ).read_text(encoding="utf-8")
+    assert ".claude/skills/ollija/SKILL.md" in (REPO_ROOT / "AGENTS.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_every_claude_skill_has_an_agent_alias() -> None:
+    canonical_names = {
+        path.name for path in CANONICAL_SKILLS.iterdir() if path.is_dir()
+    }
+
+    assert canonical_names
+    assert {path.name for path in AGENT_LINKS.iterdir()} == canonical_names
+    for name in canonical_names:
+        alias = AGENT_LINKS / name
+        assert alias.is_symlink()
+        assert alias.resolve() == (CANONICAL_SKILLS / name).resolve()
 
 
 def test_lfg_and_goal_delivery_contract_is_shared_with_agent_rules() -> None:
