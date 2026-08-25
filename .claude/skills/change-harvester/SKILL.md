@@ -162,6 +162,38 @@ Function-level green while production still omits `cfg=` is incomplete.
 | Cron / pause | `render.yaml` → `pushinweight-harvest`, ops pause doc |
 | Durable reports | `tests/posts/` (cohort + cost SSOT) |
 
+## Persisted latest-N health verification
+
+After local regression tests and before delivery, use
+`$harvester-latest-n-health-check` to inspect the production rows produced by
+the live pipeline.
+
+Use the **enrichment-relevant route** when the final diff changes any of these
+surfaces:
+
+- `monitor/cycle.py` post persistence or durable enrichment orchestration;
+- `core/models.py` or a migration that affects checked post/enrichment facts;
+- `x_monitor/translator.py`, `x_monitor/attribution.py`, or
+  `x_monitor/reattribute.py`;
+- enrichment configuration in `config.yaml` or `x_monitor/config.py`; or
+- `render.yaml` scheduling or the `run_cycle` flow.
+
+Run the initial literal latest-N cohort, retain its ordered tweet IDs, use the
+caller's wait mechanism for the 30-minute grace window, and then inspect that
+exact cohort by ID. Fresh pending enrichment is inconclusive, not a regression.
+Do not retry or substitute a newer cohort.
+
+Use the **immediate route** once for other harvester changes, for an operator's
+latest-health inspection, or when the final diff only changes the diagnostic
+itself. Record healthy, fresh-pending, unhealthy, or operational-error evidence.
+
+This planned verification does not authorize a cron halt.
+It does not authorize a harvest run.
+It does not authorize provider calls.
+It does not authorize production mutation.
+If the owner separately reports a live anomaly, use the M17 incident path in
+`.claude/skills/avoiding-recurring-mistakes/SKILL.md`.
+
 ## Definition of Done
 
 - Reported failure is **red before** the product fix and **green after**.
