@@ -997,9 +997,11 @@ def _fetch_evidence_rows(
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
-    # Each ARRAY subquery is capped before the streams are unioned. A post gets
-    # rank_limit + 1 for streams that did not select it; downstream role
-    # eligibility therefore uses a real ordinal only for a bounded selection.
+    # Sample each candidate window before ranking evidence roles. The four time
+    # buckets keep older catalyst posts eligible without letting any role scan
+    # the full brand history. A post gets rank_limit + 1 for streams that did
+    # not select it; downstream role eligibility therefore uses a real ordinal
+    # only for a bounded selection.
     sql = """
         WITH requested_bounds AS (
             SELECT
@@ -1019,6 +1021,57 @@ def _fetch_evidence_rows(
             CROSS JOIN (
                 SELECT %s::timestamptz AS as_of, %s::bigint AS rank_limit
             ) bounds
+        ),
+        time_buckets AS (
+            SELECT
+                r.*,
+                bucket.bucket_index,
+                r.start_at
+                    + (r.end_at - r.start_at)
+                    * (bucket.bucket_index::double precision / 4.0)
+                    AS bucket_start,
+                r.start_at
+                    + (r.end_at - r.start_at)
+                    * ((bucket.bucket_index + 1)::double precision / 4.0)
+                    AS bucket_end
+            FROM requested_bounds r
+            CROSS JOIN generate_series(0, 3) AS bucket(bucket_index)
+        ),
+        candidate_pool AS (
+            SELECT
+                bucket.position,
+                bucket.candidate_id,
+                bucket.brand_key,
+                ranked.tweet_id
+            FROM time_buckets bucket
+            CROSS JOIN LATERAL (
+                SELECT p.tweet_id::text AS tweet_id
+                FROM posts p
+                WHERE p.created_at >= bucket.bucket_start
+                  AND p.created_at < bucket.bucket_end
+                  AND p.created_at < bucket.as_of
+                  AND (
+                        (
+                            nullif(btrim(p.text), '') IS NOT NULL
+                            AND (
+                                NOT coalesce(p.is_retweet, false)
+                                OR p.text !~* '^\\s*RT\\s+@'
+                            )
+                        )
+                        OR (
+                            NOT coalesce(p.is_retweet, false)
+                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
+                        )
+                  )
+                  AND EXISTS (
+                        SELECT 1
+                        FROM posts_brands pb
+                        WHERE pb.post_id = p.tweet_id
+                          AND pb.brand_id = bucket.brand_key
+                  )
+                ORDER BY p.created_at DESC, p.tweet_id ASC
+                LIMIT bucket.rank_limit
+            ) ranked
         ),
         official_accounts AS (
             SELECT DISTINCT ba.brand_id::text AS brand_key, ba.accounts_id
@@ -1042,28 +1095,12 @@ def _fetch_evidence_rows(
             FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
+                FROM candidate_pool pool
+                JOIN posts p ON p.tweet_id = pool.tweet_id
                 LEFT JOIN official_accounts official
                   ON official.brand_key = r.brand_key
                  AND official.accounts_id = p.author_id
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
+                WHERE pool.position = r.position
                 ORDER BY
                     (official.accounts_id IS NOT NULL) DESC,
                     (
@@ -1100,25 +1137,9 @@ def _fetch_evidence_rows(
             FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
+                FROM candidate_pool pool
+                JOIN posts p ON p.tweet_id = pool.tweet_id
+                WHERE pool.position = r.position
                 ORDER BY
                     p.created_at ASC,
                     CASE
@@ -1150,25 +1171,9 @@ def _fetch_evidence_rows(
             FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
+                FROM candidate_pool pool
+                JOIN posts p ON p.tweet_id = pool.tweet_id
+                WHERE pool.position = r.position
                 ORDER BY
                     (NOT coalesce(p.is_retweet, false)) DESC,
                     (
@@ -1277,25 +1282,9 @@ def _fetch_evidence_rows(
             FROM requested r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
+                FROM candidate_pool pool
+                JOIN posts p ON p.tweet_id = pool.tweet_id
+                WHERE pool.position = r.position
                 ORDER BY
                     (
                         r.dominant_discourse IS NOT NULL
@@ -1341,25 +1330,9 @@ def _fetch_evidence_rows(
             FROM requested r
             CROSS JOIN LATERAL unnest(ARRAY(
                 SELECT p.tweet_id::text
-                FROM posts_brands pb
-                JOIN posts p ON p.tweet_id = pb.post_id
-                WHERE pb.brand_id::text = r.brand_key
-                  AND p.created_at >= r.start_at
-                  AND p.created_at < r.end_at
-                  AND p.created_at < r.as_of
-                  AND (
-                        (
-                            nullif(btrim(p.text), '') IS NOT NULL
-                            AND (
-                                NOT coalesce(p.is_retweet, false)
-                                OR p.text !~* '^\\s*RT\\s+@'
-                            )
-                        )
-                        OR (
-                            NOT coalesce(p.is_retweet, false)
-                            AND nullif(btrim(p.quoted_text), '') IS NOT NULL
-                        )
-                  )
+                FROM candidate_pool pool
+                JOIN posts p ON p.tweet_id = pool.tweet_id
+                WHERE pool.position = r.position
                 ORDER BY
                     (
                         r.dominant_sentiment IS NOT NULL
