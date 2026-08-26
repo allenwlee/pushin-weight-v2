@@ -57,6 +57,9 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Implementation failures return to the parent implementation workflow for diagnosis, correction, recommit, and restaging.
 - SSH, shell, environment, or multi-machine failures use the repository infra/multi-machine skill first.
 - The change ledger is advisory; do not validate or enforce it.
+- Never force-remove a worktree. Retain staging-only, failed, dirty, locked,
+  noncanonical, or candidate-mismatched worktrees for diagnosis or later
+  delivery.
 - Do not run an endless retry loop or start a persistent Ollija process.
 <!-- END OLLIJA DELIVERY GUIDE -->
 
