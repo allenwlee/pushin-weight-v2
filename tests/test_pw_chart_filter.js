@@ -367,8 +367,10 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   const scales = axis.charts[0].config.options.scales;
   assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xCalifornia', 'y']),
     '1d config creates local, California, and y scales');
-  assert(scales.x.position === 'top' && scales.xCalifornia.position === 'bottom',
-    'local time is above the plot and California time is below it');
+  assert(scales.x.position === 'bottom' && scales.xCalifornia.position === 'bottom',
+    'local and California time are both below the plot');
+  assert(scales.x.weight < scales.xCalifornia.weight,
+    'local time is the inner bottom axis immediately above California time');
   assert(scales.x.ticks.autoSkip === false && scales.xCalifornia.ticks.autoSkip === false,
     'both 1d axes keep the fixed 24 ticks at narrow widths');
   const localScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
@@ -382,13 +384,16 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   const californiaLabels = californiaScale.ticks.map((tick, index, ticks) =>
     scales.xCalifornia.ticks.callback.call(californiaScale, tick.value, index, ticks));
   assert(JSON.stringify(localLabels) === JSON.stringify([
-    '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
-    '18', '19', '20', '21', '22', '23', '0', '1', '2', '3', '4', '5',
+    '6:00', '', '8:00', '', '10:00', '', '12:00', '', '14:00', '', '16:00', '',
+    '18:00', '', '20:00', '', '22:00', '', '0:00', '', '2:00', '', '4:00', '',
   ]), 'local labels cover the next whole hour through the current hour');
-  assert(californiaLabels.length === 24 && californiaLabels.every((label) => /^\d{1,2}$/.test(label)),
-    'California labels are hour-only values for the same fixed positions');
-  assert(scales.x.ticks.color === '#666666' && scales.xCalifornia.ticks.color === '#fbbf24',
-    'axis colors retain the chart default locally and use the CA pill tint below');
+  assert(californiaLabels.length === 24 && californiaLabels.every((label) => label === '' || /^\d{1,2}:00$/.test(label)),
+    'California labels show only even wall-clock hours with minute suffixes');
+  assert(scales.x.grid.drawTicks === true && scales.xCalifornia.grid.drawTicks === true &&
+    scales.x.grid.drawOnChartArea === false && scales.xCalifornia.grid.drawOnChartArea === false,
+    'odd hours retain hash marks without adding vertical plot grid lines');
+  assert(scales.x.ticks.color === '#666666' && scales.xCalifornia.ticks.color === 'rgba(251, 191, 36, 0.45)',
+    'axis colors retain the chart default locally and dim the CA pill tint below');
   assert(
     axis.legend.innerHTML.indexOf('data-pw-chart-brand="deepseek"') <
       axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
@@ -410,8 +415,8 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   dstScale.afterBuildTicks(dstRuntime);
   const dstLabels = dstRuntime.ticks.map((tick, index, ticks) =>
     dstScale.ticks.callback.call(dstRuntime, tick.value, index, ticks));
-  assert(dstLabels.length === 24 && dstLabels.filter((label) => label === '1').length === 2,
-    'California fall-back keeps 24 real instants and repeats the wall-clock hour');
+  assert(dstLabels.length === 24 && dstLabels.filter((label) => label === '').length >= 12,
+    'California fall-back keeps 24 real tick instants while suppressing odd-hour labels');
 
   const sevenDay = makeSandbox({ initial: payload(7, 4, 'qwen') });
   assert(JSON.stringify(Object.keys(sevenDay.charts[0].config.options.scales).sort()) === JSON.stringify(['x', 'y']),

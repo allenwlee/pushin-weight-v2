@@ -135,12 +135,31 @@
     form.submit();
   }
 
+  function initialLocale() {
+    var authored = document.body.getAttribute('data-pw-locale') || 'zh_cn';
+    try {
+      if (new URLSearchParams(window.location.search).has('locale')) return authored;
+    } catch (_error) { /* keep the authored locale */ }
+    if (window.pwFilter && window.pwFilter.getPreference) {
+      return window.pwFilter.getPreference('locale') || authored;
+    }
+    return authored;
+  }
+
+  function hasExplicitLocale() {
+    try { return new URLSearchParams(window.location.search).has('locale'); }
+    catch (_error) { return false; }
+  }
+
   function wireLocale() {
     var buttons = document.querySelectorAll('[data-pw-locale-btn]');
     buttons.forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         var locale = btn.getAttribute('data-pw-locale-btn');
+        if (window.pwFilter && window.pwFilter.setPreference) {
+          window.pwFilter.setPreference('locale', locale);
+        }
         applyChrome(locale);
         document.dispatchEvent(new CustomEvent('pw:locale-change', {
           detail: { locale: locale },
@@ -165,8 +184,15 @@
   }
 
   function init() {
-    applyChrome(document.body.getAttribute('data-pw-locale') || 'zh_cn');
+    var authored = document.body.getAttribute('data-pw-locale') || 'zh_cn';
+    var restored = initialLocale();
+    applyChrome(restored);
     wireLocale();
+    if (!hasExplicitLocale() && selectedLocale(restored) !== selectedLocale(authored)) {
+      document.dispatchEvent(new CustomEvent('pw:locale-change', {
+        detail: { locale: restored },
+      }));
+    }
     // The V22 filter store owns public window changes so both consumers use
     // one event without a reload. Legacy pages retain their POST/cookie flow.
     if (!document.querySelector('.filter-bar')) wireWindow();

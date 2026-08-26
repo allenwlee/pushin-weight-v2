@@ -139,7 +139,12 @@ aside.control-panel
 | `cn_nationalism` | 6 | `_DASHBOARD_NATIONALISM_KEYS` (same scale, separate filter) |
 | `unsanctioned` | 1 | `"only"` sentinel — toggles `only flagged posts` |
 
-**JS owner:** `pw-filter-store.js` — watches all `input[data-pw-filter-group]` checkboxes, maintains a `pwFilters` cookie + window event, and forces chart / feed re-fetch.
+**JS owner:** `pw-filter-store.js` — watches homepage controls, maintains one
+versioned `localStorage` preference payload per anonymous/authenticated browser
+namespace, emits the shared window event, and forces chart/feed re-fetch after
+filter restoration or mutation. Locale also remains in Django's one-year cookie
+because the server needs it before JavaScript runs; filters are never copied into
+cookies.
 
 **CSS:** `dashboard.css:364-409`.
 

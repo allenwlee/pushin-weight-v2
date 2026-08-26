@@ -14,7 +14,9 @@ from monitor.views import (
     _decode_cursor,
     _encode_cursor,
     _feed_tint_class,
+    _follower_bin,
     _paginate_feed,
+    _partition_home_brands,
     _post_passes_cursor,
     _serialize_feed_row,
     _parse_filters_from_request,
@@ -386,8 +388,40 @@ class TestSerializeFeedRow:
         assert row["tint_class"] == "tint-pos-mixed"
         assert "meta_text" in row
         assert "ts_abs_text" in row
-        assert row["avatar_initials"] == "US"
+        assert row["follower_bin"] == "10k-50k"
+        assert row["followers_count"] == 12_800
+        assert row["followers_label"] == "12.8k followers"
         assert row["engagement_pretty"]["followers"] == "12.8k"
+
+    @pytest.mark.parametrize(
+        ("followers", "expected"),
+        [
+            (0, "0-1k"),
+            (999, "0-1k"),
+            (1_000, "1k-10k"),
+            (9_999, "1k-10k"),
+            (10_000, "10k-50k"),
+            (49_999, "10k-50k"),
+            (50_000, "50k-plus"),
+            (5_000_000, "50k-plus"),
+        ],
+    )
+    def test_follower_bin_boundaries(self, followers, expected):
+        assert _follower_bin(followers) == expected
+
+
+    def test_home_brand_tiers_use_actual_model_nicknames(self):
+        brands = [
+            {"nickname": nickname}
+            for nickname in ("deepseek", "gemini", "gpt", "claude", "grok", "qwen")
+        ]
+
+        open_brands, closed_brands = _partition_home_brands(brands)
+
+        assert [brand["nickname"] for brand in closed_brands] == [
+            "gemini", "gpt", "claude", "grok",
+        ]
+        assert [brand["nickname"] for brand in open_brands] == ["deepseek", "qwen"]
 
     def test_text_translated_uses_locale(self):
         post = _make_post("100", "2026-07-20T10:00:00+00:00")

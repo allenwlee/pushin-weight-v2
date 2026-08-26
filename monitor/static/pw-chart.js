@@ -131,10 +131,11 @@
     if (hourlyTicks.length !== 24) return null;
     var localColor = (Chart.defaults && Chart.defaults.color) || '#666666';
 
-    function hourlyScale(position, color, formatter) {
+    function hourlyScale(weight, color, formatter, fontWeight) {
       return {
         type: 'category',
-        position: position,
+        position: 'bottom',
+        weight: weight,
         labels: days,
         offset: false,
         afterBuildTicks: function (scale) {
@@ -143,24 +144,36 @@
         ticks: {
           autoSkip: false,
           color: color,
-          font: { size: 9 },
+          font: { size: 9, weight: fontWeight },
           maxRotation: 0,
           minRotation: 0,
           padding: 3,
           callback: function (_value, index) {
-            return formatter(hourlyTicks[index].instant);
+            var hour = Number(formatter(hourlyTicks[index].instant)) % 24;
+            return hour % 2 === 0 ? hour + ':00' : '';
           },
         },
-        grid: { display: false },
-        border: { color: color },
+        grid: {
+          display: true,
+          drawOnChartArea: false,
+          drawTicks: true,
+          tickLength: 4,
+          color: color,
+        },
+        border: { color: color, width: weight === 0 ? 1.5 : 1 },
       };
     }
 
     return {
-      x: hourlyScale('top', localColor, function (timestamp) {
+      x: hourlyScale(0, localColor, function (timestamp) {
         return String(new Date(timestamp).getHours());
-      }),
-      xCalifornia: hourlyScale('bottom', '#fbbf24', californiaHour),
+      }, 600),
+      xCalifornia: hourlyScale(
+        1,
+        'rgba(251, 191, 36, 0.45)',
+        californiaHour,
+        400
+      ),
     };
   }
 

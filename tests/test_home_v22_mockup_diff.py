@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.test import Client
 
 from tests.mockup_spec import load_spec
@@ -44,7 +45,15 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
         return response.content.decode("utf-8")
 
     def test_allowlist_requires_narrow_reviewed_entries(self):
-        assert validate_allowlist(json.loads(ALLOWLIST.read_text(encoding="utf-8"))) == []
+        entries = validate_allowlist(json.loads(ALLOWLIST.read_text(encoding="utf-8")))
+        self.assertEqual(
+            [(entry["selector"], entry["region"]) for entry in entries],
+            [
+                ("header.topbar", "topbar"),
+                ("nav.filter-bar", "filters"),
+                ("[data-tz-widget]", "timezone"),
+            ],
+        )
         with self.assertRaisesRegex(AssertionError, "selector, region, and rationale"):
             validate_allowlist({"entries": [{"selector": ".x"}]})
         with self.assertRaisesRegex(AssertionError, "broad wildcard"):
@@ -61,16 +70,17 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
                 self.assertIsNone(difference, difference.report(locale=locale, viewport=VIEWPORT, oracle_source=str(spec.source)) if difference else "")
 
     def test_chart_runtime_projections_do_not_hide_unknown_shell_children(self):
-        """Only the live chart, its legend, and status may differ from the mockup."""
+        """Approved title/chart projections cannot hide unknown chart children."""
         spec = load_spec()
         rendered = self._render("en")
+        allowlist = validate_allowlist(json.loads(ALLOWLIST.read_text(encoding="utf-8")))
 
         known_projection = first_authored_difference(
             spec,
             rendered,
             locale="en",
             viewport=VIEWPORT,
-            allowlist=[],
+            allowlist=allowlist,
         )
         self.assertIsNone(
             known_projection,
@@ -93,7 +103,7 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
             mutated,
             locale="en",
             viewport=VIEWPORT,
-            allowlist=[],
+            allowlist=allowlist,
         )
         self.assertIsNotNone(difference)
         self.assertEqual(difference.region, "chart")
@@ -104,6 +114,11 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
         locale = self.client.post("/locale/en/", HTTP_REFERER="https://example.invalid/")
         self.assertEqual(locale.status_code, 302)
         self.assertEqual(locale["Location"], "/")
+        consumed_override = self.client.post(
+            "/locale/zh_cn/",
+            HTTP_REFERER="http://127.0.0.1/?locale=en&view=home",
+        )
+        self.assertEqual(consumed_override["Location"], "http://127.0.0.1/?view=home")
         window = self.client.post("/window/7/", HTTP_REFERER="http://127.0.0.1/")
         self.assertEqual(window.status_code, 302)
         self.assertEqual(window["Location"], "http://127.0.0.1/")
@@ -118,6 +133,41 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
         self.assertEqual(anonymous.post("/locale/en/", HTTP_REFERER="http://127.0.0.1/").status_code, 302)
         self.assertEqual(anonymous.post("/window/7/", HTTP_REFERER="http://127.0.0.1/").status_code, 302)
         self.assertEqual(anonymous.get("/internal/").status_code, 302)
+
+    def test_valid_url_filters_override_browser_defaults_in_initial_projection(self):
+        requested = {
+            "brands": ["qwen"],
+            "sentiment": ["positive"],
+            "window": 30,
+        }
+        response = self.client.get("/", {"filters": json.dumps(requested)})
+
+        self.assertEqual(response.status_code, 200)
+        applied = json.loads(response.context["applied_filters_json"])
+        self.assertEqual(applied["brands"], ["qwen"])
+        self.assertEqual(applied["sentiment"], ["positive"])
+        self.assertEqual(applied["window"], 30)
+        payload = json.loads(response.context["payload"])
+        self.assertEqual(payload["applied_filters"], applied)
+
+    def test_preference_namespaces_are_stable_opaque_and_user_scoped(self):
+        first = self.client.get("/").context["home_preferences_namespace"]
+        again = self.client.get("/").context["home_preferences_namespace"]
+        second_user = get_user_model().objects.create_user(
+            username="v22-second-verifier",
+            email="v22-second@example.test",
+            password="v22-second-test-only-password",
+        )
+        self.client.force_login(second_user)
+        second = self.client.get("/").context["home_preferences_namespace"]
+        anonymous = Client(HTTP_HOST="127.0.0.1").get("/").context[
+            "home_preferences_namespace"
+        ]
+
+        self.assertEqual(first, again)
+        self.assertRegex(first, r"^user-[0-9a-f]{16}$")
+        self.assertNotEqual(first, second)
+        self.assertEqual(anonymous, "anonymous")
 
     def test_chart_partial_has_no_execution_comment_or_rendered_note(self):
         """Regression pin: chart implementation notes must never reach users."""

@@ -41,7 +41,7 @@ EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
 # Each section's required text.
 EXPECTED_SECTIONS = {
     "banner": ["window-toggle", "tz-pill", "locale-toggle"],
-    "trending-models": ["脉冲", "窗口内热度"],  # zh_cn hardcoded labels
+    "trending-models": ["data-pw-pulse-shell", "pulse-chip"],
     # Trending pills carry .delta.up/.down/.flat spans with pct values (iter 2 v22)
     "filter-groups": ["Brands", "Discourse", "account.role", "lang",
                       "Sentiment", "Nationalism", "unsanctioned"],
@@ -90,7 +90,7 @@ class RegressionNet:
         self._check_trending_deltas(html)
         self._check_top_voices(html)
         self._check_feed_engagement(html)
-        self._check_feed_avatars(html)
+        self._check_follower_glyphs(html)
         self._check_feed_row_shape(html)
         self._check_filter_contract(html)
         self._check_chart_contract(html)
@@ -441,29 +441,19 @@ class RegressionNet:
                              not bad,
                              f"missing in {len(bad)}/{len(eng_blocks)} blocks")
 
-    def _check_feed_avatars(self, html):
-        # Feed cards must each render an avatar circle with stable HSL color
-        # and 1-2 char initials. Pinned by iter 3 (v22).
-        avatars = re.findall(r'<span class="avatar" style="background: (hsl\([^)]+\))"[^>]*>([^<]+)</span>', html)
-        self.assert_("feed has >= 1 avatar circle",
-                     len(avatars) >= 1,
-                     f"got {len(avatars)} avatars")
-        if avatars:
-            # Each avatar has a valid hsl() color
-            for color, initials in avatars[:3]:
-                if not color.startswith("hsl("):
-                    self.assert_("avatar color is hsl(...)", False, f"got {color!r}")
-                    return
-            # Each initials is 1-2 chars, alphanumeric or '?'
-            bad = [(c, i) for c, i in avatars if not (1 <= len(i) <= 2) or (i != '?' and not i.isalnum())]
-            self.assert_("avatar initials are 1-2 chars [A-Z?]",
-                         not bad,
-                         f"bad: {bad[:3]}")
-            # All avatars must use the same hsl() pattern (stable hash)
-            unique_colors = len(set(c for c, _ in avatars))
-            self.assert_(f"avatars have varied colors ({unique_colors} unique)",
-                         unique_colors >= 2,
-                         f"only {unique_colors} unique colors across {len(avatars)} avatars")
+    def _check_follower_glyphs(self, html):
+        glyphs = re.findall(
+            r'<span class="follower-glyph follower-bin-([^" ]+)"[^>]*aria-label="([^"]*followers)"',
+            html,
+        )
+        self.assert_("feed has >= 1 follower-count glyph",
+                     len(glyphs) >= 1,
+                     f"got {len(glyphs)} glyphs")
+        allowed = {"0-1k", "1k-10k", "10k-50k", "50k-plus"}
+        bad = [glyph for glyph in glyphs if glyph[0] not in allowed]
+        self.assert_("all follower glyphs use a defined count bin",
+                     not bad,
+                     f"invalid: {bad[:3]}")
 
     def _check_feed_row_shape(self, html):
         # iter 14 (U5): feed row must match v22-master mockup-canon shape.
@@ -497,10 +487,10 @@ class RegressionNet:
             self.assert_(f".sig-row.{sig} present",
                          f'class="sig-row {sig}"' in html,
                          f"missing — right column missing emoji signals")
-        # Inside feed-main: avatar, head (handle + meta), text, engagement
-        self.assert_(".feed-main .avatar present",
-                     re.search(r'<div class="feed-main">\s*<span class="avatar"', html, re.DOTALL) is not None,
-                     "avatar must be first child of .feed-main")
+        # Inside feed-main: follower glyph, head (handle + meta), text, engagement
+        self.assert_(".feed-main .follower-glyph present",
+                     re.search(r'<div class="feed-main">\s*<span class="follower-glyph', html, re.DOTALL) is not None,
+                     "follower glyph must be first child of .feed-main")
         self.assert_(".feed-main .head present",
                      '<div class="head">' in html,
                      "head row missing from .feed-main")

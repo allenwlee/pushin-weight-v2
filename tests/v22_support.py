@@ -40,6 +40,12 @@ V22_FIXTURE_BRANDS = (
     ("qwen", "Qwen", "#f97316"),
     ("ernie", "ERNIE", "#0ea5e9"),
 )
+V22_CLOSED_FIXTURE_BRANDS = (
+    ("gemini", "Gemini"),
+    ("gpt", "GPT"),
+    ("claude", "Claude"),
+    ("grok", "Grok"),
+)
 
 
 def fixture_from_oracle() -> dict:
@@ -61,13 +67,14 @@ def seed_real_home_orm(fixture: dict) -> None:
             display_name_zh_cn=name,
             accent_color=color,
         )
-    Brand.objects.create(
-        nickname="anthropic",
-        display_name="Anthropic",
-        display_name_en="Anthropic",
-        display_name_zh_cn="Anthropic",
-        accent_color="#d97706",
-    )
+    for nickname, name in V22_CLOSED_FIXTURE_BRANDS:
+        Brand.objects.create(
+            nickname=nickname,
+            display_name=name,
+            display_name_en=name,
+            display_name_zh_cn=name,
+            accent_color="#d97706",
+        )
     for key in {key for row in fixture["feed"]["items"] for key in row["post_types"]}:
         PostTypeKey.objects.create(key=key)
     for key in {key for row in fixture["feed"]["items"] for key in row["sentiments"]}:
@@ -129,6 +136,16 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             },
         )
         brands[nickname] = brand
+    for nickname, name in V22_CLOSED_FIXTURE_BRANDS:
+        Brand.objects.get_or_create(
+            nickname=nickname,
+            defaults={
+                "display_name": name,
+                "display_name_en": name,
+                "display_name_zh_cn": name,
+                "accent_color": "#d97706",
+            },
+        )
     for key in ("buzz_releases", "hands_on_usage", "feedback_questions"):
         PostTypeKey.objects.get_or_create(key=key)
     for key in ("positive", "negative", "mixed", "neutral"):

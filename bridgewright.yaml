@@ -6,6 +6,7 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
+      - docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md
       - docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md
       - docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md
       - docs/reference/2026-08-19-132714-v24-bridgewright-target.md
@@ -16,7 +17,7 @@ configuration:
       - monitor/static
       - project
     adapter: .bridgewright/adapter.yaml
-    last_approved_contract: docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md
+    last_approved_contract: docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md
   source_boundaries:
     - monitor/templates
     - monitor/static
@@ -29,6 +30,8 @@ configuration:
       description: Owner-approved production filter and feed interaction delta.
     - key: production.home.chart-time-performance
       description: Owner-approved home-chart time-axis and performance delta.
+    - key: production.home.preferences-ui
+      description: Owner-approved browser preferences and homepage UI regression delta.
     - key: trend.headline
       description: Shared analytical trend narrative surface.
   scenarios: []

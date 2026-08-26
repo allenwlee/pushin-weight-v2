@@ -29,7 +29,7 @@ from django.test.utils import CaptureQueriesContext
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 from core.models import Post
-from monitor.views import _clear_home_pulse_cache
+from monitor.views import MODEL_DISPLAY_NAMES, _clear_home_pulse_cache
 from tests.mockup_spec import DEFAULT_SOURCE, MockupSpec, load_spec
 from tests.shell_diff import AUTHORED_REGIONS, parse_rendered_html, select_one
 from tests.v22_support import (
@@ -839,7 +839,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     )
                     self.assertEqual(projection["chart"]["window_days"], projection["pulseWindow"])
                     self.assertEqual(projection["chart"]["computed_at"], projection["pulseComputedAt"])
-                    self.assertLessEqual(projection["pulseCount"], 8)
+                    self.assertEqual(
+                        projection["pulseCount"],
+                        len(MODEL_DISPLAY_NAMES),
+                    )
                     refreshed_legend = page.locator("[data-pw-chart-legend]")
                     self.assertEqual(
                         refreshed_legend.count(),
@@ -946,14 +949,20 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     scaleKeys: Object.keys(chart.scales).sort(),
                                     localPosition: chart.scales.x?.position,
                                     californiaPosition: chart.scales.xCalifornia?.position,
+                                    localTop: chart.scales.x?.top,
+                                    californiaTop: chart.scales.xCalifornia?.top,
                                     localLabels: chart.scales.x ? tickLabels(chart.scales.x) : [],
                                     californiaLabels: chart.scales.xCalifornia
                                       ? tickLabels(chart.scales.xCalifornia)
                                       : [],
-                                    expectedLocal: instants.map((instant) => String(instant.getHours())),
-                                    expectedCalifornia: instants.map((instant) =>
-                                      String(Number(californiaHour.format(instant)))
-                                    ),
+                                    expectedLocal: instants.map((instant) => {
+                                      const hour = instant.getHours();
+                                      return hour % 2 === 0 ? `${hour}:00` : '';
+                                    }),
+                                    expectedCalifornia: instants.map((instant) => {
+                                      const hour = Number(californiaHour.format(instant));
+                                      return hour % 2 === 0 ? `${hour}:00` : '';
+                                    }),
                                     localColor: chart.scales.x?.options.ticks.color,
                                     defaultColor: Chart.defaults.color,
                                     californiaColor: chart.scales.xCalifornia?.options.ticks.color,
@@ -970,8 +979,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 }"""
                             )
                             self.assertEqual(runtime["scaleKeys"], ["x", "xCalifornia", "y"])
-                            self.assertEqual(runtime["localPosition"], "top")
+                            self.assertEqual(runtime["localPosition"], "bottom")
                             self.assertEqual(runtime["californiaPosition"], "bottom")
+                            self.assertLess(runtime["localTop"], runtime["californiaTop"])
                             self.assertEqual(runtime["localLabels"], runtime["expectedLocal"])
                             self.assertEqual(
                                 runtime["californiaLabels"],
@@ -980,7 +990,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(len(runtime["localLabels"]), 24)
                             self.assertEqual(len(runtime["californiaLabels"]), 24)
                             self.assertEqual(runtime["localColor"], runtime["defaultColor"])
-                            self.assertEqual(runtime["californiaColor"].lower(), "#fbbf24")
+                            self.assertEqual(
+                                runtime["californiaColor"].replace(" ", ""),
+                                "rgba(251,191,36,0.45)",
+                            )
                             self.assertEqual(
                                 runtime["legendOrder"],
                                 runtime["expectedLegendOrder"],
@@ -1128,15 +1141,39 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "computedAt => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).computed_at === computedAt",
                         arg=fixture_computed_at,
                     )
-                    california_labels = page.evaluate(
+                    california_axis = page.evaluate(
                         """() => {
                           const canvas = document.querySelector('canvas.home-chart');
-                          return Chart.getChart(canvas).scales.xCalifornia.ticks
-                            .map((tick) => String(tick.label));
+                          const chart = Chart.getChart(canvas);
+                          const formatter = new Intl.DateTimeFormat('en-US', {
+                            timeZone: 'America/Los_Angeles',
+                            hour: 'numeric',
+                            hourCycle: 'h23',
+                          });
+                          const ticks = chart.scales.xCalifornia.ticks;
+                          const firstHour = new Date(chart.data.labels[0]);
+                          firstHour.setMinutes(0, 0, 0);
+                          firstHour.setHours(firstHour.getHours() + 1);
+                          const hours = ticks.map((_, index) => Number(
+                            formatter.format(new Date(
+                              firstHour.getTime() + index * 60 * 60 * 1000
+                            ))
+                          ));
+                          return {
+                            labels: ticks.map((tick) => String(tick.label)),
+                            hours,
+                          };
                         }"""
                     )
-                    self.assertEqual(len(california_labels), 24)
-                    self.assertEqual(california_labels.count("1"), 2)
+                    self.assertEqual(len(california_axis["labels"]), 24)
+                    self.assertEqual(california_axis["hours"].count(1), 2)
+                    self.assertEqual(
+                        california_axis["labels"],
+                        [
+                            f"{hour}:00" if hour % 2 == 0 else ""
+                            for hour in california_axis["hours"]
+                        ],
+                    )
                     self.assertEqual(console_errors, [])
                     self.assertEqual(page_errors, [])
                 finally:
@@ -1706,7 +1743,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             "zh"
                         )
                     )
-                    self.assertEqual(normalized(page), release_zh)
+                    self.assertEqual(normalized(page), quiet_zh)
+                    self.assertEqual(
+                        page.locator("[data-pw-window-btn].is-active").get_attribute(
+                            "data-pw-window-btn"
+                        ),
+                        "30",
+                    )
 
                     for window_days, expected in ((7, flat_zh), (30, quiet_zh)):
                         with page.expect_response(
@@ -1975,12 +2018,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             "zh_cn": ["1天", "7天", "30天", "365天"],
             "original": ["1d", "7d", "30d", "365d"],
         }
-        expected_pulse_headers = {
-            "en": "Trending\n· 1d heat",
-            "zh_cn": "脉冲\n· 1天热度",
-            "original": "Trending\n· 1d heat",
-        }
-
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -2007,14 +2044,23 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     """() => {
                                       const rect = (element) => {
                                         const box = element.getBoundingClientRect();
-                                        return {x: box.x, left: box.left, width: box.width, height: box.height, right: box.right};
+                                        return {x: box.x, y: box.y, top: box.top, left: box.left, width: box.width, height: box.height, right: box.right, bottom: box.bottom};
                                       };
                                       const controls = document.querySelector('.topbar-controls');
+                                      const appName = document.querySelector('.app-name');
+                                      const zhTitle = appName.querySelector('.zh');
+                                      const enTitle = appName.querySelector('.en');
                                       return {
                                         controls: rect(controls),
                                         locale: [...document.querySelectorAll('[data-pw-locale-btn]')].map(rect),
                                         windows: [...document.querySelectorAll('[data-pw-window-btn]')].map(rect),
                                         timezone: rect(document.querySelector('[data-tz-widget]')),
+                                        title: {
+                                          app: rect(appName),
+                                          zh: rect(zhTitle),
+                                          en: rect(enTitle),
+                                          lines: [...enTitle.querySelectorAll('.en-line')].map((line) => ({...rect(line), text: line.textContent})),
+                                        },
                                       };
                                     }"""
                                 )
@@ -2046,9 +2092,29 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     page.locator("[data-pw-window-btn]").all_inner_texts(),
                                     expected_labels[locale],
                                 )
+                                self.assertEqual(page.locator(".pulse-bar-head").count(), 0)
+                                self.assertGreater(
+                                    page.locator("[data-pw-pulse-entry]").count(), 0
+                                )
                                 self.assertEqual(
-                                    page.locator(".pulse-bar-head").inner_text(),
-                                    expected_pulse_headers[locale],
+                                    [line["text"] for line in geometry["title"]["lines"]],
+                                    ["Pushin'", "Weight"],
+                                )
+                                self.assertGreater(
+                                    geometry["title"]["lines"][1]["y"],
+                                    geometry["title"]["lines"][0]["y"],
+                                )
+                                self.assertGreaterEqual(
+                                    geometry["title"]["en"]["left"],
+                                    geometry["title"]["app"]["left"] - 0.5,
+                                )
+                                self.assertLessEqual(
+                                    geometry["title"]["en"]["right"],
+                                    geometry["title"]["app"]["right"] + 0.5,
+                                )
+                                self.assertLessEqual(
+                                    geometry["title"]["en"]["height"],
+                                    geometry["title"]["zh"]["height"] + 1,
                                 )
                                 signature = {
                                     "controls": geometry["controls"],
@@ -2077,6 +2143,204 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                         )
                             finally:
                                 context.close()
+            finally:
+                browser.close()
+
+    def test_home_preferences_survive_locale_navigation_reload_and_new_page(self) -> None:
+        """Last-used homepage state is restored before chart/feed refresh."""
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(
+                    browser,
+                    cookies,
+                    VIEWPORTS["desktop"],
+                )
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/", wait_until="networkidle")
+                    page.wait_for_function("() => window.pwFilter && window.__pwTz")
+
+                    with page.expect_response(lambda response: "/chart.html?" in response.url):
+                        page.locator("[data-pw-window-btn='30']").click()
+                    page.evaluate("() => window.pwFilter.set('brands', ['qwen'])")
+                    page.locator("[data-tz-widget]").click()
+                    page.locator('[data-group="brands"]').click()
+                    page.locator('body > .filter-dropdown [data-lens="closed"]').click()
+
+                    with page.expect_navigation(wait_until="networkidle"):
+                        page.locator('[data-pw-locale-btn="zh_cn"]').click()
+                    page.wait_for_function(
+                        "() => window.pwFilter && window.__pwTz && "
+                        "JSON.parse(document.querySelector('canvas.home-chart').dataset.home).window_days === 30"
+                    )
+
+                    state = page.evaluate(
+                        """() => ({
+                          filters: window.pwFilter.get(),
+                          preferences: window.pwFilter.getPreferences(),
+                          timezone: window.__pwTz.mode,
+                          locale: document.body.dataset.pwLocale,
+                          brandLens: document.querySelector('[data-lens-pair="open,closed"] .dd-lens-body')?.dataset.activeLens,
+                          storageKeys: Object.keys(localStorage).filter((key) => key.startsWith('pushinweight.home.preferences.v1:')),
+                        })"""
+                    )
+                    self.assertEqual(state["filters"]["window"], 30)
+                    self.assertEqual(state["filters"]["brands"], ["qwen"])
+                    self.assertEqual(state["timezone"], "ca")
+                    self.assertEqual(state["locale"], "zh_cn")
+                    self.assertEqual(state["brandLens"], "closed")
+                    self.assertEqual(state["preferences"]["version"], 1)
+                    self.assertEqual(len(state["storageKeys"]), 1)
+
+                    runtime_requests: list[str] = []
+                    page.on(
+                        "request",
+                        lambda request: runtime_requests.append(request.url)
+                        if "/chart.html?" in request.url or "/feed/?" in request.url
+                        else None,
+                    )
+                    page.reload(wait_until="networkidle")
+                    page.wait_for_function(
+                        "() => window.pwFilter?.get().window === 30 && window.__pwTz?.mode === 'ca'"
+                    )
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["qwen"])
+                    for endpoint in ("/chart.html?", "/feed/?"):
+                        first_request = next(
+                            url for url in runtime_requests if endpoint in url
+                        )
+                        query = parse_qs(urlparse(first_request).query)
+                        first_filters = json.loads(query["filters"][0])
+                        self.assertEqual(first_filters["window"], 30)
+                        self.assertEqual(first_filters["brands"], ["qwen"])
+                        self.assertEqual(query["locale"], ["zh_cn"])
+
+                    override = json.dumps({"brands": ["minimax"], "window": 7})
+                    page.goto(
+                        f"{self.live_server_url}/?{urlencode({'filters': override})}",
+                        wait_until="networkidle",
+                    )
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["minimax"])
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 7)
+                    page.goto(f"{self.live_server_url}/", wait_until="networkidle")
+                    page.wait_for_function("() => window.pwFilter?.get().window === 30")
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["qwen"])
+
+                    next_page = context.new_page()
+                    try:
+                        next_page.goto(f"{self.live_server_url}/", wait_until="networkidle")
+                        next_page.wait_for_function(
+                            "() => window.pwFilter?.get().window === 30 && window.__pwTz?.mode === 'ca'"
+                        )
+                        self.assertEqual(
+                            next_page.evaluate("() => window.pwFilter.get().brands"),
+                            ["qwen"],
+                        )
+                    finally:
+                        next_page.close()
+
+                    # A URL locale is a transient override. Choosing a locale
+                    # consumes that override instead of redirecting back into it.
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    self.assertEqual(page.locator('[data-pw-locale-btn].is-active').inner_text(), "en")
+                    with page.expect_navigation(wait_until="networkidle"):
+                        page.locator('[data-pw-locale-btn="zh_cn"]').click()
+                    self.assertNotIn("locale=", page.url)
+                    self.assertEqual(page.locator('[data-pw-locale-btn].is-active').inner_text(), "中文")
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_locale_only_restore_refetches_data_and_invalid_storage_falls_back(self) -> None:
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(
+                    browser, cookies, VIEWPORTS["desktop"]
+                )
+                page = context.new_page()
+                errors: list[str] = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                try:
+                    page.goto(f"{self.live_server_url}/", wait_until="networkidle")
+                    storage_key = page.evaluate("() => window.pwFilter.storageKey")
+                    preferences = page.evaluate("() => window.pwFilter.getPreferences()")
+                    preferences["locale"] = "zh_cn"
+                    page.evaluate(
+                        "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
+                        [storage_key, preferences],
+                    )
+
+                    runtime_requests: list[str] = []
+                    page.on(
+                        "request",
+                        lambda request: runtime_requests.append(request.url)
+                        if "/chart.html?" in request.url or "/feed/?" in request.url
+                        else None,
+                    )
+                    page.reload(wait_until="networkidle")
+                    page.wait_for_function(
+                        "() => document.body.dataset.pwLocale === 'zh_cn'"
+                    )
+                    for endpoint in ("/chart.html?", "/feed/?"):
+                        request_url = next(
+                            url for url in runtime_requests if endpoint in url
+                        )
+                        self.assertEqual(
+                            parse_qs(urlparse(request_url).query)["locale"],
+                            ["zh_cn"],
+                        )
+
+                    invalid = {
+                        **preferences,
+                        "locale": "not-a-locale",
+                        "window": 999,
+                        "timezone": "mars",
+                        "filters": {
+                            **preferences["filters"],
+                            "brands": ["removed-model"],
+                            "window": 999,
+                        },
+                    }
+                    page.evaluate(
+                        "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
+                        [storage_key, invalid],
+                    )
+                    page.reload(wait_until="networkidle")
+                    fallback = page.evaluate(
+                        "() => ({filters: window.pwFilter.get(), preferences: window.pwFilter.getPreferences(), locale: document.body.dataset.pwLocale, timezone: window.__pwTz.mode})"
+                    )
+                    self.assertEqual(fallback["filters"]["window"], 1)
+                    self.assertIn("qwen", fallback["filters"]["brands"])
+                    self.assertEqual(fallback["locale"], "en")
+                    self.assertEqual(fallback["timezone"], "local")
+
+                    page.evaluate(
+                        "key => localStorage.setItem(key, '{malformed')", storage_key
+                    )
+                    page.reload(wait_until="networkidle")
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 1)
+
+                    stale = {**preferences, "version": 0, "window": 365}
+                    page.evaluate(
+                        "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
+                        [storage_key, stale],
+                    )
+                    page.reload(wait_until="networkidle")
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 1)
+
+                    page.add_init_script(
+                        "Storage.prototype.getItem = function () { throw new Error('storage unavailable'); }; "
+                        "Storage.prototype.setItem = function () { throw new Error('storage unavailable'); };"
+                    )
+                    page.reload(wait_until="networkidle")
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 1)
+                    self.assertEqual(errors, [])
+                finally:
+                    context.close()
             finally:
                 browser.close()
 
@@ -2472,8 +2736,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "commentary_zh_cn",
             "account",
             "engagement_pretty",
-            "avatar_initials",
-            "avatar_color",
+            "follower_bin",
+            "followers_count",
+            "followers_label",
             "meta_text",
             "ts_abs_text",
             "classifications",
@@ -2498,6 +2763,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row.get_attribute("data-tint"), tint)
         shell = row.locator(".feed-row-shell")
         self.assertTrue(shell.evaluate("element => element.classList.contains('" + tint + "')"))
+        glyph = row.locator(".follower-glyph")
+        self.assertEqual(glyph.count(), 1)
+        self.assertIn("followers", glyph.get_attribute("aria-label") or "")
+        self.assertGreater(glyph.bounding_box()["width"], 0)
         for selector in ("[data-sig-sentiment]", "[data-sig-post-type]", "[data-sig-nat]"):
             marker = row.locator(selector)
             self.assertTrue(marker.is_visible(), f"marker is hidden: {selector}")
@@ -2592,9 +2861,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_exact_ae11_pulse_projection_is_visible_and_accessible(self) -> None:
-        """The deterministic integrated fixture reaches the browser unchanged."""
-        expected = self.fixture["pulse_expectations"]
+    def test_canonical_twenty_model_pulse_is_visible_and_accessible(self) -> None:
+        """Every canonical enabled model reaches the browser, including zeroes."""
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -2604,7 +2872,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
                     page.wait_for_function(
                         "nickname => Boolean(document.querySelector(`[data-pw-pulse-entry='${nickname}']`))",
-                        arg="pulse_up",
+                        arg="upstage",
                     )
                     projection = page.evaluate(
                         """() => {
@@ -2638,20 +2906,31 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         }"""
                     )
 
-                    self.assertEqual(projection["order"], expected["order"])
-                    self.assertEqual(projection["listItems"], len(expected["order"]))
-                    self.assertEqual(projection["buttons"], len(expected["order"]))
+                    self.assertEqual(projection["order"], list(MODEL_DISPLAY_NAMES))
+                    self.assertEqual(projection["listItems"], 20)
+                    self.assertEqual(projection["buttons"], 20)
                     self.assertEqual(projection["window"], "1")
                     self.assertRegex(projection["computedAt"], r"^\d{4}-\d{2}-\d{2}T")
-                    for nickname, values in expected["details"].items():
+                    zero = projection["details"]["upstage"]
+                    self.assertEqual(zero["text"], "0%")
+                    self.assertEqual(zero["glyph"], "→")
+                    self.assertIn("flat 0 percent", zero["aria"])
+                    for nickname in MODEL_DISPLAY_NAMES:
                         with self.subTest(nickname=nickname):
                             actual = projection["details"][nickname]
-                            self.assertEqual(actual["text"], values["text"])
-                            self.assertEqual(actual["glyph"], values["glyph"])
-                            self.assertEqual(actual["aria"], values["aria"])
                             self.assertEqual(actual["pressed"], "false")
                             self.assertGreater(actual["width"], 0)
                             self.assertGreater(actual["height"], 0)
+                    page.locator('[data-group="brands"]').click()
+                    dropdown = page.locator("body > .filter-dropdown.is-portaled")
+                    open_models = dropdown.locator(
+                        '[data-tier-grid="open"] [data-pw-filter-group="brands"]'
+                    ).evaluate_all("inputs => inputs.map(input => input.value)")
+                    closed_models = dropdown.locator(
+                        '[data-tier-grid="closed"] [data-pw-filter-group="brands"]'
+                    ).evaluate_all("inputs => inputs.map(input => input.value)")
+                    self.assertEqual(closed_models, ["gemini", "gpt", "claude", "grok"])
+                    self.assertTrue(set(open_models).isdisjoint(closed_models))
                 finally:
                     context.close()
             finally:

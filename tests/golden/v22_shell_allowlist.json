@@ -1,3 +1,19 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "selector": "header.topbar",
+      "region": "topbar",
+      "rationale": "Owner-approved mobile legibility change splits the English Pushin' Weight title across two lines while leaving the authored Chinese title unchanged."
+    },
+    {
+      "selector": "nav.filter-bar",
+      "region": "filters",
+      "rationale": "Owner-approved model taxonomy correction moves Claude into the four-model Closed lens; dedicated filter regression tests continue to pin the exact Open and Closed membership."
+    },
+    {
+      "selector": "[data-tz-widget]",
+      "region": "timezone",
+      "rationale": "Production's shipped two-choice timezone pill replaces the mockup's compact four-child pill; dedicated browser tests pin both choices, state, sizing, and persistence."
+    }
+  ]
 }

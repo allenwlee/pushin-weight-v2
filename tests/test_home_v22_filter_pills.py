@@ -81,10 +81,10 @@ BRAND_CONTEXT = [
         "accent_color": "#f97316",
     },
     {
-        "nickname": "anthropic",
-        "display_name": "Anthropic",
-        "display_name_en": "Anthropic",
-        "display_name_zh_cn": "Anthropic",
+        "nickname": "claude",
+        "display_name": "Claude",
+        "display_name_en": "Claude",
+        "display_name_zh_cn": "Claude",
         "accent_color": "#d97706",
     },
 ]
@@ -224,7 +224,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         closed_grid = body.split('data-tier-grid="closed"', 1)[1].split('</div>', 1)[0]
         sentiment_grid = body.split('data-group="sentiment"', 1)[1].split('data-group="nationalism"', 1)[0]
         self.assertIn('value="qwen"', open_grid)
-        self.assertIn('value="anthropic"', closed_grid)
+        self.assertIn('value="claude"', closed_grid)
         self.assertIn('value="positive"', sentiment_grid)
         self.assertIn('value="mixed"', sentiment_grid)
 

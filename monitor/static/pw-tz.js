@@ -6,7 +6,12 @@
   if (!root || !window.Intl || !Intl.DateTimeFormat) return;
 
   var CA_TIMEZONE = 'America/Los_Angeles';
-  var active = root.getAttribute('data-tz-active') === 'ca' ? 'ca' : 'local';
+  var savedMode = window.pwFilter && window.pwFilter.getPreference
+    ? window.pwFilter.getPreference('timezone')
+    : null;
+  var active = savedMode === 'ca' || (savedMode == null && root.getAttribute('data-tz-active') === 'ca')
+    ? 'ca'
+    : 'local';
   var CA_ICON_HTML = '<span class="tz-ca-icon" title="California" aria-label="California">CA</span>';
   var formattersByZone = Object.create(null);
 
@@ -105,6 +110,9 @@
 
   function toggle() {
     active = active === 'local' ? 'ca' : 'local';
+    if (window.pwFilter && window.pwFilter.setPreference) {
+      window.pwFilter.setPreference('timezone', active);
+    }
     render();
   }
 
@@ -116,7 +124,16 @@
     }
   });
   document.addEventListener('pw:chrome-change', render);
-  window.__pwTz = { get mode() { return active; }, setMode: function (mode) { active = mode === 'ca' ? 'ca' : 'local'; render(); } };
+  window.__pwTz = {
+    get mode() { return active; },
+    setMode: function (mode) {
+      active = mode === 'ca' ? 'ca' : 'local';
+      if (window.pwFilter && window.pwFilter.setPreference) {
+        window.pwFilter.setPreference('timezone', active);
+      }
+      render();
+    },
+  };
   render();
   window.setInterval(render, 60 * 1000);
 })();

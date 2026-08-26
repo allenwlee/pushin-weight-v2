@@ -22,7 +22,9 @@
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
-        <span class="avatar" style="background: {{ row.avatar_color }}" aria-hidden="true">{{ row.avatar_initials }}</span>
+        <span class="follower-glyph follower-bin-{{ row.follower_bin }}"
+              role="img" aria-label="{{ row.followers_label }}"
+              title="{{ row.followers_label }}"></span>
         <div class="body">
           <div class="head">
             {% with handle=row.account.handle|default:'' %}

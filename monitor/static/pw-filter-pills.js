@@ -330,6 +330,15 @@
     });
     var body = dd.querySelector(".dd-lens-body");
     if (body) body.setAttribute("data-active-lens", lens);
+    if (window.pwFilter && window.pwFilter.setLens) {
+      var pair = dd.getAttribute('data-lens-pair');
+      var preferenceKey = pair === 'open,closed'
+        ? 'brands'
+        : pair === 'us,cn'
+          ? 'nationalism'
+          : null;
+      if (preferenceKey) window.pwFilter.setLens(preferenceKey, lens);
+    }
     e.preventDefault();
     e.stopPropagation();
   });

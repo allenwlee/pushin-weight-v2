@@ -101,6 +101,15 @@ class HomeV22TopbarLayoutTests(PostgreSQLV22TestCase):
             re.search(r'<div class="topbar-title-row">.*?<h1 class="app-name".*?</h1>.*?</div>', body, re.DOTALL),
             "app-name must live inside .topbar-title-row per mockup L847",
         )
+        self.assertRegex(
+            body,
+            r'<span class="en">\s*<span class="en-line">Pushin\'</span>\s*<span class="en-line">Weight</span>\s*</span>',
+        )
+
+    def test_redundant_pulse_heading_is_absent(self):
+        body = self._get_home().content.decode("utf-8")
+        self.assertNotIn('class="pulse-bar-head"', body)
+        self.assertIn('data-pw-pulse', body)
 
     def test_locale_toggle_in_title_row(self):
         r = self._get_home()

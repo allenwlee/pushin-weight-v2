@@ -27,6 +27,7 @@ from core.models import (
     SentimentKey,
 )
 from monitor.views import (
+    MODEL_DISPLAY_NAMES,
     _HOME_CHART_CACHE,
     _HOME_PULSE_CACHE,
     _HOME_TOP_VOICES_CACHE,
@@ -107,34 +108,59 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         _clear_home_pulse_cache()
 
     def test_ae11_exact_equal_window_projection_and_single_query_cache(self):
-        with self.assertNumQueries(1):
+        canonical = {
+            "up": "Up",
+            "down": "Down",
+            "flat": "Flat",
+            "new": "New",
+            "absent": "Absent",
+        }
+        with patch.dict("monitor.views.MODEL_DISPLAY_NAMES", canonical, clear=True):
+            with self.assertNumQueries(1):
+                pulse = _build_home_pulse_payload(1, now=ANCHOR)
+
+            by_nickname = {entry["nickname"]: entry for entry in pulse["entries"]}
+            self.assertEqual(list(by_nickname), list(canonical))
+            self.assertEqual(
+                (by_nickname["up"]["current_count"], by_nickname["up"]["prior_count"], by_nickname["up"]["delta_percent"], by_nickname["up"]["direction"]),
+                (6, 4, 50, "up"),
+            )
+            self.assertEqual(
+                (by_nickname["down"]["current_count"], by_nickname["down"]["prior_count"], by_nickname["down"]["delta_percent"], by_nickname["down"]["direction"]),
+                (2, 4, -50, "down"),
+            )
+            self.assertEqual(
+                (by_nickname["flat"]["current_count"], by_nickname["flat"]["prior_count"], by_nickname["flat"]["delta_percent"], by_nickname["flat"]["direction"]),
+                (4, 4, 0, "flat"),
+            )
+            self.assertEqual(
+                (by_nickname["new"]["current_count"], by_nickname["new"]["prior_count"], by_nickname["new"]["delta_percent"], by_nickname["new"]["direction"]),
+                (3, 0, None, None),
+            )
+            self.assertEqual(by_nickname["new"]["status"], "new")
+            self.assertEqual(
+                (by_nickname["absent"]["current_count"], by_nickname["absent"]["prior_count"], by_nickname["absent"]["delta_percent"], by_nickname["absent"]["direction"]),
+                (0, 0, 0, "flat"),
+            )
+            self.assertEqual(pulse["window_days"], 1)
+            self.assertEqual(pulse["computed_at"], ANCHOR.isoformat())
+
+            with self.assertNumQueries(0):
+                self.assertEqual(_build_home_pulse_payload(1, now=ANCHOR), pulse)
+
+    def test_canonical_twenty_model_query_is_date_bounded_and_single_query(self):
+        with CaptureQueriesContext(connection) as queries:
             pulse = _build_home_pulse_payload(1, now=ANCHOR)
 
-        by_nickname = {entry["nickname"]: entry for entry in pulse["entries"]}
-        self.assertEqual(list(by_nickname), ["up", "flat", "new", "down"])
+        self.assertEqual(len(queries), 1)
         self.assertEqual(
-            (by_nickname["up"]["current_count"], by_nickname["up"]["prior_count"], by_nickname["up"]["delta_percent"], by_nickname["up"]["direction"]),
-            (6, 4, 50, "up"),
+            [entry["nickname"] for entry in pulse["entries"]],
+            list(MODEL_DISPLAY_NAMES),
         )
-        self.assertEqual(
-            (by_nickname["down"]["current_count"], by_nickname["down"]["prior_count"], by_nickname["down"]["delta_percent"], by_nickname["down"]["direction"]),
-            (2, 4, -50, "down"),
-        )
-        self.assertEqual(
-            (by_nickname["flat"]["current_count"], by_nickname["flat"]["prior_count"], by_nickname["flat"]["delta_percent"], by_nickname["flat"]["direction"]),
-            (4, 4, 0, "flat"),
-        )
-        self.assertEqual(
-            (by_nickname["new"]["current_count"], by_nickname["new"]["prior_count"], by_nickname["new"]["delta_percent"], by_nickname["new"]["direction"]),
-            (3, 0, None, None),
-        )
-        self.assertEqual(by_nickname["new"]["status"], "new")
-        self.assertNotIn("absent", by_nickname)
-        self.assertEqual(pulse["window_days"], 1)
-        self.assertEqual(pulse["computed_at"], ANCHOR.isoformat())
-
-        with self.assertNumQueries(0):
-            self.assertEqual(_build_home_pulse_payload(1, now=ANCHOR), pulse)
+        self.assertEqual(len(pulse["entries"]), 20)
+        sql = queries.captured_queries[0]["sql"].upper()
+        self.assertGreaterEqual(sql.count("SELECT COUNT"), 2)
+        self.assertNotIn("FILTER (WHERE", sql)
 
     def test_half_away_from_zero_rounding_and_rounded_zero_direction(self):
         self.assertEqual(_round_pulse_percent(9, 8), 13)

@@ -6,15 +6,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=chart-time1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=preferences-ui1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
-  <script src="{% static 'pw-filter-store.js' %}?v=v24-controls1" defer></script>
-  <script src="{% static 'pw-filter-pills.js' %}?v=filter-portal1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=chart-time1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=filter-feed1" defer></script>
-  <script src="{% static 'pw-tz.js' %}?v=v24-controls1" defer></script>
-  <script src="{% static 'pw-locale-toggle.js' %}?v=filter-feed1" defer></script>
+  <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=dual-bottom-axes1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=follower-glyph1" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
 <!-- pw-shell:v20 -->
@@ -22,6 +22,7 @@
       data-pw-filters='{{ applied_filters_json|safe }}'
       data-pw-brands='{{ brand_nicknames_json|safe }}'
       data-pw-locale="{{ active_locale }}"
+      data-pw-preferences-namespace="{{ home_preferences_namespace }}"
       data-pw-window="{{ home_window_days }}"
       data-pw-page="multi"
       data-pw-shell="v20"
@@ -35,7 +36,7 @@
     <div class="topbar-title-row">
       <h1 class="app-name">
         <span class="zh">{{ app_name_zh }}</span>
-        <span class="en">{{ app_name_en }}</span>
+        <span class="en"><span class="en-line">Pushin'</span><span class="en-line">Weight</span></span>
       </h1>
       <nav class="window-toggle locale-toggle" aria-label="{% if is_zh_chrome %}显示语言{% else %}Display language{% endif %}" data-i18n-aria="locale">
         <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
@@ -83,10 +84,6 @@
   </header>
 
   <section class="pulse-bar-wrap" aria-label="{% trans 'Trending models' %}" data-pw-pulse-shell>
-    <div class="pulse-bar-head">
-      <strong>{% trans "Trending" %}</strong>
-      <span class="muted">{% trans "· 1d heat" %}</span>
-    </div>
     <div class="pulse-bar" role="list" data-pw-pulse data-pw-window="{{ pulse.window_days }}" data-pw-computed-at="{{ pulse.computed_at }}">
       {% for entry in pulse.entries %}
         <li>

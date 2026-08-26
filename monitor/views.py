@@ -20,10 +20,12 @@ from decimal import Decimal, ROUND_HALF_UP
 from threading import Lock
 from time import monotonic
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.core.signing import salted_hmac
 from django.db.models import (
     Count,
     Exists,
@@ -33,6 +35,7 @@ from django.db.models import (
     QuerySet,
     Subquery,
 )
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
@@ -193,9 +196,9 @@ _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN: dict[str, str] = {
 
 # Presentation-only V22 lens. Brand has no open/closed schema field, and these
 # four settled provider nicknames are the authored closed-model tier.
-_HOME_CLOSED_BRAND_NICKNAMES = frozenset({
-    "anthropic", "openai", "spacexai", "google",
-})
+_HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
+    "gemini", "gpt", "claude", "grok",
+)
 
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
 HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
@@ -461,6 +464,14 @@ def _resolve_home_window(request: HttpRequest) -> int:
                     return n
         except (ValueError, TypeError):
             pass
+    # Shareable direct-query form. The complete filter payload above remains
+    # the normal browser path, but a valid explicit window wins over cookies.
+    try:
+        direct_window = int(request.GET.get("window", ""))
+    except (TypeError, ValueError):
+        direct_window = None
+    if direct_window in ALLOWED_HOME_WINDOWS:
+        return direct_window
     # Fall back to cookie
     raw = request.COOKIES.get(HOME_WINDOW_COOKIE)
     if raw is None:
@@ -565,6 +576,18 @@ def _avatar_color(handle: str) -> str:
         n &= 0xFFFFFFFF
     hue = n % 360
     return f"hsl({hue}, 55%, 45%)"
+
+
+def _follower_bin(count: int | None) -> str:
+    """Return the public-feed follower glyph bucket for a raw count."""
+    followers = max(0, int(count or 0))
+    if followers < 1_000:
+        return "0-1k"
+    if followers < 10_000:
+        return "1k-10k"
+    if followers < 50_000:
+        return "10k-50k"
+    return "50k-plus"
 
 
 def _engagement_pretty(followers: int, likes: int, rts: int, replies: int) -> dict[str, str]:
@@ -772,6 +795,12 @@ def _v22_feed_display_fields(
     sentiment_keys, _, _, _ = _feed_signal_keys(sentiment_classifications)
     handle = account.get("handle") or author_handle or ""
     followers_count = account.get("followers_count") or 0
+    engagement_pretty = _engagement_pretty(
+        followers_count,
+        like_count or 0,
+        retweet_count or 0,
+        reply_count or 0,
+    )
     return {
         "sentiment_keys": sentiment_keys,
         "post_type_keys": post_type_keys,
@@ -782,12 +811,10 @@ def _v22_feed_display_fields(
         "ts_abs_text": _feed_abs_stamp(created_at),
         "avatar_initials": _avatar_initials(handle),
         "avatar_color": _avatar_color(handle),
-        "engagement_pretty": _engagement_pretty(
-            followers_count,
-            like_count or 0,
-            retweet_count or 0,
-            reply_count or 0,
-        ),
+        "follower_bin": _follower_bin(followers_count),
+        "followers_count": followers_count,
+        "followers_label": f"{engagement_pretty['followers']} followers",
+        "engagement_pretty": engagement_pretty,
     }
 
 
@@ -1202,6 +1229,12 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
     unsanctioned = request.GET.get("unsanctioned")
     if unsanctioned in ("off", "only", "any"):
         out["unsanctioned"] = unsanctioned
+    try:
+        window = int(request.GET.get("window", ""))
+    except (TypeError, ValueError):
+        window = None
+    if window in ALLOWED_HOME_WINDOWS:
+        out["window"] = window
     return out
 
 
@@ -1688,7 +1721,7 @@ def _build_home_pulse_payload(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Aggregate current/prior equal windows in one query and rank the top eight."""
+    """Aggregate equal windows for every canonical enabled model in one query."""
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
     now = now or django_timezone.now()
@@ -1700,47 +1733,68 @@ def _build_home_pulse_payload(
 
         midpoint = now - timedelta(days=window_days)
         start = now - timedelta(days=window_days * 2)
-        rows = list(
+        canonical_nicknames = list(MODEL_DISPLAY_NAMES)
+        current_counts = (
             PostBrand.objects
             .filter(
-                brand__is_sentinel=False,
-                post__created_at__gte=start,
+                brand_id=OuterRef("nickname"),
+                post__created_at__gte=midpoint,
                 post__created_at__lt=now,
             )
+            .order_by()
+            .values("brand_id")
+            .annotate(total=Count("post_id"))
+            .values("total")[:1]
+        )
+        prior_counts = (
+            PostBrand.objects
+            .filter(
+                brand_id=OuterRef("nickname"),
+                post__created_at__gte=start,
+                post__created_at__lt=midpoint,
+            )
+            .order_by()
+            .values("brand_id")
+            .annotate(total=Count("post_id"))
+            .values("total")[:1]
+        )
+        rows = list(
+            Brand.objects
+            .filter(is_sentinel=False, nickname__in=canonical_nicknames)
             .values(
-                "brand_id",
-                "brand__display_name",
-                "brand__display_name_en",
-                "brand__display_name_zh_cn",
-                "brand__accent_color",
+                "nickname",
+                "display_name",
+                "display_name_en",
+                "display_name_zh_cn",
+                "accent_color",
             )
             .annotate(
-                current_count=Count(
-                    "post",
-                    filter=Q(post__created_at__gte=midpoint, post__created_at__lt=now),
-                ),
-                prior_count=Count(
-                    "post",
-                    filter=Q(post__created_at__gte=start, post__created_at__lt=midpoint),
-                ),
+                current_count=Coalesce(Subquery(current_counts), 0),
+                prior_count=Coalesce(Subquery(prior_counts), 0),
             )
         )
+        rows_by_nickname = {row["nickname"]: row for row in rows}
         entries: list[dict[str, Any]] = []
-        for row in rows:
-            current = row["current_count"] or 0
-            prior = row["prior_count"] or 0
-            if current == 0 and prior == 0:
-                continue
+        for nickname in canonical_nicknames:
+            row = rows_by_nickname.get(nickname, {})
+            current = row.get("current_count") or 0
+            prior = row.get("prior_count") or 0
             delta = _round_pulse_percent(current, prior)
             is_new = prior == 0 and current > 0
-            direction = None if is_new else "up" if delta > 0 else "down" if delta < 0 else "flat"
-            nickname = row["brand_id"]
+            if current == 0 and prior == 0:
+                delta = 0
+            direction = (
+                None if is_new
+                else "up" if delta > 0
+                else "down" if delta < 0
+                else "flat"
+            )
             entries.append({
                 "nickname": nickname,
-                "display_name": row["brand__display_name"] or MODEL_DISPLAY_NAMES.get(nickname, nickname),
-                "display_name_en": row["brand__display_name_en"] or row["brand__display_name"] or MODEL_DISPLAY_NAMES.get(nickname, nickname),
-                "display_name_zh_cn": row["brand__display_name_zh_cn"] or row["brand__display_name"] or MODEL_DISPLAY_NAMES.get(nickname, nickname),
-                "accent_color": row["brand__accent_color"] or MODEL_ACCENT_COLORS.get(nickname, "#9ca3af"),
+                "display_name": row.get("display_name") or MODEL_DISPLAY_NAMES.get(nickname, nickname),
+                "display_name_en": row.get("display_name_en") or row.get("display_name") or MODEL_DISPLAY_NAMES.get(nickname, nickname),
+                "display_name_zh_cn": row.get("display_name_zh_cn") or row.get("display_name") or MODEL_DISPLAY_NAMES.get(nickname, nickname),
+                "accent_color": row.get("accent_color") or MODEL_ACCENT_COLORS.get(nickname, "#9ca3af"),
                 "current_count": current,
                 "prior_count": prior,
                 "delta_percent": delta,
@@ -1748,16 +1802,10 @@ def _build_home_pulse_payload(
                 "status": "new" if is_new else "numeric",
                 "direction": direction,
             })
-        entries.sort(key=lambda entry: (
-            -entry["current_count"],
-            0 if entry["status"] == "new" else 1,
-            -(entry["delta_percent"] if entry["delta_percent"] is not None else 0),
-            entry["nickname"].casefold(),
-        ))
         payload = {
             "window_days": window_days,
             "computed_at": now.isoformat(),
-            "entries": entries[:8],
+            "entries": entries,
         }
         _HOME_PULSE_CACHE[window_days] = (cache_now, payload)
         return deepcopy(payload)
@@ -1852,9 +1900,25 @@ def _partition_home_brands(
     brands: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Split the V22 brand lens without inventing a persistence field."""
-    closed = [brand for brand in brands if brand["nickname"] in _HOME_CLOSED_BRAND_NICKNAMES]
+    by_nickname = {brand["nickname"]: brand for brand in brands}
+    closed = [
+        by_nickname[nickname]
+        for nickname in _HOME_CLOSED_BRAND_NICKNAMES
+        if nickname in by_nickname
+    ]
     open_ = [brand for brand in brands if brand["nickname"] not in _HOME_CLOSED_BRAND_NICKNAMES]
     return open_, closed
+
+
+def _home_preferences_namespace(request: HttpRequest) -> str:
+    """Return an opaque stable browser-preference namespace for this viewer."""
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return "anonymous"
+    return "user-" + salted_hmac(
+        "pushinweight.home.preferences",
+        str(user.pk),
+    ).hexdigest()[:16]
 
 
 @ensure_csrf_cookie
@@ -1874,6 +1938,11 @@ def home(request: HttpRequest) -> HttpResponse:
         "brands": [brand["nickname"] for brand in open_brands],
         "window": window_days,
     }
+    requested_filters = _parse_filters_from_request(request)
+    if requested_filters:
+        initial_filters.update(_normalize_home_filters(requested_filters))
+        # Keep all server projections on the same already-resolved window.
+        initial_filters["window"] = window_days
 
     # Get recent posts with brand associations for feed
     feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
@@ -1922,6 +1991,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
         "app_title_zh": APP_TITLE_ZH,
+        "home_preferences_namespace": _home_preferences_namespace(request),
         **filter_entries,
         "pulse": initial_chart_payload["pulse"],
         "payload": json.dumps(initial_chart_payload),
@@ -2598,7 +2668,11 @@ def spend_stub(request: HttpRequest) -> HttpResponse:
 
 
 
-def _safe_home_redirect(request: HttpRequest) -> str:
+def _safe_home_redirect(
+    request: HttpRequest,
+    *,
+    drop_query_keys: tuple[str, ...] = (),
+) -> str:
     """Keep cookie-setting endpoints on the dashboard origin."""
     referrer = request.META.get("HTTP_REFERER", "")
     if url_has_allowed_host_and_scheme(
@@ -2606,7 +2680,15 @@ def _safe_home_redirect(request: HttpRequest) -> str:
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        return referrer
+        if not drop_query_keys:
+            return referrer
+        parsed = urlsplit(referrer)
+        query = urlencode([
+            (key, value)
+            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if key not in drop_query_keys
+        ])
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
     return "/"
 
 
@@ -2623,7 +2705,7 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
-    response = redirect(_safe_home_redirect(request))
+    response = redirect(_safe_home_redirect(request, drop_query_keys=("locale",)))
     response.set_cookie("locale", normalized, max_age=365 * 24 * 3600)
     request.session["_language"] = django_code
     return response

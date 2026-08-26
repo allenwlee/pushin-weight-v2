@@ -9,6 +9,7 @@
     --up: #10b981;
     --down: #f87171;
     --kimi: #ec4899;
+    --followers-rgb: 96, 165, 250;
   }
   * { box-sizing: border-box; }
   body {
@@ -192,20 +193,6 @@
     border-radius: 10px;
     padding: 7px 10px 5px;
   }
-  .pulse-bar-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 5px;
-  }
-  .pulse-bar-head .label {
-    font-size: 10px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 500;
-  }
-  .pulse-bar-head .updated { font-size: 10px; color: var(--muted); }
   .pulse-bar {
     display: flex;
     gap: 5px;
@@ -660,6 +647,29 @@
     font-weight: 700;
     color: white;
   }
+  .feed-row .follower-glyph {
+    --follower-size: 8px;
+    --follower-opacity: 0.32;
+    flex: 0 0 var(--follower-size);
+    width: var(--follower-size);
+    height: var(--follower-size);
+    margin-top: 2px;
+    border-radius: 50%;
+    background: rgba(var(--followers-rgb), var(--follower-opacity));
+    box-shadow: 0 0 0 1px rgba(var(--followers-rgb), 0.22);
+  }
+  .feed-row .follower-bin-1k-10k {
+    --follower-size: 12px;
+    --follower-opacity: 0.48;
+  }
+  .feed-row .follower-bin-10k-50k {
+    --follower-size: 16px;
+    --follower-opacity: 0.68;
+  }
+  .feed-row .follower-bin-50k-plus {
+    --follower-size: 22px;
+    --follower-opacity: 0.9;
+  }
   .feed-row .body { flex: 1; min-width: 0; }
   .feed-row .head {
     display: flex;
@@ -1085,6 +1095,30 @@ body.desktop-shell .pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] 
   flex: 1 1 0 !important;
   width: auto !important;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+.topbar-title-row .app-name .zh {
+  flex: 0 0 auto;
+}
+.topbar-title-row .app-name .en {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  margin-left: 6px;
+  font-size: 9.5px;
+  line-height: 0.95;
+  height: 1.9em;
+  white-space: nowrap;
+}
+.topbar-title-row .app-name .en-line {
+  display: block;
+  height: 0.95em;
+  line-height: 0.95;
 }
 .topbar-title-row .locale-toggle {
   flex: 0 0 auto;
@@ -1108,6 +1142,11 @@ body.desktop-shell .pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] 
 }
 body.desktop-shell .topbar-title-row .locale-toggle { font-size: 12px; }
 body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; font-size: 12px; height: auto; }
+body.desktop-shell .topbar .topbar-title-row h1.app-name .en {
+  font-size: 10px;
+  height: 1.9em;
+  line-height: 0.95;
+}
 
 @media (max-width: 899px) {
   body.desktop-shell .topbar-controls .window-toggle:not(.locale-toggle) {
@@ -1121,6 +1160,13 @@ body.desktop-shell .topbar-title-row .locale-toggle button { padding: 5px 12px; 
 }
 
 @media (max-width: 340px) {
+  .topbar-title-row { gap: 6px; }
+  body.desktop-shell .topbar-title-row .locale-toggle button {
+    width: 50px;
+    flex-basis: 50px;
+    padding-inline: 0;
+    font-size: 10px;
+  }
   body.desktop-shell .topbar .window-toggle:not(.locale-toggle) button {
     width: auto;
     flex: 1 1 0;

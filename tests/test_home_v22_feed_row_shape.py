@@ -39,7 +39,8 @@ def _fake_row():
         "nat_cn": "", "nat_us": "mild_pro",
         "tint_class": "tint-positive",
         "meta_text": "12m", "ts_abs_text": "(01:51 本地)",
-        "avatar_initials": "K", "avatar_color": "#ec4899",
+        "follower_bin": "50k-plus", "followers_count": 128400,
+        "followers_label": "128.4k followers",
         "engagement_pretty": {"followers": "128.4k", "likes": "1.2k", "retweets": "340", "replies": "89"},
         "brands": [{"nickname": "kimi", "display_name": "Kimi", "display_name_en": "Kimi", "display_name_zh_cn": "Kimi"}],
         "brand_nicknames": ["kimi"],
@@ -133,11 +134,17 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         for sig in ("sig-sentiment", "sig-post-type", "sig-nat", "sig-unsanctioned"):
             self.assertIn(f'sig-row {sig}"', body, f"missing .sig-row.{sig}")
 
-    def test_feed_main_has_avatar_handle_text_engagement(self):
+    def test_feed_main_has_follower_glyph_handle_text_engagement(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
-        # avatar first child of feed-main
-        self.assertRegex(body, r'<div class="feed-main">\s*<span class="avatar"')
+        # Follower-count glyph is the first child of feed-main; initials avatars
+        # no longer carry the primary at-a-glance signal on the public feed.
+        self.assertRegex(
+            body,
+            r'<div class="feed-main">\s*<span class="follower-glyph follower-bin-50k-plus"',
+        )
+        self.assertIn('aria-label="128.4k followers"', body)
+        self.assertNotIn('<span class="avatar"', body)
         # head contains handle + meta + ts-abs
         self.assertIn('class="head"', body)
         self.assertIn('class="handle"', body)

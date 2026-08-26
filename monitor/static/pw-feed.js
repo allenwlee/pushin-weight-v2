@@ -154,6 +154,12 @@
     return h.replace(/^@+/, '');
   }
 
+  function followerBin(row) {
+    var allowed = ['0-1k', '1k-10k', '10k-50k', '50k-plus'];
+    if (allowed.indexOf(row.follower_bin) !== -1) return row.follower_bin;
+    return '0-1k';
+  }
+
   // iter 14 (U5): render mockup-canon 2-column grid. Emoji + tint are
   // populated by paintSignals() once the row is in the DOM.
   function renderRowHtml(row) {
@@ -166,6 +172,8 @@
           escapeHtml(handleLabel) + '</a>'
       : escapeHtml(handleLabel);
     var followersPretty = (row.account && row.account.followers_pretty) || '';
+    var followersLabel = row.followers_label || (followersPretty || '0') + ' followers';
+    var followerClass = followerBin(row);
     var eng = row.engagement_pretty || {};
     var tint = row.tint_class || 'tint-neutral';
     var metaText = row.meta_text || '';
@@ -184,7 +192,9 @@
     return (
       '<div class="feed-row-shell ' + escapeHtml(tint) + '">' +
         '<div class="feed-main">' +
-          '<span class="avatar" style="background: ' + escapeHtml(row.avatar_color || '') + '">' + escapeHtml(row.avatar_initials || '?') + '</span>' +
+          '<span class="follower-glyph follower-bin-' + followerClass + '" role="img"' +
+            ' aria-label="' + escapeHtml(followersLabel) + '"' +
+            ' title="' + escapeHtml(followersLabel) + '"></span>' +
           '<div class="body">' +
             '<div class="head">' +
               '<span class="handle">' + handleHtml + '</span>' +
