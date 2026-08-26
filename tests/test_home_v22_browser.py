@@ -948,12 +948,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                   return {
                                     scaleKeys: Object.keys(chart.scales).sort(),
                                     localPosition: chart.scales.x?.position,
-                                    californiaPosition: chart.scales.xCalifornia?.position,
+                                    comparisonPosition: chart.scales.xComparison?.position,
                                     localTop: chart.scales.x?.top,
-                                    californiaTop: chart.scales.xCalifornia?.top,
+                                    comparisonTop: chart.scales.xComparison?.top,
                                     localLabels: chart.scales.x ? tickLabels(chart.scales.x) : [],
-                                    californiaLabels: chart.scales.xCalifornia
-                                      ? tickLabels(chart.scales.xCalifornia)
+                                    comparisonLabels: chart.scales.xComparison
+                                      ? tickLabels(chart.scales.xComparison)
                                       : [],
                                     expectedLocal: instants.map((instant) => {
                                       const hour = instant.getHours();
@@ -965,7 +965,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     }),
                                     localColor: chart.scales.x?.options.ticks.color,
                                     defaultColor: Chart.defaults.color,
-                                    californiaColor: chart.scales.xCalifornia?.options.ticks.color,
+                                    comparisonColor: chart.scales.xComparison?.options.ticks.color,
+                                    localTitle: chart.scales.x?.options.title.text,
+                                    comparisonTitle: chart.scales.xComparison?.options.title.text,
+                                    localBorder: chart.scales.x?.options.border.display,
+                                    comparisonBorder: chart.scales.xComparison?.options.border.display,
                                     legendOrder: [...region.querySelectorAll('[data-pw-chart-legend] [data-pw-chart-brand]')]
                                       .map((node) => node.dataset.pwChartBrand),
                                     expectedLegendOrder: pulseOrder.concat(chartOnly),
@@ -978,22 +982,26 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                   };
                                 }"""
                             )
-                            self.assertEqual(runtime["scaleKeys"], ["x", "xCalifornia", "y"])
+                            self.assertEqual(runtime["scaleKeys"], ["x", "xComparison", "y"])
                             self.assertEqual(runtime["localPosition"], "bottom")
-                            self.assertEqual(runtime["californiaPosition"], "bottom")
-                            self.assertLess(runtime["localTop"], runtime["californiaTop"])
+                            self.assertEqual(runtime["comparisonPosition"], "bottom")
+                            self.assertLess(runtime["localTop"], runtime["comparisonTop"])
                             self.assertEqual(runtime["localLabels"], runtime["expectedLocal"])
                             self.assertEqual(
-                                runtime["californiaLabels"],
+                                runtime["comparisonLabels"],
                                 runtime["expectedCalifornia"],
                             )
                             self.assertEqual(len(runtime["localLabels"]), 24)
-                            self.assertEqual(len(runtime["californiaLabels"]), 24)
+                            self.assertEqual(len(runtime["comparisonLabels"]), 24)
                             self.assertEqual(runtime["localColor"], runtime["defaultColor"])
                             self.assertEqual(
-                                runtime["californiaColor"].replace(" ", ""),
+                                runtime["comparisonColor"].replace(" ", ""),
                                 "rgba(251,191,36,0.45)",
                             )
+                            self.assertEqual(runtime["localTitle"], "local")
+                            self.assertEqual(runtime["comparisonTitle"], "CA")
+                            self.assertTrue(runtime["localBorder"])
+                            self.assertFalse(runtime["comparisonBorder"])
                             self.assertEqual(
                                 runtime["legendOrder"],
                                 runtime["expectedLegendOrder"],
@@ -1150,7 +1158,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             hour: 'numeric',
                             hourCycle: 'h23',
                           });
-                          const ticks = chart.scales.xCalifornia.ticks;
+                          const ticks = chart.scales.xComparison.ticks;
                           const firstHour = new Date(chart.data.labels[0]);
                           firstHour.setMinutes(0, 0, 0);
                           firstHour.setHours(firstHour.getHours() + 1);
@@ -2413,6 +2421,22 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "[data-pw-window-btn].is-active"
                     ).evaluate("element => getComputedStyle(element).backgroundColor")
                     self.assertEqual(selected_background, active_window_background)
+                    selected_edge = page.locator(
+                        f'[data-pw-pulse-entry="{nicknames[1]}"]'
+                    ).evaluate(
+                        """element => {
+                          const probe = document.createElement('span');
+                          probe.style.color = getComputedStyle(element).getPropertyValue('--chip-color');
+                          document.body.appendChild(probe);
+                          const expected = getComputedStyle(probe).color;
+                          probe.remove();
+                          return {
+                            expected,
+                            actual: getComputedStyle(element).borderLeftColor,
+                          };
+                        }"""
+                    )
+                    self.assertEqual(selected_edge["actual"], selected_edge["expected"])
 
                     chart_runtime = page.evaluate(
                         """() => {
@@ -2507,6 +2531,92 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 ).first.inner_text(),
                                 initial_stamp,
                             )
+                            axis_colors = page.evaluate(
+                                """() => {
+                                  const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                                  return {
+                                    local: chart.scales.x.options.ticks.color,
+                                    comparison: chart.scales.xComparison.options.ticks.color,
+                                  };
+                                }"""
+                            )
+                            self.assertEqual(
+                                axis_colors["local"].replace(" ", ""),
+                                "rgba(102,102,102,0.55)",
+                            )
+                            self.assertEqual(
+                                axis_colors["comparison"].replace(" ", ""),
+                                "rgba(251,191,36,1)",
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
+    def test_california_browser_compares_against_localized_beijing_time(self) -> None:
+        """California-local browsers get the Beijing comparison contract."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, expected_local, expected_title in (
+                    ("en", "local", "Beijing"),
+                    ("zh_hans", "本地", "北京"),
+                ):
+                    with self.subTest(locale=locale):
+                        context = browser.new_context(
+                            viewport=VIEWPORTS["desktop"],
+                            timezone_id="America/Los_Angeles",
+                        )
+                        page = context.new_page()
+                        try:
+                            page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            page.wait_for_function("() => window.__pwTz")
+                            pill = page.locator("[data-tz-widget]")
+                            icon = pill.locator("[data-tz-comparison-icon]")
+                            self.assertEqual(
+                                pill.get_attribute("data-tz-comparison"),
+                                "beijing",
+                            )
+                            self.assertTrue(
+                                icon.evaluate("element => element.classList.contains('tz-bj-icon')")
+                            )
+                            self.assertEqual(icon.inner_text(), "京")
+                            self.assertEqual(icon.get_attribute("aria-label"), expected_title)
+                            chart_state = page.evaluate(
+                                """() => {
+                                  const canvas = document.querySelector('canvas.home-chart');
+                                  const chart = Chart.getChart(canvas);
+                                  const payload = JSON.parse(canvas.dataset.home);
+                                  const firstHour = new Date(payload.days[0]);
+                                  firstHour.setMinutes(0, 0, 0);
+                                  firstHour.setHours(firstHour.getHours() + 1);
+                                  const formatter = new Intl.DateTimeFormat('en-US', {
+                                    timeZone: 'Asia/Shanghai',
+                                    hour: 'numeric',
+                                    hourCycle: 'h23',
+                                  });
+                                  const expected = Array.from({length: 24}, (_, index) => {
+                                    const instant = new Date(firstHour.getTime() + index * 60 * 60 * 1000);
+                                    const hour = Number(formatter.format(instant));
+                                    return hour % 2 === 0 ? `${hour}:00` : '';
+                                  });
+                                  return {
+                                    timezone: window.__pwTz.getComparison().timezone,
+                                    localTitle: chart.scales.x.options.title.text,
+                                    title: chart.scales.xComparison.options.title.text,
+                                    labels: chart.scales.xComparison.ticks.map((tick) => String(tick.label)),
+                                    expected,
+                                  };
+                                }"""
+                            )
+                            self.assertEqual(chart_state["timezone"], "Asia/Shanghai")
+                            self.assertEqual(chart_state["localTitle"], expected_local)
+                            self.assertEqual(chart_state["title"], expected_title)
+                            self.assertEqual(len(chart_state["labels"]), 24)
+                            self.assertEqual(chart_state["labels"], chart_state["expected"])
                         finally:
                             context.close()
             finally:
@@ -2750,6 +2860,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         ):
             self.assertIn(key, row)
         self.assertEqual(row["account"]["handle"], "v22metadata000")
+        self.assertEqual(row["account"]["display_name"], "V22 Metadata Account 000")
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
         self.assertEqual(row["post_type_keys"], ["buzz_releases", "hands_on_usage"])
         self.assertEqual(row["nat_cn"], "pro")
@@ -2763,10 +2874,17 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row.get_attribute("data-tint"), tint)
         shell = row.locator(".feed-row-shell")
         self.assertTrue(shell.evaluate("element => element.classList.contains('" + tint + "')"))
-        glyph = row.locator(".follower-glyph")
+        lead = row.locator(".follower-lead")
+        glyph = lead.locator(".follower-glyph")
+        count = lead.locator(".follower-count")
+        self.assertEqual(lead.count(), 1)
         self.assertEqual(glyph.count(), 1)
-        self.assertIn("followers", glyph.get_attribute("aria-label") or "")
+        self.assertIn("followers", lead.get_attribute("aria-label") or "")
         self.assertGreater(glyph.bounding_box()["width"], 0)
+        self.assertTrue((count.inner_text() or "").strip())
+        account_link = row.locator(".feed-handle-link")
+        self.assertTrue(account_link.inner_text().startswith("V22 Metadata Account "))
+        self.assertRegex(account_link.get_attribute("href") or "", r"/v22metadata\d{3}$")
         for selector in ("[data-sig-sentiment]", "[data-sig-post-type]", "[data-sig-nat]"):
             marker = row.locator(selector)
             self.assertTrue(marker.is_visible(), f"marker is hidden: {selector}")
@@ -2902,6 +3020,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             buttons: bar.querySelectorAll('button').length,
                             window: bar.dataset.pwWindow,
                             computedAt: bar.dataset.pwComputedAt,
+                            overflowX: getComputedStyle(bar).overflowX,
+                            scrollbarWidth: getComputedStyle(bar).scrollbarWidth,
+                            webkitScrollbarDisplay: getComputedStyle(bar, '::-webkit-scrollbar').display,
+                            overflows: bar.scrollWidth > bar.clientWidth,
+                            reachesLast: (() => {
+                              bar.scrollLeft = bar.scrollWidth;
+                              const barBox = bar.getBoundingClientRect();
+                              const lastBox = entries.at(-1).getBoundingClientRect();
+                              return lastBox.right <= barBox.right + 1 && lastBox.left >= barBox.left - 1;
+                            })(),
                           };
                         }"""
                     )
@@ -2911,6 +3039,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(projection["buttons"], 20)
                     self.assertEqual(projection["window"], "1")
                     self.assertRegex(projection["computedAt"], r"^\d{4}-\d{2}-\d{2}T")
+                    self.assertEqual(projection["overflowX"], "auto")
+                    self.assertTrue(projection["overflows"])
+                    self.assertNotEqual(projection["scrollbarWidth"], "none")
+                    self.assertNotEqual(projection["webkitScrollbarDisplay"], "none")
+                    self.assertTrue(projection["reachesLast"])
                     zero = projection["details"]["upstage"]
                     self.assertEqual(zero["text"], "0%")
                     self.assertEqual(zero["glyph"], "→")
@@ -2931,6 +3064,35 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     ).evaluate_all("inputs => inputs.map(input => input.value)")
                     self.assertEqual(closed_models, ["gemini", "gpt", "claude", "grok"])
                     self.assertTrue(set(open_models).isdisjoint(closed_models))
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_mobile_pulse_remains_touch_scrollable_without_desktop_scrollbar(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport={"width": 390, "height": 844},
+                    timezone_id="Asia/Tokyo",
+                )
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    pulse = page.locator("[data-pw-pulse]")
+                    mobile_overflow = pulse.evaluate(
+                        """bar => ({
+                          overflowX: getComputedStyle(bar).overflowX,
+                          scrollbarWidth: getComputedStyle(bar).scrollbarWidth,
+                          webkitScrollbarDisplay: getComputedStyle(bar, '::-webkit-scrollbar').display,
+                          overflows: bar.scrollWidth > bar.clientWidth,
+                        })"""
+                    )
+                    self.assertEqual(mobile_overflow["overflowX"], "auto")
+                    self.assertTrue(mobile_overflow["overflows"])
+                    self.assertEqual(mobile_overflow["scrollbarWidth"], "none")
+                    self.assertEqual(mobile_overflow["webkitScrollbarDisplay"], "none")
                 finally:
                     context.close()
             finally:
@@ -2960,6 +3122,41 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         flagged = next(row for row in all_rows["rows"] if row["unsanctioned"])
         self.assertIn("unsanctioned", flagged)
         self.assertTrue(flagged["unsanctioned"])
+
+    def test_follower_lead_keeps_feed_bodies_aligned_across_all_bins(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    geometry = page.locator(".feed-row[data-pw-feed-row]").evaluate_all(
+                        """rows => rows.slice(0, 4).map((row) => {
+                          const lead = row.querySelector('.follower-lead');
+                          const glyph = row.querySelector('.follower-glyph');
+                          const body = row.querySelector('.feed-main > .body');
+                          return {
+                            leadWidth: lead.getBoundingClientRect().width,
+                            bodyLeft: body.getBoundingClientRect().left,
+                            glyphSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
+                            count: row.querySelector('.follower-count').textContent.trim(),
+                          };
+                        })"""
+                    )
+                    self.assertEqual(len(geometry), 4)
+                    self.assertEqual(len({row["leadWidth"] for row in geometry}), 1)
+                    self.assertEqual(len({row["bodyLeft"] for row in geometry}), 1)
+                    self.assertEqual(
+                        [row["glyphSize"] for row in geometry],
+                        sorted(row["glyphSize"] for row in geometry),
+                    )
+                    self.assertEqual(len({row["glyphSize"] for row in geometry}), 4)
+                    self.assertTrue(all(row["count"] for row in geometry))
+                finally:
+                    context.close()
+            finally:
+                browser.close()
 
     def test_brand_scope_changes_display_tint_without_losing_classifications(self) -> None:
         target = self.fixture["brand_scope_id"]

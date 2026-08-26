@@ -8,7 +8,7 @@
   var REQUEST_TIMEOUT_MS = 12000;
   var generation = 0;
   var activeController = null;
-  var californiaHourFormatter = null;
+  var fallbackComparisonHourFormatter = null;
 
   var BRAND_NAMES = {
     moonshot_kimi: 'Kimi',
@@ -113,25 +113,65 @@
     });
   }
 
-  function californiaHour(timestamp) {
-    if (!californiaHourFormatter) {
-      californiaHourFormatter = new Intl.DateTimeFormat('en-US', {
+  function comparisonState() {
+    if (window.__pwTz && typeof window.__pwTz.getComparison === 'function') {
+      return window.__pwTz.getComparison();
+    }
+    return {
+      key: 'california',
+      timezone: 'America/Los_Angeles',
+      shortLabel: 'CA',
+      localLabel: isZhLocale(currentLocale(getHomeChartRegion())) ? '本地' : 'local',
+    };
+  }
+
+  function comparisonHour(timestamp) {
+    if (window.__pwTz && typeof window.__pwTz.comparisonHour === 'function') {
+      return String(Number(window.__pwTz.comparisonHour(timestamp)) % 24);
+    }
+    if (!fallbackComparisonHourFormatter) {
+      fallbackComparisonHourFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Los_Angeles',
         hour: 'numeric',
         hourCycle: 'h23',
       });
     }
-    var parts = californiaHourFormatter.formatToParts(new Date(timestamp));
+    var parts = fallbackComparisonHourFormatter.formatToParts(new Date(timestamp));
     var hour = parts.find(function (part) { return part.type === 'hour'; });
     return String(Number(hour ? hour.value : 0) % 24);
+  }
+
+  function colorWithAlpha(color, alpha) {
+    var value = String(color || '').trim();
+    var shortHex = value.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+    var longHex = value.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (shortHex) {
+      return 'rgba(' + [shortHex[1], shortHex[2], shortHex[3]].map(function (part) {
+        return parseInt(part + part, 16);
+      }).join(', ') + ', ' + alpha + ')';
+    }
+    if (longHex) {
+      return 'rgba(' + [longHex[1], longHex[2], longHex[3]].map(function (part) {
+        return parseInt(part, 16);
+      }).join(', ') + ', ' + alpha + ')';
+    }
+    return value;
   }
 
   function oneDayScales(days) {
     var hourlyTicks = fixedHourlyTicks(days);
     if (hourlyTicks.length !== 24) return null;
-    var localColor = (Chart.defaults && Chart.defaults.color) || '#666666';
+    var defaultColor = (Chart.defaults && Chart.defaults.color) || '#666666';
+    var timezone = comparisonState();
+    var activeMode = window.__pwTz && window.__pwTz.mode === 'ca' ? 'ca' : 'local';
+    var localColor = activeMode === 'local'
+      ? defaultColor
+      : colorWithAlpha(defaultColor, 0.55);
+    var comparisonColor = activeMode === 'ca'
+      ? 'rgba(251, 191, 36, 1)'
+      : 'rgba(251, 191, 36, 0.45)';
 
-    function hourlyScale(weight, color, formatter, fontWeight) {
+    function hourlyScale(weight, color, formatter, fontWeight, title, drawBorder) {
       return {
         type: 'category',
         position: 'bottom',
@@ -147,7 +187,7 @@
           font: { size: 9, weight: fontWeight },
           maxRotation: 0,
           minRotation: 0,
-          padding: 3,
+          padding: drawBorder ? 2 : 0,
           callback: function (_value, index) {
             var hour = Number(formatter(hourlyTicks[index].instant)) % 24;
             return hour % 2 === 0 ? hour + ':00' : '';
@@ -160,19 +200,29 @@
           tickLength: 4,
           color: color,
         },
-        border: { color: color, width: weight === 0 ? 1.5 : 1 },
+        border: { display: drawBorder, color: color, width: 1.5 },
+        title: {
+          display: true,
+          text: title,
+          align: 'start',
+          color: color,
+          font: { size: 9, weight: fontWeight },
+          padding: { top: 0, bottom: 0 },
+        },
       };
     }
 
     return {
       x: hourlyScale(0, localColor, function (timestamp) {
         return String(new Date(timestamp).getHours());
-      }, 600),
-      xCalifornia: hourlyScale(
+      }, 600, timezone.localLabel || 'local', true),
+      xComparison: hourlyScale(
         1,
-        'rgba(251, 191, 36, 0.45)',
-        californiaHour,
-        400
+        comparisonColor,
+        comparisonHour,
+        activeMode === 'ca' ? 600 : 400,
+        timezone.shortLabel || 'CA',
+        false
       ),
     };
   }
@@ -601,6 +651,14 @@
     });
   }
 
+  function redrawOneDayTimeAxes() {
+    var region = getHomeChartRegion();
+    var canvas = chartIn(region);
+    var payload = readPayload(canvas);
+    if (!validPayload(payload) || (payload.granularity || 'day') !== 'minute') return;
+    renderOne(canvas);
+  }
+
   function disableHtmxRefresh(region) {
     ['hx-get', 'hx-trigger', 'hx-vals', 'hx-swap'].forEach(function (name) {
       region.removeAttribute(name);
@@ -632,4 +690,5 @@
 
   document.addEventListener('pw:filter-change', requestChart);
   document.addEventListener('pw:locale-change', requestChart);
+  document.addEventListener('pw:timezone-change', redrawOneDayTimeAxes);
 })();

@@ -314,6 +314,34 @@ class TestSerializeFeedRow:
         assert "account" in row
         assert row["enrichment_status"] == "succeeded"
 
+    def test_account_display_name_prefers_account_then_snapshot_then_handle(self):
+        named = _serialize_feed_row(_make_post(
+            "100",
+            "2026-07-20T10:00:00+00:00",
+            author_name="Snapshot Name",
+            account={
+                "handle": "@user",
+                "display_name": "Current Account Name",
+                "role": None,
+                "followers_count": 0,
+            },
+        ), "en")
+        snapshot = _serialize_feed_row(_make_post(
+            "101",
+            "2026-07-20T10:00:00+00:00",
+            author_name="Snapshot Name",
+            account={"handle": "@user", "role": None, "followers_count": 0},
+        ), "en")
+        handle = _serialize_feed_row(_make_post(
+            "102",
+            "2026-07-20T10:00:00+00:00",
+            account={"handle": "@user", "role": None, "followers_count": 0},
+        ), "en")
+
+        assert named["account"]["display_name"] == "Current Account Name"
+        assert snapshot["account"]["display_name"] == "Snapshot Name"
+        assert handle["account"]["display_name"] == "@user"
+
     @pytest.mark.parametrize(
         ("locale", "expected_label"),
         (("en", "enrichment pending"), ("zh_cn", "补充处理中")),

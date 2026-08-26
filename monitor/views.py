@@ -262,6 +262,15 @@ def _pretty_followers(count: int | None) -> str:
     return str(count)
 
 
+def _feed_account_display_name(
+    account_name: str | None,
+    snapshot_name: str | None,
+    handle: str | None,
+) -> str:
+    """Resolve the public feed identity without changing its handle-based link."""
+    return account_name or snapshot_name or handle or "@unknown"
+
+
 def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
     """Return (display_text, is_translated) for a post in the given locale.
 
@@ -891,24 +900,35 @@ def _post_to_wire(
     # Account data — from enrichment when available
     if enriched and enriched.get("account"):
         acc = enriched["account"]
+        handle = acc.get("handle") or post.author_handle or "@unknown"
         account_wire = {
-            "handle": acc.get("handle") or "@unknown",
+            "handle": handle,
+            "display_name": _feed_account_display_name(
+                acc.get("display_name"), post.author_name, handle
+            ),
             "role": acc.get("role_key"),
             "role_label": acc.get("role_label") or "",
             "followers_count": acc.get("followers_count") or 0,
             "followers_pretty": acc.get("followers_pretty") or "",
         }
     elif post.author:
+        handle = post.author.handle or post.author_handle or "@unknown"
         account_wire = {
-            "handle": post.author.handle or "@unknown",
+            "handle": handle,
+            "display_name": _feed_account_display_name(
+                post.author.display_name, post.author_name, handle
+            ),
             "role": None,
             "role_label": "",
             "followers_count": post.author.followers_count or 0,
             "followers_pretty": _pretty_followers(post.author.followers_count),
         }
     else:
+        handle = post.author_handle or "@unknown"
         account_wire = {
-            "handle": "@unknown", "role": None, "role_label": "",
+            "handle": handle,
+            "display_name": _feed_account_display_name(None, post.author_name, handle),
+            "role": None, "role_label": "",
             "followers_count": 0, "followers_pretty": "",
         }
 
@@ -1100,6 +1120,14 @@ def _enrich_posts_with_classifications(
     result: list[dict[str, Any]] = []
     for post in posts:
         tid = post.tweet_id
+        account_handle = (
+            post.author.handle if post.author else post.author_handle
+        ) or "@unknown"
+        account_display_name = _feed_account_display_name(
+            post.author.display_name if post.author else None,
+            post.author_name,
+            account_handle,
+        )
         row: dict[str, Any] = {
             "tweet_id": tid,
             "created_at": post.created_at.isoformat() if post.created_at else None,
@@ -1113,6 +1141,7 @@ def _enrich_posts_with_classifications(
             "reply_count": post.reply_count or 0,
             "lang_detected": post.lang_detected,
             "author_handle": post.author_handle,
+            "author_name": post.author_name,
             "author_id": post.author_id,
             "headline": post.headline,
             "headline_source": post.headline_source,
@@ -1133,7 +1162,8 @@ def _enrich_posts_with_classifications(
             "brands": [],
             "classifications_by_brand": {},
             "account": {
-                "handle": post.author.handle if post.author else (post.author_handle or "@unknown"),
+                "handle": account_handle,
+                "display_name": account_display_name,
                 "role": None,
                 "role_key": None,
                 "role_label": "",
@@ -2212,11 +2242,18 @@ def _serialize_feed_row(
             "role_label": cls.get("role_label"),
         }
 
+    account_wire = dict(post.get("account") or {})
+    account_handle = account_wire.get("handle") or post.get("author_handle") or "@unknown"
+    account_wire["handle"] = account_handle
+    account_wire["display_name"] = _feed_account_display_name(
+        account_wire.get("display_name"), post.get("author_name"), account_handle
+    )
+
     display_fields = _v22_feed_display_fields(
         classifications,
         active_brand_scope=active_brand_scope,
         created_at=post.get("created_at"),
-        account=post.get("account") or {},
+        account=account_wire,
         like_count=post.get("like_count"),
         retweet_count=post.get("retweet_count"),
         reply_count=post.get("reply_count"),
@@ -2250,7 +2287,7 @@ def _serialize_feed_row(
             post.get("enrichment_status", PostEnrichmentState.Status.SUCCEEDED),
             locale,
         ),
-        "account": post.get("account", {}),
+        "account": account_wire,
         **display_fields,
     }
 

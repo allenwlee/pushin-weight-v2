@@ -239,6 +239,14 @@ function makeSandbox(options = {}) {
   const charts = [];
   const intervals = [];
   let filters = { brands: '__all__', window: 1 };
+  let tzMode = options.tzMode || 'local';
+  const comparison = options.comparison || {
+    key: 'california',
+    timezone: 'America/Los_Angeles',
+    label: 'California',
+    shortLabel: 'CA',
+    shortLabelZh: '加州',
+  };
 
   function FakeChart(canvas, config) {
     this.canvas = canvas;
@@ -290,7 +298,11 @@ function makeSandbox(options = {}) {
       return node;
     },
     getElementById(id) { return options.legacy && id === 'home-chart' ? region : null; },
-    body: { addEventListener() {} },
+    body: {
+      addEventListener() {},
+      getAttribute(name) { return name === 'data-pw-locale' ? (options.locale || 'en') : null; },
+    },
+    documentElement: { getAttribute() { return null; } },
   };
 
   const sandbox = {
@@ -306,7 +318,28 @@ function makeSandbox(options = {}) {
     clearTimeout,
     setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; },
     clearInterval() {},
-    window: { pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } } },
+    window: {
+      pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } },
+      __pwTz: {
+        get mode() { return tzMode; },
+        getComparison() {
+          const zh = (options.locale || 'en') === 'zh_cn';
+          return Object.assign({}, comparison, {
+            localLabel: zh ? '本地' : 'local',
+            shortLabel: zh && comparison.shortLabelZh
+              ? comparison.shortLabelZh
+              : comparison.shortLabel,
+          });
+        },
+        comparisonHour(timestamp) {
+          return Number(new Intl.DateTimeFormat('en-US', {
+            timeZone: comparison.timezone,
+            hour: 'numeric',
+            hourCycle: 'h23',
+          }).format(new Date(timestamp)));
+        },
+      },
+    },
     document,
     Chart: FakeChart,
     CustomEvent: function (type, init) { this.type = type; this.detail = (init && init.detail) || {}; },
@@ -365,35 +398,61 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   }));
   const axis = makeSandbox({ initial: oneDay });
   const scales = axis.charts[0].config.options.scales;
-  assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xCalifornia', 'y']),
-    '1d config creates local, California, and y scales');
-  assert(scales.x.position === 'bottom' && scales.xCalifornia.position === 'bottom',
-    'local and California time are both below the plot');
-  assert(scales.x.weight < scales.xCalifornia.weight,
-    'local time is the inner bottom axis immediately above California time');
-  assert(scales.x.ticks.autoSkip === false && scales.xCalifornia.ticks.autoSkip === false,
+  assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xComparison', 'y']),
+    '1d config creates local, comparison, and y scales');
+  assert(scales.x.position === 'bottom' && scales.xComparison.position === 'bottom',
+    'local and comparison time are both below the plot');
+  assert(scales.x.weight < scales.xComparison.weight,
+    'local time is the inner bottom axis immediately above comparison time');
+  assert(scales.x.ticks.autoSkip === false && scales.xComparison.ticks.autoSkip === false,
     'both 1d axes keep the fixed 24 ticks at narrow widths');
   const localScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
-  const californiaScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
+  const comparisonScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
   scales.x.afterBuildTicks(localScale);
-  scales.xCalifornia.afterBuildTicks(californiaScale);
-  assert(localScale.ticks.length === 24 && californiaScale.ticks.length === 24,
+  scales.xComparison.afterBuildTicks(comparisonScale);
+  assert(localScale.ticks.length === 24 && comparisonScale.ticks.length === 24,
     'both 1d scales build exactly 24 positions');
   const localLabels = localScale.ticks.map((tick, index, ticks) =>
     scales.x.ticks.callback.call(localScale, tick.value, index, ticks));
-  const californiaLabels = californiaScale.ticks.map((tick, index, ticks) =>
-    scales.xCalifornia.ticks.callback.call(californiaScale, tick.value, index, ticks));
+  const comparisonLabels = comparisonScale.ticks.map((tick, index, ticks) =>
+    scales.xComparison.ticks.callback.call(comparisonScale, tick.value, index, ticks));
   assert(JSON.stringify(localLabels) === JSON.stringify([
     '6:00', '', '8:00', '', '10:00', '', '12:00', '', '14:00', '', '16:00', '',
     '18:00', '', '20:00', '', '22:00', '', '0:00', '', '2:00', '', '4:00', '',
   ]), 'local labels cover the next whole hour through the current hour');
-  assert(californiaLabels.length === 24 && californiaLabels.every((label) => label === '' || /^\d{1,2}:00$/.test(label)),
-    'California labels show only even wall-clock hours with minute suffixes');
-  assert(scales.x.grid.drawTicks === true && scales.xCalifornia.grid.drawTicks === true &&
-    scales.x.grid.drawOnChartArea === false && scales.xCalifornia.grid.drawOnChartArea === false,
+  assert(comparisonLabels.length === 24 && comparisonLabels.every((label) => label === '' || /^\d{1,2}:00$/.test(label)),
+    'comparison labels show only even wall-clock hours with minute suffixes');
+  assert(scales.x.grid.drawTicks === true && scales.xComparison.grid.drawTicks === true &&
+    scales.x.grid.drawOnChartArea === false && scales.xComparison.grid.drawOnChartArea === false,
     'odd hours retain hash marks without adding vertical plot grid lines');
-  assert(scales.x.ticks.color === '#666666' && scales.xCalifornia.ticks.color === 'rgba(251, 191, 36, 0.45)',
-    'axis colors retain the chart default locally and dim the CA pill tint below');
+  assert(scales.x.border.display === true && scales.xComparison.border.display === false,
+    'only the local time row draws a horizontal axis baseline');
+  assert(scales.x.title.text === 'local' && scales.xComparison.title.text === 'CA' &&
+    scales.x.title.align === 'start' && scales.xComparison.title.align === 'start',
+    'one-day rows have short start-aligned timezone titles');
+  assert(scales.x.ticks.color === '#666666' && scales.xComparison.ticks.color === 'rgba(251, 191, 36, 0.45)',
+    'local mode keeps local fully opaque and dims the comparison row');
+
+  const comparisonMode = makeSandbox({ initial: oneDay, tzMode: 'ca' });
+  const comparisonModeScales = comparisonMode.charts[0].config.options.scales;
+  assert(comparisonModeScales.x.ticks.color === 'rgba(102, 102, 102, 0.55)' &&
+    comparisonModeScales.xComparison.ticks.color === 'rgba(251, 191, 36, 1)',
+    'comparison mode makes its row fully opaque and dims local lettering');
+
+  const beijing = makeSandbox({
+    initial: oneDay,
+    locale: 'zh_cn',
+    comparison: {
+      key: 'beijing',
+      timezone: 'Asia/Shanghai',
+      label: 'Beijing',
+      shortLabel: 'Beijing',
+      shortLabelZh: '北京',
+    },
+  });
+  const beijingScales = beijing.charts[0].config.options.scales;
+  assert(beijingScales.x.title.text === '本地' && beijingScales.xComparison.title.text === '北京',
+    'Chinese California-local browsers label local and Beijing rows');
   assert(
     axis.legend.innerHTML.indexOf('data-pw-chart-brand="deepseek"') <
       axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
@@ -410,7 +469,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     new Date(dstEnd - (288 - index) * 5 * 60 * 1000).toISOString());
   dstPayload.series.qwen = dstPayload.days.map(() => 1);
   const dst = makeSandbox({ initial: dstPayload });
-  const dstScale = dst.charts[0].config.options.scales.xCalifornia;
+  const dstScale = dst.charts[0].config.options.scales.xComparison;
   const dstRuntime = { ticks: [] };
   dstScale.afterBuildTicks(dstRuntime);
   const dstLabels = dstRuntime.ticks.map((tick, index, ticks) =>

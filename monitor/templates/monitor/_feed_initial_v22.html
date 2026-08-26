@@ -22,9 +22,13 @@
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
-        <span class="follower-glyph follower-bin-{{ row.follower_bin }}"
-              role="img" aria-label="{{ row.followers_label }}"
-              title="{{ row.followers_label }}"></span>
+        <div class="follower-lead follower-bin-{{ row.follower_bin }}"
+             role="img"
+             aria-label="{{ row.followers_label }}"
+             title="{{ row.followers_label }}">
+          <span class="follower-glyph" role="img" aria-hidden="true">👥</span>
+          <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
+        </div>
         <div class="body">
           <div class="head">
             {% with handle=row.account.handle|default:'' %}
@@ -32,7 +36,7 @@
                 {% if handle %}
                   <a class="feed-handle-link"
                      href="https://x.com/{{ handle|cut:'@' }}"
-                     target="_blank" rel="noopener noreferrer">{{ handle }}</a>
+                     target="_blank" rel="noopener noreferrer">{{ row.account.display_name|default:handle }}</a>
                 {% else %}@unknown{% endif %}
               </span>
             {% endwith %}
@@ -69,7 +73,6 @@
             {% endif %}
           </div>
           <div class="engagement">
-            <span class="followers">{{ row.engagement_pretty.followers }}</span>
             <span class="likes">{{ row.engagement_pretty.likes }}</span>
             <span class="rts">{{ row.engagement_pretty.retweets }}</span>
             <span class="replies">{{ row.engagement_pretty.replies }}</span>

@@ -160,3 +160,18 @@ msgstr "已停用"
 
 msgid "No clear conversation story emerged in this window."
 msgstr "这一时间段内没有出现明确的讨论主题。"
+
+msgid "local"
+msgstr "本地"
+
+msgid "California"
+msgstr "加州"
+
+msgid "Beijing"
+msgstr "北京"
+
+msgid "Toggle local ⇄ California time"
+msgstr "切换 本地 ⇄ 加州时间"
+
+msgid "Toggle local ⇄ Beijing time"
+msgstr "切换 本地 ⇄ 北京时间"

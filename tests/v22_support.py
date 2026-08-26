@@ -87,6 +87,7 @@ def seed_real_home_orm(fixture: dict) -> None:
         account = Account.objects.create(
             author_id=f"u3-account-{index}",
             handle=source["handle"].removeprefix("@"),
+            display_name=f"U3 Account {index}",
             followers_count=10_000 - index,
         )
         post = Post.objects.create(
@@ -168,10 +169,14 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             if index == 2
             else f"v22-metadata-{index:03d}"
         )
+        follower_bins = (500, 5_000, 20_000, 50_000)
         account = Account.objects.create(
             author_id=f"v22-metadata-account-{index:03d}",
             handle=f"v22metadata{index:03d}",
-            followers_count=12_800 - index,
+            display_name=f"V22 Metadata Account {index:03d}",
+            followers_count=(
+                follower_bins[index] if index < len(follower_bins) else 12_800 - index
+            ),
         )
         post = Post.objects.create(
             tweet_id=tweet_id,

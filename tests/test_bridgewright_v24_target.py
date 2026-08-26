@@ -10,6 +10,7 @@ V24_CONTRACT = "docs/reference/2026-08-19-132714-v24-bridgewright-target.md"
 PRODUCTION_CONTRACT = "docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md"
 CHART_CONTRACT = "docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md"
 PREFERENCES_UI_CONTRACT = "docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md"
+PULSE_FEED_TIMEZONE_CONTRACT = "docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md"
 
 
 def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
@@ -18,7 +19,8 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == PREFERENCES_UI_CONTRACT
+    assert authorities["last_approved_contract"] == PULSE_FEED_TIMEZONE_CONTRACT
+    assert PULSE_FEED_TIMEZONE_CONTRACT in authorities["approved_product_intent"]
     assert PREFERENCES_UI_CONTRACT in authorities["approved_product_intent"]
     assert CHART_CONTRACT in authorities["approved_product_intent"]
     assert PRODUCTION_CONTRACT in authorities["approved_product_intent"]
@@ -41,6 +43,10 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.preferences-ui",
             "description": "Owner-approved browser preferences and homepage UI regression delta.",
+        },
+        {
+            "key": "production.home.pulse-feed-timezone-polish",
+            "description": "Owner-approved pulse navigation, timezone chart, and feed identity delta.",
         },
         {
             "key": "trend.headline",
@@ -87,3 +93,18 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "`gemini`, `gpt`, `claude`, and `grok`" in preferences_contract
     assert "current hosted staging\nappearance is not an approved baseline" in preferences_contract.lower()
     assert "does\nnot approve promotion to production" in preferences_contract
+
+    pulse_feed_timezone_contract = (
+        REPO_ROOT / PULSE_FEED_TIMEZONE_CONTRACT
+    ).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in pulse_feed_timezone_contract
+    assert "c2c713d07f6fb7c9659ae70f4d4d03dcf414ac7b" in pulse_feed_timezone_contract
+    assert "visible native horizontal scrollbar" in pulse_feed_timezone_contract
+    assert "model-colored left edge" in pulse_feed_timezone_contract
+    assert "only the local row draws a baseline" in pulse_feed_timezone_contract
+    assert "America/Los_Angeles" in pulse_feed_timezone_contract
+    assert "Asia/Shanghai" in pulse_feed_timezone_contract
+    assert "fixed-width follower lead column" in pulse_feed_timezone_contract
+    assert "account display name" in pulse_feed_timezone_contract
+    assert "current hosted staging appearance" in pulse_feed_timezone_contract.lower()
+    assert "exact staged candidate SHA" in pulse_feed_timezone_contract

@@ -8,3 +8,18 @@ msgstr ""
 
 msgid "No clear conversation story emerged in this window."
 msgstr "No clear conversation story emerged in this window."
+
+msgid "local"
+msgstr "local"
+
+msgid "California"
+msgstr "California"
+
+msgid "Beijing"
+msgstr "Beijing"
+
+msgid "Toggle local ⇄ California time"
+msgstr "Toggle local ⇄ California time"
+
+msgid "Toggle local ⇄ Beijing time"
+msgstr "Toggle local ⇄ Beijing time"

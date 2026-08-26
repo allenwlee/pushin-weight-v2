@@ -6,14 +6,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=preferences-ui1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=pulse-feed-timezone1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=dynamic-comparison1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=dual-bottom-axes1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=follower-glyph1" defer></script>
-  <script src="{% static 'pw-tz.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=timezone-axis-polish1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=follower-lead1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -75,9 +75,9 @@
         </span>
         <span class="tz-divider" aria-hidden="true"></span>
         <span class="tz-choice" data-tz-choice="ca">
-          <span class="tz-emoji" data-tz-ca-emoji>🌙</span>
-          <span class="tz-time" data-tz-ca-time>00:00</span>
-          <span class="tz-ca-icon" title="California" aria-label="California">CA</span>
+          <span class="tz-emoji" data-tz-comparison-emoji data-tz-ca-emoji>🌙</span>
+          <span class="tz-time" data-tz-comparison-time data-tz-ca-time>00:00</span>
+          <span class="tz-ca-icon" data-tz-comparison-icon title="California" aria-label="California">CA</span>
         </span>
       </button>
     </div>
