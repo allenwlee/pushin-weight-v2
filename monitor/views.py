@@ -70,9 +70,9 @@ log = logging.getLogger(__name__)
 # ============================================================================
 
 MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "minimax": "MiniMax AI",
-    "qwen": "Qwen",
     "deepseek": "DeepSeek",
+    "qwen": "Qwen",
+    "minimax": "MiniMax AI",
     "glm": "Zhipu GLM",
     "mimo": "Xiaomi MiMo",
     "moonshot_kimi": "Moonshot Kimi",

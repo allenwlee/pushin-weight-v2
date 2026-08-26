@@ -102,6 +102,8 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "visible native horizontal scrollbar" in pulse_feed_timezone_contract
     assert "model-colored left edge" in pulse_feed_timezone_contract
     assert "only the local row draws a baseline" in pulse_feed_timezone_contract
+    assert "retain odd-hour hashes only for local time" in pulse_feed_timezone_contract
+    assert "DeepSeek, Qwen, MiniMax" in pulse_feed_timezone_contract
     assert "America/Los_Angeles" in pulse_feed_timezone_contract
     assert "Asia/Shanghai" in pulse_feed_timezone_contract
     assert "fixed-width follower lead column" in pulse_feed_timezone_contract

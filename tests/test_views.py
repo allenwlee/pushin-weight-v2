@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from monitor.views import (
+    MODEL_DISPLAY_NAMES,
     _decode_cursor,
     _encode_cursor,
     _feed_tint_class,
@@ -24,6 +25,10 @@ from monitor.views import (
     _FEED_DEFAULT_ORDER,
     FEED_DEFAULT_LIMIT,
 )
+
+
+def test_home_model_order_starts_with_owner_fixed_top_three():
+    assert list(MODEL_DISPLAY_NAMES)[:3] == ["deepseek", "qwen", "minimax"]
 
 
 # ============================================================================

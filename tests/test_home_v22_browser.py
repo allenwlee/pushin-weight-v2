@@ -950,6 +950,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     localPosition: chart.scales.x?.position,
                                     comparisonPosition: chart.scales.xComparison?.position,
                                     localTop: chart.scales.x?.top,
+                                    localBottom: chart.scales.x?.bottom,
                                     comparisonTop: chart.scales.xComparison?.top,
                                     localLabels: chart.scales.x ? tickLabels(chart.scales.x) : [],
                                     comparisonLabels: chart.scales.xComparison
@@ -968,6 +969,20 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     comparisonColor: chart.scales.xComparison?.options.ticks.color,
                                     localTitle: chart.scales.x?.options.title.text,
                                     comparisonTitle: chart.scales.xComparison?.options.title.text,
+                                    localTitleDisplay: chart.scales.x?.options.title.display,
+                                    comparisonTitleDisplay: chart.scales.xComparison?.options.title.display,
+                                    localDrawTicks: chart.scales.x?.options.grid.drawTicks,
+                                    comparisonDrawTicks: chart.scales.xComparison?.options.grid.drawTicks,
+                                    comparisonGridDisplay: chart.scales.xComparison?.options.grid.display,
+                                    timezoneLabelPlugin: chart.config.plugins.some(
+                                      (plugin) => plugin.id === 'pwTimezoneRowLabels'
+                                    ),
+                                    alignedTickPixels: chart.scales.x.ticks.every(
+                                      (_, index) => Math.abs(
+                                        chart.scales.x.getPixelForTick(index) -
+                                        chart.scales.xComparison.getPixelForTick(index)
+                                      ) <= 0.5
+                                    ),
                                     localBorder: chart.scales.x?.options.border.display,
                                     comparisonBorder: chart.scales.xComparison?.options.border.display,
                                     legendOrder: [...region.querySelectorAll('[data-pw-chart-legend] [data-pw-chart-brand]')]
@@ -986,6 +1001,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(runtime["localPosition"], "bottom")
                             self.assertEqual(runtime["comparisonPosition"], "bottom")
                             self.assertLess(runtime["localTop"], runtime["comparisonTop"])
+                            self.assertLessEqual(
+                                abs(runtime["localBottom"] - runtime["comparisonTop"]),
+                                1,
+                            )
                             self.assertEqual(runtime["localLabels"], runtime["expectedLocal"])
                             self.assertEqual(
                                 runtime["comparisonLabels"],
@@ -1000,6 +1019,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertEqual(runtime["localTitle"], "local")
                             self.assertEqual(runtime["comparisonTitle"], "CA")
+                            self.assertFalse(runtime["localTitleDisplay"])
+                            self.assertFalse(runtime["comparisonTitleDisplay"])
+                            self.assertTrue(runtime["timezoneLabelPlugin"])
+                            self.assertTrue(runtime["localDrawTicks"])
+                            self.assertFalse(runtime["comparisonDrawTicks"])
+                            self.assertFalse(runtime["comparisonGridDisplay"])
+                            self.assertTrue(runtime["alignedTickPixels"])
                             self.assertTrue(runtime["localBorder"])
                             self.assertFalse(runtime["comparisonBorder"])
                             self.assertEqual(

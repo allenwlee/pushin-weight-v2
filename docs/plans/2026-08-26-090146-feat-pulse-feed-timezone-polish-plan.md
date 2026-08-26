@@ -110,13 +110,13 @@ Follower circles have variable widths, so the text body shifts horizontally from
 
 **One-day chart and comparison timezone**
 
-- R3. The 1d chart must label the two time rows at the left as `local` and `CA`, with `本地` and `加州` in Chinese; when California is the browser-local timezone, the comparison label must become Beijing.
-- R4. The row matching the selected timezone-pill mode must use full-opacity tick, hash, and title lettering; the inactive local row must use the chart-lettering color at 55% alpha and the inactive comparison row must retain the current 45% alpha treatment.
-- R5. Both 1d time-label rows must remain below the plot with local immediately above the comparison row, share the same 24 fixed hourly x positions, label only even hours as `0:00` through `22:00`, and retain an unlabeled hash at every odd hour.
-- R6. The comparison row must not draw a second horizontal axis baseline. Its aligned labels and hourly positions must remain and move upward into the space released by that line.
+- R3. The 1d chart must label the two time rows inline at the left as `local` and `CA`, with `本地` and `加州` in Chinese; when California is the browser-local timezone, the comparison label must become Beijing. The labels must not consume separate full-width title rows.
+- R4. The row matching the selected timezone-pill mode must use full-opacity tick and row-label lettering; the inactive local row must use the chart-lettering color at 55% alpha and the inactive comparison row must retain the current 45% alpha treatment.
+- R5. Both 1d time-label rows must remain below the plot with local immediately above the comparison row, share the same 24 fixed hourly x positions, and label only even hours as `0:00` through `22:00`. Local time retains an unlabeled hash at every odd hour.
+- R6. The comparison row must draw neither a second horizontal baseline nor hourly hash marks. Its time labels must sit directly below and remain pixel-aligned with the local labels.
 - R7. When `Intl.DateTimeFormat().resolvedOptions().timeZone` is `America/Los_Angeles`, the comparison zone must be `Asia/Shanghai`; every other browser-local timezone must continue to compare against `America/Los_Angeles`.
 - R8. The timezone pill and sub-24-hour feed stamps must follow the same dynamic comparison-zone decision as the chart. Beijing must use a `tz-bj-icon` with a red gradient, yellow `京`, and localized Beijing accessibility text in English and Chinese.
-- R9. Toggling the timezone pill or locale must update chart row prominence, row titles, clocks, icons, accessible names, and feed timestamps without losing the persisted homepage settings.
+- R9. Toggling the timezone pill or locale must update chart row prominence, row labels, clocks, icons, accessible names, and feed timestamps without losing the persisted homepage settings.
 
 **Feed identity and geometry**
 
@@ -128,9 +128,10 @@ Follower circles have variable widths, so the text body shifts horizontally from
 
 **Compatibility and delivery**
 
-- R15. Non-1d chart scales, chart aggregation, request-race protection, last-good restoration, 20-model ordering, filter state, browser preference persistence, locale navigation, mobile layout, `/internal/`, auth, and harvest behavior must remain unchanged.
+- R15. Non-1d chart scales, chart aggregation, request-race protection, last-good restoration, 20-model inventory, filter ordering/state, browser preference persistence, locale navigation, mobile layout, `/internal/`, auth, and harvest behavior must remain unchanged.
 - R16. A new approved Bridgewright target must supersede the prior preferences/UI target only for these named surfaces and must continue to use production, not the pre-existing hosted staging appearance, as the comparison baseline.
 - R17. The exact reviewed candidate must pass staging before the same SHA is promoted to production under the generated Ollija Delivery Guide.
+- R18. Pulse chips and the chart legend must share one fixed 20-model order beginning DeepSeek, Qwen, MiniMax; refreshes and chart-only series must not reorder those canonical entries.
 
 ### Key Decisions
 
@@ -141,7 +142,8 @@ Follower circles have variable widths, so the text body shifts horizontally from
 ### Acceptance Examples
 
 - AE1. **Covers R1-R2.** Given a 1440px desktop viewport where the 20 chips overflow, the user can operate the visible horizontal scrollbar to reach the last chip; selecting orange Qwen leaves an orange left edge while the rest of the chip is blue.
-- AE2. **Covers R3-R6 and R9.** Given a Tokyo browser in 1d local mode, the local row is fully opaque above a dim CA row, both rows share 24 x positions, only even hours have `H:00` labels, odd hours keep hashes, and only the local row draws a baseline; selecting CA reverses the prominence without moving the labels out of alignment.
+- AE2. **Covers R3-R6 and R9.** Given a Tokyo browser in 1d local mode, the local row is fully opaque directly above a dim CA row, both rows share 24 pixel-aligned positions, only even hours have `H:00` labels, only local has odd-hour hashes and a baseline, and each compact timezone label sits inline with its time row; selecting CA reverses the prominence without moving the labels.
+- AE7. **Covers R18.** Initial and refreshed pulse chips and the graph legend begin DeepSeek, Qwen, MiniMax and keep the same fixed order for all remaining canonical models.
 - AE3. **Covers R3 and R7-R9.** Given an `America/Los_Angeles` browser, the comparison pill and chart row say Beijing, use `Asia/Shanghai`, render the red/yellow `京` icon, and show localized accessible copy after English or Chinese locale changes.
 - AE4. **Covers R10-R14.** Given four feed rows at follower-bin boundaries, each body has the same x coordinate, each lead column shows a progressively larger followers emoji with the compact count below it, and none repeats followers in engagement.
 - AE5. **Covers R13-R14.** Given an account with display name `Example Name` and handle `example_handle`, both SSR and refreshed rows display `Example Name` but link to `https://x.com/example_handle`; a missing name displays the handle.
@@ -171,9 +173,9 @@ Follower circles have variable widths, so the text body shifts horizontally from
 
 - KTD1. **Use the existing native overflow container for desktop pulse scrolling.** Reveal a compact desktop scrollbar and keep the mobile scrollbar treatment unchanged; do not intercept vertical wheel motion or introduce navigation arrows for this batch. Supports R1.
 - KTD2. **Restore the selected chip edge after the shorthand border color.** The selected rule owns the blue fill and non-leading borders, while an equal-or-more-specific rule reasserts `border-left-color: var(--chip-color)`. Supports R2.
-- KTD3. **Keep two Chart.js scale objects but render one baseline.** The comparison scale remains because it guarantees pixel-aligned labels and fixed tick positions, while Chart.js 4 `border.display` suppresses only its baseline and its grid continues to draw hourly hashes. Supports R3-R6.
+- KTD3. **Keep two Chart.js scale objects but render only local axis marks.** The comparison scale remains because it guarantees pixel-aligned labels and fixed tick positions; its `border` and `grid` are disabled so it contributes aligned time labels without a baseline or hash marks. Supports R3-R6.
 - KTD4. **Resolve one shared comparison-zone descriptor in `pw-tz.js` and load it before the chart controller.** It supplies the IANA zone, mode-compatible `ca` storage value, short chart label, localized pill/accessibility label, icon class/content, and hour formatter to both timezone and chart code. Existing stored `local|ca` preferences remain valid. Supports R7-R9 and R15.
-- KTD5. **Use start-aligned scale titles and a timezone-change redraw.** Chart scale titles carry `local`/`CA` or Beijing copy at the left; scale padding keeps each title visually attached to its time row and moves the borderless comparison row upward. A dedicated timezone change notification makes Chart.js update row colors and titles immediately without fetching new data. Supports R3-R6 and R9.
+- KTD5. **Draw compact row labels inline instead of allocating Chart.js title rows.** Keep localized label text on each scale with built-in title layout disabled; a local canvas plugin draws that text in the free lower-left gutter at the tick-row baseline. Removing the two title boxes places comparison times directly below local times. A dedicated timezone change notification updates row colors and labels immediately without fetching data. Supports R3-R6 and R9.
 - KTD6. **Project account display name once and share fallback semantics.** Add `display_name` to the existing account wire object from `Account.display_name`, falling back through the post author snapshot and handle; both feed renderers consume that field while the href remains handle-derived. Supports R13-R14.
 - KTD7. **Make the follower marker a fixed lead component.** CSS reserves one column based on the largest emoji and compact-count width; follower-bin classes vary emoji size and presentation inside it, and SSR/client markup removes the engagement follower span. Supports R10-R12 and R14.
 - KTD8. **Bind only the intentional delta in Bridgewright.** Add a timestamped approved target, make it the manifest's last approved contract, retain all prior authorities, and update the regression pin. Supports R16.
@@ -188,12 +190,12 @@ flowchart TB
   DESC -->|Yes| BJ[Comparison descriptor: Beijing]
   CA --> PILL[Timezone pill and feed stamps]
   BJ --> PILL
-  CA --> AXES[1d Chart.js scale titles and hours]
+  CA --> AXES[1d Chart.js inline labels and hours]
   BJ --> AXES
   MODE[Persisted local or ca mode] --> PILL
   MODE --> AXES
   AXES --> LOCAL[Local scale: labels, hashes, baseline]
-  AXES --> COMP[Comparison scale: aligned labels and hashes, no baseline]
+  AXES --> COMP[Comparison scale: aligned labels, no hashes or baseline]
 ```
 
 ```mermaid
@@ -208,7 +210,7 @@ flowchart TB
 
 ### Assumptions
 
-- “Remove the 2nd x axes” means remove the comparison row's horizontal baseline, not the comparison labels, scale object, or odd-hour hashes; this interpretation is required to preserve the user's aligned CA/Beijing times.
+- “Remove the 2nd x axes” means preserve the comparison labels and scale object while removing its horizontal baseline and hash marks; this is required to keep CA/Beijing times aligned directly below local time.
 - The existing `ca` preference value represents the comparison choice for backward compatibility even when that comparison resolves to Beijing in a California browser.
 - The native followers emoji already used by the engagement row is the intended replacement marker. Its visual size changes by the existing four bins, and the compact count remains text for scanability and accessibility.
 - A missing account display name falls back to the stored handle so historical rows remain usable without a migration or backfill.
@@ -229,7 +231,7 @@ flowchart TB
 - `monitor/static/pw-tz.js` owns the persisted Local/CA mode, timezone clocks, and sub-24-hour feed timestamps.
 - `monitor/views.py`, `monitor/templates/monitor/_feed_initial_v22.html`, and `monitor/static/pw-feed.js` form the public feed projection/SSR/client parity path.
 - `docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md` protects the current production baseline and prior approved UI behavior.
-- Chart.js 4 official axis documentation confirms scale titles, scale weights, grid tick controls, and `border.display` for suppressing one baseline.
+- Chart.js 4 official axis documentation confirms scale weights, grid tick controls, local plugins, and `border.display` for suppressing one baseline.
 
 ---
 
@@ -254,7 +256,7 @@ flowchart TB
 ### U2. Restore desktop pulse navigation and selected brand edges
 
 - **Goal:** Make every model reachable on desktop and preserve each chip's visual identity when selected.
-- **Requirements:** R1-R2, R15.
+- **Requirements:** R1-R2, R15, R18.
 - **Dependencies:** U1.
 - **Files:** `monitor/static/home-v20.css`, `monitor/templates/monitor/home.html`, `monitor/static/pw-chart.js`, `tests/test_home_v22_browser.py`, `tests/test_pw_chart_filter.js`.
 - **Approach:**
@@ -267,7 +269,7 @@ flowchart TB
   - At desktop width, 20 overflowing chips expose a non-hidden horizontal scrollbar and scrolling changes `scrollLeft` enough to reveal the final chip.
   - At mobile width, the bar remains horizontally touch-scrollable without a desktop scrollbar taking layout space.
   - Selecting a non-blue chip gives it the accent background while computed `border-left-color` continues to equal its `--chip-color`, before and after a chart refresh rerenders the pulse.
-- **Verification:** Desktop Chromium reaches the last model through the visible horizontal control, selected colors survive refresh, and existing 20-model order/accessibility assertions pass.
+- **Verification:** Desktop Chromium reaches the last model through the visible horizontal control, selected colors survive refresh, and pulse plus legend retain the fixed DeepSeek, Qwen, MiniMax-first 20-model order.
 
 ### U3. Unify dynamic comparison zones and one-day axis presentation
 
@@ -278,14 +280,14 @@ flowchart TB
 - **Approach:**
   1. Centralize the conditional California/Beijing descriptor in the timezone controller, load that controller before the chart script, and expose a read-only comparison-zone API for the chart.
   2. Render the pill and feed stamps from that descriptor while retaining the persisted `local|ca` mode and stable control geometry.
-  3. Configure both 1d scales from the same hourly instants, add start-aligned localized titles, preserve even-hour labels and odd-hour hashes, and hide only the comparison border.
-  4. Derive tick/title/hash colors from the active mode and redraw the chart on timezone or locale changes without issuing a chart data request.
+  3. Configure both 1d scales from the same hourly instants, draw compact localized labels inline with the tick rows, preserve even-hour labels and local odd-hour hashes, and hide the comparison border and grid.
+  4. Derive tick/row-label colors from the active mode and redraw the chart on timezone or locale changes without issuing a chart data request.
   5. Leave the non-1d scale path and refresh/race behavior untouched.
 - **Execution note:** Start with deterministic Node scale-contract tests, then validate exact scale geometry and computed colors in Chromium with Tokyo and Los Angeles contexts.
 - **Patterns to follow:** Existing `fixedHourlyTicks`, `hourlyScale`, `window.__pwTz`, `pw:chrome-change`, preference-store, and V24 timezone browser tests.
 - **Test scenarios:**
-  - Tokyo local mode renders `local` above `CA`, 24 aligned positions, twelve even-hour labels per row, odd-hour hashes, one baseline, full local opacity, and 45%-alpha CA styling.
-  - Tokyo comparison mode renders CA ticks, hashes, and title at full opacity while local lettering uses the chart color at 55% alpha.
+  - Tokyo local mode renders `local` inline above `CA`, 24 pixel-aligned positions, twelve even-hour labels per row, local-only odd-hour hashes, one baseline, full local opacity, and 45%-alpha CA styling.
+  - Tokyo comparison mode renders CA ticks and its inline label at full opacity, without CA hashes, while local lettering uses the chart color at 55% alpha.
   - Clicking the pill selects comparison mode, reverses row prominence, changes sub-24-hour feed timestamps, and keeps chart/pill geometry stable without a network refresh.
   - A Los Angeles browser uses `Asia/Shanghai`, `Beijing`/`北京`, and the `tz-bj-icon` with `京` in the pill, chart, and feed timestamps.
   - Chinese and English locale changes update `本地`/`加州`/`北京` and `local`/`CA`/`Beijing` visible and accessible text while preserving filters, window, lenses, pulse selections, and timezone mode.

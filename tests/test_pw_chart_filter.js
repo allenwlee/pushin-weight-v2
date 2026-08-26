@@ -384,7 +384,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     qwen: '#f97316', deepseek: '#3b82f6', minimax: '#22c55e', chart_only: '#9ca3af',
   };
   oneDay.totals = { qwen: 1, deepseek: 2, minimax: 3, chart_only: 4 };
-  oneDay.pulse.entries = ['deepseek', 'minimax', 'qwen'].map((nickname, index) => ({
+  oneDay.pulse.entries = ['deepseek', 'qwen', 'minimax'].map((nickname, index) => ({
     nickname,
     display_name: nickname,
     display_name_en: nickname,
@@ -422,14 +422,18 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   ]), 'local labels cover the next whole hour through the current hour');
   assert(comparisonLabels.length === 24 && comparisonLabels.every((label) => label === '' || /^\d{1,2}:00$/.test(label)),
     'comparison labels show only even wall-clock hours with minute suffixes');
-  assert(scales.x.grid.drawTicks === true && scales.xComparison.grid.drawTicks === true &&
-    scales.x.grid.drawOnChartArea === false && scales.xComparison.grid.drawOnChartArea === false,
-    'odd hours retain hash marks without adding vertical plot grid lines');
+  assert(scales.x.grid.drawTicks === true && scales.x.grid.drawOnChartArea === false,
+    'local odd hours retain hash marks without adding vertical plot grid lines');
+  assert(scales.xComparison.grid.display === false && scales.xComparison.grid.drawTicks === false,
+    'comparison time draws no hourly hash marks');
   assert(scales.x.border.display === true && scales.xComparison.border.display === false,
     'only the local time row draws a horizontal axis baseline');
   assert(scales.x.title.text === 'local' && scales.xComparison.title.text === 'CA' &&
-    scales.x.title.align === 'start' && scales.xComparison.title.align === 'start',
-    'one-day rows have short start-aligned timezone titles');
+    scales.x.title.display === false && scales.xComparison.title.display === false,
+    'one-day row labels do not consume separate full-width title rows');
+  assert(axis.charts[0].config.plugins.some((plugin) => plugin.id === 'pwTimezoneRowLabels') &&
+    axis.charts[0].config.options.plugins.pwTimezoneRowLabels.display === true,
+    'compact timezone labels are drawn inline with their time rows');
   assert(scales.x.ticks.color === '#666666' && scales.xComparison.ticks.color === 'rgba(251, 191, 36, 0.45)',
     'local mode keeps local fully opaque and dims the comparison row');
 
@@ -455,12 +459,12 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'Chinese California-local browsers label local and Beijing rows');
   assert(
     axis.legend.innerHTML.indexOf('data-pw-chart-brand="deepseek"') <
-      axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
-    axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') <
       axis.legend.innerHTML.indexOf('data-pw-chart-brand="qwen"') &&
     axis.legend.innerHTML.indexOf('data-pw-chart-brand="qwen"') <
+      axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
+    axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') <
       axis.legend.innerHTML.indexOf('data-pw-chart-brand="chart_only"'),
-    'legend follows pulse ranking before deterministic chart-only brands'
+    'legend keeps the fixed DeepSeek, Qwen, MiniMax order before chart-only brands'
   );
 
   const dstPayload = payload(1, 4, 'qwen');

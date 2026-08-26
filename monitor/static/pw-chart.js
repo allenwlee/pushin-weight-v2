@@ -18,6 +18,43 @@
     ernie: 'ERNIE',
   };
 
+  var TIMEZONE_ROW_LABEL_PLUGIN = {
+    id: 'pwTimezoneRowLabels',
+    afterDraw: function (chart, _args, options) {
+      if (!options || options.display !== true || !chart.chartArea) return;
+      var ctx = chart.ctx;
+      ['x', 'xComparison'].forEach(function (scaleKey) {
+        var scale = chart.scales[scaleKey];
+        if (!scale) return;
+        var scaleOptions = scale.options || {};
+        var title = scaleOptions.title || {};
+        var ticks = scaleOptions.ticks || {};
+        var grid = scaleOptions.grid || {};
+        if (!title.text) return;
+        var font = ticks.font || {};
+        var size = Number(font.size) || 9;
+        var weight = font.weight || 400;
+        var family = (Chart.defaults.font && Chart.defaults.font.family) || 'sans-serif';
+        var tickLength = grid.display === false || grid.drawTicks === false
+          ? 0
+          : Number(grid.tickLength) || 0;
+        var padding = Number(ticks.padding) || 0;
+
+        ctx.save();
+        ctx.fillStyle = ticks.color || title.color || Chart.defaults.color;
+        ctx.font = weight + ' ' + size + 'px ' + family;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(
+          String(title.text),
+          chart.chartArea.left - 4,
+          scale.top + tickLength + padding + size / 2
+        );
+        ctx.restore();
+      });
+    },
+  };
+
   function getHomeChartRegion() {
     return document.querySelector(HOME_CHART_REGION_SELECTOR) ||
       document.getElementById('home-chart');
@@ -194,15 +231,15 @@
           },
         },
         grid: {
-          display: true,
+          display: drawBorder,
           drawOnChartArea: false,
-          drawTicks: true,
-          tickLength: 4,
+          drawTicks: drawBorder,
+          tickLength: drawBorder ? 4 : 0,
           color: color,
         },
         border: { display: drawBorder, color: color, width: 1.5 },
         title: {
-          display: true,
+          display: false,
           text: title,
           align: 'start',
           color: color,
@@ -313,6 +350,7 @@
     return new Chart(canvas, {
       type: 'line',
       data: { labels: days, datasets: datasets },
+      plugins: [TIMEZONE_ROW_LABEL_PLUGIN],
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -320,6 +358,7 @@
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
+          pwTimezoneRowLabels: { display: granularity === 'minute' },
           tooltip: {
             enabled: true,
             mode: 'index',
