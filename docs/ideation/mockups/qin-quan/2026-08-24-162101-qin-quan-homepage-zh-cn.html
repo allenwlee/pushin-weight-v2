@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>走个量 Pushin’ Weight — 秦权视觉方向</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #100f0d;
+      --ink-raised: #171512;
+      --ink-soft: #201d18;
+      --bone: #eee8dc;
+      --bone-dim: #b8afa1;
+      --bone-faint: #8f877c;
+      --bronze: #bd8b50;
+      --bronze-wash: rgba(189, 139, 80, .13);
+      --jade: #7cc7a6;
+      --cinnabar: #e16d58;
+      --azurite: #73a7d8;
+      --orpiment: #e2bc58;
+      --violet: #b78ac8;
+      --turquoise: #63bdb5;
+      --coral: #e79a75;
+      --chalk: #d8d1c5;
+      --line: rgba(238, 232, 220, .14);
+      --line-strong: rgba(238, 232, 220, .28);
+      --display: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+      --sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+      --mono: "SFMono-Regular", "Roboto Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--ink); scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--bone);
+      background:
+        radial-gradient(circle at 13% 2%, rgba(189,139,80,.11), transparent 28rem),
+        radial-gradient(circle at 88% 32%, rgba(124,199,166,.045), transparent 30rem),
+        linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.011) 1px, transparent 1px),
+        var(--ink);
+      background-size: auto, auto, 72px 72px, 72px 72px, auto;
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.65;
+      font-synthesis: none;
+      line-break: strict;
+      text-rendering: optimizeLegibility;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      content: "";
+      opacity: .12;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.23'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+
+    button, a { color: inherit; font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
+
+    .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .icon { width: 1em; height: 1em; flex: 0 0 auto; color: inherit; vertical-align: -.14em; }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+    .app-shell {
+      width: min(1360px, calc(100% - 36px));
+      min-height: 100vh;
+      margin: 0 auto;
+      border-inline: 1px solid var(--line);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, .7fr) minmax(430px, 1.5fr) minmax(310px, .8fr);
+      min-height: 112px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand-block, .window-block, .locale-block { padding: 25px 28px; }
+    .brand-block, .window-block { border-right: 1px solid var(--line); }
+
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .wordmark .mark { width: 31px; height: 31px; color: var(--bronze); }
+    .wordmark strong { display: block; font-family: var(--display); font-size: 20px; font-weight: 400; letter-spacing: .06em; }
+    .wordmark small { display: block; color: var(--bone-faint); font-family: var(--mono); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+
+    .eyebrow {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--bronze);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: .18em;
+    }
+
+    .window-row, .locale-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .locale-block { display: flex; flex-direction: column; align-items: flex-end; }
+
+    .plain-control {
+      min-height: 31px;
+      padding: 5px 11px;
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: transparent;
+      color: var(--bone-dim);
+      font-size: 11px;
+    }
+
+    .plain-control:hover { border-color: var(--bronze); color: var(--bone); }
+    .plain-control.is-active { border-color: var(--bronze); background: var(--bronze); color: var(--ink); font-weight: 650; }
+
+    .tz-control { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; padding-left: 17px; border-left: 1px solid var(--line); color: var(--bone-dim); font-family: var(--mono); font-size: 9px; }
+    .tz-control .sun { width: 15px; height: 15px; color: var(--orpiment); }
+    .locale-note { margin-top: 11px; color: var(--bone-faint); font-family: var(--mono); font-size: 8px; letter-spacing: .05em; }
+
+    .pulse-section {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .pulse-title { padding: 21px 28px; border-right: 1px solid var(--line); }
+    .pulse-title strong { display: block; font-family: var(--display); font-size: 23px; font-weight: 400; line-height: 1; }
+    .pulse-title span { display: block; margin-top: 8px; color: var(--bone-faint); font-family: var(--mono); font-size: 8px; }
+
+    .pulse-list {
+      display: flex;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+      list-style: none;
+      scrollbar-width: none;
+    }
+
+    .pulse-list::-webkit-scrollbar { display: none; }
+    .pulse-list li { flex: 1 0 145px; border-right: 1px solid var(--line); }
+
+    .pulse-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      height: 100%;
+      min-height: 76px;
+      padding: 15px 18px;
+      border: 0;
+      border-top: 2px solid var(--series);
+      background: transparent;
+      text-align: left;
+    }
+
+    .pulse-chip:hover, .pulse-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--series) 10%, transparent); }
+    .pulse-chip b { font-family: var(--display); font-size: 15px; font-weight: 400; white-space: nowrap; }
+    .pulse-chip span { color: var(--series); font-family: var(--mono); font-size: 9px; white-space: nowrap; }
+
+    .filter-bar {
+      position: relative;
+      z-index: 5;
+      display: flex;
+      align-items: stretch;
+      min-height: 52px;
+      border-bottom: 1px solid var(--line);
+      overflow: visible;
+    }
+
+    .filter-lead { display: grid; place-items: center; width: 150px; flex: 0 0 150px; border-right: 1px solid var(--line); color: var(--bone-faint); font-family: var(--mono); font-size: 8px; letter-spacing: .12em; }
+    .filter-scroller { display: flex; flex: 1; overflow-x: auto; scrollbar-width: none; }
+    .filter-scroller::-webkit-scrollbar { display: none; }
+
+    .filter-wrap { position: relative; flex: 0 0 auto; border-right: 1px solid var(--line); }
+    .filter-pill { display: inline-flex; align-items: center; gap: 9px; min-width: 112px; height: 51px; padding: 0 17px; border: 0; background: transparent; color: var(--bone-dim); white-space: nowrap; }
+    .filter-pill:hover, .filter-pill[aria-expanded="true"] { background: var(--bronze-wash); color: var(--bone); }
+    .status-ring { width: 7px; height: 7px; border: 1px solid var(--bone-faint); border-radius: 50%; }
+    .filter-pill .caret { margin-left: auto; color: var(--bronze); font-size: 9px; }
+
+    .filter-menu {
+      position: absolute;
+      top: calc(100% + 1px);
+      left: 0;
+      z-index: 10;
+      display: none;
+      width: 280px;
+      padding: 18px;
+      border: 1px solid var(--line-strong);
+      background: #171512;
+      box-shadow: 0 24px 50px rgba(0,0,0,.38);
+    }
+
+    .filter-wrap.is-open .filter-menu { display: block; }
+    .filter-menu strong { display: block; margin-bottom: 12px; font-family: var(--display); font-size: 18px; font-weight: 400; }
+    .filter-menu label { display: flex; align-items: center; gap: 9px; padding: 6px 0; color: var(--bone-dim); font-size: 11px; }
+    .filter-menu input { accent-color: var(--bronze); }
+
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(360px, .78fr); }
+    .analysis-column { min-width: 0; border-right: 1px solid var(--line); }
+    .feed-column { min-width: 0; }
+
+    .chart-panel { padding: 34px 34px 26px; border-bottom: 1px solid var(--line); }
+    .panel-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    .panel-head h2 { margin: 0; font-family: var(--display); font-size: clamp(31px, 3vw, 48px); font-weight: 400; letter-spacing: .025em; line-height: 1.05; }
+    .panel-head p { max-width: 34ch; margin: 0; color: var(--bone-dim); font-size: 11px; text-align: right; }
+
+    .chart-frame { position: relative; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); padding: 18px 0 8px; }
+    .chart-frame svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .grid-line { stroke: rgba(238,232,220,.09); stroke-width: 1; }
+    .axis-label { fill: var(--bone-faint); font-family: var(--mono); font-size: 8px; }
+    .series { opacity: .9; transition: opacity 160ms ease; }
+    .series path { fill: none; stroke: var(--series); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .series .marker { fill: var(--ink); stroke: var(--series); stroke-width: 2; vector-effect: non-scaling-stroke; }
+    .chart-frame.has-focus .series:not(.is-focus) { opacity: .12; }
+    .series.is-focus path { stroke-width: 3.2; }
+
+    .chart-note {
+      position: absolute;
+      top: 31px;
+      right: 14px;
+      width: 162px;
+      padding: 11px 12px;
+      border: 1px solid var(--line-strong);
+      background: rgba(16,15,13,.92);
+      color: var(--bone-dim);
+      font-size: 9px;
+      pointer-events: none;
+    }
+
+    .chart-note b { display: block; margin-bottom: 3px; color: var(--bone); font-family: var(--display); font-size: 14px; font-weight: 400; }
+
+    .chart-legend { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); margin-top: 10px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .legend-btn { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 40px; padding: 8px 10px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; color: var(--bone-dim); text-align: left; font-size: 9px; }
+    .legend-btn:hover, .legend-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--series) 9%, transparent); color: var(--bone); }
+    .legend-mark { position: relative; width: 25px; height: 8px; flex: 0 0 auto; }
+    .legend-mark::before { position: absolute; top: 3px; left: 0; width: 25px; border-top: 2px solid var(--series); content: ""; }
+    .legend-mark::after { position: absolute; top: 1px; left: 10px; width: 5px; height: 5px; border: 1px solid var(--series); background: var(--ink); content: ""; transform: rotate(var(--marker-rotate, 0deg)); border-radius: var(--marker-radius, 0); }
+    .legend-btn[data-dash="short"] .legend-mark::before { border-top-style: dashed; }
+    .legend-btn[data-dash="dot"] .legend-mark::before { border-top-style: dotted; }
+
+    .headline {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      min-height: 214px;
+      background: linear-gradient(115deg, rgba(189,139,80,.08), transparent 46%);
+    }
+
+    .headline-label { padding: 29px 22px; border-right: 1px solid var(--line); color: var(--bronze); }
+    .headline-label .icon { display: block; width: 28px; height: 28px; margin-bottom: 14px; }
+    .headline-label span { font-family: var(--mono); font-size: 8px; letter-spacing: .08em; }
+    .headline-copy { padding: 29px 34px; }
+    .headline-copy h3 { max-width: 720px; margin: 0 0 13px; font-family: var(--display); font-size: 25px; font-weight: 400; line-height: 1.35; }
+    .headline-copy h3 strong { color: var(--bronze); font-weight: 400; }
+    .headline-copy ul { margin: 0; padding-left: 17px; color: var(--bone-dim); font-size: 11px; }
+    .headline-copy .voices { margin-top: 15px; color: var(--bone-faint); font-family: var(--mono); font-size: 8px; }
+
+    .feed-head { display: flex; justify-content: space-between; align-items: end; min-height: 94px; padding: 24px 26px; border-bottom: 1px solid var(--line-strong); }
+    .feed-head h2 { margin: 0; font-family: var(--display); font-size: 27px; font-weight: 400; }
+    .feed-head span { color: var(--bone-faint); font-family: var(--mono); font-size: 8px; }
+
+    .feed-row { display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 13px; padding: 20px 25px 18px; border-bottom: 1px solid var(--line); transition: background 150ms ease; }
+    .feed-row:hover { background: rgba(255,255,255,.018); }
+    .avatar { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--bronze); font-family: var(--display); font-size: 13px; }
+    .post-meta { color: var(--bone-faint); font-size: 9px; }
+    .post-meta b { color: var(--bone); font-size: 11px; font-weight: 600; }
+    .post-type { display: inline-block; margin-left: 5px; padding: 1px 5px; border: 1px solid var(--line); color: var(--bronze); font-size: 8px; }
+    .post-copy { margin: 7px 0 11px; color: #ddd7cc; font-size: 12px; line-height: 1.62; }
+    .signals { display: flex; flex-wrap: wrap; gap: 13px; color: var(--bone-faint); font-family: var(--mono); font-size: 8px; }
+    .signal { display: inline-flex; align-items: center; gap: 4px; }
+    .signal .icon { width: 12px; height: 12px; }
+    .signal.semantic { color: var(--jade); }
+
+    .palette-footer { display: flex; justify-content: space-between; gap: 20px; padding: 18px 28px 44px; border-top: 1px solid var(--line); color: var(--bone-faint); font-family: var(--mono); font-size: 8px; line-height: 1.6; }
+
+    @media (max-width: 1050px) {
+      .topbar { grid-template-columns: 230px 1fr; }
+      .locale-block { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); }
+      .workspace { grid-template-columns: 1fr; }
+      .analysis-column { border-right: 0; }
+      .feed-column { border-top: 1px solid var(--line); }
+      .feed-list { display: grid; grid-template-columns: 1fr 1fr; }
+      .feed-row { border-right: 1px solid var(--line); }
+    }
+
+    @media (max-width: 700px) {
+      .app-shell { width: calc(100% - 20px); }
+      .topbar { grid-template-columns: 1fr; }
+      .brand-block, .window-block { border-right: 0; border-bottom: 1px solid var(--line); }
+      .locale-block { grid-column: auto; flex-wrap: wrap; }
+      .pulse-section { grid-template-columns: 1fr; }
+      .pulse-title { border-right: 0; border-bottom: 1px solid var(--line); }
+      .filter-lead { width: 74px; flex-basis: 74px; }
+      .chart-panel { padding: 28px 18px 22px; }
+      .panel-head { display: block; }
+      .panel-head p { margin-top: 12px; text-align: left; }
+      .chart-note { display: none; }
+      .chart-legend { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .headline { grid-template-columns: 1fr; }
+      .headline-label { display: flex; align-items: center; gap: 10px; padding: 19px 22px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .headline-label .icon { width: 20px; height: 20px; margin: 0; }
+      .headline-copy { padding: 24px 22px; }
+      .feed-list { grid-template-columns: 1fr; }
+      .feed-row { border-right: 0; }
+      .palette-footer { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .topbar > *, .pulse-section > *, .workspace > * { animation: rise 480ms cubic-bezier(.22,.7,.25,1) both; }
+      .pulse-section > :nth-child(2) { animation-delay: 70ms; }
+      .workspace > :nth-child(2) { animation-delay: 120ms; }
+      @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    }
+  </style>
+</head>
+<body>
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="mark-quan" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M11.56 2.48C8.5 2.61 6.62 4.8 6.57 8.03 3.72 8.95 2.42 12.25 3.15 19.72c2.56 1.16 5.53 1.71 8.87 1.64 3.32-.07 6.23-.75 8.68-2.01.42-7.31-.72-10.45-3.58-11.31-.26-3.5-2.42-5.7-5.56-5.56Zm.16 2.26c1.74-.08 2.74 1.02 3.01 3.56l-5.78.13c.06-2.29.95-3.61 2.77-3.69Zm-5.8 5.74c3.38-.83 8.29-.76 11.73-.22 1.03 1.86 1.3 4.44 1.07 7.29-1.92.73-4.19 1.12-6.76 1.17-2.56.05-4.86-.27-6.79-.9-.21-2.95-.11-5.52.75-7.34Z"/></symbol>
+      <symbol id="icon-heart" viewBox="0 0 24 24"><path d="M12.04 20.05S4.35 15.3 3.75 10.4c-.43-3.49 1.63-5.94 4.67-5.88 1.65.03 2.88.93 3.57 2.19.87-1.42 2.15-2.27 3.86-2.3 3.09-.05 5.08 2.49 4.42 5.84-.87 4.44-8.23 9.8-8.23 9.8Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="icon-reply" viewBox="0 0 24 24"><path d="M5.1 17.73c-1.22-1.37-1.86-3.1-1.76-5.05.23-4.5 3.84-7.64 8.65-7.63 4.88.02 8.3 2.94 8.42 7.23.12 4.13-3.52 7.14-8.35 7.08-1.25-.01-2.42-.22-3.47-.62l-4.22 1.78.73-2.79Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/></symbol>
+      <symbol id="icon-repost" viewBox="0 0 24 24"><path d="m7.65 5.15-3.2 3.1 3.2 2.92M4.72 8.26h9.36c3.48 0 5.4 1.65 5.46 4.67m-3.19 5.91 3.2-3.1-3.2-2.92m2.93 2.91H9.92c-3.48 0-5.4-1.65-5.46-4.67" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="icon-followers" viewBox="0 0 24 24"><path d="M14.7 9.1c.1 2-1.1 3.5-3.1 3.6-2 .1-3.4-1.3-3.5-3.3-.1-2 1.2-3.5 3.2-3.6 2-.1 3.3 1.3 3.4 3.3Zm-9.3 8.8c.4-2.3 2.5-3.7 5.9-3.8 3.5-.1 5.7 1.1 6.2 3.5M16.6 7.1c1.6.1 2.5 1.2 2.4 2.8-.1 1.6-1.1 2.6-2.6 2.7m1.7 1.4c1.7.3 2.8 1.3 3.1 2.9M6.3 7.5c-1.6.2-2.4 1.4-2.2 2.9.2 1.6 1.3 2.5 2.8 2.4m-1.6 1.5c-1.7.5-2.7 1.5-2.8 3.2" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/></symbol>
+      <symbol id="icon-rise" viewBox="0 0 24 24"><path d="M5.12 17.96 11.8 6.08l7.08 11.37m-7.06-11.38 5.22 1.19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="icon-sentiment" viewBox="0 0 24 24"><path d="M20.24 11.88c.12 4.57-3.27 8.01-8.08 8.18-4.74.18-8.28-2.97-8.4-7.52-.13-4.66 3.19-8.23 8.05-8.42 4.9-.19 8.31 3.04 8.43 7.76Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.45 14.16c.93 1.14 2.1 1.65 3.55 1.58 1.5-.08 2.68-.66 3.48-1.77" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/></symbol>
+      <symbol id="icon-sun" viewBox="0 0 24 24"><path d="M17.28 11.65c.12 3.04-2.04 5.35-5.13 5.49-3.07.14-5.36-1.96-5.49-4.99-.14-3.11 2-5.45 5.15-5.59 3.14-.14 5.34 1.95 5.47 5.09ZM11.72 2.63l.06 2.05m.39 14.62.07 2.07M2.9 12.17l2.03-.05m14.12-.41 2.05-.06" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/></symbol>
+    </defs>
+  </svg>
+
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <a class="wordmark" href="#chart" aria-label="走个量首页">
+          <svg class="icon mark" aria-hidden="true"><use href="#mark-quan"></use></svg>
+          <span><strong>走个量</strong><small>Pushin’ Weight</small></span>
+        </a>
+      </div>
+      <div class="window-block">
+        <span class="eyebrow">观察窗口</span>
+        <div class="window-row" role="group" aria-label="时间窗口">
+          <button class="plain-control is-active" type="button">1天</button>
+          <button class="plain-control" type="button">7天</button>
+          <button class="plain-control" type="button">30天</button>
+          <button class="plain-control" type="button">365天</button>
+          <span class="tz-control"><svg class="icon sun" aria-hidden="true"><use href="#icon-sun"></use></svg>11:17 本地 · 19:17 CA</span>
+        </div>
+      </div>
+      <div class="locale-block">
+        <span class="eyebrow">显示语言</span>
+        <div class="locale-row" role="group" aria-label="显示语言">
+          <button class="plain-control" type="button">英文</button>
+          <button class="plain-control is-active" type="button">中文</button>
+          <button class="plain-control" type="button">原文</button>
+        </div>
+        <span class="locale-note">数据刷新于 11:16:42</span>
+      </div>
+    </header>
+
+    <section class="pulse-section" aria-labelledby="pulse-title">
+      <div class="pulse-title"><strong id="pulse-title">脉冲</strong><span>1天热度</span></div>
+      <ul class="pulse-list">
+        <li><button class="pulse-chip" style="--series:var(--jade)" aria-pressed="false"><b>DeepSeek</b><span>▲ 4%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--cinnabar)" aria-pressed="false"><b>Qwen</b><span>▼ 4%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--azurite)" aria-pressed="false"><b>MiniMax AI</b><span>▼ 8%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--violet)" aria-pressed="false"><b>智谱 GLM</b><span>▼ 17%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--turquoise)" aria-pressed="false"><b>Meta Llama</b><span>▲ 14%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--orpiment)" aria-pressed="false"><b>Mistral</b><span>▲ 65%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--coral)" aria-pressed="false"><b>小米 MiMo</b><span>▼ 33%</span></button></li>
+        <li><button class="pulse-chip" style="--series:var(--chalk)" aria-pressed="false"><b>零一万物</b><span>▲ 8%</span></button></li>
+      </ul>
+    </section>
+
+    <nav class="filter-bar" aria-label="筛选条件">
+      <span class="filter-lead">筛选</span>
+      <div class="filter-scroller">
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>品牌<span class="caret">⌄</span></button><div class="filter-menu"><strong>品牌</strong><label><input type="checkbox" checked> DeepSeek</label><label><input type="checkbox" checked> Qwen</label><label><input type="checkbox" checked> MiniMax AI</label><label><input type="checkbox" checked> 智谱 GLM</label></div></div>
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>话语<span class="caret">⌄</span></button><div class="filter-menu"><strong>话语</strong><label><input type="checkbox" checked> 技术讨论</label><label><input type="checkbox" checked> 市场动态</label><label><input type="checkbox" checked> 产品体验</label><label><input type="checkbox" checked> 未分类</label></div></div>
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>角色<span class="caret">⌄</span></button><div class="filter-menu"><strong>角色</strong><label><input type="checkbox" checked> 开发者</label><label><input type="checkbox" checked> 研究者</label><label><input type="checkbox" checked> 媒体</label></div></div>
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>语言<span class="caret">⌄</span></button><div class="filter-menu"><strong>语言</strong><label><input type="checkbox" checked> 中文</label><label><input type="checkbox" checked> 英文</label><label><input type="checkbox" checked> 日文</label></div></div>
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>情绪<span class="caret">⌄</span></button><div class="filter-menu"><strong>情绪</strong><label><input type="checkbox" checked> 正向</label><label><input type="checkbox" checked> 中性</label><label><input type="checkbox" checked> 负向</label></div></div>
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>民族主义<span class="caret">⌄</span></button><div class="filter-menu"><strong>民族主义</strong><label><input type="checkbox" checked> 无</label><label><input type="checkbox" checked> 中国</label><label><input type="checkbox" checked> 美国</label></div></div>
+        <div class="filter-wrap"><button class="filter-pill" type="button" aria-expanded="false"><span class="status-ring"></span>未授权<span class="caret">⌄</span></button><div class="filter-menu"><strong>未授权内容</strong><label><input type="checkbox"> 仅显示已标记内容</label></div></div>
+      </div>
+    </nav>
+
+    <div class="workspace">
+      <div class="analysis-column">
+        <section class="chart-panel" id="chart" aria-labelledby="chart-title">
+          <header class="panel-head">
+            <h2 id="chart-title">模型声量，逐时而见。</h2>
+            <p>颜色负责快速分组；线型与节点形状保留第二条辨认路径。点击图例可单独查看一条曲线。</p>
+          </header>
+          <div class="chart-frame">
+            <svg viewBox="0 0 880 350" role="img" aria-label="过去一天八个模型品牌的帖子数量折线图">
+              <g aria-hidden="true">
+                <line class="grid-line" x1="54" y1="32" x2="860" y2="32"/><line class="grid-line" x1="54" y1="82" x2="860" y2="82"/><line class="grid-line" x1="54" y1="132" x2="860" y2="132"/><line class="grid-line" x1="54" y1="182" x2="860" y2="182"/><line class="grid-line" x1="54" y1="232" x2="860" y2="232"/><line class="grid-line" x1="54" y1="282" x2="860" y2="282"/>
+                <line class="grid-line" x1="54" y1="32" x2="54" y2="282"/><line class="grid-line" x1="255" y1="32" x2="255" y2="282"/><line class="grid-line" x1="457" y1="32" x2="457" y2="282"/><line class="grid-line" x1="659" y1="32" x2="659" y2="282"/><line class="grid-line" x1="860" y1="32" x2="860" y2="282"/>
+                <text class="axis-label" x="27" y="285">0</text><text class="axis-label" x="21" y="235">4</text><text class="axis-label" x="21" y="185">8</text><text class="axis-label" x="15" y="135">12</text><text class="axis-label" x="15" y="85">16</text><text class="axis-label" x="15" y="35">20</text>
+                <text class="axis-label" x="54" y="306">00:00</text><text class="axis-label" x="239" y="306">06:00</text><text class="axis-label" x="441" y="306">12:00</text><text class="axis-label" x="643" y="306">18:00</text><text class="axis-label" x="826" y="306">24:00</text>
+                <text class="axis-label" x="54" y="331">帖子 / 5分钟 · 本地时间</text>
+              </g>
+              <g class="series" data-series="deepseek" style="--series:var(--jade)"><path d="M54 245 C88 236 92 168 122 196 S176 112 209 151 S266 88 302 132 S361 62 400 102 S461 44 501 88 S560 32 598 77 S657 86 700 105 S759 66 797 112 S830 96 860 121"/><circle class="marker" cx="209" cy="151" r="4"/><circle class="marker" cx="501" cy="88" r="4"/><circle class="marker" cx="797" cy="112" r="4"/></g>
+              <g class="series" data-series="qwen" style="--series:var(--cinnabar)"><path stroke-dasharray="9 5" d="M54 261 C97 248 119 207 159 222 S220 180 260 205 S323 151 366 175 S423 142 467 160 S527 106 570 137 S625 153 670 146 S735 121 779 157 S828 136 860 168"/><rect class="marker" x="256" y="201" width="8" height="8"/><rect class="marker" x="566" y="133" width="8" height="8"/><rect class="marker" x="775" y="153" width="8" height="8"/></g>
+              <g class="series" data-series="minimax" style="--series:var(--azurite)"><path d="M54 236 C91 219 128 237 165 206 S222 224 263 190 S329 214 370 181 S426 198 471 176 S536 192 576 159 S640 179 683 152 S748 176 791 145 S833 156 860 139"/><path class="marker" d="M263 184l5 9h-10Z"/><path class="marker" d="M576 153l5 9h-10Z"/><path class="marker" d="M791 139l5 9h-10Z"/></g>
+              <g class="series" data-series="glm" style="--series:var(--violet)"><path stroke-dasharray="2 5" d="M54 274 C112 259 150 270 199 248 S286 262 334 239 S421 254 470 229 S556 244 604 221 S692 236 742 210 S820 228 860 202"/><circle class="marker" cx="334" cy="239" r="4"/><circle class="marker" cx="604" cy="221" r="4"/><circle class="marker" cx="860" cy="202" r="4"/></g>
+              <g class="series" data-series="llama" style="--series:var(--turquoise)"><path stroke-dasharray="13 5 3 5" d="M54 255 C103 242 145 250 191 226 S269 244 315 214 S398 228 445 204 S527 215 574 193 S657 207 705 184 S793 202 860 174"/><path class="marker" d="M315 208l6 6-6 6-6-6Z"/><path class="marker" d="M574 187l6 6-6 6-6-6Z"/><path class="marker" d="M860 168l6 6-6 6-6-6Z"/></g>
+              <g class="series" data-series="mistral" style="--series:var(--orpiment)"><path d="M54 267 C120 255 166 259 217 246 S309 251 360 231 S452 240 506 218 S602 227 654 201 S752 214 804 183 S842 177 860 160"/><rect class="marker" x="356" y="227" width="8" height="8" transform="rotate(45 360 231)"/><rect class="marker" x="650" y="197" width="8" height="8" transform="rotate(45 654 201)"/><rect class="marker" x="800" y="179" width="8" height="8" transform="rotate(45 804 183)"/></g>
+              <g class="series" data-series="mimo" style="--series:var(--coral)"><path stroke-dasharray="5 6" d="M54 279 C102 269 149 275 197 258 S286 269 334 253 S424 261 475 241 S563 254 613 234 S701 246 752 225 S821 237 860 219"/><path class="marker" d="M334 247l5 3v6l-5 3-5-3v-6Z"/><path class="marker" d="M613 228l5 3v6l-5 3-5-3v-6Z"/><path class="marker" d="M860 213l5 3v6l-5 3-5-3v-6Z"/></g>
+              <g class="series" data-series="yi" style="--series:var(--chalk)"><path stroke-dasharray="1 7" d="M54 271 C115 266 162 269 214 260 S313 265 365 254 S466 260 519 248 S620 255 674 242 S778 250 860 233"/><circle class="marker" cx="365" cy="254" r="3"/><circle class="marker" cx="674" cy="242" r="3"/><circle class="marker" cx="860" cy="233" r="3"/></g>
+            </svg>
+            <div class="chart-note"><b>DeepSeek · 11:15</b><span style="color:var(--jade)">13 帖 / 5分钟</span><br>较前一小时均值 +18%</div>
+          </div>
+          <div class="chart-legend" role="group" aria-label="图表系列">
+            <button class="legend-btn" style="--series:var(--jade);--marker-radius:50%" data-series="deepseek" aria-pressed="false"><span class="legend-mark"></span>DeepSeek</button>
+            <button class="legend-btn" style="--series:var(--cinnabar)" data-series="qwen" data-dash="short" aria-pressed="false"><span class="legend-mark"></span>Qwen</button>
+            <button class="legend-btn" style="--series:var(--azurite);--marker-rotate:45deg" data-series="minimax" aria-pressed="false"><span class="legend-mark"></span>MiniMax AI</button>
+            <button class="legend-btn" style="--series:var(--violet);--marker-radius:50%" data-series="glm" data-dash="dot" aria-pressed="false"><span class="legend-mark"></span>智谱 GLM</button>
+            <button class="legend-btn" style="--series:var(--turquoise);--marker-rotate:45deg" data-series="llama" data-dash="short" aria-pressed="false"><span class="legend-mark"></span>Meta Llama</button>
+            <button class="legend-btn" style="--series:var(--orpiment);--marker-rotate:45deg" data-series="mistral" aria-pressed="false"><span class="legend-mark"></span>Mistral</button>
+            <button class="legend-btn" style="--series:var(--coral)" data-series="mimo" data-dash="short" aria-pressed="false"><span class="legend-mark"></span>小米 MiMo</button>
+            <button class="legend-btn" style="--series:var(--chalk);--marker-radius:50%" data-series="yi" data-dash="dot" aria-pressed="false"><span class="legend-mark"></span>零一万物</button>
+          </div>
+        </section>
+
+        <section class="headline" aria-labelledby="headline-title">
+          <div class="headline-label"><svg class="icon" aria-hidden="true"><use href="#icon-rise"></use></svg><span>趋势摘要 · 已过期</span></div>
+          <div class="headline-copy">
+            <h3 id="headline-title"><strong>DeepSeek</strong> 和 MiniMax AI 主导本窗口的 AI 模型讨论；DeepSeek 在窗口中期出现一波冲高。</h3>
+            <ul><li>DeepSeek 的作者数从窗口起始段攀升至中期峰值后回落，但互动覆盖缺失。</li><li>MiniMax AI 的帖子类型向上手使用偏移，话语结构向真实热度靠拢。</li></ul>
+            <div class="voices">主要声音 · @sophiamyang ☆228 · @yabarich ☆121 · @Rubycryptoz ☆105</div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="feed-column" aria-labelledby="feed-title">
+        <header class="feed-head"><h2 id="feed-title">本窗口最新</h2><span>实时 · 30 秒刷新</span></header>
+        <div class="feed-list">
+          <article class="feed-row"><div class="avatar">春</div><div><div class="post-meta"><b>chunxiangai</b> · 2分钟前 <span class="post-type">综合</span></div><p class="post-copy">@2012__forever deepseek 没有订阅制。</p><div class="signals"><span class="signal"><svg class="icon"><use href="#icon-followers"></use></svg>42.3k</span><span class="signal"><svg class="icon"><use href="#icon-heart"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-repost"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-reply"></use></svg>0</span></div></div></article>
+          <article class="feed-row"><div class="avatar">J</div><div><div class="post-meta"><b>Json589734</b> · 2分钟前 <span class="post-type">综合</span></div><p class="post-copy">@CommandCodeAI StepFun or MiniMax</p><div class="signals"><span class="signal"><svg class="icon"><use href="#icon-followers"></use></svg>40</span><span class="signal"><svg class="icon"><use href="#icon-heart"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-repost"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-reply"></use></svg>0</span></div></div></article>
+          <article class="feed-row"><div class="avatar">N</div><div><div class="post-meta"><b>NKLinhzk</b> · 2分钟前 <span class="post-type">综合</span></div><p class="post-copy">@_44t1 @TronDao_AR 将 qwen 融入推理网格，是很强的一步。</p><div class="signals"><span class="signal"><svg class="icon"><use href="#icon-followers"></use></svg>23.5k</span><span class="signal semantic"><svg class="icon"><use href="#icon-sentiment"></use></svg>正向</span><span class="signal"><svg class="icon"><use href="#icon-heart"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-reply"></use></svg>0</span></div></div></article>
+          <article class="feed-row"><div class="avatar">H</div><div><div class="post-meta"><b>HWatson2007</b> · 3分钟前 <span class="post-type">价格</span></div><p class="post-copy">Meta Muse Spark 1.2 在 OpenRouter 上大幅降价；这个价格已经比 DeepSeek 官方供应更低。</p><div class="signals"><span class="signal"><svg class="icon"><use href="#icon-followers"></use></svg>42</span><span class="signal"><svg class="icon"><use href="#icon-heart"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-repost"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-reply"></use></svg>0</span></div></div></article>
+          <article class="feed-row"><div class="avatar">李</div><div><div class="post-meta"><b>JamesBonds2006</b> · 3分钟前 <span class="post-type">体验</span></div><p class="post-copy">DeepSeek 已经本地搞上了，就像沙漠里接上了自来水，而不是只能买瓶装水。</p><div class="signals"><span class="signal"><svg class="icon"><use href="#icon-followers"></use></svg>213</span><span class="signal"><svg class="icon"><use href="#icon-heart"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-repost"></use></svg>0</span><span class="signal"><svg class="icon"><use href="#icon-reply"></use></svg>0</span></div></div></article>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="palette-footer"><span>走个量 · 秦权视觉方向<br>色相 + 线型 + 节点，三重编码</span><span>模拟数据 · 独立原型<br>未改动生产界面</span></footer>
+  </main>
+
+  <script>
+    const allToggleGroups = document.querySelectorAll('.window-row, .locale-row');
+    allToggleGroups.forEach((group) => group.addEventListener('click', (event) => {
+      const button = event.target.closest('.plain-control');
+      if (!button) return;
+      group.querySelectorAll('.plain-control').forEach((item) => item.classList.toggle('is-active', item === button));
+    }));
+
+    document.querySelectorAll('.pulse-chip').forEach((button) => button.addEventListener('click', () => {
+      button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'));
+    }));
+
+    document.querySelectorAll('.filter-pill').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const wrap = button.closest('.filter-wrap');
+      document.querySelectorAll('.filter-wrap').forEach((item) => {
+        if (item !== wrap) item.classList.remove('is-open');
+        item.querySelector('.filter-pill').setAttribute('aria-expanded', String(item === wrap && !wrap.classList.contains('is-open')));
+      });
+      wrap.classList.toggle('is-open');
+      button.setAttribute('aria-expanded', String(wrap.classList.contains('is-open')));
+    }));
+    document.addEventListener('click', () => document.querySelectorAll('.filter-wrap').forEach((item) => {
+      item.classList.remove('is-open');
+      item.querySelector('.filter-pill').setAttribute('aria-expanded', 'false');
+    }));
+    document.querySelectorAll('.filter-menu').forEach((menu) => menu.addEventListener('click', (event) => event.stopPropagation()));
+
+    const chart = document.querySelector('.chart-frame');
+    const legendButtons = document.querySelectorAll('.legend-btn');
+    legendButtons.forEach((button) => button.addEventListener('click', () => {
+      const wasActive = button.getAttribute('aria-pressed') === 'true';
+      legendButtons.forEach((item) => item.setAttribute('aria-pressed', 'false'));
+      chart.querySelectorAll('.series').forEach((item) => item.classList.remove('is-focus'));
+      chart.classList.toggle('has-focus', !wasActive);
+      if (!wasActive) {
+        button.setAttribute('aria-pressed', 'true');
+        chart.querySelector(`[data-series="${button.dataset.series}"]`).classList.add('is-focus');
+      }
+    }));
+  </script>
+</body>
+</html>
