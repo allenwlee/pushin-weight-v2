@@ -10,7 +10,7 @@ ollija:
   change_id: feat-ui-state-chart-avatars-model-tabs-2026-08-26-043852
   branch: feat/ui-state-chart-avatars-model-tabs
   workflow: lfg
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -39,7 +39,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -50,6 +50,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ui-state-chart-avatars-model-tabs` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ui-state-chart-avatars-model-tabs` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -65,16 +72,21 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+- On 2026-08-26 the owner approved the hosted staging UI at candidate
+  `9619f3e0a3ff60292e78eb4ce1597264a03e5934` and explicitly authorized
+  production promotion. Updating this plan's delivery target and generated
+  guide creates a documentation-only descendant SHA; redeploy and verify that
+  exact descendant on staging before promotion. Because no runtime code or
+  assets change, the owner's visual approval carries forward.
 
 # Goal
 
 Make the public homepage remember each browser user's last-used view across
 reloads and sessions, repair the reported chart, model-tier, pulse, feed, and
-mobile-title regressions, and deliver the verified candidate to hosted staging
-without changing production. Staging must preserve production's current
-baseline outside the intentional changes because the owner reports that the
-current staging site has drifted substantially from production.
+mobile-title regressions, and promote the exact staging-verified candidate to
+production after owner approval. Staging and production must preserve the
+current production baseline outside the intentional changes because the owner
+reports that the prior staging site had drifted substantially from production.
 
 ## Product Contract
 
@@ -112,10 +124,11 @@ current staging site has drifted substantially from production.
 - **R7 — Correct open/closed tiers.** Put `gemini`, `gpt`, `claude`, and `grok`
   in Closed and remove them from Open. Preserve all other current brands and
   existing count/selection semantics.
-- **R8 — Staging-only delivery.** Commit and push the feature branch, open and
-  watch its PR, fast-forward the exact green candidate to `staging`, and verify
-  the Render staging deployment at that exact SHA. Do not push or promote to
-  `main` and do not alter production.
+- **R8 — Approved production delivery.** Commit and push the feature branch,
+  keep its PR open, fast-forward the exact green candidate to `staging`, and
+  verify the Render staging deployment at that exact SHA. After the owner's
+  explicit approval, fast-forward that unchanged SHA to `main` and verify the
+  production Render services at the same SHA.
 
 ### Persisted-state precedence
 
@@ -161,8 +174,9 @@ scope.
 5. Desktop and 390px mobile render no pulse heading, show a fully readable
    two-line English title next to unchanged `走个量`, show exactly 20 pulse
    chips, and show four Closed brands with none duplicated in Open.
-6. Hosted staging resolves to the candidate SHA, passes the focused/browser
-   checks, and matches the production baseline outside intentional selectors.
+6. Hosted staging and production resolve to the same candidate SHA, pass their
+   configured checks, and match the prior production baseline outside
+   intentional selectors.
 
 ## Technical Design
 
@@ -313,7 +327,7 @@ locale/reload state, all windows, Local/CA, Open/Closed, and incremental feed
 replacement. Report executed/skipped/error counts and fail on any unexpected
 skip or browser setup error.
 
-### U8 — Review, ship PR, and stage exact candidate
+### U8 — Review, stage, and promote the exact candidate
 
 - Run the LFG simplification and code-review passes; apply eligible findings and
   rerun affected checks.
@@ -326,9 +340,13 @@ skip or browser setup error.
 - Verify Render reports the same SHA at
   `https://pushinweight-staging-web.onrender.com`; compare staging against
   production at matched viewport/locale/state, allowing only R1–R7 differences.
+- After the recorded owner approval, fetch `origin/main`, require it to be an
+  ancestor of the unchanged staged candidate, push that exact SHA to `main`,
+  and verify every configured production service reports it.
 
-**Done:** hosted staging is visually and behaviorally verified at the exact
-candidate SHA. Stop there; production remains untouched.
+**Done:** hosted staging and production are behaviorally verified at the same
+exact candidate SHA, after which the generated guide's guarded worktree cleanup
+may run as the final filesystem action.
 
 ## Risks and Mitigations
 
