@@ -1,6 +1,6 @@
 ---
 name: harvester-latest-n-health-check
-description: Inspect the literal latest production posts and persisted post-fetch health without writes or provider calls. Use when checking latest production posts, diagnosing post-fetch health, or running enrichment verification after harvester, translation, sentiment, post-type, or discourse changes.
+description: Inspect the literal latest production posts and persisted post-fetch health, with an optional full Markdown evidence report, without writes or provider calls. Use when checking latest production posts, diagnosing post-fetch health, or running enrichment verification after harvester, translation, sentiment, post-type, or discourse changes.
 ---
 
 # Harvester latest-N health check
@@ -18,7 +18,8 @@ This is a health check, not a repair or active probe.
 - Never re-enrich or backfill a post.
 - Do not halt the harvest cron for this planned diagnostic. Apply M17 from `.claude/skills/avoiding-recurring-mistakes/SKILL.md` if a separate live incident is confirmed.
 - Do not retry, poll, or start a recurring loop. Run once for the immediate route or exactly twice for the enrichment-relevant route.
-- Do not print full post text, credentials, raw Render diagnostics, query text, or tracebacks.
+- Do not print full post text, credentials, raw Render diagnostics, query text, or tracebacks to normal human or JSON output.
+- Full post text, the exact read-only SQL, and current-code prompt reconstructions are allowed only in explicit `--report` mode. Never copy credentials, environment values, raw Render stderr, or tracebacks into that report.
 
 The bundled helper makes one bounded `render psql` call to `pushinweight-db-shadow`. Its fixed SQL begins a read-only transaction, verifies `transaction_read_only=on`, applies timeouts, and limits the cohort before joining per-brand facts.
 
@@ -69,6 +70,38 @@ Stable JSON report:
 "$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --json
 ```
 
+Detailed Markdown evidence report:
+
+```bash
+"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --report
+```
+
+`--report` and `--json` are mutually exclusive. Detailed mode preserves the
+same single bounded read-only database snapshot and keeps terminal output
+bounded. It writes atomically to the repository's canonical operator-analysis
+location:
+
+`docs/analysis/harvester/YYYY-MM-DD-HHMMSS-harvester-latest-n-health-report.md`
+
+The report contains:
+
+- summary and ordered cohort IDs;
+- full source text, persisted English and Simplified Chinese translations,
+  commentary, enrichment attempts/timestamps, per-brand facts, discourse,
+  nationalism, mentions, and unsanctioned-flag evidence;
+- an empty ledger of LLM calls made by the checker—the checker makes none;
+- verbatim prompts and deterministically known request kwargs reconstructed by
+  the current pure translation and classification prompt builders;
+- an explicit provenance warning that current-code reconstructions are not
+  historical wire calls, because historical prompts, responses, retry counts,
+  runtime `thinking`, and original production batch membership are not stored;
+- exact SQL, invocation, Python version, checker file-content SHA-256,
+  repository commit, and the complete checker source.
+
+Do not describe reconstructed calls as historical observations. The report may
+show the configured model name, but must label runtime-only values unavailable
+instead of reading secrets or constructing a provider client.
+
 Interpret both `status` and `regression_gate`:
 
 - `status=healthy` and `regression_gate=complete`: every selected row is complete.
@@ -109,5 +142,6 @@ Include:
 - overall `status` and `regression_gate`
 - bounded per-post stage and reason details for unhealthy rows
 - any stable operational error code
+- the saved report path when `--report` was requested
 
 Do not propose harvest, prompt, model, cursor, scheduler, or data repairs from this skill. Diagnosis and remediation require a separate scoped request and the repository harvester guardrails.

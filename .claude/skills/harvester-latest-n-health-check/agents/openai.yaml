@@ -1,4 +1,4 @@
 interface:
   display_name: "Harvester Latest-N Health Check"
-  short_description: "Audit newest persisted production post health"
-  default_prompt: "Use $harvester-latest-n-health-check to inspect the literal latest production cohort or verify an enrichment-relevant change without harvesting, provider calls, or production writes."
+  short_description: "Audit post health and write detailed evidence"
+  default_prompt: "Use $harvester-latest-n-health-check to inspect the literal latest production cohort, optionally write the canonical detailed Markdown report, or verify an enrichment-relevant change without harvesting, provider calls, or production writes."

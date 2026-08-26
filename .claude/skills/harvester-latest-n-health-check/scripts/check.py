@@ -4,11 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
+import shlex
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -16,6 +21,8 @@ DATABASE_RESOURCE = "pushinweight-db-shadow"
 DEFAULT_LATEST = 20
 MAX_COHORT = 200
 QUERY_TIMEOUT_SECONDS = 30
+REPORT_RELATIVE_DIR = Path("docs/analysis/harvester")
+LLM_BATCH_SIZE = 20
 _TWEET_ID_RE = re.compile(r"^[0-9]{1,32}$")
 _SAFE_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _VALID_STAGE_STATUSES = {"pending", "succeeded", "failed"}
@@ -44,6 +51,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     selector.add_argument("--tweet-id", action="append", dest="tweet_ids")
     parser.add_argument("--grace-hours", type=int)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="write an opt-in detailed Markdown evidence report",
+    )
     args = parser.parse_args(argv)
 
     if args.latest is None and not args.tweet_ids:
@@ -58,6 +70,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         if any(not _TWEET_ID_RE.fullmatch(tweet_id) for tweet_id in args.tweet_ids):
             raise HealthCheckError("invocation", "invalid_arguments")
     if args.grace_hours is not None and not 1 <= args.grace_hours <= 24 * 30:
+        raise HealthCheckError("invocation", "invalid_arguments")
+    if args.report and args.as_json:
         raise HealthCheckError("invocation", "invalid_arguments")
     return args
 
@@ -91,10 +105,77 @@ def _selected_cte(*, latest: int | None, tweet_ids: Sequence[str] | None) -> str
   )"""
 
 
-def build_query(*, latest: int | None, tweet_ids: Sequence[str] | None) -> str:
+def build_query(
+    *,
+    latest: int | None,
+    tweet_ids: Sequence[str] | None,
+    detailed: bool = False,
+) -> str:
     """Build one fixed, bounded, read-only PostgreSQL snapshot query."""
 
     selected_cte = _selected_cte(latest=latest, tweet_ids=tweet_ids)
+    post_detail_fields = ""
+    brand_detail_fields = ""
+    discourse_detail_fields = ""
+    if detailed:
+        post_detail_fields = """,
+        'author_id', p.author_id,
+        'author_handle', p.author_handle,
+        'author_name', p.author_name,
+        'source_query_id', p.source_query_id,
+        'created_at', p.created_at,
+        'text', p.text,
+        'lang', p.lang,
+        'lang_detected', p.lang_detected,
+        'text_en', p.text_en,
+        'text_zh_cn', p.text_zh_cn,
+        'commentary_en', p.commentary_en,
+        'commentary_zh_cn', p.commentary_zh_cn,
+        'tweet_url', COALESCE(p.tweet_url, p.tweet_twitter_url),
+        'like_count', p.like_count,
+        'retweet_count', p.retweet_count,
+        'reply_count', p.reply_count,
+        'quote_count', p.quote_count,
+        'view_count', p.view_count,
+        'metrics_refreshed_at', p.metrics_refreshed_at,
+        'translation_attempts', es.translation_attempts,
+        'translation_first_attempt_at', es.translation_first_attempt_at,
+        'translation_last_attempt_at', es.translation_last_attempt_at,
+        'translation_next_attempt_at', es.translation_next_attempt_at,
+        'classification_attempts', es.classification_attempts,
+        'classification_first_attempt_at', es.classification_first_attempt_at,
+        'classification_last_attempt_at', es.classification_last_attempt_at,
+        'classification_next_attempt_at', es.classification_next_attempt_at,
+        'enrichment_created_at', es.created_at,
+        'enrichment_updated_at', es.updated_at,
+        'unsanctioned_flags', (
+          SELECT jsonb_build_object(
+            'flags', uf.flags,
+            'flag_set', uf.flag_set,
+            'evidence', uf.evidence,
+            'decided_at', uf.decided_at
+          )
+          FROM posts_unsanctioned_flags uf
+          WHERE uf.post_id = p.tweet_id
+        )"""
+        brand_detail_fields = """,
+              'weight', pb.weight,
+              'mentions', COALESCE((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'source', mention.source,
+                    'raw_token', mention.raw_token,
+                    'mentioned_at', mention.mentioned_at
+                  )
+                  ORDER BY mention.source, mention.mentioned_at
+                )
+                FROM posts_brands_mentions mention
+                WHERE mention.post_id = p.tweet_id
+                  AND mention.brand_id = pb.brand_id
+              ), '[]'::jsonb)"""
+        discourse_detail_fields = """,
+                    'china_nationalism', discourse.china_nationalism,
+                    'us_nationalism', discourse.us_nationalism"""
     return f"""BEGIN TRANSACTION READ ONLY;
 SET LOCAL statement_timeout = '15s';
 SET LOCAL lock_timeout = '1s';
@@ -106,7 +187,7 @@ WITH
       p.ordinal,
       jsonb_build_object(
         'tweet_id', p.tweet_id,
-        'fetched_at', p.fetched_at,
+        'fetched_at', p.fetched_at{post_detail_fields},
         'age_seconds', CASE
           WHEN es.created_at IS NULL THEN NULL
           ELSE GREATEST(
@@ -125,7 +206,7 @@ WITH
         'brands', COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
-              'brand_id', pb.brand_id,
+              'brand_id', pb.brand_id{brand_detail_fields},
               'signals', COALESCE((
                 SELECT jsonb_agg(
                   jsonb_build_object(
@@ -142,7 +223,7 @@ WITH
                 SELECT jsonb_agg(
                   jsonb_build_object(
                     'discourse', discourse.discourse_key,
-                    'act_id', discourse.act_id
+                    'act_id', discourse.act_id{discourse_detail_fields}
                   )
                   ORDER BY discourse.discourse_key, discourse.act_id
                 )
@@ -524,6 +605,566 @@ def _render_human(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _load_report_config(repo_root: Path) -> dict[str, Any]:
+    try:
+        import yaml
+    except ImportError:
+        raise HealthCheckError("configuration", "config_invalid") from None
+    try:
+        data = yaml.safe_load((repo_root / "config.yaml").read_text()) or {}
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        raise HealthCheckError("configuration", "config_invalid") from None
+    if not isinstance(data, dict):
+        raise HealthCheckError("configuration", "config_invalid")
+    return data
+
+
+def _prompt_builders(repo_root: Path) -> tuple[Callable[..., str], Callable[..., str]]:
+    inserted = str(repo_root) not in sys.path
+    if inserted:
+        sys.path.insert(0, str(repo_root))
+    try:
+        from x_monitor.attribution import build_batch_pragmatics_full_prompt
+        from x_monitor.translator import build_pragmatics_translation_prompt
+    except (ImportError, OSError):
+        raise HealthCheckError("report", "prompt_reconstruction_failed") from None
+    finally:
+        if inserted:
+            try:
+                sys.path.remove(str(repo_root))
+            except ValueError:
+                pass
+    return build_pragmatics_translation_prompt, build_batch_pragmatics_full_prompt
+
+
+def build_request_reconstructions(
+    rows: Sequence[dict[str, Any]],
+    *,
+    repo_root: Path,
+    config_data: dict[str, Any] | None = None,
+    prompt_builders: tuple[Callable[..., str], Callable[..., str]] | None = None,
+) -> list[dict[str, Any]]:
+    """Reconstruct current-code request kwargs without creating a client."""
+
+    data = config_data if config_data is not None else _load_report_config(repo_root)
+    llm = data.get("llm") if isinstance(data, dict) else None
+    if not isinstance(llm, dict):
+        raise HealthCheckError("configuration", "config_invalid")
+    translator_model = llm.get("translator_model")
+    classifier_model = llm.get("classifier_model")
+    if not isinstance(translator_model, str) or not isinstance(
+        classifier_model, str
+    ):
+        raise HealthCheckError("configuration", "config_invalid")
+
+    if prompt_builders is None:
+        prompt_builders = _prompt_builders(repo_root)
+    translation_builder, classification_builder = prompt_builders
+
+    tweets: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        tweet_id = str(row.get("tweet_id") or "")
+        source_text = row.get("text")
+        if not tweet_id or not isinstance(source_text, str) or not source_text:
+            continue
+        brands = row.get("brands") if isinstance(row.get("brands"), list) else []
+        brand_ids = [
+            brand["brand_id"]
+            for brand in brands
+            if isinstance(brand, dict)
+            and isinstance(brand.get("brand_id"), str)
+            and brand.get("brand_id")
+        ]
+        tweets.append(
+            {"tweet_id": tweet_id, "text": source_text, "brand_ids": brand_ids}
+        )
+
+    calls: list[dict[str, Any]] = []
+    for start in range(0, len(tweets), LLM_BATCH_SIZE):
+        batch = tweets[start : start + LLM_BATCH_SIZE]
+        batch_index = start // LLM_BATCH_SIZE + 1
+        try:
+            translation_prompt = translation_builder(batch, ["en", "zh_cn"])
+        except Exception:  # noqa: BLE001 - sanitize the prompt-builder boundary
+            raise HealthCheckError(
+                "report", "prompt_reconstruction_failed"
+            ) from None
+        translation_max_tokens = min(65536, max(16384, 1000 * len(batch)))
+        calls.append(
+            {
+                "stage": "translation",
+                "historical_wire_call": False,
+                "evidence_class": "current_code_reconstruction",
+                "batch_index": batch_index,
+                "tweet_ids": [tweet["tweet_id"] for tweet in batch],
+                "call_site": (
+                    "monitor.cycle.CycleRunner._run_post_fetch -> "
+                    "x_monitor.translator.translate_batch_pragmatics"
+                ),
+                "known_request_kwargs": {
+                    "model": translator_model,
+                    "max_tokens": translation_max_tokens,
+                    "messages": [{"role": "user", "content": translation_prompt}],
+                },
+                "runtime_only_kwargs": {
+                    "thinking": {
+                        "status": "unavailable",
+                        "reason": (
+                            "resolved from production role-specific environment at "
+                            "call time and not persisted"
+                        ),
+                    }
+                },
+            }
+        )
+
+        kept = [tweet for tweet in batch if tweet["brand_ids"]]
+        if not kept:
+            continue
+        try:
+            classification_prompt = classification_builder(kept)
+        except Exception:  # noqa: BLE001 - sanitize the prompt-builder boundary
+            raise HealthCheckError(
+                "report", "prompt_reconstruction_failed"
+            ) from None
+        calls.append(
+            {
+                "stage": "classification",
+                "historical_wire_call": False,
+                "evidence_class": "current_code_reconstruction",
+                "batch_index": batch_index,
+                "tweet_ids": [tweet["tweet_id"] for tweet in kept],
+                "call_site": (
+                    "monitor.cycle.CycleRunner._run_post_fetch -> "
+                    "x_monitor.attribution.classify_batch_pragmatics_full"
+                ),
+                "known_request_kwargs": {
+                    "model": classifier_model,
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": classification_prompt}],
+                },
+                "runtime_only_kwargs": {
+                    "thinking": {
+                        "status": "unavailable",
+                        "reason": (
+                            "resolved from production classifier environment at call "
+                            "time and not persisted"
+                        ),
+                    }
+                },
+            }
+        )
+    return calls
+
+
+def _code_block(language: str, value: str) -> str:
+    longest_run = max((len(run) for run in re.findall(r"`+", value)), default=0)
+    fence = "`" * max(3, longest_run + 1)
+    return f"{fence}{language}\n{value.rstrip()}\n{fence}"
+
+
+def _json_block(value: Any) -> str:
+    return _code_block(
+        "json", json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False)
+    )
+
+
+def _markdown_cell(value: Any) -> str:
+    if value is None or value == "":
+        return "—"
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def _table(rows: Sequence[tuple[Any, Any]]) -> str:
+    lines = ["| Field | Value |", "| --- | --- |"]
+    lines.extend(
+        f"| {_markdown_cell(key)} | {_markdown_cell(value)} |" for key, value in rows
+    )
+    return "\n".join(lines)
+
+
+def _post_report_section(
+    row: dict[str, Any], health: dict[str, Any], ordinal: int
+) -> str:
+    tweet_id = str(row.get("tweet_id") or "")
+    metadata = _table(
+        [
+            ("Health state", health.get("state")),
+            ("Translation status", health.get("translation_status")),
+            ("Classification status", health.get("classification_status")),
+            ("Author", row.get("author_handle")),
+            ("Author ID", row.get("author_id")),
+            ("Source query", row.get("source_query_id")),
+            ("Tweet created", row.get("created_at")),
+            ("Fetched", row.get("fetched_at")),
+            ("Tweet URL", row.get("tweet_url")),
+            ("Source language", row.get("lang")),
+            ("Detected language", row.get("lang_detected")),
+            ("Likes", row.get("like_count")),
+            ("Reposts", row.get("retweet_count")),
+            ("Replies", row.get("reply_count")),
+            ("Quotes", row.get("quote_count")),
+            ("Views", row.get("view_count")),
+            ("Metrics refreshed", row.get("metrics_refreshed_at")),
+        ]
+    )
+    enrichment = _table(
+        [
+            ("Translation attempts", row.get("translation_attempts")),
+            ("Translation first attempt", row.get("translation_first_attempt_at")),
+            ("Translation last attempt", row.get("translation_last_attempt_at")),
+            ("Translation next attempt", row.get("translation_next_attempt_at")),
+            ("Translation error code", row.get("translation_error_code")),
+            ("Classification attempts", row.get("classification_attempts")),
+            (
+                "Classification first attempt",
+                row.get("classification_first_attempt_at"),
+            ),
+            (
+                "Classification last attempt",
+                row.get("classification_last_attempt_at"),
+            ),
+            (
+                "Classification next attempt",
+                row.get("classification_next_attempt_at"),
+            ),
+            ("Classification error code", row.get("classification_error_code")),
+            ("State created", row.get("enrichment_created_at")),
+            ("State updated", row.get("enrichment_updated_at")),
+        ]
+    )
+
+    parts = [
+        f"## Post {ordinal}: `{tweet_id}`",
+        "",
+        metadata,
+        "",
+        "### Health findings",
+        "",
+        _json_block(health.get("reasons") or []),
+        "",
+        "### Full source text",
+        "",
+        _code_block("text", str(row.get("text") or "")),
+        "",
+        "### Persisted translations and commentary",
+        "",
+        "English translation:",
+        "",
+        _code_block("text", str(row.get("text_en") or "")),
+        "",
+        "Simplified Chinese translation:",
+        "",
+        _code_block("text", str(row.get("text_zh_cn") or "")),
+        "",
+        "English commentary:",
+        "",
+        _code_block("text", str(row.get("commentary_en") or "")),
+        "",
+        "Simplified Chinese commentary:",
+        "",
+        _code_block("text", str(row.get("commentary_zh_cn") or "")),
+        "",
+        "### Durable enrichment state",
+        "",
+        enrichment,
+        "",
+        "### Per-brand findings",
+        "",
+    ]
+    brands = row.get("brands") if isinstance(row.get("brands"), list) else []
+    if not brands:
+        parts.append("No persisted brand rows.")
+    for brand in brands:
+        if not isinstance(brand, dict):
+            continue
+        parts.extend(
+            [
+                f"#### `{brand.get('brand_id') or 'missing-brand-id'}`",
+                "",
+                _table([("Weight", brand.get("weight"))]),
+                "",
+                "Mentions:",
+                "",
+                _json_block(brand.get("mentions") or []),
+                "",
+                "Post types and sentiment:",
+                "",
+                _json_block(brand.get("signals") or []),
+                "",
+                "Discourse and nationalism:",
+                "",
+                _json_block(brand.get("discourses") or []),
+                "",
+            ]
+        )
+    parts.extend(
+        [
+            "### Unsanctioned-flag evidence",
+            "",
+            _json_block(row.get("unsanctioned_flags")),
+        ]
+    )
+    return "\n".join(parts)
+
+
+def _missing_post_report_section(
+    tweet_id: str, health: dict[str, Any], ordinal: int
+) -> str:
+    return "\n".join(
+        [
+            f"## Post {ordinal}: `{tweet_id}`",
+            "",
+            _table(
+                [
+                    ("Health state", health.get("state")),
+                    ("Translation status", health.get("translation_status")),
+                    ("Classification status", health.get("classification_status")),
+                ]
+            ),
+            "",
+            "### Health findings",
+            "",
+            _json_block(health.get("reasons") or []),
+            "",
+            (
+                "No persisted post row was returned for this requested exact-cohort "
+                "tweet ID, so source, translation, enrichment, brand, discourse, "
+                "and flag evidence is unavailable."
+            ),
+        ]
+    )
+
+
+def render_detailed_report(
+    snapshot: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    sql: str,
+    invocation: str,
+    generated_at: datetime,
+    repo_root: Path,
+    request_reconstructions: Sequence[dict[str, Any]],
+    script_source: str,
+    script_sha256: str,
+    repo_commit: str,
+    python_version: str,
+) -> str:
+    """Render a durable, full-detail Markdown evidence report."""
+
+    summary = payload["summary"]
+    rows = snapshot.get("posts") if isinstance(snapshot.get("posts"), list) else []
+    health_by_id = {
+        str(post.get("tweet_id") or ""): post
+        for post in payload.get("posts", [])
+        if isinstance(post, dict)
+    }
+    parts = [
+        "---",
+        "title: Harvester latest-N health report",
+        f"generated_at: {generated_at.isoformat()}",
+        f"database_resource: {DATABASE_RESOURCE}",
+        f"cohort_mode: {payload.get('mode')}",
+        f"cohort_size: {summary.get('total')}",
+        f"status: {payload.get('status')}",
+        "database_access: read-only",
+        f"checker_source_sha256: {script_sha256}",
+        f"repo_commit: {repo_commit}",
+        "---",
+        "",
+        "# Harvester latest-N health report",
+        "",
+        (
+            "This report captures one bounded snapshot of persisted production "
+            "post-fetch health. It is a diagnostic artifact, not a harvest, "
+            "repair, retry, re-enrichment, or provider probe."
+        ),
+        "",
+        "## Summary",
+        "",
+        _table(
+            [
+                ("Overall status", payload.get("status")),
+                ("Regression gate", payload.get("regression_gate")),
+                ("Cohort mode", payload.get("mode")),
+                ("Total posts", summary.get("total")),
+                ("Complete", summary.get("complete")),
+                ("Pending", summary.get("pending")),
+                ("Unhealthy", summary.get("unhealthy")),
+                ("Grace period (hours)", payload.get("grace_hours")),
+                ("Transaction read-only", payload.get("transaction_read_only")),
+            ]
+        ),
+        "",
+        "Ordered cohort tweet IDs:",
+        "",
+        _json_block(payload.get("cohort_tweet_ids") or []),
+        "",
+        "## Methodology and safety",
+        "",
+        (
+            "The checker made one `render psql` call to the configured production "
+            "database resource. The selected cohort was bounded before related "
+            "facts were joined. The transaction declared read-only mode, applied "
+            "statement/lock/idle timeouts, and returned the transaction mode in "
+            "the same snapshot. No production row was mutated."
+        ),
+        "",
+        "The checker did not run harvesting, call TwitterAPI, or create an LLM client.",
+        "",
+        "Invocation:",
+        "",
+        _code_block("shell", invocation),
+        "",
+        "## LLM call evidence",
+        "",
+        "### Calls made by this health checker",
+        "",
+        _json_block([]),
+        "",
+        "### Current-code LLM request reconstructions",
+        "",
+        (
+            "The following entries contain the verbatim prompt strings produced "
+            "by the current pure prompt builders for this selected cohort and the "
+            "request kwargs deterministically known from source-controlled code. "
+            "They are not historical wire evidence. Production does not persist "
+            "historical prompt payloads, response payloads, retry count, original "
+            "batch membership, or runtime-resolved `thinking`; unavailable values "
+            "are labeled instead of inferred."
+        ),
+        "",
+    ]
+    if request_reconstructions:
+        for call in request_reconstructions:
+            parts.extend(
+                [
+                    (
+                        f"#### {call.get('stage', 'unknown').title()} batch "
+                        f"{call.get('batch_index', '?')}"
+                    ),
+                    "",
+                    _json_block(call),
+                    "",
+                ]
+            )
+    else:
+        parts.extend(
+            [
+                (
+                    "No current-code request is reconstructed because the selected "
+                    "cohort contains no non-empty source text eligible for enrichment."
+                ),
+                "",
+            ]
+        )
+
+    rows_by_id = {
+        str(row.get("tweet_id") or ""): row
+        for row in rows
+        if isinstance(row, dict)
+    }
+    parts.extend(["# Per-post evidence", ""])
+    for ordinal, tweet_id_value in enumerate(payload.get("cohort_tweet_ids", []), 1):
+        tweet_id = str(tweet_id_value)
+        health = health_by_id.get(tweet_id, _missing_post(tweet_id))
+        row = rows_by_id.get(tweet_id)
+        if row is None:
+            section = _missing_post_report_section(tweet_id, health, ordinal)
+        else:
+            section = _post_report_section(row, health, ordinal)
+        parts.extend([section, ""])
+
+    parts.extend(
+        [
+            "# Reproducibility appendix",
+            "",
+            "## Exact read-only SQL",
+            "",
+            _code_block("sql", sql),
+            "",
+            "## Checker implementation",
+            "",
+            _table(
+                [
+                    (
+                        "Checker path",
+                        ".claude/skills/harvester-latest-n-health-check/scripts/check.py",
+                    ),
+                    ("Checker file-content SHA-256", script_sha256),
+                    ("Repository commit", repo_commit),
+                    ("Python version", python_version),
+                    ("Repository root", repo_root),
+                ]
+            ),
+            "",
+            (
+                "The complete checker source used to render this artifact follows. "
+                "It includes cohort selection, health rules, SQL, request "
+                "reconstruction, report rendering, atomic write behavior, and "
+                "stable error handling."
+            ),
+            "",
+            _code_block("python", script_source),
+            "",
+        ]
+    )
+    return "\n".join(parts)
+
+
+def write_report_atomic(
+    report: str, *, repo_root: Path, generated_at: datetime
+) -> Path:
+    report_dir = repo_root / REPORT_RELATIVE_DIR
+    filename = (
+        generated_at.strftime("%Y-%m-%d-%H%M%S")
+        + "-harvester-latest-n-health-report.md"
+    )
+    target = report_dir / filename
+    temporary: Path | None = None
+    try:
+        report_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=report_dir,
+            prefix=".harvester-report-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(report)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    except OSError:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise HealthCheckError("report", "report_write_failed") from None
+    return target
+
+
+def _repo_commit(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unavailable"
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", value) else "unavailable"
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -533,6 +1174,7 @@ def main(
 ) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     as_json = "--json" in raw_argv
+    report_path: Path | None = None
     try:
         args = parse_args(raw_argv)
         configured_grace_hours = load_grace_hours()
@@ -541,7 +1183,11 @@ def main(
         grace_hours = (
             args.grace_hours if args.grace_hours is not None else configured_grace_hours
         )
-        sql = build_query(latest=args.latest, tweet_ids=args.tweet_ids)
+        sql = build_query(
+            latest=args.latest,
+            tweet_ids=args.tweet_ids,
+            detailed=args.report,
+        )
         snapshot = execute_query(sql, runner=runner)
         payload, exit_code = evaluate_snapshot(
             snapshot,
@@ -549,6 +1195,41 @@ def main(
             requested_ids=args.tweet_ids,
             grace_hours=grace_hours,
         )
+        if args.report and exit_code in {0, 1}:
+            try:
+                repo_root = Path(__file__).resolve().parents[4]
+                script_path = Path(__file__).resolve()
+                script_source = script_path.read_text()
+                generated_at = datetime.now().astimezone()
+                request_reconstructions = build_request_reconstructions(
+                    snapshot["posts"], repo_root=repo_root
+                )
+                report = render_detailed_report(
+                    snapshot,
+                    payload,
+                    sql=sql,
+                    invocation=shlex.join(
+                        [sys.executable, str(script_path), *raw_argv]
+                    ),
+                    generated_at=generated_at,
+                    repo_root=repo_root,
+                    request_reconstructions=request_reconstructions,
+                    script_source=script_source,
+                    script_sha256=hashlib.sha256(script_source.encode()).hexdigest(),
+                    repo_commit=_repo_commit(repo_root),
+                    python_version=sys.version.replace("\n", " "),
+                )
+                report_path = write_report_atomic(
+                    report, repo_root=repo_root, generated_at=generated_at
+                )
+            except HealthCheckError:
+                raise
+            except OSError:
+                raise HealthCheckError(
+                    "report", "checker_source_unavailable"
+                ) from None
+            except Exception:  # noqa: BLE001 - sanitize the report boundary
+                raise HealthCheckError("report", "report_generation_failed") from None
     except HealthCheckError as exc:
         payload = _error_payload(exc.error_class, exc.code)
         exit_code = 2
@@ -558,6 +1239,8 @@ def main(
     else:
         target = stderr if exit_code == 2 else stdout
         target.write(_render_human(payload) + "\n")
+        if report_path is not None:
+            target.write(f"report={report_path}\n")
     return exit_code
 
 

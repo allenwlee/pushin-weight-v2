@@ -6,6 +6,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 
@@ -65,6 +66,70 @@ def _snapshot(*posts, read_only="on"):
     return {"transaction_read_only": read_only, "posts": list(posts)}
 
 
+def _detailed_post(**overrides):
+    row = _post(
+        text="Full source post with `inline code` and a ``` fence.",
+        lang="ja",
+        lang_detected="ja",
+        text_en="Full English translation.",
+        text_zh_cn="完整中文翻译。",
+        commentary_en=None,
+        commentary_zh_cn="中文语境说明。",
+        source_query_id="C1",
+        author_id="author-1",
+        author_handle="example",
+        author_name="Example Author",
+        created_at="2026-08-24T23:58:00+00:00",
+        tweet_url="https://x.com/example/status/100",
+        like_count=12,
+        retweet_count=3,
+        reply_count=2,
+        quote_count=1,
+        translation_attempts=1,
+        translation_first_attempt_at="2026-08-25T00:00:01+00:00",
+        translation_last_attempt_at="2026-08-25T00:00:01+00:00",
+        translation_next_attempt_at=None,
+        classification_attempts=1,
+        classification_first_attempt_at="2026-08-25T00:00:02+00:00",
+        classification_last_attempt_at="2026-08-25T00:00:02+00:00",
+        classification_next_attempt_at=None,
+        enrichment_created_at="2026-08-25T00:00:00+00:00",
+        enrichment_updated_at="2026-08-25T00:00:03+00:00",
+        unsanctioned_flags={
+            "flags": "[]",
+            "flag_set": [],
+            "evidence": "No unsanctioned signals.",
+            "decided_at": "2026-08-25T00:00:02+00:00",
+        },
+        brands=[
+            {
+                "brand_id": "minimax",
+                "weight": 1.0,
+                "mentions": [
+                    {
+                        "source": "query",
+                        "raw_token": "MiniMax",
+                        "mentioned_at": "2026-08-25T00:00:00+00:00",
+                    }
+                ],
+                "signals": [
+                    {"post_type": "announcement", "sentiment": "positive"}
+                ],
+                "discourses": [
+                    {
+                        "discourse": "genuine_hype",
+                        "act_id": 0,
+                        "china_nationalism": "none",
+                        "us_nationalism": "none",
+                    }
+                ],
+            }
+        ],
+    )
+    row.update(overrides)
+    return row
+
+
 def test_cli_defaults_to_latest_twenty_and_rejects_out_of_range(checker):
     assert checker.parse_args([]).latest == 20
     assert checker.parse_args(["--latest", "1"]).latest == 1
@@ -85,6 +150,17 @@ def test_cli_accepts_ordered_exact_ids_and_rejects_unsafe_values(checker):
         with pytest.raises(checker.HealthCheckError) as exc_info:
             checker.parse_args(["--tweet-id", invalid])
         assert exc_info.value.code == "invalid_arguments"
+
+
+def test_cli_supports_opt_in_detailed_report_and_rejects_json_combination(checker):
+    args = checker.parse_args(["--latest", "3", "--report"])
+
+    assert args.report is True
+    assert args.as_json is False
+
+    with pytest.raises(checker.HealthCheckError) as exc_info:
+        checker.parse_args(["--report", "--json"])
+    assert exc_info.value.code == "invalid_arguments"
 
 
 def test_query_is_bounded_before_joins_and_declares_read_only_mode(checker):
@@ -115,6 +191,26 @@ def test_exact_query_uses_validated_ids_in_requested_order(checker):
     assert "('100', 1)" in sql
     assert sql.index("('200', 0)") < sql.index("('100', 1)")
     assert "JOIN selected_ids" in sql
+
+
+def test_detailed_query_adds_report_facts_without_expanding_default_snapshot(checker):
+    default_sql = checker.build_query(latest=20, tweet_ids=None)
+    detailed_sql = checker.build_query(latest=20, tweet_ids=None, detailed=True)
+
+    for detailed_fact in (
+        "'text', p.text",
+        "'text_en', p.text_en",
+        "'commentary_zh_cn', p.commentary_zh_cn",
+        "'translation_attempts', es.translation_attempts",
+        "'classification_last_attempt_at', es.classification_last_attempt_at",
+        "'weight', pb.weight",
+        "'china_nationalism', discourse.china_nationalism",
+        "'unsanctioned_flags'",
+    ):
+        assert detailed_fact in detailed_sql
+        assert detailed_fact not in default_sql
+    assert detailed_sql.count("BEGIN TRANSACTION READ ONLY") == 1
+    assert detailed_sql.index("LIMIT 20") < detailed_sql.index("posts_brands")
 
 
 def test_complete_and_fresh_pending_rows_exit_zero_with_distinct_counts(checker):
@@ -432,6 +528,403 @@ def test_human_and_json_output_never_include_source_text(checker):
             assert "grace_hours=24" in stdout.getvalue()
 
 
+def test_request_reconstruction_uses_selected_text_and_brands_without_clients(
+    checker, tmp_path
+):
+    builder_inputs = []
+
+    def translation_builder(tweets, locales):
+        builder_inputs.append(("translation", tweets, locales))
+        return "TRANSLATION PROMPT\n" + tweets[0]["text"]
+
+    def classification_builder(tweets):
+        builder_inputs.append(("classification", tweets))
+        return "CLASSIFICATION PROMPT\n" + tweets[0]["text"]
+
+    calls = checker.build_request_reconstructions(
+        [_detailed_post()],
+        repo_root=tmp_path,
+        config_data={
+            "llm": {
+                "translator_model": "translator-model",
+                "classifier_model": "classifier-model",
+            }
+        },
+        prompt_builders=(translation_builder, classification_builder),
+    )
+
+    assert [call[0] for call in builder_inputs] == [
+        "translation",
+        "classification",
+    ]
+    assert builder_inputs[0][1] == [
+        {
+            "tweet_id": "100",
+            "text": _detailed_post()["text"],
+            "brand_ids": ["minimax"],
+        }
+    ]
+    assert builder_inputs[0][2] == ["en", "zh_cn"]
+    assert builder_inputs[1][1][0]["brand_ids"] == ["minimax"]
+    assert len(calls) == 2
+    assert calls[0]["stage"] == "translation"
+    assert calls[0]["known_request_kwargs"]["model"] == "translator-model"
+    assert calls[0]["known_request_kwargs"]["max_tokens"] == 16384
+    assert calls[0]["known_request_kwargs"]["messages"][0]["content"].startswith(
+        "TRANSLATION PROMPT"
+    )
+    assert calls[1]["stage"] == "classification"
+    assert calls[1]["known_request_kwargs"]["model"] == "classifier-model"
+    assert calls[1]["known_request_kwargs"]["max_tokens"] == 4096
+    assert all("client" not in json.dumps(call).lower() for call in calls)
+    assert all(call["historical_wire_call"] is False for call in calls)
+    assert all("thinking" in call["runtime_only_kwargs"] for call in calls)
+
+
+def test_request_reconstruction_remains_bounded_at_two_hundred_posts(
+    checker, tmp_path
+):
+    posts = [
+        _detailed_post(tweet_id=str(1000 + index), text=f"post {index}")
+        for index in range(200)
+    ]
+
+    calls = checker.build_request_reconstructions(
+        posts,
+        repo_root=tmp_path,
+        config_data={
+            "llm": {
+                "translator_model": "translator-model",
+                "classifier_model": "classifier-model",
+            }
+        },
+        prompt_builders=(
+            lambda tweets, locales: f"translate {len(tweets)} {locales}",
+            lambda tweets: f"classify {len(tweets)}",
+        ),
+    )
+
+    assert len(calls) == 20
+    assert sum(call["stage"] == "translation" for call in calls) == 10
+    assert sum(call["stage"] == "classification" for call in calls) == 10
+    assert all(len(call["tweet_ids"]) == 20 for call in calls)
+
+
+def test_real_prompt_builders_are_pure_and_include_selected_post(checker):
+    from x_monitor.translator import _max_tokens_for_batch_size
+
+    calls = checker.build_request_reconstructions(
+        [_detailed_post(text="REAL BUILDER SENTINEL")],
+        repo_root=Path(__file__).parents[1],
+        config_data={
+            "llm": {
+                "translator_model": "deepseek-v4-flash",
+                "classifier_model": "deepseek-v4-flash",
+            }
+        },
+    )
+
+    assert [call["stage"] for call in calls] == ["translation", "classification"]
+    assert calls[0]["known_request_kwargs"]["max_tokens"] == (
+        _max_tokens_for_batch_size(1)
+    )
+    for call in calls:
+        request_json = json.dumps(call["known_request_kwargs"], ensure_ascii=False)
+        assert "REAL BUILDER SENTINEL" in request_json
+        assert '"tweet_id"' in call["known_request_kwargs"]["messages"][0]["content"]
+        assert '"100"' in call["known_request_kwargs"]["messages"][0]["content"]
+
+
+def test_detailed_report_contains_full_evidence_and_explicit_provenance(
+    checker, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ENV-SECRET-MUST-NOT-LEAK")
+    snapshot = _snapshot(_detailed_post())
+    payload, _ = checker.evaluate_snapshot(
+        snapshot,
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+    request_reconstructions = [
+        {
+            "stage": "translation",
+            "historical_wire_call": False,
+            "batch_index": 1,
+            "tweet_ids": ["100"],
+            "known_request_kwargs": {
+                "model": "deepseek-v4-flash",
+                "max_tokens": 16384,
+                "messages": [
+                    {"role": "user", "content": "VERBATIM PROMPT SENTINEL"}
+                ],
+            },
+            "runtime_only_kwargs": {"thinking": "unavailable"},
+        }
+    ]
+
+    report = checker.render_detailed_report(
+        snapshot,
+        payload,
+        sql="BEGIN TRANSACTION READ ONLY; SELECT exact_sql; COMMIT;",
+        invocation="python check.py --latest 1 --report",
+        generated_at=datetime(2026, 8, 26, 1, 2, 3, tzinfo=UTC),
+        repo_root=tmp_path,
+        request_reconstructions=request_reconstructions,
+        script_source="print('CHECKER SOURCE SENTINEL')\n",
+        script_sha256="abc123",
+        repo_commit="deadbeef",
+        python_version="3.14.0",
+    )
+
+    for expected in (
+        "Harvester latest-N health report",
+        "Full source post with `inline code` and a ``` fence.",
+        "Full English translation.",
+        "完整中文翻译。",
+        "中文语境说明。",
+        "minimax",
+        "genuine_hype",
+        "No unsanctioned signals.",
+        "Calls made by this health checker",
+        "[]",
+        "Current-code LLM request reconstructions",
+        "not historical wire evidence",
+        "VERBATIM PROMPT SENTINEL",
+        "BEGIN TRANSACTION READ ONLY; SELECT exact_sql; COMMIT;",
+        "abc123",
+        "deadbeef",
+        "3.14.0",
+        "CHECKER SOURCE SENTINEL",
+    ):
+        assert expected in report
+    assert "ENV-SECRET-MUST-NOT-LEAK" not in report
+    assert report.count("```python") == 1
+
+
+def test_exact_report_renders_requested_post_missing_from_database(checker, tmp_path):
+    snapshot = _snapshot(_detailed_post(tweet_id="200"))
+    payload, exit_code = checker.evaluate_snapshot(
+        snapshot,
+        latest=None,
+        requested_ids=["200", "100"],
+        grace_hours=24,
+    )
+
+    report = checker.render_detailed_report(
+        snapshot,
+        payload,
+        sql="BEGIN TRANSACTION READ ONLY; COMMIT;",
+        invocation="python check.py --tweet-id 200 --tweet-id 100 --report",
+        generated_at=datetime(2026, 8, 26, 1, 2, 3, tzinfo=UTC),
+        repo_root=tmp_path,
+        request_reconstructions=[],
+        script_source="print('checker')\n",
+        script_sha256="abc123",
+        repo_commit="deadbeef",
+        python_version="3.14.0",
+    )
+
+    assert exit_code == 1
+    assert "## Post 2: `100`" in report
+    assert "No persisted post row was returned" in report
+    assert '"reason": "missing_post"' in report
+
+
+def test_detailed_report_write_is_atomic_and_cleans_failed_temp(
+    checker, monkeypatch, tmp_path
+):
+    generated_at = datetime(2026, 8, 26, 1, 2, 3, tzinfo=UTC)
+    path = checker.write_report_atomic(
+        "report body", repo_root=tmp_path, generated_at=generated_at
+    )
+
+    assert path == (
+        tmp_path
+        / "docs/analysis/harvester/2026-08-26-010203-harvester-latest-n-health-report.md"
+    )
+    assert path.read_text() == "report body"
+    assert list(path.parent.glob(".*.tmp")) == []
+
+    monkeypatch.setattr(checker.os, "replace", lambda *_args: (_ for _ in ()).throw(OSError()))
+    with pytest.raises(checker.HealthCheckError) as exc_info:
+        checker.write_report_atomic(
+            "new report body", repo_root=tmp_path, generated_at=generated_at
+        )
+    assert exc_info.value.code == "report_write_failed"
+    assert path.read_text() == "report body"
+    assert list(path.parent.glob(".*.tmp")) == []
+
+
+def test_main_report_mode_uses_detailed_snapshot_and_prints_saved_path(
+    checker, monkeypatch, tmp_path
+):
+    snapshot_json = json.dumps(_snapshot(_detailed_post()))
+    captured = {}
+
+    def runner(command, **kwargs):
+        captured["sql"] = command[4]
+        return subprocess.CompletedProcess(command, 0, stdout=snapshot_json, stderr="")
+
+    monkeypatch.setattr(checker, "load_grace_hours", lambda: 24)
+    monkeypatch.setattr(
+        checker,
+        "build_request_reconstructions",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        checker,
+        "write_report_atomic",
+        lambda report, **_kwargs: captured.setdefault(
+            "report", tmp_path / "saved-report.md"
+        ),
+    )
+    stdout = StringIO()
+
+    exit_code = checker.main(
+        ["--latest", "1", "--report"],
+        runner=runner,
+        stdout=stdout,
+        stderr=StringIO(),
+    )
+
+    assert exit_code == 0
+    assert "'text', p.text" in captured["sql"]
+    assert "report=" + str(tmp_path / "saved-report.md") in stdout.getvalue()
+    assert "Full source post" not in stdout.getvalue()
+
+
+def test_main_unhealthy_report_still_writes_and_retains_exit_one(
+    checker, monkeypatch, tmp_path
+):
+    unhealthy = _detailed_post(
+        brands=[
+            {
+                "brand_id": "minimax",
+                "weight": 1.0,
+                "mentions": [],
+                "signals": [
+                    {"post_type": "announcement", "sentiment": "positive"}
+                ],
+                "discourses": [],
+            }
+        ]
+    )
+    snapshot_json = json.dumps(_snapshot(unhealthy))
+    captured = {}
+
+    def runner(command, **kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=snapshot_json, stderr="")
+
+    monkeypatch.setattr(checker, "load_grace_hours", lambda: 24)
+    monkeypatch.setattr(
+        checker, "build_request_reconstructions", lambda *_args, **_kwargs: []
+    )
+    monkeypatch.setattr(
+        checker,
+        "write_report_atomic",
+        lambda report, **_kwargs: captured.setdefault(
+            "report", tmp_path / "unhealthy-report.md"
+        ),
+    )
+    stdout = StringIO()
+
+    exit_code = checker.main(
+        ["--latest", "1", "--report"],
+        runner=runner,
+        stdout=stdout,
+        stderr=StringIO(),
+    )
+
+    assert exit_code == 1
+    assert "status=unhealthy" in stdout.getvalue()
+    assert "report=" + str(tmp_path / "unhealthy-report.md") in stdout.getvalue()
+
+
+def test_unexpected_report_exception_is_sanitized(checker, monkeypatch):
+    snapshot_json = json.dumps(_snapshot(_detailed_post()))
+    writes = []
+
+    def runner(command, **kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=snapshot_json, stderr="")
+
+    monkeypatch.setattr(checker, "load_grace_hours", lambda: 24)
+    monkeypatch.setattr(
+        checker, "build_request_reconstructions", lambda *_args, **_kwargs: []
+    )
+    monkeypatch.setattr(
+        checker,
+        "render_detailed_report",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            TypeError("internal renderer secret")
+        ),
+    )
+    monkeypatch.setattr(
+        checker,
+        "write_report_atomic",
+        lambda *_args, **_kwargs: writes.append(True),
+    )
+    stdout = StringIO()
+    stderr = StringIO()
+
+    exit_code = checker.main(
+        ["--latest", "1", "--report"],
+        runner=runner,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 2
+    assert writes == []
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == (
+        "harvester-health error class=report code=report_generation_failed\n"
+    )
+    assert "internal renderer secret" not in stderr.getvalue()
+
+
+def test_report_reconstruction_failure_is_stable_and_writes_no_partial(
+    checker, monkeypatch
+):
+    snapshot_json = json.dumps(_snapshot(_detailed_post()))
+    writes = []
+
+    def runner(command, **kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=snapshot_json, stderr="")
+
+    def fail_prompt_builder(*_args, **_kwargs):
+        raise RuntimeError("provider-shaped internal detail")
+
+    monkeypatch.setattr(checker, "load_grace_hours", lambda: 24)
+    monkeypatch.setattr(
+        checker,
+        "_prompt_builders",
+        lambda _repo_root: (fail_prompt_builder, fail_prompt_builder),
+    )
+    monkeypatch.setattr(
+        checker,
+        "write_report_atomic",
+        lambda *_args, **_kwargs: writes.append(True),
+    )
+    stdout = StringIO()
+    stderr = StringIO()
+
+    exit_code = checker.main(
+        ["--latest", "1", "--report"],
+        runner=runner,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 2
+    assert writes == []
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == (
+        "harvester-health error class=report code=prompt_reconstruction_failed\n"
+    )
+    assert "provider-shaped" not in stderr.getvalue()
+
+
 def test_skill_is_discoverable_and_metadata_matches():
     import yaml
 
@@ -479,6 +972,13 @@ def test_skill_defines_immediate_and_exact_cohort_routes():
         "Do not retry",
     ):
         assert safety_rule in skill_text
+    for report_contract in (
+        "--latest 20 --report",
+        "docs/analysis/harvester/YYYY-MM-DD-HHMMSS-harvester-latest-n-health-report.md",
+        "historical wire calls",
+        "complete checker source",
+    ):
+        assert report_contract in skill_text
 
 
 def test_documented_helper_resolves_outside_the_repository(tmp_path):

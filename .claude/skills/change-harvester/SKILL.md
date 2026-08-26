@@ -160,7 +160,8 @@ Function-level green while production still omits `cfg=` is incomplete.
 | Metrics refresh | `monitor/metrics_refresh.py` |
 | Cost | `scripts/harvest_cost/` |
 | Cron / pause | `render.yaml` → `pushinweight-harvest`, ops pause doc |
-| Durable reports | `tests/posts/` (cohort + cost SSOT) |
+| Durable health reports | `docs/analysis/harvester/` (canonical operator analysis) |
+| Historical cohort examples | `tests/posts/` (style reference, not canonical output) |
 
 ## Persisted latest-N health verification
 
@@ -186,6 +187,9 @@ Do not retry or substitute a newer cohort.
 Use the **immediate route** once for other harvester changes, for an operator's
 latest-health inspection, or when the final diff only changes the diagnostic
 itself. Record healthy, fresh-pending, unhealthy, or operational-error evidence.
+When the owner requests full post-level evidence, use the helper's explicit
+`--report` mode and retain the generated report under
+`docs/analysis/harvester/`; normal human and JSON output remain bounded.
 
 This planned verification does not authorize a cron halt.
 It does not authorize a harvest run.
@@ -207,8 +211,9 @@ If the owner separately reports a live anomaly, use the M17 incident path in
     `lang_detected` / signals).
   - Cost impact checked when search or metrics volume changed
     (`python -m scripts.harvest_cost`).
-  - Optional but preferred for material volume/quality changes: a cohort
-    note under `tests/posts/` in the recovery-cohort shape.
+  - Optional but preferred for material volume/quality changes: a detailed
+    health report under `docs/analysis/harvester/`, using historical
+    `tests/posts/` cohort notes only as a stylistic reference.
 - Exit 0 / Render “successful” alone is **not** DoD.
 - Pause/resume events appended to
   `docs/operations/pause-and-resume-harvest-cron.md` when used.
@@ -234,4 +239,5 @@ If the owner separately reports a live anomaly, use the M17 incident path in
 | `scripts/harvest_cost/README.md` | Credit pricing CLI |
 | `docs/solutions/runtime-errors/translator-*.md` | Translator env / truncation / lang |
 | `docs/solutions/integration-issues/harvest-pipeline-missing-call-queries.md` | Query wiring gaps |
-| `tests/posts/*-cohort.md` | Durable post-cycle evidence format |
+| `docs/analysis/harvester/` | Canonical generated harvester health reports |
+| `tests/posts/*-cohort.md` | Historical post-cycle report style reference |
