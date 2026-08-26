@@ -202,6 +202,73 @@ def test_delivery_target_never_upgrades_plan_authority(tmp_path: Path, target: s
     assert f"Owner selection recorded: `{str(selected).lower()}`" in guide
 
 
+def test_production_cleanup_is_guarded_canonical_and_last(tmp_path: Path) -> None:
+    config = _configured(tmp_path)
+    active_worktree = tmp_path / ".worktrees" / "feat" / "example"
+
+    guide = _render(
+        _plan(target="production", selected=True),
+        config=config,
+        plan_path=tmp_path / "docs" / "plans" / "example.md",
+        active_worktree=active_worktree,
+    )
+
+    production_verification = (
+        "Verify the remote production ref resolves to the candidate SHA"
+    )
+    removal = (
+        f"git -C {tmp_path} worktree remove {active_worktree}"
+    )
+    assert guide.index(production_verification) < guide.index(removal)
+    for guard in ("registered", "clean", "unlocked", "verified candidate SHA"):
+        assert guard in guide
+    assert "without `--force`" in guide
+    assert "Preserve the local and remote feature branches" in guide
+    assert "final filesystem action" in guide
+
+
+@pytest.mark.parametrize(
+    ("target", "selected"),
+    [
+        ("on-request", False),
+        ("staging", True),
+        ("production", False),
+    ],
+)
+def test_nonproduction_or_unauthorized_guides_have_no_removal_command(
+    tmp_path: Path, target: str, selected: bool
+) -> None:
+    config = _configured(tmp_path)
+
+    guide = _render(
+        _plan(target=target, selected=selected),
+        config=config,
+        plan_path=tmp_path / "docs" / "plans" / "example.md",
+        active_worktree=tmp_path / ".worktrees" / "feat" / "example",
+    )
+
+    assert "git -C " not in guide
+    assert "worktree remove" not in guide
+
+
+def test_noncanonical_production_guide_withholds_removal_command(
+    tmp_path: Path,
+) -> None:
+    config = _configured(tmp_path)
+
+    guide = _render(
+        _plan(target="production", selected=True),
+        config=config,
+        plan_path=tmp_path / "docs" / "plans" / "example.md",
+        active_worktree=tmp_path / "outside" / "example",
+    )
+
+    assert "git -C " not in guide
+    assert "worktree remove" not in guide
+    assert "withholds the cleanup command" in guide
+    assert "relocation and reannotation" in guide
+
+
 @pytest.mark.parametrize(
     "content",
     [

@@ -31,6 +31,15 @@ planning, or `staging` or `production` when an LFG or goal owner selected one
 upfront. The parent workflow follows the selected target; Ollija does not
 approve or execute the delivery.
 
+### Production worktree cleanup
+
+The parent-owned final filesystem action after the remote production ref and
+Render service both prove the unchanged candidate SHA. The generated guide
+emits `git worktree remove` only for the canonical linked worktree and requires
+it to remain registered, clean, unlocked, and at that SHA. Staging-only,
+failed, unsafe, or noncanonical worktrees are retained. Ollija supplies the
+guidance but performs no cleanup itself.
+
 ## x-monitor pipeline
 
 The x-monitor service ingests social-media posts about AI/LLM brands, classifies them, and persists the results. The vocabulary below is scoped to the run-summary layer that operators read at the end of each pipeline run.

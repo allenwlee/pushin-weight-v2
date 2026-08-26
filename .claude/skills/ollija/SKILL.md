@@ -13,7 +13,8 @@ Ollija is a plan guide, not a release controller. Its only public command is:
 
 It resolves one shared Markdown plan and writes or refreshes its generated
 Ollija Delivery Guide. It does not start agents, create release state, ask for
-approvals, move worktrees, commit, push, deploy, or retry in the background.
+approvals, move or remove worktrees, commit, push, deploy, or retry in the
+background.
 
 ## Planning contract
 
@@ -53,6 +54,22 @@ The Ollija release worktree area is:
 If annotation says the active worktree is outside that area, make relocation
 the first plan action and rerun annotation after the move. This is guidance
 only: do not prompt, move, reject, or block the worktree.
+
+## Production worktree cleanup
+
+For a user-selected production target, let the generated guide direct the
+parent workflow to clean up only after exact-SHA production verification. The
+guide emits an executable removal command only for the resolved canonical
+linked worktree.
+
+Before running `git worktree remove`, require that worktree to remain
+registered, clean, unlocked, and at the verified candidate SHA. Run from the
+authoritative repository root without `--force`, preserve the local and remote
+feature branches, and make removal the final filesystem action. Retain every
+staging-only, failed, unauthorized, dirty, locked, noncanonical, or
+candidate-mismatched worktree. Ollija does not remove the worktree itself; the
+parent workflow owns the guarded mutation and reports afterward from the
+authoritative root.
 
 ## Before Git or deployment mutations
 

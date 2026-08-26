@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from shlex import quote
 from string import Template
 from typing import Any
 
@@ -121,7 +122,37 @@ def _placement(config: ProjectConfig, metadata: PlanMetadata, active_worktree: P
     )
 
 
-def _delivery_actions(config: ProjectConfig, metadata: PlanMetadata) -> str:
+def _production_cleanup_action(
+    config: ProjectConfig,
+    metadata: PlanMetadata,
+    active_worktree: Path,
+) -> str:
+    if not is_canonical_worktree(config, active_worktree, metadata.branch):
+        return (
+            "11. Retain this noncanonical worktree. Ollija withholds the cleanup "
+            "command until relocation and reannotation make the exact canonical "
+            "target explicit."
+        )
+    root = quote(str(config.authority.repository_root))
+    worktree = quote(str(active_worktree))
+    return (
+        "11. After step 10 succeeds, perform worktree cleanup as the final "
+        "filesystem action:\n"
+        f"    - From `{config.authority.repository_root}`, require "
+        f"`{active_worktree}` to remain registered, clean, unlocked, and at the "
+        "verified candidate SHA. If any guard fails, retain it and report the "
+        "reason.\n"
+        f"    - Run `git -C {root} worktree remove {worktree}` without `--force`.\n"
+        "    - Preserve the local and remote feature branches. Continue final "
+        "reporting from the authoritative repository root."
+    )
+
+
+def _delivery_actions(
+    config: ProjectConfig,
+    metadata: PlanMetadata,
+    active_worktree: Path,
+) -> str:
     tests = "\n".join(f"   - `{command}`" for command in config.delivery.test_commands)
     base = (
         "1. Complete implementation and the plan's verification contract.\n"
@@ -161,7 +192,8 @@ def _delivery_actions(config: ProjectConfig, metadata: PlanMetadata) -> str:
         f"exact candidate SHA to `refs/heads/{config.git.production_branch}` with the server-enforced fast-forward "
         f"command `git push {config.git.remote} <candidate-sha>:refs/heads/{config.git.production_branch}`.\n"
         "10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for "
-        f"`{config.environments['production'].service}` reports that same SHA before reporting completion."
+        f"`{config.environments['production'].service}` reports that same SHA before reporting completion.\n"
+        + _production_cleanup_action(config, metadata, active_worktree)
     )
 
 
@@ -199,7 +231,7 @@ def render_delivery_guide(
         "workflow": metadata.workflow,
         "delivery_target": metadata.delivery_target,
         "delivery_selected_by_user": str(metadata.delivery_selected_by_user).lower(),
-        "delivery_actions": _delivery_actions(config, metadata),
+        "delivery_actions": _delivery_actions(config, metadata, active_worktree),
         "code_failure_route": config.delivery.code_failure_route,
         "infra_failure_route": config.delivery.infra_failure_route,
     }

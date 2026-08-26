@@ -34,4 +34,7 @@ ${delivery_actions}
 - Implementation failures return to the ${code_failure_route} for diagnosis, correction, recommit, and restaging.
 - SSH, shell, environment, or multi-machine failures use the ${infra_failure_route} first.
 - The change ledger is advisory; do not validate or enforce it.
+- Never force-remove a worktree. Retain staging-only, failed, dirty, locked,
+  noncanonical, or candidate-mismatched worktrees for diagnosis or later
+  delivery.
 - Do not run an endless retry loop or start a persistent Ollija process.

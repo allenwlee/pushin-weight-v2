@@ -42,6 +42,15 @@ guidance only: it does not approve, commit, push, deploy, move worktrees, or
 run a persistent release process. Read `.claude/skills/ollija/SKILL.md` for the
 same portable contract.
 
+After exact-SHA production verification, the generated guide directs the
+parent workflow to run guarded `git worktree remove` cleanup only for the
+canonical linked worktree. Require it to remain registered, clean, unlocked,
+and at the verified candidate SHA; run from the authoritative root without
+`--force` and preserve feature branches. Make removal the final filesystem
+action. Retain staging-only, failed, unauthorized, dirty, locked,
+noncanonical, or candidate-mismatched worktrees. Ollija provides guidance and
+does not remove the worktree itself.
+
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules
 

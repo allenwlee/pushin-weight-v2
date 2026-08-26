@@ -72,3 +72,17 @@ def test_lfg_and_goal_delivery_contract_is_shared_with_agent_rules() -> None:
         assert "delivery_selected_by_user" in text
         assert "on-request" in text
         assert "annotate-plan" in text
+
+
+def test_production_worktree_cleanup_contract_is_shared_with_agent_rules() -> None:
+    body = CANONICAL.read_text(encoding="utf-8")
+    agent_rules = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    for text in (body, agent_rules):
+        assert "exact-SHA production verification" in text
+        assert "git worktree remove" in text
+        assert "without" in text and "`--force`" in text
+        assert "staging-only" in text
+        assert "parent workflow" in text
+
+    assert "does not remove the worktree itself" in body
