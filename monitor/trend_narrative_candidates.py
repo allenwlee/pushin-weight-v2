@@ -524,9 +524,6 @@ def build_trend_analysis_snapshot(
             stable_family_facts=stable_family_facts,
         )
         canonical_snapshot_json(snapshot)
-        provider_json = canonical_snapshot_json(project_provider_packet(snapshot))
-        if len(provider_json.encode("utf-8")) > evidence_policy.provider_packet_bytes:
-            raise TrendSnapshotSizeError("trend_provider_packet_too_large")
         # Exercise every deterministic editor packet before this immutable
         # snapshot escapes the repeatable-read boundary.  Compaction may trim
         # text copies, never evidence rows; an irreducible packet fails safe.
@@ -1499,6 +1496,11 @@ def _project_compact_ranking_packet(snapshot: Mapping[str, Any]) -> dict[str, An
     dossiers = []
     for dossier in snapshot.get("dossiers", []):
         row = _provider_dossier(dossier)
+        # Ranking is the only all-brand transport. Keep its content-led
+        # signals and citable facts, but omit per-brand trajectories/episodes
+        # and cap evidence previews so 20+ brands fit the shared budget.
+        for key in ("metadata_trajectories", "episodes", "evidence_allocation"):
+            row.pop(key, None)
         row["evidence"] = [
             {
                 "evidence_id": evidence["evidence_id"],

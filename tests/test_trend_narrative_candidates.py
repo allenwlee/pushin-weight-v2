@@ -1089,6 +1089,8 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     provider = project_provider_packet(snapshot)
     assert provider["dossiers"][0].get("raw_series") is None
     assert len(provider["dossiers"][0]["evidence"]) <= 2
+    assert "metadata_trajectories" not in provider["dossiers"][0]
+    assert "episodes" not in provider["dossiers"][0]
     assert raw_author_id not in canonical_snapshot_json(provider)
     assert raw_post_id not in canonical_snapshot_json(provider)
 
