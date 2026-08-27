@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,9 +11,13 @@ from types import SimpleNamespace
 import pytest
 
 from scripts.staging_refresh.database import (
+    CandidateCensus,
+    CandidateProcessor,
     RefreshError,
+    ScrubReport,
     SnapshotRestoreEngine,
     SourceCensus,
+    scrub_candidate_data,
 )
 from scripts.staging_refresh.policy import load_policy
 
@@ -32,8 +37,43 @@ class FakeAdapter:
             database_bytes=100,
             schema_checksum="a" * 64,
             migration_checksum="b" * 64,
-            row_counts={"posts": 12, "brands": 2},
+            row_counts={
+                "accounts": 5,
+                "brands": 2,
+                "posts": 12,
+                "posts_brands": 10,
+                "products": 3,
+            },
             latest_timestamps={"posts.created_at": "2026-08-27T01:00:00+00:00"},
+            translation_counts={
+                "posts.text_en": 10,
+                "posts.text_zh_cn": 10,
+                "brands.display_name_en": 2,
+                "brands.display_name_zh_cn": 2,
+            },
+            classification_counts={
+                table: 1 for table in policy.validation.classification_tables
+            },
+            terminal_narrative_count=4,
+            current_narrative_count=4,
+        )
+        self.candidate_census = CandidateCensus(
+            base_tables=policy.relations.classified_tables,
+            views=policy.relations.views,
+            sequences=policy.relations.sequences,
+            columns=policy.validation.required_columns,
+            row_counts=self.census.row_counts,
+            latest_timestamps=self.census.latest_timestamps,
+            translation_counts=self.census.translation_counts,
+            classification_counts=self.census.classification_counts,
+            scrubbed_counts={table: 0 for table in policy.scrub.truncate_tables},
+            terminal_narrative_count=4,
+            current_narrative_count=4,
+            duplicate_current_windows=(),
+            invalid_foreign_keys=(),
+            view_valid=True,
+            site_domain=policy.scrub.site_domain,
+            site_name=policy.scrub.site_name,
         )
 
     @contextmanager
@@ -58,6 +98,30 @@ class FakeAdapter:
 
     def drop_shadow(self, _url: str, name: str) -> None:
         self.events.append(f"shadow:drop:{name}")
+
+    def scrub_candidate(self, _url: str, name: str) -> ScrubReport:
+        self.events.append(f"candidate:scrub:{name}")
+        return ScrubReport(
+            cleared_rows={table: 1 for table in self.policy.scrub.truncate_tables},
+            removed_narratives=3,
+            retained_narratives=4,
+            site_rows=1,
+        )
+
+    def inspect_candidate(self, _url: str, name: str) -> CandidateCensus:
+        self.events.append(f"candidate:inspect:{name}")
+        return self.candidate_census
+
+    def mark_validated(
+        self,
+        _url: str,
+        name: str,
+        marker: str,
+        evidence: dict[str, object],
+    ) -> str:
+        assert evidence["validation"] == "passed"
+        self.events.append(f"candidate:validated:{name}")
+        return marker.replace('"state":"building"', '"state":"validated"')
 
 
 class FakeRunner:
@@ -93,6 +157,12 @@ class FakeRunner:
                 return SimpleNamespace(
                     returncode=1, stdout="", stderr="contains-password"
                 )
+        if (
+            executable == "python"
+            and command[-2:] == ["migrate", "--check"]
+            and self.fail == "django_migrate_check"
+        ):
+            return SimpleNamespace(returncode=1, stdout="", stderr="pending")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
@@ -311,3 +381,186 @@ def test_stale_cleanup_removes_only_old_owned_artifacts(tmp_path: Path) -> None:
     assert not old_owned.exists()
     assert fresh_owned.exists()
     assert unrelated.exists()
+
+
+def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, runner, events = _engine(tmp_path)
+    artifact = engine.export_dump()
+    with engine.target_lock():
+        candidate = engine.restore_shadow(artifact)
+        result = CandidateProcessor(
+            policy=engine.policy,
+            target_url=engine.target_url,
+            adapter=adapter,
+            runner=runner,
+            python="/usr/local/bin/python",
+        ).process(candidate)
+
+    django_commands = [
+        command[1:]
+        for command, _environment in runner.commands
+        if Path(command[0]).name == "python"
+    ]
+    assert django_commands == [
+        ["manage.py", "migrate", "--noinput"],
+        ["manage.py", "check", "--deploy"],
+        ["manage.py", "migrate", "--check"],
+    ]
+    assert events.index(f"candidate:scrub:{candidate.name}") < events.index(
+        f"candidate:inspect:{candidate.name}"
+    )
+    assert events[-2] == f"candidate:validated:{candidate.name}"
+    assert result.candidate.marker != candidate.marker
+    assert result.scrub.removed_narratives == 3
+
+
+@pytest.mark.parametrize(
+    ("change", "code"),
+    [
+        ("missing_migration", "candidate_migrations_pending"),
+        ("invalid_view", "candidate_view_invalid"),
+        ("stale_timestamp", "candidate_latest_timestamp_mismatch:posts.created_at"),
+        ("count_drift", "candidate_count_mismatch:posts"),
+        ("orphan", "candidate_foreign_key_invalid:fk_orphan"),
+        ("translation", "candidate_translation_mismatch:posts.text_en"),
+        ("duplicate_current", "candidate_current_narrative_duplicate:1"),
+        ("sensitive", "candidate_scrub_incomplete:auth_user"),
+    ],
+)
+def test_candidate_validation_blocks_every_unsafe_shape(
+    tmp_path: Path, change: str, code: str
+) -> None:
+    engine, adapter, runner, events = _engine(tmp_path)
+    artifact = engine.export_dump()
+    with engine.target_lock():
+        candidate = engine.restore_shadow(artifact)
+        census = adapter.candidate_census
+        if change == "missing_migration":
+            runner.fail = "django_migrate_check"
+        elif change == "invalid_view":
+            census = replace(census, view_valid=False)
+        elif change == "stale_timestamp":
+            census = replace(
+                census,
+                latest_timestamps={"posts.created_at": "2026-08-26T01:00:00+00:00"},
+            )
+        elif change == "count_drift":
+            census = replace(census, row_counts={**census.row_counts, "posts": 11})
+        elif change == "orphan":
+            census = replace(census, invalid_foreign_keys=("fk_orphan",))
+        elif change == "translation":
+            census = replace(
+                census,
+                translation_counts={**census.translation_counts, "posts.text_en": 9},
+            )
+        elif change == "duplicate_current":
+            census = replace(census, duplicate_current_windows=(1,))
+        elif change == "sensitive":
+            census = replace(
+                census,
+                scrubbed_counts={**census.scrubbed_counts, "auth_user": 1},
+            )
+        adapter.candidate_census = census
+
+        with pytest.raises(RefreshError, match=code):
+            CandidateProcessor(
+                policy=engine.policy,
+                target_url=engine.target_url,
+                adapter=adapter,
+                runner=runner,
+                python="/usr/local/bin/python",
+            ).process(candidate)
+
+    assert not any(event.startswith("candidate:validated") for event in events)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_database_scrub_removes_private_and_transient_state_but_keeps_history() -> None:
+    from django.contrib.auth import get_user_model
+    from django.contrib.sites.models import Site
+    from django.db import connection, transaction
+
+    from core.models import TrendNarrative
+
+    policy = load_policy(POLICY_PATH)
+    now = datetime(2026, 8, 27, 1, 0, tzinfo=UTC)
+    get_user_model().objects.create_user(username="private", password="test")
+    transient = TrendNarrative.objects.create(
+        source_cycle_id="transient",
+        window_days=1,
+        status="checked",
+        facts_as_of=now,
+    )
+    published = TrendNarrative.objects.create(
+        source_cycle_id="published",
+        window_days=7,
+        status="published",
+        facts_as_of=now,
+        is_current=True,
+        primary_brand_key="brand",
+        primary_brand_name_en="Brand",
+        primary_brand_name_zh_hans="品牌",
+        body_en="Published body",
+        body_zh_hans="已发布内容",
+        output_hash="output-hash",
+        call_slot_consumed=True,
+        claim_owner="worker",
+        claim_fence=1,
+        claimed_at=now,
+        claim_expires_at=now.replace(hour=2),
+        transport_started_at=now,
+        transport_completed_at=now,
+        generated_at=now,
+        published_at=now,
+    )
+
+    with transaction.atomic(), connection.cursor() as cursor:
+        report = scrub_candidate_data(cursor, policy)
+
+    assert report.removed_narratives == 1
+    assert not TrendNarrative.objects.filter(pk=transient.pk).exists()
+    assert TrendNarrative.objects.filter(pk=published.pk, status="published").exists()
+    assert get_user_model().objects.count() == 0
+    site = Site.objects.get(pk=1)
+    assert site.domain == policy.scrub.site_domain
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT count(*) FROM trend_narrative_versions")
+        assert cursor.fetchone()[0] == 1
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_database_scrub_failure_rolls_back_every_destructive_statement() -> None:
+    from django.contrib.auth import get_user_model
+    from django.db import DatabaseError, connection, transaction
+
+    policy = load_policy(POLICY_PATH)
+    get_user_model().objects.create_user(username="must-survive", password="test")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "CREATE FUNCTION staging_refresh_test_reject_site() RETURNS trigger "
+            "LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'reject site'; END $$"
+        )
+        cursor.execute(
+            "CREATE TRIGGER staging_refresh_test_reject_site "
+            "BEFORE UPDATE ON django_site FOR EACH STATEMENT "
+            "EXECUTE FUNCTION staging_refresh_test_reject_site()"
+        )
+    try:
+        with (
+            pytest.raises(DatabaseError, match="reject site"),
+            transaction.atomic(),
+            connection.cursor() as cursor,
+        ):
+            scrub_candidate_data(cursor, policy)
+
+        assert get_user_model().objects.filter(username="must-survive").exists()
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DROP TRIGGER IF EXISTS staging_refresh_test_reject_site ON django_site"
+            )
+            cursor.execute("DROP FUNCTION IF EXISTS staging_refresh_test_reject_site()")

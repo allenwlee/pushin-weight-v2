@@ -67,6 +67,9 @@ class ValidationPolicy:
     latest_timestamp_table: str
     latest_timestamp_column: str
     maximum_latest_timestamp_lag_seconds: int
+    required_columns: Mapping[str, frozenset[str]]
+    translation_columns: Mapping[str, tuple[str, ...]]
+    classification_tables: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,13 +166,22 @@ def _strict(raw: Mapping[str, Any], expected: set[str], *, field: str) -> None:
     if missing:
         raise PolicyError(f"policy_missing_fields:{field}:{','.join(missing)}")
     if unknown:
-        prefix = "policy_unknown_fields" if field == "root" else f"policy_unknown_fields:{field}"
+        prefix = (
+            "policy_unknown_fields"
+            if field == "root"
+            else f"policy_unknown_fields:{field}"
+        )
         raise PolicyError(f"{prefix}:{','.join(unknown)}")
 
 
 def _line(raw: Mapping[str, Any], key: str, *, field: str) -> str:
     value = raw.get(key)
-    if not isinstance(value, str) or not value.strip() or "\n" in value or "\r" in value:
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or "\n" in value
+        or "\r" in value
+    ):
         raise PolicyError(f"policy_field_invalid:{field}.{key}")
     return value.strip()
 
@@ -183,7 +195,11 @@ def _integer(raw: Mapping[str, Any], key: str, *, field: str, minimum: int = 0) 
 
 def _number(raw: Mapping[str, Any], key: str, *, field: str, minimum: float) -> float:
     value = raw.get(key)
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or float(value) < minimum:
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or float(value) < minimum
+    ):
         raise PolicyError(f"policy_field_invalid:{field}.{key}")
     return float(value)
 
@@ -231,11 +247,37 @@ def _endpoint(raw: Mapping[str, Any], field: str) -> EndpointPolicy:
         port=_integer(raw, "port", field=field, minimum=1),
         database=_line(raw, "database", field=field),
         role=_line(raw, "role", field=field),
-        minimum_server_version=_integer(raw, "minimum_server_version", field=field, minimum=1),
+        minimum_server_version=_integer(
+            raw, "minimum_server_version", field=field, minimum=1
+        ),
     )
     if not _DATABASE_NAME.fullmatch(endpoint.database):
         raise PolicyError(f"policy_field_invalid:{field}.database")
     return endpoint
+
+
+def _identifier_mapping(
+    raw: Mapping[str, Any], key: str, *, field: str
+) -> dict[str, frozenset[str]]:
+    value = raw.get(key)
+    if not isinstance(value, Mapping) or not value:
+        raise PolicyError(f"policy_field_invalid:{field}.{key}")
+    result: dict[str, frozenset[str]] = {}
+    for name, items in value.items():
+        if not isinstance(name, str) or not _DATABASE_NAME.fullmatch(name):
+            raise PolicyError(f"policy_field_invalid:{field}.{key}")
+        if not isinstance(items, list) or not items:
+            raise PolicyError(f"policy_field_invalid:{field}.{key}.{name}")
+        identifiers = tuple(items)
+        if not all(
+            isinstance(item, str) and _DATABASE_NAME.fullmatch(item)
+            for item in identifiers
+        ):
+            raise PolicyError(f"policy_field_invalid:{field}.{key}.{name}")
+        if len(set(identifiers)) != len(identifiers):
+            raise PolicyError(f"policy_field_duplicate:{field}.{key}.{name}")
+        result[name] = frozenset(identifiers)
+    return result
 
 
 def load_policy(path: str | Path) -> RefreshPolicy:
@@ -285,8 +327,12 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         field="relations",
     )
     relations = RelationsPolicy(
-        copied_tables=frozenset(_strings(relations_raw, "copied_tables", field="relations")),
-        excluded_tables=frozenset(_strings(relations_raw, "excluded_tables", field="relations")),
+        copied_tables=frozenset(
+            _strings(relations_raw, "copied_tables", field="relations")
+        ),
+        excluded_tables=frozenset(
+            _strings(relations_raw, "excluded_tables", field="relations")
+        ),
         views=frozenset(_strings(relations_raw, "views", field="relations")),
         sequences=frozenset(_strings(relations_raw, "sequences", field="relations")),
     )
@@ -300,7 +346,9 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         field="scrub",
     )
     scrub = ScrubPolicy(
-        truncate_tables=frozenset(_strings(scrub_raw, "truncate_tables", field="scrub")),
+        truncate_tables=frozenset(
+            _strings(scrub_raw, "truncate_tables", field="scrub")
+        ),
         retained_narrative_statuses=_strings(
             scrub_raw, "retained_narrative_statuses", field="scrub"
         ),
@@ -317,6 +365,9 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         "latest_timestamp_table",
         "latest_timestamp_column",
         "maximum_latest_timestamp_lag_seconds",
+        "required_columns",
+        "translation_columns",
+        "classification_tables",
     }
     _strict(validation_raw, validation_fields, field="validation")
     validation = ValidationPolicy(
@@ -337,11 +388,32 @@ def load_policy(path: str | Path) -> RefreshPolicy:
             "maximum_latest_timestamp_lag_seconds",
             field="validation",
         ),
+        required_columns=_identifier_mapping(
+            validation_raw, "required_columns", field="validation"
+        ),
+        translation_columns={
+            table: tuple(columns)
+            for table, columns in _identifier_mapping(
+                validation_raw, "translation_columns", field="validation"
+            ).items()
+        },
+        classification_tables=_strings(
+            validation_raw, "classification_tables", field="validation"
+        ),
     )
-    validated_tables = set(validation.exact_count_tables) | set(
-        validation.required_nonempty_tables
-    ) | {validation.latest_timestamp_table}
+    validated_tables = (
+        set(validation.exact_count_tables)
+        | set(validation.required_nonempty_tables)
+        | {validation.latest_timestamp_table}
+    )
     if not validated_tables <= relations.copied_tables:
+        raise PolicyError("policy_validation_table_not_copied")
+    configured_validation_tables = (
+        set(validation.required_columns)
+        | set(validation.translation_columns)
+        | set(validation.classification_tables)
+    )
+    if not configured_validation_tables <= relations.copied_tables:
         raise PolicyError("policy_validation_table_not_copied")
 
     storage_raw = _mapping(raw, "storage")
@@ -351,7 +423,9 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         field="storage",
     )
     storage = StoragePolicy(
-        target_disk_bytes=_integer(storage_raw, "target_disk_bytes", field="storage", minimum=1),
+        target_disk_bytes=_integer(
+            storage_raw, "target_disk_bytes", field="storage", minimum=1
+        ),
         required_reserve_ratio=_number(
             storage_raw, "required_reserve_ratio", field="storage", minimum=0.01
         ),
@@ -376,7 +450,9 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     lifecycle = LifecyclePolicy(
         marker_prefix=_line(lifecycle_raw, "marker_prefix", field="database_lifecycle"),
         shadow_prefix=_line(lifecycle_raw, "shadow_prefix", field="database_lifecycle"),
-        recovery_prefix=_line(lifecycle_raw, "recovery_prefix", field="database_lifecycle"),
+        recovery_prefix=_line(
+            lifecycle_raw, "recovery_prefix", field="database_lifecycle"
+        ),
         retained_recoveries=_integer(
             lifecycle_raw, "retained_recoveries", field="database_lifecycle", minimum=1
         ),
@@ -503,7 +579,10 @@ def guard_environment(
         or environ.get("RENDER_SERVICE_NAME") != policy.service.name
     ):
         raise PolicyError("service_identity_mismatch")
-    if action in _MUTATING_ACTIONS and environ.get(policy.enable_environment, "").lower() != "true":
+    if (
+        action in _MUTATING_ACTIONS
+        and environ.get(policy.enable_environment, "").lower() != "true"
+    ):
         raise PolicyError("refresh_not_enabled")
 
     target = _parse_connection(environ.get(policy.target.environment), label="target")
@@ -517,7 +596,9 @@ def guard_environment(
 
     source: ConnectionIdentity | None = None
     if action in {"preflight", "refresh"}:
-        source = _parse_connection(environ.get(policy.source.environment), label="source")
+        source = _parse_connection(
+            environ.get(policy.source.environment), label="source"
+        )
         _guard_endpoint(source, policy.source, label="source")
 
     checked_recovery: str | None = None
@@ -528,7 +609,9 @@ def guard_environment(
         if confirmation != expected:
             raise PolicyError("confirmation_mismatch")
 
-    return Authorization(action=action, source=source, target=target, recovery=checked_recovery)
+    return Authorization(
+        action=action, source=source, target=target, recovery=checked_recovery
+    )
 
 
 def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) -> None:

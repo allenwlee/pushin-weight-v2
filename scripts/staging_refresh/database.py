@@ -7,13 +7,15 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
 from psycopg import sql
@@ -37,6 +39,10 @@ class SourceCensus:
     migration_checksum: str
     row_counts: Mapping[str, int]
     latest_timestamps: Mapping[str, str | None]
+    translation_counts: Mapping[str, int]
+    classification_counts: Mapping[str, int]
+    terminal_narrative_count: int
+    current_narrative_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +60,41 @@ class ShadowCandidate:
     artifact: DumpArtifact
 
 
+@dataclass(frozen=True, slots=True)
+class ScrubReport:
+    cleared_rows: Mapping[str, int]
+    removed_narratives: int
+    retained_narratives: int
+    site_rows: int
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateCensus:
+    base_tables: frozenset[str]
+    views: frozenset[str]
+    sequences: frozenset[str]
+    columns: Mapping[str, frozenset[str]]
+    row_counts: Mapping[str, int]
+    latest_timestamps: Mapping[str, str | None]
+    translation_counts: Mapping[str, int]
+    classification_counts: Mapping[str, int]
+    scrubbed_counts: Mapping[str, int]
+    terminal_narrative_count: int
+    current_narrative_count: int
+    duplicate_current_windows: tuple[int, ...]
+    invalid_foreign_keys: tuple[str, ...]
+    view_valid: bool
+    site_domain: str
+    site_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateResult:
+    candidate: ShadowCandidate
+    scrub: ScrubReport
+    census: CandidateCensus
+
+
 class SnapshotAdapter(Protocol):
     def exported_snapshot(self, database_url: str) -> Any: ...
 
@@ -64,6 +105,18 @@ class SnapshotAdapter(Protocol):
     def marker_matches(self, database_url: str, name: str, marker: str) -> bool: ...
 
     def drop_shadow(self, database_url: str, name: str) -> None: ...
+
+    def scrub_candidate(self, database_url: str, name: str) -> ScrubReport: ...
+
+    def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus: ...
+
+    def mark_validated(
+        self,
+        database_url: str,
+        name: str,
+        marker: str,
+        evidence: dict[str, object],
+    ) -> str: ...
 
 
 class CommandResult(Protocol):
@@ -120,6 +173,56 @@ def _libpq_environment(
     return environment
 
 
+def _table_count(cursor: Any, table: str) -> int:
+    cursor.execute(sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table)))
+    return int(cursor.fetchone()[0])
+
+
+def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for table, columns in policy.validation.translation_columns.items():
+        for column in columns:
+            cursor.execute(
+                sql.SQL(
+                    "SELECT count(*) FROM {} WHERE NULLIF(BTRIM({}), '') IS NOT NULL"
+                ).format(sql.Identifier(table), sql.Identifier(column))
+            )
+            counts[f"{table}.{column}"] = int(cursor.fetchone()[0])
+    return counts
+
+
+def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
+    """Scrub one already-restored non-serving database inside its transaction."""
+
+    cleared = {
+        table: _table_count(cursor, table)
+        for table in sorted(policy.scrub.truncate_tables)
+    }
+    targets = [sql.Identifier(table) for table in sorted(policy.scrub.truncate_tables)]
+    cursor.execute(
+        sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(
+            sql.SQL(", ").join(targets)
+        )
+    )
+    cursor.execute(
+        "DELETE FROM trend_narratives WHERE NOT (status = ANY(%s))",
+        [list(policy.scrub.retained_narrative_statuses)],
+    )
+    removed_narratives = int(cursor.rowcount)
+    cursor.execute(
+        "UPDATE django_site SET domain = %s, name = %s",
+        [policy.scrub.site_domain, policy.scrub.site_name],
+    )
+    site_rows = int(cursor.rowcount)
+    retained_narratives = _table_count(cursor, "trend_narratives")
+    return ScrubReport(
+        cleared_rows=cleared,
+        removed_narratives=removed_narratives,
+        retained_narratives=retained_narratives,
+        site_rows=site_rows,
+    )
+
+
 class PsycopgSnapshotAdapter:
     def __init__(
         self,
@@ -172,6 +275,21 @@ class PsycopgSnapshotAdapter:
             )
             value = cursor.fetchone()[0]
             latest[f"{table}.{column}"] = value.isoformat() if value else None
+            translation_counts = _translation_counts(cursor, self.policy)
+            classification_counts = {
+                table: _table_count(cursor, table)
+                for table in self.policy.validation.classification_tables
+            }
+            cursor.execute(
+                "SELECT count(*) FROM trend_narratives WHERE status = ANY(%s)",
+                [list(self.policy.scrub.retained_narrative_statuses)],
+            )
+            terminal_narrative_count = int(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT count(*) FROM trend_narratives "
+                "WHERE status = 'published' AND is_current"
+            )
+            current_narrative_count = int(cursor.fetchone()[0])
             census = SourceCensus(
                 snapshot_id=snapshot_id,
                 captured_at=self.now().astimezone(UTC),
@@ -180,6 +298,10 @@ class PsycopgSnapshotAdapter:
                 migration_checksum=migration_checksum,
                 row_counts=row_counts,
                 latest_timestamps=latest,
+                translation_counts=translation_counts,
+                classification_counts=classification_counts,
+                terminal_narrative_count=terminal_narrative_count,
+                current_narrative_count=current_narrative_count,
             )
             try:
                 yield census
@@ -240,6 +362,153 @@ class PsycopgSnapshotAdapter:
                 [name],
             )
             cursor.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(name)))
+
+    def _candidate_parameters(self, database_url: str, name: str) -> dict[str, str]:
+        try:
+            parameters = {
+                key: str(value)
+                for key, value in conninfo_to_dict(database_url).items()
+                if value is not None
+            }
+        except Exception as exc:
+            raise RefreshError("target_url_invalid") from exc
+        parameters["dbname"] = name
+        return parameters
+
+    def scrub_candidate(self, database_url: str, name: str) -> ScrubReport:
+        parameters = self._candidate_parameters(database_url, name)
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            return scrub_candidate_data(cursor, self.policy)
+
+    def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus:
+        parameters = self._candidate_parameters(database_url, name)
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT c.relname, c.relkind FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'S', 'v')"
+            )
+            relations = list(cursor.fetchall())
+            base_tables = frozenset(
+                str(row[0]) for row in relations if row[1] in {"r", "p"}
+            )
+            views = frozenset(str(row[0]) for row in relations if row[1] == "v")
+            sequences = frozenset(str(row[0]) for row in relations if row[1] == "S")
+            cursor.execute(
+                "SELECT table_name, column_name FROM information_schema.columns "
+                "WHERE table_schema = 'public'"
+            )
+            columns: dict[str, set[str]] = {}
+            for table, column in cursor.fetchall():
+                columns.setdefault(str(table), set()).add(str(column))
+            row_counts = {
+                table: _table_count(cursor, table)
+                for table in self.policy.validation.exact_count_tables
+            }
+            table = self.policy.validation.latest_timestamp_table
+            column = self.policy.validation.latest_timestamp_column
+            cursor.execute(
+                sql.SQL("SELECT max({}) FROM {}").format(
+                    sql.Identifier(column), sql.Identifier(table)
+                )
+            )
+            latest_value = cursor.fetchone()[0]
+            latest = {
+                f"{table}.{column}": (
+                    latest_value.isoformat() if latest_value else None
+                )
+            }
+            translations = _translation_counts(cursor, self.policy)
+            classifications = {
+                table: _table_count(cursor, table)
+                for table in self.policy.validation.classification_tables
+            }
+            scrubbed = {
+                table: _table_count(cursor, table)
+                for table in sorted(self.policy.scrub.truncate_tables)
+            }
+            cursor.execute(
+                "SELECT count(*) FROM trend_narratives WHERE status = ANY(%s)",
+                [list(self.policy.scrub.retained_narrative_statuses)],
+            )
+            terminal_count = int(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT count(*) FROM trend_narratives "
+                "WHERE status = 'published' AND is_current"
+            )
+            current_count = int(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT window_days FROM trend_narratives WHERE is_current "
+                "GROUP BY window_days HAVING count(*) > 1 ORDER BY window_days"
+            )
+            duplicates = tuple(int(row[0]) for row in cursor.fetchall())
+            cursor.execute(
+                "SELECT conname FROM pg_constraint c "
+                "JOIN pg_namespace n ON n.oid = c.connamespace "
+                "WHERE n.nspname = 'public' AND c.contype = 'f' "
+                "AND NOT c.convalidated ORDER BY conname"
+            )
+            invalid_foreign_keys = tuple(str(row[0]) for row in cursor.fetchall())
+            cursor.execute("SELECT 1 FROM trend_narrative_versions LIMIT 0")
+            cursor.execute("SELECT domain, name FROM django_site WHERE id = 1")
+            site_row = cursor.fetchone()
+            return CandidateCensus(
+                base_tables=base_tables,
+                views=views,
+                sequences=sequences,
+                columns={table: frozenset(values) for table, values in columns.items()},
+                row_counts=row_counts,
+                latest_timestamps=latest,
+                translation_counts=translations,
+                classification_counts=classifications,
+                scrubbed_counts=scrubbed,
+                terminal_narrative_count=terminal_count,
+                current_narrative_count=current_count,
+                duplicate_current_windows=duplicates,
+                invalid_foreign_keys=invalid_foreign_keys,
+                view_valid=True,
+                site_domain=str(site_row[0]) if site_row else "",
+                site_name=str(site_row[1]) if site_row else "",
+            )
+
+    def mark_validated(
+        self,
+        database_url: str,
+        name: str,
+        marker: str,
+        evidence: dict[str, object],
+    ) -> str:
+        prefix = f"{self.policy.lifecycle.marker_prefix}:"
+        if not marker.startswith(prefix):
+            raise RefreshError("candidate_marker_invalid")
+        try:
+            payload = json.loads(marker.removeprefix(prefix))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RefreshError("candidate_marker_invalid") from exc
+        if not isinstance(payload, dict) or payload.get("state") != "building":
+            raise RefreshError("candidate_marker_invalid")
+        payload["state"] = "validated"
+        payload["validated_at"] = self.now().astimezone(UTC).isoformat()
+        payload["evidence"] = evidence
+        validated = prefix + json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        parameters = admin_connection_parameters(database_url)
+        with (
+            self.connect(**parameters, autocommit=True) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "SELECT obj_description(oid, 'pg_database') "
+                "FROM pg_database WHERE datname = %s",
+                [name],
+            )
+            row = cursor.fetchone()
+            if not row or row[0] != marker:
+                raise RefreshError("candidate_marker_changed")
+            cursor.execute(
+                sql.SQL("COMMENT ON DATABASE {} IS %s").format(sql.Identifier(name)),
+                [validated],
+            )
+        return validated
 
 
 class SnapshotRestoreEngine:
@@ -515,6 +784,175 @@ class SnapshotRestoreEngine:
         if not self._owned_artifact(artifact.path):
             raise RefreshError("artifact_cleanup_refused")
         artifact.path.unlink(missing_ok=True)
+
+
+def _django_database_url(database_url: str, database: str) -> str:
+    try:
+        parsed = urlsplit(database_url)
+        if parsed.scheme not in {"postgres", "postgresql"} or not parsed.netloc:
+            raise ValueError
+    except ValueError as exc:
+        raise RefreshError("target_url_invalid") from exc
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            f"/{quote(database, safe='')}",
+            parsed.query,
+            "",
+        )
+    )
+
+
+class CandidateProcessor:
+    """Migrate, scrub, validate, and mark one non-serving shadow database."""
+
+    def __init__(
+        self,
+        *,
+        policy: RefreshPolicy,
+        target_url: str,
+        adapter: SnapshotAdapter,
+        runner: Callable[..., CommandResult] = subprocess.run,
+        python: str = sys.executable,
+    ) -> None:
+        self.policy = policy
+        self.target_url = target_url
+        self.adapter = adapter
+        self.runner = runner
+        self.python = python
+
+    @property
+    def project_root(self) -> Path:
+        return self.policy.path.parents[1]
+
+    def _django_environment(self, database: str) -> dict[str, str]:
+        environment = {
+            key: os.environ[key]
+            for key in ("PATH", "LANG", "LC_ALL", "TZ", "SYSTEMROOT")
+            if key in os.environ
+        }
+        environment.update(
+            {
+                "DATABASE_URL": _django_database_url(self.target_url, database),
+                "DJANGO_SETTINGS_MODULE": "project.settings",
+                "DEBUG": "False",
+                "OLLIJA_STAGING_MODE": "False",
+                "XMONITOR_DRY_RUN": "True",
+                "X_MONITOR_HEADLINE_SERVING_ENABLED": "False",
+                "X_MONITOR_HEADLINE_ENQUEUE_ENABLED": "False",
+                "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED": "False",
+            }
+        )
+        return environment
+
+    def _run_django(self, database: str, *arguments: str) -> None:
+        command = [self.python, "manage.py", *arguments]
+        try:
+            result = self.runner(
+                command,
+                cwd=self.project_root,
+                env=self._django_environment(database),
+                text=True,
+                capture_output=True,
+                timeout=60 * 30,
+                check=False,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            raise RefreshError("candidate_django_command_failed") from exc
+        if result.returncode != 0:
+            if arguments == ("migrate", "--check"):
+                raise RefreshError("candidate_migrations_pending")
+            if arguments and arguments[0] == "migrate":
+                raise RefreshError("candidate_migration_failed")
+            raise RefreshError("candidate_django_check_failed")
+
+    def _validate(self, candidate: ShadowCandidate, census: CandidateCensus) -> None:
+        source = candidate.artifact.source
+        if census.base_tables != self.policy.relations.classified_tables:
+            raise RefreshError("candidate_table_policy_mismatch")
+        if census.views != self.policy.relations.views or not census.view_valid:
+            raise RefreshError("candidate_view_invalid")
+        if census.sequences != self.policy.relations.sequences:
+            raise RefreshError("candidate_sequence_policy_mismatch")
+        for table, required in self.policy.validation.required_columns.items():
+            missing = required - census.columns.get(table, frozenset())
+            if missing:
+                raise RefreshError(f"candidate_column_missing:{table}.{min(missing)}")
+        for table, expected in source.row_counts.items():
+            if census.row_counts.get(table) != expected:
+                raise RefreshError(f"candidate_count_mismatch:{table}")
+        for table in self.policy.validation.required_nonempty_tables:
+            if census.row_counts.get(table, 0) <= 0:
+                raise RefreshError(f"candidate_required_table_empty:{table}")
+        for key, expected in source.translation_counts.items():
+            if census.translation_counts.get(key) != expected:
+                raise RefreshError(f"candidate_translation_mismatch:{key}")
+        for table, expected in source.classification_counts.items():
+            if census.classification_counts.get(table) != expected:
+                raise RefreshError(f"candidate_classification_mismatch:{table}")
+        for key, expected in source.latest_timestamps.items():
+            actual = census.latest_timestamps.get(key)
+            if actual is None or expected is None:
+                if actual != expected:
+                    raise RefreshError(f"candidate_latest_timestamp_mismatch:{key}")
+                continue
+            difference = abs(
+                (
+                    datetime.fromisoformat(actual) - datetime.fromisoformat(expected)
+                ).total_seconds()
+            )
+            if difference > self.policy.validation.maximum_latest_timestamp_lag_seconds:
+                raise RefreshError(f"candidate_latest_timestamp_mismatch:{key}")
+        incomplete = [
+            table for table, count in census.scrubbed_counts.items() if count != 0
+        ]
+        if incomplete:
+            raise RefreshError(f"candidate_scrub_incomplete:{min(incomplete)}")
+        if census.terminal_narrative_count != source.terminal_narrative_count:
+            raise RefreshError("candidate_terminal_narrative_mismatch")
+        if census.current_narrative_count != source.current_narrative_count:
+            raise RefreshError("candidate_current_narrative_mismatch")
+        if census.duplicate_current_windows:
+            raise RefreshError(
+                "candidate_current_narrative_duplicate:"
+                f"{census.duplicate_current_windows[0]}"
+            )
+        if census.invalid_foreign_keys:
+            raise RefreshError(
+                f"candidate_foreign_key_invalid:{census.invalid_foreign_keys[0]}"
+            )
+        if census.site_domain != self.policy.scrub.site_domain:
+            raise RefreshError("candidate_site_invalid")
+        if census.site_name != self.policy.scrub.site_name:
+            raise RefreshError("candidate_site_invalid")
+
+    def process(self, candidate: ShadowCandidate) -> CandidateResult:
+        self._run_django(candidate.name, "migrate", "--noinput")
+        self._run_django(candidate.name, "check", "--deploy")
+        self._run_django(candidate.name, "migrate", "--check")
+        scrub = self.adapter.scrub_candidate(self.target_url, candidate.name)
+        census = self.adapter.inspect_candidate(self.target_url, candidate.name)
+        self._validate(candidate, census)
+        evidence: dict[str, object] = {
+            "validation": "passed",
+            "row_counts": dict(census.row_counts),
+            "scrubbed_counts": dict(census.scrubbed_counts),
+            "terminal_narratives": census.terminal_narrative_count,
+        }
+        marker = self.adapter.mark_validated(
+            self.target_url,
+            candidate.name,
+            candidate.marker,
+            evidence,
+        )
+        return CandidateResult(
+            candidate=replace(candidate, marker=marker),
+            scrub=scrub,
+            census=census,
+        )
 
 
 class PostgresRuntime:

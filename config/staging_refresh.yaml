@@ -155,6 +155,60 @@ validation:
   latest_timestamp_table: posts
   latest_timestamp_column: created_at
   maximum_latest_timestamp_lag_seconds: 0
+  required_columns:
+    accounts:
+      - author_id
+      - handle
+      - bio_en
+      - bio_zh_cn
+    brands:
+      - nickname
+      - display_name_en
+      - display_name_zh_cn
+    posts:
+      - tweet_id
+      - author_id
+      - text
+      - text_en
+      - text_zh_cn
+      - created_at
+      - lang_detected
+    posts_brands:
+      - post_id
+      - brand_id
+      - weight
+    trend_narratives:
+      - id
+      - status
+      - window_days
+      - is_current
+      - body_en
+      - body_zh_hans
+      - published_at
+    trend_narrative_subjects:
+      - id
+      - trend_narrative_id
+      - position
+      - support_type
+  translation_columns:
+    posts:
+      - text_en
+      - text_zh_cn
+    accounts:
+      - bio_en
+      - bio_zh_cn
+    brands:
+      - display_name_en
+      - display_name_zh_cn
+    companies:
+      - display_name_en
+      - display_name_zh_cn
+  classification_tables:
+    - posts_brands
+    - posts_brands_discourse
+    - posts_brands_mentions
+    - posts_brands_signals
+    - posts_unsanctioned_flags
 
 storage:
   target_disk_bytes: 16106127360
