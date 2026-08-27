@@ -23,7 +23,13 @@ from psycopg.conninfo import conninfo_to_dict
 
 from scripts.database_lock import acquire_cluster_lock, admin_connection_parameters
 
-from .policy import DatabaseInspection, RefreshPolicy
+from .policy import DatabaseInspection, RefreshPolicy, expected_confirmation
+from .receipt import (
+    Receipt,
+    ReceiptError,
+    decode_database_comment,
+    encode_database_comment,
+)
 
 
 class RefreshError(RuntimeError):
@@ -95,6 +101,13 @@ class CandidateResult:
     census: CandidateCensus
 
 
+@dataclass(frozen=True, slots=True)
+class DatabaseState:
+    name: str
+    allow_connections: bool
+    comment: str | None
+
+
 class SnapshotAdapter(Protocol):
     def exported_snapshot(self, database_url: str) -> Any: ...
 
@@ -117,6 +130,31 @@ class SnapshotAdapter(Protocol):
         marker: str,
         evidence: dict[str, object],
     ) -> str: ...
+
+    def database_state(self, database_url: str, name: str) -> DatabaseState | None: ...
+
+    def database_states(
+        self, database_url: str, prefix: str
+    ) -> tuple[DatabaseState, ...]: ...
+
+    def set_allow_connections(
+        self, database_url: str, name: str, allowed: bool
+    ) -> None: ...
+
+    def terminate_connections(self, database_url: str, name: str) -> None: ...
+
+    def rename_database(self, database_url: str, old: str, new: str) -> None: ...
+
+    def write_receipt_comments(
+        self,
+        database_url: str,
+        active_name: str,
+        active_comment: str,
+        recovery_name: str,
+        recovery_comment: str,
+    ) -> None: ...
+
+    def drop_recovery(self, database_url: str, name: str) -> None: ...
 
 
 class CommandResult(Protocol):
@@ -331,8 +369,9 @@ class PsycopgSnapshotAdapter:
                 )
             )
             cursor.execute(
-                sql.SQL("COMMENT ON DATABASE {} IS %s").format(sql.Identifier(name)),
-                [marker],
+                sql.SQL("COMMENT ON DATABASE {} IS {}").format(
+                    sql.Identifier(name), sql.Literal(marker)
+                )
             )
 
     def marker_matches(self, database_url: str, name: str, marker: str) -> bool:
@@ -505,10 +544,124 @@ class PsycopgSnapshotAdapter:
             if not row or row[0] != marker:
                 raise RefreshError("candidate_marker_changed")
             cursor.execute(
-                sql.SQL("COMMENT ON DATABASE {} IS %s").format(sql.Identifier(name)),
-                [validated],
+                sql.SQL("COMMENT ON DATABASE {} IS {}").format(
+                    sql.Identifier(name), sql.Literal(validated)
+                )
             )
         return validated
+
+    def database_state(self, database_url: str, name: str) -> DatabaseState | None:
+        parameters = admin_connection_parameters(database_url)
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT datname, datallowconn, obj_description(oid, 'pg_database') "
+                "FROM pg_database WHERE datname = %s",
+                [name],
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return DatabaseState(
+            name=str(row[0]), allow_connections=bool(row[1]), comment=row[2]
+        )
+
+    def database_states(
+        self, database_url: str, prefix: str
+    ) -> tuple[DatabaseState, ...]:
+        parameters = admin_connection_parameters(database_url)
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT datname, datallowconn, obj_description(oid, 'pg_database') "
+                "FROM pg_database WHERE starts_with(datname, %s) ORDER BY datname",
+                [prefix],
+            )
+            rows = cursor.fetchall()
+        return tuple(
+            DatabaseState(
+                name=str(row[0]), allow_connections=bool(row[1]), comment=row[2]
+            )
+            for row in rows
+        )
+
+    def _administration(self, database_url: str, statement: Any) -> None:
+        parameters = admin_connection_parameters(database_url)
+        timeout = str(
+            self.policy.lifecycle.administration_statement_timeout_seconds * 1000
+        )
+        with (
+            self.connect(**parameters, autocommit=True) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "SELECT set_config('statement_timeout', %s, false)", [timeout]
+            )
+            cursor.execute(statement)
+
+    def set_allow_connections(
+        self, database_url: str, name: str, allowed: bool
+    ) -> None:
+        self._administration(
+            database_url,
+            sql.SQL("ALTER DATABASE {} WITH ALLOW_CONNECTIONS {}").format(
+                sql.Identifier(name), sql.SQL("true" if allowed else "false")
+            ),
+        )
+
+    def terminate_connections(self, database_url: str, name: str) -> None:
+        parameters = admin_connection_parameters(database_url)
+        timeout = str(
+            self.policy.lifecycle.administration_statement_timeout_seconds * 1000
+        )
+        with (
+            self.connect(**parameters, autocommit=True) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "SELECT set_config('statement_timeout', %s, false)", [timeout]
+            )
+            cursor.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                [name],
+            )
+
+    def rename_database(self, database_url: str, old: str, new: str) -> None:
+        self._administration(
+            database_url,
+            sql.SQL("ALTER DATABASE {} RENAME TO {}").format(
+                sql.Identifier(old), sql.Identifier(new)
+            ),
+        )
+
+    def write_receipt_comments(
+        self,
+        database_url: str,
+        active_name: str,
+        active_comment: str,
+        recovery_name: str,
+        recovery_comment: str,
+    ) -> None:
+        parameters = admin_connection_parameters(database_url)
+        timeout = str(
+            self.policy.lifecycle.administration_statement_timeout_seconds * 1000
+        )
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('statement_timeout', %s, true)", [timeout]
+            )
+            cursor.execute(
+                sql.SQL("COMMENT ON DATABASE {} IS {}").format(
+                    sql.Identifier(active_name), sql.Literal(active_comment)
+                )
+            )
+            cursor.execute(
+                sql.SQL("COMMENT ON DATABASE {} IS {}").format(
+                    sql.Identifier(recovery_name), sql.Literal(recovery_comment)
+                )
+            )
+
+    def drop_recovery(self, database_url: str, name: str) -> None:
+        self.drop_shadow(database_url, name)
 
 
 class SnapshotRestoreEngine:
@@ -869,7 +1022,7 @@ class CandidateProcessor:
                 raise RefreshError("candidate_migration_failed")
             raise RefreshError("candidate_django_check_failed")
 
-    def _validate(self, candidate: ShadowCandidate, census: CandidateCensus) -> None:
+    def validate(self, candidate: ShadowCandidate, census: CandidateCensus) -> None:
         source = candidate.artifact.source
         if census.base_tables != self.policy.relations.classified_tables:
             raise RefreshError("candidate_table_policy_mismatch")
@@ -935,7 +1088,7 @@ class CandidateProcessor:
         self._run_django(candidate.name, "migrate", "--check")
         scrub = self.adapter.scrub_candidate(self.target_url, candidate.name)
         census = self.adapter.inspect_candidate(self.target_url, candidate.name)
-        self._validate(candidate, census)
+        self.validate(candidate, census)
         evidence: dict[str, object] = {
             "validation": "passed",
             "row_counts": dict(census.row_counts),
@@ -955,6 +1108,387 @@ class CandidateProcessor:
         )
 
 
+class LifecycleManager:
+    """Guard canonical/recovery database name transitions and durable receipts."""
+
+    def __init__(
+        self,
+        *,
+        policy: RefreshPolicy,
+        target_url: str,
+        adapter: SnapshotAdapter,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        self.policy = policy
+        self.target_url = target_url
+        self.adapter = adapter
+        self.now = now or (lambda: datetime.now(UTC))
+
+    @property
+    def canonical(self) -> str:
+        return self.policy.target.database
+
+    def _recovery_name(self) -> str:
+        suffix = self.now().astimezone(UTC).strftime("%Y%m%dt%H%M%Sz").lower()
+        name = f"{self.policy.lifecycle.recovery_prefix}{suffix}"
+        if len(name) > 63:
+            raise RefreshError("recovery_name_too_long")
+        return name
+
+    def _state(self, name: str, *, missing: str) -> DatabaseState:
+        state = self.adapter.database_state(self.target_url, name)
+        if state is None:
+            raise RefreshError(missing)
+        return state
+
+    def _receipt(
+        self,
+        *,
+        action: str,
+        recovery: str,
+        result: CandidateResult | None = None,
+        prior: Receipt | None = None,
+        census: CandidateCensus | None = None,
+    ) -> Receipt:
+        if result is not None:
+            source = result.candidate.artifact.source
+            payload: dict[str, object] = {
+                "version": 1,
+                "action": action,
+                "completed_at": self.now().astimezone(UTC).isoformat(),
+                "source_resource_id": self.policy.source.resource_id,
+                "source_database": self.policy.source.database,
+                "target_resource_id": self.policy.target.resource_id,
+                "canonical_database": self.canonical,
+                "recovery_database": recovery,
+                "snapshot_at": source.captured_at.astimezone(UTC).isoformat(),
+                "dump_checksum": result.candidate.artifact.checksum,
+                "dump_bytes": result.candidate.artifact.byte_size,
+                "source_counts": dict(source.row_counts),
+                "candidate_counts": dict(result.census.row_counts),
+                "scrubbed_rows": dict(result.scrub.cleared_rows),
+                "latest_timestamps": dict(result.census.latest_timestamps),
+                "rollback_confirmation": expected_confirmation(
+                    self.policy, "rollback", recovery=recovery
+                ),
+            }
+        elif prior is not None:
+            payload = prior.to_payload()
+            payload.update(
+                {
+                    "action": action,
+                    "completed_at": self.now().astimezone(UTC).isoformat(),
+                    "recovery_database": recovery,
+                    "rollback_confirmation": expected_confirmation(
+                        self.policy, "rollback", recovery=recovery
+                    ),
+                }
+            )
+            if census is not None:
+                payload["candidate_counts"] = dict(census.row_counts)
+                payload["latest_timestamps"] = dict(census.latest_timestamps)
+        else:  # pragma: no cover - internal call contract
+            raise RefreshError("receipt_input_missing")
+        try:
+            return Receipt.from_payload(payload)
+        except ReceiptError as exc:
+            raise RefreshError("receipt_invalid") from exc
+
+    def _write_receipt(self, receipt: Receipt) -> None:
+        self.adapter.write_receipt_comments(
+            self.target_url,
+            self.canonical,
+            encode_database_comment(
+                marker_prefix=self.policy.lifecycle.marker_prefix,
+                state="active",
+                database=self.canonical,
+                receipt=receipt,
+            ),
+            receipt.recovery_database,
+            encode_database_comment(
+                marker_prefix=self.policy.lifecycle.marker_prefix,
+                state="recovery",
+                database=receipt.recovery_database,
+                receipt=receipt,
+            ),
+        )
+
+    def _diagnostic(self, *names: str) -> str:
+        values = []
+        for name in names:
+            state = self.adapter.database_state(self.target_url, name)
+            if state is None:
+                values.append(f"{name}=absent")
+            else:
+                enabled = "enabled" if state.allow_connections else "disabled"
+                values.append(f"{name}={enabled}")
+        return ";".join(values)
+
+    def _repair_swap(
+        self,
+        *,
+        incoming: str,
+        displaced: str,
+        failure_code: str,
+    ) -> None:
+        try:
+            canonical = self.adapter.database_state(self.target_url, self.canonical)
+            incoming_state = self.adapter.database_state(self.target_url, incoming)
+            displaced_state = self.adapter.database_state(self.target_url, displaced)
+
+            if canonical is not None and incoming_state is None and displaced_state:
+                self.adapter.set_allow_connections(
+                    self.target_url, self.canonical, False
+                )
+                self.adapter.terminate_connections(self.target_url, self.canonical)
+                self.adapter.rename_database(self.target_url, self.canonical, incoming)
+                canonical = None
+            if canonical is None and displaced_state is not None:
+                self.adapter.rename_database(self.target_url, displaced, self.canonical)
+
+            canonical = self.adapter.database_state(self.target_url, self.canonical)
+            incoming_state = self.adapter.database_state(self.target_url, incoming)
+            displaced_state = self.adapter.database_state(self.target_url, displaced)
+            if (
+                canonical is None
+                or incoming_state is None
+                or displaced_state is not None
+            ):
+                raise RefreshError("repair_state_invalid")
+            if incoming_state.allow_connections:
+                self.adapter.set_allow_connections(self.target_url, incoming, False)
+                self.adapter.terminate_connections(self.target_url, incoming)
+            self.adapter.set_allow_connections(self.target_url, self.canonical, True)
+        except BaseException as exc:
+            detail = self._diagnostic(self.canonical, incoming, displaced)
+            raise RefreshError(
+                f"{failure_code}_manual_recovery_required:{detail}"
+            ) from exc
+        raise RefreshError(f"{failure_code}_failed_repaired")
+
+    def _swap(
+        self,
+        *,
+        incoming: str,
+        displaced: str,
+        prepare_receipt: Callable[[], Receipt],
+        failure_code: str,
+    ) -> Receipt:
+        try:
+            self.adapter.set_allow_connections(self.target_url, incoming, False)
+            self.adapter.terminate_connections(self.target_url, incoming)
+            self.adapter.set_allow_connections(self.target_url, self.canonical, False)
+            self.adapter.terminate_connections(self.target_url, self.canonical)
+            self.adapter.rename_database(self.target_url, self.canonical, displaced)
+            self.adapter.rename_database(self.target_url, incoming, self.canonical)
+            self.adapter.set_allow_connections(self.target_url, self.canonical, True)
+            receipt = prepare_receipt()
+            self._write_receipt(receipt)
+        except BaseException:  # noqa: BLE001 - every cutover failure must reconcile
+            self._repair_swap(
+                incoming=incoming,
+                displaced=displaced,
+                failure_code=failure_code,
+            )
+        return receipt
+
+    def activate(self, result: CandidateResult) -> Receipt:
+        candidate = result.candidate
+        canonical = self._state(self.canonical, missing="canonical_database_missing")
+        candidate_state = self._state(
+            candidate.name, missing="candidate_database_missing"
+        )
+        recovery = self._recovery_name()
+        if not canonical.allow_connections:
+            raise RefreshError("canonical_database_disabled")
+        if (
+            not candidate.name.startswith(self.policy.lifecycle.shadow_prefix)
+            or candidate.name == self.canonical
+        ):
+            raise RefreshError("candidate_name_invalid")
+        if candidate_state.comment != candidate.marker:
+            raise RefreshError("candidate_marker_changed")
+        marker_prefix = f"{self.policy.lifecycle.marker_prefix}:"
+        try:
+            marker = json.loads(candidate.marker.removeprefix(marker_prefix))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RefreshError("candidate_marker_invalid") from exc
+        if (
+            not candidate.marker.startswith(marker_prefix)
+            or not isinstance(marker, dict)
+            or marker.get("state") != "validated"
+            or marker.get("database") != candidate.name
+            or marker.get("checksum") != candidate.artifact.checksum
+        ):
+            raise RefreshError("candidate_marker_invalid")
+        if self.adapter.database_state(self.target_url, recovery) is not None:
+            raise RefreshError("recovery_database_already_exists")
+
+        receipt = self._receipt(action="refresh", recovery=recovery, result=result)
+
+        def prepare_receipt() -> Receipt:
+            census = self.adapter.inspect_candidate(self.target_url, self.canonical)
+            CandidateProcessor(
+                policy=self.policy,
+                target_url=self.target_url,
+                adapter=self.adapter,
+            ).validate(candidate, census)
+            return receipt
+
+        return self._swap(
+            incoming=candidate.name,
+            displaced=recovery,
+            prepare_receipt=prepare_receipt,
+            failure_code="activation",
+        )
+
+    def _decode_state(self, state: DatabaseState, *, expected_state: str, invalid: str):
+        try:
+            record = decode_database_comment(
+                state.comment,
+                marker_prefix=self.policy.lifecycle.marker_prefix,
+            )
+        except ReceiptError as exc:
+            raise RefreshError(invalid) from exc
+        if record.state != expected_state or record.database != state.name:
+            raise RefreshError(invalid)
+        return record
+
+    def _verify_shape(self, census: CandidateCensus) -> None:
+        if census.base_tables != self.policy.relations.classified_tables:
+            raise RefreshError("active_table_policy_mismatch")
+        if census.views != self.policy.relations.views or not census.view_valid:
+            raise RefreshError("active_view_invalid")
+        if census.sequences != self.policy.relations.sequences:
+            raise RefreshError("active_sequence_policy_mismatch")
+        for table, required in self.policy.validation.required_columns.items():
+            if required - census.columns.get(table, frozenset()):
+                raise RefreshError(f"active_column_missing:{table}")
+        for table in self.policy.validation.required_nonempty_tables:
+            if census.row_counts.get(table, 0) <= 0:
+                raise RefreshError(f"active_required_table_empty:{table}")
+        if census.duplicate_current_windows or census.invalid_foreign_keys:
+            raise RefreshError("active_relational_invariant_invalid")
+        if (
+            census.site_domain != self.policy.scrub.site_domain
+            or census.site_name != self.policy.scrub.site_name
+        ):
+            raise RefreshError("active_site_invalid")
+
+    def _verify_census(self, receipt: Receipt, census: CandidateCensus) -> None:
+        self._verify_shape(census)
+        if dict(census.row_counts) != dict(receipt.candidate_counts):
+            raise RefreshError("active_count_mismatch")
+        if dict(census.latest_timestamps) != dict(receipt.latest_timestamps):
+            raise RefreshError("active_latest_timestamp_mismatch")
+        if receipt.action == "refresh" and any(census.scrubbed_counts.values()):
+            raise RefreshError("active_scrub_incomplete")
+
+    def verify(self) -> Receipt:
+        canonical = self._state(self.canonical, missing="canonical_database_missing")
+        if not canonical.allow_connections:
+            raise RefreshError("canonical_database_disabled")
+        active = self._decode_state(
+            canonical, expected_state="active", invalid="active_marker_invalid"
+        )
+        receipt = active.receipt
+        if receipt.canonical_database != self.canonical:
+            raise RefreshError("active_receipt_invalid")
+        recovery = self._state(
+            receipt.recovery_database, missing="recovery_database_missing"
+        )
+        if recovery.allow_connections:
+            raise RefreshError("recovery_database_enabled")
+        recovery_record = self._decode_state(
+            recovery, expected_state="recovery", invalid="recovery_marker_invalid"
+        )
+        if recovery_record.receipt != receipt:
+            raise RefreshError("receipt_pair_mismatch")
+        census = self.adapter.inspect_candidate(self.target_url, self.canonical)
+        self._verify_census(receipt, census)
+        return receipt
+
+    def rollback(self, recovery: str) -> Receipt:
+        expected_confirmation(self.policy, "rollback", recovery=recovery)
+        canonical = self._state(self.canonical, missing="canonical_database_missing")
+        recovery_state = self._state(recovery, missing="recovery_database_missing")
+        if not canonical.allow_connections:
+            raise RefreshError("canonical_database_disabled")
+        if recovery_state.allow_connections:
+            raise RefreshError("recovery_database_enabled")
+        active = self._decode_state(
+            canonical, expected_state="active", invalid="active_marker_invalid"
+        )
+        marked_recovery = self._decode_state(
+            recovery_state,
+            expected_state="recovery",
+            invalid="recovery_marker_invalid",
+        )
+        if (
+            active.receipt != marked_recovery.receipt
+            or active.receipt.recovery_database != recovery
+        ):
+            raise RefreshError("recovery_receipt_mismatch")
+        displaced = self._recovery_name()
+        if displaced == recovery:
+            raise RefreshError("recovery_name_collision")
+        if self.adapter.database_state(self.target_url, displaced) is not None:
+            raise RefreshError("recovery_database_already_exists")
+
+        def prepare_receipt() -> Receipt:
+            census = self.adapter.inspect_candidate(self.target_url, self.canonical)
+            self._verify_shape(census)
+            return self._receipt(
+                action="rollback",
+                recovery=displaced,
+                prior=active.receipt,
+                census=census,
+            )
+
+        return self._swap(
+            incoming=recovery,
+            displaced=displaced,
+            prepare_receipt=prepare_receipt,
+            failure_code="rollback",
+        )
+
+    def prune(self, recovery: str) -> str:
+        expected_confirmation(self.policy, "prune", recovery=recovery)
+        state = self._state(recovery, missing="recovery_database_missing")
+        if state.allow_connections:
+            raise RefreshError("recovery_database_enabled")
+        record = self._decode_state(
+            state, expected_state="recovery", invalid="recovery_marker_invalid"
+        )
+        if record.receipt.recovery_database != recovery:
+            raise RefreshError("recovery_receipt_mismatch")
+
+        marked: list[str] = []
+        for candidate in self.adapter.database_states(
+            self.target_url, self.policy.lifecycle.recovery_prefix
+        ):
+            if candidate.allow_connections:
+                continue
+            try:
+                candidate_record = self._decode_state(
+                    candidate,
+                    expected_state="recovery",
+                    invalid="recovery_marker_invalid",
+                )
+            except RefreshError:
+                continue
+            if candidate_record.receipt.recovery_database == candidate.name:
+                marked.append(candidate.name)
+        retained = set(sorted(marked)[-self.policy.lifecycle.retained_recoveries :])
+        if (
+            recovery in retained
+            or len(marked) <= self.policy.lifecycle.retained_recoveries
+        ):
+            raise RefreshError("recovery_retained")
+        self.adapter.drop_recovery(self.target_url, recovery)
+        return recovery
+
+
 class PostgresRuntime:
     """PostgreSQL inspection boundary and lifecycle command runtime."""
 
@@ -964,15 +1498,28 @@ class PostgresRuntime:
         *,
         source_url: str | None = None,
         target_url: str | None = None,
+        adapter: SnapshotAdapter | None = None,
+        engine: SnapshotRestoreEngine | None = None,
+        runner: Callable[..., CommandResult] = subprocess.run,
+        lock_factory: Callable[..., Any] = acquire_cluster_lock,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         self.policy = policy
         self.source_url = source_url
         self.target_url = target_url
-        self.engine = (
+        self.now = now or (lambda: datetime.now(UTC))
+        self.adapter = adapter or PsycopgSnapshotAdapter(policy, now=self.now)
+        self.runner = runner
+        self.lock_factory = lock_factory
+        self.engine = engine or (
             SnapshotRestoreEngine(
                 policy=policy,
                 source_url=source_url,
                 target_url=target_url,
+                adapter=self.adapter,
+                runner=runner,
+                lock_factory=lock_factory,
+                now=self.now,
             )
             if source_url and target_url
             else None
@@ -1047,5 +1594,67 @@ class PostgresRuntime:
     def inspect_target(self, url: str) -> DatabaseInspection:
         return self._inspect(url)
 
-    def execute(self, action: str, *, recovery: str | None = None) -> dict[str, str]:
-        raise RuntimeError("lifecycle_not_implemented")
+    def _lifecycle(self) -> LifecycleManager:
+        if not self.target_url:
+            raise RefreshError("target_url_missing")
+        return LifecycleManager(
+            policy=self.policy,
+            target_url=self.target_url,
+            adapter=self.adapter,
+            now=self.now,
+        )
+
+    @contextmanager
+    def _target_lock(self) -> Iterator[None]:
+        if not self.target_url:
+            raise RefreshError("target_url_missing")
+        with self.lock_factory(
+            self.target_url,
+            wait_seconds=0,
+            lock_id=self.policy.lifecycle.cluster_lock_id,
+        ):
+            yield
+
+    def _refresh(self) -> Receipt:
+        if self.engine is None:
+            raise RefreshError("refresh_urls_missing")
+        artifact = self.engine.export_dump()
+        try:
+            with self.engine.target_lock():
+                candidate = self.engine.restore_shadow(artifact)
+                try:
+                    result = CandidateProcessor(
+                        policy=self.policy,
+                        target_url=self.engine.target_url,
+                        adapter=self.engine.adapter,
+                        runner=self.runner,
+                    ).process(candidate)
+                except BaseException:
+                    self.engine.cleanup_shadow(candidate.name, candidate.marker)
+                    raise
+                return LifecycleManager(
+                    policy=self.policy,
+                    target_url=self.engine.target_url,
+                    adapter=self.engine.adapter,
+                    now=self.now,
+                ).activate(result)
+        finally:
+            self.engine.cleanup_artifact(artifact)
+
+    def execute(self, action: str, *, recovery: str | None = None) -> dict[str, object]:
+        if action == "refresh":
+            return self._refresh().to_payload()
+        if action == "verify":
+            return self._lifecycle().verify().to_payload()
+        if action == "rollback":
+            if recovery is None:
+                raise RefreshError("recovery_name_missing")
+            with self._target_lock():
+                return self._lifecycle().rollback(recovery).to_payload()
+        if action == "prune":
+            if recovery is None:
+                raise RefreshError("recovery_name_missing")
+            with self._target_lock():
+                pruned = self._lifecycle().prune(recovery)
+            return {"action": "prune", "recovery_database": pruned}
+        raise RefreshError("action_invalid")

@@ -8,6 +8,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Protocol, TextIO
 
+from scripts.database_lock import DatabaseLockError
+
+from .database import RefreshError
 from .policy import (
     DatabaseInspection,
     PolicyError,
@@ -22,7 +25,9 @@ class Runtime(Protocol):
 
     def inspect_target(self, url: str) -> DatabaseInspection: ...
 
-    def execute(self, action: str, *, recovery: str | None = None) -> dict[str, object]: ...
+    def execute(
+        self, action: str, *, recovery: str | None = None
+    ) -> dict[str, object]: ...
 
 
 def _default_policy_path() -> Path:
@@ -33,10 +38,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="refresh-staging-data")
     parser.add_argument("--policy", type=Path, default=_default_policy_path())
     subcommands = parser.add_subparsers(dest="action", required=True)
-    subcommands.add_parser("preflight", help="prove source and target safety without mutation")
-    refresh = subcommands.add_parser("refresh", help="build, verify, and activate a shadow copy")
+    subcommands.add_parser(
+        "preflight", help="prove source and target safety without mutation"
+    )
+    refresh = subcommands.add_parser(
+        "refresh", help="build, verify, and activate a shadow copy"
+    )
     refresh.add_argument("--confirm", required=True)
-    subcommands.add_parser("verify", help="verify the active staging database and receipt")
+    subcommands.add_parser(
+        "verify", help="verify the active staging database and receipt"
+    )
     for action in ("rollback", "prune"):
         command = subcommands.add_parser(action)
         command.add_argument("--recovery", required=True)
@@ -45,7 +56,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _emit(stream: TextIO, payload: Mapping[str, object]) -> None:
-    stream.write(json.dumps(dict(payload), sort_keys=True, separators=(",", ":")) + "\n")
+    stream.write(
+        json.dumps(dict(payload), sort_keys=True, separators=(",", ":")) + "\n"
+    )
 
 
 def run(
@@ -91,7 +104,7 @@ def run(
             confirmation=confirmation,
             recovery=recovery,
         )
-        if args.action in {"preflight", "verify"}:
+        if args.action == "preflight":
             _emit(
                 output,
                 {
@@ -111,6 +124,9 @@ def run(
     except PolicyError as exc:
         _emit(output, {"status": "rejected", "code": str(exc)})
         return 2
+    except (RefreshError, DatabaseLockError) as exc:
+        _emit(output, {"status": "error", "code": str(exc)})
+        return 1
     except Exception:  # noqa: BLE001 - arbitrary failures must cross a secret-free boundary
         _emit(output, {"status": "error", "code": "runtime_error"})
         return 1

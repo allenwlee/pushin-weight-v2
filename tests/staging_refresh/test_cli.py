@@ -112,6 +112,26 @@ def test_preflight_passes_without_a_mutating_call(policy, environment) -> None:
     assert json.loads(output.getvalue())["status"] == "authorized"
 
 
+def test_verify_recovers_and_emits_the_durable_receipt(policy, environment) -> None:
+    runtime = FakeRuntime(policy)
+    output = io.StringIO()
+
+    status = run(
+        ["--policy", str(POLICY_PATH), "verify"],
+        environ=environment,
+        runtime=runtime,
+        stdout=output,
+    )
+
+    assert status == 0
+    assert runtime.calls == ["inspect_target", "execute:verify"]
+    assert json.loads(output.getvalue()) == {
+        "action": "verify",
+        "recovery": "",
+        "status": "complete",
+    }
+
+
 @pytest.mark.parametrize("command", ["refresh", "rollback", "prune"])
 def test_production_service_rejects_mutation_before_database_access(
     command: str, policy, environment

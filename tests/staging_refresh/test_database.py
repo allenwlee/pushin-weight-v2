@@ -5,14 +5,21 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
+from getpass import getuser
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
+from scripts.database_lock import DatabaseLockError
 from scripts.staging_refresh.database import (
     CandidateCensus,
     CandidateProcessor,
+    DatabaseState,
+    LifecycleManager,
+    PostgresRuntime,
+    PsycopgSnapshotAdapter,
     RefreshError,
     ScrubReport,
     SnapshotRestoreEngine,
@@ -20,6 +27,11 @@ from scripts.staging_refresh.database import (
     scrub_candidate_data,
 )
 from scripts.staging_refresh.policy import load_policy
+from scripts.staging_refresh.receipt import (
+    Receipt,
+    decode_database_comment,
+    encode_database_comment,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = REPO_ROOT / "config" / "staging_refresh.yaml"
@@ -166,11 +178,91 @@ class FakeRunner:
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
+class FakeLifecycleAdapter(FakeAdapter):
+    def __init__(self, policy, events: list[str]) -> None:
+        super().__init__(policy, events)
+        self.states: dict[str, DatabaseState] = {
+            policy.target.database: DatabaseState(
+                name=policy.target.database,
+                allow_connections=True,
+                comment=None,
+            )
+        }
+        self.rename_count = 0
+        self.fail_after_rename: int | None = None
+        self.fail_every_repair = False
+
+    def create_shadow(self, _url: str, name: str, marker: str) -> None:
+        super().create_shadow(_url, name, marker)
+        self.states[name] = DatabaseState(
+            name=name,
+            allow_connections=True,
+            comment=marker,
+        )
+
+    def mark_validated(
+        self,
+        _url: str,
+        name: str,
+        marker: str,
+        evidence: dict[str, object],
+    ) -> str:
+        validated = super().mark_validated(_url, name, marker, evidence)
+        self.states[name] = replace(self.states[name], comment=validated)
+        return validated
+
+    def database_state(self, _url: str, name: str) -> DatabaseState | None:
+        return self.states.get(name)
+
+    def database_states(self, _url: str, prefix: str) -> tuple[DatabaseState, ...]:
+        return tuple(
+            state for name, state in self.states.items() if name.startswith(prefix)
+        )
+
+    def set_allow_connections(self, _url: str, name: str, allowed: bool) -> None:
+        state = self.states[name]
+        self.states[name] = replace(state, allow_connections=allowed)
+        self.events.append(f"database:allow:{name}:{str(allowed).lower()}")
+
+    def terminate_connections(self, _url: str, name: str) -> None:
+        self.events.append(f"database:terminate:{name}")
+
+    def rename_database(self, _url: str, old: str, new: str) -> None:
+        self.rename_count += 1
+        state = self.states.pop(old)
+        self.states[new] = replace(state, name=new)
+        self.events.append(f"database:rename:{old}:{new}")
+        if self.fail_after_rename == self.rename_count:
+            raise RefreshError("injected_rename_failure")
+        if self.fail_every_repair and self.rename_count > 2:
+            raise RefreshError("injected_repair_failure")
+
+    def write_receipt_comments(
+        self,
+        _url: str,
+        active_name: str,
+        active_comment: str,
+        recovery_name: str,
+        recovery_comment: str,
+    ) -> None:
+        self.states[active_name] = replace(
+            self.states[active_name], comment=active_comment
+        )
+        self.states[recovery_name] = replace(
+            self.states[recovery_name], comment=recovery_comment
+        )
+        self.events.append("database:receipt")
+
+    def drop_recovery(self, _url: str, name: str) -> None:
+        del self.states[name]
+        self.events.append(f"database:drop:{name}")
+
+
 @contextmanager
 def fake_lock(
     events: list[str], database_url: str, **_options: object
 ) -> Iterator[None]:
-    label = "source" if "production" in database_url else "target"
+    label = "source" if "staging_refresh_reader" in database_url else "target"
     events.append(f"lock:{label}:acquire")
     try:
         yield
@@ -178,10 +270,15 @@ def fake_lock(
         events.append(f"lock:{label}:release")
 
 
-def _engine(tmp_path: Path, *, free: int = 10_000):
+def _engine(
+    tmp_path: Path,
+    *,
+    free: int = 10_000,
+    adapter_class=FakeAdapter,
+):
     policy = load_policy(POLICY_PATH)
     events: list[str] = []
-    adapter = FakeAdapter(policy, events)
+    adapter = adapter_class(policy, events)
     runner = FakeRunner(events)
     source_url = (
         f"postgresql://{policy.source.role}:test@{policy.source.host}/"
@@ -474,6 +571,409 @@ def test_candidate_validation_blocks_every_unsafe_shape(
             ).process(candidate)
 
     assert not any(event.startswith("candidate:validated") for event in events)
+
+
+def _validated_candidate(tmp_path: Path):
+    engine, adapter, runner, events = _engine(
+        tmp_path,
+        adapter_class=FakeLifecycleAdapter,
+    )
+    artifact = engine.export_dump()
+    with engine.target_lock():
+        candidate = engine.restore_shadow(artifact)
+        result = CandidateProcessor(
+            policy=engine.policy,
+            target_url=engine.target_url,
+            adapter=adapter,
+            runner=runner,
+            python="/usr/local/bin/python",
+        ).process(candidate)
+    return engine, adapter, result, events
+
+
+def test_activation_keeps_the_canonical_name_and_persists_one_receipt(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, result, events = _validated_candidate(tmp_path)
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+
+    with engine.target_lock():
+        receipt = manager.activate(result)
+
+    canonical = adapter.states[engine.policy.target.database]
+    recovery = adapter.states[receipt.recovery_database]
+    assert canonical.allow_connections is True
+    assert recovery.allow_connections is False
+    assert result.candidate.name not in adapter.states
+    active_record = decode_database_comment(
+        canonical.comment,
+        marker_prefix=engine.policy.lifecycle.marker_prefix,
+    )
+    recovery_record = decode_database_comment(
+        recovery.comment,
+        marker_prefix=engine.policy.lifecycle.marker_prefix,
+    )
+    assert active_record.receipt == recovery_record.receipt == receipt
+    engine.cleanup_artifact(result.candidate.artifact)
+    assert not result.candidate.artifact.path.exists()
+    assert manager.verify() == receipt
+    assert events.index(
+        f"database:allow:{engine.policy.target.database}:true"
+    ) < events.index("database:receipt")
+
+
+@pytest.mark.parametrize("fail_after", [1, 2])
+def test_activation_rename_fault_repairs_one_active_canonical(
+    tmp_path: Path, fail_after: int
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    adapter.fail_after_rename = fail_after
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+
+    with (
+        pytest.raises(RefreshError, match="activation_failed_repaired"),
+        engine.target_lock(),
+    ):
+        manager.activate(result)
+
+    canonical = adapter.states[engine.policy.target.database]
+    assert canonical.allow_connections is True
+    assert sum(state.allow_connections for state in adapter.states.values()) == 1
+    assert not any(
+        name.startswith(engine.policy.lifecycle.recovery_prefix)
+        for name in adapter.states
+    )
+
+
+def test_unrepairable_cutover_reports_all_manual_recovery_names(tmp_path: Path) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    adapter.fail_after_rename = 2
+    adapter.fail_every_repair = True
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+
+    with pytest.raises(RefreshError) as exc_info, engine.target_lock():
+        manager.activate(result)
+
+    message = str(exc_info.value)
+    assert "activation_manual_recovery_required" in message
+    assert engine.policy.target.database in message
+    assert result.candidate.name in message
+    assert engine.policy.lifecycle.recovery_prefix in message
+
+
+def test_rollback_uses_the_receipt_named_recovery_and_keeps_displaced_candidate(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    first = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        refresh_receipt = first.activate(result)
+
+    rollback = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 3, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        rollback_receipt = rollback.rollback(refresh_receipt.recovery_database)
+
+    assert rollback_receipt.action == "rollback"
+    assert adapter.states[engine.policy.target.database].allow_connections is True
+    displaced = adapter.states[rollback_receipt.recovery_database]
+    assert displaced.allow_connections is False
+    assert (
+        decode_database_comment(
+            displaced.comment,
+            marker_prefix=engine.policy.lifecycle.marker_prefix,
+        ).state
+        == "recovery"
+    )
+
+
+def test_rollback_refuses_an_unmarked_or_receipt_mismatched_recovery(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        receipt = manager.activate(result)
+    adapter.states[receipt.recovery_database] = replace(
+        adapter.states[receipt.recovery_database],
+        comment="legacy-unmarked",
+    )
+
+    with (
+        pytest.raises(RefreshError, match="recovery_marker_invalid"),
+        engine.target_lock(),
+    ):
+        manager.rollback(receipt.recovery_database)
+
+
+@pytest.mark.parametrize("fail_after", [1, 2])
+def test_rollback_rename_fault_repairs_the_current_canonical(
+    tmp_path: Path, fail_after: int
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    refresh = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        receipt = refresh.activate(result)
+    adapter.fail_after_rename = adapter.rename_count + fail_after
+    rollback = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 3, 3, tzinfo=UTC),
+    )
+
+    with (
+        pytest.raises(RefreshError, match="rollback_failed_repaired"),
+        engine.target_lock(),
+    ):
+        rollback.rollback(receipt.recovery_database)
+
+    assert rollback.verify() == receipt
+    assert sum(state.allow_connections for state in adapter.states.values()) == 1
+    assert set(adapter.states) == {
+        engine.policy.target.database,
+        receipt.recovery_database,
+    }
+
+
+def test_prune_drops_only_excess_marked_recovery_and_retains_the_newest(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, result, events = _validated_candidate(tmp_path)
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        receipt = manager.activate(result)
+    old_name = "pushinweight_staging_recovery_20260826t010203z"
+    old_payload = receipt.to_payload()
+    old_payload["recovery_database"] = old_name
+    old_payload["rollback_confirmation"] = (
+        f"ROLLBACK staging/{old_name} -> staging/{engine.policy.target.database}"
+    )
+    old_receipt = Receipt.from_payload(old_payload)
+    adapter.states[old_name] = DatabaseState(
+        name=old_name,
+        allow_connections=False,
+        comment=encode_database_comment(
+            marker_prefix=engine.policy.lifecycle.marker_prefix,
+            state="recovery",
+            database=old_name,
+            receipt=old_receipt,
+        ),
+    )
+
+    with engine.target_lock():
+        pruned = manager.prune(old_name)
+
+    assert pruned == old_name
+    assert old_name not in adapter.states
+    assert receipt.recovery_database in adapter.states
+    assert f"database:drop:{old_name}" in events
+
+
+def test_prune_refuses_unmarked_and_retained_recoveries(tmp_path: Path) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        receipt = manager.activate(result)
+
+    with pytest.raises(RefreshError, match="recovery_retained"), engine.target_lock():
+        manager.prune(receipt.recovery_database)
+
+    impostor = "pushinweight_staging_recovery_20260825t010203z"
+    adapter.states[impostor] = DatabaseState(
+        name=impostor,
+        allow_connections=False,
+        comment="legacy",
+    )
+    with (
+        pytest.raises(RefreshError, match="recovery_marker_invalid"),
+        engine.target_lock(),
+    ):
+        manager.prune(impostor)
+
+
+def test_runtime_refresh_owns_cleanup_and_returns_the_persisted_receipt(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, runner, events = _engine(
+        tmp_path, adapter_class=FakeLifecycleAdapter
+    )
+    runtime = PostgresRuntime(
+        engine.policy,
+        source_url=engine.source_url,
+        target_url=engine.target_url,
+        adapter=adapter,
+        engine=engine,
+        runner=runner,
+        now=engine.now,
+    )
+
+    result = runtime.execute("refresh")
+
+    assert result["action"] == "refresh"
+    assert result["canonical_database"] == engine.policy.target.database
+    assert list(tmp_path.glob("*.dump")) == []
+    assert events.count("lock:target:acquire") == 1
+    assert events[-1] == "lock:target:release"
+
+
+@pytest.mark.parametrize("action", ["rollback", "prune"])
+def test_runtime_lock_refusal_happens_before_lifecycle_mutation(
+    tmp_path: Path, action: str
+) -> None:
+    engine, adapter, _runner, events = _engine(
+        tmp_path, adapter_class=FakeLifecycleAdapter
+    )
+
+    @contextmanager
+    def refusing_lock(_url: str, **_options: object) -> Iterator[None]:
+        events.append("lock:refused")
+        raise DatabaseLockError("cluster_lock_unavailable")
+        yield
+
+    runtime = PostgresRuntime(
+        engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        lock_factory=refusing_lock,
+    )
+    recovery = "pushinweight_staging_recovery_20260827t010203z"
+
+    with pytest.raises(DatabaseLockError, match="cluster_lock_unavailable"):
+        runtime.execute(action, recovery=recovery)
+
+    assert events == ["lock:refused"]
+
+
+@pytest.mark.requires_postgres
+def test_postgres_adapter_executes_the_real_database_lifecycle_sql() -> None:
+    policy = load_policy(POLICY_PATH)
+    canonical = "test_staging_refresh_canonical"
+    candidate = "test_staging_refresh_shadow_20260827t010203z"
+    recovery = "test_staging_refresh_recovery_20260827t010203z"
+    policy = replace(
+        policy,
+        target=replace(policy.target, database=canonical),
+        lifecycle=replace(
+            policy.lifecycle,
+            shadow_prefix="test_staging_refresh_shadow_",
+            recovery_prefix="test_staging_refresh_recovery_",
+        ),
+    )
+    parameters = conninfo_to_dict(os.environ["DATABASE_URL"])
+    parameters.setdefault("host", "localhost")
+    parameters.setdefault("user", getuser())
+    parameters["dbname"] = canonical
+    target_url = make_conninfo(**parameters)
+    adapter = PsycopgSnapshotAdapter(policy)
+    names = (canonical, candidate, recovery)
+    assert all(adapter.database_state(target_url, name) is None for name in names)
+    try:
+        adapter.create_shadow(target_url, canonical, "test-canonical")
+        adapter.create_shadow(target_url, candidate, "test-candidate")
+        adapter.set_allow_connections(target_url, candidate, False)
+        adapter.terminate_connections(target_url, candidate)
+        adapter.set_allow_connections(target_url, canonical, False)
+        adapter.terminate_connections(target_url, canonical)
+        adapter.rename_database(target_url, canonical, recovery)
+        adapter.rename_database(target_url, candidate, canonical)
+        receipt = Receipt.from_payload(
+            {
+                "version": 1,
+                "action": "refresh",
+                "completed_at": "2026-08-27T01:02:03+00:00",
+                "source_resource_id": policy.source.resource_id,
+                "source_database": policy.source.database,
+                "target_resource_id": policy.target.resource_id,
+                "canonical_database": canonical,
+                "recovery_database": recovery,
+                "snapshot_at": "2026-08-27T01:00:00+00:00",
+                "dump_checksum": "a" * 64,
+                "dump_bytes": 1,
+                "source_counts": {"posts": 1},
+                "candidate_counts": {"posts": 1},
+                "scrubbed_rows": {"auth_user": 0},
+                "latest_timestamps": {"posts.created_at": "2026-08-27T01:00:00+00:00"},
+                "rollback_confirmation": (
+                    f"ROLLBACK staging/{recovery} -> staging/{canonical}"
+                ),
+            }
+        )
+        adapter.write_receipt_comments(
+            target_url,
+            canonical,
+            encode_database_comment(
+                marker_prefix=policy.lifecycle.marker_prefix,
+                state="active",
+                database=canonical,
+                receipt=receipt,
+            ),
+            recovery,
+            encode_database_comment(
+                marker_prefix=policy.lifecycle.marker_prefix,
+                state="recovery",
+                database=recovery,
+                receipt=receipt,
+            ),
+        )
+        adapter.set_allow_connections(target_url, canonical, True)
+
+        assert adapter.database_state(target_url, canonical).allow_connections is True
+        assert adapter.database_state(target_url, recovery).allow_connections is False
+        assert {
+            state.name for state in adapter.database_states(target_url, "test_")
+        } >= {
+            canonical,
+            recovery,
+        }
+    finally:
+        for name in names:
+            if adapter.database_state(target_url, name) is not None:
+                adapter.drop_recovery(target_url, name)
 
 
 @pytest.mark.requires_postgres
