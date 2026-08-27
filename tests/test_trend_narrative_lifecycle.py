@@ -104,9 +104,7 @@ def _reserve(
         window_days=window_days,
         facts_as_of=facts_as_of,
         semantic_fingerprint=fingerprint,
-        generation_facts=(
-            generation_facts or _facts(brand, as_of=facts_as_of)
-        ),
+        generation_facts=(generation_facts or _facts(brand, as_of=facts_as_of)),
         publication_epoch=epoch,
         prompt_version=prompt_version,
         provider=provider,
@@ -317,11 +315,14 @@ def test_expired_lease_is_abandoned_and_never_reopened_for_same_cycle():
 def test_repeated_expired_leases_escalate_same_fingerprint_backoff():
     first = _reserve(lease_seconds=60)
     first_expired_at = NOW + timedelta(minutes=2)
-    assert abandon_expired_attempts(
-        now=first_expired_at,
-        cadence_minutes={1: 30},
-        stale_minutes={1: 60},
-    ) == 1
+    assert (
+        abandon_expired_attempts(
+            now=first_expired_at,
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
 
     second = _reserve(
         source_cycle_id="cycle-b",
@@ -329,11 +330,14 @@ def test_repeated_expired_leases_escalate_same_fingerprint_backoff():
         lease_seconds=60,
     )
     second_expired_at = NOW + timedelta(minutes=3)
-    assert abandon_expired_attempts(
-        now=second_expired_at,
-        cadence_minutes={1: 30},
-        stale_minutes={1: 60},
-    ) == 1
+    assert (
+        abandon_expired_attempts(
+            now=second_expired_at,
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
 
     first.refresh_from_db()
     second.refresh_from_db()
@@ -345,11 +349,14 @@ def test_repeated_expired_leases_escalate_same_fingerprint_backoff():
 def test_repeated_transport_incomplete_leases_escalate_across_fingerprints():
     first = _reserve(lease_seconds=60, fingerprint="a" * 64)
     first_expired_at = NOW + timedelta(minutes=2)
-    assert abandon_expired_attempts(
-        now=first_expired_at,
-        cadence_minutes={1: 30},
-        stale_minutes={1: 60},
-    ) == 1
+    assert (
+        abandon_expired_attempts(
+            now=first_expired_at,
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
 
     second = _reserve(
         source_cycle_id="cycle-b",
@@ -358,11 +365,14 @@ def test_repeated_transport_incomplete_leases_escalate_across_fingerprints():
         lease_seconds=60,
     )
     second_expired_at = NOW + timedelta(minutes=3)
-    assert abandon_expired_attempts(
-        now=second_expired_at,
-        cadence_minutes={1: 30},
-        stale_minutes={1: 60},
-    ) == 1
+    assert (
+        abandon_expired_attempts(
+            now=second_expired_at,
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
 
     first.refresh_from_db()
     second.refresh_from_db()
@@ -376,11 +386,14 @@ def test_repeated_transport_incomplete_leases_escalate_across_fingerprints():
 
 def test_transport_backoff_does_not_cross_provider_configuration_identity():
     first = _reserve(lease_seconds=60)
-    assert abandon_expired_attempts(
-        now=NOW + timedelta(minutes=2),
-        cadence_minutes={1: 30},
-        stale_minutes={1: 60},
-    ) == 1
+    assert (
+        abandon_expired_attempts(
+            now=NOW + timedelta(minutes=2),
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
 
     second = _reserve(
         source_cycle_id="cycle-b",
@@ -392,11 +405,14 @@ def test_transport_backoff_does_not_cross_provider_configuration_identity():
         llm_model_name="deepseek-v4-pro",
     )
     second_expired_at = NOW + timedelta(minutes=3)
-    assert abandon_expired_attempts(
-        now=second_expired_at,
-        cadence_minutes={1: 30},
-        stale_minutes={1: 60},
-    ) == 1
+    assert (
+        abandon_expired_attempts(
+            now=second_expired_at,
+            cadence_minutes={1: 30},
+            stale_minutes={1: 60},
+        )
+        == 1
+    )
 
     first.refresh_from_db()
     second.refresh_from_db()
@@ -541,9 +557,7 @@ def test_schema_two_publication_persists_two_measured_subjects_atomically():
     ]
     assert row.observations_zh_cn == ["两个品牌在测量时段内均呈加速走势。"]
     assert list(
-        row.subjects.values_list(
-            "position", "support_type", "canonical_key_snapshot"
-        )
+        row.subjects.values_list("position", "support_type", "canonical_key_snapshot")
     ) == [
         (0, "measured_candidate", "minimax"),
         (1, "measured_candidate", "deepseek"),
@@ -712,14 +726,15 @@ def test_evidence_subject_resolves_one_exact_existing_identity(identity):
     subject = row.subjects.get(position=1)
     expected_identity = "unresolved" if identity == "ambiguous" else identity
     assert subject.identity_type == expected_identity
-    assert subject.observed_name == (
-        "OffListModel" if identity == "ambiguous" else ""
+    assert subject.observed_name == ("OffListModel" if identity == "ambiguous" else "")
+    assert (
+        subject.canonical_key_snapshot
+        == {
+            "brand": "offlist",
+            "product": "vendor/OffListModel",
+            "ambiguous": "",
+        }[identity]
     )
-    assert subject.canonical_key_snapshot == {
-        "brand": "offlist",
-        "product": "vendor/OffListModel",
-        "ambiguous": "",
-    }[identity]
     assert bool(subject.brand_id) is (identity == "brand")
     assert bool(subject.product_id) is (identity == "product")
 
@@ -727,9 +742,7 @@ def test_evidence_subject_resolves_one_exact_existing_identity(identity):
 def test_invalid_schema_two_subjects_roll_back_the_whole_publication():
     snapshot = {
         **_facts(Brand.objects.filter(pk="minimax").first() or _brand()),
-        "candidates": [
-            {"candidate_id": "minimax:full_window", "evidence": []}
-        ],
+        "candidates": [{"candidate_id": "minimax:full_window", "evidence": []}],
     }
     row = _reserve(
         output_schema_version=2,
@@ -770,7 +783,7 @@ def test_invalid_schema_two_subjects_roll_back_the_whole_publication():
                     "candidate_ids": ["not-in-snapshot"],
                     "families": ["volume"],
                     "evidence_ids": [],
-                }
+                },
             ],
             subjects=[
                 {
@@ -796,9 +809,7 @@ def test_invalid_schema_two_subjects_roll_back_the_whole_publication():
 def test_schema_three_persists_cited_quantitative_why_metadata():
     brand = Brand.objects.filter(pk="minimax").first() or _brand()
     snapshot = _schema_three_snapshot(brand)
-    fact = project_provider_packet(snapshot)["candidates"][0][
-        "quantitative_facts"
-    ][0]
+    fact = project_provider_packet(snapshot)["candidates"][0]["quantitative_facts"][0]
     row = _reserve(output_schema_version=3, generation_facts=snapshot)
     assert mark_transport_started(
         row.pk,
@@ -956,7 +967,7 @@ def test_schema_two_rejects_cross_candidate_evidence_at_publication_boundary():
                     "candidate_ids": ["minimax:full_window"],
                     "families": ["evidence"],
                     "evidence_ids": ["e_deepseek"],
-                }
+                },
             ],
             subjects=[
                 {
@@ -1106,10 +1117,7 @@ def test_concurrent_cold_publish_serializes_and_newer_facts_win():
     assert sum(results) in {1, 2}
     current = TrendNarrative.objects.get(window_days=1, is_current=True)
     assert current.pk == newer.pk
-    assert (
-        TrendNarrative.objects.filter(window_days=1, is_current=True).count()
-        == 1
-    )
+    assert TrendNarrative.objects.filter(window_days=1, is_current=True).count() == 1
 
 
 def test_same_fingerprint_advances_only_strictly_newer_complete_check_tuple():
@@ -1274,22 +1282,28 @@ def test_u2_provider_call_identity_claim_reclaim_and_post_send_ambiguity():
         now=NOW,
     )
     assert call is not None
-    assert reserve_trend_narrative_provider_call(
-        run=run,
-        stage=TrendNarrativeProviderCall.Stage.RANK,
-        batch_key="",
-        request_identity="different-id-is-not-a-second-call",
-        request_hash="b" * 64,
-        request_packet={},
-        now=NOW,
-    ) is None
+    assert (
+        reserve_trend_narrative_provider_call(
+            run=run,
+            stage=TrendNarrativeProviderCall.Stage.RANK,
+            batch_key="",
+            request_identity="different-id-is-not-a-second-call",
+            request_hash="b" * 64,
+            request_packet={},
+            now=NOW,
+        )
+        is None
+    )
     first = claim_trend_narrative_provider_call(
         call.pk, owner="worker-a", now=NOW, lease_seconds=10
     )
     assert first is not None and first.claim_fence == 1
-    assert claim_trend_narrative_provider_call(
-        call.pk, owner="worker-b", now=NOW + timedelta(seconds=1), lease_seconds=10
-    ) is None
+    assert (
+        claim_trend_narrative_provider_call(
+            call.pk, owner="worker-b", now=NOW + timedelta(seconds=1), lease_seconds=10
+        )
+        is None
+    )
     second = claim_trend_narrative_provider_call(
         call.pk, owner="worker-b", now=NOW + timedelta(seconds=11), lease_seconds=10
     )
@@ -1306,9 +1320,12 @@ def test_u2_provider_call_identity_claim_reclaim_and_post_send_ambiguity():
     )
     call.refresh_from_db()
     assert call.state == TrendNarrativeProviderCall.State.AMBIGUOUS
-    assert claim_trend_narrative_provider_call(
-        call.pk, owner="worker-c", now=NOW + timedelta(days=1), lease_seconds=10
-    ) is None
+    assert (
+        claim_trend_narrative_provider_call(
+            call.pk, owner="worker-c", now=NOW + timedelta(days=1), lease_seconds=10
+        )
+        is None
+    )
 
 
 def test_u2_complete_response_is_terminal_and_retains_response_proof():
@@ -1342,7 +1359,10 @@ def test_u2_complete_response_is_terminal_and_retains_response_proof():
     assert call.state == TrendNarrativeProviderCall.State.COMPLETED
     assert call.response_payload == {"response": "durable"}
     assert not mark_trend_narrative_provider_call_sent(
-        call.pk, owner="worker", fence=claimed.claim_fence, now=NOW + timedelta(seconds=2)
+        call.pk,
+        owner="worker",
+        fence=claimed.claim_fence,
+        now=NOW + timedelta(seconds=2),
     )
 
 
@@ -1417,6 +1437,25 @@ def test_u2_prepared_rows_activate_only_as_one_newer_complete_cutoff_and_hold_la
     assert first.status == TrendNarrativeRun.Status.SUPERSEDED
     assert first.activated_at == NOW + timedelta(minutes=1)
 
+    third = _run(
+        cycle="u2-third",
+        facts_as_of=NOW + timedelta(minutes=20),
+        brands=[minimax.nickname, deepseek.nickname],
+    )
+    _approved(third, deepseek, now=NOW + timedelta(minutes=20))
+    held_again = prepare_brand_trend_narrative(
+        run=third,
+        brand_key=minimax.nickname,
+        brand_name_en=minimax.display_name_en,
+        brand_name_zh_cn=minimax.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.HELD,
+        attempted_at=NOW + timedelta(minutes=20),
+        error_code="critic_hold_again",
+    )
+    assert held_again.status == BrandTrendNarrative.Status.HELD
+    assert held_again.last_good_id == first_minimax.pk
+    assert activate_trend_narrative_run(third.pk, now=NOW + timedelta(minutes=21))
+
     older = _run(
         cycle="u2-older",
         facts_as_of=NOW + timedelta(minutes=5),
@@ -1425,13 +1464,15 @@ def test_u2_prepared_rows_activate_only_as_one_newer_complete_cutoff_and_hold_la
     _approved(older, minimax, now=NOW + timedelta(minutes=5))
     _approved(older, deepseek, now=NOW + timedelta(minutes=5))
     assert not activate_trend_narrative_run(older.pk, now=NOW + timedelta(minutes=12))
-    assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == second.pk
+    assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == third.pk
 
 
 def test_u2_activation_requires_every_manifest_brand_to_be_terminal():
     minimax, deepseek = _brand("u2-pending-minimax"), _brand("u2-pending-deepseek")
     run = _run(
-        cycle="u2-incomplete", facts_as_of=NOW, brands=[minimax.nickname, deepseek.nickname]
+        cycle="u2-incomplete",
+        facts_as_of=NOW,
+        brands=[minimax.nickname, deepseek.nickname],
     )
     _approved(run, minimax)
     assert not activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=1))
@@ -1476,7 +1517,9 @@ def test_u2_schema_pins_nullable_brand_snapshot_and_protected_last_good_proof():
     approved = _approved(run, brand)
     assert activate_trend_narrative_run(run.pk, now=NOW)
     later = _run(
-        cycle="u2-retained-second", facts_as_of=NOW + timedelta(minutes=1), brands=[brand.nickname]
+        cycle="u2-retained-second",
+        facts_as_of=NOW + timedelta(minutes=1),
+        brands=[brand.nickname],
     )
     held = prepare_brand_trend_narrative(
         run=later,
@@ -1502,7 +1545,9 @@ def test_u2_retention_keeps_visible_and_last_good_proof_runs():
     original_row = _approved(original, brand)
     assert activate_trend_narrative_run(original.pk, now=NOW)
     current = _run(
-        cycle="u2-prune-current", facts_as_of=NOW + timedelta(minutes=1), brands=[brand.nickname]
+        cycle="u2-prune-current",
+        facts_as_of=NOW + timedelta(minutes=1),
+        brands=[brand.nickname],
     )
     prepare_brand_trend_narrative(
         run=current,
@@ -1526,9 +1571,12 @@ def test_u2_retention_keeps_visible_and_last_good_proof_runs():
         created_at=NOW - timedelta(days=100)
     )
 
-    assert prune_per_brand_trend_narrative_history(
-        now=NOW, keep_days=30, keep_per_window=1
-    ) == 1
+    assert (
+        prune_per_brand_trend_narrative_history(
+            now=NOW, keep_days=30, keep_per_window=1
+        )
+        == 1
+    )
     assert TrendNarrativeRun.objects.filter(pk=current.pk).exists()
     assert TrendNarrativeRun.objects.filter(pk=original.pk).exists()
     assert BrandTrendNarrative.objects.filter(pk=original_row.pk).exists()

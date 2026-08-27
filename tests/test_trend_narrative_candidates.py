@@ -33,6 +33,7 @@ from monitor.trend_narrative_candidates import (
     SNAPSHOT_STATEMENT_TIMEOUT_MS,
     EvidenceSelectionPolicy,
     TrendSnapshotSizeError,
+    TrendSnapshotTransactionError,
     build_editor_batches,
     build_trend_analysis_snapshot,
     canonical_snapshot_json,
@@ -49,6 +50,15 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 AS_OF = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
 
+def test_snapshot_brand_cap_fails_before_unbounded_detail_queries():
+    Brand.objects.bulk_create([Brand(nickname="cap-alpha"), Brand(nickname="cap-beta")])
+
+    with pytest.raises(
+        TrendSnapshotTransactionError, match="trend_snapshot_brand_cap_exceeded"
+    ):
+        build_trend_analysis_snapshot(1, as_of=AS_OF, brand_cap=1)
+
+
 def _candidate(
     brand_key: str,
     *,
@@ -59,12 +69,12 @@ def _candidate(
             "episode_id": f"{brand_key}:{start}-{end}",
             "start_bucket_index": start,
             "end_bucket_index": end,
-            "start_at": (
-                AS_OF - timedelta(days=1) + timedelta(minutes=15 * start)
-            ).isoformat().replace("+00:00", "Z"),
-            "end_at": (
-                AS_OF - timedelta(days=1) + timedelta(minutes=15 * (end + 1))
-            ).isoformat().replace("+00:00", "Z"),
+            "start_at": (AS_OF - timedelta(days=1) + timedelta(minutes=15 * start))
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "end_at": (AS_OF - timedelta(days=1) + timedelta(minutes=15 * (end + 1)))
+            .isoformat()
+            .replace("+00:00", "Z"),
             "post_count": 40 - start,
             "peak_post_count": 30 - start,
             "peak_author_count": 12,
@@ -186,9 +196,27 @@ def test_u1_editor_batches_use_every_nonempty_dossier_in_canonical_groups():
                 "evidence": [],
             }
             for key in [
-                "zeta", "alpha", "delta", "zero", "beta", "eta", "gamma",
-                "iota", "theta", "kappa", "lambda", "mu", "nu", "xi",
-                "omicron", "pi", "rho", "sigma", "tau", "upsilon", "phi",
+                "zeta",
+                "alpha",
+                "delta",
+                "zero",
+                "beta",
+                "eta",
+                "gamma",
+                "iota",
+                "theta",
+                "kappa",
+                "lambda",
+                "mu",
+                "nu",
+                "xi",
+                "omicron",
+                "pi",
+                "rho",
+                "sigma",
+                "tau",
+                "upsilon",
+                "phi",
                 "chi",
             ]
         ],
@@ -302,7 +330,8 @@ def test_u1_evidence_reservation_rolls_ordinary_capacity_to_first_party():
             "source_cluster_id": "ordinary-cluster-1",
             "first_party_role": "public_opaque",
             "source_flags": {"post_kind": "source_post"},
-        }]
+        },
+    ]
 
     selected, allocation = select_dossier_evidence(7, rows)
 
@@ -420,7 +449,9 @@ def test_u1_packet_compaction_preserves_each_evidence_target_or_fails_safe():
     batch = build_editor_batches(snapshot)[0]
 
     assert [len(dossier["evidence"]) for dossier in batch["dossiers"]] == [12] * 5
-    assert len(canonical_snapshot_json(batch).encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
+    assert (
+        len(canonical_snapshot_json(batch).encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
+    )
 
 
 def test_u1_corpus_phrase_summary_keeps_unseen_phrase_separate_from_taxonomy():
@@ -554,9 +585,7 @@ def test_u1_corpus_query_finds_overlapping_unseen_phrase_in_full_posts():
         )
         for index in range(3)
     ]
-    PostBrand.objects.bulk_create(
-        [PostBrand(post=post, brand=brand) for post in posts]
-    )
+    PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
 
     signals = trend_candidates._fetch_corpus_phrase_signals(
         [
@@ -671,9 +700,7 @@ def _seed_snapshot_posts() -> tuple[Brand, str, str]:
         for index in range(3)
     ]
     Post.objects.bulk_create(posts)
-    PostBrand.objects.bulk_create(
-        [PostBrand(post=post, brand=brand) for post in posts]
-    )
+    PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
     PostTypeKey.objects.create(key="reaction")
     SentimentKey.objects.create(key="positive")
     SentimentKey.objects.create(key="negative")
@@ -724,7 +751,10 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
 
     def capture_evidence_query(execute, sql, params, many, context):
         normalized = sql.casefold()
-        if "with requested_bounds as" in normalized and "official_accounts as" in normalized:
+        if (
+            "with requested_bounds as" in normalized
+            and "official_accounts as" in normalized
+        ):
             evidence_queries.append((sql, params))
         return execute(sql, params, many, context)
 
@@ -740,11 +770,11 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
 
     statements = [row["sql"].lstrip().upper() for row in queries.captured_queries]
     set_index = next(
-        index for index, sql in enumerate(statements) if sql.startswith("SET TRANSACTION")
+        index
+        for index, sql in enumerate(statements)
+        if sql.startswith("SET TRANSACTION")
     )
-    assert not any(
-        sql.startswith(("SELECT", "WITH")) for sql in statements[:set_index]
-    )
+    assert not any(sql.startswith(("SELECT", "WITH")) for sql in statements[:set_index])
     assert "REPEATABLE READ" in statements[set_index]
     assert "READ ONLY" in statements[set_index]
     timeout_statement = next(
@@ -770,8 +800,9 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     )
     for stream_name, next_name in stream_bounds:
         stream_sql = normalized_evidence_sql[
-            normalized_evidence_sql.index(stream_name) :
-            normalized_evidence_sql.index(next_name)
+            normalized_evidence_sql.index(stream_name) : normalized_evidence_sql.index(
+                next_name
+            )
         ]
         assert "FROM CANDIDATE_POOL POOL" in stream_sql
         assert "FROM POSTS_BRANDS PB" not in stream_sql
@@ -813,11 +844,8 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     two_brand_statements = [
         row["sql"].lstrip().upper()
         for row in two_brand_queries.captured_queries
-        if row["sql"].lstrip().upper().startswith(
-            ("SET TRANSACTION", "SELECT", "WITH")
-        )
-        and "SET_CONFIG('STATEMENT_TIMEOUT'"
-        not in row["sql"].lstrip().upper()
+        if row["sql"].lstrip().upper().startswith(("SET TRANSACTION", "SELECT", "WITH"))
+        and "SET_CONFIG('STATEMENT_TIMEOUT'" not in row["sql"].lstrip().upper()
     ]
     assert len(two_brand_statements) == len(analysis_statements)
     assert {row["brand_key"] for row in two_brand_snapshot["dossiers"]} == {
@@ -870,16 +898,12 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
             post=post,
             brand=brand,
             post_type_id="bounded_reaction",
-            sentiment_id=(
-                "bounded_positive" if index < 16 else "bounded_negative"
-            ),
+            sentiment_id=("bounded_positive" if index < 16 else "bounded_negative"),
         )
         PostBrandDiscourse.objects.create(
             post=post,
             brand=brand,
-            discourse_id=(
-                "bounded_technical" if index < 16 else "bounded_release"
-            ),
+            discourse_id=("bounded_technical" if index < 16 else "bounded_release"),
             act_id=1,
         )
 
@@ -910,22 +934,17 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
     )
     assert repeated == rows
     assert len(rows) <= 4 * len(rank_fields)
-    assert all(
-        min(int(row[field]) for field in rank_fields) <= 4 for row in rows
-    )
-    assert all(
-        1 <= int(row[field]) <= 5 for row in rows for field in rank_fields
-    )
+    assert all(min(int(row[field]) for field in rank_fields) <= 4 for row in rows)
+    assert all(1 <= int(row[field]) <= 5 for row in rows for field in rank_fields)
     for field in rank_fields:
-        assert sorted(
-            int(row[field]) for row in rows if int(row[field]) <= 4
-        ) == [1, 2, 3, 4]
-    assert {row["dominant_discourse"] for row in rows} == {
-        "bounded_technical"
-    }
-    assert {row["dominant_sentiment"] for row in rows} == {
-        "bounded_positive"
-    }
+        assert sorted(int(row[field]) for row in rows if int(row[field]) <= 4) == [
+            1,
+            2,
+            3,
+            4,
+        ]
+    assert {row["dominant_discourse"] for row in rows} == {"bounded_technical"}
+    assert {row["dominant_sentiment"] for row in rows} == {"bounded_positive"}
 
     episode_rows = trend_candidates._fetch_evidence_rows(
         [
@@ -939,12 +958,8 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
         rank_limit=4,
     )
 
-    assert {row["dominant_discourse"] for row in episode_rows} == {
-        "bounded_release"
-    }
-    assert {row["dominant_sentiment"] for row in episode_rows} == {
-        "bounded_negative"
-    }
+    assert {row["dominant_discourse"] for row in episode_rows} == {"bounded_release"}
+    assert {row["dominant_sentiment"] for row in episode_rows} == {"bounded_negative"}
 
 
 def test_near_duplicate_source_clusters_cannot_fill_two_evidence_roles():
@@ -998,10 +1013,13 @@ def test_near_duplicate_source_clusters_cannot_fill_two_evidence_roles():
 
     assert len({row["source_cluster_id"] for row in selected}) == len(selected)
     selected_excerpts = {row["excerpt"] for row in selected}
-    assert not {
-        "A shared model launch happened today",
-        "A shared model launch happened today!",
-    } <= selected_excerpts
+    assert (
+        not {
+            "A shared model launch happened today",
+            "A shared model launch happened today!",
+        }
+        <= selected_excerpts
+    )
 
 
 def _adaptive_evidence_row(
@@ -1114,21 +1132,16 @@ def test_adaptive_evidence_deepens_the_story_leader_and_preserves_strata():
         "technical_analysis",
         "release_buzz",
     }
-    observed_hours = {
-        datetime.fromisoformat(row["created_at"]).hour
-        for row in lead
-    }
+    observed_hours = {datetime.fromisoformat(row["created_at"]).hour for row in lead}
     assert min(observed_hours) <= 2
     assert max(observed_hours) >= 17
     assert len({row["source_cluster_id"] for row in lead}) == len(lead)
     assert len({row["author_group_id"] for row in lead}) == len(lead)
 
-    repeated, repeated_allocations = (
-        trend_candidates._select_evidence_with_allocation(
-            list(reversed(rows)),
-            candidates=candidates,
-            policy=policy,
-        )
+    repeated, repeated_allocations = trend_candidates._select_evidence_with_allocation(
+        list(reversed(rows)),
+        candidates=candidates,
+        policy=policy,
     )
     assert repeated == selected
     assert repeated_allocations == allocations
@@ -1201,10 +1214,7 @@ def test_high_volume_reservoir_and_final_allocation_remain_bounded():
         "signals": [{"family": "volume", "rank": 1, "stream_position": 1}],
         "family_facts": {"volume": {"selected_count": 4_000}},
     }
-    rows = [
-        _adaptive_evidence_row("large:full_window", index)
-        for index in range(300)
-    ]
+    rows = [_adaptive_evidence_row("large:full_window", index) for index in range(300)]
 
     selected, allocations = trend_candidates._select_evidence_with_allocation(
         rows,
@@ -1242,8 +1252,11 @@ def test_worst_case_snapshot_and_provider_projection_stay_bounded():
         ],
     }
     batch = build_editor_batches(snapshot)[0]
-    assert len(canonical_snapshot_json(batch).encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
+    assert (
+        len(canonical_snapshot_json(batch).encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
+    )
     assert [len(row["evidence"]) for row in batch["dossiers"]] == [12] * 5
+
 
 def test_size_guard_fails_with_a_safe_code():
     oversized = {"value": "x" * MAX_SNAPSHOT_BYTES}

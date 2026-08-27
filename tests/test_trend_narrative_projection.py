@@ -715,7 +715,7 @@ def test_ten_window_requests_are_database_only_and_apply_only_brand_selection(
         lambda: _config(),
     )
     monkeypatch.setattr(
-        "monitor.trend_narrative_generation.generate_trend_narrative",
+        "monitor.trend_narrative_generation.execute_per_brand_provider_request",
         lambda *_args, **_kwargs: pytest.fail("web request reached provider"),
     )
     monkeypatch.setattr(
@@ -1148,7 +1148,7 @@ def test_u5_chart_endpoint_threads_brand_filter_to_dto_v3(client, monkeypatch):
         "monitor.trend_narrative_projection._load_config", lambda: _config()
     )
     monkeypatch.setattr(
-        "monitor.trend_narrative_generation.generate_trend_narrative",
+        "monitor.trend_narrative_generation.execute_per_brand_provider_request",
         lambda *_args, **_kwargs: pytest.fail("view request reached provider"),
     )
 

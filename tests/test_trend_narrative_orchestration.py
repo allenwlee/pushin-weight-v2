@@ -15,9 +15,15 @@ from core.models import (
     TrendNarrativeVisibleRun,
     TrendNarrativeWorkSlot,
 )
-from monitor.trend_narrative_generation import PerBrandProviderResponse
+from monitor.trend_narrative_generation import (
+    HeadlineGenerationError,
+    PerBrandProviderResponse,
+)
+from monitor.trend_narrative_lifecycle import mark_trend_narrative_provider_call_sent
 from monitor.trend_narrative_tasks import (
+    _fallback_brand_order,
     _provider_budget_reason,
+    _reconcile_run,
     execute_per_brand_stage,
     finalize_per_brand_run,
     initialize_per_brand_snapshot,
@@ -184,8 +190,49 @@ def test_work_slots_keep_one_active_and_only_the_latest_queued_cutoff(monkeypatc
     assert len(scheduled) == 4
     for slot in TrendNarrativeWorkSlot.objects.all():
         assert slot.active_source_cycle_id == "cycle-a"
-        assert slot.queued_source_cycle_id == "cycle-c"
-        assert slot.queued_facts_as_of == NOW + timedelta(seconds=20)
+        assert slot.queued_source_cycle_id == ""
+
+    for minutes, source in ((30, "cycle-d"), (60, "cycle-e"), (360, "cycle-f")):
+        reconcile_per_brand_trend_narratives(
+            _envelope(source, NOW + timedelta(minutes=minutes)),
+            now=NOW + timedelta(minutes=minutes),
+            enqueue=enqueue,
+        )
+    slots = {slot.window_days: slot for slot in TrendNarrativeWorkSlot.objects.all()}
+    assert slots[1].queued_source_cycle_id == "cycle-f"
+    assert slots[7].queued_source_cycle_id == "cycle-f"
+    assert slots[30].queued_source_cycle_id == "cycle-f"
+    assert slots[365].queued_source_cycle_id == ""
+
+    reconcile_per_brand_trend_narratives(
+        _envelope("cycle-g", NOW + timedelta(minutes=1440)),
+        now=NOW + timedelta(minutes=1440),
+        enqueue=enqueue,
+    )
+    assert {
+        slot.queued_source_cycle_id for slot in TrendNarrativeWorkSlot.objects.all()
+    } == {"cycle-g"}
+
+
+def test_expired_and_provider_disabled_envelopes_create_no_runtime_state(monkeypatch):
+    monkeypatch.setattr("monitor.trend_narrative_tasks._load_config", _config)
+    expired = reconcile_per_brand_trend_narratives(
+        _envelope("expired", NOW),
+        now=NOW + timedelta(hours=1),
+        enqueue=lambda *_args, **_kwargs: pytest.fail("expired work was enqueued"),
+    )
+    assert expired["status"] == "expired"
+    assert not TrendNarrativeWorkSlot.objects.exists()
+
+    disabled = HeadlineNarrativeConfig(
+        activation_state="owner_override",
+        provider_calls_enabled=False,
+        enqueue_enabled=True,
+    )
+    monkeypatch.setattr("monitor.trend_narrative_tasks._load_config", lambda: disabled)
+    result = reconcile_per_brand_trend_narratives(_envelope("disabled", NOW), now=NOW)
+    assert result["status"] == "provider_disabled"
+    assert not TrendNarrativeWorkSlot.objects.exists()
 
 
 def test_lost_snapshot_handoff_is_reclaimed_only_after_lease_expiry(monkeypatch):
@@ -203,7 +250,10 @@ def test_lost_snapshot_handoff_is_reclaimed_only_after_lease_expiry(monkeypatch)
         envelope, now=NOW + timedelta(seconds=30), enqueue=broken
     )
     reconcile_per_brand_trend_narratives(
-        envelope,
+        _envelope(
+            "cycle-b",
+            NOW + timedelta(seconds=config.lease_seconds + 1),
+        ),
         now=NOW + timedelta(seconds=config.lease_seconds + 1),
         enqueue=broken,
     )
@@ -297,6 +347,142 @@ def test_twenty_brands_use_one_rank_four_editor_four_critic_calls(monkeypatch):
     )
     assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == run.pk
     assert not TrendNarrativeWorkSlot.objects.get(window_days=1).active_source_cycle_id
+
+
+def test_expired_rank_send_becomes_ambiguous_and_falls_back_without_resend():
+    config = _config(per_brand_expected_max_brands=1)
+    run = TrendNarrativeRun.objects.create(
+        source_cycle_id="expired-rank",
+        window_days=1,
+        facts_as_of=NOW,
+        packet_schema_version=3,
+        snapshot=_snapshot(1),
+        brand_manifest=["brand-00"],
+    )
+    queued = []
+    _reconcile_run(
+        run,
+        config=config,
+        now=NOW,
+        enqueue=lambda kind, **kwargs: queued.append((kind, kwargs)),
+    )
+    rank = TrendNarrativeProviderCall.objects.get(run=run, stage="rank")
+    assert mark_trend_narrative_provider_call_sent(
+        rank.pk,
+        owner=rank.claim_owner,
+        fence=rank.claim_fence,
+        now=NOW + timedelta(seconds=1),
+    )
+    queued.clear()
+
+    _reconcile_run(
+        run,
+        config=config,
+        now=NOW + timedelta(seconds=config.lease_seconds + 1),
+        enqueue=lambda kind, **kwargs: queued.append((kind, kwargs)),
+    )
+
+    rank.refresh_from_db()
+    assert rank.state == TrendNarrativeProviderCall.State.AMBIGUOUS
+    assert rank.error_code == "lease_expired_after_send"
+    assert TrendNarrativeProviderCall.objects.filter(run=run, stage="rank").count() == 1
+    assert [kind for kind, _kwargs in queued] == ["stage"]
+    assert (
+        TrendNarrativeProviderCall.objects.get(pk=queued[0][1]["call_id"]).stage
+        == TrendNarrativeProviderCall.Stage.EDITOR
+    )
+
+
+@pytest.mark.parametrize(
+    ("transport_completed", "expected_state"),
+    [
+        (False, TrendNarrativeProviderCall.State.AMBIGUOUS),
+        (True, TrendNarrativeProviderCall.State.FAILED),
+    ],
+)
+def test_provider_failures_record_post_send_uncertainty_or_known_failure(
+    monkeypatch, transport_completed, expected_state
+):
+    config = _config(per_brand_expected_max_brands=1)
+    run = TrendNarrativeRun.objects.create(
+        source_cycle_id=f"provider-failure-{transport_completed}",
+        window_days=1,
+        facts_as_of=NOW,
+        packet_schema_version=3,
+        snapshot=_snapshot(1),
+        brand_manifest=["brand-00"],
+    )
+    _reconcile_run(run, config=config, now=NOW, enqueue=lambda *_args, **_kwargs: None)
+    rank = TrendNarrativeProviderCall.objects.get(run=run, stage="rank")
+    monkeypatch.setattr("monitor.trend_narrative_tasks._load_config", lambda: config)
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.execute_per_brand_provider_request",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            HeadlineGenerationError(
+                "provider_fixture_failure",
+                transport_completed=transport_completed,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._enqueue_per_brand_stage",
+        lambda *_args, **_kwargs: None,
+    )
+
+    result = execute_per_brand_stage(
+        rank.pk,
+        owner=rank.claim_owner,
+        fence=rank.claim_fence,
+        now=NOW,
+    )
+
+    rank.refresh_from_db()
+    assert result["status"] == "terminal_failure"
+    assert rank.state == expected_state
+    assert rank.error_code == "provider_fixture_failure"
+
+
+def test_rank_fallback_preserves_prior_overlap_then_uses_fact_movement():
+    prior = TrendNarrativeRun.objects.create(
+        source_cycle_id="prior-order",
+        window_days=1,
+        facts_as_of=NOW - timedelta(minutes=30),
+        packet_schema_version=3,
+        snapshot=_snapshot(1),
+        brand_manifest=["brand-02"],
+        internal_order=["brand-02"],
+        status=TrendNarrativeRun.Status.ACTIVE,
+        activated_at=NOW - timedelta(minutes=29),
+    )
+    TrendNarrativeVisibleRun.objects.create(
+        window_days=1,
+        run=prior,
+        facts_as_of=prior.facts_as_of,
+        activated_at=prior.activated_at,
+    )
+    snapshot = _snapshot(3)
+    snapshot["dossiers"][0]["shape_summary"] = {
+        "start_segment_post_count": 10,
+        "end_segment_post_count": 11,
+    }
+    snapshot["dossiers"][1]["shape_summary"] = {
+        "start_segment_post_count": 1,
+        "end_segment_post_count": 20,
+    }
+    snapshot["dossiers"][2]["shape_summary"] = {
+        "start_segment_post_count": 5,
+        "end_segment_post_count": 5,
+    }
+    current = TrendNarrativeRun.objects.create(
+        source_cycle_id="fallback-order",
+        window_days=1,
+        facts_as_of=NOW,
+        packet_schema_version=3,
+        snapshot=snapshot,
+        brand_manifest=["brand-00", "brand-01", "brand-02"],
+    )
+
+    assert _fallback_brand_order(current) == ["brand-02", "brand-01", "brand-00"]
 
 
 def test_budget_counts_reserved_work_and_stops_before_the_next_transport():

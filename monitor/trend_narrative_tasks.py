@@ -6,27 +6,24 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
-from billiard.exceptions import SoftTimeLimitExceeded
 from django.db import transaction
 from django.utils import timezone
 
 from core.models import (
     BrandTrendNarrative,
-    TrendNarrative,
     TrendNarrativeProviderCall,
     TrendNarrativeRun,
     TrendNarrativeVisibleRun,
     TrendNarrativeWorkSlot,
 )
 from monitor.trend_narrative_candidates import (
+    MAX_EDITOR_BRANDS_PER_BATCH,
     EvidenceSelectionPolicy,
-    _fit_editor_batch_to_packet_budget,
-    _provider_dossier,
+    build_editor_batches,
     build_trend_analysis_snapshot,
     project_provider_packet,
 )
@@ -35,38 +32,24 @@ from monitor.trend_narrative_facts import (
     TrendFactThresholds,
 )
 from monitor.trend_narrative_generation import (
-    HEADLINE_OUTPUT_SCHEMA_VERSION,
     HeadlineGenerationError,
     build_per_brand_critic_request,
     build_per_brand_editor_request,
     build_per_brand_rank_request,
     execute_per_brand_provider_request,
-    generate_trend_narrative,
-    generation_fingerprint,
     validate_per_brand_critic_response,
     validate_per_brand_editor_response,
     validate_per_brand_rank_response,
 )
 from monitor.trend_narrative_lifecycle import (
-    abandon_expired_attempts,
     activate_trend_narrative_run,
-    advance_current_check,
-    attempt_failure_history,
     claim_trend_narrative_provider_call,
     complete_trend_narrative_provider_call,
-    fail_generation,
+    expire_sent_trend_narrative_provider_call,
     fail_trend_narrative_provider_call,
-    has_active_generation_backoff,
-    mark_transport_completed,
-    mark_transport_started,
     mark_trend_narrative_provider_call_ambiguous,
     mark_trend_narrative_provider_call_sent,
-    next_failure_backoff,
     prepare_brand_trend_narrative,
-    prune_narrative_history,
-    publish_generation,
-    record_no_call_check,
-    reserve_generation,
     reserve_trend_narrative_provider_call,
 )
 from x_monitor.config import HeadlineNarrativeConfig, load_config
@@ -80,352 +63,6 @@ class _PerBrandBudgetExceeded(RuntimeError):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
-
-
-def process_trend_narrative_envelope(
-    envelope: dict[str, Any],
-    *,
-    now=None,
-    clock=None,
-) -> dict[str, Any]:
-    """Visit fixed windows sequentially with at most four physical attempts."""
-    clock = clock or timezone.now
-    processed_at = now or clock()
-    source_cycle_id, facts_as_of = _validate_envelope(envelope)
-    config = _load_config()
-    stats: dict[str, Any] = {
-        "status": "completed",
-        "source_cycle_id": source_cycle_id,
-        "control_revision": config.control_revision,
-        "slots_consumed": 0,
-        "transport_started": 0,
-        "published": 0,
-        "failed": 0,
-        "suppressed": 0,
-        "checks_advanced": 0,
-        "not_due": 0,
-        "outdated": 0,
-        "errors": [],
-    }
-    if processed_at > facts_as_of + timedelta(seconds=config.task_expiry_seconds):
-        stats["status"] = "expired"
-        return stats
-
-    abandon_expired_attempts(
-        now=processed_at,
-        cadence_minutes=config.cadence_minutes,
-        stale_minutes=config.stale_minutes,
-    )
-    thresholds = _thresholds(config)
-    evidence_policy = _evidence_policy(config)
-    for window_days in sorted(ALLOWED_TREND_WINDOWS):
-        if stats["slots_consumed"] >= config.call_cap:
-            break
-        rows = TrendNarrative.objects.filter(window_days=window_days)
-        if rows.filter(facts_as_of__gte=facts_as_of).exists():
-            stats["outdated"] += 1
-            continue
-        cadence_rows = rows.exclude(
-            status__in=[
-                TrendNarrative.Status.FAILED,
-                TrendNarrative.Status.ABANDONED,
-            ]
-        ).exclude(
-            status=TrendNarrative.Status.SUPPRESSED,
-            error_code="provider_backoff",
-        )
-        if config.provider_calls_active:
-            cadence_rows = cadence_rows.exclude(
-                status=TrendNarrative.Status.SUPPRESSED,
-                error_code="provider_calls_disabled",
-            )
-        latest = cadence_rows.order_by(
-            "-latest_checked_at", "-created_at", "-pk"
-        ).first()
-        last_activity = None
-        if latest is not None:
-            last_activity = latest.latest_checked_at or latest.created_at
-        cadence = timedelta(minutes=config.cadence_minutes[window_days])
-        if last_activity is not None and processed_at < last_activity + cadence:
-            stats["not_due"] += 1
-            continue
-
-        try:
-            snapshot = build_trend_analysis_snapshot(
-                window_days,
-                as_of=facts_as_of,
-                thresholds=thresholds,
-                evidence_policy=evidence_policy,
-            )
-        except SoftTimeLimitExceeded:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "trend snapshot failed for %sd source=%s error_type=%s",
-                window_days,
-                source_cycle_id,
-                type(exc).__name__,
-            )
-            stats["failed"] += 1
-            stats["errors"].append(f"{window_days}d:snapshot_failed")
-            failure_facts = {
-                "snapshot_schema_version": 1,
-                "window_days": window_days,
-                "as_of": facts_as_of.isoformat(),
-                "failure_stage": "snapshot",
-                "candidates": [],
-            }
-            failure_fingerprint = hashlib.sha256(
-                (f"snapshot-failure-v1:{window_days}:{type(exc).__name__}").encode()
-            ).hexdigest()
-            _record_no_call(
-                source_cycle_id=source_cycle_id,
-                window_days=window_days,
-                facts_as_of=facts_as_of,
-                fingerprint=failure_fingerprint,
-                facts=failure_facts,
-                processed_at=processed_at,
-                status=TrendNarrative.Status.SUPPRESSED,
-                reason="snapshot_failed",
-            )
-            continue
-        active_config = _load_config()
-        stats["control_revision"] = active_config.control_revision
-        fingerprint = generation_fingerprint(snapshot, active_config)
-        current = rows.filter(is_current=True).first()
-        if current is not None and current.semantic_fingerprint == fingerprint:
-            if advance_current_check(
-                window_days=window_days,
-                semantic_fingerprint=fingerprint,
-                source_cycle_id=source_cycle_id,
-                checked_as_of=facts_as_of,
-                checked_at=processed_at,
-                facts=snapshot,
-            ):
-                stats["checks_advanced"] += 1
-            continue
-
-        if not snapshot["candidates"]:
-            _record_no_call(
-                source_cycle_id=source_cycle_id,
-                window_days=window_days,
-                facts_as_of=facts_as_of,
-                fingerprint=fingerprint,
-                facts=snapshot,
-                processed_at=processed_at,
-                status=TrendNarrative.Status.CHECKED,
-                reason="insufficient_data",
-            )
-            stats["suppressed"] += 1
-            continue
-        if not active_config.provider_calls_active:
-            _record_no_call(
-                source_cycle_id=source_cycle_id,
-                window_days=window_days,
-                facts_as_of=facts_as_of,
-                fingerprint=fingerprint,
-                facts=snapshot,
-                processed_at=processed_at,
-                status=TrendNarrative.Status.SUPPRESSED,
-                reason="provider_calls_disabled",
-            )
-            stats["suppressed"] += 1
-            continue
-
-        provider_host = urlsplit(active_config.base_url).hostname or ""
-        if has_active_generation_backoff(
-            window_days=window_days,
-            semantic_fingerprint=fingerprint,
-            publication_epoch=active_config.publication_epoch,
-            prompt_version=active_config.prompt_version,
-            provider=active_config.provider,
-            provider_host=provider_host,
-            llm_model_name=active_config.model,
-            now=processed_at,
-        ):
-            _record_no_call(
-                source_cycle_id=source_cycle_id,
-                window_days=window_days,
-                facts_as_of=facts_as_of,
-                fingerprint=fingerprint,
-                facts=snapshot,
-                processed_at=processed_at,
-                status=TrendNarrative.Status.SUPPRESSED,
-                reason="provider_backoff",
-            )
-            stats["suppressed"] += 1
-            continue
-
-        owner = f"headline:{source_cycle_id}:{window_days}"[:128]
-        attempt_started_at = now or clock()
-        attempt = reserve_generation(
-            source_cycle_id=source_cycle_id,
-            window_days=window_days,
-            facts_as_of=facts_as_of,
-            semantic_fingerprint=fingerprint,
-            generation_facts=snapshot,
-            publication_epoch=active_config.publication_epoch,
-            prompt_version=active_config.prompt_version,
-            provider=active_config.provider,
-            provider_host=provider_host,
-            llm_model_name=active_config.model,
-            owner=owner,
-            now=attempt_started_at,
-            lease_seconds=active_config.lease_seconds,
-            output_schema_version=HEADLINE_OUTPUT_SCHEMA_VERSION,
-        )
-        if attempt is None:
-            continue
-        stats["slots_consumed"] += 1
-        if not mark_transport_started(
-            attempt.pk,
-            owner=owner,
-            fence=attempt.claim_fence,
-            now=attempt_started_at,
-        ):
-            stats["failed"] += 1
-            stats["errors"].append(f"{window_days}d:claim_lost")
-            continue
-        stats["transport_started"] += 1
-        transport_completed = False
-        try:
-            generated = generate_trend_narrative(snapshot, active_config)
-            transport_completed = mark_transport_completed(
-                attempt.pk,
-                owner=owner,
-                fence=attempt.claim_fence,
-                now=(now or clock()),
-            )
-            if generated.semantic_fingerprint != fingerprint:
-                raise ValueError("generation fingerprint mismatch")
-            published = publish_generation(
-                attempt.pk,
-                owner=owner,
-                fence=attempt.claim_fence,
-                body_en=generated.body_en,
-                body_zh_cn=generated.body_zh_cn,
-                output_hash=generated.output_hash,
-                input_tokens=generated.input_tokens,
-                output_tokens=generated.output_tokens,
-                latency_ms=generated.latency_ms,
-                now=now or clock(),
-                observations_en=generated.observations_en,
-                observations_zh_cn=generated.observations_zh_cn,
-                selected_candidate_ids=generated.selected_candidate_ids,
-                claims=generated.claims,
-                subjects=generated.subjects,
-            )
-            if published:
-                stats["published"] += 1
-            else:
-                stats["failed"] += 1
-                stats["errors"].append(f"{window_days}d:claim_lost")
-        except HeadlineGenerationError as exc:
-            logger.warning(
-                "trend narrative generation rejected for %sd source=%s category=%s",
-                window_days,
-                source_cycle_id,
-                exc,
-            )
-            if exc.transport_completed:
-                transport_completed = mark_transport_completed(
-                    attempt.pk,
-                    owner=owner,
-                    fence=attempt.claim_fence,
-                    now=(now or clock()),
-                )
-            _record_failure(
-                attempt=attempt,
-                owner=owner,
-                config=active_config,
-                processed_at=(now or clock()),
-                error_code=exc.code,
-                transport_completed=transport_completed,
-            )
-            stats["failed"] += 1
-            stats["errors"].append(f"{window_days}d:generation_failed")
-        except SoftTimeLimitExceeded:
-            raise
-        # Fail closed for unexpected provider/SDK/runtime errors while keeping
-        # the consumed slot terminal and logging only the safe exception type.
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "trend narrative generation failed for %sd source=%s error_type=%s",
-                window_days,
-                source_cycle_id,
-                type(exc).__name__,
-            )
-            _record_failure(
-                attempt=attempt,
-                owner=owner,
-                config=active_config,
-                processed_at=(now or clock()),
-                error_code="headline_runtime_failure",
-                transport_completed=transport_completed,
-            )
-            stats["failed"] += 1
-            stats["errors"].append(f"{window_days}d:generation_failed")
-
-    prune_narrative_history(
-        now=processed_at,
-        keep_days=config.retention_days,
-        keep_per_window=config.retention_rows_per_window,
-    )
-    return stats
-
-
-def _record_no_call(
-    *,
-    source_cycle_id: str,
-    window_days: int,
-    facts_as_of,
-    fingerprint: str,
-    facts: dict[str, Any],
-    processed_at,
-    status: str,
-    reason: str,
-) -> None:
-    record_no_call_check(
-        source_cycle_id=source_cycle_id,
-        window_days=window_days,
-        facts_as_of=facts_as_of,
-        semantic_fingerprint=fingerprint,
-        facts=facts,
-        checked_at=processed_at,
-        status=status,
-        reason_code=reason,
-    )
-
-
-def _record_failure(
-    *,
-    attempt,
-    owner,
-    config,
-    processed_at,
-    error_code: str,
-    transport_completed: bool,
-) -> None:
-    failures = attempt_failure_history(
-        attempt,
-        transport_completed=transport_completed,
-    )
-    consecutive_failures, next_attempt_at = next_failure_backoff(
-        failures,
-        window_days=attempt.window_days,
-        now=processed_at,
-        cadence_minutes=config.cadence_minutes,
-        stale_minutes=config.stale_minutes,
-    )
-    fail_generation(
-        attempt.pk,
-        owner=owner,
-        fence=attempt.claim_fence,
-        error_code=error_code,
-        now=processed_at,
-        consecutive_failures=consecutive_failures,
-        next_attempt_at=next_attempt_at,
-    )
 
 
 def _load_config() -> HeadlineNarrativeConfig:
@@ -554,6 +191,7 @@ def initialize_per_brand_snapshot(
         as_of=facts_as_of,
         thresholds=_thresholds(config),
         evidence_policy=_evidence_policy(config),
+        brand_cap=config.per_brand_expected_max_brands,
     )
     dossiers = list(snapshot.get("dossiers") or [])
     manifest = [str(row["brand_key"]) for row in dossiers]
@@ -608,7 +246,14 @@ def initialize_per_brand_snapshot(
             else BrandTrendNarrative.Status.DATA_QUALITY_UNAVAILABLE
         )
         _prepare_outcome(run, dossier, status=status, now=current, error_code=outcome)
-    expected_calls = 1 + 2 * ((len([d for d in dossiers if d.get("outcome") == "narrative_eligible"]) + 4) // 5)
+    expected_calls = 1 + 2 * (
+        (
+            len([d for d in dossiers if d.get("outcome") == "narrative_eligible"])
+            + MAX_EDITOR_BRANDS_PER_BATCH
+            - 1
+        )
+        // MAX_EDITOR_BRANDS_PER_BATCH
+    )
     if expected_calls > config.per_brand_call_cap:
         _suspend_run(
             run,
@@ -638,28 +283,58 @@ def _coalesce_window_envelope(
     active_run: TrendNarrativeRun | None = None
     with transaction.atomic():
         TrendNarrativeWorkSlot.objects.get_or_create(window_days=window_days)
-        slot = TrendNarrativeWorkSlot.objects.select_for_update(
-            of=("self",)
-        ).select_related("active_run").get(window_days=window_days)
+        slot = (
+            TrendNarrativeWorkSlot.objects.select_for_update(of=("self",))
+            .select_related("active_run")
+            .get(window_days=window_days)
+        )
         if slot.active_run is not None and slot.active_run.status in {
             TrendNarrativeRun.Status.ACTIVE,
             TrendNarrativeRun.Status.SUPERSEDED,
             TrendNarrativeRun.Status.SUSPENDED,
         }:
             _promote_or_clear_slot(slot)
-        if not slot.active_source_cycle_id:
-            slot.active_source_cycle_id = source_cycle_id
-            slot.active_facts_as_of = facts_as_of
-        elif (
-            source_cycle_id != slot.active_source_cycle_id
-            and facts_as_of > slot.active_facts_as_of
-            and (
-                slot.queued_facts_as_of is None
-                or facts_as_of > slot.queued_facts_as_of
+        same_active_source = (
+            slot.active_source_cycle_id == source_cycle_id
+            and slot.active_facts_as_of == facts_as_of
+        )
+        same_queued_source = (
+            slot.queued_source_cycle_id == source_cycle_id
+            and slot.queued_facts_as_of == facts_as_of
+        )
+        cadence_suppressed = False
+        if not same_active_source and not same_queued_source:
+            cutoffs = [
+                cutoff
+                for cutoff in (slot.active_facts_as_of, slot.queued_facts_as_of)
+                if cutoff is not None
+            ]
+            latest_run_cutoff = (
+                TrendNarrativeRun.objects.filter(window_days=window_days)
+                .order_by("-facts_as_of")
+                .values_list("facts_as_of", flat=True)
+                .first()
             )
-        ):
-            slot.queued_source_cycle_id = source_cycle_id
-            slot.queued_facts_as_of = facts_as_of
+            if latest_run_cutoff is not None:
+                cutoffs.append(latest_run_cutoff)
+            if cutoffs and facts_as_of < max(cutoffs) + timedelta(
+                minutes=config.cadence_minutes[window_days]
+            ):
+                cadence_suppressed = True
+        if not cadence_suppressed:
+            if not slot.active_source_cycle_id:
+                slot.active_source_cycle_id = source_cycle_id
+                slot.active_facts_as_of = facts_as_of
+            elif (
+                source_cycle_id != slot.active_source_cycle_id
+                and facts_as_of > slot.active_facts_as_of
+                and (
+                    slot.queued_facts_as_of is None
+                    or facts_as_of > slot.queued_facts_as_of
+                )
+            ):
+                slot.queued_source_cycle_id = source_cycle_id
+                slot.queued_facts_as_of = facts_as_of
         if slot.active_run_id is None:
             snapshot_job = _claim_snapshot_slot(slot, config=config, now=now)
         else:
@@ -670,7 +345,7 @@ def _coalesce_window_envelope(
         try:
             enqueue("snapshot", **snapshot_job)
             scheduled += 1
-        except Exception:  # noqa: BLE001 - the persisted lease enables recovery
+        except Exception:
             logger.exception(
                 "trend narrative snapshot broker handoff failed window=%s",
                 window_days,
@@ -679,9 +354,7 @@ def _coalesce_window_envelope(
         TrendNarrativeRun.Status.PREPARING,
         TrendNarrativeRun.Status.TERMINAL,
     }:
-        scheduled += _reconcile_run(
-            active_run, config=config, now=now, enqueue=enqueue
-        )
+        scheduled += _reconcile_run(active_run, config=config, now=now, enqueue=enqueue)
     return scheduled
 
 
@@ -704,9 +377,7 @@ def _claim_snapshot_slot(
         f"snapshot:{slot.window_days}:{slot.snapshot_claim_fence}"
     )[:128]
     slot.snapshot_claimed_at = now
-    slot.snapshot_claim_expires_at = now + timedelta(
-        seconds=config.lease_seconds
-    )
+    slot.snapshot_claim_expires_at = now + timedelta(seconds=config.lease_seconds)
     return {
         "source_cycle_id": slot.active_source_cycle_id,
         "window_days": slot.window_days,
@@ -817,7 +488,7 @@ def _complete_work_slot(
         return 0
     try:
         enqueue("snapshot", **snapshot_job)
-    except Exception:  # noqa: BLE001 - the persisted lease enables recovery
+    except Exception:
         logger.exception(
             "trend narrative promoted snapshot handoff failed window=%s",
             run.window_days,
@@ -842,9 +513,7 @@ def _suspend_run(
         locked.status = TrendNarrativeRun.Status.SUSPENDED
         locked.suspension_reason = reason[:64]
         locked.save(update_fields=["status", "suspension_reason", "updated_at"])
-    _complete_work_slot(
-        locked, config=config, now=now, enqueue=enqueue
-    )
+    _complete_work_slot(locked, config=config, now=now, enqueue=enqueue)
 
 
 def execute_per_brand_stage(
@@ -945,9 +614,7 @@ def finalize_per_brand_run(run_id: int, *, now: datetime | None = None) -> bool:
                 }:
                     locked.status = TrendNarrativeRun.Status.SUPERSEDED
                     locked.activated_at = current
-                    locked.save(
-                        update_fields=["status", "activated_at", "updated_at"]
-                    )
+                    locked.save(update_fields=["status", "activated_at", "updated_at"])
             completed = True
     if completed:
         _complete_work_slot(
@@ -999,6 +666,7 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
     if rank.state == TrendNarrativeProviderCall.State.RESERVED:
         _claim_and_enqueue(rank, config=config, now=now, enqueue=enqueue)
         return 1
+    rank = _terminalize_expired_sent(rank, now=now)
     if rank.state == TrendNarrativeProviderCall.State.SENT:
         return 0
     batches = _resolved_batches(run, rank)
@@ -1018,6 +686,7 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
                 enqueue=enqueue,
             )
             return scheduled
+        editor = _terminalize_expired_sent(editor, now=now)
         if editor.state == TrendNarrativeProviderCall.State.RESERVED:
             _claim_and_enqueue(editor, config=config, now=now, enqueue=enqueue)
             scheduled += 1
@@ -1072,6 +741,7 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
                 enqueue=enqueue,
             )
             return scheduled
+        critic = _terminalize_expired_sent(critic, now=now)
         if critic.state == TrendNarrativeProviderCall.State.RESERVED:
             _claim_and_enqueue(critic, config=config, now=now, enqueue=enqueue)
             scheduled += 1
@@ -1100,19 +770,20 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
     return scheduled
 
 
+def _terminalize_expired_sent(call, *, now):
+    """Turn only an expired sent lease into the documented ambiguous terminal."""
+    if call.state == TrendNarrativeProviderCall.State.SENT:
+        expire_sent_trend_narrative_provider_call(call.pk, now=now)
+        call.refresh_from_db()
+    return call
+
+
 def _resolved_batches(
     run: TrendNarrativeRun, rank: TrendNarrativeProviderCall
 ) -> list[dict[str, Any]]:
-    """Use model ordering when valid, otherwise canonical deterministic fallback."""
+    """Use model order, then prior visible order and deterministic fact signals."""
     if not run.batch_manifest:
-        order = sorted(
-            [
-                str(d["brand_key"])
-                for d in run.snapshot.get("dossiers", [])
-                if d.get("outcome") == "narrative_eligible"
-            ],
-            key=lambda key: (key.casefold(), key),
-        )
+        order = _fallback_brand_order(run)
         if rank.state == TrendNarrativeProviderCall.State.COMPLETED:
             try:
                 parsed = json.loads(
@@ -1134,31 +805,65 @@ def _resolved_batches(
     return _batches_for_order(run.snapshot, list(run.internal_order))
 
 
+def _fallback_brand_order(run: TrendNarrativeRun) -> list[str]:
+    """Preserve last-good overlap, then rank remaining brands from packet facts."""
+    dossiers = {
+        str(dossier["brand_key"]): dossier
+        for dossier in run.snapshot.get("dossiers", [])
+        if dossier.get("outcome") == "narrative_eligible"
+    }
+    prior = (
+        TrendNarrativeVisibleRun.objects.filter(window_days=run.window_days)
+        .select_related("run")
+        .first()
+    )
+    order = []
+    if prior is not None:
+        order.extend(key for key in prior.run.internal_order if key in dossiers)
+    missing = [key for key in dossiers if key not in order]
+    missing.sort(key=lambda key: _fallback_dossier_sort_key(dossiers[key]))
+    return [*order, *missing]
+
+
+def _fallback_dossier_sort_key(dossier: dict[str, Any]) -> tuple[Any, ...]:
+    """Order by within-window movement, mix/content signal, then stable key."""
+    shape = dossier.get("shape_summary") or {}
+    dominant = shape.get("dominant_transition") or {}
+    movement = max(
+        abs(_decimal_or_zero(shape.get("total_change_pct"))),
+        abs(_decimal_or_zero(dominant.get("post_count_change"))),
+        abs(
+            Decimal(int(shape.get("end_segment_post_count") or 0))
+            - Decimal(int(shape.get("start_segment_post_count") or 0))
+        ),
+    )
+    mix_change = max(
+        (
+            abs(_decimal_or_zero(fact.get("source_value")))
+            for fact in dossier.get("facts", [])
+            if str(fact.get("family") or "") != "volume"
+        ),
+        default=Decimal(0),
+    )
+    content_signal = Decimal(
+        len(dossier.get("corpus_signals") or []) + len(dossier.get("evidence") or [])
+    )
+    key = str(dossier["brand_key"])
+    return (-movement, -mix_change, -content_signal, key.casefold(), key)
+
+
+def _decimal_or_zero(value: object) -> Decimal:
+    try:
+        return Decimal(str(value)) if value is not None else Decimal(0)
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(0)
+
+
 def _batches_for_order(
     snapshot: dict[str, Any], order: list[str]
 ) -> list[dict[str, Any]]:
     """Freeze the resolved rank/fallback order into exact one-to-five packets."""
-    dossiers = {str(row["brand_key"]): row for row in snapshot.get("dossiers", [])}
-    eligible = [
-        key
-        for key in order
-        if dossiers.get(key, {}).get("outcome") == "narrative_eligible"
-    ]
-    batches = []
-    for index in range(0, len(eligible), 5):
-        keys = eligible[index : index + 5]
-        batch = {
-            "packet_schema_version": int(snapshot["packet_schema_version"]),
-            "window_days": snapshot["window_days"],
-            "as_of": snapshot["as_of"],
-            "baseline_context": dict(snapshot["baseline_context"]),
-            "batch_key": f"{snapshot['window_days']}d:{index // 5 + 1:03d}",
-            "manifest_brand_keys": keys,
-            "dossiers": [_provider_dossier(dossiers[key]) for key in keys],
-        }
-        _fit_editor_batch_to_packet_budget(batch)
-        batches.append(batch)
-    return batches
+    return build_editor_batches(snapshot, brand_order=order)
 
 
 def _ensure_call(
@@ -1208,15 +913,21 @@ def _provider_budget_reason(
     config: HeadlineNarrativeConfig,
 ) -> str:
     """Return a closed pre-send budget reason, including reserved work."""
-    calls = list(run.provider_calls.all())
+    calls = list(
+        run.provider_calls.only(
+            "state",
+            "input_tokens",
+            "output_tokens",
+            "request_packet",
+        )
+    )
     if len(calls) + 1 > config.per_brand_call_cap:
         return "call_cap"
     input_tokens = 0
     output_tokens = 0
     for call in calls:
-        if (
-            call.state == TrendNarrativeProviderCall.State.COMPLETED
-            and (call.input_tokens or call.output_tokens)
+        if call.state == TrendNarrativeProviderCall.State.COMPLETED and (
+            call.input_tokens or call.output_tokens
         ):
             input_tokens += call.input_tokens
             output_tokens += call.output_tokens
@@ -1233,10 +944,8 @@ def _provider_budget_reason(
     if output_tokens > config.per_brand_output_token_cap:
         return "output_token_cap"
     cost = (
-        Decimal(input_tokens)
-        * config.per_brand_input_usd_per_million
-        + Decimal(output_tokens)
-        * config.per_brand_output_usd_per_million
+        Decimal(input_tokens) * config.per_brand_input_usd_per_million
+        + Decimal(output_tokens) * config.per_brand_output_usd_per_million
     ) / Decimal(1_000_000)
     if cost > config.per_brand_cost_cap_usd:
         return "dollar_cap"
@@ -1363,7 +1072,7 @@ def _claim_and_enqueue(call, *, config, now, enqueue) -> bool:
         return False
     try:
         enqueue("stage", call_id=call.pk, owner=owner, fence=claim.claim_fence)
-    except Exception:  # noqa: BLE001 - lease expiry is the durable recovery path
+    except Exception:
         logger.exception("trend narrative stage broker handoff failed call=%s", call.pk)
         return False
     return True

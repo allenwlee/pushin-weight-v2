@@ -69,6 +69,19 @@ def project_trend_narrative(
                 "run__brand_narratives",
                 queryset=BrandTrendNarrative.objects.select_related(
                     "brand", "last_good__brand"
+                ).defer(
+                    "propositions",
+                    "events",
+                    "cited_fact_ids",
+                    "cited_evidence_ids",
+                    "selected_evidence_packet",
+                    "final_critic_payload",
+                    "last_good__propositions",
+                    "last_good__events",
+                    "last_good__cited_fact_ids",
+                    "last_good__cited_evidence_ids",
+                    "last_good__selected_evidence_packet",
+                    "last_good__final_critic_payload",
                 ),
             )
         )
@@ -223,14 +236,10 @@ def _project_visible_run(
 ) -> dict[str, Any]:
     """Project rows from exactly the run captured by the visible pointer."""
     run = visible.run
-    outcomes = {
-        row.brand_key_snapshot: row for row in run.brand_narratives.all()
-    }
+    outcomes = {row.brand_key_snapshot: row for row in run.brand_narratives.all()}
     manifest = _unique_strings(run.brand_manifest)
     manifest_set = set(manifest)
-    ranked = [
-        key for key in _unique_strings(run.internal_order) if key in manifest_set
-    ]
+    ranked = [key for key in _unique_strings(run.internal_order) if key in manifest_set]
     ranked_set = set(ranked)
     ranked.extend(key for key in manifest if key not in ranked_set)
     explicit = selected_brand_keys is not None
@@ -258,8 +267,7 @@ def _project_visible_run(
     chosen = candidates[:2]
     missing = [key for key in chosen if key not in outcomes]
     current_brands = {
-        brand.nickname: brand
-        for brand in Brand.objects.filter(nickname__in=missing)
+        brand.nickname: brand for brand in Brand.objects.filter(nickname__in=missing)
     }
     items = [
         _per_brand_item(
@@ -369,8 +377,8 @@ def _v3_projection(
         state = next(iter(states))
     else:
         state = "mixed"
-    body = items[0]["headline"] if items else _fallback_body(
-        is_zh=is_zh, disabled=False
+    body = (
+        items[0]["headline"] if items else _fallback_body(is_zh=is_zh, disabled=False)
     )
     return {
         "schema_version": 3,
@@ -385,9 +393,7 @@ def _v3_projection(
     }
 
 
-def _v2_compatibility(
-    *, body: str, items: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _v2_compatibility(*, body: str, items: list[dict[str, Any]]) -> dict[str, Any]:
     """Keep the server-rendered strip safe until U6 switches to ``items``."""
     first = items[0] if items else None
     brand = first["brand"] if first else None
@@ -435,8 +441,11 @@ def _per_brand_item(
             served = outcome.last_good
             state = "stale"
         elif outcome.status == BrandTrendNarrative.Status.APPROVED:
-            stale = outcome.verified_at is None or now >= outcome.verified_at + timedelta(
-                minutes=config.stale_minutes[window_days] if config else 0
+            stale = (
+                outcome.verified_at is None
+                or now
+                >= outcome.verified_at
+                + timedelta(minutes=config.stale_minutes[window_days] if config else 0)
             )
             state = "stale" if stale else "available"
         elif outcome.status == BrandTrendNarrative.Status.NO_CONTENT:
@@ -449,12 +458,16 @@ def _per_brand_item(
     name_en = (
         outcome.brand_name_en_snapshot
         if outcome is not None
-        else fallback_brand.display_name_en if fallback_brand is not None else brand_key
+        else fallback_brand.display_name_en
+        if fallback_brand is not None
+        else brand_key
     )
     name_zh = (
         outcome.brand_name_zh_cn_snapshot
         if outcome is not None
-        else fallback_brand.display_name_zh_cn if fallback_brand is not None else brand_key
+        else fallback_brand.display_name_zh_cn
+        if fallback_brand is not None
+        else brand_key
     )
     display_name = name_zh if is_zh else name_en
     brand_exists = (
@@ -487,9 +500,7 @@ def _per_brand_item(
             "url": reverse("brand_home", args=[brand_key]) if brand_exists else None,
         },
         "state": state,
-        "state_label": _item_state_label(
-            state, freshness=freshness, is_zh=is_zh
-        ),
+        "state_label": _item_state_label(state, freshness=freshness, is_zh=is_zh),
         "headline": headline,
         "secondary": secondary,
         "verified_at": _iso(verified_at),
@@ -498,17 +509,27 @@ def _per_brand_item(
     }
 
 
-def _terminal_copy(
-    state: str, *, display_name: str, is_zh: bool
-) -> tuple[str, str]:
+def _terminal_copy(state: str, *, display_name: str, is_zh: bool) -> tuple[str, str]:
     if state == "no_content":
         return (
-            (f"{display_name}在这一时间段内没有帖子。" if is_zh else f"{display_name} had no posts in this window."),
-            ("这一时间段的来源覆盖完整。" if is_zh else "Source coverage was complete for this period."),
+            (
+                f"{display_name}在这一时间段内没有帖子。"
+                if is_zh
+                else f"{display_name} had no posts in this window."
+            ),
+            (
+                "这一时间段的来源覆盖完整。"
+                if is_zh
+                else "Source coverage was complete for this period."
+            ),
         )
     if state == "data_quality_unavailable":
         return (
-            (f"{display_name}的趋势摘要暂不可用。" if is_zh else f"{display_name}'s trend summary is unavailable."),
+            (
+                f"{display_name}的趋势摘要暂不可用。"
+                if is_zh
+                else f"{display_name}'s trend summary is unavailable."
+            ),
             (
                 "这一时间段的来源数据不完整，因此未对讨论量作出判断。"
                 if is_zh
@@ -516,7 +537,11 @@ def _terminal_copy(
             ),
         )
     return (
-        (f"{display_name}的趋势摘要暂不可用。" if is_zh else f"{display_name}'s trend summary is unavailable."),
+        (
+            f"{display_name}的趋势摘要暂不可用。"
+            if is_zh
+            else f"{display_name}'s trend summary is unavailable."
+        ),
         (
             "最近一次审核未生成可发布的趋势摘要。"
             if is_zh
@@ -544,7 +569,9 @@ def _freshness_projection(
         )
     else:
         relative_label = (
-            f"last verified {relative}" if kind == "verified" else f"last attempt {relative}"
+            f"last verified {relative}"
+            if kind == "verified"
+            else f"last attempt {relative}"
         )
     return {
         "kind": kind,
@@ -573,15 +600,23 @@ def _absolute_time(value, *, is_zh: bool) -> str:
     if is_zh:
         return f"{utc.year}年{utc.month}月{utc.day}日 {utc:%H:%M} UTC"
     month = (
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
     )[utc.month - 1]
     return f"{month} {utc.day}, {utc.year}, {utc:%H:%M} UTC"
 
 
-def _item_state_label(
-    state: str, *, freshness: dict[str, Any], is_zh: bool
-) -> str:
+def _item_state_label(state: str, *, freshness: dict[str, Any], is_zh: bool) -> str:
     relative = str(freshness.get("relative") or "")
     if state == "stale":
         return f"过期 · {relative}" if is_zh else f"Stale · {relative}"
@@ -635,10 +670,15 @@ def _selection_projection(
 def _non_narrative_sort_key(outcome: BrandTrendNarrative | None) -> int:
     if outcome is None:
         return 1
-    return 0 if outcome.status in {
-        BrandTrendNarrative.Status.APPROVED,
-        BrandTrendNarrative.Status.HELD,
-    } else 1
+    return (
+        0
+        if outcome.status
+        in {
+            BrandTrendNarrative.Status.APPROVED,
+            BrandTrendNarrative.Status.HELD,
+        }
+        else 1
+    )
 
 
 def _normalize_selected_brands(
@@ -802,9 +842,7 @@ def _subject_projection(
                 "key": key,
                 "display_name": name_zh_cn if is_zh else name_en,
                 "url": (
-                    reverse("brand_home", args=[key])
-                    if brand_id is not None
-                    else None
+                    reverse("brand_home", args=[key]) if brand_id is not None else None
                 ),
             }
             for position, (brand_id, key, name_en, name_zh_cn) in enumerate(legacy)
@@ -816,13 +854,9 @@ def _subject_projection(
             "support_type": subject.support_type,
             "entity_type": subject.entity_type,
             "identity_type": subject.identity_type,
-            "key": (
-                subject.canonical_key_snapshot or subject.observed_name
-            ),
+            "key": (subject.canonical_key_snapshot or subject.observed_name),
             "display_name": (
-                subject.name_zh_cn_snapshot
-                if is_zh
-                else subject.name_en_snapshot
+                subject.name_zh_cn_snapshot if is_zh else subject.name_en_snapshot
             ),
             "url": (
                 reverse("brand_home", args=[subject.canonical_key_snapshot])
@@ -841,12 +875,12 @@ def _body_parts(body: str, primary_name: str) -> tuple[str, str]:
     for match in re.finditer(re.escape(primary_name), body, flags=re.IGNORECASE):
         preceding = body[match.start() - 1 : match.start()]
         following = body[match.end() : match.end() + 1]
-        if (preceding and preceding.isalnum()) or (
-            following and following.isalnum()
-        ):
+        if (preceding and preceding.isalnum()) or (following and following.isalnum()):
             continue
         return body[: match.start()], body[match.end() :]
     return "", body
+
+
 def _public_observations(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []

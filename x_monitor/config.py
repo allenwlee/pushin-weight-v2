@@ -45,7 +45,13 @@ KNOWN_MODELS: frozenset[str] = frozenset(
 )
 
 VALID_REVIEW_REASONS: frozenset[str] = frozenset(
-    {"low_engagement", "off_topic", "suspicious_actor", "ambiguous_role", "banned_token"}
+    {
+        "low_engagement",
+        "off_topic",
+        "suspicious_actor",
+        "ambiguous_role",
+        "banned_token",
+    }
 )
 
 VALID_QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
@@ -112,7 +118,6 @@ class QuoteTweetConfig(BaseModel):
     daily_enabled: bool = True
     daily_recency_days: int = Field(default=7, ge=1)
     daily_call_budget: int = Field(default=50, ge=0)
-
 
 
 class MetricsRefreshConfig(BaseModel):
@@ -234,8 +239,7 @@ class HarvestConfig(BaseModel):
             )
         if self.relevancy_timeout_seconds > self.tip_sweep_target_seconds:
             raise ValueError(
-                "relevancy_timeout_seconds must not exceed "
-                "tip_sweep_target_seconds"
+                "relevancy_timeout_seconds must not exceed tip_sweep_target_seconds"
             )
         return self
 
@@ -287,9 +291,15 @@ class HeadlineNarrativeConfig(BaseModel):
     provider: Literal["anthropic", "deepseek", "minimax"] = "deepseek"
     base_url: str = "https://api.deepseek.com/anthropic"
     model: str = "deepseek-v4-pro"
-    rank_prompt_version: str = Field(default="headline-rank-v1", min_length=1, max_length=64)
-    editor_prompt_version: str = Field(default="headline-editor-v1", min_length=1, max_length=64)
-    critic_prompt_version: str = Field(default="headline-critic-v1", min_length=1, max_length=64)
+    rank_prompt_version: str = Field(
+        default="headline-rank-v1", min_length=1, max_length=64
+    )
+    editor_prompt_version: str = Field(
+        default="headline-editor-v2", min_length=1, max_length=64
+    )
+    critic_prompt_version: str = Field(
+        default="headline-critic-v2", min_length=1, max_length=64
+    )
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
     critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
@@ -344,21 +354,19 @@ class HeadlineNarrativeConfig(BaseModel):
     per_brand_input_token_cap: int = Field(default=500_000, ge=1_000)
     per_brand_output_token_cap: int = Field(default=160_000, ge=1_000)
     per_brand_cost_cap_usd: Decimal = Field(
-        default=Decimal("0.50"), gt=0, decimal_places=4
+        default=Decimal("1.00"), gt=0, decimal_places=4
     )
     per_brand_input_usd_per_million: Decimal = Field(
-        default=Decimal("0.50"), ge=0, decimal_places=4
+        default=Decimal("1.32"), ge=0, decimal_places=4
     )
     per_brand_output_usd_per_million: Decimal = Field(
-        default=Decimal("2.00"), ge=0, decimal_places=4
+        default=Decimal("3.96"), ge=0, decimal_places=4
     )
     per_brand_pricing_version: str = Field(
-        default="deepseek-v4-pro-2026-08-27", min_length=1, max_length=64
+        default="deepseek-v4-pro-peak-2026-08-27", min_length=1, max_length=64
     )
     per_brand_expected_max_brands: int = Field(default=25, ge=1, le=100)
-    per_brand_p95_latency_seconds: Decimal = Field(
-        default=Decimal("45"), gt=0, le=120
-    )
+    per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
     per_brand_worker_concurrency: Literal[1] = 1
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
@@ -370,9 +378,7 @@ class HeadlineNarrativeConfig(BaseModel):
     serving_enabled: bool = False
     enqueue_enabled: bool = False
     provider_calls_enabled: bool = False
-    publication_source: Literal["prefer_per_brand", "legacy_only"] = (
-        "prefer_per_brand"
-    )
+    publication_source: Literal["prefer_per_brand", "legacy_only"] = "prefer_per_brand"
     legacy_fallback_enabled: bool = True
     control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
 
@@ -419,9 +425,7 @@ class HeadlineNarrativeConfig(BaseModel):
             for window in windows
         ):
             raise ValueError("headline stale limits must be twice each cadence")
-        if not (
-            self.surging_ratio >= self.rising_ratio >= self.steady_ratio
-        ):
+        if not (self.surging_ratio >= self.rising_ratio >= self.steady_ratio):
             raise ValueError("headline momentum ratios must descend")
         if not (
             self.evidence_floor
@@ -441,16 +445,14 @@ class HeadlineNarrativeConfig(BaseModel):
         )
         if expected_input_tokens > self.per_brand_input_token_cap:
             raise ValueError("per-brand input cap cannot fit the expected brand graph")
-        expected_output_tokens = (
-            self.rank_max_tokens
-            + expected_batches * (self.editor_max_tokens + self.critic_max_tokens)
+        expected_output_tokens = self.rank_max_tokens + expected_batches * (
+            self.editor_max_tokens + self.critic_max_tokens
         )
         if expected_output_tokens > self.per_brand_output_token_cap:
             raise ValueError("per-brand output cap cannot fit the expected brand graph")
         expected_cost = (
             Decimal(expected_input_tokens) * self.per_brand_input_usd_per_million
-            + Decimal(expected_output_tokens)
-            * self.per_brand_output_usd_per_million
+            + Decimal(expected_output_tokens) * self.per_brand_output_usd_per_million
         ) / Decimal(1_000_000)
         if expected_cost > self.per_brand_cost_cap_usd:
             raise ValueError("per-brand dollar cap cannot fit the expected brand graph")
@@ -463,10 +465,7 @@ class HeadlineNarrativeConfig(BaseModel):
             * self.per_brand_p95_latency_seconds
             / Decimal(3600 * self.per_brand_worker_concurrency)
         )
-        if (
-            self.provider_calls_active
-            and drain_utilization >= Decimal("1")
-        ):
+        if self.provider_calls_active and drain_utilization >= Decimal("1"):
             raise ValueError(
                 "headline concurrency-one drain rate must exceed the arrival rate"
             )
@@ -500,7 +499,9 @@ class Config(BaseModel):
     headline_narrative: HeadlineNarrativeConfig = HeadlineNarrativeConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
-    review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))
+    review_reasons: list[str] = Field(
+        default_factory=lambda: list(VALID_REVIEW_REASONS)
+    )
     # R17 (legacy): skip order was Q6 → Q5 → Q3 → Q2 → Q4 → Q1 (Q6
     # praise is high-volume / low-decision-signal).
     #
@@ -561,6 +562,7 @@ class Config(BaseModel):
         brand also matches (the empty-brands fallback to "*" is treated
         as a match for that spec).
         """
+
         def _placeholder(spec: XQuerySpec) -> str:
             if spec.is_wide_net and spec.wide_net_brands:
                 return spec.wide_net_brands[0]
@@ -652,7 +654,8 @@ class Config(BaseModel):
                 "co-occurrence; removing them from B halves TwitterAPI "
                 "credit spend on the wide-net path with no recall "
                 "loss. See plan 2026-07-13-002 U4.",
-                len(dupes), dupes,
+                len(dupes),
+                dupes,
             )
         return self
 
@@ -691,15 +694,18 @@ def load_config(path: Path) -> Config:
     # differ from config.yaml. Merge env vars into Config.llm only
     # when the field is not already explicitly set in yaml — yaml wins.
     import os
+
     raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
     env_llm_overrides = {
-        k: v for k, v in {
+        k: v
+        for k, v in {
             "translator_model": os.environ.get("X_MONITOR_TRANSLATOR_MODEL"),
             "classifier_model": os.environ.get("X_MONITOR_CLASSIFIER_MODEL"),
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
-        }.items() if v is not None
+        }.items()
+        if v is not None
     }
     # Plan 2026-08-04-001: yaml wins over env, BUT a yaml `null` is
     # not "set" — it uses the role-specific env value when present and
@@ -707,7 +713,10 @@ def load_config(path: Path) -> Config:
     # when no role-specific env value exists.
     raw_llm_filtered = {k: v for k, v in raw_llm.items() if v is not None}
     if raw_llm or env_llm_overrides:
-        merged_llm = {**env_llm_overrides, **raw_llm_filtered}  # yaml wins over env (non-null only)
+        merged_llm = {
+            **env_llm_overrides,
+            **raw_llm_filtered,
+        }  # yaml wins over env (non-null only)
         raw = {**raw, "llm": merged_llm}
     raw_headline = (
         raw.get("headline_narrative", {})

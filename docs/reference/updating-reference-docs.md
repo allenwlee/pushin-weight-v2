@@ -22,7 +22,7 @@ only repository sources of truth for the production PostgreSQL schema.
 | `docs/reference/db-schema.md` | Django/PostgreSQL tables, columns, relationships, constraints, and indexes | `core/models.py`, `core/migrations/`, and optional read-only PostgreSQL introspection |
 | `docs/reference/lookup-tables.md` | Lookup keys, labels, seed ownership, and usage | Django models, seed commands/data, and attribution code |
 | `docs/reference/classifier-prompts.md` | Literal classifier prompts, model route, input/output contracts, and validation | `x_monitor/attribution.py`, `x_monitor/config.py`, `config.yaml`, and focused tests |
-| `docs/reference/headline-trend-narratives.md` | V22 headline trend math, adaptive series, engagement/nationalism facts, evidence packet, literal prompt, DeepSeek route, output validation, ledger/subjects, public DTO, rollout controls, and follow-ups | `monitor/trend_narrative_*.py`, `monitor/tasks.py`, `core/models.py`, current migrations, `x_monitor/config.py`, `config.yaml`, `render.yaml`, `docs/deploy/render.md`, and focused tests |
+| `docs/reference/headline-trend-narratives.md` | All-brand dossier math, evidence selection, literal rank/editor/critic prompts, DeepSeek route, mechanical and semantic validation ownership, run/call/brand ledger, public DTO, rollout controls, and follow-ups | `monitor/trend_narrative_*.py`, `monitor/tasks.py`, `core/models.py`, current migrations, `x_monitor/config.py`, `config.yaml`, `render.yaml`, `docs/deploy/render.md`, and focused tests |
 | `x-monitoring/README.md` | High-level v2 system overview and links to the six focused references | The six reviewed reference files plus current application and deployment code |
 
 ## Procedure
@@ -64,20 +64,24 @@ legacy SQLite database, `schema.dot`, or the retired PNG.
 
 For `headline-trend-narratives.md`, also perform these exact checks:
 
-1. Compare the fenced literal prompt with
-   `monitor/trend_narrative_generation.py::HEADLINE_SYSTEM_PROMPT_V3`
+1. Compare each fenced literal rank, editor, and critic prompt with its
+   corresponding constant in `monitor/trend_narrative_generation.py`
    character-for-character.
-2. Verify candidate, series, episode, evidence, and provider-packet limits
-   against `monitor/trend_narrative_candidates.py`.
+2. Verify all-brand dossier, fact, aggregate corpus, evidence, five-brand
+   batch, and provider-packet limits against
+   `monitor/trend_narrative_candidates.py`.
 3. Verify every mathematical fact and coverage rule against
    `monitor/trend_narrative_facts.py`.
 4. Verify the exact provider, endpoint, model, timeout, retry policy, prompt
    version, and credential variable against the real generation caller and
    `HeadlineNarrativeConfig`.
-5. Verify the seven-key output contract, claim/evidence linkage, and subject
-   validation against generation tests.
-6. Verify `TrendNarrative`, `TrendNarrativeSubject`, physical PostgreSQL table
-   names, compatibility view, and expansion-only migration behavior.
+5. Verify the rank/editor/critic output contracts, closed fact/evidence ID
+   ownership, all-brand completeness, and semantic critic decisions against
+   generation and orchestration tests.
+6. Verify `TrendNarrativeRun`, `TrendNarrativeProviderCall`,
+   `BrandTrendNarrative`, `TrendNarrativeVisibleRun`,
+   `TrendNarrativeWorkSlot`, legacy `TrendNarrative` compatibility, physical
+   PostgreSQL table names, and expansion-only migration behavior.
 7. Verify the browser DTO contains no provider, claim, evidence, credential,
    or private-source internals.
 8. Verify serving, enqueueing, and provider-call controls independently, and
@@ -136,8 +140,8 @@ code drift in the operator handoff.
    and a current review footer.
 4. Spot-check at least two substantive claims in each focused reference
    against its primary source.
-5. Programmatically compare the literal headline prompt block with
-   `HEADLINE_SYSTEM_PROMPT_V3`; require an exact match.
+5. Programmatically compare every literal rank/editor/critic prompt block with
+   its source constant; require exact matches.
 6. Confirm every README reference link resolves to an existing file and its
    target H1 still describes the linked subject.
 7. Confirm `schema.dot`, the retired PNG, code, migrations, configuration, and

@@ -36,7 +36,7 @@ _FAILURE_STATUSES = (
     TrendNarrative.Status.FAILED,
     TrendNarrative.Status.ABANDONED,
 )
-_TERMINAL_BRAND_STATUSES = frozenset(
+TERMINAL_BRAND_STATUSES = frozenset(
     {
         BrandTrendNarrative.Status.APPROVED,
         BrandTrendNarrative.Status.HELD,
@@ -149,7 +149,11 @@ def complete_trend_narrative_provider_call(
         call.completed_at = now
         call.save(
             update_fields=[
-                "state", "response_hash", "response_payload", "completed_at", "updated_at"
+                "state",
+                "response_hash",
+                "response_payload",
+                "completed_at",
+                "updated_at",
             ]
         )
         return True
@@ -171,6 +175,22 @@ def mark_trend_narrative_provider_call_ambiguous(
             return False
         call.state = TrendNarrativeProviderCall.State.AMBIGUOUS
         call.error_code = error_code[:64]
+        call.save(update_fields=["state", "error_code", "updated_at"])
+        return True
+
+
+def expire_sent_trend_narrative_provider_call(call_id: int, *, now) -> bool:
+    """Terminalize an expired post-send lease without risking another send."""
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state == TrendNarrativeProviderCall.State.AMBIGUOUS:
+            return True
+        if call.state != TrendNarrativeProviderCall.State.SENT:
+            return False
+        if call.claim_expires_at is None or call.claim_expires_at > now:
+            return False
+        call.state = TrendNarrativeProviderCall.State.AMBIGUOUS
+        call.error_code = "lease_expired_after_send"
         call.save(update_fields=["state", "error_code", "updated_at"])
         return True
 
@@ -223,22 +243,38 @@ def prepare_brand_trend_narrative(
     if status not in BrandTrendNarrative.Status.values:
         raise ValueError("unsupported brand narrative status")
     with transaction.atomic():
-        existing = BrandTrendNarrative.objects.select_for_update().filter(
-            run=run, brand_key_snapshot=brand_key
-        ).first()
+        existing = (
+            BrandTrendNarrative.objects.select_for_update()
+            .filter(run=run, brand_key_snapshot=brand_key)
+            .first()
+        )
         if existing is not None:
             return existing
         last_good = None
         if status == BrandTrendNarrative.Status.HELD:
-            visible = TrendNarrativeVisibleRun.objects.select_for_update().filter(
-                window_days=run.window_days
-            ).select_related("run").first()
+            visible = (
+                TrendNarrativeVisibleRun.objects.select_for_update()
+                .filter(window_days=run.window_days)
+                .select_related("run")
+                .first()
+            )
             if visible is not None:
-                last_good = BrandTrendNarrative.objects.filter(
-                    run=visible.run,
-                    brand_key_snapshot=brand_key,
-                    status=BrandTrendNarrative.Status.APPROVED,
-                ).first()
+                prior = (
+                    BrandTrendNarrative.objects.select_related("last_good")
+                    .filter(
+                        run=visible.run,
+                        brand_key_snapshot=brand_key,
+                    )
+                    .first()
+                )
+                if prior is not None:
+                    last_good = (
+                        prior
+                        if prior.status == BrandTrendNarrative.Status.APPROVED
+                        else prior.last_good
+                        if prior.status == BrandTrendNarrative.Status.HELD
+                        else None
+                    )
             if last_good is None:
                 status = BrandTrendNarrative.Status.UNAVAILABLE
         return BrandTrendNarrative.objects.create(
@@ -279,17 +315,17 @@ def activate_trend_narrative_run(run_id: int, *, now) -> bool:
         manifest = [str(key) for key in run.brand_manifest]
         if len(manifest) != len(set(manifest)):
             raise ValueError("run brand manifest must have unique keys")
-        outcomes = list(
-            BrandTrendNarrative.objects.select_for_update().filter(run=run)
-        )
-        if (
-            {row.brand_key_snapshot for row in outcomes} != set(manifest)
-            or any(row.status not in _TERMINAL_BRAND_STATUSES for row in outcomes)
+        outcomes = list(BrandTrendNarrative.objects.select_for_update().filter(run=run))
+        if {row.brand_key_snapshot for row in outcomes} != set(manifest) or any(
+            row.status not in TERMINAL_BRAND_STATUSES for row in outcomes
         ):
             return False
-        pointer = TrendNarrativeVisibleRun.objects.select_for_update().filter(
-            window_days=run.window_days
-        ).select_related("run").first()
+        pointer = (
+            TrendNarrativeVisibleRun.objects.select_for_update()
+            .filter(window_days=run.window_days)
+            .select_related("run")
+            .first()
+        )
         if pointer is not None and run.facts_as_of <= pointer.facts_as_of:
             return False
         if pointer is not None:
@@ -302,7 +338,9 @@ def activate_trend_narrative_run(run_id: int, *, now) -> bool:
             pointer.run = run
             pointer.facts_as_of = run.facts_as_of
             pointer.activated_at = now
-            pointer.save(update_fields=["run", "facts_as_of", "activated_at", "updated_at"])
+            pointer.save(
+                update_fields=["run", "facts_as_of", "activated_at", "updated_at"]
+            )
         else:
             TrendNarrativeVisibleRun.objects.create(
                 window_days=run.window_days,
@@ -341,11 +379,15 @@ def prune_per_brand_trend_narrative_history(
                 .values_list("pk", flat=True)[:keep_per_window]
             )
             protected = pinned_run_ids | newest_ids
-            count, _ = TrendNarrativeRun.objects.filter(
-                window_days=window_days,
-                created_at__lt=cutoff,
-                status=TrendNarrativeRun.Status.SUPERSEDED,
-            ).exclude(pk__in=protected).delete()
+            count, _ = (
+                TrendNarrativeRun.objects.filter(
+                    window_days=window_days,
+                    created_at__lt=cutoff,
+                    status=TrendNarrativeRun.Status.SUPERSEDED,
+                )
+                .exclude(pk__in=protected)
+                .delete()
+            )
             deleted += count
     return deleted
 
@@ -896,12 +938,16 @@ def prune_narrative_history(
                 ).values_list("pk", flat=True)
             )
             protected.update(current_ids)
-            count, _ = TrendNarrative.objects.filter(
-                window_days=window_days,
-                status__in=_TERMINAL_STATUSES,
-                created_at__lt=cutoff,
-                is_current=False,
-            ).exclude(pk__in=protected).delete()
+            count, _ = (
+                TrendNarrative.objects.filter(
+                    window_days=window_days,
+                    status__in=_TERMINAL_STATUSES,
+                    created_at__lt=cutoff,
+                    is_current=False,
+                )
+                .exclude(pk__in=protected)
+                .delete()
+            )
             deleted += count
     return deleted
 
@@ -945,9 +991,7 @@ def _validate_publication_payload(
         return payload
     if row.output_schema_version not in {2, 3}:
         raise ValueError("unsupported trend narrative output schema")
-    payload["subjects"] = _resolve_evidence_subject_identities(
-        payload["subjects"]
-    )
+    payload["subjects"] = _resolve_evidence_subject_identities(payload["subjects"])
     if len(payload["observations_en"]) != len(payload["observations_zh_cn"]):
         raise ValueError("schema-2 observations must be bilingual")
     if len(payload["observations_en"]) > 2:
@@ -1005,9 +1049,9 @@ def _validate_publication_payload(
     for candidate_id, candidate in candidates.items():
         for evidence in candidate.get("evidence", []):
             if isinstance(evidence, Mapping) and evidence.get("evidence_id"):
-                evidence_owners.setdefault(
-                    str(evidence["evidence_id"]), set()
-                ).add(candidate_id)
+                evidence_owners.setdefault(str(evidence["evidence_id"]), set()).add(
+                    candidate_id
+                )
     selected_ids = set(payload["selected_candidate_ids"])
     for claim in payload["claims"]:
         claim_candidate_ids = set(
@@ -1020,9 +1064,7 @@ def _validate_publication_payload(
     for subject in evidence_only:
         evidence_ids = list(subject.get("evidence_ids") or [])
         if not evidence_ids or any(
-            not evidence_owners.get(str(evidence_id), set()).intersection(
-                selected_ids
-            )
+            not evidence_owners.get(str(evidence_id), set()).intersection(selected_ids)
             for evidence_id in evidence_ids
         ):
             raise ValueError(
@@ -1030,8 +1072,7 @@ def _validate_publication_payload(
             )
     if len(measured) == 2:
         measured_keys = [
-            str(subject.get("canonical_key_snapshot") or "")
-            for subject in measured
+            str(subject.get("canonical_key_snapshot") or "") for subject in measured
         ]
         if not all(measured_keys) or len(set(measured_keys)) != 2:
             raise ValueError("two measured subjects must have distinct identities")
@@ -1105,9 +1146,7 @@ def _validate_schema_three_claims(
             names_en.union(str(fact["display_en"]) for fact in cited),
         ) or _uncited_digit(
             text_zh_cn,
-            names_zh_cn.union(
-                str(fact["display_zh_cn"]) for fact in cited
-            ),
+            names_zh_cn.union(str(fact["display_zh_cn"]) for fact in cited),
         ):
             raise ValueError("schema-3 prose contains an uncited digit")
 
@@ -1148,10 +1187,7 @@ def _write_subjects(
                 product = Product.objects.filter(pk=product_id).first()
             if product is None and canonical_key:
                 product = Product.objects.filter(repo_id=canonical_key).first()
-        if (
-            identity_type == TrendNarrativeSubject.IdentityType.BRAND
-            and brand is None
-        ):
+        if identity_type == TrendNarrativeSubject.IdentityType.BRAND and brand is None:
             raise ValueError("known brand subjects require an existing brand")
         if (
             identity_type == TrendNarrativeSubject.IdentityType.PRODUCT
@@ -1170,9 +1206,7 @@ def _write_subjects(
                 observed_name=str(subject.get("observed_name") or ""),
                 canonical_key_snapshot=canonical_key,
                 name_en_snapshot=str(subject.get("name_en_snapshot") or ""),
-                name_zh_cn_snapshot=str(
-                    subject.get("name_zh_cn_snapshot") or ""
-                ),
+                name_zh_cn_snapshot=str(subject.get("name_zh_cn_snapshot") or ""),
                 candidate_id=str(subject.get("candidate_id") or ""),
                 evidence_ids=list(subject.get("evidence_ids") or []),
             )
@@ -1208,8 +1242,7 @@ def _resolve_evidence_subject_identities(
         )
         products = list(
             Product.objects.filter(
-                Q(repo_id__iexact=observed_name)
-                | Q(display_name__iexact=observed_name)
+                Q(repo_id__iexact=observed_name) | Q(display_name__iexact=observed_name)
             )
             .distinct()
             .order_by("repo_id")[:2]
@@ -1247,15 +1280,11 @@ def _write_legacy_subject_snapshots(
     row.primary_brand = _subject_brand(primary)
     row.primary_brand_key = str(primary.get("canonical_key_snapshot") or "")[:64]
     row.primary_brand_name_en = str(primary.get("name_en_snapshot") or "")
-    row.primary_brand_name_zh_hans = str(
-        primary.get("name_zh_cn_snapshot") or ""
-    )
+    row.primary_brand_name_zh_hans = str(primary.get("name_zh_cn_snapshot") or "")
     secondary = subjects[1] if len(subjects) == 2 else None
     row.secondary_brand = _subject_brand(secondary)
     row.secondary_brand_key = (
-        str(secondary.get("canonical_key_snapshot") or "")[:64]
-        if secondary
-        else ""
+        str(secondary.get("canonical_key_snapshot") or "")[:64] if secondary else ""
     )
     row.secondary_brand_name_en = (
         str(secondary.get("name_en_snapshot") or "") if secondary else ""
