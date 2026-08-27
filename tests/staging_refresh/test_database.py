@@ -1022,10 +1022,22 @@ def test_postgres_adapter_executes_the_real_database_lifecycle_sql() -> None:
     target_url = make_conninfo(**parameters)
     adapter = PsycopgSnapshotAdapter(policy)
     names = (canonical, candidate, recovery)
+    building_marker = (
+        f'{policy.lifecycle.marker_prefix}:{{"database":"{candidate}",'
+        '"state":"building"}'
+    )
     assert all(adapter.database_state(target_url, name) is None for name in names)
     try:
         adapter.create_shadow(target_url, canonical, "test-canonical")
-        adapter.create_shadow(target_url, candidate, "test-candidate")
+        adapter.create_shadow(target_url, candidate, building_marker)
+        assert adapter.marker_matches(target_url, candidate, building_marker)
+        validated_marker = adapter.mark_validated(
+            target_url,
+            candidate,
+            building_marker,
+            {"validation": "passed"},
+        )
+        assert adapter.marker_matches(target_url, candidate, validated_marker)
         adapter.set_allow_connections(target_url, candidate, False)
         adapter.terminate_connections(target_url, candidate)
         adapter.set_allow_connections(target_url, canonical, False)
@@ -1077,8 +1089,18 @@ def test_postgres_adapter_executes_the_real_database_lifecycle_sql() -> None:
         )
         adapter.set_allow_connections(target_url, canonical, True)
 
-        assert adapter.database_state(target_url, canonical).allow_connections is True
-        assert adapter.database_state(target_url, recovery).allow_connections is False
+        canonical_state = adapter.database_state(target_url, canonical)
+        recovery_state = adapter.database_state(target_url, recovery)
+        assert canonical_state.allow_connections is True
+        assert recovery_state.allow_connections is False
+        assert decode_database_comment(
+            canonical_state.comment,
+            marker_prefix=policy.lifecycle.marker_prefix,
+        ).receipt == receipt
+        assert decode_database_comment(
+            recovery_state.comment,
+            marker_prefix=policy.lifecycle.marker_prefix,
+        ).receipt == receipt
         assert {
             state.name for state in adapter.database_states(target_url, "test_")
         } >= {
@@ -1098,7 +1120,7 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
     from django.contrib.sites.models import Site
     from django.db import connection, transaction
 
-    from core.models import TrendNarrative
+    from core.models import TrendNarrative, TrendNarrativeSubject
 
     policy = load_policy(POLICY_PATH)
     now = datetime(2026, 8, 27, 1, 0, tzinfo=UTC)
@@ -1131,6 +1153,28 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
         generated_at=now,
         published_at=now,
     )
+    transient_subject = TrendNarrativeSubject.objects.create(
+        trend_narrative=transient,
+        position=1,
+        support_type="evidence_only",
+        entity_type="organization",
+        identity_type="unresolved",
+        observed_name="Transient subject",
+        name_en_snapshot="Transient subject",
+        name_zh_cn_snapshot="临时主体",
+        evidence_ids=["post:transient"],
+    )
+    published_subject = TrendNarrativeSubject.objects.create(
+        trend_narrative=published,
+        position=1,
+        support_type="evidence_only",
+        entity_type="organization",
+        identity_type="unresolved",
+        observed_name="Published subject",
+        name_en_snapshot="Published subject",
+        name_zh_cn_snapshot="已发布主体",
+        evidence_ids=["post:published"],
+    )
 
     with transaction.atomic(), connection.cursor() as cursor:
         report = scrub_candidate_data(cursor, policy)
@@ -1138,6 +1182,8 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
     assert report.removed_narratives == 1
     assert not TrendNarrative.objects.filter(pk=transient.pk).exists()
     assert TrendNarrative.objects.filter(pk=published.pk, status="published").exists()
+    assert not TrendNarrativeSubject.objects.filter(pk=transient_subject.pk).exists()
+    assert TrendNarrativeSubject.objects.filter(pk=published_subject.pk).exists()
     assert get_user_model().objects.count() == 0
     site = Site.objects.get(pk=1)
     assert site.domain == policy.scrub.site_domain

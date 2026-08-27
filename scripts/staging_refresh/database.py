@@ -244,6 +244,13 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
         )
     )
     cursor.execute(
+        "DELETE FROM trend_narrative_subjects "
+        "WHERE trend_narrative_id IN ("
+        "SELECT id FROM trend_narratives WHERE NOT (status = ANY(%s))"
+        ")",
+        [list(policy.scrub.retained_narrative_statuses)],
+    )
+    cursor.execute(
         "DELETE FROM trend_narratives WHERE NOT (status = ANY(%s))",
         [list(policy.scrub.retained_narrative_statuses)],
     )
@@ -379,7 +386,8 @@ class PsycopgSnapshotAdapter:
         parameters = admin_connection_parameters(database_url)
         with self.connect(**parameters) as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT obj_description(oid, 'pg_database') FROM pg_database WHERE datname = %s",
+                "SELECT shobj_description(oid, 'pg_database') "
+                "FROM pg_database WHERE datname = %s",
                 [name],
             )
             row = cursor.fetchone()
@@ -537,7 +545,7 @@ class PsycopgSnapshotAdapter:
             connection.cursor() as cursor,
         ):
             cursor.execute(
-                "SELECT obj_description(oid, 'pg_database') "
+                "SELECT shobj_description(oid, 'pg_database') "
                 "FROM pg_database WHERE datname = %s",
                 [name],
             )
@@ -555,7 +563,8 @@ class PsycopgSnapshotAdapter:
         parameters = admin_connection_parameters(database_url)
         with self.connect(**parameters) as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT datname, datallowconn, obj_description(oid, 'pg_database') "
+                "SELECT datname, datallowconn, "
+                "shobj_description(oid, 'pg_database') "
                 "FROM pg_database WHERE datname = %s",
                 [name],
             )
@@ -572,7 +581,8 @@ class PsycopgSnapshotAdapter:
         parameters = admin_connection_parameters(database_url)
         with self.connect(**parameters) as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT datname, datallowconn, obj_description(oid, 'pg_database') "
+                "SELECT datname, datallowconn, "
+                "shobj_description(oid, 'pg_database') "
                 "FROM pg_database WHERE starts_with(datname, %s) ORDER BY datname",
                 [prefix],
             )
