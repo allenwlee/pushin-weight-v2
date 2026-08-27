@@ -1,0 +1,171 @@
+schema_version: 1
+
+service:
+  id: srv-d9vb8t49v7es738lf2ng
+  name: pushinweight-staging-web
+  enable_environment: STAGING_DATA_REFRESH_ENABLED
+
+source:
+  environment: STAGING_REFRESH_SOURCE_DATABASE_URL
+  resource_id: dpg-d9koekqjobas73fvjqng-a
+  host: dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com
+  port: 5432
+  database: pushinweight_shadow
+  role: staging_refresh_reader
+  minimum_server_version: 180000
+
+target:
+  environment: DATABASE_URL
+  resource_id: dpg-d9vb8ds9v7es738lepsg-a
+  host: dpg-d9vb8ds9v7es738lepsg-a.oregon-postgres.render.com
+  port: 5432
+  database: pushinweight_staging
+  role: pushinweight_staging
+  minimum_server_version: 180000
+
+production_deny:
+  resource_ids:
+    - dpg-d9koekqjobas73fvjqng-a
+  hosts:
+    - dpg-d9koekqjobas73fvjqng-a.oregon-postgres.render.com
+  databases:
+    - pushinweight_shadow
+
+relations:
+  copied_tables:
+    - account_post_appearances
+    - accounts
+    - brand_hashtags
+    - brand_keywords
+    - brand_search_terms
+    - brands
+    - brands_accounts
+    - brands_companies
+    - companies
+    - companies_accounts
+    - discourse_keys
+    - discourse_labels
+    - django_content_type
+    - django_migrations
+    - django_site
+    - hf_orgs
+    - nationalism_keys
+    - nationalism_labels
+    - post_type_keys
+    - post_type_labels
+    - posts
+    - posts_brands
+    - posts_brands_discourse
+    - posts_brands_mentions
+    - posts_brands_signals
+    - posts_unsanctioned_flags
+    - products
+    - role_labels
+    - roles
+    - search_queries
+    - sentiment_keys
+    - sentiment_labels
+    - trend_narrative_subjects
+    - trend_narratives
+    - unsanctioned_flag_keys
+  excluded_tables:
+    - _applied_config_snapshot
+    - account_emailaddress
+    - account_emailconfirmation
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - auth_user
+    - auth_user_groups
+    - auth_user_user_permissions
+    - call_state
+    - django_session
+    - harvest_backlog_windows
+    - post_enrichment_states
+    - socialaccount_socialaccount
+    - socialaccount_socialapp
+    - socialaccount_socialapp_sites
+    - socialaccount_socialtoken
+    - twitter_list_memberships
+    - twitter_list_sync_state
+  views:
+    - trend_narrative_versions
+  sequences:
+    - account_emailaddress_id_seq
+    - account_emailconfirmation_id_seq
+    - auth_group_id_seq
+    - auth_group_permissions_id_seq
+    - auth_permission_id_seq
+    - auth_user_groups_id_seq
+    - auth_user_id_seq
+    - auth_user_user_permissions_id_seq
+    - django_content_type_id_seq
+    - django_migrations_id_seq
+    - django_site_id_seq
+    - harvest_backlog_windows_id_seq
+    - products_id_seq
+    - search_queries_id_seq
+    - socialaccount_socialaccount_id_seq
+    - socialaccount_socialapp_id_seq
+    - socialaccount_socialapp_sites_id_seq
+    - socialaccount_socialtoken_id_seq
+    - trend_narrative_subjects_id_seq
+    - trend_narrative_versions_id_seq
+    - twitter_list_memberships_id_seq
+
+scrub:
+  truncate_tables:
+    - _applied_config_snapshot
+    - account_emailaddress
+    - account_emailconfirmation
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - auth_user
+    - auth_user_groups
+    - auth_user_user_permissions
+    - call_state
+    - django_session
+    - harvest_backlog_windows
+    - post_enrichment_states
+    - socialaccount_socialaccount
+    - socialaccount_socialapp
+    - socialaccount_socialapp_sites
+    - socialaccount_socialtoken
+    - twitter_list_memberships
+    - twitter_list_sync_state
+  retained_narrative_statuses:
+    - published
+    - superseded
+  site_domain: pushinweight-staging-web.onrender.com
+  site_name: Pushin Weight Staging
+
+validation:
+  exact_count_tables:
+    - accounts
+    - brands
+    - posts
+    - posts_brands
+    - products
+  required_nonempty_tables:
+    - accounts
+    - brands
+    - posts
+    - posts_brands
+  latest_timestamp_table: posts
+  latest_timestamp_column: created_at
+  maximum_latest_timestamp_lag_seconds: 0
+
+storage:
+  target_disk_bytes: 16106127360
+  required_reserve_ratio: 0.20
+  local_free_space_multiplier: 2.0
+
+database_lifecycle:
+  marker_prefix: staging-refresh/v1
+  shadow_prefix: pushinweight_staging_shadow_
+  recovery_prefix: pushinweight_staging_recovery_
+  retained_recoveries: 1
+  administration_statement_timeout_seconds: 30
+  cluster_lock_id: 8675309
+  deploy_lock_timeout_seconds: 900
