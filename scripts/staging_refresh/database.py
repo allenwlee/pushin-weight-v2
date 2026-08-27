@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -394,22 +395,12 @@ class PsycopgSnapshotAdapter:
             return bool(row and row[0] == marker)
 
     def drop_shadow(self, database_url: str, name: str) -> None:
-        parameters = admin_connection_parameters(database_url)
-        with (
-            self.connect(**parameters, autocommit=True) as connection,
-            connection.cursor() as cursor,
-        ):
-            cursor.execute(
-                sql.SQL("ALTER DATABASE {} WITH ALLOW_CONNECTIONS false").format(
-                    sql.Identifier(name)
-                )
-            )
-            cursor.execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = %s AND pid <> pg_backend_pid()",
-                [name],
-            )
-            cursor.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(name)))
+        self.set_allow_connections(database_url, name, False)
+        self.terminate_connections(database_url, name)
+        self._administration(
+            database_url,
+            sql.SQL("DROP DATABASE {}").format(sql.Identifier(name)),
+        )
 
     def _candidate_parameters(self, database_url: str, name: str) -> dict[str, str]:
         try:
@@ -632,9 +623,25 @@ class PsycopgSnapshotAdapter:
             )
             cursor.execute(
                 "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                "WHERE datname = %s AND pid <> pg_backend_pid() "
+                "AND usename = current_user",
                 [name],
             )
+            deadline = (
+                time.monotonic()
+                + self.policy.lifecycle.administration_statement_timeout_seconds
+            )
+            while True:
+                cursor.execute(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE datname = %s AND pid <> pg_backend_pid()",
+                    [name],
+                )
+                if int(cursor.fetchone()[0]) == 0:
+                    return
+                if time.monotonic() >= deadline:
+                    raise RefreshError("database_connections_remain")
+                time.sleep(0.1)
 
     def rename_database(self, database_url: str, old: str, new: str) -> None:
         self._administration(

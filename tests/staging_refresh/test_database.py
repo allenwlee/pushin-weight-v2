@@ -1000,6 +1000,76 @@ def test_runtime_lock_refusal_happens_before_lifecycle_mutation(
     assert events == ["lock:refused"]
 
 
+def test_termination_signals_only_app_sessions_and_bounds_managed_drain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = load_policy(POLICY_PATH)
+    statements: list[str] = []
+    remaining = iter([1, 0])
+
+    class Cursor:
+        result: tuple[int] | None = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, statement: str, _parameters: object = None) -> None:
+            statements.append(statement)
+            if "SELECT count(*) FROM pg_stat_activity" in statement:
+                self.result = (next(remaining),)
+
+        def fetchone(self) -> tuple[int]:
+            assert self.result is not None
+            return self.result
+
+    cursor = Cursor()
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def cursor(self) -> Cursor:
+            return cursor
+
+    monkeypatch.setattr(
+        "scripts.staging_refresh.database.time.sleep", lambda _seconds: None
+    )
+    adapter = PsycopgSnapshotAdapter(
+        policy,
+        connect=lambda **_parameters: Connection(),
+    )
+
+    adapter.terminate_connections(
+        "postgresql://pushinweight_staging:test@localhost/pushinweight_staging",
+        "pushinweight_staging_shadow_test",
+    )
+
+    terminate = next(
+        statement for statement in statements if "pg_terminate_backend" in statement
+    )
+    assert "usename = current_user" in terminate
+    assert sum("SELECT count(*) FROM pg_stat_activity" in item for item in statements) == 2
+
+    statements.clear()
+    remaining = iter([1])
+    moments = iter([0.0, 31.0])
+    monkeypatch.setattr(
+        "scripts.staging_refresh.database.time.monotonic", lambda: next(moments)
+    )
+
+    with pytest.raises(RefreshError, match="database_connections_remain"):
+        adapter.terminate_connections(
+            "postgresql://pushinweight_staging:test@localhost/pushinweight_staging",
+            "pushinweight_staging_shadow_test",
+        )
+
+
 @pytest.mark.requires_postgres
 def test_postgres_adapter_executes_the_real_database_lifecycle_sql() -> None:
     policy = load_policy(POLICY_PATH)
