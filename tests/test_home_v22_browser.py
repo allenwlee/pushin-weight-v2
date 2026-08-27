@@ -434,11 +434,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         self.fixture = fixture_from_oracle()
         seed_real_home_orm(self.fixture)
         _clear_home_pulse_cache()
-        from core.models import Post, PostEnrichmentState
-
-        pending_post = Post.objects.order_by("-created_at").first()
-        self.assertIsNotNone(pending_post)
-        PostEnrichmentState.objects.create(post=pending_post)
         from django.contrib.auth import get_user_model
 
         self.browser_user = get_user_model().objects.create_user(
@@ -2921,20 +2916,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                             tz = page.locator("[data-tz-widget]")
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
-                            pending_row = page.locator(
-                                ".feed-row[data-enrichment-status='pending']"
-                            ).first
-                            pending_signal = pending_row.locator(
-                                ".enrichment-status-pending[role='status']"
-                            )
-                            self.assertEqual(pending_signal.count(), 1)
-                            self.assertTrue(pending_signal.is_visible())
-                            self.assertNotEqual((pending_signal.inner_text() or "").strip(), "")
                             self.assertEqual(
-                                page.locator(
-                                    ".feed-row[data-enrichment-status='succeeded'] "
-                                    ".enrichment-status"
-                                ).count(),
+                                page.locator(".feed-row .enrichment-status").count(),
                                 0,
                             )
                             initial_feed_stamp = feed_stamp.text_content()
@@ -3411,6 +3394,102 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "52 enriched rows must use bounded bulk metadata queries, not per-row lookups",
         )
 
+    def test_feed_eligibility_query_keeps_request_latency_and_roundtrips_bounded(
+        self,
+    ) -> None:
+        from contextlib import nullcontext
+        from statistics import median
+        from time import monotonic
+
+        from django.db.models import Prefetch
+        from django.utils import timezone
+
+        from core.models import PostBrand
+        from monitor.views import _get_feed_posts
+
+        Post.objects.filter(tweet_id__startswith="v22-pulse-").delete()
+
+        def baseline_get_feed_posts(
+            window_days: int | None = None,
+            brand_nickname: str | None = None,
+            limit: int = 50,
+        ):
+            cutoff = (
+                timezone.now() - timedelta(days=window_days)
+                if window_days
+                else None
+            )
+            queryset = Post.objects.select_related("author").prefetch_related(
+                Prefetch(
+                    "brands",
+                    queryset=PostBrand.objects.select_related("brand"),
+                )
+            )
+            if cutoff:
+                queryset = queryset.filter(created_at__gte=cutoff)
+            if brand_nickname:
+                queryset = queryset.filter(
+                    brands__brand__nickname=brand_nickname
+                ).distinct()
+            return queryset.order_by("-created_at")[:limit]
+
+        client = Client(HTTP_HOST="localhost")
+
+        def request_sample(*, baseline: bool) -> tuple[float, int]:
+            patch_context = (
+                patch(
+                    "monitor.views._get_feed_posts",
+                    side_effect=baseline_get_feed_posts,
+                )
+                if baseline
+                else nullcontext()
+            )
+            with patch_context:
+                started = monotonic()
+                with CaptureQueriesContext(connection) as queries:
+                    response = client.get("/feed/?limit=50")
+                elapsed = monotonic() - started
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()["rows"]), 50)
+            return elapsed, len(queries)
+
+        request_sample(baseline=True)
+        request_sample(baseline=False)
+        baseline_samples = [request_sample(baseline=True) for _ in range(5)]
+        candidate_samples = [request_sample(baseline=False) for _ in range(5)]
+        baseline_times = [elapsed for elapsed, _ in baseline_samples]
+        candidate_times = [elapsed for elapsed, _ in candidate_samples]
+        baseline_roundtrips = [count for _, count in baseline_samples]
+        candidate_roundtrips = [count for _, count in candidate_samples]
+        baseline_median = median(baseline_times)
+        candidate_median = median(candidate_times)
+        allowed_median = baseline_median + max(baseline_median * 0.25, 0.05)
+        baseline_plan = baseline_get_feed_posts(limit=500).explain()
+        candidate_plan = _get_feed_posts(limit=500).explain()
+
+        print(
+            "FEED_ELIGIBILITY_BENCHMARK "
+            + json.dumps(
+                {
+                    "baseline_seconds": baseline_times,
+                    "candidate_seconds": candidate_times,
+                    "baseline_median_seconds": baseline_median,
+                    "candidate_median_seconds": candidate_median,
+                    "allowed_median_seconds": allowed_median,
+                    "baseline_roundtrips": baseline_roundtrips,
+                    "candidate_roundtrips": candidate_roundtrips,
+                    "baseline_plan": baseline_plan,
+                    "candidate_plan": candidate_plan,
+                },
+                sort_keys=True,
+            )
+        )
+        self.assertTrue(baseline_plan.strip())
+        self.assertTrue(candidate_plan.strip())
+        self.assertEqual(candidate_roundtrips, baseline_roundtrips)
+        self.assertLessEqual(candidate_median, allowed_median)
+        self.assertTrue(all(elapsed < 2 for elapsed in candidate_times))
+
     def test_anonymous_browser_refetch_and_page_two_append_paint_metadata(self) -> None:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
@@ -3732,6 +3811,146 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         page.locator(f".feed-row[data-tweet-id='{recovered_id}']").wait_for()
                         self.assertTrue(page.locator("[data-pw-feed-status]").is_hidden())
                         current_id = recovered_id
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_terminal_completion_reveals_the_exact_hidden_row_on_first_page_refresh(self) -> None:
+        from core.models import PostEnrichmentState
+
+        ordered_posts = list(Post.objects.order_by("-created_at")[:3])
+        pending_post = ordered_posts[0]
+        failed_post = ordered_posts[1]
+        expected_fill = ordered_posts[2]
+        PostEnrichmentState.objects.create(post=pending_post)
+        PostEnrichmentState.objects.create(
+            post=failed_post,
+            translation_status=PostEnrichmentState.Status.FAILED,
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+        )
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                context.add_init_script(
+                    """
+                    (() => {
+                      const realSetInterval = window.setInterval.bind(window);
+                      const realClearInterval = window.clearInterval.bind(window);
+                      window.__feedEligibilityMinuteCallbacks = [];
+                      window.__feedEligibilityIntervalDelays = [];
+                      window.setInterval = (fn, delay, ...args) => {
+                        window.__feedEligibilityIntervalDelays.push(delay);
+                        if (delay === 60000) {
+                          window.__feedEligibilityMinuteCallbacks.push(fn);
+                          return -window.__feedEligibilityMinuteCallbacks.length;
+                        }
+                        return realSetInterval(fn, delay, ...args);
+                      };
+                      window.clearInterval = (id) => id < 0 ? undefined : realClearInterval(id);
+                    })();
+                    """
+                )
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{pending_post.tweet_id}']"
+                        ).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
+                        ).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{expected_fill.tweet_id}']"
+                        ).count(),
+                        1,
+                    )
+                    first_page = page.evaluate(
+                        """async () => {
+                          const response = await fetch('/feed/?limit=1');
+                          if (!response.ok) throw new Error(`feed status ${response.status}`);
+                          return response.json();
+                        }"""
+                    )
+                    self.assertEqual(
+                        [row["tweet_id"] for row in first_page["rows"]],
+                        [expected_fill.tweet_id],
+                    )
+                    callback_names = page.evaluate(
+                        "() => window.__feedEligibilityMinuteCallbacks.map(fn => fn.name)"
+                    )
+                    self.assertIn("refreshFirstPage", callback_names)
+                    self.assertIn(
+                        60000,
+                        page.evaluate(
+                            "() => window.__feedEligibilityIntervalDelays"
+                        ),
+                    )
+
+                    update_results: list[int] = []
+
+                    def mark_terminal_complete() -> None:
+                        from django.db import close_old_connections
+
+                        close_old_connections()
+                        try:
+                            update_results.append(
+                                PostEnrichmentState.objects.filter(
+                                    post_id=pending_post.tweet_id
+                                ).update(
+                                    translation_status=PostEnrichmentState.Status.SUCCEEDED,
+                                    classification_status=PostEnrichmentState.Status.SUCCEEDED,
+                                )
+                            )
+                        finally:
+                            close_old_connections()
+
+                    update_thread = threading.Thread(target=mark_terminal_complete)
+                    update_thread.start()
+                    update_thread.join(timeout=5)
+                    self.assertFalse(update_thread.is_alive())
+                    self.assertEqual(update_results, [1])
+
+                    with page.expect_response(
+                        lambda response: "/feed/?" in response.url
+                        and response.status == 200
+                    ):
+                        page.evaluate(
+                            """async () => {
+                              const refresh = window.__feedEligibilityMinuteCallbacks.find(
+                                fn => fn.name === 'refreshFirstPage'
+                              );
+                              await refresh();
+                            }"""
+                        )
+                    revealed = page.locator(
+                        f".feed-row[data-tweet-id='{pending_post.tweet_id}']"
+                    )
+                    revealed.wait_for()
+                    self.assertTrue(revealed.is_visible())
+                    box = revealed.bounding_box()
+                    self.assertIsNotNone(box)
+                    self.assertGreater(box["width"], 0)
+                    self.assertGreater(box["height"], 0)
+                    self.assertEqual(
+                        revealed.get_attribute("data-enrichment-status"), "succeeded"
+                    )
+                    self.assertEqual(revealed.locator(".enrichment-status").count(), 0)
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
+                        ).count(),
+                        0,
+                    )
                 finally:
                     context.close()
             finally:

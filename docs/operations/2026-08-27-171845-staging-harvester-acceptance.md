@@ -17,8 +17,10 @@ runs/work slots/provider ledgers/visible pointers, and
 each. The external TwitterAPI.io/provider account and quota remain shared.
 
 One Trigger Run is fixed at one configured call, one logical/physical search
-attempt, one page, five returned/persisted posts, no HTTP retries, no metrics
-refresh, and five enrichment claims. Operators may not bypass the profile with
+attempt, one page, five returned/persisted posts, no HTTP retries, and no
+metrics refresh. Its enrichment profile is aggregate/current/carryover
+`5/5/0`: up to five newly inserted current-cycle rows and no carryover rows.
+The lanes cannot borrow capacity. Operators may not bypass the profile with
 plain `python manage.py run_cycle`.
 
 ## One-time Render setup
@@ -97,9 +99,20 @@ not contain a URL, query payload, credential, or provider response body.
 
 Interpret the top-level status literally:
 
-- `accepted`: at least one result entered persistence and bounded enrichment;
-- `inconclusive`: safe zero/filtered/no-enrichment result; no automatic retry;
-- `failed`: identity, provider, pipeline, or hard-bound failure; no retry.
+- `accepted`: one through five posts were newly inserted, the inserted IDs are
+  exactly the current-cycle claimed IDs, carryover is empty, and every inserted
+  ID is terminal-complete with valid persisted output;
+- `inconclusive`: a safe zero-result, update-only, or still-pending outcome;
+  there is no automatic retry and it cannot authorize production;
+- `failed`: an identity, cap, provider, pipeline, carryover, terminal-stage,
+  output-validity, or exact-ID mismatch; there is no retry and it cannot
+  authorize production.
+
+An accepted command result is necessary but not sufficient. Read-only staging
+database and feed observations must also prove that every inserted ID was
+hidden before terminal success and is visible after terminal success. The
+existing 60-second feed refresh may be driven once without waiting a wall-clock
+minute. A pending, failed, or incomplete row appearing in the feed fails.
 
 ## Staging acceptance evidence
 
@@ -135,7 +148,39 @@ search_requests:
 results:
 inserted:
 updated:
-enrichment_claimed:
+enrichment_claim_cap_aggregate: 5
+enrichment_claim_cap_current_cycle: 5
+enrichment_claim_cap_carryover: 0
+n_enrichment_claimed:
+n_enrichment_claimed_current_cycle:
+n_enrichment_claimed_carryover:
+n_enrichment_succeeded:
+n_enrichment_succeeded_current_cycle:
+n_enrichment_succeeded_carryover:
+n_enrichment_pending:
+n_enrichment_pending_current_cycle:
+n_enrichment_pending_carryover:
+n_enrichment_failed:
+n_enrichment_failed_current_cycle:
+n_enrichment_failed_carryover:
+n_enrichment_deferred:
+n_enrichment_quarantined:
+inserted_post_ids: []
+enrichment_current_cycle_post_ids: []
+enrichment_carryover_post_ids: []
+enrichment_state_facts: []
+# Each fact contains only post_id, lane, translation_status,
+# classification_status, and output_complete.
+inserted_current_identity_result: pass|fail
+every_inserted_id_terminal_complete: pass|fail
+feed_hidden_before_terminal_success: pass|fail
+feed_visible_after_terminal_success: pass|fail
+feed_observed_at_utc:
+translator_effective_model_redacted:
+translator_effective_host_redacted:
+classifier_effective_model_redacted:
+classifier_effective_host_redacted:
+provider_routing_candidate_match: pass|fail
 cursor_advanced:
 headline_dispatch_status:
 headline_provider_calls_before:
@@ -147,6 +192,21 @@ queue_depth_after:
 provider_secrets: present, values redacted
 operator:
 ```
+
+The command and evidence must prove
+`inserted_post_ids == enrichment_current_cycle_post_ids` and
+`enrichment_carryover_post_ids == []`. Every inserted ID must have exactly one
+fact with `lane=current_cycle`, `translation_status=succeeded`,
+`classification_status=succeeded`, and `output_complete=true`. Total and lane
+claimed/succeeded/pending/failed counts must reconcile exactly with those
+facts. Deferred and quarantined are totals and do not authorize acceptance.
+
+Derive the four effective provider-routing values from the loaded candidate
+configuration and the same environment fallback used by the production
+factories, without constructing a provider client. Store only a stable
+redacted fingerprint of each normalized model/host value; do not store a URL,
+credential, process environment dump, or provider response. Staging and
+production fingerprints must match each other and the candidate configuration.
 
 After the run, query only staging:
 
@@ -173,11 +233,127 @@ Inspect broker/worker status without provider calls. Queue depth must return to
 zero. A broker/provider headline failure is recorded separately; it does not
 erase accepted harvested posts.
 
+## Candidate staging stop rule
+
+This candidate gets one bounded staging attempt. A zero-result or update-only
+attempt is inconclusive; any pending exact inserted cohort is also
+inconclusive. Any hard error or failed terminal/output/feed gate is failed.
+Both classifications stop promotion. There is no automatic retry, manual
+substitute, cursor reset, refresh, backfill, or newer-cohort substitution. A
+new attempt requires separate owner authorization and a new recorded attempt;
+the historical result below remains immutable.
+
+## Same-path staging and production parity
+
+Staging and production use the same `CycleRunner`, writer lock, claimant,
+translator, classifier, persistence, terminalization, and feed predicate.
+Only bounded configuration differs: staging caps `5/5/0` and production caps `100/50/50`
+for aggregate/current/carryover. Batch size 20, provider
+concurrency three, request/stage/outer deadlines, models, hosts, prompts, and
+search semantics are identical. A redacted effective model or host mismatch,
+different candidate SHA, or different code path fails promotion.
+
+## Pre-promotion read-only feed blast-radius gate
+
+Before moving the unchanged candidate to `main`, run the five-warm-request
+PostgreSQL benchmark and a read-only unfiltered/default-window feed census on
+the production-shaped snapshot. Apply eligibility in the database before the
+limit. Record the baseline and candidate query plans, SQL round trips, response
+counts, and timings. No write, repair, provider call, or owner check-in is part
+of this gate.
+
+For the unfiltered default feed, fewer than 50 rows when at least 50 eligible rows exist
+fails promotion. When fewer than 50 are eligible in the identical
+window, the page count must equal that eligible count. SQL round trips must not
+increase. Candidate median must be no more than baseline median plus the
+greater of 25% or 50 ms, and every candidate request must remain below 2,000
+ms. Any unacceptable threshold fails promotion rather than being waived.
+
+Record:
+
+```text
+feed_snapshot_id:
+feed_window_days:
+feed_eligible_global_count:
+feed_default_limit: 50
+feed_default_page_count:
+feed_page_fill_result: pass|fail
+feed_baseline_query_round_trips:
+feed_query_round_trips:
+feed_baseline_median_ms:
+feed_candidate_median_ms:
+feed_candidate_max_ms:
+feed_baseline_query_plan_hash:
+feed_candidate_query_plan_hash:
+feed_blast_radius_result: pass|fail
+```
+
+## Promotion preparation and forbidden actions
+
+Record the exact pre-promotion `main` SHA and the people responsible before
+promotion. The rollback route is a prepared feature-only revert advanced to
+`main` through ordinary Git and Render auto-deploy; its validation uses only
+natural scheduled cron jobs.
+
+Do not suspend production. Do not reschedule production. Do not manually trigger production.
+Do not apply a production Blueprint. Do not substitute a
+backfill, replay, or manual harvest for a natural boundary. Promotion starts
+immediately after a completed natural production cycle.
+
 ## Production continuity evidence
 
 Production success is a separate read-only gate. A green staging result does
-not prove it. Record UTC observations spanning the staging Trigger Run and run
-this query only through the documented production Render psql route:
+not prove it. Define the closed continuity ledger as follows:
+
+- `B0` is the completed natural quarter-hour boundary immediately before
+  promotion starts.
+- `B1...Bn` are every expected `00/15/30/45` boundary after `B0` through the
+  first qualifying natural candidate-SHA cycle. Candidate behavioral
+  acceptance starts only after both web and harvester report that SHA.
+- `Bn+1` is the following natural boundary after the acceptance cycle.
+
+Every boundary must correlate exactly one scheduled Render execution with
+exactly one terminal canonical `HARVEST_SUMMARY`. Match service ID, deploy SHA,
+run ID, terminal status, and the summary's own start/finish timestamps and
+hash. Post `fetched_at`, insertion timestamps, and wall-clock proximity are
+useful context, but timestamps are supplemental and cannot establish the
+correlation by themselves.
+
+The summary line is counts-only. New releases emit summary schema v2; evidence
+readers must parse historical v1 against its original narrower allowlists and
+must reject a v1 envelope that claims v2 fields. This version rule does not
+change the one-summary-per-boundary continuity requirement.
+
+Use one entry per boundary:
+
+```text
+boundary_label: B0|B1...Bn|Bn+1
+scheduled_boundary_utc:
+render_execution_id:
+render_trigger: schedule
+render_started_at:
+render_finished_at:
+render_status:
+render_service_id:
+render_deploy_sha:
+summary_run_id:
+summary_started_at:
+summary_finished_at:
+summary_status:
+summary_service_id:
+summary_deploy_sha:
+summary_hash:
+correlation_result: pass|fail
+```
+
+A missing, duplicate, aborted, lock-skipped, manual, or uncorrelatable
+execution/summary pair fails permanently. A later successful job cannot repair
+or replace that boundary. Do not change production to make this evidence pass;
+a continuity failure transfers to incident handling and makes zero-disruption
+success impossible.
+
+The older `max(fetched_at)` observation remains supplemental and may be
+captured through the documented production Render psql route:
 
 ```sql
 SELECT max(fetched_at) AS latest_fetch,
@@ -185,22 +361,132 @@ SELECT max(fetched_at) AS latest_fetch,
 FROM posts;
 ```
 
+## Exact production cohort and quality evidence
+
+After both production services report the unchanged candidate SHA, inspect the
+first of at most two natural candidate-SHA cycles that inserts at least one
+post. A zero-insert or update-only first cycle is inconclusive and may advance
+only to the second natural cycle. The first nonempty inserted cohort is immutable:
+retain its summary run ID and the exactly one `HARVEST_COHORT` receipt emitted
+for that run before querying any posts. The receipt must be schema-valid,
+independently hashed, bounded, and correlated to the canonical summary's
+service ID, deploy SHA, run ID, and summary hash. Its inserted IDs, disjoint
+current/carryover IDs, lane facts, and derived outcome counts must reconcile;
+a missing, duplicate, malformed, truncated, or uncorrelated receipt fails.
+Never reconstruct the cohort from timestamps or substitute a later or newer
+cohort if enrichment, visibility, or quality fails.
+
+The exact cohort passes only when current-cycle claim identity reconciles,
+carryover accounting reconciles, every inserted ID is terminal-complete and
+feed-visible, and these quality gates pass:
+
+- all posts have canonical `lang_detected`;
+- at least 99% of non-`zh-Hans` posts have valid nonblank `text_zh_cn`;
+- at least 99% of all posts have valid nonblank, distinct `commentary_en` and
+  `commentary_zh_cn` under the shared persisted-output policy.
+
+Record numerators, denominators, rates, and percentages. A zero non-`zh-Hans`
+denominator is valid. Integer acceptance is strict: N=50 requires 50/50 for
+each 99% gate.
+
+## Supplemental latest-N harvester report
+
+Run the read-only harvester latest-N checker with `N=50` and save its detailed
+report under `docs/analysis/harvester/`. Retain its literal ordered IDs. This
+report is supplemental population evidence and never replaces the exact
+candidate-cycle cohort.
+
+Because this release changes enrichment timing, invoke the helper exactly twice
+through its enrichment-relevant route. First run
+`"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 50 --json` and freeze the ordered
+IDs. Wait the skill's single 30-minute grace without polling. Then run one
+`"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --tweet-id <id> ... --report` invocation
+containing every frozen ID in its original order. Do not retry, substitute a
+newer cohort, or make a third checker call.
+
+The report must follow the harvester health-check skill and contain full source text,
+persisted translations and commentaries, durable enrichment states and
+attempt timestamps, per-brand facts, discourse, nationalism, mentions, and
+unsanctioned-flag evidence. The provider-call evidence is limited to the checker's empty
+LLM-call ledger plus verbatim current-code prompt reconstructions and
+deterministically known request kwargs. It must state that these are not
+historical wire calls, mark runtime-only values unavailable, and include the
+exact read-only SQL, invocation, Python version, checker SHA-256, repository
+commit, and complete checker source. Never include credentials, environment
+values, raw Render stderr, or tracebacks.
+
+## Production release evidence
+
+Fill every field without inference. Use `unknown`, which fails the associated
+gate; never omit a field.
+
 ```text
-production_service: pushinweight-harvest
-production_schedule_before: */15 * * * *
-production_schedule_after: */15 * * * *
-observation_before_utc:
-latest_fetch_before:
-observation_during_utc:
-latest_fetch_during:
-observation_after_utc:
-latest_fetch_after:
+candidate_sha:
+pre_promotion_sha:
+production_web_service: pushinweight-web
+production_harvester_service: pushinweight-harvest
+production_database_resource: pushinweight-db-shadow
+production_web_sha:
+production_harvester_sha:
+promotion_started_at_utc:
+rollback_route:
+release_operator:
+continuity_observer:
+rollback_decider:
+incident_owner:
+staging_caps: 5/5/0
+production_caps: 100/50/50
+staging_provider_routing_fingerprint:
+production_provider_routing_fingerprint:
+production_translator_effective_model_redacted:
+production_translator_effective_host_redacted:
+production_classifier_effective_model_redacted:
+production_classifier_effective_host_redacted:
+provider_routing_parity: pass|fail
+candidate_cycles_observed: 1|2
+candidate_cycle_summary_run_id:
+candidate_cycle_cohort_receipt_hash:
+candidate_cycle_cohort_summary_hash:
+candidate_cycle_inserted_post_ids: []
+candidate_cycle_current_claimed_post_ids: []
+candidate_cycle_carryover_claimed_count:
+candidate_cycle_terminal_complete_count:
+candidate_cycle_feed_visible_count:
+canonical_lang_numerator:
+canonical_lang_denominator:
+non_zh_hans_text_zh_cn_numerator:
+non_zh_hans_text_zh_cn_denominator:
+non_zh_hans_text_zh_cn_rate:
+non_zh_hans_text_zh_cn_percentage:
+commentary_en_valid_numerator:
+commentary_en_valid_denominator:
+commentary_en_valid_rate:
+commentary_en_valid_percentage:
+commentary_zh_cn_valid_numerator:
+commentary_zh_cn_valid_denominator:
+commentary_zh_cn_valid_rate:
+commentary_zh_cn_valid_percentage:
+quality_gate: pass|fail
+latest_n: 50
+latest_n_report_path:
+continuity_first_boundary: B0
+continuity_acceptance_boundary:
+continuity_following_boundary: Bn+1
+continuity_result: pass|fail
 production_service_mutations: none
-continuity_result: pass|fail|inconclusive
+release_result: pass|fail
 ```
 
-Do not change production to make this evidence pass. A stalled production
-timestamp is a separate incident and a staging stop condition.
+## Scheduler-preserving rollback
+
+If a post-promotion stop trigger fires, advance the prepared feature-only
+revert through ordinary auto-deploy and natural cron. Do not suspend,
+reschedule, manually trigger, apply a Blueprint, delete rows, or run a manual
+replacement harvest. Rollback completes only after web and harvester report
+the rollback SHA and the closed continuity ledger extends through the first
+natural rollback-SHA cycle with seven-call, error, credit, and feed baselines
+restored. An emergency suspension may be necessary for incident safety, but it
+makes this release's zero-disruption success impossible.
 
 ## Recorded staging acceptance — 2026-08-27
 

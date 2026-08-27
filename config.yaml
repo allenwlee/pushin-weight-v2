@@ -113,12 +113,15 @@ harvest:
     reconcile_interval_hours: 6
     request_timeout_seconds: 30
   enrichment:
-    claim_per_cycle: 50
+    claim_per_cycle: 100
+    current_cycle_claim_per_cycle: 50
+    carryover_claim_per_cycle: 50
     max_attempts: 8
     max_age_hours: 24
     claim_ttl_seconds: 660
     request_timeout_seconds: 90
     attempt_budget_seconds: 300
+    terminalization_reserve_seconds: 30
 
 # One-shot metrics re-fetch (plan 2026-08-10-002). Each post is by-ID
 # refreshed exactly once after delay_hours from first fetched_at.

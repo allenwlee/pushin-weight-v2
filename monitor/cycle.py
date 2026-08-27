@@ -62,6 +62,24 @@ from monitor.list_membership import (
     resolve_call_a_author_contexts,
     run_due_reconciliation,
 )
+from monitor.post_enrichment import (
+    CANONICAL_LANG_CODES as _CANONICAL_LANG_CODES,
+)
+from monitor.post_enrichment import (
+    ENRICHMENT_COUNT_KEYS,
+    enrichment_stage_outcome,
+    persisted_output_complete_q,
+    post_persisted_output_complete,
+)
+from monitor.post_enrichment import (
+    commentary_is_distinct as _commentary_is_distinct,
+)
+from monitor.post_enrichment import (
+    persisted_output_complete as _translation_output_complete,
+)
+from monitor.post_enrichment import (
+    present_text as _present_text,
+)
 
 # x_monitor imports — reuse existing pipeline modules.
 # These have no import-time side effects; they don't touch Store or
@@ -118,103 +136,16 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _commentary_or_none(value: Any) -> str | None:
-    """Normalize the translator's explicit no-commentary sentinel to NULL."""
-    if not isinstance(value, str):
-        return None
-    commentary = value.strip()
-    if not commentary or commentary.casefold() in {"n/a", "na"}:
-        return None
-    return commentary
-
-
-def _present_text(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    if not normalized or normalized.casefold() in {"n/a", "na"}:
-        return None
-    return normalized
-
-
-_CANONICAL_LANG_CODES = frozenset(
-    {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
-)
-
-
-def _commentary_is_distinct(value: Any, *source_values: Any) -> bool:
-    commentary = _present_text(value)
-    if commentary is None:
-        return False
-    folded = commentary.casefold()
-    return all(
-        folded != source.casefold()
-        for candidate in source_values
-        if (source := _present_text(candidate)) is not None
-    )
-
-
-def _translation_output_complete(
-    *,
-    source_text: Any,
-    lang_detected: Any,
-    text_en: Any,
-    text_zh_cn: Any,
-    commentary_en: Any,
-    commentary_zh_cn: Any,
-) -> bool:
-    """True only when canonical, genuine persistence outputs all exist."""
-    lang = _present_text(lang_detected)
-    outputs_present = all(
-        _present_text(value) is not None
-        for value in (
-            text_en,
-            text_zh_cn,
-            commentary_en,
-            commentary_zh_cn,
-        )
-    )
-    if lang not in _CANONICAL_LANG_CODES or not outputs_present:
-        return False
-    comparison_values = (source_text, text_en, text_zh_cn)
-    return _commentary_is_distinct(
-        commentary_en, *comparison_values
-    ) and _commentary_is_distinct(commentary_zh_cn, *comparison_values)
-
-
 def _requeue_recent_incomplete_translations(
     *, cfg: Any, now: datetime | None = None
 ) -> int:
     """Reopen recent false successes without resurrecting historical debt."""
     now = now or django_timezone.now()
     age_cutoff = now - timedelta(hours=cfg.max_age_hours)
-    missing_output = (
-        Q(post__lang_detected__isnull=True)
-        | Q(post__lang_detected="")
-        | Q(post__text_en__isnull=True)
-        | Q(post__text_en="")
-        | Q(post__text_zh_cn__isnull=True)
-        | Q(post__text_zh_cn="")
-        | Q(post__commentary_en__isnull=True)
-        | Q(post__commentary_en="")
-        | Q(post__commentary_zh_cn__isnull=True)
-        | Q(post__commentary_zh_cn="")
-    )
-    invalid_output = (
-        ~Q(post__lang_detected__in=_CANONICAL_LANG_CODES)
-        | Q(post__commentary_en__iregex=r"^\s*n/?a\s*$")
-        | Q(post__commentary_zh_cn__iregex=r"^\s*n/?a\s*$")
-        | Q(post__commentary_en__iexact=F("post__text"))
-        | Q(post__commentary_en__iexact=F("post__text_en"))
-        | Q(post__commentary_en__iexact=F("post__text_zh_cn"))
-        | Q(post__commentary_zh_cn__iexact=F("post__text"))
-        | Q(post__commentary_zh_cn__iexact=F("post__text_en"))
-        | Q(post__commentary_zh_cn__iexact=F("post__text_zh_cn"))
-    )
     return PostEnrichmentState.objects.filter(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
-    ).filter(missing_output | invalid_output).update(
+    ).exclude(persisted_output_complete_q(prefix="post__")).update(
         translation_status=PostEnrichmentState.Status.PENDING,
         translation_next_attempt_at=now,
         translation_error_code="translation_output_incomplete",
@@ -223,8 +154,21 @@ def _requeue_recent_incomplete_translations(
 
 @dataclass(frozen=True)
 class EnrichmentClaimBatch:
-    states: tuple[PostEnrichmentState, ...]
+    current_cycle_states: tuple[PostEnrichmentState, ...] = ()
+    carryover_states: tuple[PostEnrichmentState, ...] = ()
     quarantined: int = 0
+
+    @property
+    def states(self) -> tuple[PostEnrichmentState, ...]:
+        return self.carryover_states + self.current_cycle_states
+
+    @property
+    def current_cycle_post_ids(self) -> tuple[str, ...]:
+        return tuple(str(state.pk) for state in self.current_cycle_states)
+
+    @property
+    def carryover_post_ids(self) -> tuple[str, ...]:
+        return tuple(str(state.pk) for state in self.carryover_states)
 
 
 def _claim_enrichment_states(
@@ -234,17 +178,18 @@ def _claim_enrichment_states(
     now: datetime | None = None,
     prefer_created_before: datetime | None = None,
 ) -> EnrichmentClaimBatch:
-    """Quarantine aged debt, then claim one bounded cycle-aware batch.
+    """Quarantine exhausted debt, then claim one atomic two-lane batch.
 
     Active leases are excluded, expired leases are recoverable, and attempt/
     age exhaustion becomes an explicit failed state instead of an immortal
     pending row. Aged rows are transitioned outside the claim budget so they
-    cannot consume every slot before live work reaches the classifier.
+    cannot consume slots before live work reaches the classifier.
     ``skip_locked`` lets a second writer avoid rows currently owned by another
     transaction even though the outer writer lock normally serializes
-    production entrypoints. Normal live cycles prefer rows that predate the
-    cycle (and their retries) before rows inserted by that same cycle, avoiding
-    a perpetual freshest-first displacement loop.
+    production entrypoints. A cutoff creates disjoint carryover (older than
+    cutoff) and current-cycle (at or after cutoff) allocations that never
+    borrow from one another. Omitting the cutoff preserves the legacy bounded
+    backlog/backfill claim.
     """
 
     now = now or django_timezone.now()
@@ -253,7 +198,8 @@ def _claim_enrichment_states(
         Q(translation_status=PostEnrichmentState.Status.PENDING)
         | Q(classification_status=PostEnrichmentState.Status.PENDING)
     ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
-    claimed: list[PostEnrichmentState] = []
+    current_cycle: list[PostEnrichmentState] = []
+    carryover: list[PostEnrichmentState] = []
 
     with transaction.atomic():
         expired_due = due & Q(created_at__lte=age_cutoff)
@@ -291,17 +237,91 @@ def _claim_enrichment_states(
             claimed_at=None,
             claim_expires_at=None,
         )
-        candidate_qs = (
+
+        # Transition attempt-exhausted stages before either bounded lane is
+        # sliced. Otherwise terminal debt can consume a claim slot and starve
+        # eligible work at the edge of the cap.
+        attempt_exhausted = due & Q(created_at__gt=age_cutoff) & (
+            Q(
+                translation_status=PostEnrichmentState.Status.PENDING,
+                translation_attempts__gte=cfg.max_attempts,
+            )
+            | Q(
+                classification_status=PostEnrichmentState.Status.PENDING,
+                classification_attempts__gte=cfg.max_attempts,
+            )
+        )
+        attempt_exhausted_ids = tuple(
+            str(post_id)
+            for post_id in PostEnrichmentState.objects.filter(
+                attempt_exhausted
+            ).values_list("post_id", flat=True)
+        )
+        if attempt_exhausted_ids:
+            PostEnrichmentState.objects.filter(
+                post_id__in=attempt_exhausted_ids
+            ).update(
+                translation_status=Case(
+                    When(
+                        translation_status=PostEnrichmentState.Status.PENDING,
+                        translation_attempts__gte=cfg.max_attempts,
+                        then=Value(PostEnrichmentState.Status.FAILED),
+                    ),
+                    default=F("translation_status"),
+                ),
+                translation_error_code=Case(
+                    When(
+                        translation_status=PostEnrichmentState.Status.PENDING,
+                        translation_attempts__gte=cfg.max_attempts,
+                        then=Value("attempts_exhausted"),
+                    ),
+                    default=F("translation_error_code"),
+                ),
+                classification_status=Case(
+                    When(
+                        classification_status=PostEnrichmentState.Status.PENDING,
+                        classification_attempts__gte=cfg.max_attempts,
+                        then=Value(PostEnrichmentState.Status.FAILED),
+                    ),
+                    default=F("classification_status"),
+                ),
+                classification_error_code=Case(
+                    When(
+                        classification_status=PostEnrichmentState.Status.PENDING,
+                        classification_attempts__gte=cfg.max_attempts,
+                        then=Value("attempts_exhausted"),
+                    ),
+                    default=F("classification_error_code"),
+                ),
+            )
+
+            terminal_attempt_ids = tuple(
+                str(post_id)
+                for post_id in PostEnrichmentState.objects.filter(
+                    post_id__in=attempt_exhausted_ids
+                )
+                .exclude(
+                    Q(translation_status=PostEnrichmentState.Status.PENDING)
+                    | Q(classification_status=PostEnrichmentState.Status.PENDING)
+                )
+                .values_list("post_id", flat=True)
+            )
+            if terminal_attempt_ids:
+                quarantined += len(terminal_attempt_ids)
+                PostEnrichmentState.objects.filter(
+                    post_id__in=terminal_attempt_ids
+                ).update(
+                    claim_owner="",
+                    claim_run_id="",
+                    claimed_at=None,
+                    claim_expires_at=None,
+                )
+
+        eligible_qs = (
             PostEnrichmentState.objects.select_for_update(skip_locked=True)
             .select_related("post")
             .filter(due, created_at__gt=age_cutoff)
-        )
-        if prefer_created_before is not None:
-            candidate_qs = candidate_qs.annotate(
-                _cycle_priority=Case(
-                    When(created_at__lt=prefer_created_before, then=Value(0)),
-                    default=Value(1),
-                ),
+            .annotate(
                 _retry_priority=Case(
                     When(
                         Q(
@@ -315,40 +335,34 @@ def _claim_enrichment_states(
                         then=Value(0),
                     ),
                     default=Value(1),
-                ),
-            # Protect the literal latest cohort from both current-cycle inserts
-            # and older retry debt. Retry state only breaks equal timestamps.
-            ).order_by(
-                "_cycle_priority", "-created_at", "_retry_priority", "post_id"
+                )
             )
+            .order_by("-created_at", "_retry_priority", "post_id")
+        )
+
+        if prefer_created_before is None:
+            legacy_cap = min(
+                cfg.claim_per_cycle,
+                cfg.carryover_claim_per_cycle,
+            )
+            carryover = list(eligible_qs[:legacy_cap])
         else:
-            candidate_qs = candidate_qs.order_by("-created_at", "post_id")
-        candidates = list(candidate_qs[: cfg.claim_per_cycle])
+            carryover = list(
+                eligible_qs.filter(created_at__lt=prefer_created_before)[
+                    : cfg.carryover_claim_per_cycle
+                ]
+            )
+            aggregate_remainder = max(cfg.claim_per_cycle - len(carryover), 0)
+            current_cap = min(
+                cfg.current_cycle_claim_per_cycle,
+                aggregate_remainder,
+            )
+            current_cycle = list(
+                eligible_qs.filter(created_at__gte=prefer_created_before)[:current_cap]
+            )
+
+        candidates = [*carryover, *current_cycle]
         for state in candidates:
-            for prefix in ("translation", "classification"):
-                status_name = f"{prefix}_status"
-                attempts_name = f"{prefix}_attempts"
-                if getattr(state, status_name) != PostEnrichmentState.Status.PENDING:
-                    continue
-                error_code = ""
-                if getattr(state, attempts_name) >= cfg.max_attempts:
-                    error_code = "attempts_exhausted"
-                if error_code:
-                    setattr(state, status_name, PostEnrichmentState.Status.FAILED)
-                    setattr(state, f"{prefix}_error_code", error_code)
-
-            if (
-                state.translation_status == PostEnrichmentState.Status.FAILED
-                and state.classification_status == PostEnrichmentState.Status.FAILED
-            ):
-                quarantined += 1
-                state.claim_owner = ""
-                state.claim_run_id = ""
-                state.claimed_at = None
-                state.claim_expires_at = None
-                state.save()
-                continue
-
             state.claim_owner = f"harvester:{run_id}"[:128]
             state.claim_run_id = str(run_id)[:128]
             state.claimed_at = now
@@ -366,9 +380,12 @@ def _claim_enrichment_states(
                     setattr(state, first_name, now)
                 setattr(state, f"{prefix}_last_attempt_at", now)
             state.save()
-            claimed.append(state)
 
-    return EnrichmentClaimBatch(states=tuple(claimed), quarantined=quarantined)
+    return EnrichmentClaimBatch(
+        current_cycle_states=tuple(current_cycle),
+        carryover_states=tuple(carryover),
+        quarantined=quarantined,
+    )
 
 
 def _release_enrichment_claim(post_id: str, *, run_id: str) -> bool:
@@ -1864,6 +1881,8 @@ class CycleRunner:
         for it in items:
             if it.get("_unattributed"):
                 continue
+            it.pop("_db_inserted", None)
+            it.pop("_persisted_post_id", None)
             try:
                 with transaction.atomic():
                     account = _upsert_account(it)
@@ -1885,6 +1904,8 @@ class CycleRunner:
                 # The timestamp is taken after the atomic block exits: this
                 # is the server-owned commit boundary, including duplicate
                 # updates. It is intentionally not Post.fetched_at.
+                it["_db_inserted"] = bool(created)
+                it["_persisted_post_id"] = str(post.pk)
                 it["_db_committed_at"] = self._wall_now().isoformat()
             except Exception as exc:
                 n_failed += 1
@@ -1923,27 +1944,33 @@ class CycleRunner:
         Lazy imports are used so the module loads without LLM deps.
         """
         counters = {
+            **{key: 0 for key in ENRICHMENT_COUNT_KEYS},
             "n_translated": 0,
             "n_discourse": 0,
             "n_nationalism": 0,
             "n_failed_translate": 0,
-            "n_enrichment_claimed": 0,
-            "n_enrichment_pending": 0,
-            "n_enrichment_failed": 0,
-            "n_enrichment_succeeded": 0,
-            "n_enrichment_quarantined": 0,
-            "n_enrichment_deferred": 0,
             "n_translation_requeued": 0,
             "n_translator_unavailable": 0,
             "n_classifier_unavailable": 0,
             "n_unsanctioned_persisted": 0,
             "n_unsanctioned_cleared": 0,
             "flag_dead_letters": [],
+            "inserted_post_ids": sorted(
+                {
+                    str(item.get("_persisted_post_id"))
+                    for item in kept_posts
+                    if item.get("_db_inserted")
+                    and item.get("_persisted_post_id")
+                }
+            ),
+            "enrichment_current_cycle_post_ids": [],
+            "enrichment_carryover_post_ids": [],
+            "enrichment_state_facts": [],
         }
 
         enrichment_cfg = self.cfg.harvest.enrichment
-        combined_stage_budget = 2 * enrichment_cfg.attempt_budget_seconds
-        if deadline is not None and not deadline.can_start(combined_stage_budget):
+        claim_safe_envelope = enrichment_cfg.claim_safe_envelope_seconds
+        if deadline is not None and not deadline.can_start(claim_safe_envelope):
             counters["n_enrichment_deferred"] = PostEnrichmentState.objects.filter(
                 Q(translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)
@@ -1961,6 +1988,18 @@ class CycleRunner:
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
+        counters["n_enrichment_claimed_current_cycle"] = len(
+            claim_batch.current_cycle_post_ids
+        )
+        counters["n_enrichment_claimed_carryover"] = len(
+            claim_batch.carryover_post_ids
+        )
+        counters["enrichment_current_cycle_post_ids"] = list(
+            claim_batch.current_cycle_post_ids
+        )
+        counters["enrichment_carryover_post_ids"] = list(
+            claim_batch.carryover_post_ids
+        )
         counters["n_enrichment_quarantined"] = claim_batch.quarantined
         if claim_batch.quarantined:
             self._error_counts["enrichment_quarantined"] += claim_batch.quarantined
@@ -2119,12 +2158,12 @@ class CycleRunner:
                     text_en or post.text_en,
                     text_zh_cn or post.text_zh_cn,
                 )
-                commentary_en = _commentary_or_none(r.get("en_equivalent"))
+                commentary_en = _present_text(r.get("en_equivalent"))
                 if not _commentary_is_distinct(
                     commentary_en, *comparison_values
                 ):
                     commentary_en = None
-                commentary_zh_cn = _commentary_or_none(r.get("cn_equivalent"))
+                commentary_zh_cn = _present_text(r.get("cn_equivalent"))
                 if not _commentary_is_distinct(
                     commentary_zh_cn, *comparison_values
                 ):
@@ -2344,27 +2383,36 @@ class CycleRunner:
             error_code=classification_error_code,
             cfg=enrichment_cfg,
         )
+        resolved_states = list(
+            PostEnrichmentState.objects.select_related("post").filter(
+                post_id__in=claimed_post_ids
+            )
+        )
+        current_cycle_id_set = set(claim_batch.current_cycle_post_ids)
+        counters["enrichment_state_facts"] = [
+            {
+                "post_id": str(state.post_id),
+                "lane": (
+                    "current_cycle"
+                    if str(state.post_id) in current_cycle_id_set
+                    else "carryover"
+                ),
+                "translation_status": state.translation_status,
+                "classification_status": state.classification_status,
+                "output_complete": post_persisted_output_complete(state.post),
+            }
+            for state in resolved_states
+        ]
         for state in claimed_states:
             _release_enrichment_claim(state.pk, run_id=run_id)
-
-        resolved_states = list(
-            PostEnrichmentState.objects.filter(post_id__in=claimed_post_ids)
-        )
-        counters["n_enrichment_succeeded"] = sum(
-            1
-            for state in resolved_states
-            if state.translation_status == PostEnrichmentState.Status.SUCCEEDED
-            and state.classification_status == PostEnrichmentState.Status.SUCCEEDED
-        )
-        counters["n_enrichment_failed"] = sum(
-            1
-            for state in resolved_states
-            if state.translation_status == PostEnrichmentState.Status.FAILED
-            or state.classification_status == PostEnrichmentState.Status.FAILED
-        )
-        counters["n_enrichment_pending"] = len(resolved_states) - (
-            counters["n_enrichment_succeeded"] + counters["n_enrichment_failed"]
-        )
+        for fact in counters["enrichment_state_facts"]:
+            outcome = enrichment_stage_outcome(
+                translation_status=fact["translation_status"],
+                classification_status=fact["classification_status"],
+            )
+            lane = fact["lane"]
+            counters[f"n_enrichment_{outcome}"] += 1
+            counters[f"n_enrichment_{outcome}_{lane}"] += 1
         counters["n_enrichment_quarantined"] = (
             claim_batch.quarantined + counters["n_enrichment_failed"]
         )
@@ -3100,7 +3148,9 @@ class CycleRunner:
                 kept_all,
                 run_id=run_id,
                 deadline=deadline,
-                prefer_created_before=cycle_started_wall,
+                prefer_created_before=(
+                    None if self.cycle_kind == "backfill" else cycle_started_wall
+                ),
             )
             post_fetch_completed_at = self._wall_now().isoformat()
             pf_counters["completed_at"] = post_fetch_completed_at
@@ -3164,7 +3214,7 @@ class CycleRunner:
             try:
                 from monitor.metrics_refresh import run_metrics_refresh
 
-                mr_out = run_metrics_refresh(api, self.cfg)
+                mr_out = run_metrics_refresh(api, self.cfg, deadline=deadline)
                 summary.setdefault("metrics_refresh", {}).update(mr_out)
                 if int(mr_out.get("n_refreshed") or 0):
                     logger.info(

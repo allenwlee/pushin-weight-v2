@@ -629,31 +629,112 @@ class TestFeedViewIntegration:
         assert "applied_filters" in data
         assert "locale" in data
 
-    def test_feed_returns_durable_enrichment_state(self, client, django_user_model):
+    @pytest.mark.requires_postgres
+    def test_feed_routes_hide_ineligible_rows_before_page_limit(self, client, django_user_model):
+        from datetime import timedelta
+
         from django.utils import timezone
 
-        from core.models import Post, PostEnrichmentState
+        from core.models import Brand, Post, PostBrand, PostEnrichmentState
 
         user = django_user_model.objects.create_user(
             username="enrichment-user", password="pass",
         )
-        post = Post.objects.create(
+        now = timezone.now()
+        complete_fields = {
+            "text": "Source post",
+            "text_en": "English translation",
+            "text_zh_cn": "中文翻译",
+            "commentary_en": "English commentary",
+            "commentary_zh_cn": "中文评论",
+            "lang_detected": "en",
+        }
+        pending = Post.objects.create(
             tweet_id="enrichment-pending",
-            text="pending post",
-            created_at=timezone.now(),
+            created_at=now,
+            **complete_fields,
         )
-        PostEnrichmentState.objects.create(post=post)
+        PostEnrichmentState.objects.create(post=pending)
+        failed = Post.objects.create(
+            tweet_id="enrichment-failed",
+            created_at=now - timedelta(seconds=1),
+            **complete_fields,
+        )
+        PostEnrichmentState.objects.create(
+            post=failed,
+            translation_status=PostEnrichmentState.Status.FAILED,
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+        )
+        succeeded = Post.objects.create(
+            tweet_id="enrichment-succeeded",
+            created_at=now - timedelta(seconds=2),
+            **complete_fields,
+        )
+        PostEnrichmentState.objects.create(
+            post=succeeded,
+            translation_status=PostEnrichmentState.Status.SUCCEEDED,
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+        )
+        legacy = Post.objects.create(
+            tweet_id="enrichment-legacy-complete",
+            created_at=now - timedelta(seconds=3),
+            **complete_fields,
+        )
+        invalid_succeeded = Post.objects.create(
+            tweet_id="enrichment-succeeded-invalid",
+            created_at=now - timedelta(seconds=4),
+            **{
+                **complete_fields,
+                "commentary_en": complete_fields["text"],
+            },
+        )
+        PostEnrichmentState.objects.create(
+            post=invalid_succeeded,
+            translation_status=PostEnrichmentState.Status.SUCCEEDED,
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+        )
+        incomplete_legacy = Post.objects.create(
+            tweet_id="enrichment-legacy-incomplete",
+            created_at=now - timedelta(seconds=5),
+            **{
+                **complete_fields,
+                "commentary_zh_cn": None,
+            },
+        )
+        brand, _ = Brand.objects.get_or_create(
+            nickname="deepseek",
+            defaults={"display_name": "DeepSeek"},
+        )
+        for post in (
+            pending,
+            failed,
+            succeeded,
+            legacy,
+            invalid_succeeded,
+            incomplete_legacy,
+        ):
+            PostBrand.objects.create(post=post, brand=brand)
         client.force_login(user)
 
-        response = client.get("/feed/")
+        for feed_url in (
+            "/feed/?limit=2",
+            "/feed/?limit=2&brand=deepseek&locale=zh_cn",
+        ):
+            response = client.get(feed_url, secure=True)
+            assert response.status_code == 200
+            assert [row["tweet_id"] for row in response.json()["rows"]] == [
+                succeeded.tweet_id,
+                legacy.tweet_id,
+            ]
 
-        assert response.status_code == 200
-        row = next(
-            item for item in response.json()["rows"]
-            if item["tweet_id"] == post.tweet_id
-        )
-        assert row["enrichment_status"] == "pending"
-        assert row["enrichment_status_label"] == "enrichment pending"
+        for route in ("/", "/internal/", "/brands/deepseek/"):
+            html_response = client.get(route, secure=True)
+            assert html_response.status_code == 200
+            html = html_response.content.decode("utf-8")
+            for visible in (succeeded, legacy):
+                assert f'data-tweet-id="{visible.tweet_id}"' in html
+            for hidden in (pending, failed, invalid_succeeded, incomplete_legacy):
+                assert f'data-tweet-id="{hidden.tweet_id}"' not in html
 
     def test_feed_is_public_for_the_anonymous_home(self, client):
         resp = client.get("/feed/")

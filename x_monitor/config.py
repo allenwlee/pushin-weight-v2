@@ -226,24 +226,43 @@ class EnrichmentAttemptDeadline:
 class EnrichmentConfig(BaseModel):
     """Bounded durable translation/classification queue."""
 
-    claim_per_cycle: int = Field(default=50, ge=1)
+    claim_per_cycle: int = Field(default=100, ge=1)
+    current_cycle_claim_per_cycle: int = Field(default=50, ge=0)
+    carryover_claim_per_cycle: int = Field(default=50, ge=0)
     max_attempts: int = Field(default=8, ge=1)
     max_age_hours: int = Field(default=24, ge=1)
     claim_ttl_seconds: int = Field(default=660, ge=1)
     request_timeout_seconds: int = Field(default=90, ge=1)
     attempt_budget_seconds: int = Field(default=300, ge=1)
+    terminalization_reserve_seconds: int = Field(default=30, ge=1)
 
     @model_validator(mode="after")
     def _validate_attempt_budget(self) -> EnrichmentConfig:
+        if (
+            self.current_cycle_claim_per_cycle + self.carryover_claim_per_cycle
+            > self.claim_per_cycle
+        ):
+            raise ValueError(
+                "current_cycle_claim_per_cycle + carryover_claim_per_cycle "
+                "must not exceed claim_per_cycle"
+            )
         if self.request_timeout_seconds > self.attempt_budget_seconds:
             raise ValueError(
                 "request_timeout_seconds must not exceed attempt_budget_seconds"
             )
-        if self.claim_ttl_seconds < (2 * self.attempt_budget_seconds):
+        if self.claim_ttl_seconds < self.claim_safe_envelope_seconds:
             raise ValueError(
-                "claim_ttl_seconds must cover both enrichment stage budgets"
+                "claim_ttl_seconds must cover both enrichment stage budgets "
+                "and terminalization reserve"
             )
         return self
+
+    @property
+    def claim_safe_envelope_seconds(self) -> int:
+        return (
+            2 * self.attempt_budget_seconds
+            + self.terminalization_reserve_seconds
+        )
 
     def start_attempt_deadline(
         self, *, monotonic: Callable[[], float] = time.monotonic

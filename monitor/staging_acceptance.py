@@ -8,11 +8,17 @@ this module.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+from monitor.post_enrichment import (
+    ENRICHMENT_COUNT_KEYS,
+    enrichment_fact_terminal_complete,
+    enrichment_stage_outcome,
+)
 from scripts.staging_refresh.policy import RefreshPolicy
 from x_monitor.config import Config
 
@@ -27,6 +33,17 @@ MAX_PAGES = 1
 MAX_PER_PAGE = 5
 MAX_TRUNCATION_WALKS = 1
 MAX_ENRICHMENT_CLAIMS = 5
+MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS = 5
+MAX_CARRYOVER_ENRICHMENT_CLAIMS = 0
+
+_SAFE_POST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_FACT_KEYS = {
+    "post_id",
+    "lane",
+    "translation_status",
+    "classification_status",
+    "output_complete",
+}
 
 
 class StagingAcceptanceError(ValueError):
@@ -57,6 +74,10 @@ class StagingAcceptanceProfile:
                 "truncation_walks": MAX_TRUNCATION_WALKS,
                 "metrics_refresh": False,
                 "enrichment_claims": MAX_ENRICHMENT_CLAIMS,
+                "enrichment_current_cycle_claims": (
+                    MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS
+                ),
+                "enrichment_carryover_claims": MAX_CARRYOVER_ENRICHMENT_CLAIMS,
                 "http_retries": 0,
             },
         }
@@ -66,6 +87,14 @@ class StagingAcceptanceProfile:
 class PreparedStagingAcceptance:
     profile: StagingAcceptanceProfile
     config: Config
+
+
+@dataclass(frozen=True, slots=True)
+class StagingAcceptanceEvaluation:
+    status: str
+    reason_codes: tuple[str, ...]
+    selected_call: dict[str, Any]
+    post_evidence: tuple[dict[str, Any], ...] = ()
 
 
 def _configured_call_ids(cfg: Config) -> frozenset[str]:
@@ -159,7 +188,13 @@ def _inspect_database(database, policy: RefreshPolicy) -> tuple[str, str]:
 
 def _bounded_config(cfg: Config) -> Config:
     enrichment = cfg.harvest.enrichment.model_copy(
-        update={"claim_per_cycle": MAX_ENRICHMENT_CLAIMS}
+        update={
+            "claim_per_cycle": MAX_ENRICHMENT_CLAIMS,
+            "current_cycle_claim_per_cycle": (
+                MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS
+            ),
+            "carryover_claim_per_cycle": MAX_CARRYOVER_ENRICHMENT_CLAIMS,
+        }
     )
     harvest = cfg.harvest.model_copy(update={"enrichment": enrichment})
     return cfg.model_copy(
@@ -179,6 +214,266 @@ def _bounded_config(cfg: Config) -> Config:
             ),
             "harvest": harvest,
         }
+    )
+
+
+def _safe_nonnegative_count(source: Mapping[str, Any], key: str) -> int:
+    value = source.get(key)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise StagingAcceptanceError(f"invalid_enrichment_count:{key}")
+    return value
+
+
+def _safe_post_ids(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)) or len(value) > MAX_ENRICHMENT_CLAIMS:
+        raise StagingAcceptanceError("invalid_enrichment_post_ids")
+    result = tuple(str(post_id) for post_id in value)
+    if len(set(result)) != len(result) or any(
+        not _SAFE_POST_ID_RE.fullmatch(post_id) for post_id in result
+    ):
+        raise StagingAcceptanceError("invalid_enrichment_post_ids")
+    return result
+
+
+def _safe_enrichment_facts(value: Any) -> tuple[dict[str, Any], ...]:
+    if not isinstance(value, (list, tuple)) or len(value) > MAX_ENRICHMENT_CLAIMS:
+        raise StagingAcceptanceError("invalid_enrichment_facts")
+    result: list[dict[str, Any]] = []
+    for raw in value:
+        if not isinstance(raw, Mapping) or set(raw) != _FACT_KEYS:
+            raise StagingAcceptanceError("invalid_enrichment_facts")
+        post_id = str(raw.get("post_id") or "")
+        lane = raw.get("lane")
+        translation_status = raw.get("translation_status")
+        classification_status = raw.get("classification_status")
+        output_complete = raw.get("output_complete")
+        if (
+            not _SAFE_POST_ID_RE.fullmatch(post_id)
+            or lane not in {"current_cycle", "carryover"}
+            or not isinstance(output_complete, bool)
+        ):
+            raise StagingAcceptanceError("invalid_enrichment_facts")
+        try:
+            enrichment_stage_outcome(
+                translation_status=translation_status,
+                classification_status=classification_status,
+            )
+        except ValueError as exc:
+            raise StagingAcceptanceError("invalid_enrichment_facts") from exc
+        result.append(
+            {
+                "post_id": post_id,
+                "lane": lane,
+                "translation_status": translation_status,
+                "classification_status": classification_status,
+                "output_complete": output_complete,
+            }
+        )
+    if len({fact["post_id"] for fact in result}) != len(result):
+        raise StagingAcceptanceError("invalid_enrichment_facts")
+    return tuple(sorted(result, key=lambda fact: fact["post_id"]))
+
+
+def evaluate_staging_acceptance(
+    prepared: PreparedStagingAcceptance,
+    stats: Mapping[str, Any],
+) -> StagingAcceptanceEvaluation:
+    """Classify one bounded run from exact inserted and same-cycle facts."""
+
+    selected_call = next(
+        (
+            dict(row)
+            for row in stats.get("calls", [])
+            if isinstance(row, Mapping)
+            and row.get("call_id") == prepared.profile.selected_call
+        ),
+        {},
+    )
+    call_status = str(selected_call.get("status") or "missing")
+    n_results = selected_call.get("n_results")
+    n_inserted = selected_call.get("n_inserted")
+    n_updated = selected_call.get("n_updated")
+    if (
+        stats.get("status") not in {"completed", "degraded"}
+        or bool(stats.get("errors"))
+        or call_status not in {"completed", "no_results"}
+        or not isinstance(n_results, int)
+        or isinstance(n_results, bool)
+        or n_results < 0
+        or n_results > MAX_RESULTS
+        or not isinstance(n_inserted, int)
+        or isinstance(n_inserted, bool)
+        or n_inserted < 0
+        or n_inserted > MAX_RESULTS
+        or not isinstance(n_updated, int)
+        or isinstance(n_updated, bool)
+        or n_updated < 0
+    ):
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("pipeline_or_bound_failure",),
+            selected_call=selected_call,
+        )
+
+    post_fetch = stats.get("post_fetch")
+    if not isinstance(post_fetch, Mapping):
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("invalid_enrichment_evidence",),
+            selected_call=selected_call,
+        )
+    try:
+        counts = {
+            key: _safe_nonnegative_count(post_fetch, key)
+            for key in ENRICHMENT_COUNT_KEYS
+        }
+        inserted_ids = _safe_post_ids(post_fetch.get("inserted_post_ids"))
+        current_ids = _safe_post_ids(
+            post_fetch.get("enrichment_current_cycle_post_ids")
+        )
+        carryover_ids = _safe_post_ids(
+            post_fetch.get("enrichment_carryover_post_ids")
+        )
+        facts = _safe_enrichment_facts(post_fetch.get("enrichment_state_facts"))
+    except StagingAcceptanceError:
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("invalid_enrichment_evidence",),
+            selected_call=selected_call,
+        )
+
+    if counts["n_enrichment_claimed_carryover"] or carryover_ids:
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("carryover_claimed",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    if (
+        counts["n_enrichment_claimed"] > MAX_ENRICHMENT_CLAIMS
+        or counts["n_enrichment_claimed_current_cycle"]
+        > MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS
+    ):
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("enrichment_cap_exceeded",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+
+    fact_ids = {fact["post_id"] for fact in facts}
+    claimed_ids = set(current_ids) | set(carryover_ids)
+    derived = {
+        f"n_enrichment_{outcome}_{lane}": sum(
+            1
+            for fact in facts
+            if fact["lane"] == lane
+            and enrichment_stage_outcome(
+                translation_status=fact["translation_status"],
+                classification_status=fact["classification_status"],
+            )
+            == outcome
+        )
+        for lane in ("current_cycle", "carryover")
+        for outcome in ("succeeded", "pending", "failed")
+    }
+    derived.update(
+        {
+            f"n_enrichment_{outcome}": sum(
+                derived[f"n_enrichment_{outcome}_{lane}"]
+                for lane in ("current_cycle", "carryover")
+            )
+            for outcome in ("succeeded", "pending", "failed")
+        }
+    )
+    evidence_consistent = (
+        not (set(current_ids) & set(carryover_ids))
+        and fact_ids == claimed_ids
+        and counts["n_enrichment_claimed"] == len(claimed_ids)
+        and counts["n_enrichment_claimed_current_cycle"] == len(current_ids)
+        and counts["n_enrichment_claimed_carryover"] == len(carryover_ids)
+        and all(counts[key] == value for key, value in derived.items())
+    )
+    if not evidence_consistent:
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("inconsistent_enrichment_evidence",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    if n_results == 0:
+        return StagingAcceptanceEvaluation(
+            status="inconclusive",
+            reason_codes=("no_results",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    if n_inserted == 0:
+        return StagingAcceptanceEvaluation(
+            status="inconclusive",
+            reason_codes=(("update_only",) if n_updated else ("no_inserted_posts",)),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    if len(inserted_ids) != n_inserted:
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("inserted_identity_count_mismatch",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+
+    acceptance_ids = set(inserted_ids)
+    if not acceptance_ids or set(current_ids) != acceptance_ids:
+        return StagingAcceptanceEvaluation(
+            status="inconclusive",
+            reason_codes=("current_cycle_identity_mismatch",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    accepted_facts = tuple(
+        fact for fact in facts if fact["post_id"] in acceptance_ids
+    )
+    if any(
+        enrichment_stage_outcome(
+            translation_status=fact["translation_status"],
+            classification_status=fact["classification_status"],
+        )
+        == "failed"
+        for fact in accepted_facts
+    ):
+        return StagingAcceptanceEvaluation(
+            status="failed",
+            reason_codes=("enrichment_failed",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    if any(
+        enrichment_stage_outcome(
+            translation_status=fact["translation_status"],
+            classification_status=fact["classification_status"],
+        )
+        == "pending"
+        for fact in accepted_facts
+    ):
+        return StagingAcceptanceEvaluation(
+            status="inconclusive",
+            reason_codes=("enrichment_pending",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    if not all(enrichment_fact_terminal_complete(fact) for fact in accepted_facts):
+        return StagingAcceptanceEvaluation(
+            status="inconclusive",
+            reason_codes=("output_incomplete",),
+            selected_call=selected_call,
+            post_evidence=facts,
+        )
+    return StagingAcceptanceEvaluation(
+        status="accepted",
+        reason_codes=("terminal_complete",),
+        selected_call=selected_call,
+        post_evidence=accepted_facts,
     )
 
 

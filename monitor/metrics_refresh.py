@@ -19,6 +19,8 @@ from x_monitor.config import Config, MetricsRefreshConfig
 
 logger = logging.getLogger(__name__)
 
+_TWEETS_BY_IDS_CHUNK = 50
+
 
 def _mrc(cfg: Config | None) -> MetricsRefreshConfig:
     if cfg is None:
@@ -65,6 +67,7 @@ def run_metrics_refresh(
     cfg: Config | None = None,
     *,
     now: datetime | None = None,
+    deadline: Any | None = None,
 ) -> dict[str, Any]:
     """Select due posts, by-ID refresh metrics, stamp once. Never raises."""
     mrc = _mrc(cfg)
@@ -74,6 +77,7 @@ def run_metrics_refresh(
         "n_refreshed": 0,
         "n_missing": 0,
         "n_errors": 0,
+        "n_deferred": 0,
         "delay_hours": float(mrc.delay_hours),
         "per_cycle_cap": int(mrc.per_cycle_cap),
     }
@@ -96,19 +100,30 @@ def run_metrics_refresh(
     if not due:
         return out
 
-    try:
-        fresh = api.get_tweets_by_ids(due)
-    except Exception as exc:
-        logger.warning("metrics_refresh: get_tweets_by_ids failed: %s", exc)
-        out["n_errors"] = 1
-        out["error"] = str(exc)
-        return out
+    fresh: dict[str, dict[str, Any]] = {}
+    request_envelope = float(getattr(api, "timeout_s", 60)) * (
+        int(getattr(api, "max_retries", 2)) + 1
+    ) + 8.0
+    for offset in range(0, len(due), _TWEETS_BY_IDS_CHUNK):
+        chunk = due[offset : offset + _TWEETS_BY_IDS_CHUNK]
+        if deadline is not None and not deadline.can_start(request_envelope):
+            out["n_deferred"] = len(due) - offset
+            break
+        try:
+            chunk_fresh = api.get_tweets_by_ids(chunk)
+        except Exception as exc:
+            logger.warning("metrics_refresh: get_tweets_by_ids failed: %s", exc)
+            out["n_errors"] = 1
+            out["n_deferred"] = len(due) - offset
+            out["error"] = str(exc)
+            break
+        if isinstance(chunk_fresh, dict):
+            fresh.update(chunk_fresh)
 
-    if not isinstance(fresh, dict):
-        fresh = {}
+    attempted = due[: len(due) - int(out["n_deferred"])]
 
     stamp_now = now or dj_timezone.now()
-    for tid in due:
+    for tid in attempted:
         info = fresh.get(tid)
         if not info:
             out["n_missing"] += 1
@@ -124,10 +139,11 @@ def run_metrics_refresh(
             out["n_errors"] += 1
 
     logger.info(
-        "metrics_refresh: due=%d refreshed=%d missing=%d errors=%d",
+        "metrics_refresh: due=%d refreshed=%d missing=%d errors=%d deferred=%d",
         out["n_due"],
         out["n_refreshed"],
         out["n_missing"],
         out["n_errors"],
+        out["n_deferred"],
     )
     return out

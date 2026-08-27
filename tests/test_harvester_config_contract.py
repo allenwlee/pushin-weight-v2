@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from x_monitor.config import Config
+from x_monitor.config import Config, load_config
+
+REPO = Path(__file__).resolve().parent.parent
 
 
 def _config(**harvest_overrides) -> Config:
@@ -28,12 +32,27 @@ def test_harvest_runtime_defaults_pin_u9_contract():
     assert cfg.harvest.backlog.replays_per_cycle == 2
     assert cfg.harvest.list_membership.page_size == 20
     assert cfg.harvest.list_membership.reconcile_interval_hours == 6
-    assert cfg.harvest.enrichment.claim_per_cycle == 50
+    assert cfg.harvest.enrichment.claim_per_cycle == 100
+    assert cfg.harvest.enrichment.current_cycle_claim_per_cycle == 50
+    assert cfg.harvest.enrichment.carryover_claim_per_cycle == 50
     assert cfg.harvest.enrichment.max_attempts == 8
     assert cfg.harvest.enrichment.max_age_hours == 24
     assert cfg.harvest.enrichment.claim_ttl_seconds == 660
     assert cfg.harvest.enrichment.request_timeout_seconds == 90
     assert cfg.harvest.enrichment.attempt_budget_seconds == 300
+    assert cfg.harvest.enrichment.terminalization_reserve_seconds == 30
+    assert cfg.harvest.enrichment.claim_safe_envelope_seconds == 630
+
+
+def test_committed_yaml_pins_production_two_lane_envelope():
+    enrichment = load_config(REPO / "config.yaml").harvest.enrichment
+
+    assert (
+        enrichment.claim_per_cycle,
+        enrichment.current_cycle_claim_per_cycle,
+        enrichment.carryover_claim_per_cycle,
+    ) == (100, 50, 50)
+    assert enrichment.claim_safe_envelope_seconds == 630
 
 
 @pytest.mark.parametrize(
@@ -89,6 +108,7 @@ def test_config_creates_one_shareable_monotonic_deadline_contract():
         ("claim_ttl_seconds", 0),
         ("request_timeout_seconds", 0),
         ("attempt_budget_seconds", 0),
+        ("terminalization_reserve_seconds", 0),
     ],
 )
 def test_enrichment_runtime_rejects_unbounded_or_disabled_guards(field, value):
@@ -104,6 +124,41 @@ def test_enrichment_claim_lease_covers_both_stage_budgets():
             enrichment={
                 "claim_ttl_seconds": 599,
                 "attempt_budget_seconds": 300,
+            }
+        )
+
+    assert "claim_ttl_seconds" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "enrichment",
+    [
+        {
+            "claim_per_cycle": 99,
+            "current_cycle_claim_per_cycle": 50,
+            "carryover_claim_per_cycle": 50,
+        },
+        {
+            "claim_per_cycle": 5,
+            "current_cycle_claim_per_cycle": 5,
+            "carryover_claim_per_cycle": 1,
+        },
+    ],
+)
+def test_enrichment_lane_caps_must_fit_the_aggregate(enrichment):
+    with pytest.raises(ValidationError) as exc_info:
+        _config(enrichment=enrichment)
+
+    assert "claim_per_cycle" in str(exc_info.value)
+
+
+def test_enrichment_claim_lease_covers_terminalization_reserve():
+    with pytest.raises(ValidationError) as exc_info:
+        _config(
+            enrichment={
+                "claim_ttl_seconds": 629,
+                "attempt_budget_seconds": 300,
+                "terminalization_reserve_seconds": 30,
             }
         )
 

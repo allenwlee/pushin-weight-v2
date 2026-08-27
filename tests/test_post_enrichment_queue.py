@@ -40,6 +40,49 @@ def test_claims_are_bounded_and_active_claims_are_not_double_owned():
     assert all(state.classification_attempts == 1 for state in first.states)
 
 
+def test_two_lane_claim_rolls_back_all_ownership_and_attempts_on_failure(
+    monkeypatch,
+):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now()
+    carryover = [_state(f"rollback-old-{index}") for index in range(2)]
+    current = [_state(f"rollback-new-{index}") for index in range(2)]
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in carryover]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in current]).update(
+        created_at=cutoff + timedelta(seconds=1)
+    )
+    original_save = PostEnrichmentState.save
+    claim_saves = 0
+
+    def fail_second_claim_save(self, *args, **kwargs):
+        nonlocal claim_saves
+        if self.claim_run_id == "rollback-run":
+            claim_saves += 1
+            if claim_saves == 2:
+                raise RuntimeError("forced two-lane rollback")
+        return original_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(PostEnrichmentState, "save", fail_second_claim_save)
+
+    with pytest.raises(RuntimeError, match="forced two-lane rollback"):
+        _claim_enrichment_states(
+            cfg=_cfg().harvest.enrichment,
+            run_id="rollback-run",
+            now=cutoff + timedelta(seconds=2),
+            prefer_created_before=cutoff,
+        )
+
+    for state in [*carryover, *current]:
+        state.refresh_from_db()
+        assert state.claim_run_id == ""
+        assert state.translation_attempts == 0
+        assert state.classification_attempts == 0
+
+
 def test_expired_claim_is_recoverable_by_the_next_cycle():
     from monitor.cycle import _claim_enrichment_states
 
@@ -196,7 +239,7 @@ def test_deadline_defers_work_without_claiming_or_spending_an_attempt():
     state.refresh_from_db()
     assert (
         deadline.requested_seconds
-        == 2 * _cfg().harvest.enrichment.attempt_budget_seconds
+        == _cfg().harvest.enrichment.claim_safe_envelope_seconds
     )
     assert counters["n_enrichment_claimed"] == 0
     assert counters["n_enrichment_deferred"] == 1
@@ -205,39 +248,36 @@ def test_deadline_defers_work_without_claiming_or_spending_an_attempt():
     assert state.claim_run_id == ""
 
 
-def test_claim_prefers_the_pre_cycle_cohort_over_current_cycle_inserts():
+def test_claims_disjoint_current_and_carryover_lanes_without_borrowing():
     from core.models import PostEnrichmentState
     from monitor.cycle import _claim_enrichment_states
 
     cutoff = timezone.now()
-    previous = [_state(f"previous-{index}") for index in range(2)]
-    current = [_state(f"current-{index}") for index in range(2)]
-    PostEnrichmentState.objects.filter(pk=previous[0].pk).update(
-        created_at=cutoff - timedelta(minutes=2),
-        translation_attempts=1,
-    )
-    PostEnrichmentState.objects.filter(pk=previous[1].pk).update(
+    previous = [_state(f"previous-{index:02d}") for index in range(75)]
+    current = [_state(f"current-{index:02d}") for index in range(75)]
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in previous]).update(
         created_at=cutoff - timedelta(minutes=1)
     )
-    PostEnrichmentState.objects.filter(pk=current[0].pk).update(
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in current]).update(
         created_at=cutoff + timedelta(seconds=1)
     )
-    PostEnrichmentState.objects.filter(pk=current[1].pk).update(
-        created_at=cutoff + timedelta(seconds=2)
-    )
-    cfg = _cfg().harvest.enrichment.model_copy(update={"claim_per_cycle": 2})
 
     batch = _claim_enrichment_states(
-        cfg=cfg,
-        run_id="pre-cycle-first",
-        now=cutoff + timedelta(seconds=3),
+        cfg=_cfg().harvest.enrichment,
+        run_id="two-lane",
+        now=cutoff + timedelta(seconds=2),
         prefer_created_before=cutoff,
     )
 
-    assert [state.pk for state in batch.states] == [previous[1].pk, previous[0].pk]
+    assert len(batch.states) == 100
+    assert len(batch.carryover_post_ids) == 50
+    assert len(batch.current_cycle_post_ids) == 50
+    assert set(batch.carryover_post_ids).isdisjoint(batch.current_cycle_post_ids)
+    assert set(batch.carryover_post_ids) <= {state.pk for state in previous}
+    assert set(batch.current_cycle_post_ids) <= {state.pk for state in current}
 
 
-def test_claim_preserves_full_latest_50_against_37_current_cycle_inserts():
+def test_claim_lanes_do_not_borrow_unused_capacity():
     from core.models import PostEnrichmentState
     from monitor.cycle import _claim_enrichment_states
 
@@ -258,8 +298,151 @@ def test_claim_preserves_full_latest_50_against_37_current_cycle_inserts():
         prefer_created_before=cutoff,
     )
 
+    assert len(batch.states) == 87
+    assert set(batch.carryover_post_ids) == {state.pk for state in retained}
+    assert set(batch.current_cycle_post_ids) == {state.pk for state in current}
+
+
+def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
+    monkeypatch,
+):
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    cutoff = timezone.now()
+    carryover = [_state(f"combined-old-{index:02d}") for index in range(50)]
+    current = [_state(f"combined-new-{index:02d}") for index in range(37)]
+    from core.models import PostEnrichmentState
+
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in carryover]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in current]).update(
+        created_at=cutoff + timedelta(seconds=1)
+    )
+    client = object()
+    translator_calls = []
+    classifier_calls = []
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+
+    def translate(tweets, locales, translator_client, **kwargs):
+        translator_calls.append((list(tweets), kwargs))
+        return [
+            {
+                "tweet_id": tweet["tweet_id"],
+                "text_en": tweet["text"],
+                "text_zh_cn": "深度求索发布了更新",
+                "en_equivalent": "The release adds competitive pressure.",
+                "cn_equivalent": "这次发布增加了竞争压力。",
+                "lang_detected": "en",
+            }
+            for tweet in tweets
+        ]
+
+    def classify(tweets, brands, classifier_client, **kwargs):
+        classifier_calls.append((list(tweets), kwargs))
+        return [
+            {"by_brand": {}, "unsanctioned_flags": []}
+            for _tweet in tweets
+        ]
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+        [],
+        run_id="combined-two-lane-provider-path",
+        prefer_created_before=cutoff,
+    )
+
+    expected_ids = {state.pk for state in [*carryover, *current]}
+    assert counters["n_enrichment_claimed"] == 87
+    assert counters["n_enrichment_claimed_carryover"] == 50
+    assert counters["n_enrichment_claimed_current_cycle"] == 37
+    assert len(translator_calls) == 1
+    assert len(classifier_calls) == 1
+    assert {row["tweet_id"] for row in translator_calls[0][0]} == expected_ids
+    assert {row["tweet_id"] for row in classifier_calls[0][0]} == expected_ids
+    assert translator_calls[0][1]["max_workers"] == 3
+    assert classifier_calls[0][1]["max_workers"] == 3
+    assert classifier_calls[0][1]["model"] == "deepseek-v4-flash"
+    assert translator_calls[0][1]["cfg"].llm.translator_model == "deepseek-v4-flash"
+    assert translator._TRANSLATION_BATCH_SIZE == 20
+    assert attribution._CLASSIFY_BATCH_SIZE == 20
+
+
+def test_no_cutoff_preserves_legacy_fifty_row_capacity():
+    from monitor.cycle import _claim_enrichment_states
+
+    for index in range(75):
+        _state(f"legacy-no-cutoff-{index:02d}")
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="legacy-no-cutoff",
+    )
+
     assert len(batch.states) == 50
-    assert {state.pk for state in batch.states} == {state.pk for state in retained}
+    assert len(batch.carryover_post_ids) == 50
+    assert batch.current_cycle_post_ids == ()
+
+
+@pytest.mark.parametrize(
+    ("cycle_kind", "expects_cutoff"),
+    [("manual", True), ("scheduled", True), ("backfill", False)],
+)
+def test_cycle_runner_threads_cutoff_to_normal_runs_but_not_backfill(
+    monkeypatch, cycle_kind, expects_cutoff
+):
+    from datetime import UTC, datetime
+
+    from monitor import cycle as cycle_module
+    from monitor.cycle import CycleRunner
+    from x_monitor.query_plan import PlannedCall
+
+    started = datetime(2026, 8, 27, 2, 30, tzinfo=UTC)
+    captured = {}
+    call = PlannedCall(
+        call_id="B1",
+        call_kind="brand_wide",
+        brand_id="deepseek",
+        bucket=None,
+        query_string="DeepSeek",
+        query_length=8,
+    )
+
+    class EmptyApi:
+        timeout_s = 60
+        max_retries = 2
+
+        def run_search(self, query, **kwargs):
+            return [], False
+
+    monkeypatch.setattr(CycleRunner, "_plan_calls", lambda self: [call])
+    monkeypatch.setattr(
+        cycle_module.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls: EmptyApi()),
+    )
+
+    def capture_post_fetch(self, items, **kwargs):
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", capture_post_fetch)
+    monkeypatch.setattr(
+        "monitor.metrics_refresh.run_metrics_refresh",
+        lambda *args, **kwargs: {},
+    )
+
+    CycleRunner(
+        cfg=_cfg(),
+        cycle_kind=cycle_kind,
+        _clock=lambda: started,
+    ).run()
+
+    assert (captured["prefer_created_before"] == started) is expects_cutoff
 
 
 def test_claim_preserves_fresh_pre_cycle_cohort_ahead_of_older_retries():

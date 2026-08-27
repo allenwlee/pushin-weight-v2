@@ -62,6 +62,7 @@ from core.models import (
     SentimentKey,
     SentimentLabel,
 )
+from monitor.post_enrichment import persisted_output_complete_q
 
 log = logging.getLogger(__name__)
 
@@ -564,19 +565,28 @@ def _get_feed_posts(
     if window_days:
         cutoff = django_timezone.now() - timedelta(days=window_days)
 
-    qs = Post.objects.select_related("author").prefetch_related(
-        Prefetch(
-            "brands",
-            queryset=PostBrand.objects.select_related("brand"),
-        ),
-    ).order_by("-created_at")
+    terminal_state = Q(
+        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+    qs = (
+        Post.objects.filter(persisted_output_complete_q())
+        .filter(Q(enrichment_state__isnull=True) | terminal_state)
+        .select_related("author")
+        .prefetch_related(
+            Prefetch(
+                "brands",
+                queryset=PostBrand.objects.select_related("brand"),
+            ),
+        )
+    )
 
     if cutoff:
         qs = qs.filter(created_at__gte=cutoff)
     if brand_nickname:
         qs = qs.filter(brands__brand__nickname=brand_nickname).distinct()
 
-    return qs[:limit]
+    return qs.order_by("-created_at")[:limit]
 
 
 # ============================================================================

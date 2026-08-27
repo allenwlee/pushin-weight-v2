@@ -55,8 +55,8 @@ requires the stage enable flag, deployment environment, configured and Render
 service names, one configured call ID, the exact staging PostgreSQL host/name/
 role, and provider credentials before it takes the writer lock or builds a
 network client. The immutable execution envelope is one call, one page, five
-results, one total search pass, zero HTTP retries, no metrics refresh, and five
-enrichment claims.
+results, one total search pass, zero HTTP retries, no metrics refresh, and
+staging `5/5/0` aggregate/current/carryover enrichment claims.
 
 Staging and production currently use the same provider account and therefore
 the same shared provider quota. Database and broker isolation prevent cursor,
@@ -73,6 +73,41 @@ automatic retry.
 The full acceptance, evidence, secret-rotation, suspension, and reactivation
 procedure is
 [`docs/operations/2026-08-27-171845-staging-harvester-acceptance.md`](../operations/2026-08-27-171845-staging-harvester-acceptance.md).
+
+### Same-cycle zero-disruption release
+
+Staging and production run the same `CycleRunner`, claimant, translation,
+classification, persistence, and enriched-only feed predicate. Their only
+enrichment allocation difference is staging `5/5/0` versus production `100/50/50`
+for aggregate/current/carryover. Models, resolved provider routes,
+batch size, concurrency, timeouts, deadlines, and search semantics must match;
+compare secret-free model/host fingerprints before promotion.
+
+The candidate may move to `main` only after one bounded staging attempt is
+accepted under the exact inserted/current-cycle identity and terminal-output
+rules in the acceptance runbook. Inconclusive or failed staging has no
+automatic retry. Promotion begins immediately after a completed natural
+production cycle and keeps a closed continuity ledger from that boundary,
+through every `00/15/30/45` deployment boundary and the first qualifying
+candidate-SHA natural cycle, to one following boundary. Every entry correlates
+exactly one scheduled Render execution with one terminal canonical `HARVEST_SUMMARY`;
+missing, duplicate, aborted, lock-skipped, manual, or
+uncorrelatable evidence fails permanently.
+
+Canonical summaries emitted by this release use summary schema v2; readers
+must continue to parse historical v1 using its narrower post-fetch and metrics
+allowlists. A nonempty cycle also emits exactly one bounded `HARVEST_COHORT`
+receipt. It is separate from the counts-only summary and must match the same
+service ID, deploy SHA, run ID, and summary hash before its post IDs may be
+used as acceptance evidence.
+
+No production suspension, schedule change, manual run, or Blueprint
+application is part of this release or its rollback. Rollback advances a
+prepared feature-only revert through ordinary auto-deploy and natural cron,
+then closes the same ledger through the first rollback-SHA natural cycle.
+Read-only feed page-fill/performance preflight, immutable exact-cohort quality,
+and the supplemental detailed latest-50 report are defined in the acceptance
+runbook rather than duplicated here.
 
 ## Deployed reality
 

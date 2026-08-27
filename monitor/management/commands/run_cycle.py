@@ -25,12 +25,13 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from monitor.post_enrichment import ENRICHMENT_COUNT_KEYS
 from monitor.staging_acceptance import (
-    MAX_RESULTS,
     PreparedStagingAcceptance,
     StagingAcceptanceError,
     bounded_runtime_settings,
     bounded_twitter_client_factory,
+    evaluate_staging_acceptance,
     prepare_staging_acceptance,
 )
 
@@ -265,10 +266,8 @@ class Command(BaseCommand):
         )
 
         if prepared is not None:
-            acceptance_status, selected_call = self._acceptance_status(
-                stats,
-                selected_call=prepared.profile.selected_call,
-            )
+            evaluation = evaluate_staging_acceptance(prepared, stats)
+            acceptance_status = evaluation.status
             if acceptance_status == "failed":
                 stats["status"] = "aborted"
             if acceptance_status == "accepted":
@@ -289,8 +288,7 @@ class Command(BaseCommand):
                     self._acceptance_output(
                         prepared=prepared,
                         stats=stats,
-                        selected_call=selected_call,
-                        acceptance_status=acceptance_status,
+                        evaluation=evaluation,
                         dispatch=dispatch,
                     ),
                     indent=2,
@@ -323,47 +321,11 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  Errors: {stats['errors']}"))
 
     @staticmethod
-    def _acceptance_status(
-        stats: dict,
-        *,
-        selected_call: str,
-    ) -> tuple[str, dict]:
-        call = next(
-            (
-                row
-                for row in stats.get("calls", [])
-                if row.get("call_id") == selected_call
-            ),
-            {},
-        )
-        call_status = str(call.get("status") or "missing")
-        n_results = int(call.get("n_results") or 0)
-        n_persisted = int(call.get("n_inserted") or 0) + int(call.get("n_updated") or 0)
-        n_enrichment_claimed = int(
-            stats.get("post_fetch", {}).get("n_enrichment_claimed") or 0
-        )
-        # ``no_results`` is CycleRunner's successful-empty terminal status.
-        # Truncation and cursor-write outcomes remain failures here because a
-        # staging acceptance cannot prove its full bounded coverage from them.
-        hard_failure = (
-            stats.get("status") not in {"completed", "degraded"}
-            or bool(stats.get("errors"))
-            or call_status not in {"completed", "no_results"}
-            or n_results > MAX_RESULTS
-        )
-        if hard_failure:
-            return "failed", call
-        if n_results >= 1 and n_persisted >= 1 and n_enrichment_claimed >= 1:
-            return "accepted", call
-        return "inconclusive", call
-
-    @staticmethod
     def _acceptance_output(
         *,
         prepared: PreparedStagingAcceptance,
         stats: dict,
-        selected_call: dict,
-        acceptance_status: str,
+        evaluation,
         dispatch,
     ) -> dict:
         total_keys = (
@@ -385,23 +347,25 @@ class Command(BaseCommand):
             "cursor_advanced",
         )
         totals = stats.get("totals", {})
+        post_fetch = stats.get("post_fetch", {})
         return {
-            "status": acceptance_status,
+            "status": evaluation.status,
+            "reason_codes": list(evaluation.reason_codes),
             "staging_acceptance": prepared.profile.as_dict(),
             "cycle": {
                 "run_id": str(stats.get("run_id") or ""),
                 "status": str(stats.get("status") or ""),
                 "totals": {key: totals.get(key, 0) for key in total_keys},
                 "selected_call": {
-                    key: selected_call.get(key)
+                    key: evaluation.selected_call.get(key)
                     for key in call_keys
-                    if key in selected_call
+                    if key in evaluation.selected_call
                 },
                 "post_fetch": {
-                    "n_enrichment_claimed": int(
-                        stats.get("post_fetch", {}).get("n_enrichment_claimed") or 0
-                    )
+                    key: int(post_fetch.get(key) or 0)
+                    for key in ENRICHMENT_COUNT_KEYS
                 },
+                "enrichment_posts": list(evaluation.post_evidence),
                 "error_count": len(stats.get("errors", [])),
             },
             "headline_dispatch": {
