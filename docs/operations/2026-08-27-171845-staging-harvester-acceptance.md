@@ -1,10 +1,12 @@
 # Staging harvester acceptance
 
-Created: 2026-08-27. Delivery target: staging only.
+Created: 2026-08-27. Delivery target: production, with staging-first gates.
 
 This record is both the runbook and the evidence template for one bounded live
-staging attempt. It does not authorize a production deploy, production service
-mutation, production cron pause, or replay of an earlier production gap.
+staging attempt. It does not independently authorize a production deploy;
+production authority and exact-SHA promotion gates live in the annotated Ollija
+plan. It never authorizes a production cron pause, schedule change, Blueprint
+application, manual data mutation, or replay of an earlier production gap.
 
 ## Ownership and fixed limits
 
@@ -44,7 +46,9 @@ Stop at the first failed gate. Do not Trigger Run and do not try a plain
 command as a workaround.
 
 1. Run `./bin/ollija annotate-plan <plan-path> --check`; confirm the recorded
-   target is `staging` and the candidate worktree/branch are canonical.
+   target matches the owner's current selection and the candidate
+   worktree/branch are canonical. A production target still requires every
+   staging-first gate in the generated guide.
 2. Confirm the exact candidate SHA locally with `git rev-parse HEAD` and on
    staging with `printenv RENDER_GIT_COMMIT`. Record both; they must match.
 3. Confirm `printenv RENDER_SERVICE_NAME` is
