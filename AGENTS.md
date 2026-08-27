@@ -67,8 +67,7 @@ There is one production stack: v2.
   are additive candidate resources; they never run harvesting or beat.
 - **DB:** Managed PostgreSQL on Render (service-scoped `DATABASE_URL`). The v1 SQLite file at
   `data/x_monitoring.db` is read-only historical state; do not write to
-  it. The local `data/django_dev.db` is a dev-only SQLite; never point
-  prod at it.
+  it.
 - **Models:** `core/models.py` is the source of truth for DB schema.
 - **Migrations:** `core/migrations/` (auto-generated from models).
 - **Querying prod:** see `reference_pushinweight_prod_db_via_render_cli.md`
@@ -154,6 +153,17 @@ other PushinWeight/ollija artifact on `allenwlee`; it is only a keyboard and
 browser endpoint. Follow the authority-transfer procedure in
 `docs/operations/ollija-rollout-baseline.md` before treating any replacement
 host as writable.
+
+## allenwlee GUI automation
+
+`allenwlee` has macOS Accessibility permission for Apple's incoming SSH
+wrapper (shown by macOS as `sshd-keygen-wrapper` or a shortened `sshkeygen`
+label). Authenticated SSH sessions can therefore use `osascript` and System
+Events to inspect or control its visible GUI. This does not change repository
+authority or grant new filesystem/SSH-key access. Use it only for an explicit
+owner-requested keyboard/browser action, identify the intended app/window
+before sending input, and read
+`docs/operations/2026-08-27-073626-allenwlee-ssh-gui-automation.md` first.
 
 ## Memory
 
