@@ -335,10 +335,10 @@ class HeadlineNarrativeConfig(BaseModel):
         default="headline-rank-v1", min_length=1, max_length=64
     )
     editor_prompt_version: str = Field(
-        default="headline-editor-v2", min_length=1, max_length=64
+        default="headline-editor-v3", min_length=1, max_length=64
     )
     critic_prompt_version: str = Field(
-        default="headline-critic-v2", min_length=1, max_length=64
+        default="headline-critic-v3", min_length=1, max_length=64
     )
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
@@ -389,12 +389,12 @@ class HeadlineNarrativeConfig(BaseModel):
     # U4's durable per-brand graph has a separate budget from the retired
     # shared-headline four-window cap.  It intentionally permits the exact
     # successful graph: one rank plus editor and critic for each five-brand
-    # batch (nine calls for twenty eligible brands).
+    # batch (seventeen calls for forty eligible brands).
     per_brand_call_cap: int = Field(default=25, ge=1, le=200)
-    per_brand_input_token_cap: int = Field(default=500_000, ge=1_000)
+    per_brand_input_token_cap: int = Field(default=700_000, ge=1_000)
     per_brand_output_token_cap: int = Field(default=160_000, ge=1_000)
     per_brand_cost_cap_usd: Decimal = Field(
-        default=Decimal("1.00"), gt=0, decimal_places=4
+        default=Decimal("1.50"), gt=0, decimal_places=4
     )
     per_brand_input_usd_per_million: Decimal = Field(
         default=Decimal("1.32"), ge=0, decimal_places=4
@@ -405,7 +405,7 @@ class HeadlineNarrativeConfig(BaseModel):
     per_brand_pricing_version: str = Field(
         default="deepseek-v4-pro-peak-2026-08-27", min_length=1, max_length=64
     )
-    per_brand_expected_max_brands: int = Field(default=25, ge=1, le=100)
+    per_brand_expected_max_brands: int = Field(default=40, ge=1, le=100)
     per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
     per_brand_worker_concurrency: Literal[1] = 1
     max_body_en_chars: int = Field(default=240, ge=80, le=500)

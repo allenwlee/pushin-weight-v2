@@ -148,8 +148,8 @@ headline_narrative:
   base_url: "https://api.deepseek.com/anthropic"
   model: "deepseek-v4-pro"
   rank_prompt_version: "headline-rank-v1"
-  editor_prompt_version: "headline-editor-v2"
-  critic_prompt_version: "headline-critic-v2"
+  editor_prompt_version: "headline-editor-v3"
+  critic_prompt_version: "headline-critic-v3"
   rank_max_tokens: 2400
   editor_max_tokens: 8000
   critic_max_tokens: 9000
@@ -177,15 +177,15 @@ headline_narrative:
   evidence_provider_packet_bytes: 131072
   call_cap: 4
   per_brand_call_cap: 25
-  per_brand_input_token_cap: 500000
+  per_brand_input_token_cap: 700000
   per_brand_output_token_cap: 160000
   # Conservative peak, cache-miss rates from DeepSeek's official 2026-08-27
   # pricing page. Off-peak/cache-hit billing can only reduce actual cost.
-  per_brand_cost_cap_usd: "1.00"
+  per_brand_cost_cap_usd: "1.50"
   per_brand_input_usd_per_million: "1.32"
   per_brand_output_usd_per_million: "3.96"
   per_brand_pricing_version: "deepseek-v4-pro-peak-2026-08-27"
-  per_brand_expected_max_brands: 25
+  per_brand_expected_max_brands: 40
   per_brand_p95_latency_seconds: "45"
   per_brand_worker_concurrency: 1
   max_body_en_chars: 240
