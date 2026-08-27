@@ -234,7 +234,7 @@ def test_claim_prefers_the_pre_cycle_cohort_over_current_cycle_inserts():
         prefer_created_before=cutoff,
     )
 
-    assert [state.pk for state in batch.states] == [previous[0].pk, previous[1].pk]
+    assert [state.pk for state in batch.states] == [previous[1].pk, previous[0].pk]
 
 
 def test_claim_preserves_full_latest_50_against_37_current_cycle_inserts():
@@ -255,6 +255,33 @@ def test_claim_preserves_full_latest_50_against_37_current_cycle_inserts():
         cfg=_cfg().harvest.enrichment,
         run_id="production-displacement-shape",
         now=cutoff + timedelta(minutes=2),
+        prefer_created_before=cutoff,
+    )
+
+    assert len(batch.states) == 50
+    assert {state.pk for state in batch.states} == {state.pk for state in retained}
+
+
+def test_claim_preserves_fresh_pre_cycle_cohort_ahead_of_older_retries():
+    """Production pin: retry debt must not starve the retained latest 50."""
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now()
+    retained = [_state(f"fresh-retained-{index:02d}") for index in range(50)]
+    retries = [_state(f"older-retry-{index:02d}") for index in range(50)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retained]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retries]).update(
+        created_at=cutoff - timedelta(minutes=30),
+        translation_attempts=1,
+    )
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="fresh-before-retry-debt",
+        now=cutoff + timedelta(minutes=1),
         prefer_created_before=cutoff,
     )
 

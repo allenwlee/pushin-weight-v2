@@ -479,6 +479,21 @@ def test_u1_corpus_phrase_summary_keeps_unseen_phrase_separate_from_taxonomy():
     ]
 
 
+def test_u1_corpus_phrase_summary_exposes_atomic_resource_limit():
+    summary = trend_candidates._corpus_phrase_family_fact(
+        [],
+        selected_basis=10,
+        extraction_status="resource_limited",
+    )
+
+    assert summary == {
+        "status": "unavailable",
+        "unavailable_reason": "resource_limited",
+        "selected_basis_count": 10,
+        "labels": [],
+    }
+
+
 def test_u1_shape_summary_replaces_raw_array_with_dominant_late_transition():
     series = [
         {
@@ -587,7 +602,168 @@ def test_u1_corpus_query_finds_overlapping_unseen_phrase_in_full_posts():
     ]
     PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
 
-    signals = trend_candidates._fetch_corpus_phrase_signals(
+    with CaptureQueriesContext(connection) as queries:
+        signals_by_brand, status = trend_candidates._fetch_corpus_phrase_signals(
+            [
+                {
+                    "candidate_id": f"{brand.nickname}:full_window",
+                    "brand_key": brand.nickname,
+                    "start_at": AS_OF - timedelta(days=1),
+                    "end_at": AS_OF,
+                }
+            ],
+            as_of=AS_OF,
+        )
+    signals = signals_by_brand[brand.nickname]
+
+    ox_alpha = next(signal for signal in signals if signal["phrase"] == "ox alpha")
+    assert ox_alpha["prevalence"] == 3
+    assert "ox alpha" in ox_alpha["representative_excerpt"]
+    assert status == "available"
+    assert len(queries) == 1
+    source_sql = queries[0]["sql"].casefold()
+    assert "regexp_split_to_table" not in source_sql
+    assert "lead(" not in source_sql
+    assert "p.created_at >=" in source_sql
+
+
+def test_u1_corpus_query_has_exact_multi_brand_current_prior_ranking():
+    primary = Brand.objects.create(nickname="exact_primary")
+    peer = Brand.objects.create(nickname="exact_peer")
+    account = Account.objects.create(author_id="exact-author", handle="exact")
+    window_start = AS_OF - timedelta(days=1)
+    rows = [
+        ("exact-prior", primary, window_start - timedelta(hours=12), "legacy theme"),
+        ("exact-early", primary, window_start + timedelta(hours=1), "legacy theme"),
+        ("exact-peer", peer, window_start + timedelta(hours=10), "aa bb"),
+        (
+            "exact-tie",
+            primary,
+            window_start + timedelta(hours=12),
+            "aa bb cc dd ee ff gg hh ii",
+        ),
+        ("exact-late", primary, window_start + timedelta(hours=20), "legacy theme"),
+    ]
+    posts = [
+        Post.objects.create(
+            tweet_id=tweet_id,
+            author=account,
+            created_at=created_at,
+            text=body,
+        )
+        for tweet_id, _brand, created_at, body in rows
+    ]
+    PostBrand.objects.bulk_create(
+        [
+            PostBrand(post=post, brand=brand)
+            for post, (_tweet_id, brand, _created_at, _body) in zip(
+                posts, rows, strict=True
+            )
+        ]
+    )
+
+    signals_by_brand, status = trend_candidates._fetch_corpus_phrase_signals(
+        [
+            {
+                "candidate_id": f"{brand.nickname}:full_window",
+                "brand_key": brand.nickname,
+                "start_at": window_start,
+                "end_at": AS_OF,
+            }
+            for brand in (primary, peer)
+        ],
+        as_of=AS_OF,
+    )
+
+    assert status == "available"
+    signals = signals_by_brand[primary.nickname]
+    assert [row["phrase"] for row in signals] == [
+        "legacy theme",
+        "bb cc",
+        "cc dd",
+        "dd ee",
+        "ee ff",
+        "ff gg",
+        "gg hh",
+        "hh ii",
+    ]
+    assert "aa bb" not in {row["phrase"] for row in signals}
+    legacy = signals[0]
+    assert legacy["prevalence"] == 2
+    assert legacy["prior_prevalence"] == 1
+    assert legacy["peer_brand_count"] == 1
+    assert legacy["burst_interval"] == {"start_bucket": 0, "end_bucket": 3}
+    assert legacy["representative_excerpt"] == "legacy theme"
+    assert len(legacy["representative_evidence_ids"]) == 1
+    assert signals_by_brand[peer.nickname][0]["peer_brand_count"] == 2
+
+
+def test_u1_corpus_query_fails_open_atomically_at_source_row_limit(monkeypatch):
+    brands = [
+        Brand.objects.create(nickname=f"limited_phrase_{index}") for index in range(2)
+    ]
+    account = Account.objects.create(author_id="limited-author", handle="limited")
+    posts = [
+        Post.objects.create(
+            tweet_id=f"limited-post-{index}",
+            author=account,
+            created_at=AS_OF - timedelta(minutes=10 - index),
+            text=f"Brand {index} has a distinct recurring phrase",
+        )
+        for index in range(2)
+    ]
+    PostBrand.objects.bulk_create(
+        [
+            PostBrand(post=post, brand=brand)
+            for post, brand in zip(posts, brands, strict=True)
+        ]
+    )
+    candidates = [
+        {
+            "candidate_id": f"{brand.nickname}:full_window",
+            "brand_key": brand.nickname,
+            "start_at": AS_OF - timedelta(days=1),
+            "end_at": AS_OF,
+        }
+        for brand in brands
+    ]
+    monkeypatch.setattr(trend_candidates, "MAX_CORPUS_SOURCE_ROWS", 1)
+
+    signals, status = trend_candidates._fetch_corpus_phrase_signals(
+        candidates,
+        as_of=AS_OF,
+    )
+
+    assert signals == {}
+    assert status == "resource_limited"
+
+
+@pytest.mark.parametrize(
+    ("ceiling_name", "ceiling"),
+    [
+        ("MAX_CORPUS_SOURCE_TEXT_CHARACTERS", 3),
+        ("MAX_CORPUS_TEXT_CHARACTERS", 3),
+        ("MAX_CORPUS_DISTINCT_PHRASES_PER_BRAND", 1),
+    ],
+)
+def test_u1_corpus_query_fails_open_at_each_local_resource_ceiling(
+    monkeypatch, ceiling_name, ceiling
+):
+    brand = Brand.objects.create(nickname=f"limited_{ceiling_name.casefold()}")
+    account = Account.objects.create(
+        author_id=f"author-{ceiling_name}",
+        handle=f"handle-{ceiling_name}",
+    )
+    post = Post.objects.create(
+        tweet_id=f"post-{ceiling_name}",
+        author=account,
+        created_at=AS_OF - timedelta(minutes=5),
+        text="one two three",
+    )
+    PostBrand.objects.create(post=post, brand=brand)
+    monkeypatch.setattr(trend_candidates, ceiling_name, ceiling)
+
+    signals, status = trend_candidates._fetch_corpus_phrase_signals(
         [
             {
                 "candidate_id": f"{brand.nickname}:full_window",
@@ -597,11 +773,99 @@ def test_u1_corpus_query_finds_overlapping_unseen_phrase_in_full_posts():
             }
         ],
         as_of=AS_OF,
-    )[brand.nickname]
+    )
 
-    ox_alpha = next(signal for signal in signals if signal["phrase"] == "ox alpha")
-    assert ox_alpha["prevalence"] == 3
-    assert "ox alpha" in ox_alpha["representative_excerpt"]
+    assert signals == {}
+    assert status == "resource_limited"
+
+
+def test_u1_corpus_query_fails_open_atomically_at_token_limit(monkeypatch):
+    brand = Brand.objects.create(nickname="token_limited_phrase")
+    account = Account.objects.create(author_id="token-author", handle="token")
+    post = Post.objects.create(
+        tweet_id="token-limited-post",
+        author=account,
+        created_at=AS_OF - timedelta(minutes=5),
+        text="one two three four",
+    )
+    PostBrand.objects.create(post=post, brand=brand)
+    monkeypatch.setattr(trend_candidates, "MAX_CORPUS_TOKENS_PER_DOCUMENT", 3)
+
+    signals, status = trend_candidates._fetch_corpus_phrase_signals(
+        [
+            {
+                "candidate_id": f"{brand.nickname}:full_window",
+                "brand_key": brand.nickname,
+                "start_at": AS_OF - timedelta(days=1),
+                "end_at": AS_OF,
+            }
+        ],
+        as_of=AS_OF,
+    )
+
+    assert signals == {}
+    assert status == "resource_limited"
+
+
+def test_u1_corpus_query_fails_open_when_top_boundary_tie_is_too_large(monkeypatch):
+    brand = Brand.objects.create(nickname="tie_limited_phrase")
+    account = Account.objects.create(author_id="tie-author", handle="tie")
+    post = Post.objects.create(
+        tweet_id="tie-limited-post",
+        author=account,
+        created_at=AS_OF - timedelta(minutes=5),
+        text="one two three four five six",
+    )
+    PostBrand.objects.create(post=post, brand=brand)
+    monkeypatch.setattr(trend_candidates, "MAX_CORPUS_RETAINED_PHRASES", 4)
+
+    signals, status = trend_candidates._fetch_corpus_phrase_signals(
+        [
+            {
+                "candidate_id": f"{brand.nickname}:full_window",
+                "brand_key": brand.nickname,
+                "start_at": AS_OF - timedelta(days=1),
+                "end_at": AS_OF,
+            }
+        ],
+        as_of=AS_OF,
+    )
+
+    assert signals == {}
+    assert status == "resource_limited"
+
+
+def test_u1_corpus_documents_normalize_unicode_before_deduping_and_tokenizing():
+    spec = {
+        "start_at": AS_OF - timedelta(days=1),
+        "end_at": AS_OF,
+        "upper_at": AS_OF,
+        "lower_at": AS_OF - timedelta(days=2),
+    }
+    rows = [
+        (
+            "unicode-1",
+            "shared-root",
+            AS_OF - timedelta(minutes=2),
+            "OX e\u0301clair🚀模型 发布",
+        ),
+        (
+            "unicode-2",
+            "shared-root",
+            AS_OF - timedelta(minutes=1),
+            "OX éclair🚀模型 发布",
+        ),
+    ]
+
+    documents = list(trend_candidates._iter_corpus_documents(rows, spec))
+
+    assert len(documents) == 1
+    assert documents[0]["normalized_text"] == "ox éclair 模型 发布"
+    assert documents[0]["phrases"] == {
+        "ox éclair",
+        "éclair 模型",
+        "模型 发布",
+    }
 
 
 def test_u1_stable_family_bases_are_not_multiplied_by_multiple_flags():
@@ -825,6 +1089,8 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     provider = project_provider_packet(snapshot)
     assert provider["dossiers"][0].get("raw_series") is None
     assert len(provider["dossiers"][0]["evidence"]) <= 2
+    assert "metadata_trajectories" not in provider["dossiers"][0]
+    assert "episodes" not in provider["dossiers"][0]
     assert raw_author_id not in canonical_snapshot_json(provider)
     assert raw_post_id not in canonical_snapshot_json(provider)
 
@@ -852,6 +1118,48 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
         brand.nickname,
         second_brand.nickname,
     }
+
+
+def test_snapshot_resource_limit_reaches_provider_without_losing_other_evidence(
+    monkeypatch,
+):
+    _seed_snapshot_posts()
+    PostEnrichmentState.objects.bulk_create(
+        [
+            PostEnrichmentState(
+                post=post,
+                translation_status=PostEnrichmentState.Status.SUCCEEDED,
+                classification_status=PostEnrichmentState.Status.SUCCEEDED,
+            )
+            for post in Post.objects.all()
+        ]
+    )
+    monkeypatch.setattr(trend_candidates, "MAX_CORPUS_SOURCE_ROWS", 1)
+    thresholds = TrendFactThresholds(
+        min_posts=2,
+        min_authors=2,
+        episode_peak_ratio=Decimal(1),
+    )
+
+    snapshot = build_trend_analysis_snapshot(
+        1,
+        as_of=AS_OF,
+        thresholds=thresholds,
+    )
+    provider = project_provider_packet(snapshot)
+    editor_batch = build_editor_batches(snapshot)[0]
+
+    for packet in (snapshot, provider, editor_batch):
+        dossier = packet["dossiers"][0]
+        corpus_family = dossier["family_summaries"]["corpus_phrases"]
+        assert dossier["corpus_signals_status"] == "resource_limited"
+        assert dossier["corpus_signals"] == []
+        assert corpus_family["status"] == "unavailable"
+        assert corpus_family["unavailable_reason"] == "resource_limited"
+        assert any(fact["family"] == "volume" for fact in dossier["facts"])
+        assert dossier["evidence"]
+    private_corpus = snapshot["dossiers"][0]["aggregate_inputs"]["corpus_phrases"]
+    assert private_corpus["unavailable_reason"] == "resource_limited"
 
 
 def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():

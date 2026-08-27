@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections import defaultdict
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from heapq import nlargest
+from itertools import pairwise
 from typing import Any
 
 from django.db import connection, transaction
@@ -30,6 +33,12 @@ MAX_PROVIDER_PACKET_BYTES = 128 * 1024
 MAX_EDITOR_BRANDS_PER_BATCH = 5
 MAX_SNAPSHOT_BRANDS = 100
 MAX_QUANTITATIVE_FACTS_PER_CANDIDATE = 24
+MAX_CORPUS_SOURCE_ROWS = 20_000
+MAX_CORPUS_SOURCE_TEXT_CHARACTERS = 8 * 1024 * 1024
+MAX_CORPUS_TEXT_CHARACTERS = 32_000
+MAX_CORPUS_TOKENS_PER_DOCUMENT = 8_192
+MAX_CORPUS_DISTINCT_PHRASES_PER_BRAND = 750_000
+MAX_CORPUS_RETAINED_PHRASES = 100_000
 SNAPSHOT_STATEMENT_TIMEOUT_MS = 30_000
 SNAPSHOT_LOCK_TIMEOUT_MS = 5_000
 NEAR_DUPLICATE_JACCARD = Decimal("0.90")
@@ -53,6 +62,23 @@ SUPPORTING_CONTEXT_ROLE = "supporting_context"
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _PURE_REPOST_RE = re.compile(r"^\s*RT\s+@", re.IGNORECASE)
+_CORPUS_TOKEN_SEPARATOR_RE = re.compile(r"(?:[^\w-]|_)+", re.UNICODE)
+
+_CORPUS_SOURCE_ROWS_SQL = """
+    SELECT pb.brand_id::text AS brand_key,
+           p.tweet_id::text,
+           coalesce(p.quoted_status_id::text, p.tweet_id::text) AS source_root_id,
+           p.created_at,
+           p.text
+    FROM posts p
+    JOIN posts_brands pb ON pb.post_id = p.tweet_id
+    WHERE pb.brand_id::text = ANY(%s::text[])
+      AND p.created_at >= %s::timestamptz
+      AND p.created_at < %s::timestamptz
+      AND nullif(btrim(p.text), '') IS NOT NULL
+    ORDER BY pb.brand_id::text, p.created_at, p.tweet_id
+    LIMIT %s
+"""
 
 
 class TrendSnapshotError(ValueError):
@@ -65,6 +91,10 @@ class TrendSnapshotSizeError(TrendSnapshotError):
 
 class TrendSnapshotTransactionError(TrendSnapshotError):
     """Snapshot construction could not establish its required read boundary."""
+
+
+class _CorpusPhraseResourceLimit(RuntimeError):
+    """The optional phrase family exceeded its deterministic local budget."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -458,11 +488,10 @@ def build_trend_analysis_snapshot(
             as_of=as_of_utc,
             rank_limit=evidence_policy.reservoir_rank_limit,
         )
-        # This is a single set-based query across the complete, source-root
-        # deduplicated corpus.  It deliberately does not reuse the bounded
-        # evidence reservoir: a phrase that is real for the brand must not
-        # disappear merely because none of its posts won an evidence slot.
-        corpus_signals = _fetch_corpus_phrase_signals(
+        # Read a bounded source corpus once, then deduplicate and count phrases
+        # locally. This deliberately does not reuse the evidence reservoir: a
+        # phrase must not disappear merely because its posts missed that sample.
+        corpus_signals, corpus_extraction_status = _fetch_corpus_phrase_signals(
             [
                 {
                     "candidate_id": row["candidate_key"]["candidate_id"],
@@ -491,12 +520,10 @@ def build_trend_analysis_snapshot(
             details=details,
             evidence_rows=evidence_rows,
             corpus_signals=corpus_signals,
+            corpus_extraction_status=corpus_extraction_status,
             stable_family_facts=stable_family_facts,
         )
         canonical_snapshot_json(snapshot)
-        provider_json = canonical_snapshot_json(project_provider_packet(snapshot))
-        if len(provider_json.encode("utf-8")) > evidence_policy.provider_packet_bytes:
-            raise TrendSnapshotSizeError("trend_provider_packet_too_large")
         # Exercise every deterministic editor packet before this immutable
         # snapshot escapes the repeatable-read boundary.  Compaction may trim
         # text copies, never evidence rows; an irreducible packet fails safe.
@@ -913,6 +940,7 @@ def _assemble_compact_snapshot(
     details: Mapping[str, Any],
     evidence_rows: Sequence[Mapping[str, Any]],
     corpus_signals: Mapping[str, Sequence[Mapping[str, Any]]],
+    corpus_extraction_status: str,
     stable_family_facts: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Assemble U1's private all-brand snapshot without a post-text archive."""
@@ -967,6 +995,7 @@ def _assemble_compact_snapshot(
         family_facts["corpus_phrases"] = _corpus_phrase_family_fact(
             brand_corpus_signals,
             selected_basis=selected_count,
+            extraction_status=corpus_extraction_status,
         )
         prior_count = int(family_facts.get("volume", {}).get("prior_count") or 0)
         brand_comparison_allowed = comparison_allowed and prior_count > 0
@@ -995,6 +1024,7 @@ def _assemble_compact_snapshot(
                 "family_summaries": _compact_family_summaries(family_facts),
                 "facts": _compact_citable_facts(brand_key, family_facts),
                 "shape_summary": _compact_shape_summary(detail["coarse_series"]),
+                "corpus_signals_status": corpus_extraction_status,
                 "corpus_signals": brand_corpus_signals,
                 "evidence_allocation": allocation,
                 "evidence": selected_evidence,
@@ -1058,12 +1088,15 @@ def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]
     # unavailable aggregate.
     for family in ("language", "unsanctioned_flags", "account_role", "corpus_phrases"):
         value = dict(family_facts.get(family) or {})
-        result[family] = {
+        summary = {
             "status": value.get("status", "unavailable"),
             "denominator": value.get("selected_basis_count", 0),
             "current_leader": _leading_label(value, change=False),
             "largest_change": _leading_label(value, change=True),
         }
+        if value.get("unavailable_reason"):
+            summary["unavailable_reason"] = value["unavailable_reason"]
+        result[family] = summary
     return result
 
 
@@ -1082,7 +1115,10 @@ def _family_summary_status(value: Mapping[str, Any]) -> str:
 
 
 def _corpus_phrase_family_fact(
-    signals: Sequence[Mapping[str, Any]], *, selected_basis: int
+    signals: Sequence[Mapping[str, Any]],
+    *,
+    selected_basis: int,
+    extraction_status: str = "available",
 ) -> dict[str, Any]:
     """Express bounded corpus phrases as a stable aggregate family."""
     labels = []
@@ -1100,7 +1136,14 @@ def _corpus_phrase_family_fact(
             }
         )
     return {
-        "status": "available" if selected_basis else "unavailable",
+        "status": (
+            "available"
+            if selected_basis and extraction_status == "available"
+            else "unavailable"
+        ),
+        "unavailable_reason": (
+            extraction_status if extraction_status != "available" else None
+        ),
         "selected_basis_count": selected_basis,
         "labels": labels,
     }
@@ -1453,6 +1496,11 @@ def _project_compact_ranking_packet(snapshot: Mapping[str, Any]) -> dict[str, An
     dossiers = []
     for dossier in snapshot.get("dossiers", []):
         row = _provider_dossier(dossier)
+        # Ranking is the only all-brand transport. Keep its content-led
+        # signals and citable facts, but omit per-brand trajectories/episodes
+        # and cap evidence previews so 20+ brands fit the shared budget.
+        for key in ("metadata_trajectories", "episodes", "evidence_allocation"):
+            row.pop(key, None)
         row["evidence"] = [
             {
                 "evidence_id": evidence["evidence_id"],
@@ -1923,133 +1971,184 @@ def _fetch_stable_family_facts(
 
 def _fetch_corpus_phrase_signals(
     candidates: Sequence[Mapping[str, Any]], *, as_of: datetime
-) -> dict[str, list[dict[str, Any]]]:
-    """Return at most eight novel two-word phrases per brand in one query.
+) -> tuple[dict[str, list[dict[str, Any]]], str]:
+    """Return at most eight prominent two-word phrases per brand.
 
-    PostgreSQL does source-root/exact-text deduplication and phrase counting;
-    only bounded aggregates cross into Python.  This keeps the query count
-    fixed while allowing unfamiliar names such as ``ox alpha`` to surface.
+    PostgreSQL performs one date-bounded source read. Python then scans every
+    deduplicated document twice: first for exact current/prior document counts,
+    then only for phrases tied for a possible top-eight position. This avoids
+    expanding the corpus into a million-row SQL window/grouping pipeline while
+    keeping the final counts, peer coverage, burst bounds, and excerpts exact.
+    Raw source rows exist only inside this immutable snapshot transaction and
+    are hard-bounded by row, text, token, and vocabulary ceilings. Crossing a
+    ceiling makes this optional family atomically ``resource_limited`` for all
+    brands; no sampled or partial phrase result escapes to the provider.
     """
     if not candidates:
-        return {}
-    sql = """
-        WITH requested AS (
-            SELECT * FROM unnest(
-                %s::text[], %s::text[], %s::timestamptz[], %s::timestamptz[]
-            ) AS item(candidate_id, brand_key, start_at, end_at)
-        ),
-        source_rows AS (
-            SELECT DISTINCT ON (
-                r.candidate_id, coalesce(p.quoted_status_id::text, p.tweet_id::text),
-                regexp_replace(lower(coalesce(p.text, '')), '\\s+', ' ', 'g')
-            )
-                r.candidate_id, r.brand_key, r.start_at, r.end_at,
-                p.tweet_id::text, p.created_at,
-                regexp_replace(lower(coalesce(p.text, '')), '[^[:alnum:]-]+', ' ', 'g') AS normalized_text,
-                CASE WHEN p.created_at >= r.start_at THEN 'selected' ELSE 'prior' END AS period
-            FROM requested r
-            JOIN posts_brands pb ON pb.brand_id::text = r.brand_key
-            JOIN posts p ON p.tweet_id = pb.post_id
-            WHERE p.created_at >= r.start_at - (r.end_at - r.start_at)
-              AND p.created_at < least(r.end_at, %s::timestamptz)
-              AND nullif(btrim(p.text), '') IS NOT NULL
-            ORDER BY r.candidate_id,
-                     coalesce(p.quoted_status_id::text, p.tweet_id::text),
-                     regexp_replace(lower(coalesce(p.text, '')), '\\s+', ' ', 'g'),
-                     p.created_at, p.tweet_id
-        ),
-        token_rows AS (
-            SELECT
-                s.*,
-                token.value AS token,
-                token.position,
-                lead(token.value) OVER (
-                    PARTITION BY s.candidate_id, s.tweet_id
-                    ORDER BY token.position
-                ) AS next_token
-            FROM source_rows s
-            CROSS JOIN LATERAL regexp_split_to_table(
-                btrim(s.normalized_text), '[[:space:]]+'
-            ) WITH ORDINALITY AS token(value, position)
-            WHERE char_length(token.value) >= 2
-        ),
-        phrases AS (
-            SELECT DISTINCT
-                   candidate_id, brand_key, start_at, end_at, tweet_id,
-                   created_at, normalized_text, period,
-                   token || ' ' || next_token AS phrase,
-                   floor(4 * extract(epoch FROM (s.created_at - s.start_at))
-                         / nullif(extract(epoch FROM (s.end_at - s.start_at)), 0))::integer
-                         AS burst_bucket
-            FROM token_rows s
-            WHERE next_token IS NOT NULL
-              AND char_length(next_token) >= 2
-        ),
-        phrase_counts AS (
-            SELECT candidate_id, brand_key, phrase,
-                   count(*) FILTER (WHERE period = 'selected')::integer AS selected_count,
-                   count(*) FILTER (WHERE period = 'prior')::integer AS prior_count,
-                   min(burst_bucket) FILTER (WHERE period = 'selected')::integer AS burst_start,
-                   max(burst_bucket) FILTER (WHERE period = 'selected')::integer AS burst_end,
-                   (array_agg(tweet_id ORDER BY created_at, tweet_id)
-                     FILTER (WHERE period = 'selected'))[1] AS representative_tweet_id,
-                   (array_agg(normalized_text ORDER BY created_at, tweet_id)
-                     FILTER (WHERE period = 'selected'))[1] AS representative_text
-            FROM phrases
-            GROUP BY candidate_id, brand_key, phrase
-        ),
-        peer_counts AS (
-            SELECT phrase, count(DISTINCT brand_key)::integer AS peer_brand_count
-            FROM phrase_counts WHERE selected_count > 0 GROUP BY phrase
-        ),
-        ranked AS (
-            SELECT p.*, peers.peer_brand_count,
-                   row_number() OVER (
-                     PARTITION BY p.candidate_id
-                     ORDER BY p.selected_count DESC,
-                              (p.selected_count - p.prior_count) DESC,
-                              peers.peer_brand_count ASC, p.phrase
-                   ) AS phrase_rank
-            FROM phrase_counts p JOIN peer_counts peers USING (phrase)
-            WHERE p.selected_count > 0
-        )
-        SELECT candidate_id, brand_key, phrase, selected_count, prior_count,
-               peer_brand_count, burst_start, burst_end,
-               representative_tweet_id, representative_text
-        FROM ranked WHERE phrase_rank <= 8
-        ORDER BY brand_key, phrase_rank, phrase
-    """
-    params = [
-        [str(row["candidate_id"]) for row in candidates],
-        [str(row["brand_key"]) for row in candidates],
-        [_parse_utc(str(row["start_at"])) for row in candidates],
-        [_parse_utc(str(row["end_at"])) for row in candidates],
-        as_of,
-    ]
-    result: dict[str, list[dict[str, Any]]] = {}
+        return {}, "available"
+    as_of_utc = _as_utc(as_of)
+    specs: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        brand_key = str(candidate["brand_key"])
+        if brand_key in specs:
+            raise TrendSnapshotTransactionError("duplicate_corpus_phrase_brand")
+        start_at = _parse_utc(str(candidate["start_at"]))
+        end_at = _parse_utc(str(candidate["end_at"]))
+        if end_at <= start_at:
+            raise TrendSnapshotTransactionError("invalid_corpus_phrase_window")
+        upper_at = min(end_at, as_of_utc)
+        specs[brand_key] = {
+            "candidate_id": str(candidate["candidate_id"]),
+            "start_at": start_at,
+            "end_at": end_at,
+            "upper_at": upper_at,
+            "lower_at": start_at - (end_at - start_at),
+        }
+    lower_at = min(spec["lower_at"] for spec in specs.values())
+    upper_at = max(spec["upper_at"] for spec in specs.values())
+    if upper_at <= lower_at:
+        return {}, "available"
+    rows_by_brand: dict[str, list[tuple[Any, ...]]] = defaultdict(list)
+    source_row_count = 0
+    source_text_characters = 0
     with connection.cursor() as cursor:
-        cursor.execute(sql, params)
-        for (
-            candidate_id,
-            brand_key,
-            phrase,
-            selected,
-            prior,
-            peers,
-            start,
-            end,
-            tweet_id,
-            representative_text,
-        ) in cursor.fetchall():
-            phrase_text = str(phrase)
-            result.setdefault(str(brand_key), []).append(
+        cursor.execute(
+            _CORPUS_SOURCE_ROWS_SQL,
+            [
+                sorted(specs),
+                lower_at,
+                upper_at,
+                MAX_CORPUS_SOURCE_ROWS + 1,
+            ],
+        )
+        while batch := cursor.fetchmany(500):
+            for brand_key, tweet_id, source_root_id, created_at, text in batch:
+                source_row_count += 1
+                text_characters = len(str(text or ""))
+                source_text_characters += text_characters
+                if (
+                    source_row_count > MAX_CORPUS_SOURCE_ROWS
+                    or text_characters > MAX_CORPUS_TEXT_CHARACTERS
+                    or source_text_characters > MAX_CORPUS_SOURCE_TEXT_CHARACTERS
+                ):
+                    return {}, "resource_limited"
+                rows_by_brand[str(brand_key)].append(
+                    (tweet_id, source_root_id, created_at, text)
+                )
+
+    # Peer count is the final ranking tie-breaker. Retain every phrase tied at
+    # the eighth primary (selected count, selected-minus-prior) score so the
+    # second pass can apply that tie-breaker without approximating the top 8.
+    retained: dict[str, set[str]] = {}
+    retained_phrase_count = 0
+    exact_counts: dict[tuple[str, str], tuple[int, int]] = {}
+    try:
+        for brand_key, spec in specs.items():
+            counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+            for document in _iter_corpus_documents(
+                rows_by_brand.get(brand_key, []), spec
+            ):
+                count_index = 0 if document["selected"] else 1
+                for phrase in document["phrases"]:
+                    counts[phrase][count_index] += 1
+                if len(counts) > MAX_CORPUS_DISTINCT_PHRASES_PER_BRAND:
+                    raise _CorpusPhraseResourceLimit
+            top_scores = nlargest(
+                8,
+                (
+                    (selected, selected - prior)
+                    for selected, prior in counts.values()
+                    if selected > 0
+                ),
+            )
+            if not top_scores:
+                retained[brand_key] = set()
+                continue
+            boundary_score = top_scores[-1]
+            retained[brand_key] = {
+                phrase
+                for phrase, (selected, prior) in counts.items()
+                if (
+                    selected,
+                    selected - prior,
+                )
+                >= boundary_score
+            }
+            retained_phrase_count += len(retained[brand_key])
+            if retained_phrase_count > MAX_CORPUS_RETAINED_PHRASES:
+                raise _CorpusPhraseResourceLimit
+            for phrase in retained[brand_key]:
+                exact_counts[(brand_key, phrase)] = tuple(counts[phrase])
+    except _CorpusPhraseResourceLimit:
+        return {}, "resource_limited"
+
+    candidate_phrases = set().union(*retained.values()) if retained else set()
+    peer_brands: dict[str, set[str]] = defaultdict(set)
+    representatives: dict[tuple[str, str], tuple[str, str]] = {}
+    burst_bounds: dict[tuple[str, str], tuple[int, int]] = {}
+    try:
+        if candidate_phrases:
+            for brand_key, spec in specs.items():
+                own_phrases = retained.get(brand_key, set())
+                for document in _iter_corpus_documents(
+                    rows_by_brand.get(brand_key, []), spec
+                ):
+                    if not document["selected"]:
+                        continue
+                    matching = document["phrases"] & candidate_phrases
+                    for phrase in matching:
+                        peer_brands[phrase].add(brand_key)
+                    for phrase in matching & own_phrases:
+                        key = (brand_key, phrase)
+                        representatives.setdefault(
+                            key,
+                            (
+                                str(document["tweet_id"]),
+                                str(document["normalized_text"]),
+                            ),
+                        )
+                        bucket = int(document["burst_bucket"])
+                        prior_bounds = burst_bounds.get(key)
+                        burst_bounds[key] = (
+                            (bucket, bucket)
+                            if prior_bounds is None
+                            else (
+                                min(prior_bounds[0], bucket),
+                                max(prior_bounds[1], bucket),
+                            )
+                        )
+    except _CorpusPhraseResourceLimit:
+        return {}, "resource_limited"
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for brand_key, phrases in retained.items():
+        ranked = sorted(
+            phrases,
+            key=lambda phrase: (
+                -exact_counts[(brand_key, phrase)][0],
+                -(
+                    exact_counts[(brand_key, phrase)][0]
+                    - exact_counts[(brand_key, phrase)][1]
+                ),
+                len(peer_brands[phrase]),
+                phrase,
+            ),
+        )[:8]
+        candidate_id = specs[brand_key]["candidate_id"]
+        for phrase_text in ranked:
+            selected, prior = exact_counts[(brand_key, phrase_text)]
+            tweet_id, representative_text = representatives.get(
+                (brand_key, phrase_text), ("", "")
+            )
+            start, end = burst_bounds.get((brand_key, phrase_text), (0, 0))
+            result.setdefault(brand_key, []).append(
                 {
                     "corpus_signal_id": "cs_"
                     + _digest(str(candidate_id), phrase_text)[:24],
                     "phrase": phrase_text,
                     "prevalence": int(selected or 0),
                     "prior_prevalence": int(prior or 0),
-                    "peer_brand_count": int(peers or 0),
+                    "peer_brand_count": len(peer_brands[phrase_text]),
                     "burst_interval": {
                         "start_bucket": int(start or 0),
                         "end_bucket": int(end or 0),
@@ -2067,7 +2166,50 @@ def _fetch_corpus_phrase_signals(
                     ),
                 }
             )
-    return result
+    return result, "available"
+
+
+def _iter_corpus_documents(
+    rows: Sequence[tuple[Any, ...]], spec: Mapping[str, Any]
+) -> Iterator[dict[str, Any]]:
+    """Yield source-deduplicated phrase documents for one brand."""
+    seen_sources: set[tuple[str, str]] = set()
+    start_at = spec["start_at"]
+    end_at = spec["end_at"]
+    upper_at = spec["upper_at"]
+    lower_at = spec["lower_at"]
+    duration_seconds = (end_at - start_at).total_seconds()
+    for tweet_id, source_root_id, created_at, text in rows:
+        if created_at is None or created_at < lower_at or created_at >= upper_at:
+            continue
+        source_text = unicodedata.normalize("NFC", str(text or ""))
+        if len(source_text) > MAX_CORPUS_TEXT_CHARACTERS:
+            raise _CorpusPhraseResourceLimit
+        lowered = source_text.lower()
+        source_key = (
+            str(source_root_id or tweet_id),
+            _WHITESPACE_RE.sub(" ", lowered),
+        )
+        if source_key in seen_sources:
+            continue
+        seen_sources.add(source_key)
+        normalized = _CORPUS_TOKEN_SEPARATOR_RE.sub(" ", lowered).strip()
+        tokens = [token for token in normalized.split() if len(token) >= 2]
+        if len(tokens) > MAX_CORPUS_TOKENS_PER_DOCUMENT:
+            raise _CorpusPhraseResourceLimit
+        phrases = {f"{current} {following}" for current, following in pairwise(tokens)}
+        selected = created_at >= start_at
+        yield {
+            "tweet_id": str(tweet_id),
+            "normalized_text": normalized,
+            "phrases": phrases,
+            "selected": selected,
+            "burst_bucket": (
+                int(4 * (created_at - start_at).total_seconds() / duration_seconds)
+                if selected and duration_seconds > 0
+                else 0
+            ),
+        }
 
 
 def _fetch_evidence_rows(
