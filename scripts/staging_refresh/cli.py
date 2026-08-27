@@ -72,7 +72,11 @@ def run(
         if runtime is None:
             from .database import PostgresRuntime
 
-            runtime = PostgresRuntime(policy)
+            runtime = PostgresRuntime(
+                policy,
+                source_url=values.get(policy.source.environment),
+                target_url=values.get(policy.target.environment),
+            )
 
         source = None
         if environment_guard.source is not None:

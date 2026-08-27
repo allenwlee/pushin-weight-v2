@@ -15,6 +15,7 @@
 !/.env.example
 /.ollija/state/
 /.ollija/tmp/
+/.staging-refresh/
 
 # Legacy runtime data
 data/monitor.db

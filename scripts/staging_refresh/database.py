@@ -1,17 +1,546 @@
 from __future__ import annotations
 
-from typing import Any
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import tempfile
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Protocol
 
 import psycopg
+from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict
+
+from scripts.database_lock import acquire_cluster_lock, admin_connection_parameters
 
 from .policy import DatabaseInspection, RefreshPolicy
 
 
-class PostgresRuntime:
-    """PostgreSQL inspection boundary; lifecycle mutations are added separately."""
+class RefreshError(RuntimeError):
+    """A secret-free failure before staging activation."""
 
-    def __init__(self, policy: RefreshPolicy) -> None:
+
+@dataclass(frozen=True, slots=True)
+class SourceCensus:
+    snapshot_id: str
+    captured_at: datetime
+    database_bytes: int
+    schema_checksum: str
+    migration_checksum: str
+    row_counts: Mapping[str, int]
+    latest_timestamps: Mapping[str, str | None]
+
+
+@dataclass(frozen=True, slots=True)
+class DumpArtifact:
+    path: Path
+    checksum: str
+    byte_size: int
+    source: SourceCensus
+
+
+@dataclass(frozen=True, slots=True)
+class ShadowCandidate:
+    name: str
+    marker: str
+    artifact: DumpArtifact
+
+
+class SnapshotAdapter(Protocol):
+    def exported_snapshot(self, database_url: str) -> Any: ...
+
+    def target_database_bytes(self, database_url: str) -> int: ...
+
+    def create_shadow(self, database_url: str, name: str, marker: str) -> None: ...
+
+    def marker_matches(self, database_url: str, name: str, marker: str) -> bool: ...
+
+    def drop_shadow(self, database_url: str, name: str) -> None: ...
+
+
+class CommandResult(Protocol):
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def _hash_rows(rows: list[tuple[object, ...]]) -> str:
+    payload = json.dumps(rows, default=str, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _libpq_environment(
+    database_url: str,
+    *,
+    database: str | None = None,
+    require_tls: bool,
+) -> dict[str, str]:
+    try:
+        values = conninfo_to_dict(database_url)
+    except Exception as exc:
+        raise RefreshError("connection_url_invalid") from exc
+    environment = {
+        key: os.environ[key]
+        for key in ("PATH", "LANG", "LC_ALL", "TZ", "SYSTEMROOT")
+        if key in os.environ
+    }
+    for source_key, child_key in {
+        "host": "PGHOST",
+        "hostaddr": "PGHOSTADDR",
+        "port": "PGPORT",
+        "dbname": "PGDATABASE",
+        "user": "PGUSER",
+        "password": "PGPASSWORD",
+        "sslmode": "PGSSLMODE",
+    }.items():
+        value = values.get(source_key)
+        if value is not None:
+            environment[child_key] = str(value)
+    if database:
+        environment["PGDATABASE"] = database
+    if require_tls:
+        environment["PGSSLMODE"] = "require"
+    environment["PGAPPNAME"] = "staging-data-refresh"
+    return environment
+
+
+class PsycopgSnapshotAdapter:
+    def __init__(
+        self,
+        policy: RefreshPolicy,
+        *,
+        connect: Callable[..., Any] = psycopg.connect,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
         self.policy = policy
+        self.connect = connect
+        self.now = now or (lambda: datetime.now(UTC))
+
+    @contextmanager
+    def exported_snapshot(self, database_url: str) -> Iterator[SourceCensus]:
+        with (
+            self.connect(database_url, autocommit=True) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
+            )
+            cursor.execute("SELECT pg_export_snapshot()")
+            snapshot_id = str(cursor.fetchone()[0])
+            cursor.execute("SELECT pg_database_size(current_database())")
+            database_bytes = int(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT table_name, column_name, data_type, is_nullable, "
+                "COALESCE(column_default, '') FROM information_schema.columns "
+                "WHERE table_schema = 'public' ORDER BY table_name, ordinal_position"
+            )
+            schema_checksum = _hash_rows(list(cursor.fetchall()))
+            cursor.execute(
+                "SELECT app, name, applied FROM django_migrations ORDER BY app, name"
+            )
+            migration_checksum = _hash_rows(list(cursor.fetchall()))
+            row_counts: dict[str, int] = {}
+            for table in self.policy.validation.exact_count_tables:
+                cursor.execute(
+                    sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
+                )
+                row_counts[table] = int(cursor.fetchone()[0])
+            latest: dict[str, str | None] = {}
+            table = self.policy.validation.latest_timestamp_table
+            column = self.policy.validation.latest_timestamp_column
+            cursor.execute(
+                sql.SQL("SELECT max({}) FROM {}").format(
+                    sql.Identifier(column),
+                    sql.Identifier(table),
+                )
+            )
+            value = cursor.fetchone()[0]
+            latest[f"{table}.{column}"] = value.isoformat() if value else None
+            census = SourceCensus(
+                snapshot_id=snapshot_id,
+                captured_at=self.now().astimezone(UTC),
+                database_bytes=database_bytes,
+                schema_checksum=schema_checksum,
+                migration_checksum=migration_checksum,
+                row_counts=row_counts,
+                latest_timestamps=latest,
+            )
+            try:
+                yield census
+            finally:
+                cursor.execute("ROLLBACK")
+
+    def target_database_bytes(self, database_url: str) -> int:
+        parameters = admin_connection_parameters(database_url)
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COALESCE(sum(pg_database_size(datname)), 0) FROM pg_database"
+            )
+            return int(cursor.fetchone()[0])
+
+    def create_shadow(self, database_url: str, name: str, marker: str) -> None:
+        parameters = admin_connection_parameters(database_url)
+        with (
+            self.connect(**parameters, autocommit=True) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", [name])
+            if cursor.fetchone() is not None:
+                raise RefreshError("shadow_database_already_exists")
+            cursor.execute(
+                sql.SQL("CREATE DATABASE {} TEMPLATE template0").format(
+                    sql.Identifier(name)
+                )
+            )
+            cursor.execute(
+                sql.SQL("COMMENT ON DATABASE {} IS %s").format(sql.Identifier(name)),
+                [marker],
+            )
+
+    def marker_matches(self, database_url: str, name: str, marker: str) -> bool:
+        parameters = admin_connection_parameters(database_url)
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT obj_description(oid, 'pg_database') FROM pg_database WHERE datname = %s",
+                [name],
+            )
+            row = cursor.fetchone()
+            return bool(row and row[0] == marker)
+
+    def drop_shadow(self, database_url: str, name: str) -> None:
+        parameters = admin_connection_parameters(database_url)
+        with (
+            self.connect(**parameters, autocommit=True) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                sql.SQL("ALTER DATABASE {} WITH ALLOW_CONNECTIONS false").format(
+                    sql.Identifier(name)
+                )
+            )
+            cursor.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                [name],
+            )
+            cursor.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(name)))
+
+
+class SnapshotRestoreEngine:
+    CHILD_ENVIRONMENT_ALLOWLIST = frozenset(
+        {
+            "PATH",
+            "LANG",
+            "LC_ALL",
+            "TZ",
+            "SYSTEMROOT",
+            "PGHOST",
+            "PGHOSTADDR",
+            "PGPORT",
+            "PGDATABASE",
+            "PGUSER",
+            "PGPASSWORD",
+            "PGSSLMODE",
+            "PGAPPNAME",
+        }
+    )
+    _ARTIFACT_PREFIX = "staging-refresh-"
+    _ARTIFACT_SUFFIX = ".dump"
+
+    def __init__(
+        self,
+        *,
+        policy: RefreshPolicy,
+        source_url: str,
+        target_url: str,
+        adapter: SnapshotAdapter | None = None,
+        runner: Callable[..., CommandResult] = subprocess.run,
+        lock_factory: Callable[..., Any] = acquire_cluster_lock,
+        executable_finder: Callable[[str], str | None] = shutil.which,
+        disk_usage: Callable[[Path], Any] = shutil.disk_usage,
+        temporary_root: Path | None = None,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        self.policy = policy
+        self.source_url = source_url
+        self.target_url = target_url
+        self.now = now or (lambda: datetime.now(UTC))
+        self.adapter = adapter or PsycopgSnapshotAdapter(policy, now=self.now)
+        self.runner = runner
+        self.lock_factory = lock_factory
+        self.executable_finder = executable_finder
+        self.disk_usage = disk_usage
+        self.temporary_root = temporary_root or (
+            policy.path.parents[1] / ".staging-refresh"
+        )
+        self._target_lock_depth = 0
+        self._executables: dict[str, str] = {}
+
+    @property
+    def project_root(self) -> Path:
+        return self.policy.path.parents[1]
+
+    def _run(
+        self, command: list[str], *, environment: Mapping[str, str]
+    ) -> CommandResult:
+        try:
+            return self.runner(
+                command,
+                cwd=self.project_root,
+                env=dict(environment),
+                text=True,
+                capture_output=True,
+                timeout=60 * 30,
+                check=False,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            raise RefreshError("subprocess_failed") from exc
+
+    def _verify_clients(self) -> None:
+        for name in ("pg_dump", "pg_restore"):
+            executable = self.executable_finder(name)
+            if not executable:
+                raise RefreshError(f"{name}_unavailable")
+            result = self._run([executable, "--version"], environment={})
+            match = re.search(r"PostgreSQL\)\s+(\d+)", result.stdout)
+            if result.returncode != 0 or not match:
+                raise RefreshError("postgres_client_version_unknown")
+            if int(match.group(1)) < 18:
+                raise RefreshError("postgres_client_version_unsupported")
+            self._executables[name] = executable
+
+    def _prepare_temporary_root(self) -> None:
+        self.temporary_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.temporary_root.chmod(0o700)
+
+    def cleanup_stale_artifacts(self) -> None:
+        if not self.temporary_root.exists():
+            return
+        cutoff = self.now().timestamp() - timedelta(hours=24).total_seconds()
+        for artifact in self.temporary_root.glob(
+            f"{self._ARTIFACT_PREFIX}*{self._ARTIFACT_SUFFIX}"
+        ):
+            if artifact.is_file() and artifact.stat().st_mtime < cutoff:
+                artifact.unlink()
+
+    def _new_artifact_path(self) -> Path:
+        self._prepare_temporary_root()
+        descriptor, value = tempfile.mkstemp(
+            prefix=self._ARTIFACT_PREFIX,
+            suffix=self._ARTIFACT_SUFFIX,
+            dir=self.temporary_root,
+        )
+        os.close(descriptor)
+        path = Path(value)
+        path.chmod(0o600)
+        return path
+
+    def _guard_local_space(self, source_bytes: int) -> None:
+        self._prepare_temporary_root()
+        required = int(source_bytes * self.policy.storage.local_free_space_multiplier)
+        if int(self.disk_usage(self.temporary_root).free) < required:
+            raise RefreshError("local_space_insufficient")
+
+    def export_dump(self) -> DumpArtifact:
+        self.cleanup_stale_artifacts()
+        self._verify_clients()
+        environment = _libpq_environment(self.source_url, require_tls=True)
+        artifact_path: Path | None = None
+        try:
+            with (
+                self.lock_factory(
+                    self.source_url,
+                    wait_seconds=0,
+                    lock_id=self.policy.lifecycle.cluster_lock_id,
+                ),
+                self.adapter.exported_snapshot(self.source_url) as census,
+            ):
+                self._guard_local_space(census.database_bytes)
+                artifact_path = self._new_artifact_path()
+                command = [
+                    self._executables["pg_dump"],
+                    "--format=custom",
+                    "--no-owner",
+                    "--no-privileges",
+                    f"--snapshot={census.snapshot_id}",
+                    *(
+                        f"--exclude-table-data=public.{table}"
+                        for table in sorted(self.policy.relations.excluded_tables)
+                    ),
+                    "--file",
+                    str(artifact_path),
+                ]
+                result = self._run(command, environment=environment)
+                if result.returncode != 0:
+                    raise RefreshError("pg_dump_failed")
+                mode = stat.S_IMODE(artifact_path.stat().st_mode)
+                if mode != 0o600:
+                    raise RefreshError("dump_permissions_invalid")
+                checksum = _file_sha256(artifact_path)
+                byte_size = artifact_path.stat().st_size
+                if byte_size <= 0:
+                    raise RefreshError("dump_empty")
+                return DumpArtifact(
+                    path=artifact_path,
+                    checksum=checksum,
+                    byte_size=byte_size,
+                    source=census,
+                )
+        except BaseException:
+            if artifact_path is not None and artifact_path.exists():
+                artifact_path.unlink()
+            raise
+
+    @contextmanager
+    def target_lock(self) -> Iterator[None]:
+        with self.lock_factory(
+            self.target_url,
+            wait_seconds=0,
+            lock_id=self.policy.lifecycle.cluster_lock_id,
+        ):
+            self._target_lock_depth += 1
+            try:
+                yield
+            finally:
+                self._target_lock_depth -= 1
+
+    def _guard_target_capacity(self, source_bytes: int) -> None:
+        current = self.adapter.target_database_bytes(self.target_url)
+        usable = int(
+            self.policy.storage.target_disk_bytes
+            * (1 - self.policy.storage.required_reserve_ratio)
+        )
+        if current + source_bytes > usable:
+            raise RefreshError("target_capacity_insufficient")
+
+    def _shadow_name(self) -> str:
+        suffix = self.now().astimezone(UTC).strftime("%Y%m%dt%H%M%Sz").lower()
+        name = f"{self.policy.lifecycle.shadow_prefix}{suffix}"
+        if len(name) > 63:
+            raise RefreshError("shadow_name_too_long")
+        return name
+
+    def _shadow_marker(self, name: str, artifact: DumpArtifact) -> str:
+        payload = {
+            "created_at": self.now().astimezone(UTC).isoformat(),
+            "database": name,
+            "source_resource_id": self.policy.source.resource_id,
+            "state": "building",
+            "checksum": artifact.checksum,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return f"{self.policy.lifecycle.marker_prefix}:{encoded}"
+
+    def restore_shadow(self, artifact: DumpArtifact) -> ShadowCandidate:
+        if self._target_lock_depth <= 0:
+            raise RefreshError("target_lock_required")
+        if (
+            not self._owned_artifact(artifact.path)
+            or _file_sha256(artifact.path) != artifact.checksum
+        ):
+            raise RefreshError("dump_checksum_mismatch")
+        self._guard_target_capacity(artifact.source.database_bytes)
+        name = self._shadow_name()
+        marker = self._shadow_marker(name, artifact)
+        created = False
+        try:
+            self.adapter.create_shadow(self.target_url, name, marker)
+            created = True
+            environment = _libpq_environment(
+                self.target_url,
+                database=name,
+                require_tls=False,
+            )
+            command = [
+                self._executables["pg_restore"],
+                "--exit-on-error",
+                "--no-owner",
+                "--no-privileges",
+                "--jobs=1",
+                "--dbname",
+                name,
+                str(artifact.path),
+            ]
+            result = self._run(command, environment=environment)
+            if result.returncode != 0:
+                raise RefreshError("pg_restore_failed")
+            return ShadowCandidate(name=name, marker=marker, artifact=artifact)
+        except BaseException:
+            if created:
+                self.cleanup_shadow(name, marker)
+            raise
+
+    def cleanup_shadow(self, name: str, marker: str) -> None:
+        if (
+            self._target_lock_depth <= 0
+            or not name.startswith(self.policy.lifecycle.shadow_prefix)
+            or name == self.policy.target.database
+        ):
+            raise RefreshError("shadow_cleanup_refused")
+        if not self.adapter.marker_matches(self.target_url, name, marker):
+            raise RefreshError("shadow_cleanup_refused")
+        self.adapter.drop_shadow(self.target_url, name)
+
+    def _owned_artifact(self, path: Path) -> bool:
+        try:
+            resolved = path.resolve(strict=False)
+            root = self.temporary_root.resolve(strict=False)
+        except OSError:
+            return False
+        return (
+            resolved.parent == root
+            and resolved.name.startswith(self._ARTIFACT_PREFIX)
+            and resolved.name.endswith(self._ARTIFACT_SUFFIX)
+        )
+
+    def cleanup_artifact(self, artifact: DumpArtifact) -> None:
+        if not self._owned_artifact(artifact.path):
+            raise RefreshError("artifact_cleanup_refused")
+        artifact.path.unlink(missing_ok=True)
+
+
+class PostgresRuntime:
+    """PostgreSQL inspection boundary and lifecycle command runtime."""
+
+    def __init__(
+        self,
+        policy: RefreshPolicy,
+        *,
+        source_url: str | None = None,
+        target_url: str | None = None,
+    ) -> None:
+        self.policy = policy
+        self.source_url = source_url
+        self.target_url = target_url
+        self.engine = (
+            SnapshotRestoreEngine(
+                policy=policy,
+                source_url=source_url,
+                target_url=target_url,
+            )
+            if source_url and target_url
+            else None
+        )
+        if self.engine is not None:
+            self.engine.cleanup_stale_artifacts()
 
     @staticmethod
     def _inspect(url: str) -> DatabaseInspection:
@@ -44,7 +573,9 @@ class PostgresRuntime:
                 "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'S', 'v')"
             )
             rows: list[tuple[Any, ...]] = cursor.fetchall()
-            cursor.execute("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
+            cursor.execute(
+                "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
+            )
             schema_write = bool(cursor.fetchone()[0])
 
         base_tables = frozenset(str(row[0]) for row in rows if row[1] in {"r", "p"})
