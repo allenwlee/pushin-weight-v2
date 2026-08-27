@@ -123,6 +123,7 @@ class DatabaseInspection:
     has_write_privileges: bool
     can_create_database: bool
     readable_tables: frozenset[str]
+    maintainable_tables: frozenset[str]
     readable_sequences: frozenset[str]
     base_tables: frozenset[str]
     views: frozenset[str]
@@ -646,6 +647,16 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     unreadable = policy.relations.copied_tables - source.readable_tables
     if unreadable:
         raise PolicyError(f"source_required_table_unreadable:{min(unreadable)}")
+    unexpected_maintenance = (
+        source.maintainable_tables - policy.relations.excluded_tables
+    )
+    if unexpected_maintenance:
+        raise PolicyError(
+            f"source_maintenance_privilege_unexpected:{min(unexpected_maintenance)}"
+        )
+    unlockable = policy.relations.excluded_tables - source.maintainable_tables
+    if unlockable:
+        raise PolicyError(f"source_excluded_table_unlockable:{min(unlockable)}")
     if source.readable_sequences != policy.relations.sequences:
         raise PolicyError("source_sequence_privileges_invalid")
 

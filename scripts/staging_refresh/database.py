@@ -1603,7 +1603,9 @@ class PostgresRuntime:
                 "has_sequence_privilege(current_user, c.oid, 'SELECT') ELSE FALSE END, "
                 "CASE WHEN c.relkind IN ('r', 'p') THEN "
                 "has_table_privilege(current_user, c.oid, 'INSERT,UPDATE,DELETE,TRUNCATE') "
-                "ELSE FALSE END "
+                "ELSE FALSE END, "
+                "CASE WHEN c.relkind IN ('r', 'p') THEN "
+                "has_table_privilege(current_user, c.oid, 'MAINTAIN') ELSE FALSE END "
                 "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
                 "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'S', 'v')"
             )
@@ -1622,6 +1624,11 @@ class PostgresRuntime:
         readable_sequences = frozenset(
             str(row[0]) for row in rows if row[1] == "S" and row[3]
         )
+        maintainable_tables = frozenset(
+            str(row[0]) for row in rows if row[1] in {"r", "p"} and row[5]
+        )
+        # PostgreSQL 18 MAINTAIN permits the schema locks pg_dump needs but no
+        # row writes, so it is intentionally reported separately from DML.
         table_write = any(bool(row[4]) for row in rows)
         return DatabaseInspection(
             database=str(database),
@@ -1632,6 +1639,7 @@ class PostgresRuntime:
             has_write_privileges=bool(elevated) or schema_write or table_write,
             can_create_database=bool(can_create),
             readable_tables=readable_tables,
+            maintainable_tables=maintainable_tables,
             readable_sequences=readable_sequences,
             base_tables=base_tables,
             views=views,

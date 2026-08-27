@@ -63,6 +63,18 @@ GRANT SELECT ON
   trend_narratives, unsanctioned_flag_keys
 TO staging_refresh_reader;
 
+-- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
+-- 18's MAINTAIN privilege permits that lock without permitting row reads.
+GRANT MAINTAIN ON
+  _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
+  auth_group, auth_group_permissions, auth_permission, auth_user,
+  auth_user_groups, auth_user_user_permissions, call_state, django_session,
+  harvest_backlog_windows, post_enrichment_states,
+  socialaccount_socialaccount, socialaccount_socialapp,
+  socialaccount_socialapp_sites, socialaccount_socialtoken,
+  twitter_list_memberships, twitter_list_sync_state
+TO staging_refresh_reader;
+
 GRANT SELECT ON
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
@@ -75,6 +87,11 @@ GRANT SELECT ON
   twitter_list_memberships_id_seq
 TO staging_refresh_reader;
 ```
+
+The sequence `SELECT` grants both preserve copied sequence state and permit
+`pg_dump`'s sequence locks; sequences do not need `MAINTAIN`. The excluded
+tables receive `MAINTAIN` only, so the refresh role can lock their schema but
+cannot read their rows.
 
 Do not add default privileges. A new production table must fail the exhaustive
 preflight until `config/staging_refresh.yaml`, this grant list, and the scrub or

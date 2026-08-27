@@ -36,6 +36,9 @@ def _inspection(
         has_write_privileges=False,
         can_create_database=not source,
         readable_tables=policy.relations.copied_tables if source else frozenset(),
+        maintainable_tables=(
+            policy.relations.excluded_tables if source else frozenset()
+        ),
         readable_sequences=policy.relations.sequences if source else frozenset(),
         base_tables=policy.relations.classified_tables if source else frozenset(),
         views=policy.relations.views if source else frozenset(),
@@ -76,8 +79,14 @@ def test_runbook_source_grants_cover_the_exhaustive_copy_policy() -> None:
     policy = load_policy(POLICY_PATH)
     runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
 
-    for relation in sorted(policy.relations.copied_tables | policy.relations.sequences):
+    for relation in sorted(policy.relations.classified_tables | policy.relations.sequences):
         assert relation in runbook
+    assert "GRANT MAINTAIN ON" in runbook
+    maintain_block = runbook.split("GRANT MAINTAIN ON", 1)[1].split(
+        "TO staging_refresh_reader;", 1
+    )[0]
+    maintained_relations = frozenset(maintain_block.replace(",", " ").split())
+    assert maintained_relations == policy.relations.excluded_tables
     assert "Do not add default privileges" in runbook
     assert "\\password staging_refresh_reader" in runbook
 
@@ -116,6 +125,11 @@ def test_valid_staging_preflight_is_authorized() -> None:
         ("target_database", "target_database_mismatch"),
         ("production_target", "target_is_production"),
         ("excluded_readable", "source_excluded_table_readable:auth_user"),
+        ("excluded_unlockable", "source_excluded_table_unlockable:auth_user"),
+        (
+            "unexpected_maintenance",
+            "source_maintenance_privilege_unexpected:posts",
+        ),
     ],
 )
 def test_guard_matrix_fails_closed(change: str, code: str) -> None:
@@ -138,6 +152,14 @@ def test_guard_matrix_fails_closed(change: str, code: str) -> None:
         )
     elif change == "excluded_readable":
         source = replace(source, readable_tables=source.readable_tables | {"auth_user"})
+    elif change == "excluded_unlockable":
+        source = replace(
+            source, maintainable_tables=source.maintainable_tables - {"auth_user"}
+        )
+    elif change == "unexpected_maintenance":
+        source = replace(
+            source, maintainable_tables=source.maintainable_tables | {"posts"}
+        )
 
     with pytest.raises(PolicyError, match=code):
         authorize(
