@@ -231,6 +231,118 @@ def test_subject_position_is_unique_and_bounded():
         subject_model.objects.create(position=2, **values)
 
 
+def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
+    assert {
+        "TrendNarrativeRun",
+        "TrendNarrativeProviderCall",
+        "BrandTrendNarrative",
+        "TrendNarrativeVisibleRun",
+    } <= set(dir(core_models))
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT relname
+            FROM pg_class
+            WHERE relname IN (
+                'trend_narrative_runs',
+                'trend_narrative_provider_calls',
+                'brand_trend_narratives',
+                'trend_narrative_visible_runs'
+            )
+              AND relkind = 'r'
+            ORDER BY relname
+            """
+        )
+        assert [row[0] for row in cursor.fetchall()] == [
+            "brand_trend_narratives",
+            "trend_narrative_provider_calls",
+            "trend_narrative_runs",
+            "trend_narrative_visible_runs",
+        ]
+        cursor.execute(
+            """
+            SELECT conname
+            FROM pg_constraint
+            WHERE conname IN (
+                'uq_tnr_source_window', 'uq_tnpc_run_stage_batch',
+                'uq_tnpc_request_identity', 'uq_btn_run_brand',
+                'ck_tnpc_sent_shape', 'ck_btn_held_last_good',
+                'ck_btn_critic_decision', 'ck_btn_narrative_kind',
+                'ck_btn_confidence'
+            )
+            ORDER BY conname
+            """
+        )
+        assert [row[0] for row in cursor.fetchall()] == [
+            "ck_btn_confidence",
+            "ck_btn_critic_decision",
+            "ck_btn_held_last_good",
+            "ck_btn_narrative_kind",
+            "ck_tnpc_sent_shape",
+            "uq_btn_run_brand",
+            "uq_tnpc_request_identity",
+            "uq_tnpc_run_stage_batch",
+            "uq_tnr_source_window",
+        ]
+        cursor.execute(
+            """
+            SELECT indexname
+            FROM pg_indexes
+            WHERE indexname IN (
+                'idx_tnr_window_facts', 'idx_tnpc_claim_due',
+                'idx_btn_brand_attempt'
+            )
+            ORDER BY indexname
+            """
+        )
+        assert [row[0] for row in cursor.fetchall()] == [
+            "idx_btn_brand_attempt",
+            "idx_tnpc_claim_due",
+            "idx_tnr_window_facts",
+        ]
+
+    brand_fields = {
+        field.name for field in core_models.BrandTrendNarrative._meta.fields
+    }
+    assert {"critic_decision", "narrative_kind", "confidence"} <= brand_fields
+
+
+def test_u2_migration_round_trip_preserves_legacy_narrative_rows():
+    from django.db.migrations.executor import MigrationExecutor
+
+    legacy = core_models.TrendNarrative.objects.create(
+        source_cycle_id="u2-migration-preserves-legacy",
+        window_days=7,
+        status=core_models.TrendNarrative.Status.CHECKED,
+        facts_as_of=NOW,
+        error_code="existing_legacy_check",
+    )
+    try:
+        executor = MigrationExecutor(connection)
+        executor.migrate([("core", "0016_post_commentary_fields")])
+        old_apps = executor.loader.project_state(
+            [("core", "0016_post_commentary_fields")]
+        ).apps
+        old_row = old_apps.get_model("core", "TrendNarrative").objects.get(
+            pk=legacy.pk
+        )
+        assert old_row.source_cycle_id == "u2-migration-preserves-legacy"
+        assert old_row.error_code == "existing_legacy_check"
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([("core", "0017_per_brand_trend_narratives")])
+        new_apps = executor.loader.project_state(
+            [("core", "0017_per_brand_trend_narratives")]
+        ).apps
+        new_row = new_apps.get_model("core", "TrendNarrative").objects.get(
+            pk=legacy.pk
+        )
+        assert new_row.source_cycle_id == "u2-migration-preserves-legacy"
+        assert new_row.error_code == "existing_legacy_check"
+    finally:
+        _restore_current_core_schema()
+
+
 def test_product_subject_snapshot_survives_future_product_catalog_deletion():
     product = core_models.Product.objects.create(
         repo_id="vendor/FutureModel",

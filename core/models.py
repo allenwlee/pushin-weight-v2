@@ -1757,6 +1757,312 @@ class TrendNarrative(models.Model):
         )
 
 
+class TrendNarrativeRun(models.Model):
+    """Immutable all-brand facts cutoff for one source-cycle/window pair."""
+
+    class Status(models.TextChoices):
+        PREPARING = "preparing", "Preparing"
+        TERMINAL = "terminal", "Terminal"
+        ACTIVE = "active", "Active"
+        SUPERSEDED = "superseded", "Superseded"
+
+    source_cycle_id = models.CharField(max_length=128)
+    window_days = models.PositiveSmallIntegerField()
+    facts_as_of = models.DateTimeField()
+    packet_schema_version = models.PositiveSmallIntegerField()
+    snapshot = models.JSONField()
+    brand_manifest = models.JSONField(default=list, db_default=[])
+    batch_manifest = models.JSONField(default=list, db_default=[])
+    internal_order = models.JSONField(default=list, db_default=[])
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PREPARING
+    )
+    activated_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "trend_narrative_runs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_cycle_id", "window_days"],
+                name="uq_tnr_source_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_days__in=[1, 7, 30, 365]),
+                name="ck_tnr_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=["preparing", "terminal", "active", "superseded"]
+                ),
+                name="ck_tnr_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status__in=["active", "superseded"], activated_at__isnull=False)
+                    | models.Q(status__in=["preparing", "terminal"], activated_at__isnull=True)
+                ),
+                name="ck_tnr_activation_shape",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["window_days", "facts_as_of"],
+                name="idx_tnr_window_facts",
+            ),
+            models.Index(fields=["status", "created_at"], name="idx_tnr_status_created"),
+        ]
+
+
+class TrendNarrativeVisibleRun(models.Model):
+    """The one monotonic visible cutoff for a supported time window."""
+
+    window_days = models.PositiveSmallIntegerField(primary_key=True)
+    run = models.ForeignKey(
+        TrendNarrativeRun,
+        on_delete=models.PROTECT,
+        related_name="visible_pointers",
+    )
+    facts_as_of = models.DateTimeField()
+    activated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "trend_narrative_visible_runs"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(window_days__in=[1, 7, 30, 365]),
+                name="ck_tnvr_window",
+            ),
+        ]
+
+
+class TrendNarrativeProviderCall(models.Model):
+    """Append-only bounded transport ledger for rank/editor/critic work."""
+
+    class Stage(models.TextChoices):
+        RANK = "rank", "Rank"
+        EDITOR = "editor", "Editor"
+        CRITIC = "critic", "Critic"
+
+    class State(models.TextChoices):
+        RESERVED = "reserved", "Reserved"
+        SENT = "sent", "Sent"
+        COMPLETED = "completed", "Completed"
+        AMBIGUOUS = "ambiguous", "Ambiguous"
+        FAILED = "failed", "Failed"
+
+    run = models.ForeignKey(
+        TrendNarrativeRun,
+        on_delete=models.CASCADE,
+        related_name="provider_calls",
+    )
+    stage = models.CharField(max_length=16, choices=Stage.choices)
+    batch_key = models.CharField(max_length=128, blank=True, default="")
+    request_identity = models.CharField(max_length=128)
+    request_hash = models.CharField(max_length=64)
+    response_hash = models.CharField(max_length=64, blank=True, default="")
+    request_packet = models.JSONField(blank=True, null=True)
+    response_payload = models.JSONField(blank=True, null=True)
+    state = models.CharField(max_length=16, choices=State.choices, default=State.RESERVED)
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_fence = models.PositiveIntegerField(default=0)
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    claim_expires_at = models.DateTimeField(blank=True, null=True)
+    reserved_at = models.DateTimeField()
+    sent_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    error_code = models.CharField(max_length=64, blank=True, default="")
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    latency_ms = models.PositiveIntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "trend_narrative_provider_calls"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "stage", "batch_key"],
+                name="uq_tnpc_run_stage_batch",
+            ),
+            models.UniqueConstraint(
+                fields=["request_identity"], name="uq_tnpc_request_identity"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    stage__in=["rank", "editor", "critic"]
+                ),
+                name="ck_tnpc_stage",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    state__in=["reserved", "sent", "completed", "ambiguous", "failed"]
+                ),
+                name="ck_tnpc_state",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(claimed_at__isnull=True, claim_expires_at__isnull=True, claim_owner="", claim_fence=0)
+                    | models.Q(claimed_at__isnull=False, claim_expires_at__gt=models.F("claimed_at"), claim_owner__gt="", claim_fence__gt=0)
+                ),
+                name="ck_tnpc_claim_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(sent_at__isnull=True, state="reserved")
+                    | models.Q(sent_at__isnull=False, state__in=["sent", "completed", "ambiguous", "failed"])
+                ),
+                name="ck_tnpc_sent_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(completed_at__isnull=True, state__in=["reserved", "sent", "ambiguous", "failed"])
+                    | models.Q(completed_at__isnull=False, state="completed", response_hash__gt="")
+                ),
+                name="ck_tnpc_completed_shape",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["state", "claim_expires_at"], name="idx_tnpc_claim_due"),
+            models.Index(fields=["run", "stage"], name="idx_tnpc_run_stage"),
+        ]
+
+
+class BrandTrendNarrative(models.Model):
+    """One immutable prepared outcome for a brand within a run."""
+
+    class Status(models.TextChoices):
+        PREPARED = "prepared", "Prepared"
+        APPROVED = "approved", "Approved"
+        HELD = "held", "Held"
+        UNAVAILABLE = "unavailable", "Unavailable"
+        NO_CONTENT = "no_content", "No content"
+        DATA_QUALITY_UNAVAILABLE = "data_quality_unavailable", "Data quality unavailable"
+
+    class CriticDecision(models.TextChoices):
+        APPROVE = "approve", "Approve"
+        REPAIR = "repair", "Repair"
+        HOLD = "hold", "Hold"
+
+    class NarrativeKind(models.TextChoices):
+        EVENT_LED = "event_led", "Event led"
+        CONTENT_SHIFT = "content_shift", "Content shift"
+        MIX_SHIFT = "mix_shift", "Mix shift"
+        QUIET_CONTEXT = "quiet_context", "Quiet context"
+
+    class Confidence(models.TextChoices):
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+
+    run = models.ForeignKey(
+        TrendNarrativeRun,
+        on_delete=models.CASCADE,
+        related_name="brand_narratives",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    brand_key_snapshot = models.CharField(max_length=64)
+    brand_name_en_snapshot = models.TextField()
+    brand_name_zh_cn_snapshot = models.TextField()
+    status = models.CharField(max_length=32, choices=Status.choices)
+    headline_en = models.TextField(blank=True, default="")
+    headline_zh_cn = models.TextField(blank=True, default="")
+    secondary_en = models.TextField(blank=True, default="")
+    secondary_zh_cn = models.TextField(blank=True, default="")
+    critic_decision = models.CharField(
+        max_length=16, choices=CriticDecision.choices, blank=True, default=""
+    )
+    narrative_kind = models.CharField(
+        max_length=32, choices=NarrativeKind.choices, blank=True, default=""
+    )
+    confidence = models.CharField(
+        max_length=16, choices=Confidence.choices, blank=True, default=""
+    )
+    propositions = models.JSONField(default=list, db_default=[])
+    events = models.JSONField(default=list, db_default=[])
+    cited_fact_ids = models.JSONField(default=list, db_default=[])
+    cited_evidence_ids = models.JSONField(default=list, db_default=[])
+    selected_evidence_packet = models.JSONField(blank=True, null=True)
+    final_critic_payload = models.JSONField(blank=True, null=True)
+    verified_at = models.DateTimeField(blank=True, null=True)
+    attempted_at = models.DateTimeField()
+    error_code = models.CharField(max_length=64, blank=True, default="")
+    last_good = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        related_name="held_successors",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "brand_trend_narratives"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "brand_key_snapshot"],
+                name="uq_btn_run_brand",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=["prepared", "approved", "held", "unavailable", "no_content", "data_quality_unavailable"]
+                ),
+                name="ck_btn_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="prepared", verified_at__isnull=True)
+                    | models.Q(status="approved", verified_at__isnull=False, headline_en__gt="", headline_zh_cn__gt="", secondary_en__gt="", secondary_zh_cn__gt="")
+                    | models.Q(status__in=["held", "unavailable", "no_content", "data_quality_unavailable"])
+                ),
+                name="ck_btn_output_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="held", last_good__isnull=False)
+                    | ~models.Q(status="held")
+                ),
+                name="ck_btn_held_last_good",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    critic_decision__in=["", "approve", "repair", "hold"]
+                ),
+                name="ck_btn_critic_decision",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    narrative_kind__in=[
+                        "",
+                        "event_led",
+                        "content_shift",
+                        "mix_shift",
+                        "quiet_context",
+                    ]
+                ),
+                name="ck_btn_narrative_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence__in=["", "high", "medium", "low"]),
+                name="ck_btn_confidence",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["brand_key_snapshot", "-attempted_at"], name="idx_btn_brand_attempt"),
+            models.Index(fields=["run", "status"], name="idx_btn_run_status"),
+        ]
+
+
 class TrendNarrativeSubject(models.Model):
     """One immutable reported identity on a narrative publication."""
 

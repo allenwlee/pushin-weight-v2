@@ -8,17 +8,34 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from django.db import IntegrityError, close_old_connections, transaction
 
-from core.models import Brand, Product, TrendNarrative, TrendNarrativeSubject
+from core.models import (
+    Brand,
+    BrandTrendNarrative,
+    Product,
+    TrendNarrative,
+    TrendNarrativeProviderCall,
+    TrendNarrativeRun,
+    TrendNarrativeSubject,
+    TrendNarrativeVisibleRun,
+)
 from monitor.trend_narrative_candidates import project_provider_packet
 from monitor.trend_narrative_lifecycle import (
     abandon_expired_attempts,
+    activate_trend_narrative_run,
     advance_current_check,
+    claim_trend_narrative_provider_call,
+    complete_trend_narrative_provider_call,
     fail_generation,
     mark_transport_completed,
     mark_transport_started,
+    mark_trend_narrative_provider_call_ambiguous,
+    mark_trend_narrative_provider_call_sent,
+    prepare_brand_trend_narrative,
     prune_narrative_history,
+    prune_per_brand_trend_narrative_history,
     publish_generation,
     reserve_generation,
+    reserve_trend_narrative_provider_call,
 )
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -1209,3 +1226,310 @@ def test_retention_keeps_current_generating_recent_and_newest_twenty():
     assert TrendNarrative.objects.filter(pk=recent.pk).exists()
     assert TrendNarrative.objects.filter(pk__in=old_ids).count() == 18
     assert prune_narrative_history(now=NOW) == 0
+
+
+def _run(*, cycle: str, facts_as_of: datetime, brands: list[str]) -> TrendNarrativeRun:
+    return TrendNarrativeRun.objects.create(
+        source_cycle_id=cycle,
+        window_days=1,
+        facts_as_of=facts_as_of,
+        packet_schema_version=3,
+        snapshot={"private": True},
+        brand_manifest=brands,
+        batch_manifest=[[brands]],
+        internal_order=brands,
+    )
+
+
+def _approved(run: TrendNarrativeRun, brand: Brand, *, now=NOW) -> BrandTrendNarrative:
+    return prepare_brand_trend_narrative(
+        run=run,
+        brand_key=brand.nickname,
+        brand_name_en=brand.display_name_en,
+        brand_name_zh_cn=brand.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.APPROVED,
+        attempted_at=now,
+        verified_at=now,
+        headline_en="Why it matters",
+        headline_zh_cn="为什么重要",
+        secondary_en="Discussion changed.",
+        secondary_zh_cn="讨论发生了变化。",
+        critic_decision=BrandTrendNarrative.CriticDecision.APPROVE,
+        narrative_kind=BrandTrendNarrative.NarrativeKind.CONTENT_SHIFT,
+        confidence=BrandTrendNarrative.Confidence.HIGH,
+        selected_evidence_packet={"evidence": ["e1"]},
+        final_critic_payload={"decision": "approve"},
+    )
+
+
+def test_u2_provider_call_identity_claim_reclaim_and_post_send_ambiguity():
+    run = _run(cycle="u2-call", facts_as_of=NOW, brands=[])
+    call = reserve_trend_narrative_provider_call(
+        run=run,
+        stage=TrendNarrativeProviderCall.Stage.RANK,
+        batch_key="",
+        request_identity="u2-call:rank",
+        request_hash="a" * 64,
+        request_packet={"dossiers": []},
+        now=NOW,
+    )
+    assert call is not None
+    assert reserve_trend_narrative_provider_call(
+        run=run,
+        stage=TrendNarrativeProviderCall.Stage.RANK,
+        batch_key="",
+        request_identity="different-id-is-not-a-second-call",
+        request_hash="b" * 64,
+        request_packet={},
+        now=NOW,
+    ) is None
+    first = claim_trend_narrative_provider_call(
+        call.pk, owner="worker-a", now=NOW, lease_seconds=10
+    )
+    assert first is not None and first.claim_fence == 1
+    assert claim_trend_narrative_provider_call(
+        call.pk, owner="worker-b", now=NOW + timedelta(seconds=1), lease_seconds=10
+    ) is None
+    second = claim_trend_narrative_provider_call(
+        call.pk, owner="worker-b", now=NOW + timedelta(seconds=11), lease_seconds=10
+    )
+    assert second is not None and second.claim_fence == 2
+    assert mark_trend_narrative_provider_call_sent(
+        call.pk, owner="worker-b", fence=2, now=NOW + timedelta(seconds=12)
+    )
+    assert mark_trend_narrative_provider_call_ambiguous(
+        call.pk,
+        owner="worker-b",
+        fence=2,
+        error_code="response_lost_after_send",
+        now=NOW + timedelta(seconds=13),
+    )
+    call.refresh_from_db()
+    assert call.state == TrendNarrativeProviderCall.State.AMBIGUOUS
+    assert claim_trend_narrative_provider_call(
+        call.pk, owner="worker-c", now=NOW + timedelta(days=1), lease_seconds=10
+    ) is None
+
+
+def test_u2_complete_response_is_terminal_and_retains_response_proof():
+    run = _run(cycle="u2-complete", facts_as_of=NOW, brands=[])
+    call = reserve_trend_narrative_provider_call(
+        run=run,
+        stage=TrendNarrativeProviderCall.Stage.EDITOR,
+        batch_key="001",
+        request_identity="u2-complete:editor:001",
+        request_hash="a" * 64,
+        request_packet={"private_packet": True},
+        now=NOW,
+    )
+    assert call is not None
+    claimed = claim_trend_narrative_provider_call(
+        call.pk, owner="worker", now=NOW, lease_seconds=10
+    )
+    assert claimed is not None
+    assert mark_trend_narrative_provider_call_sent(
+        call.pk, owner="worker", fence=claimed.claim_fence, now=NOW
+    )
+    assert complete_trend_narrative_provider_call(
+        call.pk,
+        owner="worker",
+        fence=claimed.claim_fence,
+        response_hash="c" * 64,
+        response_payload={"response": "durable"},
+        now=NOW + timedelta(seconds=1),
+    )
+    call.refresh_from_db()
+    assert call.state == TrendNarrativeProviderCall.State.COMPLETED
+    assert call.response_payload == {"response": "durable"}
+    assert not mark_trend_narrative_provider_call_sent(
+        call.pk, owner="worker", fence=claimed.claim_fence, now=NOW + timedelta(seconds=2)
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_u2_concurrent_workers_cannot_claim_one_transport_twice():
+    run = _run(cycle="u2-concurrent", facts_as_of=NOW, brands=[])
+    call = reserve_trend_narrative_provider_call(
+        run=run,
+        stage=TrendNarrativeProviderCall.Stage.CRITIC,
+        batch_key="001",
+        request_identity="u2-concurrent:critic:001",
+        request_hash="a" * 64,
+        request_packet={},
+        now=NOW,
+    )
+    assert call is not None
+
+    def claim(owner: str):
+        close_old_connections()
+        try:
+            result = claim_trend_narrative_provider_call(
+                call.pk, owner=owner, now=NOW, lease_seconds=60
+            )
+            return result.claim_owner if result is not None else None
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        owners = list(pool.map(claim, ["worker-a", "worker-b"]))
+    assert sorted(owner for owner in owners if owner is not None) in [
+        ["worker-a"],
+        ["worker-b"],
+    ]
+    call.refresh_from_db()
+    assert call.claim_fence == 1
+
+
+def test_u2_prepared_rows_activate_only_as_one_newer_complete_cutoff_and_hold_last_good():
+    minimax, deepseek = _brand("u2-minimax"), _brand("u2-deepseek")
+    first = _run(
+        cycle="u2-first", facts_as_of=NOW, brands=[minimax.nickname, deepseek.nickname]
+    )
+    first_minimax = _approved(first, minimax)
+    assert first_minimax.critic_decision == "approve"
+    assert first_minimax.narrative_kind == "content_shift"
+    assert first_minimax.confidence == "high"
+    _approved(first, deepseek)
+    assert activate_trend_narrative_run(first.pk, now=NOW + timedelta(minutes=1))
+    assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == first.pk
+
+    second = _run(
+        cycle="u2-second",
+        facts_as_of=NOW + timedelta(minutes=10),
+        brands=[minimax.nickname, deepseek.nickname],
+    )
+    _approved(second, deepseek, now=NOW + timedelta(minutes=10))
+    held = prepare_brand_trend_narrative(
+        run=second,
+        brand_key=minimax.nickname,
+        brand_name_en=minimax.display_name_en,
+        brand_name_zh_cn=minimax.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.HELD,
+        attempted_at=NOW + timedelta(minutes=10),
+        error_code="critic_hold",
+    )
+    assert held.status == BrandTrendNarrative.Status.HELD
+    assert held.last_good_id == first_minimax.pk
+    assert held.last_good.verified_at == first_minimax.verified_at
+    assert activate_trend_narrative_run(second.pk, now=NOW + timedelta(minutes=11))
+    assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == second.pk
+    first.refresh_from_db()
+    assert first.status == TrendNarrativeRun.Status.SUPERSEDED
+    assert first.activated_at == NOW + timedelta(minutes=1)
+
+    older = _run(
+        cycle="u2-older",
+        facts_as_of=NOW + timedelta(minutes=5),
+        brands=[minimax.nickname, deepseek.nickname],
+    )
+    _approved(older, minimax, now=NOW + timedelta(minutes=5))
+    _approved(older, deepseek, now=NOW + timedelta(minutes=5))
+    assert not activate_trend_narrative_run(older.pk, now=NOW + timedelta(minutes=12))
+    assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == second.pk
+
+
+def test_u2_activation_requires_every_manifest_brand_to_be_terminal():
+    minimax, deepseek = _brand("u2-pending-minimax"), _brand("u2-pending-deepseek")
+    run = _run(
+        cycle="u2-incomplete", facts_as_of=NOW, brands=[minimax.nickname, deepseek.nickname]
+    )
+    _approved(run, minimax)
+    assert not activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=1))
+    assert not TrendNarrativeVisibleRun.objects.filter(window_days=1).exists()
+    prepare_brand_trend_narrative(
+        run=run,
+        brand_key=deepseek.nickname,
+        brand_name_en=deepseek.display_name_en,
+        brand_name_zh_cn=deepseek.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.DATA_QUALITY_UNAVAILABLE,
+        attempted_at=NOW,
+        error_code="enrichment_pending",
+    )
+    assert activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=2))
+
+
+@pytest.mark.django_db(transaction=True)
+def test_u2_concurrent_first_pointer_activation_serializes_to_one_visible_run():
+    alpha, beta = _brand("u2-cold-alpha"), _brand("u2-cold-beta")
+    first = _run(cycle="u2-cold-first", facts_as_of=NOW, brands=[alpha.nickname])
+    second = _run(cycle="u2-cold-second", facts_as_of=NOW, brands=[beta.nickname])
+    _approved(first, alpha)
+    _approved(second, beta)
+
+    def activate(run_id: int) -> bool:
+        close_old_connections()
+        try:
+            return activate_trend_narrative_run(run_id, now=NOW + timedelta(seconds=1))
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(activate, [first.pk, second.pk]))
+    assert results.count(True) == 1
+    assert results.count(False) == 1
+    assert TrendNarrativeVisibleRun.objects.filter(window_days=1).count() == 1
+
+
+def test_u2_schema_pins_nullable_brand_snapshot_and_protected_last_good_proof():
+    brand = _brand("u2-retained")
+    run = _run(cycle="u2-retained-first", facts_as_of=NOW, brands=[brand.nickname])
+    approved = _approved(run, brand)
+    assert activate_trend_narrative_run(run.pk, now=NOW)
+    later = _run(
+        cycle="u2-retained-second", facts_as_of=NOW + timedelta(minutes=1), brands=[brand.nickname]
+    )
+    held = prepare_brand_trend_narrative(
+        run=later,
+        brand_key=brand.nickname,
+        brand_name_en=brand.display_name_en,
+        brand_name_zh_cn=brand.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.HELD,
+        attempted_at=NOW + timedelta(minutes=1),
+        error_code="hold",
+    )
+    brand.delete()
+    approved.refresh_from_db()
+    assert approved.brand is None
+    assert approved.brand_key_snapshot == "u2-retained"
+    with transaction.atomic(), pytest.raises(IntegrityError):
+        BrandTrendNarrative.objects.filter(pk=approved.pk).delete()
+    assert held.last_good_id == approved.pk
+
+
+def test_u2_retention_keeps_visible_and_last_good_proof_runs():
+    brand = _brand("u2-prune")
+    original = _run(cycle="u2-prune-original", facts_as_of=NOW, brands=[brand.nickname])
+    original_row = _approved(original, brand)
+    assert activate_trend_narrative_run(original.pk, now=NOW)
+    current = _run(
+        cycle="u2-prune-current", facts_as_of=NOW + timedelta(minutes=1), brands=[brand.nickname]
+    )
+    prepare_brand_trend_narrative(
+        run=current,
+        brand_key=brand.nickname,
+        brand_name_en=brand.display_name_en,
+        brand_name_zh_cn=brand.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.HELD,
+        attempted_at=NOW + timedelta(minutes=1),
+        error_code="hold",
+    )
+    assert activate_trend_narrative_run(current.pk, now=NOW + timedelta(minutes=2))
+    disposable = _run(
+        cycle="u2-prune-disposable", facts_as_of=NOW - timedelta(minutes=1), brands=[]
+    )
+    TrendNarrativeRun.objects.filter(pk=disposable.pk).update(
+        status=TrendNarrativeRun.Status.SUPERSEDED,
+        activated_at=NOW - timedelta(days=100),
+        created_at=NOW - timedelta(days=100),
+    )
+    TrendNarrativeRun.objects.filter(pk=original.pk).update(
+        created_at=NOW - timedelta(days=100)
+    )
+
+    assert prune_per_brand_trend_narrative_history(
+        now=NOW, keep_days=30, keep_per_window=1
+    ) == 1
+    assert TrendNarrativeRun.objects.filter(pk=current.pk).exists()
+    assert TrendNarrativeRun.objects.filter(pk=original.pk).exists()
+    assert BrandTrendNarrative.objects.filter(pk=original_row.pk).exists()
+    assert not TrendNarrativeRun.objects.filter(pk=disposable.pk).exists()
