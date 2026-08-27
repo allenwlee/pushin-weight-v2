@@ -342,10 +342,13 @@ class Command(BaseCommand):
         n_enrichment_claimed = int(
             stats.get("post_fetch", {}).get("n_enrichment_claimed") or 0
         )
+        # ``no_results`` is CycleRunner's successful-empty terminal status.
+        # Truncation and cursor-write outcomes remain failures here because a
+        # staging acceptance cannot prove its full bounded coverage from them.
         hard_failure = (
             stats.get("status") not in {"completed", "degraded"}
             or bool(stats.get("errors"))
-            or call_status != "completed"
+            or call_status not in {"completed", "no_results"}
             or n_results > MAX_RESULTS
         )
         if hard_failure:

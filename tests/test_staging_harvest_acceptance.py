@@ -127,6 +127,58 @@ def _accepted_stats() -> dict:
     }
 
 
+def _no_results_stats() -> dict:
+    stats = _accepted_stats()
+    stats["totals"].update(n_results=0, n_inserted=0, n_attributed=0)
+    stats["calls"][0].update(
+        status="no_results",
+        n_results=0,
+        n_kept=0,
+        n_inserted=0,
+        n_updated=0,
+    )
+    stats["post_fetch"]["n_enrichment_claimed"] = 0
+    return stats
+
+
+@pytest.mark.parametrize(
+    ("call_status", "errors", "expected"),
+    [
+        ("completed", [], "inconclusive"),
+        ("no_results", [], "inconclusive"),
+        ("cursor_write_failed", ["cursor.A: write failed"], "failed"),
+        ("no_results", ["provider: failed after response"], "failed"),
+    ],
+)
+def test_acceptance_status_treats_safe_empty_sweeps_as_inconclusive(
+    call_status: str,
+    errors: list[str],
+    expected: str,
+) -> None:
+    from monitor.management.commands.run_cycle import Command
+
+    stats = _no_results_stats()
+    stats["calls"][0]["status"] = call_status
+    stats["errors"] = errors
+
+    status, selected_call = Command._acceptance_status(stats, selected_call="A")
+
+    assert status == expected
+    assert selected_call["status"] == call_status
+
+
+def test_acceptance_status_enforces_result_cap_for_safe_call_status() -> None:
+    from monitor.management.commands.run_cycle import Command
+    from monitor.staging_acceptance import MAX_RESULTS
+
+    stats = _no_results_stats()
+    stats["calls"][0]["n_results"] = MAX_RESULTS + 1
+
+    status, _selected_call = Command._acceptance_status(stats, selected_call="A")
+
+    assert status == "failed"
+
+
 @pytest.mark.parametrize(
     ("environment", "connection", "error"),
     [
@@ -410,7 +462,27 @@ def test_command_refuses_before_writer_lock_or_provider_factory(monkeypatch):
     assert events == []
 
 
-def test_command_threads_profile_and_emits_secret_free_json(monkeypatch):
+@pytest.mark.parametrize(
+    ("runner_stats", "expected_status", "expected_dispatch"),
+    [
+        (
+            _accepted_stats(),
+            "accepted",
+            {"status": "enqueued", "task_id": "task-a"},
+        ),
+        (
+            _no_results_stats(),
+            "inconclusive",
+            {"status": "ineligible", "task_id": ""},
+        ),
+    ],
+)
+def test_command_threads_profile_and_emits_secret_free_json(
+    monkeypatch,
+    runner_stats: dict,
+    expected_status: str,
+    expected_dispatch: dict[str, str],
+):
     import monitor.management.commands.run_cycle as command_module
     from monitor.staging_acceptance import prepare_staging_acceptance
 
@@ -439,7 +511,13 @@ def test_command_threads_profile_and_emits_secret_free_json(monkeypatch):
             captured["runner"] = kwargs
 
         def run(self):
-            return _accepted_stats()
+            return runner_stats
+
+    dispatch_calls = []
+
+    def dispatch(*_args, **_kwargs):
+        dispatch_calls.append(True)
+        return SimpleNamespace(status="enqueued", task_id="task-a")
 
     monkeypatch.setattr(
         command_module, "prepare_staging_acceptance", lambda **_kwargs: prepared
@@ -461,7 +539,7 @@ def test_command_threads_profile_and_emits_secret_free_json(monkeypatch):
     )
     monkeypatch.setattr(
         "monitor.trend_narrative_dispatch.dispatch_harvest_completion",
-        lambda *_args, **_kwargs: SimpleNamespace(status="enqueued", task_id="task-a"),
+        dispatch,
     )
 
     stdout = StringIO()
@@ -479,10 +557,15 @@ def test_command_threads_profile_and_emits_secret_free_json(monkeypatch):
     assert captured["runner"]["cycle_kind"] == "manual"
     assert captured["runner"]["_backfill_call_ids"] == ["A"]
     assert captured["runner"]["cfg"].search.max_results == 5
-    assert payload["status"] == "accepted"
+    assert payload["status"] == expected_status
     assert payload["staging_acceptance"]["service"] == "pushinweight-staging-harvest"
-    assert payload["cycle"]["selected_call"]["n_results"] == 3
-    assert payload["headline_dispatch"] == {"status": "enqueued", "task_id": "task-a"}
+    assert payload["cycle"]["status"] == "completed"
+    assert (
+        payload["cycle"]["selected_call"]["n_results"]
+        == runner_stats["calls"][0]["n_results"]
+    )
+    assert payload["headline_dispatch"] == expected_dispatch
+    assert len(dispatch_calls) == (1 if expected_status == "accepted" else 0)
     assert "secret-query" not in stdout.getvalue()
     assert "DATABASE_URL" not in stdout.getvalue()
 

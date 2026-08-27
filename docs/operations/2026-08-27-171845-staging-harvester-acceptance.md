@@ -198,6 +198,35 @@ continuity_result: pass|fail|inconclusive
 Do not change production to make this evidence pass. A stalled production
 timestamp is a separate incident and a staging stop condition.
 
+## Recorded staging acceptance — 2026-08-27
+
+The first and only live attempt ran at candidate
+`e7468bd89674a9dc3f72242c1435f0b29c98e194` from 09:42:22Z through
+09:42:32Z. The cron-hosted preflight and the live command both reported
+`pushinweight-staging-harvest`, environment `staging`, and database/role
+`pushinweight_staging` / `pushinweight_staging`.
+
+The bounded result was safe but inconclusive: one call A, one search request,
+one page, zero retries, zero results, zero inserts or updates, zero enrichment
+claims, and no headline dispatch. The staging call-A cursor advanced once;
+backlog, enrichment, headline run/work/provider/visible-pointer state and all
+owned broker queue, unacked, watermark, and namespace keys remained zero. Per
+this runbook, the empty result was not retried.
+
+The deployed command initially emitted top-level `failed` because its result
+classifier accepted only call status `completed`; the normal successful-empty
+status is `no_results`. The follow-up candidate treats both statuses as safe
+and returns `inconclusive`, with regression coverage preserving hard failures
+for cursor-write and provider/pipeline errors. This classification correction
+does not change the provider envelope or justify a second live attempt.
+
+Production continuity passed independently. Before the attempt, at
+09:41:14Z, production's latest `fetched_at` was 09:30:41Z with 148 posts in
+the prior 45 minutes. After the attempt, at 09:45:53Z, it advanced to
+09:45:44Z with 191 posts in the prior 45 minutes. The production service
+remained unsuspended on branch `main` with schedule `*/15 * * * *`; no
+production service mutation occurred.
+
 ## Secret rotation
 
 Repeat this service-scoped sequence for TwitterAPI.io, translator/classifier,
