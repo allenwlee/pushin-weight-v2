@@ -455,19 +455,23 @@ def _per_brand_item(
         else:
             state = "unavailable"
 
-    name_en = (
-        outcome.brand_name_en_snapshot
-        if outcome is not None
-        else fallback_brand.display_name_en
-        if fallback_brand is not None
+    resolved_brand = fallback_brand or (
+        outcome.brand if outcome is not None and outcome.brand_id is not None else None
+    )
+    fallback_name = (
+        (resolved_brand.display_name or resolved_brand.nickname)
+        if resolved_brand is not None
         else brand_key
     )
+    name_en = (
+        (outcome.brand_name_en_snapshot if outcome is not None else None)
+        or (resolved_brand.display_name_en if resolved_brand is not None else None)
+        or fallback_name
+    )
     name_zh = (
-        outcome.brand_name_zh_cn_snapshot
-        if outcome is not None
-        else fallback_brand.display_name_zh_cn
-        if fallback_brand is not None
-        else brand_key
+        (outcome.brand_name_zh_cn_snapshot if outcome is not None else None)
+        or (resolved_brand.display_name_zh_cn if resolved_brand is not None else None)
+        or name_en
     )
     display_name = name_zh if is_zh else name_en
     brand_exists = (

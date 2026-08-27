@@ -666,6 +666,58 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(race.pulseBar.innerHTML.includes('new') && !race.pulseBar.innerHTML.includes('old'),
     'chart and pulse values come from the winning response only');
 
+  const obsoleteFailure = makeSandbox();
+  const obsoleteRequest = deferred();
+  const winningRequest = deferred();
+  obsoleteFailure.fetchQueue.push(obsoleteRequest.promise, winningRequest.promise);
+  obsoleteFailure.setFilters({ window: 7, brands: ['mimo'] });
+  obsoleteFailure.document.dispatchEvent(
+    new obsoleteFailure.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  obsoleteFailure.setFilters({ window: 1, brands: ['mimo'] });
+  obsoleteFailure.document.dispatchEvent(
+    new obsoleteFailure.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  winningRequest.resolve(await response(payload(1, 5, 'mimo')));
+  await flush();
+  obsoleteRequest.reject(new Error('obsolete seven-day request failed'));
+  await flush();
+  assert(obsoleteFailure.region.currentPayload.window_days === 1,
+    'Mimo 7d to 1d keeps the successful one-day chart after an obsolete failure');
+  assert(obsoleteFailure.region.status.hidden && obsoleteFailure.pulseStatus.hidden,
+    'an obsolete Mimo failure cannot surface stale chart or pulse warnings');
+
+  const aborted = makeSandbox();
+  const abortedRequest = deferred();
+  aborted.fetchQueue.push(abortedRequest.promise);
+  aborted.document.dispatchEvent(
+    new aborted.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  const abortError = new Error('request aborted');
+  abortError.name = 'AbortError';
+  abortedRequest.reject(abortError);
+  await flush();
+  assert(aborted.region.status.hidden && aborted.pulseStatus.hidden,
+    'an aborted chart request does not masquerade as a refresh failure');
+
+  const duplicate = makeSandbox();
+  const firstDuplicate = deferred();
+  const secondDuplicate = deferred();
+  duplicate.fetchQueue.push(firstDuplicate.promise, secondDuplicate.promise);
+  duplicate.setFilters({ window: 1, brands: ['mimo'] });
+  duplicate.document.dispatchEvent(
+    new duplicate.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  duplicate.document.dispatchEvent(
+    new duplicate.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  secondDuplicate.resolve(await response(payload(1, 9, 'mimo')));
+  await flush();
+  firstDuplicate.resolve(await response(payload(1, 2, 'mimo')));
+  await flush();
+  assert(duplicate.region.currentPayload.totals.qwen === 9,
+    'a duplicate older request cannot commit after the latest duplicate intent');
+
   console.log('--- failures preserve last-good and allow retry ---');
   const recovery = makeSandbox();
   const originalHtml = recovery.region.innerHTML;

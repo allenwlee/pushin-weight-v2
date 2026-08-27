@@ -200,6 +200,29 @@ _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
     "gemini", "gpt", "claude", "grok",
 )
 
+# Explicit current UI inventory. New production brands require a declaration
+# update, while the known fixture-only row is never rendered as a control.
+HOME_SELECTABLE_BRAND_NICKNAMES: tuple[str, ...] = (
+    *MODEL_DISPLAY_NAMES,
+    "chatglm",
+    "gemma",
+    "kwaiyii",
+    "seed",
+    "sensenova",
+    "step",
+    "wenxin",
+    *_HOME_CLOSED_BRAND_NICKNAMES,
+)
+_HOME_EXCLUDED_BRAND_NICKNAMES: tuple[str, ...] = ("test_brand",)
+_HOME_BRAND_ORDER = {
+    nickname: index
+    for index, nickname in enumerate(HOME_SELECTABLE_BRAND_NICKNAMES)
+}
+
+
+def _home_brand_sort_key(nickname: str) -> tuple[int, str]:
+    return _HOME_BRAND_ORDER.get(nickname, 999), nickname
+
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
 HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
 HOME_WINDOW_DEFAULT_BEFORE: int = 7  # pinned for Net B regression (BEFORE value, not used in code)
@@ -1571,12 +1594,14 @@ def _build_home_chart_payload(
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
 
-    # Get enabled brands
+    # Exclude only the known fixture leak. The assurance inventory gate reports
+    # any other production drift instead of changing runtime query semantics.
     brand_nicknames = list(
         Brand.objects.filter(is_sentinel=False)
-        .order_by("nickname")
+        .exclude(nickname__in=_HOME_EXCLUDED_BRAND_NICKNAMES)
         .values_list("nickname", flat=True)
     )
+    brand_nicknames.sort(key=_home_brand_sort_key)
 
     # Brand narrowing from filter
     brands_filter = normalized_filters.get("brands")
@@ -1909,14 +1934,9 @@ def _build_brands_context() -> list[dict[str, Any]]:
     Pulse values are intentionally absent here; they live in the chart payload
     so initial and refreshed chart/pulse projections share one timestamp.
     """
-    _BRAND_ORDER = [
-        "deepseek", "qwen", "glm", "minimax", "llama", "mistral",
-        "mimo", "doubao", "yi", "hunyuan", "stepfun", "ernie",
-        "kuaishou", "upstage", "inclusionai",
-    ]
-    _order_map = {nick: i for i, nick in enumerate(_BRAND_ORDER)}
-
-    brand_qs = Brand.objects.filter(is_sentinel=False)
+    brand_qs = Brand.objects.filter(is_sentinel=False).exclude(
+        nickname__in=_HOME_EXCLUDED_BRAND_NICKNAMES
+    )
     brands = []
     for b in brand_qs:
         brands.append({
@@ -1926,7 +1946,7 @@ def _build_brands_context() -> list[dict[str, Any]]:
             "display_name_en": b.display_name_en or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
             "display_name_zh_cn": b.display_name_zh_cn or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
         })
-    brands.sort(key=lambda b: (_order_map.get(b["nickname"], 999), b["nickname"]))
+    brands.sort(key=lambda brand: _home_brand_sort_key(brand["nickname"]))
     return brands
 
 

@@ -46,6 +46,17 @@ Add or strengthen a regression pin that exercises the reported differentiator:
 
 Never use live-page-derived expectations, silent skips, broad allowlists, or a weak screenshot threshold to make a failure green.
 
+## Invoke the pinned stateful assurance profile
+
+For homepage control, filter, preference, chart, feed, or request-lifecycle work, use the target declaration referenced by `bridgewright.yaml`; do not copy Bridgewright's generic protocol into this skill.
+
+1. Run `uv run --extra dev bridgewright assurance-validate --project-root .` and `uv run --extra dev bridgewright assurance-prescribe --project-root .`. A build-identity mismatch, unknown control, invalid fixture digest, or declaration error blocks the fix.
+2. Identify the controls touched by the defect and its inverse, applicable ordered actions, seeded regressions, and request races. The PushinWeight adapter owns those concrete mappings.
+3. During the fix loop, run `uv run --extra dev python -m tests.ui_assurance.gate --scope affected`. It must exercise the real Playwright state model plus the target reducer/race checks; a required skip, error, zero-match selector, or failed seed is a failure.
+4. Before release handoff, record the product-source revision in the declaration and run `uv run --extra dev python -m tests.ui_assurance.gate --scope candidate --candidate-revision <product-source-sha>`. Require every normalized obligation to pass and the generated Bridgewright assessment to report zero failed, skipped, errored, missing, or unknown obligations.
+
+Bridgewright performs read-only structural validation, prescription, and assessment. It does not prove that target evidence is truthful and grants no permission to commit, push, merge, stage, deploy, or release. The parent workflow retains those decisions and separately verifies the exact release SHA.
+
 ## Make the smallest product fix
 
 Change only the smallest surface that corrects the defect. Preserve all runtime endpoints that make the page work and retain compatibility selectors only for an explicitly preserved legacy surface.
@@ -61,6 +72,7 @@ Do not put iteration labels, agent notes, planning text, or implementation comme
 - A source-hygiene regression rejects execution/meta commentary in public template source and rendered output.
 - Static assets resolve and the required runtime behavior executes.
 - Report required test executed/skipped/error counts; skips or errors are never called green.
+- Report the affected/full assurance gate, declaration and control-model identity, obligation totals, and any replay IDs. Never infer obligation closure from a pytest count.
 - Report exact branch/SHA, environment, and commands/results inspected.
 
 Use an isolated worktree and disposable deterministic database for previews. Label preview URLs with their environment and SHA. Call something deployed only after the requested branch has been deployed successfully and the deployed URL has been checked; do not confuse local/staging evidence with production.

@@ -50,5 +50,7 @@ DJANGO_SETTINGS_MODULE = "project.settings"
 
 [dependency-groups]
 dev = [
+    "bridgewright @ git+https://github.com/allenwlee/bridgewright.git@08fec49d259ec4966eea4a2e17f75e4e6ffa706d",
+    "hypothesis>=6.138,<7",
     "playwright>=1.62.0",
 ]

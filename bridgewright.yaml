@@ -19,6 +19,9 @@ configuration:
       - project
     adapter: .bridgewright/adapter.yaml
     last_approved_contract: docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md
+  assurance:
+    profile: stateful-ui-assurance/v1
+    declaration: tests/fixtures/ui_assurance/declaration.json
   source_boundaries:
     - monitor/templates
     - monitor/static
@@ -59,10 +62,10 @@ configuration:
   untracked_allowlist: []
 requires:
   bridgewright_version: 0.1.0
-  source_revision: 22a380b1f865622cea1669793f9a6d0911e1e6f8
+  source_revision: e94b04a9511b3ef494478b84a970035861ab4400
   capability_schema: bridgewright.capabilities/v1
-  schema_set_digest: "0000000000000000000000000000000000000000000000000000000000000000"
-  skill_digest: 25de14d23567a1fbf321b442c073200c0da09dfcdbb416e7cd3c37db4ed0cf10
+  schema_set_digest: b0d89d3fadb4ccd8d736af2375bc98d1fd50070fe38f3da9ec25fa0558007509
+  skill_digest: 2504868d2eacb21828ac0b68487cd760f9741c9955810f932e4c9c915d9abc37
 artifact_routes:
   - name: investigations
     root: docs/investigations
