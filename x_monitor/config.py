@@ -336,6 +336,30 @@ class HeadlineNarrativeConfig(BaseModel):
         le=128 * 1024,
     )
     call_cap: Literal[4] = 4
+    # U4's durable per-brand graph has a separate budget from the retired
+    # shared-headline four-window cap.  It intentionally permits the exact
+    # successful graph: one rank plus editor and critic for each five-brand
+    # batch (nine calls for twenty eligible brands).
+    per_brand_call_cap: int = Field(default=25, ge=1, le=200)
+    per_brand_input_token_cap: int = Field(default=500_000, ge=1_000)
+    per_brand_output_token_cap: int = Field(default=160_000, ge=1_000)
+    per_brand_cost_cap_usd: Decimal = Field(
+        default=Decimal("0.50"), gt=0, decimal_places=4
+    )
+    per_brand_input_usd_per_million: Decimal = Field(
+        default=Decimal("0.50"), ge=0, decimal_places=4
+    )
+    per_brand_output_usd_per_million: Decimal = Field(
+        default=Decimal("2.00"), ge=0, decimal_places=4
+    )
+    per_brand_pricing_version: str = Field(
+        default="deepseek-v4-pro-2026-08-27", min_length=1, max_length=64
+    )
+    per_brand_expected_max_brands: int = Field(default=25, ge=1, le=100)
+    per_brand_p95_latency_seconds: Decimal = Field(
+        default=Decimal("45"), gt=0, le=120
+    )
+    per_brand_worker_concurrency: Literal[1] = 1
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
     task_expiry_seconds: int = Field(default=1800, ge=60, le=3600)
@@ -346,6 +370,10 @@ class HeadlineNarrativeConfig(BaseModel):
     serving_enabled: bool = False
     enqueue_enabled: bool = False
     provider_calls_enabled: bool = False
+    publication_source: Literal["prefer_per_brand", "legacy_only"] = (
+        "prefer_per_brand"
+    )
+    legacy_fallback_enabled: bool = True
     control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
 
     @property
@@ -403,12 +431,57 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline evidence allocation limits must ascend")
         if self.lease_seconds <= self.timeout_seconds:
             raise ValueError("headline lease must exceed provider timeout")
+        expected_batches = (self.per_brand_expected_max_brands + 4) // 5
+        expected_calls = 1 + 2 * expected_batches
+        if expected_calls > self.per_brand_call_cap:
+            raise ValueError("per-brand call cap cannot fit the expected brand graph")
+        packet_tokens = (self.evidence_provider_packet_bytes + 3) // 4 + 1_000
+        expected_input_tokens = packet_tokens + expected_batches * (
+            packet_tokens + packet_tokens + self.editor_max_tokens
+        )
+        if expected_input_tokens > self.per_brand_input_token_cap:
+            raise ValueError("per-brand input cap cannot fit the expected brand graph")
+        expected_output_tokens = (
+            self.rank_max_tokens
+            + expected_batches * (self.editor_max_tokens + self.critic_max_tokens)
+        )
+        if expected_output_tokens > self.per_brand_output_token_cap:
+            raise ValueError("per-brand output cap cannot fit the expected brand graph")
+        expected_cost = (
+            Decimal(expected_input_tokens) * self.per_brand_input_usd_per_million
+            + Decimal(expected_output_tokens)
+            * self.per_brand_output_usd_per_million
+        ) / Decimal(1_000_000)
+        if expected_cost > self.per_brand_cost_cap_usd:
+            raise ValueError("per-brand dollar cap cannot fit the expected brand graph")
+        calls_per_hour = sum(
+            Decimal(expected_calls * 60) / Decimal(self.cadence_minutes[window])
+            for window in windows
+        )
+        drain_utilization = (
+            calls_per_hour
+            * self.per_brand_p95_latency_seconds
+            / Decimal(3600 * self.per_brand_worker_concurrency)
+        )
+        if (
+            self.provider_calls_active
+            and drain_utilization >= Decimal("1")
+        ):
+            raise ValueError(
+                "headline concurrency-one drain rate must exceed the arrival rate"
+            )
         if (
             self.activation_state == "reviewed"
             and self.materiality_policy_version.strip().casefold().startswith("pending")
         ):
             raise ValueError(
                 "reviewed headline activation requires a reviewed materiality policy"
+            )
+        if self.publication_source == "legacy_only" and (
+            self.enqueue_enabled or self.provider_calls_enabled
+        ):
+            raise ValueError(
+                "legacy-only headline rollback requires enqueue and provider calls disabled"
             )
         return self
 
@@ -652,6 +725,8 @@ def load_config(path: Path) -> Config:
         "serving_enabled": "X_MONITOR_HEADLINE_SERVING_ENABLED",
         "enqueue_enabled": "X_MONITOR_HEADLINE_ENQUEUE_ENABLED",
         "provider_calls_enabled": "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED",
+        "publication_source": "X_MONITOR_HEADLINE_PUBLICATION_SOURCE",
+        "legacy_fallback_enabled": "X_MONITOR_HEADLINE_LEGACY_FALLBACK_ENABLED",
         "control_revision": "X_MONITOR_HEADLINE_CONTROL_REVISION",
     }
     env_headline_overrides = {

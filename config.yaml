@@ -175,6 +175,16 @@ headline_narrative:
   evidence_excerpt_characters: 1000
   evidence_provider_packet_bytes: 131072
   call_cap: 4
+  per_brand_call_cap: 25
+  per_brand_input_token_cap: 500000
+  per_brand_output_token_cap: 160000
+  per_brand_cost_cap_usd: "0.50"
+  per_brand_input_usd_per_million: "0.50"
+  per_brand_output_usd_per_million: "2.00"
+  per_brand_pricing_version: "deepseek-v4-pro-2026-08-27"
+  per_brand_expected_max_brands: 25
+  per_brand_p95_latency_seconds: "45"
+  per_brand_worker_concurrency: 1
   max_body_en_chars: 240
   max_body_zh_cn_chars: 120
   task_expiry_seconds: 1800
@@ -185,6 +195,8 @@ headline_narrative:
   serving_enabled: null
   enqueue_enabled: null
   provider_calls_enabled: null
+  publication_source: null
+  legacy_fallback_enabled: null
   control_revision: null
 
 # Query-rot streak threshold (consecutive 0-result days before a query is

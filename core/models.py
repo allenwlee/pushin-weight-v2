@@ -1762,6 +1762,7 @@ class TrendNarrativeRun(models.Model):
 
     class Status(models.TextChoices):
         PREPARING = "preparing", "Preparing"
+        SUSPENDED = "suspended", "Suspended"
         TERMINAL = "terminal", "Terminal"
         ACTIVE = "active", "Active"
         SUPERSEDED = "superseded", "Superseded"
@@ -1777,6 +1778,7 @@ class TrendNarrativeRun(models.Model):
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.PREPARING
     )
+    suspension_reason = models.CharField(max_length=64, blank=True, default="")
     activated_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1794,16 +1796,32 @@ class TrendNarrativeRun(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    status__in=["preparing", "terminal", "active", "superseded"]
+                    status__in=[
+                        "preparing",
+                        "suspended",
+                        "terminal",
+                        "active",
+                        "superseded",
+                    ]
                 ),
                 name="ck_tnr_status",
             ),
             models.CheckConstraint(
                 condition=(
                     models.Q(status__in=["active", "superseded"], activated_at__isnull=False)
-                    | models.Q(status__in=["preparing", "terminal"], activated_at__isnull=True)
+                    | models.Q(
+                        status__in=["preparing", "suspended", "terminal"],
+                        activated_at__isnull=True,
+                    )
                 ),
                 name="ck_tnr_activation_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="suspended", suspension_reason__gt="")
+                    | ~models.Q(status="suspended")
+                ),
+                name="ck_tnr_suspension_reason",
             ),
         ]
         indexes = [
@@ -1812,6 +1830,86 @@ class TrendNarrativeRun(models.Model):
                 name="idx_tnr_window_facts",
             ),
             models.Index(fields=["status", "created_at"], name="idx_tnr_status_created"),
+        ]
+
+
+class TrendNarrativeWorkSlot(models.Model):
+    """One active envelope and at most one newer queued cutoff per window."""
+
+    window_days = models.PositiveSmallIntegerField(primary_key=True)
+    active_source_cycle_id = models.CharField(max_length=128, blank=True, default="")
+    active_facts_as_of = models.DateTimeField(blank=True, null=True)
+    active_run = models.ForeignKey(
+        TrendNarrativeRun,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="work_slots",
+    )
+    snapshot_claim_owner = models.CharField(max_length=128, blank=True, default="")
+    snapshot_claim_fence = models.PositiveIntegerField(default=0)
+    snapshot_claimed_at = models.DateTimeField(blank=True, null=True)
+    snapshot_claim_expires_at = models.DateTimeField(blank=True, null=True)
+    queued_source_cycle_id = models.CharField(max_length=128, blank=True, default="")
+    queued_facts_as_of = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "trend_narrative_work_slots"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(window_days__in=[1, 7, 30, 365]),
+                name="ck_tnws_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        active_source_cycle_id="",
+                        active_facts_as_of__isnull=True,
+                        active_run__isnull=True,
+                        snapshot_claim_owner="",
+                        snapshot_claim_fence=0,
+                        snapshot_claimed_at__isnull=True,
+                        snapshot_claim_expires_at__isnull=True,
+                    )
+                    | models.Q(
+                        active_source_cycle_id__gt="",
+                        active_facts_as_of__isnull=False,
+                    )
+                ),
+                name="ck_tnws_active_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        snapshot_claim_owner="",
+                        snapshot_claim_fence=0,
+                        snapshot_claimed_at__isnull=True,
+                        snapshot_claim_expires_at__isnull=True,
+                    )
+                    | models.Q(
+                        snapshot_claim_owner__gt="",
+                        snapshot_claim_fence__gt=0,
+                        snapshot_claimed_at__isnull=False,
+                        snapshot_claim_expires_at__gt=models.F(
+                            "snapshot_claimed_at"
+                        ),
+                    )
+                ),
+                name="ck_tnws_snapshot_claim",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        queued_source_cycle_id="", queued_facts_as_of__isnull=True
+                    )
+                    | models.Q(
+                        queued_source_cycle_id__gt="",
+                        queued_facts_as_of__isnull=False,
+                    )
+                ),
+                name="ck_tnws_queued_shape",
+            ),
         ]
 
 

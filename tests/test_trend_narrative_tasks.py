@@ -20,6 +20,26 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 NOW = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
 
+def test_u4_production_refresh_routes_to_durable_reconciler(monkeypatch):
+    """Regression pin: the Celery entrypoint must not call the legacy transport."""
+    observed = []
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.reconcile_per_brand_trend_narratives",
+        lambda envelope, **kwargs: (
+            observed.append(envelope)
+            or {"status": "reconciled", "transport_started": 0}
+        ),
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_queue.coalesce_envelope", lambda envelope: envelope
+    )
+
+    result = refresh_trend_narratives.run(_envelope())
+
+    assert result["status"] == "reconciled"
+    assert observed == [_envelope()]
+
+
 def _envelope(
     source: str = "cycle-a",
     *,
@@ -241,12 +261,7 @@ def test_scheduled_task_reaches_generation_with_pinned_provider_controls(
     monkeypatch,
 ):
     config, calls = _enable(monkeypatch)
-    task_module = __import__(
-        "monitor.trend_narrative_tasks",
-        fromlist=["generate_trend_narrative"],
-    )
-    configured_generate = task_module.generate_trend_narrative
-    observed: list[tuple[int, str, str]] = []
+    scheduled: list[tuple[str, int]] = []
     observed_policies = []
 
     monkeypatch.setattr(
@@ -264,37 +279,18 @@ def test_scheduled_task_reaches_generation_with_pinned_provider_controls(
         capture_snapshot,
     )
 
-    def capture_generation(snapshot, active_config):
-        observed.append(
-            (
-                snapshot["window_days"],
-                active_config.provider,
-                active_config.model,
-            )
-        )
-        return configured_generate(snapshot, active_config)
-
     monkeypatch.setattr(
-        "monitor.trend_narrative_tasks.generate_trend_narrative",
-        capture_generation,
+        "monitor.trend_narrative_tasks._enqueue_per_brand_stage",
+        lambda kind, **kwargs: scheduled.append((kind, kwargs["window_days"])),
     )
 
     result = refresh_trend_narratives.run(_envelope())
 
-    assert result["published"] == 4
-    assert calls == [1, 7, 30, 365]
-    assert observed == [
-        (window_days, "deepseek", "deepseek-v4-pro")
-        for window_days in (1, 7, 30, 365)
-    ]
+    assert result["scheduled"] == 4
+    assert scheduled == [("snapshot", window_days) for window_days in (1, 7, 30, 365)]
+    assert calls == []
     assert config.model == "deepseek-v4-pro"
-    assert [policy.version for policy in observed_policies] == [
-        "adaptive-v1",
-        "adaptive-v1",
-        "adaptive-v1",
-        "adaptive-v1",
-    ]
-    assert all(policy.lead_ceiling == 48 for policy in observed_policies)
+    assert observed_policies == []
 
 
 def test_same_semantics_after_due_cadence_advances_checks_with_zero_calls(
@@ -384,9 +380,9 @@ def test_pending_activation_blocks_raw_provider_calls_until_override(monkeypatch
     assert blocked["suppressed"] == 4
     assert generation_calls == []
     assert not TrendNarrative.objects.filter(call_slot_consumed=True).exists()
-    assert set(
-        TrendNarrative.objects.values_list("error_code", flat=True)
-    ) == {"provider_calls_disabled"}
+    assert set(TrendNarrative.objects.values_list("error_code", flat=True)) == {
+        "provider_calls_disabled"
+    }
 
     _enabled, override_calls = _enable(monkeypatch)
     later = NOW + timedelta(minutes=1)
@@ -442,9 +438,9 @@ def test_provider_disable_after_envelope_start_consumes_zero_slots(monkeypatch):
     assert result["suppressed"] == 4
     assert generation_calls == []
     assert not TrendNarrative.objects.filter(call_slot_consumed=True).exists()
-    assert set(
-        TrendNarrative.objects.values_list("error_code", flat=True)
-    ) == {"provider_calls_disabled"}
+    assert set(TrendNarrative.objects.values_list("error_code", flat=True)) == {
+        "provider_calls_disabled"
+    }
 
 
 def test_snapshot_soft_timeout_stops_before_later_windows(monkeypatch):
@@ -767,9 +763,7 @@ def test_first_failure_waits_one_window_cadence(
     process_trend_narrative_envelope(_envelope(), now=NOW)
 
     failure = TrendNarrative.objects.get(window_days=window_days, status="failed")
-    assert failure.next_attempt_at == NOW + timedelta(
-        minutes=expected_first_delay
-    )
+    assert failure.next_attempt_at == NOW + timedelta(minutes=expected_first_delay)
 
 
 def test_each_sequential_call_receives_a_fresh_lease_clock(monkeypatch):

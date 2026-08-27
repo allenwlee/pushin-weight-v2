@@ -175,6 +175,26 @@ def mark_trend_narrative_provider_call_ambiguous(
         return True
 
 
+def fail_trend_narrative_provider_call(
+    call_id: int, *, owner: str, fence: int, error_code: str, now
+) -> bool:
+    """Terminally record a known failed transport; it is never resent in-run."""
+    if not error_code:
+        raise ValueError("error_code is required")
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state == TrendNarrativeProviderCall.State.FAILED:
+            return call.claim_owner == owner and call.claim_fence == fence
+        if call.state != TrendNarrativeProviderCall.State.SENT:
+            return False
+        if call.claim_owner != owner or call.claim_fence != fence:
+            return False
+        call.state = TrendNarrativeProviderCall.State.FAILED
+        call.error_code = error_code[:64]
+        call.save(update_fields=["state", "error_code", "updated_at"])
+        return True
+
+
 def prepare_brand_trend_narrative(
     *,
     run: TrendNarrativeRun,
@@ -193,6 +213,10 @@ def prepare_brand_trend_narrative(
     confidence: str = "",
     selected_evidence_packet: dict[str, Any] | None = None,
     final_critic_payload: dict[str, Any] | None = None,
+    propositions: list[dict[str, Any]] | None = None,
+    events: list[dict[str, Any]] | None = None,
+    cited_fact_ids: list[str] | None = None,
+    cited_evidence_ids: list[str] | None = None,
     error_code: str = "",
 ) -> BrandTrendNarrative:
     """Write one immutable per-brand terminal/prepared outcome for a run."""
@@ -231,6 +255,10 @@ def prepare_brand_trend_narrative(
             critic_decision=critic_decision,
             narrative_kind=narrative_kind,
             confidence=confidence,
+            propositions=propositions or [],
+            events=events or [],
+            cited_fact_ids=cited_fact_ids or [],
+            cited_evidence_ids=cited_evidence_ids or [],
             selected_evidence_packet=selected_evidence_packet,
             final_critic_payload=final_critic_payload,
             attempted_at=attempted_at,
