@@ -3,12 +3,12 @@
 Last verified against the Render account and Blueprint: 2026-08-27.
 
 The isolated owner-review stack is defined separately in
-`render-staging.yaml`. It contains one web service and one PostgreSQL database
-on branch `staging`; it must never be merged into this production Blueprint or
-share production resource names, database bindings, secret groups, workers,
-cron jobs, brokers, or provider credentials. This runbook owns the Render
-topology and service verification; the Ollija plan guide owns delivery
-coordination only.
+`render-staging.yaml`. It contains a web service, dormant/manual harvester,
+queue-only headline worker, owned broker, and PostgreSQL database on branch
+`staging`. It must never share production resource names, database or broker
+bindings, secret groups, workers, or cron jobs. Production must remain running
+throughout staging delivery. This runbook owns the Render topology and service
+verification; the Ollija plan guide owns delivery coordination only.
 
 The parent delivery workflow reads the selected target and current Ollija
 Delivery Guide from its plan before making Git or Render changes, and refreshes
@@ -28,6 +28,51 @@ prune procedures are defined in
 [`docs/operations/staging-data-refresh.md`](../operations/staging-data-refresh.md).
 Production must remain refresh-inert: `render.yaml` declares neither
 `STAGING_DATA_REFRESH_ENABLED` nor `STAGING_REFRESH_SOURCE_DATABASE_URL`.
+
+### Isolated staging runtime
+
+| Resource | Staging-owned role |
+|---|---|
+| `pushinweight-staging-web` | Owner-only UI and refresh authority; never harvests |
+| `pushinweight-staging-harvest` | Dormant cron; manual Trigger Run only |
+| `pushinweight-staging-headlines` | Queue-only `trend-narratives` worker, concurrency one |
+| `pushinweight-staging-headlines-broker` | Broker, envelope watermark, and queue state |
+| `pushinweight-staging-db` | Posts, cursors, backlog, enrichment claims, and headline ledgers |
+
+The harvester schedule is the exact never-occurring expression
+`0 0 31 2 *`. Render Dashboard **Trigger Run** is the only authorized initial
+invocation. Its command must remain:
+
+```text
+python manage.py run_cycle --staging-acceptance \
+  "${X_MONITOR_STAGING_ACCEPTANCE_CALL_ID:?staging acceptance call ID missing}" \
+  --json
+```
+
+Never replace it with plain `python manage.py run_cycle`, never add `--async`,
+and never schedule it periodically. The application guard independently
+requires the stage enable flag, deployment environment, configured and Render
+service names, one configured call ID, the exact staging PostgreSQL host/name/
+role, and provider credentials before it takes the writer lock or builds a
+network client. The immutable execution envelope is one call, one page, five
+results, one total search pass, zero HTTP retries, no metrics refresh, and five
+enrichment claims.
+
+Staging and production currently use the same provider account and therefore
+the same shared provider quota. Database and broker isolation prevent cursor,
+claim, and queue corruption; they do not create quota headroom. Confirm budget
+authorization immediately before every Trigger Run for both the Twitter search
+and the separately dispatched headline-provider work. The checked-in headline
+guardrails are per brand: 25 calls, 500,000 input tokens, 160,000 output
+tokens, and USD 1.00 at the pinned pricing revision, across at most 25 expected
+brands. Verify those effective values with `headline_status --json` and the
+candidate config before authorizing the attempt. A rate/quota refusal is a
+failed acceptance, advances no cursor, dispatches no headline work, and has no
+automatic retry.
+
+The full acceptance, evidence, secret-rotation, suspension, and reactivation
+procedure is
+[`docs/operations/2026-08-27-171845-staging-harvester-acceptance.md`](../operations/2026-08-27-171845-staging-harvester-acceptance.md).
 
 ## Deployed reality
 
