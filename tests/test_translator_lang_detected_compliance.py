@@ -55,16 +55,26 @@ def test_allowlist_members_pinned():
         ("zh", "zh-Hans"),
         ("zh-cn", "zh-Hans"),
         ("zh_Hans", "zh-Hans"),
+        ("zho", "zh-Hans"),
+        ("chi", "zh-Hans"),
         ("zh-tw", "zh-Hant"),
         ("zh-Hant", "zh-Hant"),
         ("ja", "ja"),
         ("ko", "ko"),
         ("other", "other"),
+        ("fr", "other"),
+        ("ar", "other"),
+        ("de", "other"),
+        ("es-MX", "other"),
+        ("pt_BR", "other"),
+        ("und", None),
+        ("zz", None),
+        ("xx", None),
+        ("qaa", None),
         ("", None),
         (None, None),
         ("   ", None),
         ("esperanto", None),
-        ("fr", None),
     ],
 )
 def test_normalize_lang_detected_table(raw, expected):
@@ -149,6 +159,70 @@ def test_all_valid_first_response_single_llm_call():
     assert client.call_count == 1
     assert all(r.get("lang_detected") for r in out)
     assert all(not r.get("translation_failed") for r in out)
+
+
+def test_valid_non_target_iso_language_uses_other_without_repair():
+    """Production pin: a real ISO code outside the named families is `other`."""
+    tweets = [
+        {"tweet_id": "fr-post", "text": "Une nouvelle version est disponible"}
+    ]
+    client = RecordingClient([
+        {"results": [{
+            "tweet_id": "fr-post",
+            "lang_detected": "fr",
+            "text_en": "A new version is available",
+            "literal_zh": "新版本现已推出",
+            "en_equivalent": "The post announces that users can try a new release.",
+            "cn_equivalent": "新版本已经上线，可以开始体验了。",
+            "annotation": "",
+        }]}
+    ])
+
+    out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
+
+    assert client.call_count == 1
+    assert out[0]["lang_detected"] == "other"
+    assert out[0]["text_en"] == "A new version is available"
+    assert out[0]["text_zh_cn"] == "新版本现已推出"
+    assert out[0]["en_equivalent"] == (
+        "The post announces that users can try a new release."
+    )
+    assert out[0]["cn_equivalent"] == "新版本已经上线，可以开始体验了。"
+    assert out[0].get("translation_failed") is not True
+
+
+def test_non_english_source_echo_uses_one_repair_for_real_translation():
+    """A valid language tag must not make a source echo count as English."""
+    tweets = [
+        {"tweet_id": "fr-echo", "text": "Une nouvelle version est disponible"}
+    ]
+    client = RecordingClient([
+        {"results": [{
+            "tweet_id": "fr-echo",
+            "lang_detected": "fr",
+            "text_en": "Une nouvelle version est disponible",
+            "literal_zh": "新版本现已推出",
+            "en_equivalent": "The post announces a newly available release.",
+            "cn_equivalent": "新版本已经上线，可以开始体验了。",
+            "annotation": "",
+        }]},
+        {"results": [{
+            "tweet_id": "fr-echo",
+            "lang_detected": "fr",
+            "text_en": "A new version is available",
+            "literal_zh": "新版本现已推出",
+            "en_equivalent": "The post announces a newly available release.",
+            "cn_equivalent": "新版本已经上线，可以开始体验了。",
+            "annotation": "",
+        }]},
+    ])
+
+    out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
+
+    assert client.call_count == 2
+    assert out[0]["lang_detected"] == "other"
+    assert out[0]["text_en"] == "A new version is available"
+    assert out[0].get("translation_failed") is not True
 
 
 def test_missing_lang_triggers_one_repair_preserves_texts():

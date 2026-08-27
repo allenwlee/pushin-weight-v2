@@ -36,7 +36,7 @@ memes, and brand voice.
 | `text_en` | Always after durable post-fetch persistence. The translator may mark an English-source echo as a noop; the persistence layer stores the source text in that case. | "Anthropics neue KI-Modelle" → "Anthropic's new AI models" |
 | `literal_zh` | Source is NOT already Simplified Chinese (deterministic noop) — note that this is the LLM's best-interpretation rendering, NOT a literal word-for-word translation | "GitHub Copilot just dropped Kimi K2.7 like a secret weapon from a sci-fi film" → "GitHub Copilot 刚刚把 Kimi K2.7 像科幻片里的秘密武器一样扔出来" |
 | `text_zh_cn` | Always after durable post-fetch persistence. The translator may mark a Simplified-Chinese-source echo as a noop; the persistence layer stores the source text in that case. | see above |
-| `lang_detected` | Always; canonical allowlist value | "en", "zh-Hans", "ja", "other", etc. |
+| `lang_detected` | Always; one of `en`, `zh-Hans`, `zh-Hant`, `ja`, `ko`, or `other`. Registered ISO 639-1 language tags outside the named families normalize to `other`; undetermined/private/reserved values remain invalid. | Model `fr`, `ar`, `de`, or `es-MX` → persisted `other` |
 | `en_equivalent` → `posts.commentary_en` | Always; non-empty English analyst synthesis, distinct from source and both translations | "The release expands Kimi's reach through Copilot." |
 | `cn_equivalent` → `posts.commentary_zh_cn` | Always; non-empty Simplified Chinese analyst synthesis, distinct from source and both translations | "Kimi K2.7 Code 正式登陆 Copilot，触达面又扩大了。" |
 | `annotation` | Only when the post contains F2/F3 friction (meme origin, named event, brand slur). Otherwise empty. | "GPT-4o-mini 的 CodingPlan 试用贴暴露了 OpenAI 的吞量设计哲学" |
