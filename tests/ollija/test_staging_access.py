@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Self
 from unittest.mock import patch
@@ -12,6 +16,7 @@ from project.staging import validate_staging_environment
 from scripts import render_migrate
 
 Operation = tuple[str, tuple[int, ...]] | str
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class _Cursor:
@@ -34,6 +39,25 @@ class _Connection:
 
     def cursor(self) -> _Cursor:
         return _Cursor(self.operations)
+
+
+class _AdminConnection(_Connection):
+    def __enter__(self) -> Self:
+        self.operations.append("admin_connect")
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.operations.append("admin_close")
+
+
+class _AdminConnect:
+    def __init__(self, operations: list[Operation]) -> None:
+        self.operations = operations
+        self.parameters: dict[str, object] = {}
+
+    def __call__(self, **parameters: object) -> _AdminConnection:
+        self.parameters = parameters
+        return _AdminConnection(self.operations)
 
 
 def test_build_migrations_always_run_under_the_advisory_lock() -> None:
@@ -71,6 +95,79 @@ def test_failed_build_migration_releases_the_advisory_lock() -> None:
         "migrate",
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
     ]
+
+
+def test_main_uses_the_admin_database_lock_around_the_real_migration_chain() -> None:
+    operations: list[Operation] = []
+    connect = _AdminConnect(operations)
+
+    status = render_migrate.main(
+        environ={
+            "DATABASE_URL": (
+                "postgresql://staging:test@staging.internal/staging_database"
+            )
+        },
+        connect=connect,
+        app_connection=_Connection(operations),
+        execute_migrate=lambda: operations.append("migrate"),
+        setup_django=lambda: operations.append("django_setup"),
+    )
+
+    assert status == 0
+    assert connect.parameters["dbname"] == "postgres"
+    assert operations == [
+        "django_setup",
+        "admin_connect",
+        ("SET statement_timeout = %s", (900_000,)),
+        ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
+        ("SET statement_timeout = 0", ()),
+        ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
+        "migrate",
+        ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
+        ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
+        "admin_close",
+    ]
+
+
+def test_main_returns_retryable_failure_without_running_migrate(capsys) -> None:
+    operations: list[Operation] = []
+
+    def fail_connect(**_parameters: object):
+        raise RuntimeError(
+            "postgresql://staging:test@staging.internal/staging_database"
+        )
+
+    status = render_migrate.main(
+        environ={"DATABASE_URL": "postgresql://staging:secret@staging.internal/staging"},
+        connect=fail_connect,
+        app_connection=_Connection(operations),
+        execute_migrate=lambda: operations.append("migrate"),
+        setup_django=lambda: operations.append("django_setup"),
+    )
+
+    assert status == 75
+    assert "migrate" not in operations
+    captured = capsys.readouterr()
+    assert "retry" in captured.err.lower()
+    assert "postgresql://" not in captured.err
+
+
+def test_build_script_entry_point_can_import_the_shared_lock() -> None:
+    environment = dict(os.environ)
+    environment.pop("DATABASE_URL", None)
+
+    result = subprocess.run(
+        [sys.executable, "scripts/render_migrate.py"],
+        cwd=REPO_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 75
+    assert "set DATABASE_URL and retry" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_staging_boot_fails_closed_for_missing_credentials_or_owner_allowlist() -> None:
