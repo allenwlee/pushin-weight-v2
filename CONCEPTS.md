@@ -128,46 +128,57 @@ The endpoint the translator pipeline calls for the message-translate stage. Set 
 
 ## Trend narratives
 
-Vocabulary for the shared V22 headline generated after eligible committed
-harvest cycles. The detailed behavioral contract is in
+Vocabulary for the all-brand, why-first headline system generated after
+eligible committed harvest cycles. The detailed behavioral contract is in
 `docs/reference/headline-trend-narratives.md`.
 
 ### Trend analysis snapshot
 
-The immutable, bounded PostgreSQL result for one fixed window and fact cutoff.
-It contains deterministic candidate rankings, complete coarse/fine series,
-coverage, exceptional episodes, and selected evidence. It is persisted in
-`TrendNarrative.generation_facts`; only a smaller provider projection crosses
-the LLM boundary.
+The immutable, bounded all-brand result for one source-cycle, fixed window,
+and fact cutoff. It contains one compact dossier per tracked brand: baseline
+quality, quantitative facts, shape summaries, aggregate corpus phrases, and a
+bounded evidence sample. The complete snapshot is persisted on
+`TrendNarrativeRun`; only closed stage-specific projections cross the LLM
+boundary.
 
-### Measured candidate
+### Brand dossier
 
-A database brand/full-window or brand/episode identity whose volume,
-engagement, and metadata facts were computed from post-brand associations. One
-or two measured candidates may be reported, and their candidate IDs must come
-from the persisted snapshot.
+The compact, Python-computed account of one tracked brand in a snapshot. It
+keeps arithmetic and eligibility deterministic while giving the editor the
+dated post text needed to infer why conversation changed. Every tracked brand
+receives an explicit eligible, no-content, or data-quality-unavailable outcome.
 
-### Evidence-only entity
+### Rank, editor, and critic calls
 
-One optional secondary company, brand, product, model, or organization directly
-named by at least two independent evidence excerpts but not measured as a trend
-candidate. Until entity discovery/resolution is implemented, an off-list name
-is persisted as an unresolved subject and must never be described as having a
-measured trend.
+The three bounded LLM stages for one run. Rank orders every eligible brand
+without dropping any. Editor calls process deterministic batches of at most
+five brands and draft bilingual headline and secondary copy. Matching critic
+calls approve, repair, or hold each brand using the same closed packet. Python
+validates schema, IDs, exact numeric ownership, completeness, and budgets; the
+critic owns semantic support, causality, proportionality, quote fidelity, and
+translation equivalence.
 
-### Narrative slot
+### Provider-call entitlement
 
-The irreversible outbound-call entitlement reserved for one
-`(source_cycle_id, window_days)` ledger row before network transport starts.
-Logical task delivery, a consumed slot, transport start, transport completion,
-and valid publication are distinct events; there can be at most one slot per
-source-cycle/window and four per envelope.
+The append-only `TrendNarrativeProviderCall` reservation for one unique
+`(run, stage, batch)` before network transport starts. Reservation, send,
+completion, ambiguity, and failure are distinct states. A 20-brand run needs
+one rank call plus four editor and four critic calls: nine total, with no repair
+or browser-triggered calls.
 
-### Last-good narrative
+### Work slot
 
-The one current published `TrendNarrative` for a window. Failed, suppressed,
-disabled, stale, or superseded attempts do not erase it; the public projection
-continues to serve it unless serving itself is disabled.
+The per-window `TrendNarrativeWorkSlot` that owns one active source-cycle and
+at most one newer queued cutoff. Its expiring claim and monotonic fence prevent
+duplicate workers from publishing the same work and let a newer cutoff replace
+older queued work without unbounded backlog growth.
+
+### Visible run and last-good brand narrative
+
+`TrendNarrativeVisibleRun` points to the one monotonic visible all-brand run
+for a window. Each approved `BrandTrendNarrative` is immutable. A held or
+failed new attempt keeps its previous brand-specific `last_good`, so one bad
+brand cannot erase the other brands or the prior good copy.
 
 ### Why-first trend headline
 
@@ -180,11 +191,13 @@ gets a candid headline without a fabricated reason.
 
 ### Relative leader and absolute materiality
 
-The relative leader is the strongest supported story among measured candidates
-for a window, even when every candidate is quiet. Absolute materiality describes
-the size of that leader's movement using window-specific language such as flat,
-small, meaningful, or sharp. Selecting a relative leader never authorizes the
-headline to exaggerate its absolute materiality.
+The relative leader is the strongest supported story among eligible brands for
+a window, even when every brand is quiet. Absolute materiality describes the
+size of that leader's movement using window-specific language such as flat,
+small, meaningful, or sharp. Ranking a relative leader never authorizes the
+headline to exaggerate its absolute materiality. The default view shows the
+top two supported brands; explicit brand filters show those brands from the
+same already-generated run.
 
 ## x-monitor deployment
 

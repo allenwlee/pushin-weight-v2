@@ -37,7 +37,7 @@ def refresh_trend_narratives(
     """Consume one committed harvest envelope on the headline-only queue."""
     from monitor.trend_narrative_queue import coalesce_envelope
     from monitor.trend_narrative_tasks import (
-        process_trend_narrative_envelope,
+        reconcile_per_brand_trend_narratives,
     )
 
     newest = coalesce_envelope(envelope)
@@ -51,7 +51,72 @@ def refresh_trend_narratives(
             "failed": 0,
             "errors": [],
         }
-    return process_trend_narrative_envelope(newest)
+    return reconcile_per_brand_trend_narratives(newest)
+
+
+@shared_task(
+    name="monitor.tasks.initialize_trend_narrative_snapshot",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def initialize_trend_narrative_snapshot(
+    *,
+    source_cycle_id: str,
+    window_days: int,
+    facts_as_of: str,
+    owner: str = "",
+    fence: int = 0,
+) -> dict[str, object]:
+    """One bounded snapshot stage; no provider transport occurs here."""
+    from datetime import datetime
+
+    from monitor.trend_narrative_tasks import initialize_per_brand_snapshot
+
+    run = initialize_per_brand_snapshot(
+        source_cycle_id=source_cycle_id,
+        window_days=window_days,
+        facts_as_of=datetime.fromisoformat(facts_as_of),
+        owner=owner,
+        fence=fence,
+    )
+    return {"status": "initialized", "run_id": run.pk if run else None}
+
+
+@shared_task(
+    name="monitor.tasks.execute_trend_narrative_stage",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def execute_trend_narrative_stage(
+    *, call_id: int, owner: str = "", fence: int = 0
+) -> dict[str, object]:
+    """One provider-call ledger row, hence at most one provider transport."""
+    from monitor.trend_narrative_tasks import execute_per_brand_stage
+
+    return execute_per_brand_stage(call_id, owner=owner, fence=fence)
+
+
+@shared_task(
+    name="monitor.tasks.finalize_trend_narrative_run",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def finalize_trend_narrative_run(*, run_id: int) -> dict[str, object]:
+    from monitor.trend_narrative_tasks import finalize_per_brand_run
+
+    return {"status": "activated" if finalize_per_brand_run(run_id) else "waiting"}
 
 
 @shared_task(name="monitor.tasks.run_cycle", bind=True, max_retries=2)

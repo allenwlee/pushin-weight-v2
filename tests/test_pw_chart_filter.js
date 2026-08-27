@@ -97,6 +97,62 @@ function payload(windowDays, count, pulseName) {
   };
 }
 
+function payloadV3(windowDays, brands) {
+  const data = payload(windowDays, 8, brands[0]);
+  const computedAt = data.computed_at;
+  data.trend_narrative = {
+    schema_version: 3,
+    window_days: windowDays,
+    computed_at: computedAt,
+    facts_as_of: computedAt,
+    state: brands.length > 1 ? 'mixed' : 'available',
+    state_label: brands.length > 1 ? 'Mixed' : 'Available',
+    items: brands.map((brand, index) => ({
+      id: 'brand-trend:' + (index + 1),
+      brand: {
+        key: brand,
+        display_name: brand,
+        url: '/brands/' + brand + '/',
+      },
+      state: index === 1 ? 'stale' : 'available',
+      state_label: index === 1
+        ? 'Stale · last verified 10 min ago'
+        : 'Available',
+      headline: brand + ' conversation focused on hands-on use.',
+      secondary: 'Users discussed setup and performance tradeoffs.',
+      verified_at: computedAt,
+      attempted_at: computedAt,
+      freshness: {
+        kind: 'verified',
+        relative: 'last verified 10 min ago',
+        absolute: 'Aug 10, 2026, 20:34 UTC',
+        absolute_iso: computedAt,
+      },
+    })),
+    selection: {
+      mode: 'explicit',
+      requested_count: brands.length,
+      returned_count: Math.min(2, brands.length),
+      truncated: brands.length > 2,
+      summary: brands.length > 2 ? '2 of ' + brands.length + ' selected' : '',
+    },
+    body: brands[0] + ' conversation focused on hands-on use.',
+    body_prefix: '',
+    body_remainder: ' conversation focused on hands-on use.',
+    observations: ['Users discussed setup and performance tradeoffs.'],
+    subjects: [],
+    primary_brand: {
+      key: brands[0],
+      display_name: brands[0],
+      url: '/brands/' + brands[0] + '/',
+    },
+    generated_at: computedAt,
+    checked_at: computedAt,
+    coverage_state: 'unknown',
+  };
+  return data;
+}
+
 function fragment(data) {
   return '<canvas class="home-chart" data-home=\'' + JSON.stringify(data) + '\'></canvas>' +
     '<p class="chart-state" data-pw-chart-status hidden></p>';
@@ -123,6 +179,7 @@ function makeRegion(data, isLegacy, legend) {
     'data-pw-pulse-empty-text': 'No pulse data',
     'data-pw-pulse-error-text': 'Pulse refresh failed',
     'data-pw-pulse-new-text': 'NEW',
+    'data-pw-headline-updated-text': 'Trend summaries updated',
     'data-pw-locale': 'en',
   };
   const status = { hidden: true, textContent: '' };
@@ -165,10 +222,10 @@ function makePulseBar() {
 
 function makeNode() {
   const attrs = {};
-  return {
+  let ownText = '';
+  const node = {
     children: [],
     hidden: true,
-    textContent: '',
     className: '',
     tagName: 'SPAN',
     href: '',
@@ -184,6 +241,16 @@ function makeNode() {
     },
     setAttribute(name, value) { attrs[name] = String(value); },
   };
+  Object.defineProperty(node, 'textContent', {
+    get() {
+      return ownText + this.children.map((child) => child.textContent).join('');
+    },
+    set(value) {
+      ownText = String(value || '');
+      this.children = [];
+    },
+  });
+  return node;
 }
 
 function makeHeadline() {
@@ -196,6 +263,8 @@ function makeHeadline() {
   voices.setAttribute('data-pw-empty-text', 'no top voices this period');
   const observations = makeNode();
   const status = makeNode();
+  const items = makeNode();
+  const selection = makeNode();
   body.parentNode = bodyParent;
   root.querySelector = function (selector) {
     if (selector === '[data-pw-headline-prefix]') return prefix;
@@ -207,9 +276,12 @@ function makeHeadline() {
     }
     if (selector === '[data-pw-headline-voice-entries]') return voices;
     if (selector === '[data-pw-headline-observations]') return observations;
+    if (selector === '[data-pw-headline-items]') return items;
+    if (selector === '[data-pw-headline-selection]') return selection;
+    if (selector === '[data-pw-headline-legacy]') return bodyParent;
     return null;
   };
-  return { root, prefix, body, state, voices, observations, status };
+  return { root, prefix, body, state, voices, observations, status, items, selection, bodyParent };
 }
 
 function response(data, ok = true) {
@@ -554,6 +626,26 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'pw-chart owns one 60-second refresh timer');
   assert(['hx-get', 'hx-trigger', 'hx-vals', 'hx-swap'].every((name) => base.region.removed.includes(name)),
     'racing htmx refresh attributes are disabled');
+
+  console.log('--- DTO v3 per-brand narrative cards ---');
+  const cards = makeSandbox();
+  cards.fetchQueue.push(response(payloadV3(7, ['deepseek', 'minimax'])));
+  cards.document.dispatchEvent(new cards.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
+  await flush();
+  assert(cards.headline.items.children.length === 2,
+    'DTO v3 renders one semantic card for each returned brand');
+  assert(cards.headline.items.children.every((node) => node.tagName === 'ARTICLE'),
+    'DTO v3 brand narratives render as semantic articles');
+  assert(cards.headline.items.children[0].getAttribute('data-pw-brand-key') === 'deepseek' &&
+    cards.headline.items.children[1].getAttribute('data-pw-brand-key') === 'minimax',
+    'DTO v3 preserves the server-selected brand order');
+  assert(cards.headline.items.children[1].textContent.includes('Stale · last verified 10 min ago'),
+    'each card exposes its own stale relative timestamp');
+  assert(cards.headline.items.children[1].getAttribute('data-pw-verified-at') ===
+    '2026-08-10T20:34:00+00:00',
+    'each card retains the exact absolute verification timestamp');
+  assert(cards.headline.bodyParent.hidden,
+    'DTO v3 hides the legacy shared-headline body');
 
   console.log('--- latest response wins atomically ---');
   const race = makeSandbox();

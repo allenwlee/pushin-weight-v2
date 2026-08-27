@@ -84,24 +84,48 @@ def verify_headline_worker_boundary() -> tuple[str, str]:
 
     from monitor.trend_narrative_generation import (
         _anthropic_client,
-        _request_payload,
+        build_per_brand_critic_request,
+        build_per_brand_editor_request,
+        build_per_brand_rank_request,
     )
     from x_monitor.config import HeadlineNarrativeConfig
 
     config = HeadlineNarrativeConfig()
-    request = _request_payload({}, config)
-    if request.get("model") != config.model:
-        raise BoundaryVerificationError(
-            "production headline request does not use the configured explicit model"
-        )
-    if request.get("thinking") != {"type": "disabled"}:
-        raise BoundaryVerificationError(
-            "production headline request must explicitly disable thinking"
-        )
-    if "temperature" in request:
-        raise BoundaryVerificationError(
-            "production headline request must omit temperature"
-        )
+    packet = {
+        "packet_schema_version": 3,
+        "window_days": 1,
+        "batch_key": "1d:boundary-proof",
+        "manifest_brand_keys": ["boundary-proof"],
+        "dossiers": [
+            {
+                "brand_key": "boundary-proof",
+                "facts": [{"fact_id": "boundary-proof:volume"}],
+                "evidence": [{"evidence_id": "ev:boundary-proof:01"}],
+            }
+        ],
+    }
+    _rank_envelope, rank_request = build_per_brand_rank_request(packet, config)
+    editor_envelope, editor_request = build_per_brand_editor_request(packet, config)
+    _critic_envelope, critic_request = build_per_brand_critic_request(
+        editor_envelope,
+        "{}",
+        {"status": "invalid", "error_codes": ["boundary_proof"]},
+        config,
+    )
+    requests = (rank_request, editor_request, critic_request)
+    for request in requests:
+        if request.get("model") != config.model:
+            raise BoundaryVerificationError(
+                "production headline request does not use the configured explicit model"
+            )
+        if request.get("thinking") != {"type": "disabled"}:
+            raise BoundaryVerificationError(
+                "production headline request must explicitly disable thinking"
+            )
+        if "temperature" in request:
+            raise BoundaryVerificationError(
+                "production headline request must omit temperature"
+            )
 
     # The placeholder is supplied directly and is never read from environment or
     # sent anywhere.  Constructing and closing the client performs no transport.
@@ -112,7 +136,8 @@ def verify_headline_worker_boundary() -> tuple[str, str]:
         max_retries=0,
     )
     try:
-        bind_request(client.messages.create, request)
+        for request in requests:
+            bind_request(client.messages.create, request)
     finally:
         client.close()
     return installed, config.model

@@ -22,10 +22,13 @@ from monitor.trend_narrative_facts import (
 )
 
 TREND_SNAPSHOT_SCHEMA_VERSION = 1
+COMPACT_DOSSIER_SCHEMA_VERSION = 3
 MAX_SHORTLIST_CANDIDATES = 6
 MAX_EVIDENCE_CHARACTERS = 1_000
 MAX_SNAPSHOT_BYTES = 256 * 1024
 MAX_PROVIDER_PACKET_BYTES = 128 * 1024
+MAX_EDITOR_BRANDS_PER_BATCH = 5
+MAX_SNAPSHOT_BRANDS = 100
 MAX_QUANTITATIVE_FACTS_PER_CANDIDATE = 24
 SNAPSHOT_STATEMENT_TIMEOUT_MS = 30_000
 SNAPSHOT_LOCK_TIMEOUT_MS = 5_000
@@ -93,6 +96,206 @@ class EvidenceSelectionPolicy:
 
 DEFAULT_EVIDENCE_SELECTION_POLICY = EvidenceSelectionPolicy()
 
+# These are a product contract, not an adaptive quality heuristic.  Each lane
+# can donate unused places to the other lane, so a complete ordinary-only
+# dossier is just as full as one with first-party announcements.
+DOSSIER_EVIDENCE_TARGETS: dict[int, tuple[int, int]] = {
+    1: (6, 2),
+    7: (8, 3),
+    30: (10, 4),
+    365: (12, 4),
+}
+
+
+def select_dossier_evidence(
+    window_days: int,
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Select fixed-size, deduplicated evidence with deterministic rollover.
+
+    First-party status is a validated account-edge property supplied by the
+    query.  Ordinary rows never acquire identity merely because they mention a
+    trusted account.
+    """
+    try:
+        target, first_party_reservation = DOSSIER_EVIDENCE_TARGETS[window_days]
+    except KeyError as exc:
+        raise ValueError("unsupported dossier window") from exc
+    ordinary_reservation = target - first_party_reservation
+    by_cluster: dict[str, Mapping[str, Any]] = {}
+    for row in sorted(evidence, key=_dossier_evidence_sort_key):
+        cluster = str(row.get("source_cluster_id") or row.get("evidence_id") or "")
+        if cluster and cluster not in by_cluster:
+            by_cluster[cluster] = row
+    deduplicated = list(by_cluster.values())
+    first_party = [
+        row
+        for row in deduplicated
+        if str(row.get("first_party_role") or "public_opaque") in {"official", "staff"}
+    ]
+    ordinary = [row for row in deduplicated if row not in first_party]
+    selected: list[dict[str, Any]] = []
+
+    # Reservations are filled independently, then all remaining candidates
+    # compete in one stable pool.  Do not silently lower target for packet
+    # pressure; byte compaction happens after this selection.
+    selected.extend(dict(row) for row in first_party[:first_party_reservation])
+    selected.extend(
+        dict(row) for row in ordinary[:ordinary_reservation] if len(selected) < target
+    )
+    chosen = {str(row.get("evidence_id") or "") for row in selected}
+    for row in sorted(first_party + ordinary, key=_dossier_evidence_sort_key):
+        if len(selected) >= target:
+            break
+        evidence_id = str(row.get("evidence_id") or "")
+        if evidence_id not in chosen:
+            selected.append(dict(row))
+            chosen.add(evidence_id)
+    return selected, {
+        "target_count": target,
+        "first_party_reservation": first_party_reservation,
+        "ordinary_reservation": ordinary_reservation,
+        "selected_count": len(selected),
+    }
+
+
+def _dossier_evidence_sort_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
+    role = str(row.get("first_party_role") or "public_opaque")
+    source_flags = row.get("source_flags") or {}
+    # Authored trusted announcements and originals lead each lane, then
+    # temporal/subject diversity already represented by the bounded reservoir,
+    # engagement, and finally stable opaque IDs settle ties.
+    return (
+        0 if role in {"official", "staff"} else 1,
+        0 if source_flags.get("post_kind") == "source_post" else 1,
+        -int(row.get("_interactions") or row.get("interactions") or 0),
+        str(row.get("created_at") or ""),
+        str(row.get("evidence_id") or ""),
+    )
+
+
+def build_editor_batches(
+    snapshot: Mapping[str, Any],
+    *,
+    brand_order: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Project deterministic five-brand packets from a compact V3 snapshot.
+
+    ``brand_order`` is the mechanically validated rank-stage order. Missing or
+    ineligible keys are ignored and eligible keys omitted by the rank response
+    are appended canonically, so evaluation and production share one batching
+    implementation without allowing the model to drop a brand.
+    """
+    if (
+        int(snapshot.get("packet_schema_version") or 0)
+        != COMPACT_DOSSIER_SCHEMA_VERSION
+    ):
+        raise ValueError("compact_dossier_snapshot_required")
+    dossiers = [
+        dict(row)
+        for row in snapshot.get("dossiers", [])
+        if str(row.get("outcome")) == "narrative_eligible"
+    ]
+    dossiers.sort(
+        key=lambda row: (str(row["brand_key"]).casefold(), str(row["brand_key"]))
+    )
+    if brand_order is not None:
+        by_key = {str(row["brand_key"]): row for row in dossiers}
+        ordered_keys = list(
+            dict.fromkeys(str(key) for key in brand_order if str(key) in by_key)
+        )
+        ordered_keys.extend(key for key in by_key if key not in ordered_keys)
+        dossiers = [by_key[key] for key in ordered_keys]
+    batches = []
+    for index in range(0, len(dossiers), MAX_EDITOR_BRANDS_PER_BATCH):
+        members = dossiers[index : index + MAX_EDITOR_BRANDS_PER_BATCH]
+        batch = {
+            "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
+            "window_days": snapshot["window_days"],
+            "as_of": snapshot["as_of"],
+            "baseline_context": dict(snapshot["baseline_context"]),
+            "batch_key": (
+                f"{snapshot['window_days']}d:"
+                f"{index // MAX_EDITOR_BRANDS_PER_BATCH + 1:03d}"
+            ),
+            "manifest_brand_keys": [str(row["brand_key"]) for row in members],
+            "dossiers": [_provider_dossier(row) for row in members],
+        }
+        _fit_editor_batch_to_packet_budget(batch)
+        batches.append(batch)
+    return batches
+
+
+def _provider_dossier(dossier: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the bounded public-to-provider half of one dossier."""
+    projected = {
+        key: value
+        for key, value in dossier.items()
+        if key
+        not in {
+            "raw_series",
+            "aggregate_inputs",
+            "source_row_provenance",
+            "evidence_selection_provenance",
+        }
+    }
+    projected["evidence"] = []
+    for evidence in dossier.get("evidence", []):
+        row = {
+            key: value
+            for key, value in evidence.items()
+            if key
+            not in {
+                "author_group_id",
+                "source_cluster_id",
+                "post_type_keys",
+                "discourse_keys",
+                "sentiment_keys",
+                "china_nationalism_keys",
+                "us_nationalism_keys",
+                "unsanctioned_flag_keys",
+            }
+        }
+        if row.get("first_party_role") not in {"official", "staff"}:
+            row.pop("handle_snapshot", None)
+        projected["evidence"].append(row)
+    return projected
+
+
+def _fit_editor_batch_to_packet_budget(batch: dict[str, Any]) -> None:
+    """Compact text only; evidence cardinality is an invariant."""
+
+    def size() -> int:
+        return len(canonical_snapshot_json(batch).encode("utf-8"))
+
+    while size() > MAX_PROVIDER_PACKET_BYTES:
+        candidates = [
+            evidence
+            for dossier in batch["dossiers"]
+            for evidence in dossier.get("evidence", [])
+            if len(str(evidence.get("excerpt") or "")) > 160
+            or evidence.get("text_en")
+            or evidence.get("text_zh_cn")
+        ]
+        if not candidates:
+            raise TrendSnapshotSizeError("compact_editor_packet_too_large")
+        evidence = max(
+            candidates,
+            key=lambda row: (
+                len(str(row.get("excerpt") or "")),
+                len(str(row.get("text_en") or ""))
+                + len(str(row.get("text_zh_cn") or "")),
+                str(row.get("evidence_id") or ""),
+            ),
+        )
+        excerpt = str(evidence.get("excerpt") or "")
+        if len(excerpt) > 160:
+            evidence["excerpt"] = excerpt[: max(160, len(excerpt) // 2)]
+        elif evidence.get("text_zh_cn"):
+            evidence.pop("text_zh_cn", None)
+        else:
+            evidence.pop("text_en", None)
+
 
 def canonical_snapshot_json(
     packet: Mapping[str, Any],
@@ -136,9 +339,7 @@ def select_trend_candidates(
 ) -> list[dict[str, Any]]:
     """Apply fixed-family seed, merge, round-robin, and brand backstop rules."""
     if limit < 1 or limit > MAX_SHORTLIST_CANDIDATES:
-        raise ValueError(
-            f"limit must be between 1 and {MAX_SHORTLIST_CANDIDATES}"
-        )
+        raise ValueError(f"limit must be between 1 and {MAX_SHORTLIST_CANDIDATES}")
     sources = {
         str(row["candidate_key"]["candidate_id"]): row
         for row in facts.get("candidates", [])
@@ -155,11 +356,7 @@ def select_trend_candidates(
             if signal not in existing["signals"]:
                 existing["signals"].append(signal)
             return
-        row = {
-            key: value
-            for key, value in item.items()
-            if key != "signal"
-        }
+        row = {key: value for key, value in item.items() if key != "signal"}
         row["signals"] = [signal]
         selected.append(row)
         selected_by_id[candidate_id] = row
@@ -208,20 +405,19 @@ def build_trend_analysis_snapshot(
     as_of: datetime,
     thresholds: TrendFactThresholds = DEFAULT_TREND_THRESHOLDS,
     evidence_policy: EvidenceSelectionPolicy = DEFAULT_EVIDENCE_SELECTION_POLICY,
+    brand_cap: int = MAX_SNAPSHOT_BRANDS,
 ) -> dict[str, Any]:
     """Build and serialize one immutable snapshot under one read-only DB view."""
     if connection.vendor != "postgresql":
         raise TrendSnapshotTransactionError("trend_snapshot_requires_postgresql")
     if connection.in_atomic_block:
-        raise TrendSnapshotTransactionError(
-            "trend_snapshot_requires_fresh_transaction"
-        )
+        raise TrendSnapshotTransactionError("trend_snapshot_requires_fresh_transaction")
+    if brand_cap < 1 or brand_cap > MAX_SNAPSHOT_BRANDS:
+        raise ValueError("snapshot brand cap must be between 1 and 100")
     as_of_utc = _as_utc(as_of)
     with transaction.atomic():
         with connection.cursor() as cursor:
-            cursor.execute(
-                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
-            )
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             cursor.execute(
                 "SELECT set_config('statement_timeout', %s, true), "
                 "set_config('lock_timeout', %s, true)",
@@ -235,40 +431,86 @@ def build_trend_analysis_snapshot(
             as_of=as_of_utc,
             thresholds=thresholds,
         )
-        shortlist = select_trend_candidates(facts)
-        brand_keys = list(
-            dict.fromkeys(str(row["brand_key"]) for row in shortlist)
-        )
+        full_window = [
+            row
+            for row in facts.get("candidates", [])
+            if row.get("candidate_key", {}).get("kind") == "full_window"
+        ]
+        if len(full_window) > brand_cap:
+            raise TrendSnapshotTransactionError("trend_snapshot_brand_cap_exceeded")
+        brand_keys = [str(row["candidate_key"]["brand_key"]) for row in full_window]
         details = fetch_trend_candidate_series(
             window_days,
             as_of=as_of_utc,
             candidate_keys=brand_keys,
+            allow_unbounded=True,
         )
         evidence_rows = _fetch_evidence_rows(
-            shortlist,
+            [
+                {
+                    "candidate_id": row["candidate_key"]["candidate_id"],
+                    "brand_key": row["candidate_key"]["brand_key"],
+                    "start_at": row["candidate_key"]["start_at"],
+                    "end_at": row["candidate_key"]["end_at"],
+                }
+                for row in full_window
+            ],
             as_of=as_of_utc,
             rank_limit=evidence_policy.reservoir_rank_limit,
         )
-        snapshot = _assemble_snapshot(
+        # This is a single set-based query across the complete, source-root
+        # deduplicated corpus.  It deliberately does not reuse the bounded
+        # evidence reservoir: a phrase that is real for the brand must not
+        # disappear merely because none of its posts won an evidence slot.
+        corpus_signals = _fetch_corpus_phrase_signals(
+            [
+                {
+                    "candidate_id": row["candidate_key"]["candidate_id"],
+                    "brand_key": row["candidate_key"]["brand_key"],
+                    "start_at": row["candidate_key"]["start_at"],
+                    "end_at": row["candidate_key"]["end_at"],
+                }
+                for row in full_window
+            ],
+            as_of=as_of_utc,
+        )
+        stable_family_facts = _fetch_stable_family_facts(
+            [
+                {
+                    "brand_key": row["candidate_key"]["brand_key"],
+                    "start_at": row["candidate_key"]["start_at"],
+                    "end_at": row["candidate_key"]["end_at"],
+                }
+                for row in full_window
+            ],
+            comparison_allowed=bool(facts.get("comparison_allowed")),
+        )
+        snapshot = _assemble_compact_snapshot(
             facts=facts,
-            shortlist=shortlist,
+            full_window=full_window,
             details=details,
             evidence_rows=evidence_rows,
-            evidence_policy=evidence_policy,
+            corpus_signals=corpus_signals,
+            stable_family_facts=stable_family_facts,
         )
-        _fit_snapshot_evidence_to_packet_budget(
-            snapshot,
-            max_bytes=evidence_policy.provider_packet_bytes,
-        )
-        canonical_snapshot_json(snapshot, enforce_limit=True)
+        canonical_snapshot_json(snapshot)
         provider_json = canonical_snapshot_json(project_provider_packet(snapshot))
         if len(provider_json.encode("utf-8")) > evidence_policy.provider_packet_bytes:
             raise TrendSnapshotSizeError("trend_provider_packet_too_large")
+        # Exercise every deterministic editor packet before this immutable
+        # snapshot escapes the repeatable-read boundary.  Compaction may trim
+        # text copies, never evidence rows; an irreducible packet fails safe.
+        build_editor_batches(snapshot)
     return snapshot
 
 
 def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     """Remove complete fine vectors and private source metadata for DeepSeek."""
+    if (
+        int(snapshot.get("packet_schema_version") or 0)
+        == COMPACT_DOSSIER_SCHEMA_VERSION
+    ):
+        return _project_compact_ranking_packet(snapshot)
     candidates = []
     comparison_allowed = bool(snapshot.get("comparison_allowed"))
     minimum_coverage = Decimal(
@@ -365,8 +607,7 @@ def _provider_family_facts(
         return projected
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         return [
-            _provider_family_facts(item, comparison_allowed=False)
-            for item in value
+            _provider_family_facts(item, comparison_allowed=False) for item in value
         ]
     return value
 
@@ -439,8 +680,8 @@ def _quantitative_display_facts(
             selected_count = int(label.get("selected_count") or 0)
             if prior_count > 0:
                 count_change = (
-                    (Decimal(selected_count) / Decimal(prior_count) - 1) * 100
-                )
+                    Decimal(selected_count) / Decimal(prior_count) - 1
+                ) * 100
                 count_fact = _quantitative_display_fact(
                     candidate_id=candidate_id,
                     family=family,
@@ -527,9 +768,7 @@ def _candidate_streams(
     *,
     limit: int,
 ) -> dict[str, list[dict[str, Any]]]:
-    streams: dict[str, list[dict[str, Any]]] = {
-        family: [] for family in FAMILY_ORDER
-    }
+    streams: dict[str, list[dict[str, Any]]] = {family: [] for family in FAMILY_ORDER}
     rankings = facts.get("family_rankings", {})
     for family in FAMILY_ORDER:
         primary_items: list[dict[str, Any]] = []
@@ -643,9 +882,7 @@ def _apply_distinct_brand_backstop(
     if replacement is None:
         return
     replacement_row = {
-        key: value
-        for key, value in replacement.items()
-        if key != "signal"
+        key: value for key, value in replacement.items() if key != "signal"
     }
     replacement_row["signals"] = [dict(replacement["signal"])]
     if len(selected) < limit:
@@ -667,6 +904,572 @@ def _apply_distinct_brand_backstop(
     selected_by_id.pop(str(removed["candidate_id"]), None)
     selected[replace_at] = replacement_row
     selected_by_id[str(replacement_row["candidate_id"])] = replacement_row
+
+
+def _assemble_compact_snapshot(
+    *,
+    facts: Mapping[str, Any],
+    full_window: Sequence[Mapping[str, Any]],
+    details: Mapping[str, Any],
+    evidence_rows: Sequence[Mapping[str, Any]],
+    corpus_signals: Mapping[str, Sequence[Mapping[str, Any]]],
+    stable_family_facts: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Assemble U1's private all-brand snapshot without a post-text archive."""
+    details_by_brand = {
+        str(row["candidate_key"]["brand_key"]): row
+        for row in details.get("candidates", [])
+    }
+    pools = _prepare_evidence_pools(
+        evidence_rows,
+        policy=DEFAULT_EVIDENCE_SELECTION_POLICY,
+    )
+    selected_coverage = facts.get("coverage", {}).get("selected", {})
+    prior_coverage = facts.get("coverage", {}).get("prior", {})
+    comparison_allowed = bool(facts.get("comparison_allowed"))
+    comparison_reasons = list(facts.get("comparison_suppressed_reasons") or [])
+    dossiers = []
+    for source in sorted(
+        full_window,
+        key=lambda row: (
+            str(row["candidate_key"]["brand_key"]).casefold(),
+            str(row["candidate_key"]["brand_key"]),
+        ),
+    ):
+        candidate_key = source["candidate_key"]
+        brand_key = str(candidate_key["brand_key"])
+        detail = details_by_brand[brand_key]
+        family_facts = {
+            **dict(source.get("family_facts") or {}),
+            **dict(stable_family_facts.get(brand_key) or {}),
+        }
+        selected_count = int(family_facts.get("volume", {}).get("selected_count") or 0)
+        enriched_count = int(
+            family_facts.get("volume", {}).get("selected_enriched_count") or 0
+        )
+        current_complete = selected_coverage.get("state") == "sufficient" and not bool(
+            selected_coverage.get("known_backlog_overlap")
+        )
+        outcome = (
+            "narrative_eligible"
+            if selected_count and enriched_count >= selected_count
+            else "data_quality_unavailable"
+            if selected_count
+            else "no_content"
+            if current_complete
+            else "data_quality_unavailable"
+        )
+        selected_evidence, allocation = select_dossier_evidence(
+            int(facts["window_days"]),
+            pools.get(str(candidate_key["candidate_id"]), []),
+        )
+        brand_corpus_signals = list(corpus_signals.get(brand_key) or [])
+        family_facts["corpus_phrases"] = _corpus_phrase_family_fact(
+            brand_corpus_signals,
+            selected_basis=selected_count,
+        )
+        prior_count = int(family_facts.get("volume", {}).get("prior_count") or 0)
+        brand_comparison_allowed = comparison_allowed and prior_count > 0
+        brand_comparison_reasons = [
+            *comparison_reasons,
+            *(
+                ["prior_period_empty"]
+                if comparison_allowed and prior_count == 0
+                else []
+            ),
+        ]
+        dossiers.append(
+            {
+                "brand_key": brand_key,
+                "display_name_en": source["display_name_en"],
+                "display_name_zh_cn": source["display_name_zh_cn"],
+                "outcome": outcome,
+                "comparison_status": {
+                    "allowed": brand_comparison_allowed,
+                    "current_post_count": selected_count,
+                    "prior_post_count": prior_count,
+                    "selected_coverage": selected_coverage,
+                    "prior_coverage": prior_coverage,
+                    "suppression_reasons": brand_comparison_reasons,
+                },
+                "family_summaries": _compact_family_summaries(family_facts),
+                "facts": _compact_citable_facts(brand_key, family_facts),
+                "shape_summary": _compact_shape_summary(detail["coarse_series"]),
+                "corpus_signals": brand_corpus_signals,
+                "evidence_allocation": allocation,
+                "evidence": selected_evidence,
+                "raw_series": {
+                    "coarse": detail["coarse_series"],
+                    "fine": detail["fine_series"],
+                    "metadata": detail.get("metadata_series", {}),
+                },
+                "aggregate_inputs": family_facts,
+                "source_row_provenance": {
+                    "candidate_id": candidate_key["candidate_id"],
+                    "kind": candidate_key["kind"],
+                    "start_at": candidate_key["start_at"],
+                    "end_at": candidate_key["end_at"],
+                },
+                "evidence_selection_provenance": {
+                    "reservoir_count": len(
+                        pools.get(str(candidate_key["candidate_id"]), [])
+                    ),
+                    "dedupe": "source_cluster_id",
+                },
+            }
+        )
+    return {
+        "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
+        "snapshot_schema_version": TREND_SNAPSHOT_SCHEMA_VERSION,
+        "window_days": facts["window_days"],
+        "as_of": facts["as_of"],
+        "baseline_context": {
+            "kind": "prior_period",
+            "start_at": facts["prior_start"],
+            "end_at": facts["window_start"],
+            "historic_norm_wording_allowed": False,
+        },
+        "coverage": facts["coverage"],
+        "dossiers": dossiers,
+    }
+
+
+def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]:
+    result = {}
+    for family in (
+        "volume",
+        "post_type",
+        "sentiment",
+        "discourse",
+        "china_nationalism",
+        "us_nationalism",
+    ):
+        value = dict(family_facts.get(family) or {})
+        result[family] = {
+            "status": _family_summary_status(value),
+            "denominator": value.get("selected_count")
+            or value.get("selected_basis_count")
+            or 0,
+            "current_leader": _leading_label(value, change=False),
+            "largest_change": _leading_label(value, change=True),
+        }
+    # These source-backed families use the same status vocabulary as the
+    # classifier families.  An empty flag set is available data, not an
+    # unavailable aggregate.
+    for family in ("language", "unsanctioned_flags", "account_role", "corpus_phrases"):
+        value = dict(family_facts.get(family) or {})
+        result[family] = {
+            "status": value.get("status", "unavailable"),
+            "denominator": value.get("selected_basis_count", 0),
+            "current_leader": _leading_label(value, change=False),
+            "largest_change": _leading_label(value, change=True),
+        }
+    return result
+
+
+def _family_summary_status(value: Mapping[str, Any]) -> str:
+    """Make zero, suppressed source data, and unavailable distinct."""
+    explicit = value.get("status")
+    if explicit in {"available", "suppressed", "unavailable"}:
+        return str(explicit)
+    basis = int(value.get("selected_count") or value.get("selected_basis_count") or 0)
+    covered = value.get("selected_covered_count")
+    if covered is None:
+        return "available" if value else "unavailable"
+    if int(covered or 0):
+        return "available"
+    return "suppressed" if basis else "unavailable"
+
+
+def _corpus_phrase_family_fact(
+    signals: Sequence[Mapping[str, Any]], *, selected_basis: int
+) -> dict[str, Any]:
+    """Express bounded corpus phrases as a stable aggregate family."""
+    labels = []
+    for signal in signals:
+        current = int(signal.get("prevalence") or 0)
+        prior = int(signal.get("prior_prevalence") or 0)
+        labels.append(
+            {
+                "key": str(signal.get("phrase") or ""),
+                "selected_count": current,
+                "prior_count": prior,
+                "selected_basis_count": selected_basis,
+                "prior_basis_count": 0,
+                "brand_change_pp": str(current - prior),
+            }
+        )
+    return {
+        "status": "available" if selected_basis else "unavailable",
+        "selected_basis_count": selected_basis,
+        "labels": labels,
+    }
+
+
+def _leading_label(value: Mapping[str, Any], *, change: bool) -> str | None:
+    labels = list(value.get("labels") or [])
+    if not labels:
+        return None
+    key = "brand_change_pp" if change else "selected_count"
+    return (
+        str(
+            max(
+                labels,
+                key=lambda row: (
+                    abs(Decimal(str(row.get(key) or "0")))
+                    if change
+                    else Decimal(str(row.get(key) or "0")),
+                    str(row.get("key") or ""),
+                ),
+            ).get("key")
+            or ""
+        )
+        or None
+    )
+
+
+def _compact_citable_facts(
+    brand_key: str, family_facts: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Return a bounded set of exact facts an editor may quote.
+
+    Each populated family contributes its current leader and, when the prior
+    period is comparable, its largest movement.  The LLM therefore receives
+    both the present conversation mix and the numerical change behind it
+    without receiving every raw label row.
+    """
+    volume = family_facts.get("volume") or {}
+    selected = int(volume.get("selected_count") or 0)
+    prior = int(volume.get("prior_count") or 0)
+    facts = [
+        _compact_fact(
+            brand_key=brand_key,
+            family="volume",
+            metric="post_count",
+            label_key=None,
+            current_value=selected,
+            baseline_value=prior,
+            source_value=selected,
+            unit="posts",
+        )
+    ]
+    volume_change = volume.get("change_pct")
+    if volume_change is not None:
+        facts.append(
+            _compact_fact(
+                brand_key=brand_key,
+                family="volume",
+                metric="post_count_change_pct",
+                label_key=None,
+                current_value=selected,
+                baseline_value=prior,
+                source_value=volume_change,
+                unit="percent",
+            )
+        )
+
+    engagement = family_facts.get("engagement") or {}
+    engagement_change = engagement.get("intensity_change_pct")
+    if engagement_change is not None:
+        facts.append(
+            _compact_fact(
+                brand_key=brand_key,
+                family="engagement",
+                metric="intensity_change_pct",
+                label_key=None,
+                current_value=(engagement.get("selected") or {}).get("intensity"),
+                baseline_value=(engagement.get("prior") or {}).get("intensity"),
+                source_value=engagement_change,
+                unit="percent",
+            )
+        )
+
+    for family in (
+        "post_type",
+        "sentiment",
+        "discourse",
+        "china_nationalism",
+        "us_nationalism",
+        "language",
+        "unsanctioned_flags",
+    ):
+        family_fact = family_facts.get(family) or {}
+        labels = list(family_fact.get("labels") or [])
+        if not labels:
+            continue
+        current = max(
+            labels,
+            key=lambda row: (
+                int(row.get("selected_count") or 0),
+                str(row.get("key") or "").casefold(),
+                str(row.get("key") or ""),
+            ),
+        )
+        facts.append(
+            _compact_label_fact(
+                brand_key=brand_key,
+                family=family,
+                label=current,
+                metric_suffix="share_pct",
+                source_value=_label_share_percent(current, selected=True),
+                unit="percent",
+            )
+        )
+        comparable = [row for row in labels if row.get("brand_change_pp") is not None]
+        if comparable:
+            changed = max(
+                comparable,
+                key=lambda row: (
+                    abs(Decimal(str(row.get("brand_change_pp") or "0"))),
+                    str(row.get("key") or "").casefold(),
+                    str(row.get("key") or ""),
+                ),
+            )
+            facts.append(
+                _compact_label_fact(
+                    brand_key=brand_key,
+                    family=family,
+                    label=changed,
+                    metric_suffix="share_change_pp",
+                    source_value=changed["brand_change_pp"],
+                    unit="percentage_points",
+                )
+            )
+
+    account_labels = {
+        str(row.get("key") or ""): row
+        for row in (family_facts.get("account_role") or {}).get("labels", [])
+    }
+    first_party_current = sum(
+        int((account_labels.get(role) or {}).get("selected_count") or 0)
+        for role in ("official", "staff")
+    )
+    first_party_prior = sum(
+        int((account_labels.get(role) or {}).get("prior_count") or 0)
+        for role in ("official", "staff")
+    )
+    if first_party_current or first_party_prior:
+        facts.append(
+            _compact_fact(
+                brand_key=brand_key,
+                family="account_role",
+                metric="official_staff_post_count",
+                label_key="official_staff",
+                current_value=first_party_current,
+                baseline_value=first_party_prior,
+                source_value=first_party_current,
+                unit="posts",
+            )
+        )
+
+    corpus_labels = list((family_facts.get("corpus_phrases") or {}).get("labels") or [])
+    if corpus_labels:
+        phrase = max(
+            corpus_labels,
+            key=lambda row: (
+                int(row.get("selected_count") or 0),
+                str(row.get("key") or "").casefold(),
+                str(row.get("key") or ""),
+            ),
+        )
+        facts.append(
+            _compact_fact(
+                brand_key=brand_key,
+                family="corpus_phrases",
+                metric="document_count",
+                label_key=str(phrase.get("key") or ""),
+                current_value=int(phrase.get("selected_count") or 0),
+                baseline_value=int(phrase.get("prior_count") or 0),
+                source_value=int(phrase.get("selected_count") or 0),
+                unit="posts",
+            )
+        )
+    return facts[:MAX_QUANTITATIVE_FACTS_PER_CANDIDATE]
+
+
+def _compact_label_fact(
+    *,
+    brand_key: str,
+    family: str,
+    label: Mapping[str, Any],
+    metric_suffix: str,
+    source_value: object,
+    unit: str,
+) -> dict[str, Any]:
+    label_key = str(label.get("key") or "")
+    return _compact_fact(
+        brand_key=brand_key,
+        family=family,
+        metric=f"{label_key}_{metric_suffix}",
+        label_key=label_key,
+        current_value=_label_share_percent(label, selected=True),
+        baseline_value=_label_share_percent(label, selected=False),
+        source_value=source_value,
+        unit=unit,
+    )
+
+
+def _label_share_percent(label: Mapping[str, Any], *, selected: bool) -> Decimal:
+    prefix = "selected" if selected else "prior"
+    explicit = label.get(f"{prefix}_prevalence")
+    if explicit is not None:
+        return Decimal(str(explicit)) * 100
+    count = int(label.get(f"{prefix}_count") or 0)
+    basis = int(label.get(f"{prefix}_basis_count") or 0)
+    return Decimal(count) * 100 / Decimal(basis) if basis else Decimal(0)
+
+
+def _compact_fact(
+    *,
+    brand_key: str,
+    family: str,
+    metric: str,
+    label_key: str | None,
+    current_value: object,
+    baseline_value: object,
+    source_value: object,
+    unit: str,
+) -> dict[str, Any]:
+    exact = Decimal(str(source_value))
+    magnitude = abs(exact)
+    quantum = Decimal("0.1") if magnitude < 1 else Decimal(1)
+    rounded = magnitude.quantize(quantum, rounding=ROUND_HALF_UP)
+    display = format(rounded, "f")
+    if "." in display:
+        display = display.rstrip("0").rstrip(".")
+    suffix_en = {
+        "percent": "%",
+        "percentage_points": " pts",
+        "posts": " posts",
+    }[unit]
+    suffix_zh_cn = {
+        "percent": "%",
+        "percentage_points": "个百分点",
+        "posts": "条帖子",
+    }[unit]
+    identity = ":".join(
+        value for value in (brand_key, family, metric, label_key) if value
+    )
+    return {
+        "fact_id": f"f:{identity}",
+        "family": family,
+        "metric": metric,
+        "label_key": label_key,
+        "current_value": _fact_value(current_value),
+        "baseline_value": _fact_value(baseline_value),
+        "source_value": format(exact, "f"),
+        "unit": unit,
+        "direction": ("increase" if exact > 0 else "decrease" if exact < 0 else "flat"),
+        "display_en": display + suffix_en,
+        "display_zh_cn": display + suffix_zh_cn,
+    }
+
+
+def _fact_value(value: object) -> str | None:
+    if value is None:
+        return None
+    try:
+        exact = Decimal(str(value))
+    except InvalidOperation:
+        return str(value)
+    return format(exact, "f")
+
+
+def _compact_shape_summary(
+    series: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Describe the shape without exposing the full bucket array."""
+    if not series:
+        return {
+            "direction": "flat",
+            "start_segment_post_count": 0,
+            "end_segment_post_count": 0,
+            "total_change_pct": None,
+            "dominant_transition": None,
+            "peak": None,
+            "trough": None,
+        }
+    counts = [int(row.get("post_count") or 0) for row in series]
+    start = counts[0]
+    end = counts[-1]
+    net = end - start
+    transitions = [
+        (index, counts[index] - counts[index - 1]) for index in range(1, len(counts))
+    ]
+    total_movement = sum(abs(change) for _, change in transitions)
+    dominant = max(
+        transitions,
+        key=lambda item: (abs(item[1]), -item[0]),
+        default=None,
+    )
+    dominant_packet = None
+    if dominant is not None:
+        index, change = dominant
+        dominant_packet = {
+            "from": series[index - 1].get("start_at"),
+            "to": series[index].get("start_at"),
+            "post_count_change": change,
+            "net_change_share_pct": (
+                format(
+                    (Decimal(abs(change)) * 100 / Decimal(total_movement)).quantize(
+                        Decimal("0.1"), rounding=ROUND_HALF_UP
+                    ),
+                    "f",
+                )
+                if total_movement
+                else "0.0"
+            ),
+        }
+    peak_index = max(range(len(counts)), key=lambda index: (counts[index], -index))
+    trough_index = min(range(len(counts)), key=lambda index: (counts[index], index))
+    return {
+        "direction": "increase" if net > 0 else "decrease" if net < 0 else "flat",
+        "start_segment_post_count": start,
+        "end_segment_post_count": end,
+        "total_change_pct": (
+            format(
+                (Decimal(net) * 100 / Decimal(start)).quantize(
+                    Decimal("0.1"), rounding=ROUND_HALF_UP
+                ),
+                "f",
+            )
+            if start
+            else None
+        ),
+        "comparison_state": "available" if start else "new_or_low_base",
+        "dominant_transition": dominant_packet,
+        "peak": {
+            "at": series[peak_index].get("start_at"),
+            "post_count": counts[peak_index],
+        },
+        "trough": {
+            "at": series[trough_index].get("start_at"),
+            "post_count": counts[trough_index],
+        },
+    }
+
+
+def _project_compact_ranking_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    dossiers = []
+    for dossier in snapshot.get("dossiers", []):
+        row = _provider_dossier(dossier)
+        row["evidence"] = [
+            {
+                "evidence_id": evidence["evidence_id"],
+                "created_at": evidence.get("created_at"),
+                "excerpt": evidence.get("excerpt"),
+                "first_party_role": evidence.get("first_party_role", "public_opaque"),
+            }
+            for evidence in dossier.get("evidence", [])[:2]
+        ]
+        dossiers.append(row)
+    return {
+        "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
+        "window_days": snapshot["window_days"],
+        "as_of": snapshot["as_of"],
+        "baseline_context": snapshot["baseline_context"],
+        "dossiers": dossiers,
+    }
 
 
 def _assemble_snapshot(
@@ -697,12 +1500,10 @@ def _assemble_snapshot(
                 ),
             }
         )
-    evidence_by_candidate, evidence_allocations = (
-        _select_evidence_with_allocation(
-            evidence_rows,
-            candidates=evidence_candidates,
-            policy=evidence_policy,
-        )
+    evidence_by_candidate, evidence_allocations = _select_evidence_with_allocation(
+        evidence_rows,
+        candidates=evidence_candidates,
+        policy=evidence_policy,
     )
     series_axis = _shared_series_axis(details)
     candidates = []
@@ -831,9 +1632,7 @@ def _shared_series_axis(details: Mapping[str, Any]) -> dict[str, Any]:
     return {
         resolution: {
             **details["schedule"][resolution],
-            "starts": [
-                row["start_at"] for row in first[f"{resolution}_series"]
-            ],
+            "starts": [row["start_at"] for row in first[f"{resolution}_series"]],
             "ends": [row["end_at"] for row in first[f"{resolution}_series"]],
         }
         for resolution in ("coarse", "fine")
@@ -859,22 +1658,14 @@ def _compact_series(
             "missing_counts": [
                 int(row["engagement"]["missing_count"]) for row in series
             ],
-            "coverage_ratios": [
-                row["engagement"]["coverage_ratio"] for row in series
-            ],
+            "coverage_ratios": [row["engagement"]["coverage_ratio"] for row in series],
             "likes": [totals_value(row, "likes") for row in series],
             "reposts": [totals_value(row, "reposts") for row in series],
             "quotes": [totals_value(row, "quotes") for row in series],
             "replies": [totals_value(row, "replies") for row in series],
-            "interactions": [
-                totals_value(row, "interactions") for row in series
-            ],
-            "intensities": [
-                row["engagement"]["intensity"] for row in series
-            ],
-            "concentrations": [
-                row["engagement"]["concentration"] for row in series
-            ],
+            "interactions": [totals_value(row, "interactions") for row in series],
+            "intensities": [row["engagement"]["intensity"] for row in series],
+            "concentrations": [row["engagement"]["concentration"] for row in series],
             "post_kinds": {},
         },
     }
@@ -882,17 +1673,11 @@ def _compact_series(
         for kind in ("source_post", "repost", "quote"):
             result["engagement"]["post_kinds"][kind] = {
                 "eligible_counts": [
-                    int(
-                        row["engagement"]["by_post_kind"][kind][
-                            "eligible_count"
-                        ]
-                    )
+                    int(row["engagement"]["by_post_kind"][kind]["eligible_count"])
                     for row in series
                 ],
                 "missing_counts": [
-                    int(
-                        row["engagement"]["by_post_kind"][kind]["missing_count"]
-                    )
+                    int(row["engagement"]["by_post_kind"][kind]["missing_count"])
                     for row in series
                 ],
                 "interactions": [
@@ -902,8 +1687,7 @@ def _compact_series(
                                 "interactions"
                             ]
                         )
-                        if row["engagement"]["by_post_kind"][kind]["totals"]
-                        is not None
+                        if row["engagement"]["by_post_kind"][kind]["totals"] is not None
                         else None
                     )
                     for row in series
@@ -931,9 +1715,7 @@ def _compact_metadata_trajectories(
             continue
         source = metadata_series.get(family, {})
         raw_labels = source.get("labels", {})
-        coverage_counts = [
-            int(value) for value in source.get("coverage_counts", [])
-        ]
+        coverage_counts = [int(value) for value in source.get("coverage_counts", [])]
         if len(coverage_counts) != len(post_counts):
             coverage_counts = [0] * len(post_counts)
         labels = {}
@@ -942,8 +1724,10 @@ def _compact_metadata_trajectories(
             counts = [int(value) for value in raw_labels.get(key, [])]
             if len(counts) != len(post_counts):
                 counts = [0] * len(post_counts)
-            if not any(counts) and not int(fact.get("selected_count") or 0) and not int(
-                fact.get("prior_count") or 0
+            if (
+                not any(counts)
+                and not int(fact.get("selected_count") or 0)
+                and not int(fact.get("prior_count") or 0)
             ):
                 continue
             labels[key] = {
@@ -972,9 +1756,7 @@ def _ratio_string(numerator: int, denominator: int) -> str:
     if denominator <= 0:
         return "0.000000"
     return str(
-        (Decimal(numerator) / Decimal(denominator)).quantize(
-            Decimal("0.000001")
-        )
+        (Decimal(numerator) / Decimal(denominator)).quantize(Decimal("0.000001"))
     )
 
 
@@ -987,6 +1769,305 @@ def _ratio_percent(numerator: int, denominator: int) -> int:
             rounding=ROUND_HALF_UP,
         )
     )
+
+
+def _fetch_stable_family_facts(
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    comparison_allowed: bool = True,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Aggregate non-classifier dossier families in one set-based query.
+
+    These are source-backed values, not inferred taxonomy.  In particular an
+    empty unsanctioned flag set has status ``available`` when classification
+    completed for at least one post, rather than being represented as an
+    invented ``none`` flag.
+    """
+    if not candidates:
+        return {}
+    sql = """
+        WITH requested AS (
+            SELECT DISTINCT ON (brand_key)
+                brand_key, start_at, end_at
+            FROM unnest(%s::text[], %s::timestamptz[], %s::timestamptz[])
+                AS item(brand_key, start_at, end_at)
+            ORDER BY brand_key
+        ),
+        edges AS (
+            SELECT
+                r.brand_key,
+                p.tweet_id,
+                CASE WHEN p.created_at >= r.start_at
+                     THEN 'selected' ELSE 'prior' END AS period,
+                coalesce(nullif(btrim(p.lang), ''), 'und') AS language,
+                coalesce(role.role_id::text, 'public_opaque') AS account_role,
+                coalesce(pes.classification_status, 'pending') AS classification_status
+            FROM requested r
+            JOIN posts_brands pb ON pb.brand_id::text = r.brand_key
+            JOIN posts p ON p.tweet_id = pb.post_id
+            LEFT JOIN post_enrichment_states pes ON pes.post_id = p.tweet_id
+            LEFT JOIN LATERAL (
+                SELECT ba.role_id
+                FROM brands_accounts ba
+                WHERE ba.brand_id::text = r.brand_key
+                  AND ba.accounts_id = p.author_id
+                  AND ba.role_id IN ('official', 'staff')
+                ORDER BY CASE ba.role_id WHEN 'official' THEN 0 ELSE 1 END
+                LIMIT 1
+            ) role ON true
+            WHERE p.created_at >= r.start_at - (r.end_at - r.start_at)
+              AND p.created_at < r.end_at
+        ),
+        bases AS (
+            SELECT brand_key, period, 'language'::text AS family,
+                   count(*)::integer AS count
+            FROM edges GROUP BY brand_key, period
+            UNION ALL
+            SELECT brand_key, period, 'account_role', count(*)::integer
+            FROM edges GROUP BY brand_key, period
+            UNION ALL
+            SELECT brand_key, period, 'unsanctioned_flags',
+                   count(*) FILTER (WHERE classification_status = 'succeeded')::integer
+            FROM edges GROUP BY brand_key, period
+        ),
+        labels AS (
+            SELECT brand_key, period, 'language'::text AS family, language AS label
+            FROM edges
+            UNION ALL
+            SELECT brand_key, period, 'account_role', account_role FROM edges
+            UNION ALL
+            SELECT e.brand_key, e.period, 'unsanctioned_flags', flag.flag_key
+            FROM edges e
+            JOIN posts_unsanctioned_flags u ON u.post_id = e.tweet_id
+            CROSS JOIN LATERAL jsonb_array_elements_text(
+                coalesce(u.flag_set, '[]'::jsonb)
+            ) flag(flag_key)
+            WHERE e.classification_status = 'succeeded'
+        ),
+        label_counts AS (
+            SELECT brand_key, family, label,
+                   count(*) FILTER (WHERE period = 'selected')::integer AS selected_count,
+                   count(*) FILTER (WHERE period = 'prior')::integer AS prior_count
+            FROM labels GROUP BY brand_key, family, label
+        ),
+        basis_counts AS (
+            SELECT brand_key, family,
+                   max(count) FILTER (WHERE period = 'selected')::integer AS selected_count,
+                   max(count) FILTER (WHERE period = 'prior')::integer AS prior_count
+            FROM bases GROUP BY brand_key, family
+        )
+        SELECT 'label'::text AS row_type, brand_key, family, label,
+               selected_count, prior_count FROM label_counts
+        UNION ALL
+        SELECT 'basis', brand_key, family, NULL::text,
+               selected_count, prior_count FROM basis_counts
+        ORDER BY row_type, brand_key, family, label
+    """
+    params = [
+        [str(row["brand_key"]) for row in candidates],
+        [_parse_utc(str(row["start_at"])) for row in candidates],
+        [_parse_utc(str(row["end_at"])) for row in candidates],
+    ]
+    labels: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    bases: dict[tuple[str, str], tuple[int, int]] = {}
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for row_type, brand_key, family, label, selected, prior in cursor.fetchall():
+            key = (str(brand_key), str(family))
+            if row_type == "basis":
+                bases[key] = (int(selected or 0), int(prior or 0))
+            else:
+                labels.setdefault(key, []).append(
+                    {
+                        "key": str(label),
+                        "selected_count": int(selected or 0),
+                        "prior_count": int(prior or 0),
+                    }
+                )
+    result: dict[str, dict[str, dict[str, Any]]] = {}
+    for brand_key in {str(row["brand_key"]) for row in candidates}:
+        result[brand_key] = {}
+        for family in ("language", "unsanctioned_flags", "account_role"):
+            selected_basis, prior_basis = bases.get((brand_key, family), (0, 0))
+            values = labels.get((brand_key, family), [])
+            for value in values:
+                selected_prevalence = (
+                    Decimal(value["selected_count"]) / Decimal(selected_basis)
+                    if selected_basis
+                    else Decimal(0)
+                )
+                prior_prevalence = (
+                    Decimal(value["prior_count"]) / Decimal(prior_basis)
+                    if prior_basis
+                    else Decimal(0)
+                )
+                value.update(
+                    selected_basis_count=selected_basis,
+                    prior_basis_count=prior_basis,
+                    selected_prevalence=format(selected_prevalence, "f"),
+                    prior_prevalence=format(prior_prevalence, "f"),
+                    brand_change_pp=(
+                        format((selected_prevalence - prior_prevalence) * 100, "f")
+                        if comparison_allowed
+                        else None
+                    ),
+                )
+            result[brand_key][family] = {
+                "status": "available" if selected_basis else "unavailable",
+                "selected_basis_count": selected_basis,
+                "prior_basis_count": prior_basis,
+                "labels": values,
+            }
+    return result
+
+
+def _fetch_corpus_phrase_signals(
+    candidates: Sequence[Mapping[str, Any]], *, as_of: datetime
+) -> dict[str, list[dict[str, Any]]]:
+    """Return at most eight novel two-word phrases per brand in one query.
+
+    PostgreSQL does source-root/exact-text deduplication and phrase counting;
+    only bounded aggregates cross into Python.  This keeps the query count
+    fixed while allowing unfamiliar names such as ``ox alpha`` to surface.
+    """
+    if not candidates:
+        return {}
+    sql = """
+        WITH requested AS (
+            SELECT * FROM unnest(
+                %s::text[], %s::text[], %s::timestamptz[], %s::timestamptz[]
+            ) AS item(candidate_id, brand_key, start_at, end_at)
+        ),
+        source_rows AS (
+            SELECT DISTINCT ON (
+                r.candidate_id, coalesce(p.quoted_status_id::text, p.tweet_id::text),
+                regexp_replace(lower(coalesce(p.text, '')), '\\s+', ' ', 'g')
+            )
+                r.candidate_id, r.brand_key, r.start_at, r.end_at,
+                p.tweet_id::text, p.created_at,
+                regexp_replace(lower(coalesce(p.text, '')), '[^[:alnum:]-]+', ' ', 'g') AS normalized_text,
+                CASE WHEN p.created_at >= r.start_at THEN 'selected' ELSE 'prior' END AS period
+            FROM requested r
+            JOIN posts_brands pb ON pb.brand_id::text = r.brand_key
+            JOIN posts p ON p.tweet_id = pb.post_id
+            WHERE p.created_at >= r.start_at - (r.end_at - r.start_at)
+              AND p.created_at < least(r.end_at, %s::timestamptz)
+              AND nullif(btrim(p.text), '') IS NOT NULL
+            ORDER BY r.candidate_id,
+                     coalesce(p.quoted_status_id::text, p.tweet_id::text),
+                     regexp_replace(lower(coalesce(p.text, '')), '\\s+', ' ', 'g'),
+                     p.created_at, p.tweet_id
+        ),
+        token_rows AS (
+            SELECT
+                s.*,
+                token.value AS token,
+                token.position,
+                lead(token.value) OVER (
+                    PARTITION BY s.candidate_id, s.tweet_id
+                    ORDER BY token.position
+                ) AS next_token
+            FROM source_rows s
+            CROSS JOIN LATERAL regexp_split_to_table(
+                btrim(s.normalized_text), '[[:space:]]+'
+            ) WITH ORDINALITY AS token(value, position)
+            WHERE char_length(token.value) >= 2
+        ),
+        phrases AS (
+            SELECT DISTINCT
+                   candidate_id, brand_key, start_at, end_at, tweet_id,
+                   created_at, normalized_text, period,
+                   token || ' ' || next_token AS phrase,
+                   floor(4 * extract(epoch FROM (s.created_at - s.start_at))
+                         / nullif(extract(epoch FROM (s.end_at - s.start_at)), 0))::integer
+                         AS burst_bucket
+            FROM token_rows s
+            WHERE next_token IS NOT NULL
+              AND char_length(next_token) >= 2
+        ),
+        phrase_counts AS (
+            SELECT candidate_id, brand_key, phrase,
+                   count(*) FILTER (WHERE period = 'selected')::integer AS selected_count,
+                   count(*) FILTER (WHERE period = 'prior')::integer AS prior_count,
+                   min(burst_bucket) FILTER (WHERE period = 'selected')::integer AS burst_start,
+                   max(burst_bucket) FILTER (WHERE period = 'selected')::integer AS burst_end,
+                   (array_agg(tweet_id ORDER BY created_at, tweet_id)
+                     FILTER (WHERE period = 'selected'))[1] AS representative_tweet_id,
+                   (array_agg(normalized_text ORDER BY created_at, tweet_id)
+                     FILTER (WHERE period = 'selected'))[1] AS representative_text
+            FROM phrases
+            GROUP BY candidate_id, brand_key, phrase
+        ),
+        peer_counts AS (
+            SELECT phrase, count(DISTINCT brand_key)::integer AS peer_brand_count
+            FROM phrase_counts WHERE selected_count > 0 GROUP BY phrase
+        ),
+        ranked AS (
+            SELECT p.*, peers.peer_brand_count,
+                   row_number() OVER (
+                     PARTITION BY p.candidate_id
+                     ORDER BY p.selected_count DESC,
+                              (p.selected_count - p.prior_count) DESC,
+                              peers.peer_brand_count ASC, p.phrase
+                   ) AS phrase_rank
+            FROM phrase_counts p JOIN peer_counts peers USING (phrase)
+            WHERE p.selected_count > 0
+        )
+        SELECT candidate_id, brand_key, phrase, selected_count, prior_count,
+               peer_brand_count, burst_start, burst_end,
+               representative_tweet_id, representative_text
+        FROM ranked WHERE phrase_rank <= 8
+        ORDER BY brand_key, phrase_rank, phrase
+    """
+    params = [
+        [str(row["candidate_id"]) for row in candidates],
+        [str(row["brand_key"]) for row in candidates],
+        [_parse_utc(str(row["start_at"])) for row in candidates],
+        [_parse_utc(str(row["end_at"])) for row in candidates],
+        as_of,
+    ]
+    result: dict[str, list[dict[str, Any]]] = {}
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for (
+            candidate_id,
+            brand_key,
+            phrase,
+            selected,
+            prior,
+            peers,
+            start,
+            end,
+            tweet_id,
+            representative_text,
+        ) in cursor.fetchall():
+            phrase_text = str(phrase)
+            result.setdefault(str(brand_key), []).append(
+                {
+                    "corpus_signal_id": "cs_"
+                    + _digest(str(candidate_id), phrase_text)[:24],
+                    "phrase": phrase_text,
+                    "prevalence": int(selected or 0),
+                    "prior_prevalence": int(prior or 0),
+                    "peer_brand_count": int(peers or 0),
+                    "burst_interval": {
+                        "start_bucket": int(start or 0),
+                        "end_bucket": int(end or 0),
+                    },
+                    # The identifier is opaque and deterministic. It names a
+                    # source row without leaking its raw post ID or author.
+                    "representative_evidence_ids": [
+                        "ce_"
+                        + _digest(str(candidate_id), str(tweet_id), phrase_text)[:24]
+                    ]
+                    if tweet_id
+                    else [],
+                    "representative_excerpt": normalized_excerpt(
+                        str(representative_text or ""), max_characters=280
+                    ),
+                }
+            )
+    return result
 
 
 def _fetch_evidence_rows(
@@ -1074,10 +2155,12 @@ def _fetch_evidence_rows(
             ) ranked
         ),
         official_accounts AS (
-            SELECT DISTINCT ba.brand_id::text AS brand_key, ba.accounts_id
+            SELECT ba.brand_id::text AS brand_key, ba.accounts_id,
+                   min(ba.role_id::text) AS first_party_role
             FROM brands_accounts ba
             JOIN requested_bounds r ON r.brand_key = ba.brand_id::text
-            WHERE ba.role_id = 'official'
+            WHERE ba.role_id IN ('official', 'staff')
+            GROUP BY ba.brand_id, ba.accounts_id
         ),
         official_stream AS (
             SELECT
@@ -1408,6 +2491,12 @@ def _fetch_evidence_rows(
                 p.quoted_status_id,
                 p.created_at,
                 p.text,
+                p.text_en,
+                p.text_zh_cn,
+                p.lang,
+                p.author_handle,
+                coalesce(pes.classification_status, 'pending')
+                    AS classification_status,
                 p.quoted_text,
                 coalesce(p.is_retweet, false) AS is_retweet,
                 coalesce(p.is_quote, false) AS is_quote,
@@ -1422,6 +2511,8 @@ def _fetch_evidence_rows(
                     + coalesce(p.reply_count, 0)
                 )::bigint AS stored_interactions,
                 official.accounts_id IS NOT NULL AS is_official,
+                coalesce(official.first_party_role, 'public_opaque')
+                    AS first_party_role,
                 bounded.dominant_discourse,
                 bounded.dominant_sentiment,
                 bounded.official_rank,
@@ -1432,6 +2523,7 @@ def _fetch_evidence_rows(
             FROM bounded_ids bounded
             JOIN requested ON requested.position = bounded.position
             JOIN posts p ON p.tweet_id = bounded.tweet_id
+            LEFT JOIN post_enrichment_states pes ON pes.post_id = p.tweet_id
             LEFT JOIN official_accounts official
               ON official.brand_key = bounded.brand_key
              AND official.accounts_id = p.author_id
@@ -1462,10 +2554,32 @@ def _fetch_evidence_rows(
                     DISTINCT d.discourse_key::text
                     ORDER BY d.discourse_key::text
                 ) AS discourse_keys
+                , array_agg(
+                    DISTINCT d.china_nationalism::text
+                    ORDER BY d.china_nationalism::text
+                ) FILTER (WHERE d.china_nationalism IS NOT NULL)
+                    AS china_nationalism_keys
+                , array_agg(
+                    DISTINCT d.us_nationalism::text
+                    ORDER BY d.us_nationalism::text
+                ) FILTER (WHERE d.us_nationalism IS NOT NULL)
+                    AS us_nationalism_keys
             FROM base_posts base
             JOIN posts_brands_discourse d
               ON d.post_id = base.tweet_id
              AND d.brand_id::text = base.brand_key
+            GROUP BY base.candidate_id, base.brand_key, base.tweet_id
+        ),
+        unsanctioned_arrays AS (
+            SELECT
+                base.candidate_id,
+                base.brand_key,
+                base.tweet_id,
+                array_agg(DISTINCT flag.flag_key ORDER BY flag.flag_key)
+                    AS unsanctioned_flag_keys
+            FROM base_posts base
+            JOIN posts_unsanctioned_flags u ON u.post_id = base.tweet_id
+            CROSS JOIN LATERAL jsonb_array_elements_text(u.flag_set) flag(flag_key)
             GROUP BY base.candidate_id, base.brand_key, base.tweet_id
         ),
         candidate_posts AS (
@@ -1479,7 +2593,13 @@ def _fetch_evidence_rows(
                 coalesce(sig.sentiment_keys, ARRAY[]::text[])
                     AS sentiment_keys,
                 coalesce(dis.discourse_keys, ARRAY[]::text[])
-                    AS discourse_keys
+                    AS discourse_keys,
+                coalesce(dis.china_nationalism_keys, ARRAY[]::text[])
+                    AS china_nationalism_keys,
+                coalesce(dis.us_nationalism_keys, ARRAY[]::text[])
+                    AS us_nationalism_keys,
+                coalesce(uns.unsanctioned_flag_keys, ARRAY[]::text[])
+                    AS unsanctioned_flag_keys
             FROM base_posts base
             LEFT JOIN signal_arrays sig
               ON sig.candidate_id = base.candidate_id
@@ -1489,6 +2609,10 @@ def _fetch_evidence_rows(
               ON dis.candidate_id = base.candidate_id
              AND dis.brand_key = base.brand_key
              AND dis.tweet_id = base.tweet_id
+            LEFT JOIN unsanctioned_arrays uns
+              ON uns.candidate_id = base.candidate_id
+             AND uns.brand_key = base.brand_key
+             AND uns.tweet_id = base.tweet_id
         )
         SELECT *
         FROM candidate_posts
@@ -1508,9 +2632,7 @@ def _fetch_evidence_rows(
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
         names = [column.name for column in cursor.description]
-        return [
-            dict(zip(names, values, strict=True)) for values in cursor.fetchall()
-        ]
+        return [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]
 
 
 def _select_evidence(
@@ -1565,8 +2687,7 @@ def _select_evidence_with_allocation(
         candidate = candidate_rows[candidate_id]
         pool = pools.get(candidate_id, [])
         signal_families = {
-            str(signal.get("family") or "")
-            for signal in candidate.get("signals", [])
+            str(signal.get("family") or "") for signal in candidate.get("signals", [])
         }
         if candidate_id == lead_id:
             allocation_class = "lead"
@@ -1683,9 +2804,7 @@ def _assign_text_clusters(
         )
         if matched_cluster is None:
             matched_cluster = str(evidence["source_cluster_id"])
-            source_representatives.append(
-                (matched_cluster, str(evidence["excerpt"]))
-            )
+            source_representatives.append((matched_cluster, str(evidence["excerpt"])))
         evidence["source_cluster_id"] = matched_cluster
 
         matched_theme = next(
@@ -1698,13 +2817,14 @@ def _assign_text_clusters(
             None,
         )
         if matched_theme is None:
-            matched_theme = "th_" + _digest(
-                candidate_id,
-                str(evidence["excerpt"]),
-            )[:20]
-            theme_representatives.append(
-                (matched_theme, str(evidence["excerpt"]))
+            matched_theme = (
+                "th_"
+                + _digest(
+                    candidate_id,
+                    str(evidence["excerpt"]),
+                )[:20]
             )
+            theme_representatives.append((matched_theme, str(evidence["excerpt"])))
         evidence["theme_cluster_id"] = matched_theme
 
     for evidence in pool:
@@ -1739,13 +2859,7 @@ def _story_potential_key(
         if int(evidence.get("_theme_support_count") or 0) >= 2
     }
     label_diversity = sum(
-        len(
-            {
-                str(key)
-                for evidence in pool
-                for key in evidence.get(field, [])
-            }
-        )
+        len({str(key) for evidence in pool for key in evidence.get(field, [])})
         for field in ("post_type_keys", "discourse_keys", "sentiment_keys")
     )
     independent_authors = len(
@@ -1819,11 +2933,7 @@ def _select_candidate_evidence(
 
     for role in EVIDENCE_ROLE_ORDER:
         ranked = sorted(
-            (
-                evidence
-                for evidence in pool
-                if evidence["_role_eligible"][role]
-            ),
+            (evidence for evidence in pool if evidence["_role_eligible"][role]),
             key=lambda evidence: (
                 str(evidence.get("author_group_id") or "") in selected_authors,
                 evidence["_ranks"][role],
@@ -1871,16 +2981,10 @@ def _select_candidate_evidence(
 
     for field in ("post_type_keys", "discourse_keys", "sentiment_keys"):
         keys = sorted(
-            {
-                str(key)
-                for evidence in pool
-                for key in evidence.get(field, [])
-            }
+            {str(key) for evidence in pool for key in evidence.get(field, [])}
         )
         for key in keys:
-            choices = [
-                evidence for evidence in pool if key in evidence.get(field, [])
-            ]
+            choices = [evidence for evidence in pool if key in evidence.get(field, [])]
             for evidence in sorted(
                 choices,
                 key=lambda item: (
@@ -1962,6 +3066,7 @@ def _fit_snapshot_evidence_to_packet_budget(
         return len(canonical_snapshot_json(packet).encode("utf-8"))
 
     candidates = list(snapshot.get("candidates", []))
+
     def snapshot_bytes() -> int:
         return len(canonical_snapshot_json(snapshot).encode("utf-8"))
 
@@ -2028,29 +3133,89 @@ def _evidence_candidate(
     else:
         return None
     candidate_id = str(row["candidate_id"])
-    evidence_id = "e_" + _digest(
-        candidate_id,
-        str(row["tweet_id"]),
-        occurrence_source,
-        excerpt,
-    )[:24]
+    evidence_id = (
+        "e_"
+        + _digest(
+            candidate_id,
+            str(row["tweet_id"]),
+            occurrence_source,
+            excerpt,
+        )[:24]
+    )
     author_group_id = (
-        "ag_" + _digest(str(row["author_id"]))[:20]
-        if row.get("author_id")
-        else None
+        "ag_" + _digest(str(row["author_id"]))[:20] if row.get("author_id") else None
     )
     if row.get("quoted_status_id"):
-        source_cluster_id = "sc_root_" + _digest(
-            str(row["quoted_status_id"])
-        )[:20]
+        source_cluster_id = "sc_root_" + _digest(str(row["quoted_status_id"]))[:20]
     else:
         source_cluster_id = "sc_text_" + _digest(excerpt)[:20]
+    first_party_role = str(
+        row.get("first_party_role") or "public_opaque"
+        if bool(row.get("is_official"))
+        else "public_opaque"
+    )
+    source_language = str(row.get("lang") or "und")
+    text_en = normalized_excerpt(row.get("text_en"), max_characters=excerpt_characters)
+    text_zh_cn = normalized_excerpt(
+        row.get("text_zh_cn"), max_characters=excerpt_characters
+    )
+    classification_status = str(row.get("classification_status") or "pending")
+    classifier_status = (
+        "available" if classification_status == "succeeded" else classification_status
+    )
+
+    def classified(values: Sequence[Any]) -> dict[str, Any]:
+        return {
+            "status": classifier_status,
+            "values": sorted(str(value) for value in values if value),
+        }
+
     return {
         "evidence_id": evidence_id,
         "author_group_id": author_group_id,
         "source_cluster_id": source_cluster_id,
         "excerpt": excerpt,
         "created_at": _iso_utc(row["created_at"]),
+        "source_language": source_language,
+        "original_text": post_text,
+        "text_en": text_en,
+        "text_zh_cn": text_zh_cn,
+        "translation_label_en": (
+            f"translated from {source_language.upper()}"
+            if text_en and source_language.casefold() not in {"en", "und"}
+            else None
+        ),
+        "translation_label_zh_cn": (
+            f"译自{source_language.upper()}"
+            if text_zh_cn
+            and source_language.casefold() not in {"zh", "zh-cn", "zh_cn", "und"}
+            else None
+        ),
+        "first_party_role": first_party_role,
+        # Names deliberately mirror the persisted production taxonomy.  Each
+        # family declares status even for a successful empty flag set, so the
+        # provider never has to infer whether absence means zero or unknown.
+        "taxonomy": {
+            "post_types": classified(row.get("post_type_keys", [])),
+            "discourse_roles": classified(row.get("discourse_keys", [])),
+            "china_nationalism": classified(row.get("china_nationalism_keys", [])),
+            "us_nationalism": classified(row.get("us_nationalism_keys", [])),
+            "unsanctioned_flags": classified(row.get("unsanctioned_flag_keys", [])),
+            "language": {
+                "status": "available" if row.get("lang") else "unavailable",
+                "values": [str(row.get("lang"))] if row.get("lang") else [],
+            },
+            "sentiment": classified(row.get("sentiment_keys", [])),
+            "account_role": {
+                "status": "available",
+                "values": [first_party_role],
+            },
+        },
+        "handle_snapshot": (
+            str(row.get("author_handle") or "")
+            if first_party_role in {"official", "staff"}
+            else None
+        ),
         "roles": [],
         "source_flags": {
             "official": bool(row["is_official"]),
@@ -2061,12 +3226,10 @@ def _evidence_candidate(
                 if bool(row["is_quote"])
                 else "source_post"
             ),
-            "metrics_observed": bool(row["metrics_observed"]),
+            "metrics_observed": bool(row.get("metrics_observed")),
             "occurrence_source": occurrence_source,
         },
-        "post_type_keys": sorted(
-            str(key) for key in row.get("post_type_keys", [])
-        ),
+        "post_type_keys": sorted(str(key) for key in row.get("post_type_keys", [])),
         "discourse_keys": sorted(str(key) for key in row["discourse_keys"]),
         "sentiment_keys": sorted(str(key) for key in row["sentiment_keys"]),
     }
@@ -2074,21 +3237,16 @@ def _evidence_candidate(
 
 def _evidence_support(evidence: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     author_groups = {
-        str(row["author_group_id"])
-        for row in evidence
-        if row.get("author_group_id")
+        str(row["author_group_id"]) for row in evidence if row.get("author_group_id")
     }
     source_clusters = {str(row["source_cluster_id"]) for row in evidence}
-    official_count = sum(
-        bool(row["source_flags"]["official"]) for row in evidence
-    )
+    official_count = sum(bool(row["source_flags"]["official"]) for row in evidence)
     return {
         "official_source_count": official_count,
         "distinct_author_group_count": len(author_groups),
         "distinct_source_cluster_count": len(source_clusters),
         "event_claim_may_be_supported": bool(
-            official_count
-            or (len(author_groups) >= 2 and len(source_clusters) >= 2)
+            official_count or (len(author_groups) >= 2 and len(source_clusters) >= 2)
         ),
         "evidence_only_entity_may_be_supported": bool(
             len(author_groups) >= 2 and len(source_clusters) >= 2

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from django.apps import apps
 from django.db import IntegrityError, connection, transaction
 
 import core.models as core_models
@@ -14,15 +16,31 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 NOW = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
 
+def test_per_brand_migration_reverse_guards_refuse_durable_runtime_data():
+    run = core_models.TrendNarrativeRun.objects.create(
+        source_cycle_id="reverse-guard",
+        window_days=1,
+        facts_as_of=NOW,
+        packet_schema_version=3,
+        snapshot={},
+    )
+    guard_migration = importlib.import_module(
+        "core.migrations.0019_guard_per_brand_narrative_reverse"
+    )
+    with pytest.raises(RuntimeError, match="cannot reverse per-brand"):
+        guard_migration.refuse_destructive_per_brand_reverse(apps, None)
+
+    core_models.TrendNarrativeRun.objects.filter(pk=run.pk).delete()
+    core_models.TrendNarrativeWorkSlot.objects.create(window_days=1)
+    with pytest.raises(RuntimeError, match="cannot reverse per-brand"):
+        guard_migration.refuse_destructive_per_brand_reverse(apps, None)
+
+
 def _restore_current_core_schema() -> None:
     from django.db.migrations.executor import MigrationExecutor
 
     executor = MigrationExecutor(connection)
-    targets = [
-        node
-        for node in executor.loader.graph.leaf_nodes()
-        if node[0] == "core"
-    ]
+    targets = [node for node in executor.loader.graph.leaf_nodes() if node[0] == "core"]
     executor.migrate(targets)
 
 
@@ -75,9 +93,11 @@ def test_physical_parent_table_and_writable_legacy_view_coexist():
         ]
     from django.db.migrations.executor import MigrationExecutor
 
-    old_apps = MigrationExecutor(connection).loader.project_state(
-        [("core", "0013_trend_narrative_version")]
-    ).apps
+    old_apps = (
+        MigrationExecutor(connection)
+        .loader.project_state([("core", "0013_trend_narrative_version")])
+        .apps
+    )
     old_model = old_apps.get_model("core", "TrendNarrativeVersion")
     old_row = old_model.objects.create(
         source_cycle_id="old-revision-write",
@@ -231,6 +251,114 @@ def test_subject_position_is_unique_and_bounded():
         subject_model.objects.create(position=2, **values)
 
 
+def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
+    assert {
+        "TrendNarrativeRun",
+        "TrendNarrativeProviderCall",
+        "BrandTrendNarrative",
+        "TrendNarrativeVisibleRun",
+    } <= set(dir(core_models))
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT relname
+            FROM pg_class
+            WHERE relname IN (
+                'trend_narrative_runs',
+                'trend_narrative_provider_calls',
+                'brand_trend_narratives',
+                'trend_narrative_visible_runs'
+            )
+              AND relkind = 'r'
+            ORDER BY relname
+            """
+        )
+        assert [row[0] for row in cursor.fetchall()] == [
+            "brand_trend_narratives",
+            "trend_narrative_provider_calls",
+            "trend_narrative_runs",
+            "trend_narrative_visible_runs",
+        ]
+        cursor.execute(
+            """
+            SELECT conname
+            FROM pg_constraint
+            WHERE conname IN (
+                'uq_tnr_source_window', 'uq_tnpc_run_stage_batch',
+                'uq_tnpc_request_identity', 'uq_btn_run_brand',
+                'ck_tnpc_sent_shape', 'ck_btn_held_last_good',
+                'ck_btn_critic_decision', 'ck_btn_narrative_kind',
+                'ck_btn_confidence'
+            )
+            ORDER BY conname
+            """
+        )
+        assert [row[0] for row in cursor.fetchall()] == [
+            "ck_btn_confidence",
+            "ck_btn_critic_decision",
+            "ck_btn_held_last_good",
+            "ck_btn_narrative_kind",
+            "ck_tnpc_sent_shape",
+            "uq_btn_run_brand",
+            "uq_tnpc_request_identity",
+            "uq_tnpc_run_stage_batch",
+            "uq_tnr_source_window",
+        ]
+        cursor.execute(
+            """
+            SELECT indexname
+            FROM pg_indexes
+            WHERE indexname IN (
+                'idx_tnr_window_facts', 'idx_tnpc_claim_due',
+                'idx_btn_brand_attempt'
+            )
+            ORDER BY indexname
+            """
+        )
+        assert [row[0] for row in cursor.fetchall()] == [
+            "idx_btn_brand_attempt",
+            "idx_tnpc_claim_due",
+            "idx_tnr_window_facts",
+        ]
+
+    brand_fields = {
+        field.name for field in core_models.BrandTrendNarrative._meta.fields
+    }
+    assert {"critic_decision", "narrative_kind", "confidence"} <= brand_fields
+
+
+def test_u2_migration_round_trip_preserves_legacy_narrative_rows():
+    from django.db.migrations.executor import MigrationExecutor
+
+    legacy = core_models.TrendNarrative.objects.create(
+        source_cycle_id="u2-migration-preserves-legacy",
+        window_days=7,
+        status=core_models.TrendNarrative.Status.CHECKED,
+        facts_as_of=NOW,
+        error_code="existing_legacy_check",
+    )
+    try:
+        executor = MigrationExecutor(connection)
+        executor.migrate([("core", "0016_post_commentary_fields")])
+        old_apps = executor.loader.project_state(
+            [("core", "0016_post_commentary_fields")]
+        ).apps
+        old_row = old_apps.get_model("core", "TrendNarrative").objects.get(pk=legacy.pk)
+        assert old_row.source_cycle_id == "u2-migration-preserves-legacy"
+        assert old_row.error_code == "existing_legacy_check"
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([("core", "0017_per_brand_trend_narratives")])
+        new_apps = executor.loader.project_state(
+            [("core", "0017_per_brand_trend_narratives")]
+        ).apps
+        new_row = new_apps.get_model("core", "TrendNarrative").objects.get(pk=legacy.pk)
+        assert new_row.source_cycle_id == "u2-migration-preserves-legacy"
+        assert new_row.error_code == "existing_legacy_check"
+    finally:
+        _restore_current_core_schema()
+
+
 def test_product_subject_snapshot_survives_future_product_catalog_deletion():
     product = core_models.Product.objects.create(
         repo_id="vendor/FutureModel",
@@ -322,9 +450,7 @@ def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
         assert narrative.model_name == "deepseek-v4-pro"
         assert narrative.llm_model_name == "deepseek-v4-pro"
         assert narrative.output_schema_version == 1
-        subject = subject_model.objects.get(
-            trend_narrative_id=narrative.pk
-        )
+        subject = subject_model.objects.get(trend_narrative_id=narrative.pk)
         assert subject.position == 0
         assert subject.support_type == "measured_candidate"
         assert subject.identity_type == "brand"
@@ -349,18 +475,21 @@ def test_reverse_refuses_expansion_only_data_before_any_destructive_step():
         selected_candidate_ids=["minimax:full_window"],
     )
 
-    with pytest.raises(RuntimeError, match="cannot reverse"):
-        MigrationExecutor(connection).migrate(
-            [("core", "0013_trend_narrative_version")]
-        )
+    try:
+        with pytest.raises(RuntimeError, match="cannot reverse"):
+            MigrationExecutor(connection).migrate(
+                [("core", "0013_trend_narrative_version")]
+            )
 
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT relkind FROM pg_class WHERE relname = 'trend_narratives'"
-        )
-        assert cursor.fetchone()[0] == "r"
-        cursor.execute(
-            "SELECT relkind FROM pg_class WHERE relname = 'trend_narrative_versions'"
-        )
-        assert cursor.fetchone()[0] == "v"
-    assert core_models.TrendNarrative.objects.filter(pk=narrative.pk).exists()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT relkind FROM pg_class WHERE relname = 'trend_narratives'"
+            )
+            assert cursor.fetchone()[0] == "r"
+            cursor.execute(
+                "SELECT relkind FROM pg_class WHERE relname = 'trend_narrative_versions'"
+            )
+            assert cursor.fetchone()[0] == "v"
+        assert core_models.TrendNarrative.objects.filter(pk=narrative.pk).exists()
+    finally:
+        _restore_current_core_schema()

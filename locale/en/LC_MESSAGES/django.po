@@ -23,3 +23,6 @@ msgstr "Toggle local ⇄ California time"
 
 msgid "Toggle local ⇄ Beijing time"
 msgstr "Toggle local ⇄ Beijing time"
+
+msgid "Trend summaries updated"
+msgstr "Trend summaries updated"

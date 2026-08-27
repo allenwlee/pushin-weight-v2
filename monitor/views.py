@@ -1679,9 +1679,13 @@ def _build_home_chart_payload(
     computed_at = pulse["computed_at"]
     from monitor.trend_narrative_projection import project_trend_narrative
 
+    selected_narrative_brands = normalized_filters.get("brands")
+    if selected_narrative_brands in (None, "__all__"):
+        selected_narrative_brands = None
     trend_narrative = project_trend_narrative(
         window_days,
         locale=locale,
+        selected_brand_keys=selected_narrative_brands,
         now=now,
         computed_at=computed_at,
     )
