@@ -54,6 +54,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
 9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
 10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/integrate/why-first-trend-headlines-20260824` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/integrate/why-first-trend-headlines-20260824` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -61,6 +65,9 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Implementation failures return to the parent implementation workflow for diagnosis, correction, recommit, and restaging.
 - SSH, shell, environment, or multi-machine failures use the repository infra/multi-machine skill first.
 - The change ledger is advisory; do not validate or enforce it.
+- Never force-remove a worktree. Retain staging-only, failed, dirty, locked,
+  noncanonical, or candidate-mismatched worktrees for diagnosis or later
+  delivery.
 - Do not run an endless retry loop or start a persistent Ollija process.
 <!-- END OLLIJA DELIVERY GUIDE -->
 

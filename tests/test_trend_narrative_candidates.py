@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -22,7 +20,9 @@ from core.models import (
     PostBrand,
     PostBrandDiscourse,
     PostBrandSignal,
+    PostEnrichmentState,
     PostTypeKey,
+    PostUnsanctionedFlag,
     Role,
     SentimentKey,
 )
@@ -33,10 +33,12 @@ from monitor.trend_narrative_candidates import (
     SNAPSHOT_STATEMENT_TIMEOUT_MS,
     EvidenceSelectionPolicy,
     TrendSnapshotSizeError,
+    build_editor_batches,
     build_trend_analysis_snapshot,
     canonical_snapshot_json,
     normalized_excerpt,
     project_provider_packet,
+    select_dossier_evidence,
     select_trend_candidates,
     text_five_gram_jaccard,
 )
@@ -169,6 +171,451 @@ def test_volume_stream_reaches_second_brand_before_extra_same_brand_episode():
         "alpha:10-10",
         "alpha:20-20",
     ]
+
+
+def test_u1_editor_batches_use_every_nonempty_dossier_in_canonical_groups():
+    snapshot = {
+        "packet_schema_version": 3,
+        "window_days": 7,
+        "as_of": "2026-08-12T12:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "dossiers": [
+            {
+                "brand_key": key,
+                "outcome": "narrative_eligible" if key != "zero" else "no_content",
+                "evidence": [],
+            }
+            for key in [
+                "zeta", "alpha", "delta", "zero", "beta", "eta", "gamma",
+                "iota", "theta", "kappa", "lambda", "mu", "nu", "xi",
+                "omicron", "pi", "rho", "sigma", "tau", "upsilon", "phi",
+                "chi",
+            ]
+        ],
+    }
+
+    batches = build_editor_batches(snapshot)
+
+    assert [batch["manifest_brand_keys"] for batch in batches] == [
+        ["alpha", "beta", "chi", "delta", "eta"],
+        ["gamma", "iota", "kappa", "lambda", "mu"],
+        ["nu", "omicron", "phi", "pi", "rho"],
+        ["sigma", "tau", "theta", "upsilon", "xi"],
+        ["zeta"],
+    ]
+    assert all("zero" not in batch["manifest_brand_keys"] for batch in batches)
+
+
+@pytest.mark.parametrize("cardinality", [1, 2, 3, 4, 5])
+def test_u1_editor_batch_preserves_one_to_five_brand_cardinality(cardinality: int):
+    snapshot = {
+        "packet_schema_version": 3,
+        "window_days": 1,
+        "as_of": "2026-08-12T12:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "dossiers": [
+            {
+                "brand_key": f"brand-{index}",
+                "outcome": "narrative_eligible",
+                "evidence": [],
+            }
+            for index in range(cardinality)
+        ],
+    }
+
+    batches = build_editor_batches(snapshot)
+
+    assert len(batches) == 1
+    assert len(batches[0]["manifest_brand_keys"]) == cardinality
+    assert len(batches[0]["dossiers"]) == cardinality
+
+
+def test_u1_evidence_reservations_roll_over_without_losing_the_window_target():
+    ordinary = [
+        {
+            "evidence_id": f"ordinary-{index}",
+            "source_cluster_id": f"cluster-{index}",
+            "created_at": f"2026-08-12T0{index}:00:00Z",
+            "first_party_role": "public_opaque",
+            "source_flags": {"post_kind": "source_post"},
+            "excerpt": f"ordinary evidence {index}",
+        }
+        for index in range(8)
+    ]
+
+    selected, allocation = select_dossier_evidence(7, ordinary)
+
+    assert [row["evidence_id"] for row in selected] == [
+        f"ordinary-{index}" for index in range(8)
+    ]
+    assert allocation == {
+        "target_count": 8,
+        "first_party_reservation": 3,
+        "ordinary_reservation": 5,
+        "selected_count": 8,
+    }
+
+
+@pytest.mark.parametrize(
+    ("window_days", "target", "first_party_reservation"),
+    [(1, 6, 2), (7, 8, 3), (30, 10, 4), (365, 12, 4)],
+)
+def test_u1_evidence_targets_are_fixed_for_every_supported_window(
+    window_days: int, target: int, first_party_reservation: int
+):
+    rows = [
+        {
+            "evidence_id": f"e-{index}",
+            "source_cluster_id": f"c-{index}",
+            "first_party_role": "official" if index < target else "public_opaque",
+            "source_flags": {"post_kind": "source_post"},
+        }
+        for index in range(target + 2)
+    ]
+
+    selected, allocation = select_dossier_evidence(window_days, rows)
+
+    assert len(selected) == target
+    assert allocation["target_count"] == target
+    assert allocation["first_party_reservation"] == first_party_reservation
+    assert allocation["ordinary_reservation"] == target - first_party_reservation
+
+
+def test_u1_evidence_reservation_rolls_ordinary_capacity_to_first_party():
+    rows = [
+        {
+            "evidence_id": f"staff-{index}",
+            "source_cluster_id": f"staff-cluster-{index}",
+            "first_party_role": "staff",
+            "source_flags": {"post_kind": "source_post"},
+        }
+        for index in range(8)
+    ] + [
+        {
+            "evidence_id": "ordinary-0",
+            "source_cluster_id": "ordinary-cluster-0",
+            "first_party_role": "public_opaque",
+            "source_flags": {"post_kind": "source_post"},
+        },
+        {
+            "evidence_id": "ordinary-1",
+            "source_cluster_id": "ordinary-cluster-1",
+            "first_party_role": "public_opaque",
+            "source_flags": {"post_kind": "source_post"},
+        }]
+
+    selected, allocation = select_dossier_evidence(7, rows)
+
+    assert len(selected) == 8
+    assert sum(row["first_party_role"] == "staff" for row in selected) == 6
+    assert allocation["selected_count"] == 8
+
+
+def test_u1_dedupe_keeps_one_near_identical_evidence_cluster():
+    pool = [
+        {
+            "evidence_id": "first",
+            "source_cluster_id": "first",
+            "excerpt": "The Ox Alpha model launch is available today",
+        },
+        {
+            "evidence_id": "second",
+            "source_cluster_id": "second",
+            "excerpt": "The Ox Alpha model launch is available today!",
+        },
+    ]
+
+    trend_candidates._assign_text_clusters("alpha:full_window", pool)
+    selected, _ = select_dossier_evidence(1, pool)
+
+    assert len(selected) == 1
+    assert selected[0]["evidence_id"] == "first"
+
+
+def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
+    ordinary = trend_candidates._evidence_candidate(
+        {
+            "candidate_id": "alpha:full_window",
+            "tweet_id": "raw-post-id",
+            "author_id": "raw-author-id",
+            "author_handle": "ordinary_handle",
+            "text": "ordinary discussion",
+            "text_en": "ordinary discussion",
+            "text_zh_cn": "普通讨论",
+            "lang": "en",
+            "created_at": AS_OF,
+            "quoted_text": None,
+            "quoted_status_id": None,
+            "is_retweet": False,
+            "is_quote": False,
+            "is_official": False,
+            "first_party_role": "official",
+            "classification_status": "succeeded",
+            "post_type_keys": ["buzz_releases"],
+            "discourse_keys": ["comparison"],
+            "sentiment_keys": ["positive"],
+            "china_nationalism_keys": ["none"],
+            "us_nationalism_keys": ["mild_pro"],
+            "unsanctioned_flag_keys": ["misinformation"],
+        }
+    )
+    assert ordinary is not None
+    provider = trend_candidates._provider_dossier(
+        {
+            "brand_key": "alpha",
+            "raw_series": {"fine": [1, 2]},
+            "aggregate_inputs": {"private": True},
+            "source_row_provenance": {"post": "raw-post-id"},
+            "evidence_selection_provenance": {"author": "raw-author-id"},
+            "evidence": [ordinary],
+        }
+    )
+    evidence = provider["evidence"][0]
+
+    assert "raw_series" not in provider
+    assert "aggregate_inputs" not in provider
+    assert "author_group_id" not in evidence
+    assert "source_cluster_id" not in evidence
+    assert "handle_snapshot" not in evidence
+    assert evidence["first_party_role"] == "public_opaque"
+    assert evidence["taxonomy"] == {
+        "post_types": {"status": "available", "values": ["buzz_releases"]},
+        "discourse_roles": {"status": "available", "values": ["comparison"]},
+        "china_nationalism": {"status": "available", "values": ["none"]},
+        "us_nationalism": {"status": "available", "values": ["mild_pro"]},
+        "unsanctioned_flags": {"status": "available", "values": ["misinformation"]},
+        "language": {"status": "available", "values": ["en"]},
+        "sentiment": {"status": "available", "values": ["positive"]},
+        "account_role": {"status": "available", "values": ["public_opaque"]},
+    }
+
+
+def test_u1_packet_compaction_preserves_each_evidence_target_or_fails_safe():
+    dossiers = []
+    for brand_index in range(5):
+        evidence = [
+            {
+                "evidence_id": f"e-{brand_index}-{evidence_index}",
+                "excerpt": "x" * 2_000,
+                "text_en": "y" * 2_000,
+                "text_zh_cn": "中" * 2_000,
+            }
+            for evidence_index in range(12)
+        ]
+        dossiers.append(
+            {
+                "brand_key": f"brand-{brand_index}",
+                "outcome": "narrative_eligible",
+                "evidence": evidence,
+            }
+        )
+    snapshot = {
+        "packet_schema_version": 3,
+        "window_days": 365,
+        "as_of": "2026-08-12T12:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "dossiers": dossiers,
+    }
+
+    batch = build_editor_batches(snapshot)[0]
+
+    assert [len(dossier["evidence"]) for dossier in batch["dossiers"]] == [12] * 5
+    assert len(canonical_snapshot_json(batch).encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
+
+
+def test_u1_corpus_phrase_summary_keeps_unseen_phrase_separate_from_taxonomy():
+    summary = trend_candidates._corpus_phrase_family_fact(
+        [
+            {
+                "phrase": "ox alpha",
+                "prevalence": 4,
+                "prior_prevalence": 1,
+            }
+        ],
+        selected_basis=10,
+    )
+
+    assert summary["status"] == "available"
+    assert summary["labels"] == [
+        {
+            "key": "ox alpha",
+            "selected_count": 4,
+            "prior_count": 1,
+            "selected_basis_count": 10,
+            "prior_basis_count": 0,
+            "brand_change_pp": "3",
+        }
+    ]
+
+
+def test_u1_shape_summary_replaces_raw_array_with_dominant_late_transition():
+    series = [
+        {
+            "start_at": f"2026-08-{day:02d}T00:00:00+00:00",
+            "post_count": count,
+        }
+        for day, count in zip(range(20, 25), [1, 1, 1, 1, 10], strict=True)
+    ]
+
+    summary = trend_candidates._compact_shape_summary(series)
+
+    assert summary["direction"] == "increase"
+    assert summary["total_change_pct"] == "900.0"
+    assert summary["dominant_transition"] == {
+        "from": "2026-08-23T00:00:00+00:00",
+        "to": "2026-08-24T00:00:00+00:00",
+        "post_count_change": 9,
+        "net_change_share_pct": "100.0",
+    }
+    assert summary["peak"]["post_count"] == 10
+    assert summary["trough"]["post_count"] == 1
+
+
+def test_u1_shape_summary_locates_an_early_change_without_raw_buckets():
+    series = [
+        {
+            "start_at": f"2026-08-{day:02d}T00:00:00+00:00",
+            "post_count": count,
+        }
+        for day, count in zip(range(20, 25), [10, 11, 11, 11, 11], strict=True)
+    ]
+
+    summary = trend_candidates._compact_shape_summary(series)
+
+    assert summary["total_change_pct"] == "10.0"
+    assert summary["dominant_transition"]["from"] == "2026-08-20T00:00:00+00:00"
+    assert summary["dominant_transition"]["to"] == "2026-08-21T00:00:00+00:00"
+    assert summary["dominant_transition"]["net_change_share_pct"] == "100.0"
+
+
+def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
+    facts = trend_candidates._compact_citable_facts(
+        "deepseek",
+        {
+            "volume": {
+                "selected_count": 145,
+                "prior_count": 100,
+                "change_pct": "45.0",
+            },
+            "post_type": {
+                "labels": [
+                    {
+                        "key": "buzz_releases",
+                        "selected_count": 52,
+                        "prior_count": 12,
+                        "selected_basis_count": 145,
+                        "prior_basis_count": 100,
+                        "selected_prevalence": "0.358621",
+                        "prior_prevalence": "0.12",
+                        "brand_change_pp": "23.8621",
+                    }
+                ]
+            },
+            "sentiment": {
+                "labels": [
+                    {
+                        "key": "positive",
+                        "selected_count": 80,
+                        "prior_count": 42,
+                        "selected_basis_count": 145,
+                        "prior_basis_count": 100,
+                        "selected_prevalence": "0.551724",
+                        "prior_prevalence": "0.42",
+                        "brand_change_pp": "13.1724",
+                    }
+                ]
+            },
+            "account_role": {
+                "labels": [
+                    {"key": "official", "selected_count": 1, "prior_count": 0},
+                    {"key": "staff", "selected_count": 3, "prior_count": 1},
+                ]
+            },
+        },
+    )
+    by_metric = {fact["metric"]: fact for fact in facts}
+
+    assert by_metric["post_count_change_pct"]["display_en"] == "45%"
+    assert by_metric["buzz_releases_share_change_pp"]["display_en"] == "24 pts"
+    assert by_metric["positive_share_change_pp"]["display_en"] == "13 pts"
+    assert by_metric["official_staff_post_count"]["display_en"] == "4 posts"
+    assert all(fact["fact_id"].startswith("f:deepseek:") for fact in facts)
+
+
+def test_u1_corpus_query_finds_overlapping_unseen_phrase_in_full_posts():
+    brand = Brand.objects.create(nickname="zhipu_phrase")
+    account = Account.objects.create(author_id="phrase-author", handle="phrase")
+    posts = [
+        Post.objects.create(
+            tweet_id=f"phrase-post-{index}",
+            author=account,
+            created_at=AS_OF - timedelta(minutes=10 - index),
+            text=f"Zhipu update {index}: Ox Alpha release is drawing attention",
+        )
+        for index in range(3)
+    ]
+    PostBrand.objects.bulk_create(
+        [PostBrand(post=post, brand=brand) for post in posts]
+    )
+
+    signals = trend_candidates._fetch_corpus_phrase_signals(
+        [
+            {
+                "candidate_id": f"{brand.nickname}:full_window",
+                "brand_key": brand.nickname,
+                "start_at": AS_OF - timedelta(days=1),
+                "end_at": AS_OF,
+            }
+        ],
+        as_of=AS_OF,
+    )[brand.nickname]
+
+    ox_alpha = next(signal for signal in signals if signal["phrase"] == "ox alpha")
+    assert ox_alpha["prevalence"] == 3
+    assert "ox alpha" in ox_alpha["representative_excerpt"]
+
+
+def test_u1_stable_family_bases_are_not_multiplied_by_multiple_flags():
+    brand = Brand.objects.create(nickname="stable_family")
+    role = Role.objects.create(key="staff")
+    account = Account.objects.create(author_id="stable-author", handle="stable")
+    BrandAccount.objects.create(brand=brand, account=account, role=role)
+    post = Post.objects.create(
+        tweet_id="stable-post",
+        author=account,
+        created_at=AS_OF - timedelta(minutes=5),
+        text="stable family evidence",
+        lang="en",
+    )
+    PostBrand.objects.create(post=post, brand=brand)
+    PostEnrichmentState.objects.create(
+        post=post,
+        translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+    PostUnsanctionedFlag.objects.create(
+        post=post,
+        flags='["flag_a", "flag_b"]',
+        flag_set=["flag_a", "flag_b"],
+    )
+
+    facts = trend_candidates._fetch_stable_family_facts(
+        [
+            {
+                "brand_key": brand.nickname,
+                "start_at": AS_OF - timedelta(days=1),
+                "end_at": AS_OF,
+            }
+        ]
+    )[brand.nickname]
+
+    assert facts["language"]["selected_basis_count"] == 1
+    assert facts["account_role"]["selected_basis_count"] == 1
+    assert facts["unsanctioned_flags"]["selected_basis_count"] == 1
+    assert {
+        row["key"]: row["selected_count"]
+        for row in facts["unsanctioned_flags"]["labels"]
+    } == {"flag_a": 1, "flag_b": 1}
 
 
 def test_normalization_and_near_duplicate_threshold_are_frozen():
@@ -311,7 +758,7 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     pool_position = normalized_evidence_sql.index("CANDIDATE_POOL AS")
     official_position = normalized_evidence_sql.index("OFFICIAL_STREAM AS")
     assert "GENERATE_SERIES(0, 3)" in normalized_evidence_sql
-    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 6
+    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 7
     assert normalized_evidence_sql.count("LIMIT BUCKET.RANK_LIMIT") == 1
     assert pool_position < official_position
     stream_bounds = (
@@ -332,91 +779,31 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     assert len(evidence_params) == 6
     assert evidence_params[1] == [brand.nickname]
     assert tuple(evidence_params[-2:]) == (AS_OF, 32)
+    # U1 exposes an all-brand compact snapshot rather than the legacy
+    # shortlist/candidate projection.  The source rows remain private and the
+    # provider view contains a bounded preview only.
+    assert snapshot["packet_schema_version"] == 3
+    assert [row["brand_key"] for row in snapshot["dossiers"]] == [brand.nickname]
+    dossier = snapshot["dossiers"][0]
+    # The fixture does not create successful enrichment state, so the compact
+    # contract must refuse an editor packet rather than treating raw posts as
+    # eligible narrative evidence.
+    assert dossier["outcome"] == "data_quality_unavailable"
+    assert dossier["evidence_allocation"]["target_count"] == 6
+    assert 1 <= len(dossier["evidence"]) <= 6
+    provider = project_provider_packet(snapshot)
+    assert provider["dossiers"][0].get("raw_series") is None
+    assert len(provider["dossiers"][0]["evidence"]) <= 2
+    assert raw_author_id not in canonical_snapshot_json(provider)
+    assert raw_post_id not in canonical_snapshot_json(provider)
+
     analysis_statements = [
         sql
         for sql in statements
         if sql.startswith(("SET TRANSACTION", "SELECT", "WITH"))
         and "SET_CONFIG('STATEMENT_TIMEOUT'" not in sql
     ]
-    assert len(analysis_statements) == 10
-    assert len(snapshot["candidates"]) == 1
-    candidate = snapshot["candidates"][0]
-    assert candidate["brand_key"] == brand.nickname
-    assert 1 <= len(candidate["evidence"]) <= 48
-    assert candidate["evidence_allocation"]["selected_count"] == len(
-        candidate["evidence"]
-    )
-    assert candidate["evidence"][0]["roles"][0] == "official_or_catalyst"
-    assert all(
-        "RT @source" not in evidence["excerpt"]
-        for evidence in candidate["evidence"]
-    )
-    assert any(
-        "contrasting_reaction" in evidence["roles"]
-        and evidence["source_flags"]["post_kind"] == "quote"
-        for evidence in candidate["evidence"]
-    )
-    assert candidate["evidence_support"]["event_claim_may_be_supported"] is True
-    assert (
-        candidate["evidence_support"]["evidence_only_entity_may_be_supported"]
-        is True
-    )
-    trajectories = candidate["metadata_trajectories"]
-    assert trajectories["post_type"]["coverage_percent"][-1] == 75
-    assert trajectories["post_type"]["labels"]["reaction"]["counts"][-1] == 3
-    assert trajectories["sentiment"]["labels"]["negative"]["counts"][-1] == 1
-    assert trajectories["discourse"]["labels"]["technical_analysis"]["counts"][-1] == 3
-    assert trajectories["china_nationalism"]["labels"]["pro"]["counts"][-1] == 3
-    assert trajectories["us_nationalism"]["labels"]["anti"]["counts"][-1] == 1
-
-    canonical = canonical_snapshot_json(snapshot)
-    provider = project_provider_packet(snapshot)
-    provider_json = canonical_snapshot_json(provider)
-    assert len(canonical.encode("utf-8")) <= MAX_SNAPSHOT_BYTES
-    assert len(provider_json.encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
-    assert raw_author_id not in canonical
-    assert raw_post_id not in canonical
-    assert "fine_series" not in provider_json
-    assert provider["evidence_policy"]["version"] == "adaptive-v1"
-    assert provider["candidates"][0]["evidence_allocation"] == candidate[
-        "evidence_allocation"
-    ]
-    assert provider["candidates"][0]["evidence"][0]["post_type_keys"] == [
-        "reaction"
-    ]
-    assert provider["candidates"][0]["metadata_trajectories"] == trajectories
-    assert not caplog.records
-    assert json.loads(canonical) == snapshot
-    assert not Brand.objects.filter(nickname="OffListModel").exists()
-
-    repeated = build_trend_analysis_snapshot(
-        1,
-        as_of=AS_OF,
-        thresholds=thresholds,
-    )
-    assert canonical_snapshot_json(repeated) == canonical
-
     second_brand = Brand.objects.create(nickname="second_snapshot_brand")
-    second_accounts = [
-        Account.objects.create(
-            author_id=f"second-private-author-{index}",
-            handle=f"second-snapshot-{index}",
-        )
-        for index in range(3)
-    ]
-    second_posts = [
-        Post(
-            tweet_id=f"second-private-post-{index}",
-            author=account,
-            created_at=AS_OF - timedelta(minutes=10) + timedelta(seconds=index),
-            text=f"Independent second-brand evidence {index}",
-        )
-        for index, account in enumerate(second_accounts)
-    ]
-    Post.objects.bulk_create(second_posts)
-    PostBrand.objects.bulk_create(
-        [PostBrand(post=post, brand=second_brand) for post in second_posts]
-    )
     with CaptureQueriesContext(connection) as two_brand_queries:
         two_brand_snapshot = build_trend_analysis_snapshot(
             1,
@@ -426,14 +813,17 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     two_brand_statements = [
         row["sql"].lstrip().upper()
         for row in two_brand_queries.captured_queries
-            if row["sql"].lstrip().upper().startswith(
-                ("SET TRANSACTION", "SELECT", "WITH")
-            )
-            and "SET_CONFIG('STATEMENT_TIMEOUT'"
-            not in row["sql"].lstrip().upper()
-        ]
-    assert len(two_brand_statements) == len(analysis_statements) == 10
-    assert len({row["brand_key"] for row in two_brand_snapshot["candidates"]}) == 2
+        if row["sql"].lstrip().upper().startswith(
+            ("SET TRANSACTION", "SELECT", "WITH")
+        )
+        and "SET_CONFIG('STATEMENT_TIMEOUT'"
+        not in row["sql"].lstrip().upper()
+    ]
+    assert len(two_brand_statements) == len(analysis_statements)
+    assert {row["brand_key"] for row in two_brand_snapshot["dossiers"]} == {
+        brand.nickname,
+        second_brand.nickname,
+    }
 
 
 def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
@@ -829,90 +1219,31 @@ def test_high_volume_reservoir_and_final_allocation_remain_bounded():
 
 
 def test_worst_case_snapshot_and_provider_projection_stay_bounded():
-    _seed_snapshot_posts()
-    base = build_trend_analysis_snapshot(
-        1,
-        as_of=AS_OF,
-        thresholds=TrendFactThresholds(
-            min_posts=2,
-            min_authors=2,
-            episode_peak_ratio=Decimal(1),
-        ),
-    )
-    worst = deepcopy(base)
-    worst["window_days"] = 365
-    worst["series_axis"]["fine"]["bucket_count"] = 365
-    worst["series_axis"]["fine"]["starts"] = [
-        f"2025-08-{(index % 28) + 1:02d}T00:00:00Z" for index in range(365)
-    ]
-    worst["series_axis"]["fine"]["ends"] = [
-        f"2025-08-{(index % 28) + 1:02d}T23:59:59Z" for index in range(365)
-    ]
-    template = worst["candidates"][0]
-    candidates = []
-    for candidate_index in range(6):
-        candidate = deepcopy(template)
-        candidate["candidate_id"] = f"brand-{candidate_index}:full_window"
-        candidate["source_candidate_id"] = candidate["candidate_id"]
-        candidate["brand_key"] = f"brand-{candidate_index}"
-        for key, values in candidate["series"]["fine"].items():
-            if key == "engagement":
-                continue
-            candidate["series"]["fine"][key] = (values * 4)[:365]
-        engagement = candidate["series"]["fine"]["engagement"]
-        for key, values in engagement.items():
-            if key == "post_kinds":
-                continue
-            engagement[key] = (values * 4)[:365]
-        for values in engagement["post_kinds"].values():
-            for key, array in values.items():
-                values[key] = (array * 4)[:365]
-        target_count = 48 if candidate_index == 0 else 12
-        candidate["evidence"] = [
+    snapshot = {
+        "packet_schema_version": 3,
+        "window_days": 365,
+        "as_of": "2026-08-12T12:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "dossiers": [
             {
-                **deepcopy(template["evidence"][0]),
-                "evidence_id": f"e_{candidate_index}_{evidence_index}",
-                "source_cluster_id": f"sc_{candidate_index}_{evidence_index}",
-                "author_group_id": f"ag_{candidate_index}_{evidence_index}",
-                "excerpt": "界" * 1_000,
+                "brand_key": f"brand-{brand_index}",
+                "outcome": "narrative_eligible",
+                "evidence": [
+                    {
+                        "evidence_id": f"e-{brand_index}-{evidence_index}",
+                        "excerpt": "界" * 1_000,
+                        "text_en": "x" * 1_000,
+                        "text_zh_cn": "中" * 1_000,
+                    }
+                    for evidence_index in range(12)
+                ],
             }
-            for evidence_index in range(target_count)
-        ]
-        candidate["evidence_allocation"] = {
-            "policy_version": "adaptive-v1",
-            "allocation_class": "lead" if candidate_index == 0 else "comparison",
-            "story_rank": candidate_index + 1,
-            "reservoir_count": target_count,
-            "available_independent_source_count": target_count,
-            "protected_floor_count": 4,
-            "target_count": target_count,
-            "selected_count": target_count,
-            "packet_trimmed_count": 0,
-        }
-        candidates.append(candidate)
-    worst["candidates"] = candidates
-    worst["selection"]["candidate_count"] = 6
-
-    trend_candidates._fit_snapshot_evidence_to_packet_budget(
-        worst,
-        max_bytes=MAX_PROVIDER_PACKET_BYTES,
-    )
-
-    snapshot_bytes = len(canonical_snapshot_json(worst).encode("utf-8"))
-    provider_bytes = len(
-        canonical_snapshot_json(project_provider_packet(worst)).encode("utf-8")
-    )
-
-    assert snapshot_bytes <= MAX_SNAPSHOT_BYTES
-    assert provider_bytes <= MAX_PROVIDER_PACKET_BYTES
-    assert sum(
-        candidate["evidence_allocation"]["packet_trimmed_count"]
-        for candidate in worst["candidates"]
-    ) > 0
-    assert len(worst["candidates"][0]["evidence"]) >= len(
-        worst["candidates"][1]["evidence"]
-    )
-
+            for brand_index in range(5)
+        ],
+    }
+    batch = build_editor_batches(snapshot)[0]
+    assert len(canonical_snapshot_json(batch).encode("utf-8")) <= MAX_PROVIDER_PACKET_BYTES
+    assert [len(row["evidence"]) for row in batch["dossiers"]] == [12] * 5
 
 def test_size_guard_fails_with_a_safe_code():
     oversized = {"value": "x" * MAX_SNAPSHOT_BYTES}

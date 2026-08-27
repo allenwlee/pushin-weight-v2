@@ -113,6 +113,35 @@ def _label(candidate: dict, family: str, key: str) -> dict:
     )
 
 
+def test_u1_all_brand_aggregate_keeps_zero_post_brand_and_enrichment_count():
+    populated = _brand("u1_populated")
+    zero = _brand("u1_zero")
+    _brand("u1_sentinel", sentinel=True)
+    _seed_posts(
+        populated,
+        total=1,
+        authors=1,
+        created_at=AS_OF - timedelta(hours=1),
+        prefix="u1-populated",
+    )
+
+    facts = trend_facts.aggregate_trend_family_facts(1, as_of=AS_OF)
+    zero_candidate = _candidate(facts, zero.nickname)
+
+    assert [
+        row["candidate_key"]["brand_key"] for row in facts["candidates"]
+    ] == [populated.nickname, zero.nickname]
+    assert zero_candidate["family_facts"]["volume"] == {
+        "selected_count": 0,
+        "selected_authors": 0,
+        "selected_enriched_count": 0,
+        "prior_count": 0,
+        "prior_authors": 0,
+        "change_pct": None,
+        "comparison_state": "unavailable",
+    }
+
+
 def test_recent_minimax_leads_and_earlier_deepseek_is_handoff_contrast():
     minimax = _brand("minimax")
     deepseek = _brand("deepseek")
