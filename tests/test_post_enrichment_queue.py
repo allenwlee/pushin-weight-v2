@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
@@ -195,13 +196,112 @@ def test_deadline_defers_work_without_claiming_or_spending_an_attempt():
     state.refresh_from_db()
     assert (
         deadline.requested_seconds
-        == _cfg().harvest.enrichment.attempt_budget_seconds
+        == 2 * _cfg().harvest.enrichment.attempt_budget_seconds
     )
     assert counters["n_enrichment_claimed"] == 0
     assert counters["n_enrichment_deferred"] == 1
     assert state.translation_attempts == 0
     assert state.classification_attempts == 0
     assert state.claim_run_id == ""
+
+
+def test_claim_prefers_the_pre_cycle_cohort_over_current_cycle_inserts():
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now()
+    previous = [_state(f"previous-{index}") for index in range(2)]
+    current = [_state(f"current-{index}") for index in range(2)]
+    PostEnrichmentState.objects.filter(pk=previous[0].pk).update(
+        created_at=cutoff - timedelta(minutes=2),
+        translation_attempts=1,
+    )
+    PostEnrichmentState.objects.filter(pk=previous[1].pk).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk=current[0].pk).update(
+        created_at=cutoff + timedelta(seconds=1)
+    )
+    PostEnrichmentState.objects.filter(pk=current[1].pk).update(
+        created_at=cutoff + timedelta(seconds=2)
+    )
+    cfg = _cfg().harvest.enrichment.model_copy(update={"claim_per_cycle": 2})
+
+    batch = _claim_enrichment_states(
+        cfg=cfg,
+        run_id="pre-cycle-first",
+        now=cutoff + timedelta(seconds=3),
+        prefer_created_before=cutoff,
+    )
+
+    assert [state.pk for state in batch.states] == [previous[0].pk, previous[1].pk]
+
+
+def test_claim_preserves_full_latest_50_against_37_current_cycle_inserts():
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now().astimezone(ZoneInfo("Asia/Tokyo"))
+    retained = [_state(f"retained-{index:02d}") for index in range(50)]
+    current = [_state(f"new-arrival-{index:02d}") for index in range(37)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retained]).update(
+        created_at=cutoff - timedelta(minutes=30)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in current]).update(
+        created_at=cutoff + timedelta(minutes=1)
+    )
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="production-displacement-shape",
+        now=cutoff + timedelta(minutes=2),
+        prefer_created_before=cutoff,
+    )
+
+    assert len(batch.states) == 50
+    assert {state.pk for state in batch.states} == {state.pk for state in retained}
+
+
+def test_translation_timeout_does_not_consume_classifier_stage_budget(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("separate-stage-deadlines")
+    client = object()
+    clock = [0.0]
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+
+    def translate(tweets, locales, client, **kwargs):
+        assert kwargs["deadline"].remaining() == 300
+        clock[0] = 300.0
+        return [
+            {
+                "tweet_id": tweet["tweet_id"],
+                "text_en": tweet["text"],
+                "text_zh_cn": "深度求索发布",
+                "en_equivalent": "The release is strategically relevant.",
+                "cn_equivalent": "这次发布具有战略意义。",
+                "lang_detected": "en",
+            }
+            for tweet in tweets
+        ]
+
+    def classify(tweets, brands, client, **kwargs):
+        assert kwargs["deadline"].remaining() == 300
+        return [{"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets]
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    CycleRunner(cfg=_cfg(), _monotonic=lambda: clock[0])._run_post_fetch(
+        [], run_id="separate-stage-deadlines"
+    )
+
+    state.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
 
 
 def _complete_translation(tweet_id: str, source: str) -> dict:

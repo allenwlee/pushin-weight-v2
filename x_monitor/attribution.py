@@ -36,11 +36,16 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Literal, Protocol
 
 from ._json_parser import parse_llm_response
-from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+
+if TYPE_CHECKING:
+    from .config import Config
 
 
 logger = logging.getLogger(__name__)
@@ -1968,6 +1973,7 @@ def classify_batch_pragmatics_full(
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
+    max_workers: int = 1,
 ) -> list[dict[str, Any]]:
     """U4 (batched): per-post classification across N tweets, one LLM call per batch.
 
@@ -2012,6 +2018,45 @@ def classify_batch_pragmatics_full(
         return []
     if anthropic_client is None:
         return [dict(empty) for _ in tweets]
+
+    # Production may opt into bounded per-batch concurrency. Other callers
+    # remain sequential by default, preserving their cost and ordering
+    # behavior. Flattening futures in submission order keeps index alignment.
+    if len(tweets) > _CLASSIFY_BATCH_SIZE and max_workers > 1:
+        batches = [
+            tweets[start: start + _CLASSIFY_BATCH_SIZE]
+            for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE)
+        ]
+        callback_lock = threading.Lock()
+
+        def serialized_batch_error(
+            batch: list[dict[str, Any]], exc: Exception
+        ) -> None:
+            if on_batch_error is None:
+                return
+            with callback_lock:
+                on_batch_error(batch, exc)
+
+        with ThreadPoolExecutor(
+            max_workers=min(max_workers, len(batches)),
+            thread_name_prefix="classifier-batch",
+        ) as executor:
+            futures = [
+                executor.submit(
+                    classify_batch_pragmatics_full,
+                    batch,
+                    brand_registry,
+                    anthropic_client,
+                    model=model,
+                    on_batch_error=serialized_batch_error,
+                    max_tokens=max_tokens,
+                    thinking=thinking,
+                    deadline=deadline,
+                    max_workers=1,
+                )
+                for batch in batches
+            ]
+            return [row for future in futures for row in future.result()]
 
     # Resolve `thinking` default from env: when not explicitly passed
     # (None), use the env-driven helper. The M3/direct paths resolve to
@@ -2211,8 +2256,8 @@ class AnthropicClaudeClient:
         # HTTPS requests to different hosts (TwitterAPI.io). A fresh
         # http.client connection per call avoids the pooled-connection
         # path entirely.
-        import json as _json_module
         import http.client
+        import json as _json_module
         import urllib.parse
         from urllib.parse import urlparse
         parsed = urlparse(url)

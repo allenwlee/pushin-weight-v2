@@ -202,7 +202,7 @@ class ListMembershipConfig(BaseModel):
 
 @dataclass(frozen=True)
 class EnrichmentAttemptDeadline:
-    """One monotonic budget shared by translation and classification."""
+    """One monotonic budget for a single enrichment stage."""
 
     deadline_at: float
     request_timeout_seconds: float
@@ -224,7 +224,7 @@ class EnrichmentConfig(BaseModel):
     claim_per_cycle: int = Field(default=50, ge=1)
     max_attempts: int = Field(default=8, ge=1)
     max_age_hours: int = Field(default=24, ge=1)
-    claim_ttl_seconds: int = Field(default=360, ge=1)
+    claim_ttl_seconds: int = Field(default=660, ge=1)
     request_timeout_seconds: int = Field(default=45, ge=1)
     attempt_budget_seconds: int = Field(default=300, ge=1)
 
@@ -234,9 +234,9 @@ class EnrichmentConfig(BaseModel):
             raise ValueError(
                 "request_timeout_seconds must not exceed attempt_budget_seconds"
             )
-        if self.claim_ttl_seconds < self.attempt_budget_seconds:
+        if self.claim_ttl_seconds < (2 * self.attempt_budget_seconds):
             raise ValueError(
-                "claim_ttl_seconds must cover attempt_budget_seconds"
+                "claim_ttl_seconds must cover both enrichment stage budgets"
             )
         return self
 

@@ -47,10 +47,15 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from ._json_parser import parse_llm_response
-from typing import Any, Protocol
+
+if TYPE_CHECKING:
+    from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -233,8 +238,8 @@ def _call_with_retry(
     fixed `_resolve_translator_model` but missed this call site.
     """
     last_exc: Exception | None = None
-    from .attribution import _resolve_translator_model as _resolve_model
     from .attribution import _resolve_thinking_default
+    from .attribution import _resolve_translator_model as _resolve_model
     # cfg-threaded resolution: cfg.llm.translator_model is canonical
     # when provided; env inference is the fallback.
     model = _resolve_model(cfg)
@@ -890,6 +895,7 @@ def translate_batch_pragmatics(
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
     cfg: "Config | None" = None,
     deadline: Any | None = None,
+    max_workers: int = 1,
 ) -> list[dict[str, Any]]:
     """Translate a batch with required bilingual commentary and translations.
     Pass cfg to thread through to model resolution (per swap-translator plan).
@@ -910,6 +916,47 @@ def translate_batch_pragmatics(
 
     if dry_run:
         return [_empty_pragmatics_row(t, dry_run=True) for t in tweets]
+
+    # Independent LLM batches have no data dependency. Running them in stable,
+    # bounded parallelism prevents one slow 20-row response from consuming the
+    # entire enrichment-stage deadline before the later batches can start.
+    # Results are flattened in submission order, preserving the public
+    # index-alignment contract. Single-batch callers keep the original path.
+    if len(tweets) > _TRANSLATION_BATCH_SIZE and max_workers > 1:
+        batches = [
+            tweets[start: start + _TRANSLATION_BATCH_SIZE]
+            for start in range(0, len(tweets), _TRANSLATION_BATCH_SIZE)
+        ]
+        callback_lock = threading.Lock()
+
+        def serialized_batch_error(
+            batch: list[dict[str, Any]], exc: Exception
+        ) -> None:
+            if on_batch_error is None:
+                return
+            with callback_lock:
+                on_batch_error(batch, exc)
+
+        with ThreadPoolExecutor(
+            max_workers=min(max_workers, len(batches)),
+            thread_name_prefix="translator-batch",
+        ) as executor:
+            futures = [
+                executor.submit(
+                    translate_batch_pragmatics,
+                    batch,
+                    target_locales,
+                    client,
+                    brand_names=brand_names,
+                    few_shot_examples=few_shot_examples,
+                    on_batch_error=serialized_batch_error,
+                    cfg=cfg,
+                    deadline=deadline,
+                    max_workers=1,
+                )
+                for batch in batches
+            ]
+            return [row for future in futures for row in future.result()]
 
     out: list[dict[str, Any]] = []
     for start in range(0, len(tweets), _TRANSLATION_BATCH_SIZE):

@@ -232,8 +232,9 @@ def _claim_enrichment_states(
     cfg: Any,
     run_id: str,
     now: datetime | None = None,
+    prefer_created_before: datetime | None = None,
 ) -> EnrichmentClaimBatch:
-    """Quarantine aged debt, then claim a bounded freshest-first batch.
+    """Quarantine aged debt, then claim one bounded cycle-aware batch.
 
     Active leases are excluded, expired leases are recoverable, and attempt/
     age exhaustion becomes an explicit failed state instead of an immortal
@@ -241,7 +242,9 @@ def _claim_enrichment_states(
     cannot consume every slot before live work reaches the classifier.
     ``skip_locked`` lets a second writer avoid rows currently owned by another
     transaction even though the outer writer lock normally serializes
-    production entrypoints.
+    production entrypoints. Normal live cycles prefer rows that predate the
+    cycle (and their retries) before rows inserted by that same cycle, avoiding
+    a perpetual freshest-first displacement loop.
     """
 
     now = now or django_timezone.now()
@@ -288,15 +291,37 @@ def _claim_enrichment_states(
             claimed_at=None,
             claim_expires_at=None,
         )
-        candidates = list(
+        candidate_qs = (
             PostEnrichmentState.objects.select_for_update(skip_locked=True)
             .select_related("post")
             .filter(due, created_at__gt=age_cutoff)
-            # Preserve live-feed progress when arrivals temporarily exceed the
-            # bounded LLM budget; older unfinished work remains durable until
-            # it succeeds or reaches the explicit age limit above.
-            .order_by("-created_at", "post_id")[: cfg.claim_per_cycle]
         )
+        if prefer_created_before is not None:
+            candidate_qs = candidate_qs.annotate(
+                _cycle_priority=Case(
+                    When(created_at__lt=prefer_created_before, then=Value(0)),
+                    default=Value(1),
+                ),
+                _retry_priority=Case(
+                    When(
+                        Q(
+                            translation_status=PostEnrichmentState.Status.PENDING,
+                            translation_attempts__gt=0,
+                        )
+                        | Q(
+                            classification_status=PostEnrichmentState.Status.PENDING,
+                            classification_attempts__gt=0,
+                        ),
+                        then=Value(0),
+                    ),
+                    default=Value(1),
+                ),
+            ).order_by(
+                "_cycle_priority", "_retry_priority", "-created_at", "post_id"
+            )
+        else:
+            candidate_qs = candidate_qs.order_by("-created_at", "post_id")
+        candidates = list(candidate_qs[: cfg.claim_per_cycle])
         for state in candidates:
             for prefix in ("translation", "classification"):
                 status_name = f"{prefix}_status"
@@ -1876,6 +1901,7 @@ class CycleRunner:
         *,
         run_id: str = "post-fetch",
         deadline: Any | None = None,
+        prefer_created_before: datetime | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -1914,21 +1940,13 @@ class CycleRunner:
         }
 
         enrichment_cfg = self.cfg.harvest.enrichment
-        if deadline is not None and not deadline.can_start(
-            enrichment_cfg.attempt_budget_seconds
-        ):
+        combined_stage_budget = 2 * enrichment_cfg.attempt_budget_seconds
+        if deadline is not None and not deadline.can_start(combined_stage_budget):
             counters["n_enrichment_deferred"] = PostEnrichmentState.objects.filter(
                 Q(translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)
             ).count()
             return counters
-
-        # Translation and classification share one hard monotonic budget.
-        # Starting it before queue reconciliation and claiming makes all work
-        # in this enrichment attempt accountable to the same five minutes.
-        attempt_deadline = enrichment_cfg.start_attempt_deadline(
-            monotonic=self._monotonic
-        )
 
         counters["n_translation_requeued"] = (
             _requeue_recent_incomplete_translations(cfg=enrichment_cfg)
@@ -1937,6 +1955,7 @@ class CycleRunner:
         claim_batch = _claim_enrichment_states(
             cfg=enrichment_cfg,
             run_id=run_id,
+            prefer_created_before=prefer_created_before,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -2024,6 +2043,9 @@ class CycleRunner:
             counters["n_translator_unavailable"] = 1
             translation_rows = []
         elif translation_tweets:
+            translation_deadline = enrichment_cfg.start_attempt_deadline(
+                monotonic=self._monotonic
+            )
             try:
                 translation_rows = translate_batch_pragmatics(
                     translation_tweets,
@@ -2034,7 +2056,8 @@ class CycleRunner:
                         self._error_counts["translator_batch_failed"] + 1,
                     ),
                     cfg=self.cfg,
-                    deadline=attempt_deadline,
+                    deadline=translation_deadline,
+                    max_workers=3,
                 )
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
@@ -2156,6 +2179,9 @@ class CycleRunner:
             counters["n_classifier_unavailable"] = 1
             classification_error_code = "classifier_unavailable"
         elif classification_tweets:
+            classification_deadline = enrichment_cfg.start_attempt_deadline(
+                monotonic=self._monotonic
+            )
             try:
                 results = classify_batch_pragmatics_full(
                     classification_tweets,
@@ -2166,7 +2192,8 @@ class CycleRunner:
                         "classifier_batch_failed",
                         self._error_counts["classifier_batch_failed"] + 1,
                     ),
-                    deadline=attempt_deadline,
+                    deadline=classification_deadline,
+                    max_workers=3,
                 )
             except Exception as exc:
                 logger.warning(
@@ -3071,6 +3098,7 @@ class CycleRunner:
                 kept_all,
                 run_id=run_id,
                 deadline=deadline,
+                prefer_created_before=cycle_started_wall,
             )
             post_fetch_completed_at = self._wall_now().isoformat()
             pf_counters["completed_at"] = post_fetch_completed_at

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import threading
+import time
 from typing import Any
 
 from x_monitor.translator import (
@@ -185,3 +188,136 @@ def test_emoji_only_post_receives_real_bilingual_interpretation():
     assert result[0]["text_zh_cn"]
     assert result[0]["en_equivalent"]
     assert result[0]["cn_equivalent"]
+
+
+def test_multiple_translation_batches_run_concurrently_and_keep_input_order():
+    class ConcurrentPromptClient:
+        def __init__(self):
+            self.barrier = threading.Barrier(3)
+            self.lock = threading.Lock()
+            self.active = 0
+            self.max_active = 0
+            self.batch_sizes: list[int] = []
+
+        def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+            prompt = kwargs["messages"][0]["content"]
+            payload = json.loads(prompt.split("\n\nTweets (JSON array):\n", 1)[1])
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                self.batch_sizes.append(len(payload))
+            self.barrier.wait(timeout=2)
+            time.sleep(0.01)
+            with self.lock:
+                self.active -= 1
+            return {
+                "results": [
+                    _complete_row(
+                        row["tweet_id"],
+                        text_en=row["text"],
+                        literal_zh=f"第 {row['tweet_id']} 条更新",
+                        en_equivalent=f"Update {row['tweet_id']} matters competitively.",
+                        cn_equivalent=f"第 {row['tweet_id']} 条更新值得关注。",
+                    )
+                    for row in payload
+                ]
+            }
+
+    tweets = [
+        {"tweet_id": str(index), "text": f"Update {index}"}
+        for index in range(41)
+    ]
+    client = ConcurrentPromptClient()
+
+    result = translate_batch_pragmatics(
+        tweets,
+        ["en", "zh_cn"],
+        client,
+        few_shot_examples=[],
+        max_workers=3,
+    )
+
+    assert client.max_active == 3
+    assert sorted(client.batch_sizes) == [1, 20, 20]
+    assert [row["tweet_id"] for row in result] == [
+        tweet["tweet_id"] for tweet in tweets
+    ]
+
+
+def test_production_http_client_uses_one_connection_per_parallel_batch(monkeypatch):
+    import http.client
+
+    from x_monitor.attribution import AnthropicClaudeClient
+
+    barrier = threading.Barrier(3)
+    instances = []
+
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload: bytes):
+            self.payload = payload
+
+        def read(self):
+            return self.payload
+
+    class FakeHTTPSConnection:
+        def __init__(self, host, port, timeout):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+            self.response_payload = b""
+            self.closed = False
+            instances.append(self)
+
+        def request(self, method, path, body, headers):
+            request_body = json.loads(body)
+            prompt = request_body["messages"][0]["content"]
+            payload = json.loads(prompt.split("\n\nTweets (JSON array):\n", 1)[1])
+            barrier.wait(timeout=2)
+            results = [
+                _complete_row(
+                    row["tweet_id"],
+                    text_en=row["text"],
+                    literal_zh=f"第 {row['tweet_id']} 条更新",
+                    en_equivalent=f"Update {row['tweet_id']} matters competitively.",
+                    cn_equivalent=f"第 {row['tweet_id']} 条更新值得关注。",
+                )
+                for row in payload
+            ]
+            wire_text = json.dumps({"results": results}, ensure_ascii=False)
+            self.response_payload = json.dumps(
+                {"content": [{"type": "text", "text": wire_text}]},
+                ensure_ascii=False,
+            ).encode()
+
+        def getresponse(self):
+            return FakeResponse(self.response_payload)
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", FakeHTTPSConnection)
+    client = AnthropicClaudeClient(
+        api_key="test-key",
+        base_url="https://provider.invalid/anthropic",
+    )
+    tweets = [
+        {"tweet_id": str(index), "text": f"Update {index}"}
+        for index in range(41)
+    ]
+
+    result = translate_batch_pragmatics(
+        tweets,
+        ["en", "zh_cn"],
+        client,
+        few_shot_examples=[],
+        max_workers=3,
+    )
+
+    assert len(instances) == 3
+    assert len({id(instance) for instance in instances}) == 3
+    assert all(instance.closed for instance in instances)
+    assert [row["tweet_id"] for row in result] == [
+        tweet["tweet_id"] for tweet in tweets
+    ]
