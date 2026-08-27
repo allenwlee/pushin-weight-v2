@@ -1,6 +1,6 @@
 # Render runbook — Pushin Weight v2
 
-Last verified against the Render account and Blueprint: 2026-08-14.
+Last verified against the Render account and Blueprint: 2026-08-27.
 
 The isolated owner-review stack is defined separately in
 `render-staging.yaml`. It contains one web service and one PostgreSQL database
@@ -18,6 +18,16 @@ SHA, and, only when the plan's recorded target is production, promotes the
 unchanged SHA to `main` after staging passes. The workflow confirms the
 configured Render services and health route for that candidate. A green build
 alone is not sufficient evidence of the intended deployment identity.
+
+### Staging snapshot refresh
+
+The staging web service contains the guarded, operator-invoked production
+snapshot mechanism. It is not a deploy hook or scheduled job. Its source role,
+single staging-only secret, preflight, refresh, database receipt, rollback, and
+prune procedures are defined in
+[`docs/operations/staging-data-refresh.md`](../operations/staging-data-refresh.md).
+Production must remain refresh-inert: `render.yaml` declares neither
+`STAGING_DATA_REFRESH_ENABLED` nor `STAGING_REFRESH_SOURCE_DATABASE_URL`.
 
 ## Deployed reality
 

@@ -16,6 +16,7 @@ from scripts.staging_refresh.policy import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = REPO_ROOT / "config" / "staging_refresh.yaml"
+RUNBOOK_PATH = REPO_ROOT / "docs" / "operations" / "staging-data-refresh.md"
 
 
 def _inspection(
@@ -69,6 +70,16 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     assert "auth_user" in policy.relations.excluded_tables
     assert "posts" in policy.relations.copied_tables
     assert "trend_narrative_versions" in policy.relations.views
+
+
+def test_runbook_source_grants_cover_the_exhaustive_copy_policy() -> None:
+    policy = load_policy(POLICY_PATH)
+    runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
+
+    for relation in sorted(policy.relations.copied_tables | policy.relations.sequences):
+        assert relation in runbook
+    assert "Do not add default privileges" in runbook
+    assert "\\password staging_refresh_reader" in runbook
 
 
 def test_policy_rejects_unknown_fields(tmp_path: Path) -> None:
