@@ -188,6 +188,16 @@ Browser state is accepted only when controls, accessibility, storage, feed, char
 - Staging data-source health, exact Render SHA, and browser proof before production.
 - Exact unchanged production SHA plus read-only DeepSeek reversal, Mimo latest-wins, unsanctioned partition, locale persistence, and window smoke.
 
+## Implementation and verification status
+
+- Bridgewright's standalone protocol is reviewed and pinned to build `0.1.0`, source `e94b04a9511b3ef494478b84a970035861ab4400`, schema-set digest `b0d89d3fadb4ccd8d736af2375bc98d1fd50070fe38f3da9ec25fa0558007509`, and skill digest `2504868d2eacb21828ac0b68487cd760f9741c9955810f932e4c9c915d9abc37`.
+- PushinWeight's reviewed product-source revision is `0b95431b0d931073fba460a78acad7ae56c68200`, which includes the adoption source and current `origin/main`; the declaration and generated evidence bind to this revision.
+- The target inventory contains 15 control dimensions and 31 selectable brands. The deterministic compiler emits 1,823 obligations: 107 transitions, 90 inverses, 1,588 t-way combinations, 24 ordered sequences, 6 invariants, 5 races, and 3 permanent regression seeds.
+- The full local candidate gate passed 64 Python tests, including 42 PostgreSQL-required executions with zero skips/errors, plus 77 JavaScript chart-runtime assertions and 1,823/1,823 Bridgewright obligations with zero failed, skipped, errored, missing, or unknown results.
+- The repository Ollija suite passed 71 tests. Django's deployment check retained three pre-existing configuration warnings and reported no errors.
+- Independent Claude Opus review findings were reconciled: ordered permutations now have last-write-wins oracles, every declared race fault has a distinct execution path, the flagged partition is exact, evidence is rewritten fail-fresh, and the legacy HTTP test setting is isolated from Bridgewright assessment.
+- Staging population, exact deployed SHA, seeded browser smoke, production promotion, production smoke, and guarded worktree cleanup remain delivery steps owned by the parent workflow.
+
 ## Definition of Done
 
 - U5–U9 are implemented and locally verified with red-before/green-after evidence for the three escaped defects.
