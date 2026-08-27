@@ -1858,6 +1858,164 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_per_brand_narratives_render_bilingually_as_semantic_cards(self) -> None:
+        """The active DTO v3 paints two readable cards on desktop and mobile."""
+        from core.models import Brand, BrandTrendNarrative, TrendNarrativeRun
+        from monitor.trend_narrative_lifecycle import (
+            activate_trend_narrative_run,
+            prepare_brand_trend_narrative,
+        )
+        from x_monitor.config import HeadlineNarrativeConfig
+
+        now = datetime.now(UTC)
+        brands = []
+        for key, name in (("deepseek", "DeepSeek"), ("minimax", "MiniMax")):
+            brand, _ = Brand.objects.update_or_create(
+                nickname=key,
+                defaults={
+                    "display_name": name,
+                    "display_name_en": name,
+                    "display_name_zh_cn": name,
+                },
+            )
+            brands.append(brand)
+        run = TrendNarrativeRun.objects.create(
+            source_cycle_id="browser-u6-per-brand",
+            window_days=1,
+            facts_as_of=now,
+            packet_schema_version=3,
+            snapshot={"private": True},
+            brand_manifest=[brand.nickname for brand in brands],
+            batch_manifest=[[brand.nickname for brand in brands]],
+            internal_order=[brand.nickname for brand in brands],
+        )
+        copy = (
+            (
+                brands[0],
+                now - timedelta(minutes=5),
+                "DeepSeek discussion rose after developers shared hands-on tests.",
+                "Users highlighted faster local inference and steadier coding output.",
+                "开发者分享上手测试后，DeepSeek讨论量上升。",
+                "用户重点提到更快的本地推理和更稳定的代码输出。",
+            ),
+            (
+                brands[1],
+                now - timedelta(hours=2),
+                "MiniMax conversation stayed flat while usage questions gained share.",
+                "Posts focused on deployment setup rather than a new release.",
+                "MiniMax讨论量基本持平，但使用问题的占比上升。",
+                "帖子主要讨论部署设置，而非新版本发布。",
+            ),
+        )
+        for brand, verified_at, headline_en, secondary_en, headline_zh, secondary_zh in copy:
+            prepare_brand_trend_narrative(
+                run=run,
+                brand_key=brand.nickname,
+                brand_name_en=brand.display_name_en,
+                brand_name_zh_cn=brand.display_name_zh_cn,
+                status=BrandTrendNarrative.Status.APPROVED,
+                attempted_at=verified_at,
+                verified_at=verified_at,
+                headline_en=headline_en,
+                headline_zh_cn=headline_zh,
+                secondary_en=secondary_en,
+                secondary_zh_cn=secondary_zh,
+                critic_decision=BrandTrendNarrative.CriticDecision.APPROVE,
+                narrative_kind=BrandTrendNarrative.NarrativeKind.CONTENT_SHIFT,
+                confidence=BrandTrendNarrative.Confidence.HIGH,
+            )
+        self.assertTrue(activate_trend_narrative_run(run.pk, now=now))
+        _clear_home_pulse_cache()
+
+        config = HeadlineNarrativeConfig(
+            serving_enabled=True,
+            activation_state="owner_override",
+            publication_source="prefer_per_brand",
+            legacy_fallback_enabled=False,
+        )
+        artifact_dir = _artifact_dir()
+        cases = (
+            (
+                "en",
+                self._anonymous_cookies("en"),
+                VIEWPORTS["desktop"],
+                "DeepSeek discussion rose after developers shared hands-on tests.",
+                "Stale · last verified 2 hr ago",
+            ),
+            (
+                "zh_hans",
+                self._anonymous_cookies("zh_hans"),
+                VIEWPORTS["mobile"],
+                "开发者分享上手测试后，DeepSeek讨论量上升。",
+                "过期 · 上次验证于2小时前",
+            ),
+        )
+        with (
+            patch(
+                "monitor.trend_narrative_projection._load_config",
+                return_value=config,
+            ),
+            sync_playwright() as playwright,
+        ):
+            browser = playwright.chromium.launch()
+            try:
+                for locale, cookies, viewport, first_headline, stale_label in cases:
+                    with self.subTest(locale=locale, viewport=viewport):
+                        context = self._context_with_cookies(
+                            browser,
+                            cookies,
+                            viewport,
+                        )
+                        page = context.new_page()
+                        try:
+                            response = page.goto(
+                                self.live_server_url,
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            cards = page.locator("article[data-pw-headline-item]")
+                            self.assertEqual(cards.count(), 2)
+                            self.assertEqual(
+                                cards.nth(0).locator("h2").inner_text(),
+                                first_headline,
+                            )
+                            self.assertEqual(
+                                cards.nth(1)
+                                .locator("[data-pw-headline-item-state]")
+                                .inner_text(),
+                                stale_label,
+                            )
+                            stale_state = cards.nth(1).locator(
+                                "[data-pw-headline-item-state]"
+                            )
+                            absolute = stale_state.get_attribute("title")
+                            self.assertIsNotNone(absolute)
+                            self.assertIn("UTC", absolute)
+                            self.assertIn(
+                                absolute,
+                                stale_state.get_attribute("aria-label"),
+                            )
+                            self.assertTrue(
+                                page.locator("[data-pw-headline-legacy]").is_hidden()
+                            )
+                            for index in range(2):
+                                bounds = cards.nth(index).bounding_box()
+                                self.assertIsNotNone(bounds)
+                                self.assertGreater(bounds["width"], 0)
+                                self.assertGreater(bounds["height"], 0)
+                                self.assertLessEqual(
+                                    bounds["x"] + bounds["width"],
+                                    viewport["width"] + 1,
+                                )
+                            page.locator("[data-pw-headline]").screenshot(
+                                path=str(artifact_dir / f"per-brand-{locale}.png")
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_anonymous_filters_window_and_pulse_share_one_request_state(self) -> None:
         """One V22 action emits one immutable state to feed and chart."""
 

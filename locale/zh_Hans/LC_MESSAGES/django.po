@@ -146,6 +146,9 @@ msgstr "该时段的趋势摘要正在准备中。"
 msgid "Trend summary refresh failed; showing last result"
 msgstr "趋势摘要刷新失败，显示上次结果"
 
+msgid "Trend summaries updated"
+msgstr "趋势摘要已更新"
+
 msgid "Available"
 msgstr "可用"
 
