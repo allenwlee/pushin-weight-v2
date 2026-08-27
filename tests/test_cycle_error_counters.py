@@ -66,26 +66,35 @@ def test_commentary_normalization_treats_translator_sentinel_as_missing():
 def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeypatch):
     """Production post-fetch wiring owns state and Django flag persistence."""
     _django_setup()
-    from core.models import Post, PostEnrichmentState, PostUnsanctionedFlag
+    from core.models import (
+        Post,
+        PostEnrichmentState,
+        PostUnsanctionedFlag,
+        UnsanctionedFlagKey,
+    )
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
     from x_monitor.config import Config
 
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
     PostEnrichmentState.objects.create(post=post)
+    UnsanctionedFlagKey.objects.get_or_create(key="scam")
     client = object()
     translator_calls = []
     classifier_calls = []
+    attempt_deadlines = []
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
     monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
 
     def translate(tweets, locales, translator_client, **kwargs):
         translator_calls.append((tweets, locales, translator_client))
+        attempt_deadlines.append(kwargs["deadline"])
         return [
             {
                 "tweet_id": post.pk,
                 "text_en": post.text,
                 "text_zh_cn": "深度求索发布",
+                "en_equivalent": "The release signals another competitive step.",
                 "cn_equivalent": "深度求索这波很能打",
                 "lang_detected": "en",
             }
@@ -93,6 +102,7 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
 
     def classify(tweets, brands, classifier_client, **kwargs):
         classifier_calls.append((tweets, brands, classifier_client))
+        attempt_deadlines.append(kwargs["deadline"])
         return [{"by_brand": {}, "unsanctioned_flags": ["scam"]}]
 
     monkeypatch.setattr(
@@ -118,9 +128,11 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     assert len(translator_calls) == 1
     assert translator_calls[0][1:] == (["en", "zh_cn"], client)
     assert len(classifier_calls) == 1
+    assert attempt_deadlines[0] is attempt_deadlines[1]
+    assert attempt_deadlines[0].request_timeout_seconds == 45
     post.refresh_from_db()
     assert post.commentary_zh_cn == "深度求索这波很能打"
-    assert post.commentary_en is None
+    assert post.commentary_en == "The release signals another competitive step."
     assert PostUnsanctionedFlag.objects.filter(post=post).exists()
 
 

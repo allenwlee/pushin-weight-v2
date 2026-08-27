@@ -128,6 +128,99 @@ def _commentary_or_none(value: Any) -> str | None:
     return commentary
 
 
+def _present_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized or normalized.casefold() in {"n/a", "na"}:
+        return None
+    return normalized
+
+
+_CANONICAL_LANG_CODES = frozenset(
+    {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
+)
+
+
+def _commentary_is_distinct(value: Any, *source_values: Any) -> bool:
+    commentary = _present_text(value)
+    if commentary is None:
+        return False
+    folded = commentary.casefold()
+    return all(
+        folded != source.casefold()
+        for candidate in source_values
+        if (source := _present_text(candidate)) is not None
+    )
+
+
+def _translation_output_complete(
+    *,
+    source_text: Any,
+    lang_detected: Any,
+    text_en: Any,
+    text_zh_cn: Any,
+    commentary_en: Any,
+    commentary_zh_cn: Any,
+) -> bool:
+    """True only when canonical, genuine persistence outputs all exist."""
+    lang = _present_text(lang_detected)
+    outputs_present = all(
+        _present_text(value) is not None
+        for value in (
+            text_en,
+            text_zh_cn,
+            commentary_en,
+            commentary_zh_cn,
+        )
+    )
+    if lang not in _CANONICAL_LANG_CODES or not outputs_present:
+        return False
+    comparison_values = (source_text, text_en, text_zh_cn)
+    return _commentary_is_distinct(
+        commentary_en, *comparison_values
+    ) and _commentary_is_distinct(commentary_zh_cn, *comparison_values)
+
+
+def _requeue_recent_incomplete_translations(
+    *, cfg: Any, now: datetime | None = None
+) -> int:
+    """Reopen recent false successes without resurrecting historical debt."""
+    now = now or django_timezone.now()
+    age_cutoff = now - timedelta(hours=cfg.max_age_hours)
+    missing_output = (
+        Q(post__lang_detected__isnull=True)
+        | Q(post__lang_detected="")
+        | Q(post__text_en__isnull=True)
+        | Q(post__text_en="")
+        | Q(post__text_zh_cn__isnull=True)
+        | Q(post__text_zh_cn="")
+        | Q(post__commentary_en__isnull=True)
+        | Q(post__commentary_en="")
+        | Q(post__commentary_zh_cn__isnull=True)
+        | Q(post__commentary_zh_cn="")
+    )
+    invalid_output = (
+        ~Q(post__lang_detected__in=_CANONICAL_LANG_CODES)
+        | Q(post__commentary_en__iregex=r"^\s*n/?a\s*$")
+        | Q(post__commentary_zh_cn__iregex=r"^\s*n/?a\s*$")
+        | Q(post__commentary_en__iexact=F("post__text"))
+        | Q(post__commentary_en__iexact=F("post__text_en"))
+        | Q(post__commentary_en__iexact=F("post__text_zh_cn"))
+        | Q(post__commentary_zh_cn__iexact=F("post__text"))
+        | Q(post__commentary_zh_cn__iexact=F("post__text_en"))
+        | Q(post__commentary_zh_cn__iexact=F("post__text_zh_cn"))
+    )
+    return PostEnrichmentState.objects.filter(
+        translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        created_at__gt=age_cutoff,
+    ).filter(missing_output | invalid_output).update(
+        translation_status=PostEnrichmentState.Status.PENDING,
+        translation_next_attempt_at=now,
+        translation_error_code="translation_output_incomplete",
+    )
+
+
 @dataclass(frozen=True)
 class EnrichmentClaimBatch:
     states: tuple[PostEnrichmentState, ...]
@@ -1787,7 +1880,8 @@ class CycleRunner:
         """Drain a bounded durable translation/classification claim batch.
 
         Stage 1 (translate): calls translate_batch_pragmatics to produce
-        text_en / text_zh_cn / commentary_zh_cn / lang_detected for each post.
+        text_en / text_zh_cn / bilingual commentary / lang_detected for each
+        post.
 
         Stage 2 (classify): calls classify_batch_pragmatics_full to produce
         PostBrandSignal and PostBrandDiscourse rows for each post.
@@ -1811,6 +1905,7 @@ class CycleRunner:
             "n_enrichment_succeeded": 0,
             "n_enrichment_quarantined": 0,
             "n_enrichment_deferred": 0,
+            "n_translation_requeued": 0,
             "n_translator_unavailable": 0,
             "n_classifier_unavailable": 0,
             "n_unsanctioned_persisted": 0,
@@ -1828,6 +1923,17 @@ class CycleRunner:
             ).count()
             return counters
 
+        # Translation and classification share one hard monotonic budget.
+        # Starting it before queue reconciliation and claiming makes all work
+        # in this enrichment attempt accountable to the same five minutes.
+        attempt_deadline = enrichment_cfg.start_attempt_deadline(
+            monotonic=self._monotonic
+        )
+
+        counters["n_translation_requeued"] = (
+            _requeue_recent_incomplete_translations(cfg=enrichment_cfg)
+        )
+
         claim_batch = _claim_enrichment_states(
             cfg=enrichment_cfg,
             run_id=run_id,
@@ -1843,42 +1949,49 @@ class CycleRunner:
         if not claimed_states:
             return counters
 
-        # Build separate translator + classifier clients.
-        # build_translator_client_from_env reads ANTHROPIC_BASE_URL only
-        # (typically the MiniMax proxy path); build_anthropic_client_from_env
-        # honors X_MONITOR_CLASSIFIER_BASE_URL (DeepSeek on prod). The two
-        # stages route to different endpoints, so they need different
-        # clients — a single shared client makes translation silently fail
-        # when the classifier routes through DeepSeek (recent posts had
-        # lang_detected IS NULL because translate failed against the
-        # DeepSeek base URL).
-        from x_monitor.reattribute import (
-            build_anthropic_client_from_env,
-            build_translator_client_from_env,
-        )
-
-        translator_client = build_translator_client_from_env(self.cfg)
-        classifier_client = build_anthropic_client_from_env(self.cfg)
         # Normalize claimed Django rows to v1 format. ``kept_posts`` remains
         # in the signature for caller compatibility; durable state is the
         # queue authority so retries survive later cycles and processes.
-        tweets: list[dict[str, Any]] = []
+        translation_tweets: list[dict[str, Any]] = []
+        classification_tweets: list[dict[str, Any]] = []
         for state in claimed_states:
             post = state.post
             tid = str(post.pk)
             text = post.text or ""
             brand_ids = list(post.brands.values_list("brand_id", flat=True))
             if tid and text:
-                tweets.append({
+                tweet = {
                     "tweet_id": tid,
                     "text": text,
                     "brand_ids": list(brand_ids),
-                })
+                }
+                if state.translation_status == PostEnrichmentState.Status.PENDING:
+                    translation_tweets.append(tweet)
+                if state.classification_status == PostEnrichmentState.Status.PENDING:
+                    classification_tweets.append(tweet)
 
-        if not tweets:
+        if not translation_tweets and not classification_tweets:
             for state in claimed_states:
                 _release_enrichment_claim(state.pk, run_id=run_id)
             return counters
+
+        # Build only the clients required by pending stages. The translator and
+        # classifier use distinct role-specific routes in production.
+        from x_monitor.reattribute import (
+            build_anthropic_client_from_env,
+            build_translator_client_from_env,
+        )
+
+        translator_client = (
+            build_translator_client_from_env(self.cfg)
+            if translation_tweets
+            else None
+        )
+        classifier_client = (
+            build_anthropic_client_from_env(self.cfg)
+            if classification_tweets
+            else None
+        )
 
         # Build brand_registry from Brand model
         from core.models import Brand as BrandModel
@@ -1900,7 +2013,7 @@ class CycleRunner:
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
         translation_succeeded: set[str] = set()
-        if translator_client is None:
+        if translation_tweets and translator_client is None:
             logger.warning(
                 "_run_post_fetch: no translator client (ANTHROPIC_BASE_URL "
                 "+ MINIMAX_API_TOKEN not set) — skipping translate; "
@@ -1910,10 +2023,10 @@ class CycleRunner:
             self._errors.append("post_fetch.translator_unavailable")
             counters["n_translator_unavailable"] = 1
             translation_rows = []
-        else:
+        elif translation_tweets:
             try:
                 translation_rows = translate_batch_pragmatics(
-                    tweets,
+                    translation_tweets,
                     ["en", "zh_cn"],
                     translator_client,
                     on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
@@ -1921,18 +2034,19 @@ class CycleRunner:
                         self._error_counts["translator_batch_failed"] + 1,
                     ),
                     cfg=self.cfg,
+                    deadline=attempt_deadline,
                 )
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
                 self._error_counts["translator_batch_failed"] += 1
                 translation_rows = []
+        else:
+            translation_rows = []
 
         # Persist translations back to Post rows.
-        # Invariant: if lang_detected is a Chinese variant (zh, zh-cn,
-        # zh-hans, zh-hant, zh-tw), text_zh_cn MUST equal the source
-        # text — the original IS Chinese, so the per-locale zh_CN
-        # column just mirrors `text`. Same for EN when lang_detected
-        # is "en". Without this, the dashboard's 翻译 column under
+        # Invariant: if lang_detected is canonical Simplified Chinese,
+        # text_zh_cn MUST equal the source text. Same for EN when
+        # lang_detected is "en". Without this, the dashboard's 翻译 column under
         # zh_CN falls back to text_translated -> text (the English
         # source) which is wrong for already-Chinese posts.
         #
@@ -1943,21 +2057,31 @@ class CycleRunner:
         if translation_rows:
             from core.models import Post as PostModel
 
-            CHINESE_LANG_CODES = {"zh", "zh-cn", "zh_cn", "zh-hans", "zh-hant", "zh-tw"}
+            CHINESE_LANG_CODES = {"zh-Hans"}
             tids = [r.get("tweet_id") for r in translation_rows if r.get("tweet_id")]
-            source_text_by_tid: dict[str, str] = {}
+            posts_by_tid: dict[str, Any] = {}
             if tids:
-                for post in PostModel.objects.filter(tweet_id__in=tids).values("tweet_id", "text"):
-                    source_text_by_tid[str(post["tweet_id"])] = post["text"] or ""
+                posts_by_tid = {
+                    str(post.tweet_id): post
+                    for post in PostModel.objects.filter(tweet_id__in=tids)
+                }
             for r in translation_rows:
                 tid = r.get("tweet_id")
                 if not tid:
                     continue
-                lang_detected = r.get("lang_detected")
-                source_text = source_text_by_tid.get(str(tid), "")
-                text_zh_cn = r.get("text_zh_cn") or r.get("literal_zh") or None
-                text_en = r.get("text_en") or None
-                commentary_zh_cn = _commentary_or_none(r.get("cn_equivalent"))
+                post = posts_by_tid.get(str(tid))
+                if post is None:
+                    continue
+                if r.get("translation_failed"):
+                    continue
+                lang_detected = _present_text(r.get("lang_detected"))
+                if lang_detected not in _CANONICAL_LANG_CODES:
+                    lang_detected = None
+                source_text = post.text or ""
+                text_zh_cn = _present_text(
+                    r.get("text_zh_cn") or r.get("literal_zh")
+                )
+                text_en = _present_text(r.get("text_en"))
                 # Invariant: Chinese-detected posts must have text_zh_cn
                 # populated (use the source text if the LLM didn't emit one).
                 if lang_detected in CHINESE_LANG_CODES and not text_zh_cn:
@@ -1965,13 +2089,39 @@ class CycleRunner:
                 # Same for English-detected posts and text_en.
                 if lang_detected == "en" and not text_en:
                     text_en = source_text or None
-                PostModel.objects.filter(tweet_id=tid).update(
-                    text_en=text_en,
-                    text_zh_cn=text_zh_cn,
-                    commentary_zh_cn=commentary_zh_cn,
-                    lang_detected=lang_detected or None,
+                comparison_values = (
+                    source_text,
+                    text_en or post.text_en,
+                    text_zh_cn or post.text_zh_cn,
                 )
-                if not r.get("translation_failed") and lang_detected:
+                commentary_en = _commentary_or_none(r.get("en_equivalent"))
+                if not _commentary_is_distinct(
+                    commentary_en, *comparison_values
+                ):
+                    commentary_en = None
+                commentary_zh_cn = _commentary_or_none(r.get("cn_equivalent"))
+                if not _commentary_is_distinct(
+                    commentary_zh_cn, *comparison_values
+                ):
+                    commentary_zh_cn = None
+                effective = {
+                    "text_en": text_en or post.text_en,
+                    "text_zh_cn": text_zh_cn or post.text_zh_cn,
+                    "commentary_en": commentary_en or post.commentary_en,
+                    "commentary_zh_cn": commentary_zh_cn or post.commentary_zh_cn,
+                    "lang_detected": lang_detected or post.lang_detected,
+                }
+                updates = {
+                    field: value
+                    for field, value in effective.items()
+                    if _present_text(value) is not None
+                }
+                if updates:
+                    PostModel.objects.filter(tweet_id=tid).update(**updates)
+                if _translation_output_complete(
+                    source_text=source_text,
+                    **effective,
+                ):
                     translation_succeeded.add(str(tid))
             counters["n_translated"] = len(translation_rows)
             counters["n_failed_translate"] = sum(
@@ -1985,7 +2135,7 @@ class CycleRunner:
             succeeded_ids=translation_succeeded,
             error_code=(
                 "translator_unavailable"
-                if translator_client is None
+                if translation_tweets and translator_client is None
                 else "translation_incomplete"
             ),
             cfg=enrichment_cfg,
@@ -1999,16 +2149,16 @@ class CycleRunner:
 
         results: list[dict[str, Any]] = []
         classification_error_code = "classification_incomplete"
-        if classifier_client is None:
+        if classification_tweets and classifier_client is None:
             logger.warning("_run_post_fetch: no classifier client — skipping classify")
             self._error_counts["classifier_unavailable"] += 1
             self._errors.append("post_fetch.classifier_unavailable")
             counters["n_classifier_unavailable"] = 1
             classification_error_code = "classifier_unavailable"
-        else:
+        elif classification_tweets:
             try:
                 results = classify_batch_pragmatics_full(
-                    tweets,
+                    classification_tweets,
                     brand_registry,
                     classifier_client,
                     model=self.cfg.llm.classifier_model,
@@ -2016,6 +2166,7 @@ class CycleRunner:
                         "classifier_batch_failed",
                         self._error_counts["classifier_batch_failed"] + 1,
                     ),
+                    deadline=attempt_deadline,
                 )
             except Exception as exc:
                 logger.warning(
@@ -2039,7 +2190,7 @@ class CycleRunner:
         from monitor.unsanctioned_flags import persist_classifier_flags
 
         classification_succeeded: set[str] = set()
-        for i, (tweet, result) in enumerate(zip(tweets, results)):
+        for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
             tid = tweet["tweet_id"]
             by_brand = (
                 (result.get("by_brand") or {})
@@ -2134,7 +2285,10 @@ class CycleRunner:
             # classify_batch_pragmatics_full batches 20 posts per LLM call
             # internally.  We track boundaries in the result loop so the
             # max_llm_calls cap can stop processing past a boundary.
-            if (i + 1) % _CLASSIFY_BATCH_SIZE == 0 and i + 1 < len(tweets):
+            if (
+                (i + 1) % _CLASSIFY_BATCH_SIZE == 0
+                and i + 1 < len(classification_tweets)
+            ):
                 if pause_sec > 0:
                     import time as _time
 

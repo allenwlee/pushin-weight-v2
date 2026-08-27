@@ -75,9 +75,9 @@ def _max_tokens_for_batch_size(n: int) -> int:
     2026-08-05 a prod-typical 20-post rich-content batch consumed
     19,554 output tokens at DeepSeek V4 Pro (~977 tokens/post);
     with classification per-tweet overhead (text_en + literal_zh +
-    cn_equivalent + annotation + JSON framing) the budget must
-    scale as O(n) with a high per-post coefficient. 1000 tokens/post
-    gives ~5% headroom over the observed worst case.
+    en_equivalent + cn_equivalent + annotation + JSON framing) the budget must
+    scale as O(n) with a high per-post coefficient. Bilingual commentary now
+    uses 1500 tokens/post to preserve meaningful headroom over that probe.
 
     The hard cap is 65536 — DeepSeek's documented max output. The
     earlier 8192 cap was based on an outdated "DS V4 beta max"
@@ -99,10 +99,12 @@ def _max_tokens_for_batch_size(n: int) -> int:
     """
     if n < 1:
         return 16384
-    # 1000 tokens/post from the 2026-08-05 prod probe (19,554 tokens on
-    # 20 posts). Floor of 16384 defends against tiny-batch edge cases
+    # The original 1000 tokens/post covered the 2026-08-05 prod probe
+    # (19,554 tokens on 20 posts). Bilingual commentary adds a second
+    # synthesis field, so retain 50% structural headroom. Floor of 16384
+    # defends against tiny-batch edge cases
     # (1-2 tweet batches still need room for framing + cn_equivalent).
-    return min(65536, max(16384, 1000 * n))
+    return min(65536, max(16384, 1500 * n))
 
 
 # n_tweets is now passed directly to _call_with_retry
@@ -214,6 +216,7 @@ def _call_with_retry(
     *,
     n_tweets: int = 0,
     cfg: "Config | None" = None,
+    deadline: Any | None = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential-backoff retry on transient errors.
 
@@ -250,6 +253,11 @@ def _call_with_retry(
     # classifier-swap probe data, plan 2026-07-15-002 KTD4).
     max_tokens = _max_tokens_for_batch_size(n_tweets)
     for attempt in range(_MAX_RETRIES):
+        request_timeout: float | None = None
+        if deadline is not None:
+            request_timeout = float(deadline.request_timeout())
+            if request_timeout <= 0:
+                raise TimeoutError("enrichment_attempt_deadline_exhausted")
         try:
             kwargs: dict = {
                 "model": model,
@@ -258,11 +266,18 @@ def _call_with_retry(
             }
             if thinking is not None:
                 kwargs["thinking"] = thinking
+            if request_timeout is not None:
+                kwargs["timeout"] = request_timeout
             return client.messages_create(**kwargs)
         except Exception as e:
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
-                time.sleep(_BACKOFF_BASE_SECONDS * (2 ** attempt))
+                backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
+                if deadline is not None and deadline.remaining() <= backoff:
+                    raise TimeoutError(
+                        "enrichment_attempt_deadline_exhausted"
+                    ) from e
+                time.sleep(backoff)
     # All retries failed.
     assert last_exc is not None
     raise last_exc
@@ -522,14 +537,19 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "Detect from the tweet text (not optional). Use `other` when none of the "
     "named codes fit. Never leave blank.\n"
     "  text_en:          English text. Best interpretation of the source "
-    "(English posts may echo source; non-English get a translation). "
-    "Server-side may NULL this column when lang_detected is English.\n"
+    "(English posts may echo source; non-English get a translation).\n"
     "  literal_zh:       Best-interpretation Simplified Chinese rendering. "
     "Preserve slang; mixed Chinese/English OK for model names. "
-    "@mentions, URLs, and emojis stay verbatim. Server-side may NULL the "
-    "zh-CN column when lang_detected is already Simplified Chinese.\n"
-    "  cn_equivalent:    How Chinese netizens on Weibo/Zhihu/Bilibili would "
-    "say the same thing. Use 'N/A' if no equivalent.\n"
+    "@mentions, URLs, and emojis stay verbatim. Simplified Chinese posts may "
+    "echo the source.\n"
+    "  en_equivalent:    REQUIRED English-language analyst commentary: a "
+    "concise synthesis of what the post means and why it matters. Never use "
+    "'N/A' or an empty string. It must not copy the source or text_en. For an "
+    "emoji-only post, explain the expressed reaction.\n"
+    "  cn_equivalent:    REQUIRED Simplified Chinese analyst commentary in "
+    "the natural voice of Chinese netizens on Weibo/Zhihu/Bilibili. Never "
+    "use 'N/A' or an empty string. It must not copy the source or literal_zh. "
+    "For an emoji-only post, explain the expressed reaction.\n"
     "  annotation:       Optional 1-3 sentence cultural note ONLY for F2/F3 "
     "friction (meme origin, named event). Otherwise empty string.\n"
     "  noop_en:          Optional hint: true if source is already English.\n"
@@ -543,7 +563,8 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "Rules:\n"
     "1. Return ONLY a JSON object of the form:\n"
     '   {"results": [{"tweet_id": str, "lang_detected": str, '
-    '"text_en": str, "literal_zh": str, "cn_equivalent": str, '
+    '"text_en": str, "literal_zh": str, "en_equivalent": str, '
+    '"cn_equivalent": str, '
     '"annotation": str, "noop_en": bool, "noop_zh": bool}, ...]}\n'
     "2. One result per input tweet, in the same order. "
     "lang_detected first on every object.\n"
@@ -677,7 +698,7 @@ def apply_friction_judge(
 def _empty_pragmatics_row(
     tweet: dict[str, Any], failed: bool = False, dry_run: bool = False
 ) -> dict[str, Any]:
-    """U3: empty-row shape for the four-pronged contract (no discourse)."""
+    """Empty-row shape for translation, bilingual commentary, and annotation."""
     row: dict[str, Any] = {
         "tweet_id": str(tweet.get("tweet_id") or tweet.get("id")),
         "brand_id": tweet.get("brand_id"),
@@ -685,6 +706,7 @@ def _empty_pragmatics_row(
         "text_zh_cn": None,
         "literal_zh": None,
         "lang_detected": None,
+        "en_equivalent": None,
         "cn_equivalent": None,
         "annotation": None,
     }
@@ -731,11 +753,7 @@ def _finalize_pragmatics_row(
         and _raw_en.strip() == _source_text
         and not is_already_en
     )
-    text_en = (
-        None
-        if is_already_en or is_already_zh or _en_is_echo
-        else _raw_en
-    )
+    text_en = None if is_already_en or _en_is_echo else _raw_en
     literal_zh_raw = (
         None if is_already_zh
         else (judged.get("literal_zh") or parsed.get("text_zh_cn"))
@@ -752,6 +770,7 @@ def _finalize_pragmatics_row(
         "noop_en": text_en is None,
         "noop_zh": text_zh_cn is None,
         "literal_zh": literal_zh_raw,
+        "en_equivalent": judged.get("en_equivalent"),
         "cn_equivalent": judged.get("cn_equivalent"),
         "annotation": judged.get("annotation"),
     }
@@ -768,6 +787,7 @@ def _merge_repair_row(
         "text_en",
         "literal_zh",
         "text_zh_cn",
+        "en_equivalent",
         "cn_equivalent",
         "annotation",
         "noop_en",
@@ -787,12 +807,61 @@ def _merge_repair_row(
     return merged
 
 
-def _build_lang_repair_prompt(
+def _usable_output(value: object) -> str | None:
+    """Return a normalized required output, rejecting blank sentinels."""
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized or normalized.casefold() in {"n/a", "na"}:
+        return None
+    return normalized
+
+
+def _commentary_is_distinct(value: object, *source_values: object) -> bool:
+    commentary = _usable_output(value)
+    if commentary is None:
+        return False
+    folded = commentary.casefold()
+    return all(
+        folded != source.casefold()
+        for candidate in source_values
+        if (source := _usable_output(candidate)) is not None
+    )
+
+
+def missing_pragmatics_outputs(
+    tweet: dict[str, Any], row: dict[str, Any]
+) -> tuple[str, ...]:
+    """Name missing persistence-bearing outputs for one translator row."""
+    missing: list[str] = []
+    lang = normalize_lang_detected(row.get("lang_detected"))
+    if lang is None:
+        missing.append("lang_detected")
+
+    source_text = tweet.get("text")
+    text_en = row.get("text_en")
+    literal_zh = row.get("literal_zh") or row.get("text_zh_cn")
+    if lang is not None and lang != "en" and _usable_output(text_en) is None:
+        missing.append("text_en")
+    if lang is not None and lang != "zh-Hans" and _usable_output(literal_zh) is None:
+        missing.append("literal_zh")
+    if not _commentary_is_distinct(
+        row.get("en_equivalent"), source_text, text_en, literal_zh
+    ):
+        missing.append("en_equivalent")
+    if not _commentary_is_distinct(
+        row.get("cn_equivalent"), source_text, text_en, literal_zh
+    ):
+        missing.append("cn_equivalent")
+    return tuple(missing)
+
+
+def _build_pragmatics_repair_prompt(
     tweets: list[dict[str, Any]],
     target_locales: list[str],
     brand_names: list[str] | None = None,
 ) -> str:
-    """Short repair prompt: full pragmatics JSON with required lang_detected."""
+    """Short repair prompt requesting every required persistence output."""
     base = build_pragmatics_translation_prompt(
         tweets,
         target_locales,
@@ -800,9 +869,10 @@ def _build_lang_repair_prompt(
         few_shot_examples=[],  # no few-shot on repair — keep small
     )
     addendum = (
-        "\n\nREPAIR: A previous response omitted or used an invalid "
-        "lang_detected. For EVERY tweet below, return the full results "
-        "array again. lang_detected is REQUIRED and must be one of: "
+        "\n\nREPAIR: A previous response omitted, blanked, used N/A for, "
+        "or copied a required output. For EVERY tweet below, return the full "
+        "results array again, including distinct non-empty en_equivalent and "
+        "cn_equivalent commentary. lang_detected is REQUIRED and must be one of: "
         "en | zh-Hans | zh-Hant | ja | ko | other. Put lang_detected "
         "first on each object. Do not omit it."
     )
@@ -819,13 +889,15 @@ def translate_batch_pragmatics(
     dry_run: bool = False,
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
     cfg: "Config | None" = None,
+    deadline: Any | None = None,
 ) -> list[dict[str, Any]]:
-    """U3: translate a batch of tweets with the §5.1 four-pronged contract.
+    """Translate a batch with required bilingual commentary and translations.
     Pass cfg to thread through to model resolution (per swap-translator plan).
 
-    Plan 2026-08-10-004: after parse, each row must have allowlisted
-    lang_detected. Invalid rows get at most one repair LLM call (bad
-    ids only); residual invalid → failed empty rows (no null-lang success).
+    After parse, each row must have an allowlisted language, required target
+    translations, and distinct non-empty bilingual commentary. Incomplete rows
+    get at most one repair LLM call (bad ids only); residual incomplete output
+    becomes a failed empty row.
 
     on_batch_error (U7): optional callback invoked per-batch when the
     LLM call raised (after retries exhausted) OR the response failed
@@ -849,7 +921,13 @@ def translate_batch_pragmatics(
             few_shot_examples=few_shot_examples,
         )
         try:
-            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
+            response = _call_with_retry(
+                client,
+                prompt,
+                n_tweets=len(batch),
+                cfg=cfg,
+                deadline=deadline,
+            )
         except Exception as exc:
             logger.warning(
                 "translator_batch_failed",
@@ -882,26 +960,32 @@ def translate_batch_pragmatics(
             first_by_tid[tid] = dict(p)
             first_by_tid[tid]["_tweet"] = t
 
-        invalid_tids = [
+        incomplete_tids = [
             tid for tid in order_tids
-            if not validate_lang_detected(first_by_tid[tid].get("lang_detected"))
+            if missing_pragmatics_outputs(
+                first_by_tid[tid]["_tweet"], first_by_tid[tid]
+            )
         ]
 
-        if invalid_tids:
-            bad_tweets = [first_by_tid[tid]["_tweet"] for tid in invalid_tids]
-            repair_prompt = _build_lang_repair_prompt(
+        if incomplete_tids:
+            bad_tweets = [first_by_tid[tid]["_tweet"] for tid in incomplete_tids]
+            repair_prompt = _build_pragmatics_repair_prompt(
                 bad_tweets, target_locales, brand_names=brand_names
             )
             try:
                 repair_resp = _call_with_retry(
-                    client, repair_prompt, n_tweets=len(bad_tweets), cfg=cfg
+                    client,
+                    repair_prompt,
+                    n_tweets=len(bad_tweets),
+                    cfg=cfg,
+                    deadline=deadline,
                 )
                 repair_parsed = _parse_pragmatics_response(repair_resp, bad_tweets)
             except Exception as exc:
                 logger.warning(
                     "translator_lang_repair_failed",
                     exc_info=True,
-                    extra={"n_invalid": len(invalid_tids), "error_type": type(exc).__name__},
+                    extra={"n_incomplete": len(incomplete_tids), "error_type": type(exc).__name__},
                 )
                 repair_parsed = None
                 if on_batch_error is not None:
@@ -918,13 +1002,13 @@ def translate_batch_pragmatics(
                     first_by_tid[tid] = _merge_repair_row(first_by_tid[tid], rp)
                     first_by_tid[tid]["_tweet"] = t
                 logger.info(
-                    "translator_lang_repair_attempted n_invalid=%d",
-                    len(invalid_tids),
+                    "translator_output_repair_attempted n_incomplete=%d",
+                    len(incomplete_tids),
                 )
             else:
                 logger.warning(
-                    "translator_lang_repair_parse_failed n_invalid=%d",
-                    len(invalid_tids),
+                    "translator_output_repair_parse_failed n_incomplete=%d",
+                    len(incomplete_tids),
                 )
 
         for tid in order_tids:
@@ -935,6 +1019,15 @@ def translate_batch_pragmatics(
                 logger.warning(
                     "translator_lang_missing tweet_id=%s after_repair",
                     tid,
+                )
+                out.append(_empty_pragmatics_row(t, failed=True))
+                continue
+            missing_outputs = missing_pragmatics_outputs(t, row0)
+            if missing_outputs:
+                logger.warning(
+                    "translator_output_incomplete tweet_id=%s after_repair missing=%s",
+                    tid,
+                    ",".join(missing_outputs),
                 )
                 out.append(_empty_pragmatics_row(t, failed=True))
                 continue
@@ -1161,7 +1254,9 @@ class AnthropicClaudeClient:
         # batches; 120s gives 6x headroom. 2 retries with jitter
         # gives the hung batch a fresh connection on retry.
         kwargs.setdefault("timeout", 120.0)
-        kwargs.setdefault("max_retries", 2)
+        # Retry ownership belongs to _call_with_retry, where the shared
+        # enrichment-attempt deadline can stop further work deterministically.
+        kwargs.setdefault("max_retries", 0)
         self._client = anthropic.Anthropic(**kwargs)
 
     def messages_create(self, **kwargs) -> dict[str, Any]:

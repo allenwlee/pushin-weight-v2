@@ -28,11 +28,12 @@ def test_harvest_runtime_defaults_pin_u9_contract():
     assert cfg.harvest.backlog.replays_per_cycle == 2
     assert cfg.harvest.list_membership.page_size == 20
     assert cfg.harvest.list_membership.reconcile_interval_hours == 6
-    assert cfg.harvest.enrichment.claim_per_cycle == 20
+    assert cfg.harvest.enrichment.claim_per_cycle == 50
     assert cfg.harvest.enrichment.max_attempts == 8
     assert cfg.harvest.enrichment.max_age_hours == 24
-    assert cfg.harvest.enrichment.claim_ttl_seconds == 180
-    assert cfg.harvest.enrichment.attempt_budget_seconds == 90
+    assert cfg.harvest.enrichment.claim_ttl_seconds == 360
+    assert cfg.harvest.enrichment.request_timeout_seconds == 45
+    assert cfg.harvest.enrichment.attempt_budget_seconds == 300
 
 
 @pytest.mark.parametrize(
@@ -86,6 +87,7 @@ def test_config_creates_one_shareable_monotonic_deadline_contract():
         ("max_attempts", 0),
         ("max_age_hours", 0),
         ("claim_ttl_seconds", 0),
+        ("request_timeout_seconds", 0),
         ("attempt_budget_seconds", 0),
     ],
 )
@@ -94,3 +96,15 @@ def test_enrichment_runtime_rejects_unbounded_or_disabled_guards(field, value):
         _config(enrichment={field: value})
 
     assert field in str(exc_info.value)
+
+
+def test_enrichment_claim_lease_covers_the_full_attempt_budget():
+    with pytest.raises(ValidationError) as exc_info:
+        _config(
+            enrichment={
+                "claim_ttl_seconds": 299,
+                "attempt_budget_seconds": 300,
+            }
+        )
+
+    assert "claim_ttl_seconds" in str(exc_info.value)

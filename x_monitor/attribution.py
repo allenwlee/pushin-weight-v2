@@ -1012,6 +1012,7 @@ def _call_signal_with_retry(
     model: str | None = None,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
+    deadline: Any | None = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential backoff (mirrors translator).
 
@@ -1037,12 +1038,23 @@ def _call_signal_with_retry(
     if thinking is not None:
         create_kwargs["thinking"] = thinking
     for attempt in range(_MAX_RETRIES):
+        call_kwargs = dict(create_kwargs)
+        if deadline is not None:
+            request_timeout = float(deadline.request_timeout())
+            if request_timeout <= 0:
+                raise TimeoutError("enrichment_attempt_deadline_exhausted")
+            call_kwargs["timeout"] = request_timeout
         try:
-            return client.messages_create(**create_kwargs)
+            return client.messages_create(**call_kwargs)
         except Exception as e:
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
-                time.sleep(_BACKOFF_BASE_SECONDS * (2 ** attempt))
+                backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
+                if deadline is not None and deadline.remaining() <= backoff:
+                    raise TimeoutError(
+                        "enrichment_attempt_deadline_exhausted"
+                    ) from e
+                time.sleep(backoff)
     assert last_exc is not None
     raise last_exc
 
@@ -1703,6 +1715,7 @@ def classify_pragmatics_full(
     *,
     model: str | None = None,
     thinking: "dict | None" = None,
+    deadline: Any | None = None,
 ) -> dict[str, Any]:
     """U4 (U2a): per-brand classification + top-level unsanctioned_flags.
 
@@ -1729,6 +1742,7 @@ def classify_pragmatics_full(
             prompt,
             model=model,
             thinking=thinking,
+            deadline=deadline,
         )
     except Exception as e:
         logger.warning(
@@ -1953,6 +1967,7 @@ def classify_batch_pragmatics_full(
     on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
+    deadline: Any | None = None,
 ) -> list[dict[str, Any]]:
     """U4 (batched): per-post classification across N tweets, one LLM call per batch.
 
@@ -2020,6 +2035,8 @@ def classify_batch_pragmatics_full(
     results: list[dict[str, Any]] = []
     for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE):
         batch = tweets[start: start + _CLASSIFY_BATCH_SIZE]
+        if deadline is not None and deadline.expired():
+            raise TimeoutError("enrichment_attempt_deadline_exhausted")
         # Skip posts that carry no brand list — emit empty shape in
         # their slot so the result list is index-aligned with the
         # input. The classifier's purpose is per-brand classification;
@@ -2040,7 +2057,10 @@ def classify_batch_pragmatics_full(
         try:
             response = _call_signal_with_retry(
                 anthropic_client, prompt,
-                model=model, max_tokens=max_tokens, thinking=thinking,
+                model=model,
+                max_tokens=max_tokens,
+                thinking=thinking,
+                deadline=deadline,
             )
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
@@ -2058,7 +2078,9 @@ def classify_batch_pragmatics_full(
             )
             if on_batch_error is not None:
                 on_batch_error(batch, exc)
-            for t in batch:
+            for index, t in enumerate(batch):
+                if deadline is not None and deadline.expired():
+                    raise TimeoutError("enrichment_attempt_deadline_exhausted")
                 try:
                     single = classify_pragmatics_full(
                         text=t.get("text") or "",
@@ -2067,6 +2089,7 @@ def classify_batch_pragmatics_full(
                         anthropic_client=anthropic_client,
                         model=model,
                         thinking=thinking,
+                        deadline=deadline,
                     )
                     results.append(
                         single if isinstance(single, dict) else dict(empty),
@@ -2193,8 +2216,8 @@ class AnthropicClaudeClient:
         import urllib.parse
         from urllib.parse import urlparse
         parsed = urlparse(url)
-        body_bytes = _json_module.dumps(kwargs).encode("utf-8")
         timeout = kwargs.pop("timeout", 60)
+        body_bytes = _json_module.dumps(kwargs).encode("utf-8")
         conn = http.client.HTTPSConnection(
             parsed.hostname,
             parsed.port or 443,
