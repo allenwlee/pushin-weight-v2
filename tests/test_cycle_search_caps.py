@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from django.test import override_settings
 
 from monitor import cycle as cycle_mod
 from monitor.cycle import CycleRunner
@@ -57,18 +58,14 @@ def test_fetch_uses_config_search_caps_by_default(call):
     assert api.kwargs["max_per_page"] == 11
 
 
-def test_explicit_runtime_search_cap_overrides_win(call, monkeypatch):
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 17, raising=False
-    )
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", 2, raising=False
-    )
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_MAX_PER_PAGE", 7, raising=False
-    )
-    api = CaptureApi()
-    _runner()._fetch_tweets(call, api, window=(100, 200))
+def test_explicit_runtime_search_cap_overrides_win(call):
+    with override_settings(
+        X_MONITOR_CYCLE_LIMIT_PER_CALL=17,
+        X_MONITOR_CYCLE_MAX_PAGES_PER_CALL=2,
+        X_MONITOR_CYCLE_MAX_PER_PAGE=7,
+    ):
+        api = CaptureApi()
+        _runner()._fetch_tweets(call, api, window=(100, 200))
     assert api.kwargs["max_results"] == 17
     assert api.kwargs["max_pages"] == 2
     assert api.kwargs["max_per_page"] == 7

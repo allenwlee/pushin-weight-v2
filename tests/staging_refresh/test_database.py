@@ -20,10 +20,12 @@ from scripts.staging_refresh.database import (
     LifecycleManager,
     PostgresRuntime,
     PsycopgSnapshotAdapter,
+    QuiescenceInspection,
     RefreshError,
     ScrubReport,
     SnapshotRestoreEngine,
     SourceCensus,
+    inspect_staging_quiescence,
     scrub_candidate_data,
 )
 from scripts.staging_refresh.policy import load_policy
@@ -35,6 +37,11 @@ from scripts.staging_refresh.receipt import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = REPO_ROOT / "config" / "staging_refresh.yaml"
+
+
+@contextmanager
+def _available_harvest_lock(_url: str, **_options: object) -> Iterator[None]:
+    yield
 
 
 class FakeAdapter:
@@ -937,6 +944,15 @@ def test_runtime_refresh_owns_cleanup_and_returns_the_persisted_receipt(
     engine, adapter, runner, events = _engine(
         tmp_path, adapter_class=FakeLifecycleAdapter
     )
+
+    @contextmanager
+    def harvest_lock(_url: str, **_options: object) -> Iterator[None]:
+        events.append("lock:harvest:acquire")
+        try:
+            yield
+        finally:
+            events.append("lock:harvest:release")
+
     runtime = PostgresRuntime(
         engine.policy,
         source_url=engine.source_url,
@@ -945,6 +961,13 @@ def test_runtime_refresh_owns_cleanup_and_returns_the_persisted_receipt(
         engine=engine,
         runner=runner,
         now=engine.now,
+        harvest_lock_factory=harvest_lock,
+        quiescence_guard=lambda: QuiescenceInspection(
+            worker_nodes=(),
+            queue_depth=0,
+            unacked_count=0,
+            envelope_present=False,
+        ),
     )
 
     result = runtime.execute("refresh")
@@ -953,7 +976,159 @@ def test_runtime_refresh_owns_cleanup_and_returns_the_persisted_receipt(
     assert result["canonical_database"] == engine.policy.target.database
     assert list(tmp_path.glob("*.dump")) == []
     assert events.count("lock:target:acquire") == 1
-    assert events[-1] == "lock:target:release"
+    assert events[0] == "lock:harvest:acquire"
+    assert events[-1] == "lock:harvest:release"
+    assert events.index("lock:target:release") < events.index("lock:harvest:release")
+
+
+@pytest.mark.parametrize("action", ["preflight", "refresh"])
+def test_harvest_coordination_refusal_precedes_snapshot_work(
+    tmp_path: Path, action: str
+) -> None:
+    engine, adapter, runner, events = _engine(
+        tmp_path, adapter_class=FakeLifecycleAdapter
+    )
+
+    @contextmanager
+    def refusing_harvest_lock(_url: str, **_options: object) -> Iterator[None]:
+        events.append("lock:harvest:refused")
+        raise DatabaseLockError("harvest_lock_unavailable")
+        yield
+
+    runtime = PostgresRuntime(
+        engine.policy,
+        source_url=engine.source_url,
+        target_url=engine.target_url,
+        adapter=adapter,
+        engine=engine,
+        runner=runner,
+        now=engine.now,
+        harvest_lock_factory=refusing_harvest_lock,
+        quiescence_guard=lambda: QuiescenceInspection((), 0, 0),
+    )
+
+    with pytest.raises(DatabaseLockError, match="^harvest_lock_unavailable$"):
+        runtime.execute(action)
+
+    assert events == ["lock:harvest:refused"]
+    assert not list(tmp_path.glob("*.dump"))
+
+
+@pytest.mark.parametrize(
+    (
+        "workers",
+        "queue_depth",
+        "unacked",
+        "unacked_index",
+        "namespace_keys",
+        "envelope",
+        "code",
+    ),
+    [
+        (("worker-a",), 0, 0, 0, (), False, "staging_headline_worker_active:worker-a"),
+        ((), 1, 0, 0, (), False, "staging_headline_queue_not_empty"),
+        ((), 0, 1, 0, (), False, "staging_headline_queue_not_empty"),
+        ((), 0, 0, 1, (), False, "staging_headline_queue_not_empty"),
+        (
+            (),
+            0,
+            0,
+            0,
+            ("trend-narratives:stale",),
+            False,
+            "staging_headline_queue_not_empty",
+        ),
+        ((), 0, 0, 0, (), True, "staging_headline_envelope_present"),
+    ],
+)
+def test_runtime_quiescence_gate_refuses_before_refresh_work(
+    tmp_path: Path,
+    workers: tuple[str, ...],
+    queue_depth: int,
+    unacked: int,
+    unacked_index: int,
+    namespace_keys: tuple[str, ...],
+    envelope: bool,
+    code: str,
+) -> None:
+    engine, adapter, runner, events = _engine(
+        tmp_path, adapter_class=FakeLifecycleAdapter
+    )
+    runtime = PostgresRuntime(
+        engine.policy,
+        source_url=engine.source_url,
+        target_url=engine.target_url,
+        adapter=adapter,
+        engine=engine,
+        runner=runner,
+        now=engine.now,
+        harvest_lock_factory=_available_harvest_lock,
+        quiescence_guard=lambda: QuiescenceInspection(
+            worker_nodes=workers,
+            queue_depth=queue_depth,
+            unacked_count=unacked,
+            unacked_index_count=unacked_index,
+            namespace_keys=namespace_keys,
+            envelope_present=envelope,
+        ),
+    )
+
+    with pytest.raises(RefreshError, match=f"^{code}$"):
+        runtime.execute("refresh")
+
+    assert not any(event.startswith("snapshot:open") for event in events)
+    assert not list(tmp_path.glob("*.dump"))
+
+
+def test_live_quiescence_inspection_reads_worker_queue_and_envelope() -> None:
+    policy = load_policy(POLICY_PATH)
+
+    class RedisClient:
+        def ping(self):
+            return True
+
+        def llen(self, key):
+            assert key == policy.quiescence.queue_name
+            return 2
+
+        def hlen(self, key):
+            assert key == "unacked"
+            return 1
+
+        def zcard(self, key):
+            assert key == "unacked_index"
+            return 3
+
+        def scan_iter(self, *, match):
+            assert match == "trend-narratives*"
+            return iter(("trend-narratives", "trend-narratives:stale"))
+
+        def exists(self, key):
+            assert key == policy.quiescence.envelope_key
+            return 1
+
+    class Inspector:
+        def ping(self):
+            return {"stage-worker@host": {"ok": "pong"}}
+
+    class App:
+        control = SimpleNamespace(inspect=lambda timeout: Inspector())
+
+    inspection = inspect_staging_quiescence(
+        policy,
+        "redis://staging-broker/0",
+        redis_factory=lambda *_args, **_kwargs: RedisClient(),
+        celery_factory=lambda *_args, **_kwargs: App(),
+    )
+
+    assert inspection == QuiescenceInspection(
+        worker_nodes=("stage-worker@host",),
+        queue_depth=2,
+        unacked_count=1,
+        unacked_index_count=3,
+        namespace_keys=("trend-narratives:stale",),
+        envelope_present=True,
+    )
 
 
 def test_runtime_refuses_a_lifecycle_adapter_different_from_its_engine(
@@ -991,6 +1166,8 @@ def test_runtime_lock_refusal_happens_before_lifecycle_mutation(
         target_url=engine.target_url,
         adapter=adapter,
         lock_factory=refusing_lock,
+        harvest_lock_factory=_available_harvest_lock,
+        quiescence_guard=lambda: QuiescenceInspection((), 0, 0),
     )
     recovery = "pushinweight_staging_recovery_20260827t010203z"
 
@@ -1054,7 +1231,9 @@ def test_termination_signals_only_app_sessions_and_bounds_managed_drain(
         statement for statement in statements if "pg_terminate_backend" in statement
     )
     assert "usename = current_user" in terminate
-    assert sum("SELECT count(*) FROM pg_stat_activity" in item for item in statements) == 2
+    assert (
+        sum("SELECT count(*) FROM pg_stat_activity" in item for item in statements) == 2
+    )
 
     statements.clear()
     remaining = iter([1])
@@ -1163,14 +1342,20 @@ def test_postgres_adapter_executes_the_real_database_lifecycle_sql() -> None:
         recovery_state = adapter.database_state(target_url, recovery)
         assert canonical_state.allow_connections is True
         assert recovery_state.allow_connections is False
-        assert decode_database_comment(
-            canonical_state.comment,
-            marker_prefix=policy.lifecycle.marker_prefix,
-        ).receipt == receipt
-        assert decode_database_comment(
-            recovery_state.comment,
-            marker_prefix=policy.lifecycle.marker_prefix,
-        ).receipt == receipt
+        assert (
+            decode_database_comment(
+                canonical_state.comment,
+                marker_prefix=policy.lifecycle.marker_prefix,
+            ).receipt
+            == receipt
+        )
+        assert (
+            decode_database_comment(
+                recovery_state.comment,
+                marker_prefix=policy.lifecycle.marker_prefix,
+            ).receipt
+            == receipt
+        )
         assert {
             state.name for state in adapter.database_states(target_url, "test_")
         } >= {
@@ -1190,7 +1375,22 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
     from django.contrib.sites.models import Site
     from django.db import connection, transaction
 
-    from core.models import TrendNarrative, TrendNarrativeSubject
+    from core.models import (
+        Account,
+        BrandTrendNarrative,
+        CallState,
+        HarvestBacklogWindow,
+        Post,
+        PostEnrichmentState,
+        TrendNarrative,
+        TrendNarrativeProviderCall,
+        TrendNarrativeRun,
+        TrendNarrativeSubject,
+        TrendNarrativeVisibleRun,
+        TrendNarrativeWorkSlot,
+        TwitterListMembership,
+        TwitterListSyncState,
+    )
 
     policy = load_policy(POLICY_PATH)
     now = datetime(2026, 8, 27, 1, 0, tzinfo=UTC)
@@ -1245,6 +1445,87 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
         name_zh_cn_snapshot="已发布主体",
         evidence_ids=["post:published"],
     )
+    account = Account.objects.create(author_id="staging-state-author", handle="state")
+    post = Post.objects.create(
+        tweet_id="staging-state-post",
+        author=account,
+        text="state fixture",
+        created_at=now,
+    )
+    PostEnrichmentState.objects.create(
+        post=post,
+        claim_owner="staging-worker",
+        claim_run_id="staging-run",
+        claimed_at=now,
+        claim_expires_at=now.replace(hour=2),
+    )
+    CallState.objects.create(
+        brand_id="*",
+        call_id="A",
+        call_kind="account",
+        bucket="",
+        query_id="A",
+        last_completed_at=now,
+    )
+    HarvestBacklogWindow.objects.create(
+        brand_id="*",
+        call_id="A",
+        call_kind="account",
+        bucket="",
+        query_id="A",
+        original_since=now.replace(hour=0),
+        original_until=now.replace(hour=1),
+        remaining_since=now.replace(hour=0, minute=30),
+        remaining_until=now.replace(hour=1),
+        reason_code="page_cap",
+    )
+    TwitterListMembership.objects.create(
+        list_id=123,
+        account=account,
+        source="acceptance",
+        source_run_id="staging-run",
+    )
+    TwitterListSyncState.objects.create(
+        list_id=123,
+        snapshot_id="snapshot-a",
+        last_complete_at=now,
+    )
+    per_brand_run = TrendNarrativeRun.objects.create(
+        source_cycle_id="staging-run",
+        window_days=1,
+        facts_as_of=now,
+        packet_schema_version=1,
+        snapshot={},
+        status=TrendNarrativeRun.Status.ACTIVE,
+        activated_at=now,
+    )
+    BrandTrendNarrative.objects.create(
+        run=per_brand_run,
+        brand_key_snapshot="fixture-brand",
+        brand_name_en_snapshot="Fixture",
+        brand_name_zh_cn_snapshot="测试",
+        status=BrandTrendNarrative.Status.UNAVAILABLE,
+        attempted_at=now,
+    )
+    TrendNarrativeProviderCall.objects.create(
+        run=per_brand_run,
+        stage=TrendNarrativeProviderCall.Stage.RANK,
+        request_identity="staging-request",
+        request_hash="a" * 64,
+        reserved_at=now,
+    )
+    TrendNarrativeVisibleRun.objects.create(
+        window_days=1,
+        run=per_brand_run,
+        facts_as_of=now,
+        activated_at=now,
+    )
+    TrendNarrativeWorkSlot.objects.create(
+        window_days=1,
+        active_source_cycle_id="staging-run",
+        active_facts_as_of=now,
+        active_run=per_brand_run,
+    )
 
     with transaction.atomic(), connection.cursor() as cursor:
         report = scrub_candidate_data(cursor, policy)
@@ -1255,6 +1536,19 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
     assert not TrendNarrativeSubject.objects.filter(pk=transient_subject.pk).exists()
     assert TrendNarrativeSubject.objects.filter(pk=published_subject.pk).exists()
     assert get_user_model().objects.count() == 0
+    for model in (
+        BrandTrendNarrative,
+        CallState,
+        HarvestBacklogWindow,
+        PostEnrichmentState,
+        TrendNarrativeProviderCall,
+        TrendNarrativeRun,
+        TrendNarrativeVisibleRun,
+        TrendNarrativeWorkSlot,
+        TwitterListMembership,
+        TwitterListSyncState,
+    ):
+        assert model.objects.count() == 0
     site = Site.objects.get(pk=1)
     assert site.domain == policy.scrub.site_domain
     with connection.cursor() as cursor:

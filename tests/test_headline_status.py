@@ -356,10 +356,10 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
         "p95_latency_seconds": 45.0,
         "estimated_run_drain_seconds": 135.0,
         "window_expected_arrival_calls_per_hour": 6.0,
-        "fleet_expected_call_count_per_window": 11,
-        "fleet_expected_arrival_calls_per_hour": pytest.approx(35.2916666667),
+        "fleet_expected_call_count_per_window": 17,
+        "fleet_expected_arrival_calls_per_hour": pytest.approx(54.5416666667),
         "p95_capacity_calls_per_hour": 80.0,
-        "fleet_expected_utilization": pytest.approx(0.4411458333),
+        "fleet_expected_utilization": pytest.approx(0.6817708333),
     }
     assert "private_packet_must_not_appear" not in stdout.getvalue()
     assert "do-not-expose" not in stdout.getvalue()

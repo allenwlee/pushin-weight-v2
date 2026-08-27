@@ -75,11 +75,60 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     assert "trend_narrative_versions" in policy.relations.views
 
 
+def test_migration_graph_tables_are_exhaustively_classified() -> None:
+    from django.db.migrations.loader import MigrationLoader
+
+    policy = load_policy(POLICY_PATH)
+    state = MigrationLoader(None, ignore_no_migrations=True).project_state()
+    migration_tables = {
+        model.options.get("db_table") or f"{app_label}_{model_name}"
+        for (app_label, model_name), model in state.models.items()
+        if model.options.get("managed", True) and not model.options.get("proxy", False)
+    }
+    migration_tables.update(
+        {
+            "auth_group_permissions",
+            "auth_user_groups",
+            "auth_user_user_permissions",
+            "django_migrations",
+            "socialaccount_socialapp_sites",
+        }
+    )
+
+    assert policy.relations.classified_tables == migration_tables
+
+
+def test_per_brand_headline_graph_is_environment_local_state() -> None:
+    policy = load_policy(POLICY_PATH)
+    runtime_tables = {
+        "trend_narrative_runs",
+        "brand_trend_narratives",
+        "trend_narrative_work_slots",
+        "trend_narrative_provider_calls",
+        "trend_narrative_visible_runs",
+    }
+
+    assert runtime_tables <= policy.relations.excluded_tables
+    assert runtime_tables <= policy.scrub.truncate_tables
+    assert {
+        "trend_narrative_runs_id_seq",
+        "brand_trend_narratives_id_seq",
+        "trend_narrative_provider_calls_id_seq",
+    } <= policy.relations.sequences
+    assert policy.quiescence.harvest_environment == "staging"
+    assert policy.quiescence.broker_environment == "CELERY_BROKER_URL"
+    assert policy.quiescence.queue_name == "trend-narratives"
+    assert policy.quiescence.queue_namespace_pattern == "trend-narratives*"
+    assert policy.quiescence.unacked_index_key == "unacked_index"
+
+
 def test_runbook_source_grants_cover_the_exhaustive_copy_policy() -> None:
     policy = load_policy(POLICY_PATH)
     runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
 
-    for relation in sorted(policy.relations.classified_tables | policy.relations.sequences):
+    for relation in sorted(
+        policy.relations.classified_tables | policy.relations.sequences
+    ):
         assert relation in runbook
     assert "GRANT MAINTAIN ON" in runbook
     maintain_block = runbook.split("GRANT MAINTAIN ON", 1)[1].split(

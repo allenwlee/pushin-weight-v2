@@ -22,7 +22,11 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 
-from scripts.database_lock import acquire_cluster_lock, admin_connection_parameters
+from scripts.database_lock import (
+    acquire_cluster_lock,
+    acquire_harvest_coordination_lock,
+    admin_connection_parameters,
+)
 
 from .policy import DatabaseInspection, RefreshPolicy, expected_confirmation
 from .receipt import (
@@ -108,6 +112,80 @@ class DatabaseState:
     name: str
     allow_connections: bool
     comment: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class QuiescenceInspection:
+    worker_nodes: tuple[str, ...]
+    queue_depth: int
+    unacked_count: int
+    unacked_index_count: int = 0
+    namespace_keys: tuple[str, ...] = ()
+    envelope_present: bool = False
+
+
+def inspect_staging_quiescence(
+    policy: RefreshPolicy,
+    broker_url: str | None,
+    *,
+    redis_factory=None,
+    celery_factory=None,
+) -> QuiescenceInspection:
+    """Inspect the owned staging broker without exposing its connection URL."""
+
+    if not broker_url:
+        raise RefreshError("staging_broker_url_missing")
+    if redis_factory is None:
+        import redis
+
+        redis_factory = redis.Redis.from_url
+    if celery_factory is None:
+        from celery import Celery
+
+        celery_factory = Celery
+
+    try:
+        client = redis_factory(
+            broker_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        client.ping()
+        queue_depth = int(client.llen(policy.quiescence.queue_name))
+        unacked_count = int(client.hlen(policy.quiescence.unacked_key))
+        unacked_index_count = int(client.zcard(policy.quiescence.unacked_index_key))
+        namespace_keys = tuple(
+            sorted(
+                str(key)
+                for key in client.scan_iter(
+                    match=policy.quiescence.queue_namespace_pattern
+                )
+                if str(key) != policy.quiescence.queue_name
+            )
+        )
+        envelope_present = bool(client.exists(policy.quiescence.envelope_key))
+    except Exception as exc:
+        raise RefreshError("staging_broker_state_unavailable") from exc
+
+    try:
+        app = celery_factory("staging-refresh-quiescence", broker=broker_url)
+        inspector = app.control.inspect(
+            timeout=policy.quiescence.worker_probe_timeout_seconds
+        )
+        responses = inspector.ping() or {}
+        worker_nodes = tuple(sorted(str(name) for name in responses))
+    except Exception as exc:
+        raise RefreshError("staging_worker_state_unavailable") from exc
+
+    return QuiescenceInspection(
+        worker_nodes=worker_nodes,
+        queue_depth=queue_depth,
+        unacked_count=unacked_count,
+        unacked_index_count=unacked_index_count,
+        namespace_keys=namespace_keys,
+        envelope_present=envelope_present,
+    )
 
 
 class SnapshotAdapter(Protocol):
@@ -1563,7 +1641,10 @@ class PostgresRuntime:
         engine: SnapshotRestoreEngine | None = None,
         runner: Callable[..., CommandResult] = subprocess.run,
         lock_factory: Callable[..., Any] = acquire_cluster_lock,
+        harvest_lock_factory: Callable[..., Any] = acquire_harvest_coordination_lock,
         now: Callable[[], datetime] | None = None,
+        broker_url: str | None = None,
+        quiescence_guard: Callable[[], QuiescenceInspection] | None = None,
     ) -> None:
         self.policy = policy
         self.source_url = source_url
@@ -1578,6 +1659,10 @@ class PostgresRuntime:
         )
         self.runner = runner
         self.lock_factory = lock_factory
+        self.harvest_lock_factory = harvest_lock_factory
+        self.quiescence_guard = quiescence_guard or (
+            lambda: inspect_staging_quiescence(policy, broker_url)
+        )
         self.engine = engine or (
             SnapshotRestoreEngine(
                 policy=policy,
@@ -1690,37 +1775,69 @@ class PostgresRuntime:
         ):
             yield
 
+    @contextmanager
+    def _harvest_lock(self) -> Iterator[None]:
+        if not self.target_url:
+            raise RefreshError("target_url_missing")
+        with self.harvest_lock_factory(
+            self.target_url,
+            environment=self.policy.quiescence.harvest_environment,
+        ):
+            yield
+
     def _refresh(self) -> Receipt:
-        if self.engine is None:
-            raise RefreshError("refresh_urls_missing")
-        artifact = self.engine.export_dump()
-        try:
-            with self.engine.target_lock():
-                candidate = self.engine.restore_shadow(artifact)
-                try:
-                    result = CandidateProcessor(
+        with self._harvest_lock():
+            self._require_quiescence()
+            if self.engine is None:
+                raise RefreshError("refresh_urls_missing")
+            artifact = self.engine.export_dump()
+            try:
+                with self.engine.target_lock():
+                    candidate = self.engine.restore_shadow(artifact)
+                    try:
+                        result = CandidateProcessor(
+                            policy=self.policy,
+                            target_url=self.engine.target_url,
+                            adapter=self.engine.adapter,
+                            runner=self.runner,
+                        ).process(candidate)
+                    except BaseException:
+                        self.engine.cleanup_shadow(candidate.name, candidate.marker)
+                        raise
+                    self._require_quiescence()
+                    return LifecycleManager(
                         policy=self.policy,
                         target_url=self.engine.target_url,
                         adapter=self.engine.adapter,
-                        runner=self.runner,
-                    ).process(candidate)
-                except BaseException:
-                    self.engine.cleanup_shadow(candidate.name, candidate.marker)
-                    raise
-                return LifecycleManager(
-                    policy=self.policy,
-                    target_url=self.engine.target_url,
-                    adapter=self.engine.adapter,
-                    now=self.now,
-                ).activate(result)
-        finally:
-            self.engine.cleanup_artifact(artifact)
+                        now=self.now,
+                    ).activate(result)
+            finally:
+                self.engine.cleanup_artifact(artifact)
+
+    def _require_quiescence(self) -> QuiescenceInspection:
+        inspection = self.quiescence_guard()
+        if inspection.worker_nodes:
+            raise RefreshError(
+                f"staging_headline_worker_active:{inspection.worker_nodes[0]}"
+            )
+        if (
+            inspection.queue_depth
+            or inspection.unacked_count
+            or inspection.unacked_index_count
+            or inspection.namespace_keys
+        ):
+            raise RefreshError("staging_headline_queue_not_empty")
+        if inspection.envelope_present:
+            raise RefreshError("staging_headline_envelope_present")
+        return inspection
 
     def execute(self, action: str, *, recovery: str | None = None) -> dict[str, object]:
         if action == "preflight":
-            if self.engine is None:
-                raise RefreshError("refresh_urls_missing")
-            census = self.engine.preflight()
+            with self._harvest_lock():
+                self._require_quiescence()
+                if self.engine is None:
+                    raise RefreshError("refresh_urls_missing")
+                census = self.engine.preflight()
             return {
                 "action": "preflight",
                 "source_database_bytes": census.database_bytes,
@@ -1733,12 +1850,14 @@ class PostgresRuntime:
         if action == "rollback":
             if recovery is None:
                 raise RefreshError("recovery_name_missing")
-            with self._target_lock():
+            with self._harvest_lock(), self._target_lock():
+                self._require_quiescence()
                 return self._lifecycle().rollback(recovery).to_payload()
         if action == "prune":
             if recovery is None:
                 raise RefreshError("recovery_name_missing")
-            with self._target_lock():
+            with self._harvest_lock(), self._target_lock():
+                self._require_quiescence()
                 pruned = self._lifecycle().prune(recovery)
             return {"action": "prune", "recovery_database": pruned}
         raise RefreshError("action_invalid")

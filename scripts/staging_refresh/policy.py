@@ -80,6 +80,18 @@ class StoragePolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class QuiescencePolicy:
+    harvest_environment: str
+    broker_environment: str
+    queue_name: str
+    queue_namespace_pattern: str
+    envelope_key: str
+    unacked_key: str
+    unacked_index_key: str
+    worker_probe_timeout_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
 class LifecyclePolicy:
     marker_prefix: str
     shadow_prefix: str
@@ -102,6 +114,7 @@ class RefreshPolicy:
     scrub: ScrubPolicy
     validation: ValidationPolicy
     storage: StoragePolicy
+    quiescence: QuiescencePolicy
     lifecycle: LifecyclePolicy
 
 
@@ -148,6 +161,7 @@ _TOP_LEVEL = {
     "scrub",
     "validation",
     "storage",
+    "quiescence",
     "database_lifecycle",
 }
 _DATABASE_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}\Z")
@@ -437,6 +451,47 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     if storage.required_reserve_ratio >= 1:
         raise PolicyError("policy_field_invalid:storage.required_reserve_ratio")
 
+    quiescence_raw = _mapping(raw, "quiescence")
+    _strict(
+        quiescence_raw,
+        {
+            "harvest_environment",
+            "broker_environment",
+            "queue_name",
+            "queue_namespace_pattern",
+            "envelope_key",
+            "unacked_key",
+            "unacked_index_key",
+            "worker_probe_timeout_seconds",
+        },
+        field="quiescence",
+    )
+    quiescence = QuiescencePolicy(
+        harvest_environment=_line(
+            quiescence_raw, "harvest_environment", field="quiescence"
+        ),
+        broker_environment=_line(
+            quiescence_raw, "broker_environment", field="quiescence"
+        ),
+        queue_name=_line(quiescence_raw, "queue_name", field="quiescence"),
+        queue_namespace_pattern=_line(
+            quiescence_raw, "queue_namespace_pattern", field="quiescence"
+        ),
+        envelope_key=_line(quiescence_raw, "envelope_key", field="quiescence"),
+        unacked_key=_line(quiescence_raw, "unacked_key", field="quiescence"),
+        unacked_index_key=_line(
+            quiescence_raw, "unacked_index_key", field="quiescence"
+        ),
+        worker_probe_timeout_seconds=_integer(
+            quiescence_raw,
+            "worker_probe_timeout_seconds",
+            field="quiescence",
+            minimum=1,
+        ),
+    )
+    if quiescence.harvest_environment != "staging":
+        raise PolicyError("policy_harvest_environment_invalid")
+
     lifecycle_raw = _mapping(raw, "database_lifecycle")
     lifecycle_fields = {
         "marker_prefix",
@@ -492,6 +547,7 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         scrub=scrub,
         validation=validation,
         storage=storage,
+        quiescence=quiescence,
         lifecycle=lifecycle,
     )
 
