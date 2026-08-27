@@ -12,7 +12,7 @@ def _blueprint() -> dict:
 
 
 def _environment_by_key(service: dict) -> dict[str, dict]:
-    return {entry["key"]: entry for entry in service["envVars"]}
+    return {entry["key"]: entry for entry in service["envVars"] if "key" in entry}
 
 
 def test_staging_blueprint_keeps_one_isolated_owner_only_web_service() -> None:
@@ -34,6 +34,11 @@ def test_staging_blueprint_keeps_one_isolated_owner_only_web_service() -> None:
     assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "pending"
+    assert environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
+    assert environment["STAGING_REFRESH_SOURCE_DATABASE_URL"] == {
+        "key": "STAGING_REFRESH_SOURCE_DATABASE_URL",
+        "sync": False,
+    }
     assert not {"DEEPSEEK_API_KEY", "TWITTERAPI_IO_API_KEY", "CELERY_BROKER_URL"} & set(environment)
 
 
@@ -75,3 +80,12 @@ def test_staging_and_production_blueprints_claim_disjoint_resource_names() -> No
     }
 
     assert staging_names.isdisjoint(production_names)
+
+    production_web = next(
+        service
+        for service in production["services"]
+        if service.get("name") == "pushinweight-web"
+    )
+    production_environment = _environment_by_key(production_web)
+    assert "STAGING_DATA_REFRESH_ENABLED" not in production_environment
+    assert "STAGING_REFRESH_SOURCE_DATABASE_URL" not in production_environment

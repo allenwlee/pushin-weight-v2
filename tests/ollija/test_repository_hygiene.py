@@ -156,6 +156,14 @@ def test_current_ollija_boundary_has_no_retired_runtime_or_command_paths() -> No
             assert f"./bin/ollija {command}" not in text, path
 
 
+def test_staging_refresh_is_independent_from_ollija_runtime() -> None:
+    refresh_runtime = REPO_ROOT / "scripts" / "staging_refresh"
+
+    assert refresh_runtime.is_dir()
+    for path in [REPO_ROOT / "bin" / "refresh-staging-data", *refresh_runtime.glob("*.py")]:
+        assert "scripts.ollija" not in path.read_text(encoding="utf-8"), path
+
+
 def test_ollija_documentation_classifies_current_guidance_and_superseded_history() -> None:
     current_paths = (
         ".claude/skills/ollija/SKILL.md",
