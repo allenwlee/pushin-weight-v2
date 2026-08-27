@@ -17,7 +17,7 @@ source:
 target:
   environment: DATABASE_URL
   resource_id: dpg-d9vb8ds9v7es738lepsg-a
-  host: dpg-d9vb8ds9v7es738lepsg-a.oregon-postgres.render.com
+  host: dpg-d9vb8ds9v7es738lepsg-a
   port: 5432
   database: pushinweight_staging
   role: pushinweight_staging

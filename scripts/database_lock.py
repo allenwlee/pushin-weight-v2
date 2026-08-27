@@ -19,7 +19,7 @@ class Cursor(Protocol):
 
     def __exit__(self, *_args: object) -> None: ...
 
-    def execute(self, statement: str, parameters: list[int]) -> None: ...
+    def execute(self, statement: str, parameters: list[object]) -> None: ...
 
     def fetchone(self) -> tuple[object, ...]: ...
 
@@ -78,13 +78,18 @@ def acquire_cluster_lock(
                     if not acquired:
                         raise DatabaseLockError("cluster_lock_unavailable")
                 else:
-                    cursor.execute("SET statement_timeout = %s", [wait_seconds * 1000])
+                    cursor.execute(
+                        "SELECT set_config('statement_timeout', %s, false)",
+                        [str(wait_seconds * 1000)],
+                    )
                     try:
                         cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
                     except psycopg.errors.QueryCanceled as exc:
                         raise DatabaseLockError("cluster_lock_timeout") from exc
                     acquired = True
-                    cursor.execute("SET statement_timeout = 0", [])
+                    cursor.execute(
+                        "SELECT set_config('statement_timeout', '0', false)", []
+                    )
         except DatabaseLockError:
             raise
         except Exception as exc:

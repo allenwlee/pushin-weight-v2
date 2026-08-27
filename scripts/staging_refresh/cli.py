@@ -10,7 +10,7 @@ from typing import Protocol, TextIO
 
 from scripts.database_lock import DatabaseLockError
 
-from .database import RefreshError
+from .database import PostgresRuntime, RefreshError
 from .policy import (
     DatabaseInspection,
     PolicyError,
@@ -83,8 +83,6 @@ def run(
             recovery=recovery,
         )
         if runtime is None:
-            from .database import PostgresRuntime
-
             runtime = PostgresRuntime(
                 policy,
                 source_url=values.get(policy.source.environment),
@@ -105,9 +103,11 @@ def run(
             recovery=recovery,
         )
         if args.action == "preflight":
+            result = runtime.execute("preflight")
             _emit(
                 output,
                 {
+                    **result,
                     "action": args.action,
                     "source_database": (
                         authorization.source.database if authorization.source else None

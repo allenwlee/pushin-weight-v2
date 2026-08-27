@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -343,6 +343,28 @@ def test_snapshot_census_and_dump_use_one_exported_snapshot(tmp_path: Path) -> N
     )
 
 
+def test_preflight_checks_clients_space_capacity_and_both_locks(tmp_path: Path) -> None:
+    engine, _adapter, runner, events = _engine(tmp_path)
+
+    census = engine.preflight()
+
+    assert census.database_bytes == 100
+    assert not any(
+        command[1:] != ["--version"] for command, _environment in runner.commands
+    )
+    assert events == [
+        "command:pg_dump",
+        "command:pg_restore",
+        "lock:source:acquire",
+        "snapshot:open",
+        "snapshot:close",
+        "lock:source:release",
+        "lock:target:acquire",
+        "target:size",
+        "lock:target:release",
+    ]
+
+
 @pytest.mark.parametrize("failure", ["pg_dump", "pg_restore"])
 def test_command_failure_is_secret_free_and_preserves_canonical(
     tmp_path: Path, failure: str
@@ -627,6 +649,79 @@ def test_activation_keeps_the_canonical_name_and_persists_one_receipt(
     ) < events.index("database:receipt")
 
 
+@pytest.mark.parametrize(
+    ("field", "error"),
+    [
+        ("translation_counts", "active_translation_mismatch"),
+        ("classification_counts", "active_classification_mismatch"),
+        ("terminal_narrative_count", "active_terminal_narrative_mismatch"),
+        ("current_narrative_count", "active_current_narrative_mismatch"),
+    ],
+)
+def test_verify_rejects_post_activation_census_drift(
+    tmp_path: Path, field: str, error: str
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        manager.activate(result)
+
+    census = adapter.candidate_census
+    value = getattr(census, field)
+    if isinstance(value, Mapping):
+        changed = {**value, next(iter(value)): next(iter(value.values())) + 1}
+    else:
+        changed = value + 1
+    adapter.candidate_census = replace(census, **{field: changed})
+
+    with pytest.raises(RefreshError, match=error):
+        manager.verify()
+
+
+@pytest.mark.parametrize("action", ["rollback", "prune"])
+def test_lifecycle_refuses_a_receipt_from_another_target_identity(
+    tmp_path: Path, action: str
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+    with engine.target_lock():
+        receipt = manager.activate(result)
+
+    recovery = adapter.states[receipt.recovery_database]
+    record = decode_database_comment(
+        recovery.comment,
+        marker_prefix=engine.policy.lifecycle.marker_prefix,
+    )
+    stale_payload = record.receipt.to_payload()
+    stale_payload["target_resource_id"] = "dpg-stale-target-a"
+    stale_receipt = Receipt.from_payload(stale_payload)
+    adapter.states[receipt.recovery_database] = replace(
+        recovery,
+        comment=encode_database_comment(
+            marker_prefix=engine.policy.lifecycle.marker_prefix,
+            state="recovery",
+            database=receipt.recovery_database,
+            receipt=stale_receipt,
+        ),
+    )
+
+    with (
+        pytest.raises(RefreshError, match="receipt_identity_mismatch"),
+        engine.target_lock(),
+    ):
+        getattr(manager, action)(receipt.recovery_database)
+
+
 @pytest.mark.parametrize("fail_after", [1, 2])
 def test_activation_rename_fault_repairs_one_active_canonical(
     tmp_path: Path, fail_after: int
@@ -861,6 +956,22 @@ def test_runtime_refresh_owns_cleanup_and_returns_the_persisted_receipt(
     assert events[-1] == "lock:target:release"
 
 
+def test_runtime_refuses_a_lifecycle_adapter_different_from_its_engine(
+    tmp_path: Path,
+) -> None:
+    engine, _adapter, runner, events = _engine(tmp_path)
+
+    with pytest.raises(ValueError, match="engine_adapter_mismatch"):
+        PostgresRuntime(
+            engine.policy,
+            source_url=engine.source_url,
+            target_url=engine.target_url,
+            adapter=FakeAdapter(engine.policy, events),
+            engine=engine,
+            runner=runner,
+        )
+
+
 @pytest.mark.parametrize("action", ["rollback", "prune"])
 def test_runtime_lock_refusal_happens_before_lifecycle_mutation(
     tmp_path: Path, action: str
@@ -936,8 +1047,12 @@ def test_postgres_adapter_executes_the_real_database_lifecycle_sql() -> None:
                 "dump_bytes": 1,
                 "source_counts": {"posts": 1},
                 "candidate_counts": {"posts": 1},
+                "translation_counts": {"posts.text_en": 1},
+                "classification_counts": {"posts_brands": 1},
                 "scrubbed_rows": {"auth_user": 0},
                 "latest_timestamps": {"posts.created_at": "2026-08-27T01:00:00+00:00"},
+                "terminal_narrative_count": 1,
+                "current_narrative_count": 1,
                 "rollback_confirmation": (
                     f"ROLLBACK staging/{recovery} -> staging/{canonical}"
                 ),

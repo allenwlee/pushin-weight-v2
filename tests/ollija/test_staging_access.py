@@ -15,7 +15,7 @@ from project.middleware import StagingOwnerOnlyMiddleware
 from project.staging import validate_staging_environment
 from scripts import render_migrate
 
-Operation = tuple[str, tuple[int, ...]] | str
+Operation = tuple[str, tuple[object, ...]] | str
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -29,7 +29,7 @@ class _Cursor:
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def execute(self, statement: str, parameters: list[int]) -> None:
+    def execute(self, statement: str, parameters: list[object]) -> None:
         self.operations.append((statement, tuple(parameters)))
 
 
@@ -118,9 +118,9 @@ def test_main_uses_the_admin_database_lock_around_the_real_migration_chain() -> 
     assert operations == [
         "django_setup",
         "admin_connect",
-        ("SET statement_timeout = %s", (900_000,)),
+        ("SELECT set_config('statement_timeout', %s, false)", ("900000",)),
         ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
-        ("SET statement_timeout = 0", ()),
+        ("SELECT set_config('statement_timeout', '0', false)", ()),
         ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
         "migrate",
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
@@ -138,7 +138,9 @@ def test_main_returns_retryable_failure_without_running_migrate(capsys) -> None:
         )
 
     status = render_migrate.main(
-        environ={"DATABASE_URL": "postgresql://staging:secret@staging.internal/staging"},
+        environ={
+            "DATABASE_URL": "postgresql://staging:secret@staging.internal/staging"
+        },
         connect=fail_connect,
         app_connection=_Connection(operations),
         execute_migrate=lambda: operations.append("migrate"),
@@ -208,7 +210,9 @@ def test_production_does_not_require_staging_values() -> None:
     )
 
 
-def test_staging_owner_middleware_rejects_unauthenticated_and_nonallowlisted_requests() -> None:
+def test_staging_owner_middleware_rejects_unauthenticated_and_nonallowlisted_requests() -> (
+    None
+):
     settings = SimpleNamespace(
         OLLIJA_STAGING_MODE=True,
         OLLIJA_STAGING_ALLOWED_EMAILS=frozenset({"owner@example.com"}),

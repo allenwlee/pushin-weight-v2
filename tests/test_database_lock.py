@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+from getpass import getuser
 from typing import Self
 
 import psycopg
 import pytest
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from scripts.database_lock import (
     DatabaseLockError,
@@ -11,7 +14,7 @@ from scripts.database_lock import (
     admin_connection_parameters,
 )
 
-Operation = tuple[str, tuple[int, ...]] | str
+Operation = tuple[str, tuple[object, ...]] | str
 
 
 class FakeCursor:
@@ -33,7 +36,7 @@ class FakeCursor:
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def execute(self, statement: str, parameters: list[int]) -> None:
+    def execute(self, statement: str, parameters: list[object]) -> None:
         self.last_statement = statement
         self.operations.append((statement, tuple(parameters)))
         if self.timeout and "pg_advisory_lock" in statement:
@@ -108,12 +111,13 @@ def test_fail_fast_lock_refuses_contention_and_closes_the_connection() -> None:
     operations: list[Operation] = []
     connect = FakeConnect(operations, try_lock=False)
 
-    with pytest.raises(
-        DatabaseLockError, match="cluster_lock_unavailable"
-    ), acquire_cluster_lock(
-        "postgresql://reader:secret@cluster.example/application",
-        wait_seconds=0,
-        connect=connect,
+    with (
+        pytest.raises(DatabaseLockError, match="cluster_lock_unavailable"),
+        acquire_cluster_lock(
+            "postgresql://reader:secret@cluster.example/application",
+            wait_seconds=0,
+            connect=connect,
+        ),
     ):
         raise AssertionError("unreachable")
 
@@ -137,31 +141,43 @@ def test_waiting_lock_releases_after_success_in_reverse_order() -> None:
 
     assert operations == [
         "connect",
-        ("SET statement_timeout = %s", (900_000,)),
+        ("SELECT set_config('statement_timeout', %s, false)", ("900000",)),
         ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
-        ("SET statement_timeout = 0", ()),
+        ("SELECT set_config('statement_timeout', '0', false)", ()),
         "critical",
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
         "close",
     ]
 
 
+@pytest.mark.requires_postgres
+def test_waiting_lock_timeout_sql_executes_against_postgres() -> None:
+    parameters = conninfo_to_dict(os.environ["DATABASE_URL"])
+    parameters.setdefault("host", "localhost")
+    parameters.setdefault("user", getuser())
+    database_url = make_conninfo(**parameters)
+
+    with acquire_cluster_lock(database_url, wait_seconds=1):
+        pass
+
+
 def test_waiting_lock_times_out_at_the_bounded_deadline_and_closes() -> None:
     operations: list[Operation] = []
     connect = FakeConnect(operations, timeout=True)
 
-    with pytest.raises(
-        DatabaseLockError, match="cluster_lock_timeout"
-    ), acquire_cluster_lock(
-        "postgresql://reader:secret@cluster.example/application",
-        wait_seconds=900,
-        connect=connect,
+    with (
+        pytest.raises(DatabaseLockError, match="cluster_lock_timeout"),
+        acquire_cluster_lock(
+            "postgresql://reader:secret@cluster.example/application",
+            wait_seconds=900,
+            connect=connect,
+        ),
     ):
         raise AssertionError("unreachable")
 
     assert operations == [
         "connect",
-        ("SET statement_timeout = %s", (900_000,)),
+        ("SELECT set_config('statement_timeout', %s, false)", ("900000",)),
         ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
         "close",
     ]
@@ -171,10 +187,13 @@ def test_critical_section_failure_still_releases_and_closes() -> None:
     operations: list[Operation] = []
     connect = FakeConnect(operations)
 
-    with pytest.raises(RuntimeError, match="boom"), acquire_cluster_lock(
-        "postgresql://reader:secret@cluster.example/application",
-        wait_seconds=0,
-        connect=connect,
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        acquire_cluster_lock(
+            "postgresql://reader:secret@cluster.example/application",
+            wait_seconds=0,
+            connect=connect,
+        ),
     ):
         operations.append("critical")
         raise RuntimeError("boom")

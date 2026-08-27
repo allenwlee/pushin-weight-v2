@@ -27,8 +27,12 @@ def _payload() -> dict[str, object]:
         "dump_bytes": 1234,
         "source_counts": {"posts": 12, "brands": 2},
         "candidate_counts": {"posts": 12, "brands": 2},
+        "translation_counts": {"posts.text_en": 11, "brands": 2},
+        "classification_counts": {"posts_brands": 8},
         "scrubbed_rows": {"auth_user": 1, "django_session": 4},
         "latest_timestamps": {"posts.created_at": "2026-08-27T01:00:00+00:00"},
+        "terminal_narrative_count": 3,
+        "current_narrative_count": 2,
         "rollback_confirmation": (
             "ROLLBACK staging/pushinweight_staging_recovery_20260827t010203z "
             "-> staging/pushinweight_staging"
@@ -69,6 +73,8 @@ def test_receipt_round_trips_through_both_database_comments() -> None:
         {"environment": {"DATABASE_URL": "hidden"}},
         {"source_database": "postgresql://reader:test@source/database"},
         {"dump_checksum": "not-a-checksum"},
+        {"translation_counts": {"posts.text_en": -1}},
+        {"current_narrative_count": True},
         {
             "rollback_confirmation": (
                 "ROLLBACK staging/pushinweight_staging_recovery_20260826t010203z "

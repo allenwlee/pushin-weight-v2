@@ -123,10 +123,68 @@ active census:
 ./bin/refresh-staging-data verify
 ```
 
-The refresh is not accepted until `verify` returns the same receipt and an
-independent read-only census confirms representative counts and timestamps,
-all configured scrub tables at zero, one current narrative per window, and the
-staging site identity.
+The refresh is not accepted until `verify` returns the same receipt. Then run
+this independent, read-only SQL census against the canonical staging database;
+do not substitute estimates from `pg_stat_user_tables`:
+
+```bash
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+SELECT 'accounts' AS relation, count(*) AS rows FROM accounts
+UNION ALL SELECT 'brands', count(*) FROM brands
+UNION ALL SELECT 'posts', count(*) FROM posts
+UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
+UNION ALL SELECT 'products', count(*) FROM products
+ORDER BY relation;
+
+SELECT max(created_at) AS latest_post_created_at FROM posts;
+
+SELECT 'account_emailaddress' AS relation, count(*) AS rows FROM account_emailaddress
+UNION ALL SELECT 'account_emailconfirmation', count(*) FROM account_emailconfirmation
+UNION ALL SELECT 'auth_group', count(*) FROM auth_group
+UNION ALL SELECT 'auth_group_permissions', count(*) FROM auth_group_permissions
+UNION ALL SELECT 'auth_permission', count(*) FROM auth_permission
+UNION ALL SELECT 'auth_user', count(*) FROM auth_user
+UNION ALL SELECT 'auth_user_groups', count(*) FROM auth_user_groups
+UNION ALL SELECT 'auth_user_user_permissions', count(*) FROM auth_user_user_permissions
+UNION ALL SELECT 'call_state', count(*) FROM call_state
+UNION ALL SELECT 'django_session', count(*) FROM django_session
+UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
+UNION ALL SELECT 'post_enrichment_states', count(*) FROM post_enrichment_states
+UNION ALL SELECT 'socialaccount_socialaccount', count(*) FROM socialaccount_socialaccount
+UNION ALL SELECT 'socialaccount_socialapp', count(*) FROM socialaccount_socialapp
+UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_socialapp_sites
+UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
+UNION ALL SELECT 'twitter_list_memberships', count(*) FROM twitter_list_memberships
+UNION ALL SELECT 'twitter_list_sync_state', count(*) FROM twitter_list_sync_state
+UNION ALL SELECT '_applied_config_snapshot', count(*) FROM _applied_config_snapshot
+ORDER BY relation;
+
+SELECT window_days, count(*) AS current_rows
+FROM trend_narratives
+WHERE is_current
+GROUP BY window_days
+HAVING count(*) > 1;
+
+SELECT conname
+FROM pg_constraint c
+JOIN pg_namespace n ON n.oid = c.connamespace
+WHERE n.nspname = 'public' AND c.contype = 'f' AND NOT c.convalidated;
+
+SELECT domain, name FROM django_site WHERE id = 1;
+SQL
+
+psql "$DATABASE_URL" -X -d postgres -v ON_ERROR_STOP=1 -c \
+  "SELECT datname, datallowconn FROM pg_database WHERE datname LIKE 'pushinweight_staging_recovery_%' ORDER BY datname;"
+
+find /tmp -maxdepth 1 -type f -name 'staging-refresh-*.dump' -print
+```
+
+Record the exact counts and latest timestamp next to the receipt. Every scrub
+count must be zero; both invariant queries must return no rows; the site must
+be `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
+receipt-named recovery must have `datallowconn = f`; and the dump search must
+be empty. Compare product counts and the latest timestamp to the receipt, not
+to an earlier observation of production.
 
 ## Rollback
 

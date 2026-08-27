@@ -25,8 +25,12 @@ _RECEIPT_FIELDS = {
     "dump_bytes",
     "source_counts",
     "candidate_counts",
+    "translation_counts",
+    "classification_counts",
     "scrubbed_rows",
     "latest_timestamps",
+    "terminal_narrative_count",
+    "current_narrative_count",
     "rollback_confirmation",
 }
 _COMMENT_FIELDS = {"kind", "state", "database", "receipt"}
@@ -73,6 +77,27 @@ def _counts(value: object, *, field: str) -> dict[str, int]:
     return result
 
 
+def _metric_counts(value: object, *, field: str) -> dict[str, int]:
+    if not isinstance(value, Mapping):
+        raise ReceiptError(f"receipt_field_invalid:{field}")
+    result: dict[str, int] = {}
+    for key, count in value.items():
+        if not isinstance(key, str) or not (
+            _IDENTIFIER.fullmatch(key) or _TIMESTAMP_KEY.fullmatch(key)
+        ):
+            raise ReceiptError(f"receipt_field_invalid:{field}")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ReceiptError(f"receipt_field_invalid:{field}")
+        result[key] = count
+    return result
+
+
+def _nonnegative_integer(value: object, *, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ReceiptError(f"receipt_field_invalid:{field}")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class Receipt:
     version: int
@@ -88,8 +113,12 @@ class Receipt:
     dump_bytes: int
     source_counts: Mapping[str, int]
     candidate_counts: Mapping[str, int]
+    translation_counts: Mapping[str, int]
+    classification_counts: Mapping[str, int]
     scrubbed_rows: Mapping[str, int]
     latest_timestamps: Mapping[str, str | None]
+    terminal_narrative_count: int
+    current_narrative_count: int
     rollback_confirmation: str
 
     @classmethod
@@ -165,8 +194,22 @@ class Receipt:
             candidate_counts=_counts(
                 payload["candidate_counts"], field="candidate_counts"
             ),
+            translation_counts=_metric_counts(
+                payload["translation_counts"], field="translation_counts"
+            ),
+            classification_counts=_metric_counts(
+                payload["classification_counts"], field="classification_counts"
+            ),
             scrubbed_rows=_counts(payload["scrubbed_rows"], field="scrubbed_rows"),
             latest_timestamps=checked_latest,
+            terminal_narrative_count=_nonnegative_integer(
+                payload["terminal_narrative_count"],
+                field="terminal_narrative_count",
+            ),
+            current_narrative_count=_nonnegative_integer(
+                payload["current_narrative_count"],
+                field="current_narrative_count",
+            ),
             rollback_confirmation=confirmation,
         )
 
@@ -185,8 +228,12 @@ class Receipt:
             "dump_bytes": self.dump_bytes,
             "source_counts": dict(self.source_counts),
             "candidate_counts": dict(self.candidate_counts),
+            "translation_counts": dict(self.translation_counts),
+            "classification_counts": dict(self.classification_counts),
             "scrubbed_rows": dict(self.scrubbed_rows),
             "latest_timestamps": dict(self.latest_timestamps),
+            "terminal_narrative_count": self.terminal_narrative_count,
+            "current_narrative_count": self.current_narrative_count,
             "rollback_confirmation": self.rollback_confirmation,
         }
 

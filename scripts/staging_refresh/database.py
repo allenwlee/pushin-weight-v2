@@ -25,6 +25,7 @@ from scripts.database_lock import acquire_cluster_lock, admin_connection_paramet
 
 from .policy import DatabaseInspection, RefreshPolicy, expected_confirmation
 from .receipt import (
+    DatabaseComment,
     Receipt,
     ReceiptError,
     decode_database_comment,
@@ -831,6 +832,22 @@ class SnapshotRestoreEngine:
                 artifact_path.unlink()
             raise
 
+    def preflight(self) -> SourceCensus:
+        self.cleanup_stale_artifacts()
+        self._verify_clients()
+        with (
+            self.lock_factory(
+                self.source_url,
+                wait_seconds=0,
+                lock_id=self.policy.lifecycle.cluster_lock_id,
+            ),
+            self.adapter.exported_snapshot(self.source_url) as census,
+        ):
+            self._guard_local_space(census.database_bytes)
+        with self.target_lock():
+            self._guard_target_capacity(census.database_bytes)
+        return census
+
     @contextmanager
     def target_lock(self) -> Iterator[None]:
         with self.lock_factory(
@@ -1166,8 +1183,12 @@ class LifecycleManager:
                 "dump_bytes": result.candidate.artifact.byte_size,
                 "source_counts": dict(source.row_counts),
                 "candidate_counts": dict(result.census.row_counts),
+                "translation_counts": dict(result.census.translation_counts),
+                "classification_counts": dict(result.census.classification_counts),
                 "scrubbed_rows": dict(result.scrub.cleared_rows),
                 "latest_timestamps": dict(result.census.latest_timestamps),
+                "terminal_narrative_count": result.census.terminal_narrative_count,
+                "current_narrative_count": result.census.current_narrative_count,
                 "rollback_confirmation": expected_confirmation(
                     self.policy, "rollback", recovery=recovery
                 ),
@@ -1186,7 +1207,11 @@ class LifecycleManager:
             )
             if census is not None:
                 payload["candidate_counts"] = dict(census.row_counts)
+                payload["translation_counts"] = dict(census.translation_counts)
+                payload["classification_counts"] = dict(census.classification_counts)
                 payload["latest_timestamps"] = dict(census.latest_timestamps)
+                payload["terminal_narrative_count"] = census.terminal_narrative_count
+                payload["current_narrative_count"] = census.current_narrative_count
         else:  # pragma: no cover - internal call contract
             raise RefreshError("receipt_input_missing")
         try:
@@ -1309,13 +1334,14 @@ class LifecycleManager:
         if candidate_state.comment != candidate.marker:
             raise RefreshError("candidate_marker_changed")
         marker_prefix = f"{self.policy.lifecycle.marker_prefix}:"
+        if not candidate.marker.startswith(marker_prefix):
+            raise RefreshError("candidate_marker_invalid")
         try:
             marker = json.loads(candidate.marker.removeprefix(marker_prefix))
         except (TypeError, json.JSONDecodeError) as exc:
             raise RefreshError("candidate_marker_invalid") from exc
         if (
-            not candidate.marker.startswith(marker_prefix)
-            or not isinstance(marker, dict)
+            not isinstance(marker, dict)
             or marker.get("state") != "validated"
             or marker.get("database") != candidate.name
             or marker.get("checksum") != candidate.artifact.checksum
@@ -1342,7 +1368,9 @@ class LifecycleManager:
             failure_code="activation",
         )
 
-    def _decode_state(self, state: DatabaseState, *, expected_state: str, invalid: str):
+    def _decode_state(
+        self, state: DatabaseState, *, expected_state: str, invalid: str
+    ) -> DatabaseComment:
         try:
             record = decode_database_comment(
                 state.comment,
@@ -1352,6 +1380,14 @@ class LifecycleManager:
             raise RefreshError(invalid) from exc
         if record.state != expected_state or record.database != state.name:
             raise RefreshError(invalid)
+        receipt = record.receipt
+        if (
+            receipt.source_resource_id != self.policy.source.resource_id
+            or receipt.source_database != self.policy.source.database
+            or receipt.target_resource_id != self.policy.target.resource_id
+            or receipt.canonical_database != self.canonical
+        ):
+            raise RefreshError("receipt_identity_mismatch")
         return record
 
     def _verify_shape(self, census: CandidateCensus) -> None:
@@ -1381,6 +1417,14 @@ class LifecycleManager:
             raise RefreshError("active_count_mismatch")
         if dict(census.latest_timestamps) != dict(receipt.latest_timestamps):
             raise RefreshError("active_latest_timestamp_mismatch")
+        if dict(census.translation_counts) != dict(receipt.translation_counts):
+            raise RefreshError("active_translation_mismatch")
+        if dict(census.classification_counts) != dict(receipt.classification_counts):
+            raise RefreshError("active_classification_mismatch")
+        if census.terminal_narrative_count != receipt.terminal_narrative_count:
+            raise RefreshError("active_terminal_narrative_mismatch")
+        if census.current_narrative_count != receipt.current_narrative_count:
+            raise RefreshError("active_current_narrative_mismatch")
         if receipt.action == "refresh" and any(census.scrubbed_counts.values()):
             raise RefreshError("active_scrub_incomplete")
 
@@ -1508,7 +1552,13 @@ class PostgresRuntime:
         self.source_url = source_url
         self.target_url = target_url
         self.now = now or (lambda: datetime.now(UTC))
-        self.adapter = adapter or PsycopgSnapshotAdapter(policy, now=self.now)
+        if engine is not None and adapter is not None and engine.adapter is not adapter:
+            raise ValueError("engine_adapter_mismatch")
+        self.adapter = (
+            adapter
+            or (engine.adapter if engine is not None else None)
+            or PsycopgSnapshotAdapter(policy, now=self.now)
+        )
         self.runner = runner
         self.lock_factory = lock_factory
         self.engine = engine or (
@@ -1642,6 +1692,15 @@ class PostgresRuntime:
             self.engine.cleanup_artifact(artifact)
 
     def execute(self, action: str, *, recovery: str | None = None) -> dict[str, object]:
+        if action == "preflight":
+            if self.engine is None:
+                raise RefreshError("refresh_urls_missing")
+            census = self.engine.preflight()
+            return {
+                "action": "preflight",
+                "source_database_bytes": census.database_bytes,
+                "source_snapshot_at": census.captured_at.astimezone(UTC).isoformat(),
+            }
         if action == "refresh":
             return self._refresh().to_payload()
         if action == "verify":

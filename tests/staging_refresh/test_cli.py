@@ -108,7 +108,7 @@ def test_preflight_passes_without_a_mutating_call(policy, environment) -> None:
     )
 
     assert status == 0
-    assert runtime.calls == ["inspect_source", "inspect_target"]
+    assert runtime.calls == ["inspect_source", "inspect_target", "execute:preflight"]
     assert json.loads(output.getvalue())["status"] == "authorized"
 
 
