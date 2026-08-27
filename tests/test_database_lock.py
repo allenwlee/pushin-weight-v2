@@ -207,16 +207,12 @@ def test_harvest_coordination_contention_executes_against_postgres() -> None:
     parameters.setdefault("user", getuser())
     database_url = make_conninfo(**parameters)
 
-    with acquire_harvest_coordination_lock(
-        database_url, environment="staging"
+    with (
+        acquire_harvest_coordination_lock(database_url, environment="staging"),
+        pytest.raises(DatabaseLockError, match="^harvest_lock_unavailable$"),
+        acquire_harvest_coordination_lock(database_url, environment="staging"),
     ):
-        with (
-            pytest.raises(DatabaseLockError, match="^harvest_lock_unavailable$"),
-            acquire_harvest_coordination_lock(
-                database_url, environment="staging"
-            ),
-        ):
-            raise AssertionError("unreachable")
+        raise AssertionError("unreachable")
 
 
 def test_waiting_lock_times_out_at_the_bounded_deadline_and_closes() -> None:
