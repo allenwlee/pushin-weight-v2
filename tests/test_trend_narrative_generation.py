@@ -68,8 +68,13 @@ def test_editor_and_critic_prompts_pin_publishable_output_contract():
     assert "do not lead with a number" in editor
     assert "same named event" in editor
     assert "events=[]" in editor
+    assert "new_or_low_base" in editor
+    assert "limited sample" in editor
     assert "repair any otherwise supported narrative" in critic
     assert "output-contract or length problem" in critic
+    assert "repair a disproportionate or overstated draft" in critic
+    assert "quiet_context" in critic
+    assert "hold only when no substantive narrative" in critic
 
 
 def test_u3_editor_contract_keeps_messages_boundary_and_closed_id_ownership():
@@ -268,7 +273,7 @@ def test_u3_malformed_editor_body_is_critic_input_but_absence_is_not():
     )
     assert critic["editor_response_raw"] == "{malformed"
     assert critic["editor_parse"]["status"] == "invalid"
-    assert critic["prompt_version"] == "headline-critic-v3"
+    assert critic["prompt_version"] == "headline-critic-v4"
     assert "{malformed" in request["messages"][0]["content"]
     with pytest.raises(HeadlineGenerationError, match="editor_response_absent"):
         build_per_brand_critic_request(
@@ -509,8 +514,8 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
     assert config.rank_prompt_version == "headline-rank-v1"
-    assert config.editor_prompt_version == "headline-editor-v3"
-    assert config.critic_prompt_version == "headline-critic-v3"
+    assert config.editor_prompt_version == "headline-editor-v4"
+    assert config.critic_prompt_version == "headline-critic-v4"
     assert (
         config.rank_max_tokens,
         config.editor_max_tokens,
