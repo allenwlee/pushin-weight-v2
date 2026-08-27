@@ -22,6 +22,9 @@ Verifies:
 
 from __future__ import annotations
 
+import json
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -366,6 +369,73 @@ def test_classify_batch_one_batch_invocation_per_20_posts():
     assert len(out) == _CLASSIFY_BATCH_SIZE
     for entry in out:
         assert "kimi" in entry["by_brand"]
+
+
+def test_classification_batches_can_run_concurrently_with_stable_order():
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    class ConcurrentClassifierClient:
+        def __init__(self):
+            self.barrier = threading.Barrier(3)
+            self.lock = threading.Lock()
+            self.active = 0
+            self.max_active = 0
+            self.batch_sizes: list[int] = []
+
+        def messages_create(self, **kwargs):
+            prompt = kwargs["messages"][0]["content"]
+            payload = json.loads(prompt.rsplit("\n", 1)[1])
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                self.batch_sizes.append(len(payload))
+            self.barrier.wait(timeout=2)
+            time.sleep(0.01)
+            with self.lock:
+                self.active -= 1
+            return {
+                "results": [
+                    {
+                        "tweet_id": row["tweet_id"],
+                        "classifications": [
+                            {
+                                "brand_id": row["brand_ids"][0],
+                                "post_types": ["hands_on_usage"],
+                                "sentiment": "neutral",
+                                "discourse_roles": ["uncategorized"],
+                                "china_nationalism": "none",
+                                "us_nationalism": "none",
+                            }
+                        ],
+                        "unsanctioned_flags": [],
+                    }
+                    for row in payload
+                ]
+            }
+
+    brands = ["kimi", "glm"]
+    posts = [
+        {
+            "tweet_id": f"parallel-{index}",
+            "text": f"text {index}",
+            "brand_ids": [brands[index % 2]],
+        }
+        for index in range(41)
+    ]
+    client = ConcurrentClassifierClient()
+
+    out = classify_batch_pragmatics_full(
+        posts,
+        [],
+        client,
+        max_workers=3,
+    )
+
+    assert client.max_active == 3
+    assert sorted(client.batch_sizes) == [1, 20, 20]
+    assert [next(iter(row["by_brand"])) for row in out] == [
+        post["brand_ids"][0] for post in posts
+    ]
 
 
 def test_classify_batch_llm_exception_yields_empty_shape():

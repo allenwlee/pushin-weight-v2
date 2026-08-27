@@ -126,7 +126,8 @@ def test_all_valid_first_response_single_llm_call():
                 "lang_detected": "en",
                 "text_en": "hello",
                 "literal_zh": "你好",
-                "cn_equivalent": "N/A",
+                "en_equivalent": "A short greeting opens the conversation.",
+                "cn_equivalent": "先跟大家打个招呼。",
                 "annotation": "",
                 "noop_en": True,
                 "noop_zh": False,
@@ -136,7 +137,8 @@ def test_all_valid_first_response_single_llm_call():
                 "lang_detected": "en",
                 "text_en": "world",
                 "literal_zh": "世界",
-                "cn_equivalent": "N/A",
+                "en_equivalent": "A one-word greeting to the audience.",
+                "cn_equivalent": "跟大家问声好。",
                 "annotation": "",
                 "noop_en": True,
                 "noop_zh": False,
@@ -162,7 +164,8 @@ def test_missing_lang_triggers_one_repair_preserves_texts():
                 "lang_detected": "en",
                 "text_en": "MiniMax is great",
                 "literal_zh": "MiniMax 很棒",
-                "cn_equivalent": "N/A",
+                "en_equivalent": "MiniMax is getting an enthusiastic endorsement.",
+                "cn_equivalent": "MiniMax 这波表现很能打。",
                 "annotation": "",
                 "noop_en": True,
                 "noop_zh": False,
@@ -172,7 +175,8 @@ def test_missing_lang_triggers_one_repair_preserves_texts():
                 # missing lang_detected
                 "text_en": "DeepSeek rocks",
                 "literal_zh": "DeepSeek 真猛",
-                "cn_equivalent": "N/A",
+                "en_equivalent": "DeepSeek is getting an enthusiastic endorsement.",
+                "cn_equivalent": "DeepSeek 这波表现很能打。",
                 "annotation": "",
                 "noop_en": False,
                 "noop_zh": False,
@@ -186,6 +190,7 @@ def test_missing_lang_triggers_one_repair_preserves_texts():
                 "lang_detected": "en",
                 "text_en": "",  # empty — must keep first-pass texts
                 "literal_zh": "",
+                "en_equivalent": "",
                 "cn_equivalent": "",
                 "annotation": "",
                 "noop_en": True,
@@ -217,7 +222,8 @@ def test_repair_still_missing_lang_fails_empty_no_third_call():
             "tweet_id": "x",
             "text_en": "hello",
             "literal_zh": "你好",
-            "cn_equivalent": "N/A",
+            "en_equivalent": "A brief greeting to the audience.",
+            "cn_equivalent": "跟大家简单问个好。",
             "annotation": "",
         }]
     }
@@ -226,7 +232,8 @@ def test_repair_still_missing_lang_fails_empty_no_third_call():
             "tweet_id": "x",
             "text_en": "hello",
             "literal_zh": "你好",
-            "cn_equivalent": "N/A",
+            "en_equivalent": "A brief greeting to the audience.",
+            "cn_equivalent": "跟大家简单问个好。",
             "annotation": "",
             # still no lang
         }]
@@ -248,7 +255,8 @@ def test_success_path_never_null_lang_without_failed_flag():
             "lang_detected": "en",
             "text_en": "hi",
             "literal_zh": "嗨",
-            "cn_equivalent": "N/A",
+            "en_equivalent": "A brief greeting to the audience.",
+            "cn_equivalent": "跟大家简单问个好。",
             "annotation": "",
         }]}
     ])
@@ -267,7 +275,8 @@ def test_zh_cn_synonym_normalize_then_noop():
             "lang_detected": "zh-cn",
             "text_en": "Claude is good",
             "literal_zh": "Claude 真不错",
-            "cn_equivalent": "N/A",
+            "en_equivalent": "Claude is receiving a positive assessment.",
+            "cn_equivalent": "Claude 这波表现挺不错。",
             "annotation": "",
         }]}
     ])
@@ -277,7 +286,7 @@ def test_zh_cn_synonym_normalize_then_noop():
     assert row["lang_detected"] == "zh-Hans"
     assert row["text_zh_cn"] is None
     assert row["literal_zh"] is None
-    assert row["text_en"] is None  # zh-Hans also nulls en per current noop
+    assert row["text_en"] == "Claude is good"
 
 
 def test_never_three_llm_calls_on_repair_path():
@@ -287,7 +296,8 @@ def test_never_three_llm_calls_on_repair_path():
             "tweet_id": "z",
             "text_en": "x",
             "literal_zh": "x",
-            "cn_equivalent": "N/A",
+            "en_equivalent": "The post makes a deliberately minimal statement.",
+            "cn_equivalent": "这条就简单说一个 x。",
             "annotation": "",
         }]
     }

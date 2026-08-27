@@ -205,14 +205,54 @@ class ListMembershipConfig(BaseModel):
     request_timeout_seconds: int = Field(default=30, ge=1)
 
 
+@dataclass(frozen=True)
+class EnrichmentAttemptDeadline:
+    """One monotonic budget for a single enrichment stage."""
+
+    deadline_at: float
+    request_timeout_seconds: float
+    monotonic: Callable[[], float] = time.monotonic
+
+    def remaining(self) -> float:
+        return max(self.deadline_at - self.monotonic(), 0.0)
+
+    def expired(self) -> bool:
+        return self.remaining() <= 0.0
+
+    def request_timeout(self) -> float:
+        return min(float(self.request_timeout_seconds), self.remaining())
+
+
 class EnrichmentConfig(BaseModel):
     """Bounded durable translation/classification queue."""
 
-    claim_per_cycle: int = Field(default=20, ge=1)
+    claim_per_cycle: int = Field(default=50, ge=1)
     max_attempts: int = Field(default=8, ge=1)
     max_age_hours: int = Field(default=24, ge=1)
-    claim_ttl_seconds: int = Field(default=180, ge=1)
-    attempt_budget_seconds: int = Field(default=90, ge=1)
+    claim_ttl_seconds: int = Field(default=660, ge=1)
+    request_timeout_seconds: int = Field(default=45, ge=1)
+    attempt_budget_seconds: int = Field(default=300, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_attempt_budget(self) -> EnrichmentConfig:
+        if self.request_timeout_seconds > self.attempt_budget_seconds:
+            raise ValueError(
+                "request_timeout_seconds must not exceed attempt_budget_seconds"
+            )
+        if self.claim_ttl_seconds < (2 * self.attempt_budget_seconds):
+            raise ValueError(
+                "claim_ttl_seconds must cover both enrichment stage budgets"
+            )
+        return self
+
+    def start_attempt_deadline(
+        self, *, monotonic: Callable[[], float] = time.monotonic
+    ) -> EnrichmentAttemptDeadline:
+        return EnrichmentAttemptDeadline(
+            deadline_at=monotonic() + self.attempt_budget_seconds,
+            request_timeout_seconds=self.request_timeout_seconds,
+            monotonic=monotonic,
+        )
 
 
 class HarvestConfig(BaseModel):

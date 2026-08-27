@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REFRESH_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REFRESH_REPO_ROOT="$(cd "$REFRESH_BIN_DIR/.." && pwd)"
+
+if [[ -x "$REFRESH_REPO_ROOT/.venv/bin/python" ]]; then
+  REFRESH_PYTHON="$REFRESH_REPO_ROOT/.venv/bin/python"
+elif REFRESH_GIT_COMMON_DIR="$(git -C "$REFRESH_REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+  && [[ -x "$(dirname "$REFRESH_GIT_COMMON_DIR")/.venv/bin/python" ]]; then
+  REFRESH_PYTHON="$(dirname "$REFRESH_GIT_COMMON_DIR")/.venv/bin/python"
+else
+  REFRESH_PYTHON="${PYTHON:-python3}"
+fi
+
+export PYTHONPATH="$REFRESH_REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+cd "$REFRESH_REPO_ROOT"
+exec "$REFRESH_PYTHON" -m scripts.staging_refresh "$@"
