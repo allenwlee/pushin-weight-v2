@@ -42,6 +42,10 @@ REVOKE ALL ON DATABASE pushinweight_shadow FROM staging_refresh_reader;
 REVOKE CREATE, TEMPORARY ON DATABASE pushinweight_shadow FROM staging_refresh_reader;
 GRANT CONNECT ON DATABASE pushinweight_shadow TO staging_refresh_reader;
 GRANT CONNECT ON DATABASE postgres TO staging_refresh_reader;
+-- This database predates PostgreSQL 15's secure public-schema default. The
+-- managed application role is a member of the schema-owner role, so it keeps
+-- CREATE after this legacy grant is removed. Verify that fact before running.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE CREATE ON SCHEMA public FROM staging_refresh_reader;
 GRANT USAGE ON SCHEMA public TO staging_refresh_reader;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM staging_refresh_reader;
@@ -74,7 +78,10 @@ TO staging_refresh_reader;
 
 Do not add default privileges. A new production table must fail the exhaustive
 preflight until `config/staging_refresh.yaml`, this grant list, and the scrub or
-copy decision are reviewed together.
+copy decision are reviewed together. Before changing the `PUBLIC` schema ACL,
+prove that the managed application login is still a member of the schema-owner
+role; afterward, prove the application login retains `CREATE` and
+`staging_refresh_reader` does not.
 
 Build the external TLS URL locally without printing it, then set only
 `STAGING_REFRESH_SOURCE_DATABASE_URL` on `pushinweight-staging-web` through the
