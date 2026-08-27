@@ -287,6 +287,12 @@ class HeadlineNarrativeConfig(BaseModel):
     provider: Literal["anthropic", "deepseek", "minimax"] = "deepseek"
     base_url: str = "https://api.deepseek.com/anthropic"
     model: str = "deepseek-v4-pro"
+    rank_prompt_version: str = Field(default="headline-rank-v1", min_length=1, max_length=64)
+    editor_prompt_version: str = Field(default="headline-editor-v1", min_length=1, max_length=64)
+    critic_prompt_version: str = Field(default="headline-critic-v1", min_length=1, max_length=64)
+    rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
+    editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
+    critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
     timeout_seconds: int = Field(default=45, ge=5, le=120)
     prompt_version: str = Field(
         default="headline-v10-why-first-quantitative-color",

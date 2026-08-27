@@ -20,8 +20,15 @@ from monitor.trend_narrative_generation import (
     HEADLINE_OUTPUT_SCHEMA_VERSION,
     HEADLINE_SYSTEM_PROMPT_V3,
     HeadlineGenerationError,
+    build_per_brand_critic_request,
+    build_per_brand_editor_request,
+    build_per_brand_rank_request,
+    execute_per_brand_provider_request,
     generate_trend_narrative,
     generation_fingerprint,
+    validate_per_brand_critic_response,
+    validate_per_brand_editor_response,
+    validate_per_brand_rank_response,
 )
 from x_monitor.config import HeadlineNarrativeConfig, load_config
 
@@ -385,6 +392,353 @@ def _candidate_quantitative_fact(
     )
 
 
+def test_u3_per_brand_editor_contract_keeps_the_messages_boundary_and_exact_values():
+    packet = {
+        "packet_schema_version": 3,
+        "window_days": 7,
+        "as_of": "2026-08-26T00:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "batch_key": "7d:001",
+        "manifest_brand_keys": ["deepseek"],
+        "dossiers": [
+            {
+                "brand_key": "deepseek",
+                "headline_en": "",
+                "facts": [
+                    {
+                        "fact_id": "deepseek:volume_change",
+                        "display_en": "45%",
+                        "display_zh_cn": "45%",
+                    }
+                ],
+                "evidence": [{"evidence_id": "ev:deepseek:01"}],
+            }
+        ],
+    }
+    envelope, request = build_per_brand_editor_request(packet, HeadlineNarrativeConfig())
+
+    assert envelope["manifest_brand_keys"] == ["deepseek"]
+    assert request["model"] == "deepseek-v4-pro"
+    assert request["thinking"] == {"type": "disabled"}
+    assert set(request) == {"model", "max_tokens", "thinking", "system", "messages"}
+    assert request["messages"] and request["messages"][0]["role"] == "user"
+    assert "request_envelope=" in request["messages"][0]["content"]
+    assert envelope["packet_hash"] in request["messages"][0]["content"]
+
+    response = {
+        "editor_response_schema_version": 1,
+        "packet_hash": envelope["packet_hash"],
+        "batch_key": "7d:001",
+        "brands": [
+            {
+                "brand_key": "deepseek",
+                "headline_en": "Discussion rose 45% after an undeclared causal phrase.",
+                "headline_zh_cn": "讨论增长45%，且包含未声明的因果措辞。",
+                "secondary_en": "The available discussion focused on practical use.",
+                "secondary_zh_cn": "现有讨论集中于实际使用。",
+                "narrative_kind": "content_shift",
+                "confidence": "medium",
+                "headline_proposition_ids": ["deepseek:p1"],
+                "secondary_proposition_ids": ["deepseek:p2"],
+                "propositions": [
+                    {
+                        "proposition_id": "deepseek:p1",
+                        "output_section": "headline",
+                        "claim_en": "Discussion rose 45% after an undeclared causal phrase.",
+                        "claim_zh_cn": "讨论增长45%，且包含未声明的因果措辞。",
+                        "claim_type": "content_summary",
+                        "fact_ids": ["deepseek:volume_change"],
+                        "evidence_ids": ["ev:deepseek:01"],
+                    },
+                    {
+                        "proposition_id": "deepseek:p2",
+                        "output_section": "secondary",
+                        "claim_en": "The available discussion focused on practical use.",
+                        "claim_zh_cn": "现有讨论集中于实际使用。",
+                        "claim_type": "content_summary",
+                        "fact_ids": [],
+                        "evidence_ids": ["ev:deepseek:01"],
+                    },
+                ],
+                "events": [],
+            }
+        ],
+    }
+    parsed = validate_per_brand_editor_response(response, envelope)
+    assert parsed["brands"][0]["headline_en"].endswith("causal phrase.")
+
+    critic_envelope, critic_request = build_per_brand_critic_request(
+        envelope,
+        json.dumps(response),
+        {"status": "valid", "error_codes": []},
+        HeadlineNarrativeConfig(),
+    )
+    assert critic_envelope["packet_hash"] == envelope["packet_hash"]
+    assert critic_request["max_tokens"] == HeadlineNarrativeConfig().critic_max_tokens
+    critic = {
+        "critic_response_schema_version": 1,
+        "packet_hash": envelope["packet_hash"],
+        "batch_key": "7d:001",
+        "decisions": [
+            {
+                "brand_key": "deepseek",
+                "decision": "approve",
+                "narrative": response["brands"][0],
+                "hold_code": None,
+            }
+        ],
+    }
+    assert validate_per_brand_critic_response(critic, envelope)["decisions"][0]["decision"] == "approve"
+    critic["decisions"][0]["decision"] = "repair"
+    assert (
+        validate_per_brand_critic_response(critic, envelope)["decisions"][0][
+            "decision"
+        ]
+        == "repair"
+    )
+    critic["decisions"][0].update(decision="hold", narrative=None, hold_code="unsupported_causality")
+    assert validate_per_brand_critic_response(critic, envelope)["decisions"][0]["hold_code"] == "unsupported_causality"
+
+    response["brands"][0]["headline_en"] = "Discussion rose 46%."
+    response["brands"][0]["propositions"][0]["claim_en"] = "Discussion rose 46%."
+    with pytest.raises(HeadlineGenerationError, match="exact_value"):
+        validate_per_brand_editor_response(response, envelope)
+
+
+def test_u3_rank_contract_accepts_all_brands_and_rejects_cross_brand_reasons():
+    dossiers = [
+        {
+            "brand_key": f"brand-{index:02d}",
+            "facts": [{"fact_id": f"f:brand-{index:02d}:volume"}],
+            "evidence": [{"evidence_id": f"ev:brand-{index:02d}:01"}],
+            "corpus_signals": [
+                {"corpus_signal_id": f"cs:brand-{index:02d}:topic"}
+            ],
+        }
+        for index in range(20)
+    ]
+    envelope, request = build_per_brand_rank_request(
+        {
+            "packet_schema_version": 3,
+            "window_days": 7,
+            "dossiers": dossiers,
+        },
+        HeadlineNarrativeConfig(),
+    )
+    assert len(envelope["manifest_brand_keys"]) == 20
+    assert envelope["batch_key"] == "7d:rank"
+    assert request["max_tokens"] == HeadlineNarrativeConfig().rank_max_tokens
+    response = {
+        "rank_response_schema_version": 1,
+        "packet_hash": envelope["packet_hash"],
+        "batch_key": "7d:rank",
+        "ordered_brands": [
+            {
+                "brand_key": dossier["brand_key"],
+                "confidence": "medium",
+                "reason_refs": [
+                    {"kind": "fact", "id": dossier["facts"][0]["fact_id"]}
+                ],
+            }
+            for dossier in reversed(dossiers)
+        ],
+    }
+    assert (
+        validate_per_brand_rank_response(response, envelope)["ordered_brands"][0][
+            "brand_key"
+        ]
+        == "brand-19"
+    )
+    response["ordered_brands"][0]["reason_refs"][0]["id"] = (
+        dossiers[0]["facts"][0]["fact_id"]
+    )
+    with pytest.raises(HeadlineGenerationError, match="rank_response_reason_invalid"):
+        validate_per_brand_rank_response(response, envelope)
+
+
+def test_u3_malformed_editor_body_is_critic_input_but_absence_is_not():
+    packet = {
+        "packet_schema_version": 3,
+        "window_days": 7,
+        "batch_key": "7d:001",
+        "manifest_brand_keys": ["deepseek"],
+        "dossiers": [{"brand_key": "deepseek", "facts": [], "evidence": []}],
+    }
+    envelope, _ = build_per_brand_editor_request(
+        packet, HeadlineNarrativeConfig()
+    )
+    critic, request = build_per_brand_critic_request(
+        envelope,
+        "{malformed",
+        {"status": "invalid", "error_codes": ["json_invalid"]},
+        HeadlineNarrativeConfig(),
+    )
+    assert critic["editor_response_raw"] == "{malformed"
+    assert critic["editor_parse"]["status"] == "invalid"
+    assert critic["prompt_version"] == "headline-critic-v1"
+    assert "{malformed" in request["messages"][0]["content"]
+    with pytest.raises(HeadlineGenerationError, match="editor_response_absent"):
+        build_per_brand_critic_request(
+            envelope,
+            None,
+            {"status": "invalid", "error_codes": []},
+            HeadlineNarrativeConfig(),
+        )
+
+
+def test_u3_production_transport_uses_the_exact_messages_request_once():
+    packet = {
+        "packet_schema_version": 3,
+        "window_days": 7,
+        "batch_key": "7d:001",
+        "manifest_brand_keys": ["deepseek"],
+        "dossiers": [{"brand_key": "deepseek", "facts": [], "evidence": []}],
+    }
+    _, request = build_per_brand_editor_request(
+        packet, HeadlineNarrativeConfig()
+    )
+    client = _FakeClient("{malformed but received}")
+    constructor: list[dict] = []
+    ticks = iter([10.0, 10.25])
+
+    response = execute_per_brand_provider_request(
+        request,
+        HeadlineNarrativeConfig(),
+        api_key="headline-secret",
+        client_factory=lambda **kwargs: constructor.append(kwargs) or client,
+        monotonic=lambda: next(ticks),
+    )
+
+    assert constructor == [
+        {
+            "api_key": "headline-secret",
+            "base_url": "https://api.deepseek.com/anthropic",
+            "timeout": 45.0,
+            "max_retries": 0,
+        }
+    ]
+    assert client.messages.calls == [request]
+    assert response.raw_text == "{malformed but received}"
+    assert response.input_tokens == 720
+    assert response.output_tokens == 260
+    assert response.latency_ms == 250
+
+
+def test_u3_production_transport_maps_failures_without_retrying():
+    packet = {
+        "packet_schema_version": 3,
+        "window_days": 7,
+        "batch_key": "7d:001",
+        "manifest_brand_keys": ["deepseek"],
+        "dossiers": [{"brand_key": "deepseek", "facts": [], "evidence": []}],
+    }
+    _, request = build_per_brand_editor_request(
+        packet, HeadlineNarrativeConfig()
+    )
+
+    class TimeoutMessages:
+        def create(self, **_kwargs):
+            raise TimeoutError
+
+    with pytest.raises(HeadlineGenerationError) as captured:
+        execute_per_brand_provider_request(
+            request,
+            HeadlineNarrativeConfig(),
+            api_key="headline-secret",
+            client_factory=lambda **_kwargs: SimpleNamespace(
+                messages=TimeoutMessages()
+            ),
+        )
+    assert captured.value.code == "headline_provider_timeout"
+    assert captured.value.transport_completed is False
+
+
+def test_u3_editor_rejects_a_proposition_citing_another_brands_evidence():
+    brands = ["deepseek", "minimax"]
+    packet = {
+        "packet_schema_version": 3,
+        "window_days": 7,
+        "batch_key": "7d:001",
+        "manifest_brand_keys": brands,
+        "dossiers": [
+            {
+                "brand_key": brand,
+                "facts": [],
+                "evidence": [{"evidence_id": f"ev:{brand}:01"}],
+            }
+            for brand in brands
+        ],
+    }
+    envelope, _ = build_per_brand_editor_request(
+        packet, HeadlineNarrativeConfig()
+    )
+
+    def narrative(brand: str) -> dict:
+        return {
+            "brand_key": brand,
+            "headline_en": f"{brand} conversation focused on practical use.",
+            "headline_zh_cn": f"{brand}讨论集中在实际使用。",
+            "secondary_en": "Users described setup and performance tradeoffs.",
+            "secondary_zh_cn": "用户描述了设置与性能之间的权衡。",
+            "narrative_kind": "content_shift",
+            "confidence": "medium",
+            "headline_proposition_ids": [f"{brand}:p1"],
+            "secondary_proposition_ids": [f"{brand}:p2"],
+            "propositions": [
+                {
+                    "proposition_id": f"{brand}:p1",
+                    "output_section": "headline",
+                    "claim_en": f"{brand} conversation focused on practical use.",
+                    "claim_zh_cn": f"{brand}讨论集中在实际使用。",
+                    "claim_type": "content_summary",
+                    "fact_ids": [],
+                    "evidence_ids": [f"ev:{brand}:01"],
+                },
+                {
+                    "proposition_id": f"{brand}:p2",
+                    "output_section": "secondary",
+                    "claim_en": "Users described setup and performance tradeoffs.",
+                    "claim_zh_cn": "用户描述了设置与性能之间的权衡。",
+                    "claim_type": "content_summary",
+                    "fact_ids": [],
+                    "evidence_ids": [f"ev:{brand}:01"],
+                },
+            ],
+            "events": [],
+        }
+
+    response = {
+        "editor_response_schema_version": 1,
+        "packet_hash": envelope["packet_hash"],
+        "batch_key": "7d:001",
+        "brands": [narrative(brand) for brand in brands],
+    }
+    response["brands"][0]["propositions"][0]["evidence_ids"] = [
+        "ev:minimax:01"
+    ]
+    with pytest.raises(HeadlineGenerationError, match="ownership_invalid"):
+        validate_per_brand_editor_response(response, envelope)
+
+
+@pytest.mark.parametrize("count", [1, 3, 5])
+def test_u3_editor_manifest_is_exact_for_each_supported_batch_size(count: int):
+    keys = [f"brand-{index}" for index in range(count)]
+    packet = {
+        "packet_schema_version": 3,
+        "batch_key": f"batch-{count}",
+        "manifest_brand_keys": keys,
+        "dossiers": [
+            {"brand_key": key, "facts": [], "evidence": []} for key in keys
+        ],
+    }
+
+    envelope, request = build_per_brand_editor_request(packet, HeadlineNarrativeConfig())
+
+    assert envelope["manifest_brand_keys"] == keys
+    assert len(envelope["analysis_packet"]["dossiers"]) == count
+    assert request["max_tokens"] == HeadlineNarrativeConfig().editor_max_tokens
+
+
 def _flat_volume_mix_snapshot() -> dict:
     snapshot = _snapshot(two_candidates=False)
     candidate = snapshot["candidates"][0]
@@ -456,6 +810,14 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
+    assert config.rank_prompt_version == "headline-rank-v1"
+    assert config.editor_prompt_version == "headline-editor-v1"
+    assert config.critic_prompt_version == "headline-critic-v1"
+    assert (config.rank_max_tokens, config.editor_max_tokens, config.critic_max_tokens) == (
+        2_400,
+        8_000,
+        9_000,
+    )
     assert config.prompt_version == "headline-v10-why-first-quantitative-color"
     assert config.publication_epoch == 10
     assert config.materiality_policy_version == "pending-live-review-v1"

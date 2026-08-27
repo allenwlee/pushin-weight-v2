@@ -146,6 +146,12 @@ headline_narrative:
   provider: "deepseek"
   base_url: "https://api.deepseek.com/anthropic"
   model: "deepseek-v4-pro"
+  rank_prompt_version: "headline-rank-v1"
+  editor_prompt_version: "headline-editor-v1"
+  critic_prompt_version: "headline-critic-v1"
+  rank_max_tokens: 2400
+  editor_max_tokens: 8000
+  critic_max_tokens: 9000
   timeout_seconds: 45
   prompt_version: "headline-v10-why-first-quantitative-color"
   publication_epoch: 10
