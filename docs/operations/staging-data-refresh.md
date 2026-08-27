@@ -68,10 +68,13 @@ TO staging_refresh_reader;
 GRANT MAINTAIN ON
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
-  auth_user_groups, auth_user_user_permissions, call_state, django_session,
+  auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
+  call_state, django_session,
   harvest_backlog_windows, post_enrichment_states,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
+  trend_narrative_provider_calls, trend_narrative_runs,
+  trend_narrative_visible_runs, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
 
@@ -79,10 +82,12 @@ GRANT SELECT ON
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
   auth_user_groups_id_seq, auth_user_id_seq, auth_user_user_permissions_id_seq,
-  django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
+  brand_trend_narratives_id_seq, django_content_type_id_seq,
+  django_migrations_id_seq, django_site_id_seq,
   harvest_backlog_windows_id_seq, products_id_seq, search_queries_id_seq,
   socialaccount_socialaccount_id_seq, socialaccount_socialapp_id_seq,
   socialaccount_socialapp_sites_id_seq, socialaccount_socialtoken_id_seq,
+  trend_narrative_provider_calls_id_seq, trend_narrative_runs_id_seq,
   trend_narrative_subjects_id_seq, trend_narrative_versions_id_seq,
   twitter_list_memberships_id_seq
 TO staging_refresh_reader;
@@ -111,6 +116,57 @@ postgresql://staging_refresh_reader:<password>@dpg-d9koekqjobas73fvjqng-a.oregon
 Never put the URL in a shell command, ticket, log, receipt, Blueprint, or local
 environment file. `render-staging.yaml` declares exactly one `sync: false`
 placeholder; `render.yaml` must remain free of it.
+
+## Quiesce the staging work boundary
+
+The staging database and broker are one work-state boundary. A queued envelope
+from the old database must never run against the newly activated database.
+Before every preflight or refresh:
+
+1. Confirm `pushinweight-staging-harvest` still has the dormant
+   `0 0 31 2 *` schedule and no manual Trigger Run is active.
+2. Suspend `pushinweight-staging-headlines` in the Render Dashboard and wait
+   until the service is fully stopped. Do not merely scale it while a task is
+   finishing.
+3. From the staging web shell, purge the stage-owned broker. The broker has no
+   production consumers or data, so clearing these exact queue-coordination
+   keys cannot affect production:
+
+```bash
+celery -A project purge --force
+python - <<'PY'
+import os
+import redis
+
+from monitor.trend_narrative_queue import HEADLINE_WATERMARK_KEY
+
+client = redis.Redis.from_url(os.environ["CELERY_BROKER_URL"])
+keys = [HEADLINE_WATERMARK_KEY, "unacked", "unacked_index"]
+keys.extend(client.scan_iter(match="trend-narratives*"))
+deleted = client.delete(*keys) if keys else 0
+print({"staging_broker_keys_deleted": deleted})
+PY
+```
+
+The refresh command independently pings the staging broker, checks that no
+Celery worker responds, and requires the `trend-narratives` queue, `unacked`
+hash, `unacked_index` sorted set, every additional `trend-narratives*` key, and
+latest-envelope watermark to be empty. Missing broker access or an unavailable
+worker-state probe is a hard refusal. It checks twice: before dump work and
+again immediately before activation. Never bypass this gate.
+
+The command also acquires the same staging harvest-coordination advisory lock
+used by `--staging-acceptance`, on the cluster administration database. It
+holds that lock across the entire preflight or refresh, including activation,
+so a manual harvester cannot start in the gap between the two broker checks.
+The administration-database session survives termination and renaming of the
+active staging database. `harvest_lock_unavailable` is a hard refusal; never
+retry it until the active staging harvest or refresh has ended.
+
+Expected refusal codes are `staging_headline_worker_active:<node>`,
+`staging_headline_queue_not_empty`, and
+`staging_headline_envelope_present`. Broker or worker inspection failure is
+also a refusal, never permission to proceed.
 
 ## Preflight and refresh
 
@@ -170,6 +226,7 @@ UNION ALL SELECT 'auth_permission', count(*) FROM auth_permission
 UNION ALL SELECT 'auth_user', count(*) FROM auth_user
 UNION ALL SELECT 'auth_user_groups', count(*) FROM auth_user_groups
 UNION ALL SELECT 'auth_user_user_permissions', count(*) FROM auth_user_user_permissions
+UNION ALL SELECT 'brand_trend_narratives', count(*) FROM brand_trend_narratives
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
@@ -178,6 +235,10 @@ UNION ALL SELECT 'socialaccount_socialaccount', count(*) FROM socialaccount_soci
 UNION ALL SELECT 'socialaccount_socialapp', count(*) FROM socialaccount_socialapp
 UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_socialapp_sites
 UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
+UNION ALL SELECT 'trend_narrative_provider_calls', count(*) FROM trend_narrative_provider_calls
+UNION ALL SELECT 'trend_narrative_runs', count(*) FROM trend_narrative_runs
+UNION ALL SELECT 'trend_narrative_visible_runs', count(*) FROM trend_narrative_visible_runs
+UNION ALL SELECT 'trend_narrative_work_slots', count(*) FROM trend_narrative_work_slots
 UNION ALL SELECT 'twitter_list_memberships', count(*) FROM twitter_list_memberships
 UNION ALL SELECT 'twitter_list_sync_state', count(*) FROM twitter_list_sync_state
 UNION ALL SELECT '_applied_config_snapshot', count(*) FROM _applied_config_snapshot
@@ -209,6 +270,10 @@ be `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must
 be empty. Compare product counts and the latest timestamp to the receipt, not
 to an earlier observation of production.
+
+Only after `verify` and the independent zero-state census both pass may the
+staging headline worker be resumed. The staging harvester remains dormant;
+each later acceptance run is a separate intentional Render Trigger Run.
 
 ## Rollback
 

@@ -87,6 +87,7 @@ def run(
                 policy,
                 source_url=values.get(policy.source.environment),
                 target_url=values.get(policy.target.environment),
+                broker_url=values.get(policy.quiescence.broker_environment),
             )
 
         source = None

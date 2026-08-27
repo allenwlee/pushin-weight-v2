@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any, Protocol, Self
@@ -47,6 +48,67 @@ def admin_connection_parameters(database_url: str) -> dict[str, str]:
         raise DatabaseLockError("database_url_invalid")
     parameters["dbname"] = "postgres"
     return parameters
+
+
+def harvest_coordination_lock_keys(environment: str) -> tuple[int, int]:
+    """Return stable signed PostgreSQL keys for one environment's harvest gate."""
+
+    if not environment or "\n" in environment or "\r" in environment:
+        raise DatabaseLockError("harvest_lock_environment_invalid")
+    digest = hashlib.sha256(
+        f"pushinweight:harvest-coordination:{environment}".encode()
+    ).digest()
+    unsigned = (
+        int.from_bytes(digest[:4], "big"),
+        int.from_bytes(digest[4:8], "big"),
+    )
+    return tuple(value - 2**32 if value >= 2**31 else value for value in unsigned)
+
+
+@contextmanager
+def acquire_harvest_coordination_lock(
+    database_url: str,
+    *,
+    environment: str,
+    connect: Callable[..., Connection] = psycopg.connect,
+) -> Iterator[None]:
+    """Exclude staging harvest and refresh across active-database swaps.
+
+    Both callers connect to the cluster administration database. The lock
+    therefore survives termination and renaming of the serving staging
+    database during activation.
+    """
+
+    parameters: dict[str, Any] = admin_connection_parameters(database_url)
+    keys = harvest_coordination_lock_keys(environment)
+    try:
+        connection = connect(**parameters, autocommit=True)
+    except Exception as exc:
+        raise DatabaseLockError("harvest_lock_connection_failed") from exc
+
+    acquired = False
+    with connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_try_advisory_lock(%s, %s)", list(keys))
+                row = cursor.fetchone()
+                acquired = bool(row and row[0])
+                if not acquired:
+                    raise DatabaseLockError("harvest_lock_unavailable")
+        except DatabaseLockError:
+            raise
+        except Exception as exc:
+            raise DatabaseLockError("harvest_lock_acquire_failed") from exc
+
+        try:
+            yield
+        finally:
+            if acquired:
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT pg_advisory_unlock(%s, %s)", list(keys))
+                except Exception as exc:
+                    raise DatabaseLockError("harvest_lock_release_failed") from exc
 
 
 @contextmanager

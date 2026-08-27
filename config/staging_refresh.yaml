@@ -78,6 +78,7 @@ relations:
     - auth_user
     - auth_user_groups
     - auth_user_user_permissions
+    - brand_trend_narratives
     - call_state
     - django_session
     - harvest_backlog_windows
@@ -86,6 +87,10 @@ relations:
     - socialaccount_socialapp
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
+    - trend_narrative_provider_calls
+    - trend_narrative_runs
+    - trend_narrative_visible_runs
+    - trend_narrative_work_slots
     - twitter_list_memberships
     - twitter_list_sync_state
   views:
@@ -99,6 +104,7 @@ relations:
     - auth_user_groups_id_seq
     - auth_user_id_seq
     - auth_user_user_permissions_id_seq
+    - brand_trend_narratives_id_seq
     - django_content_type_id_seq
     - django_migrations_id_seq
     - django_site_id_seq
@@ -110,6 +116,8 @@ relations:
     - socialaccount_socialapp_sites_id_seq
     - socialaccount_socialtoken_id_seq
     - trend_narrative_subjects_id_seq
+    - trend_narrative_provider_calls_id_seq
+    - trend_narrative_runs_id_seq
     - trend_narrative_versions_id_seq
     - twitter_list_memberships_id_seq
 
@@ -124,6 +132,7 @@ scrub:
     - auth_user
     - auth_user_groups
     - auth_user_user_permissions
+    - brand_trend_narratives
     - call_state
     - django_session
     - harvest_backlog_windows
@@ -132,6 +141,10 @@ scrub:
     - socialaccount_socialapp
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
+    - trend_narrative_provider_calls
+    - trend_narrative_runs
+    - trend_narrative_visible_runs
+    - trend_narrative_work_slots
     - twitter_list_memberships
     - twitter_list_sync_state
   retained_narrative_statuses:
@@ -214,6 +227,16 @@ storage:
   target_disk_bytes: 16106127360
   required_reserve_ratio: 0.20
   local_free_space_multiplier: 2.0
+
+quiescence:
+  harvest_environment: staging
+  broker_environment: CELERY_BROKER_URL
+  queue_name: trend-narratives
+  queue_namespace_pattern: trend-narratives*
+  envelope_key: pushinweight:trend-narratives:latest-envelope:v1
+  unacked_key: unacked
+  unacked_index_key: unacked_index
+  worker_probe_timeout_seconds: 2
 
 database_lifecycle:
   marker_prefix: staging-refresh/v1

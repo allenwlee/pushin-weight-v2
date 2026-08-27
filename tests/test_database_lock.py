@@ -11,7 +11,9 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from scripts.database_lock import (
     DatabaseLockError,
     acquire_cluster_lock,
+    acquire_harvest_coordination_lock,
     admin_connection_parameters,
+    harvest_coordination_lock_keys,
 )
 
 Operation = tuple[str, tuple[object, ...]] | str
@@ -107,6 +109,43 @@ def test_admin_connection_keeps_the_cluster_and_replaces_only_the_database() -> 
     assert parameters["sslmode"] == "require"
 
 
+def test_harvest_coordination_lock_uses_admin_database_and_environment_keys() -> None:
+    operations: list[Operation] = []
+    connect = FakeConnect(operations)
+    keys = harvest_coordination_lock_keys("staging")
+
+    with acquire_harvest_coordination_lock(
+        "postgresql://reader:secret@cluster.example/application",
+        environment="staging",
+        connect=connect,
+    ):
+        operations.append("critical")
+
+    assert connect.parameters["dbname"] == "postgres"
+    assert operations == [
+        "connect",
+        ("SELECT pg_try_advisory_lock(%s, %s)", keys),
+        "critical",
+        ("SELECT pg_advisory_unlock(%s, %s)", keys),
+        "close",
+    ]
+
+
+def test_harvest_coordination_lock_refuses_concurrent_work() -> None:
+    operations: list[Operation] = []
+    connect = FakeConnect(operations, try_lock=False)
+
+    with (
+        pytest.raises(DatabaseLockError, match="^harvest_lock_unavailable$"),
+        acquire_harvest_coordination_lock(
+            "postgresql://reader:secret@cluster.example/application",
+            environment="staging",
+            connect=connect,
+        ),
+    ):
+        raise AssertionError("unreachable")
+
+
 def test_fail_fast_lock_refuses_contention_and_closes_the_connection() -> None:
     operations: list[Operation] = []
     connect = FakeConnect(operations, try_lock=False)
@@ -159,6 +198,21 @@ def test_waiting_lock_timeout_sql_executes_against_postgres() -> None:
 
     with acquire_cluster_lock(database_url, wait_seconds=1):
         pass
+
+
+@pytest.mark.requires_postgres
+def test_harvest_coordination_contention_executes_against_postgres() -> None:
+    parameters = conninfo_to_dict(os.environ["DATABASE_URL"])
+    parameters.setdefault("host", "localhost")
+    parameters.setdefault("user", getuser())
+    database_url = make_conninfo(**parameters)
+
+    with (
+        acquire_harvest_coordination_lock(database_url, environment="staging"),
+        pytest.raises(DatabaseLockError, match="^harvest_lock_unavailable$"),
+        acquire_harvest_coordination_lock(database_url, environment="staging"),
+    ):
+        raise AssertionError("unreachable")
 
 
 def test_waiting_lock_times_out_at_the_bounded_deadline_and_closes() -> None:
