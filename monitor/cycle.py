@@ -316,8 +316,10 @@ def _claim_enrichment_states(
                     ),
                     default=Value(1),
                 ),
+            # Protect the literal latest cohort from both current-cycle inserts
+            # and older retry debt. Retry state only breaks equal timestamps.
             ).order_by(
-                "_cycle_priority", "_retry_priority", "-created_at", "post_id"
+                "_cycle_priority", "-created_at", "_retry_priority", "post_id"
             )
         else:
             candidate_qs = candidate_qs.order_by("-created_at", "post_id")

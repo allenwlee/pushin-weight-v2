@@ -32,7 +32,7 @@ def test_harvest_runtime_defaults_pin_u9_contract():
     assert cfg.harvest.enrichment.max_attempts == 8
     assert cfg.harvest.enrichment.max_age_hours == 24
     assert cfg.harvest.enrichment.claim_ttl_seconds == 660
-    assert cfg.harvest.enrichment.request_timeout_seconds == 45
+    assert cfg.harvest.enrichment.request_timeout_seconds == 90
     assert cfg.harvest.enrichment.attempt_budget_seconds == 300
 
 

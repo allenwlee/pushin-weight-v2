@@ -439,11 +439,29 @@ LANG_DETECTED_ALLOWLIST: frozenset[str] = frozenset(
     {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
 )
 
+# Registered ISO 639-1 primary language subtags. Keeping this boundary local
+# avoids accepting reserved/undetermined values such as ``und``, ``qaa``,
+# ``xx``, or ``zz`` merely because they resemble language tags.
+_ISO_639_1_PRIMARY_CODES: frozenset[str] = frozenset(
+    """
+    aa ab ae af ak am an ar as av ay az ba be bg bh bi bm bn bo br bs ca ce
+    ch co cr cs cu cv cy da de dv dz ee el en eo es et eu fa ff fi fj fo fr
+    fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz ia id ie ig ii ik io is
+    it iu ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky la lb lg li ln
+    lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv
+    ny oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk
+    sl sm sn so sq sr ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw
+    ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu
+    """.split()
+)
+
 # Synonym map: bare / region tags → allowlist form (after lower+hyphen normalize).
 _LANG_SYNONYMS: dict[str, str] = {
     "en": "en",
     "eng": "en",
     "zh": "zh-Hans",
+    "zho": "zh-Hans",
+    "chi": "zh-Hans",
     "zh-cn": "zh-Hans",
     "zh-hans": "zh-Hans",
     "zh-sg": "zh-Hans",
@@ -489,6 +507,18 @@ def normalize_lang_detected(raw: object) -> str | None:
         return "zh-Hans"
     if s in LANG_DETECTED_ALLOWLIST:
         return s
+    # The persisted vocabulary groups every real language outside the named
+    # EN/ZH/JA/KO families into ``other``. Providers commonly return the more
+    # precise registered language tag (for example ``fr`` or ``es-MX``) even
+    # when the prompt requests that bucket. Accept an ISO 639-1 primary code
+    # with conservative region/script subtags; free-form, reserved, private,
+    # and undetermined values still take the bounded repair path.
+    parts = s.split("-")
+    if parts[0] in _ISO_639_1_PRIMARY_CODES and all(
+        2 <= len(part) <= 8 and part.isascii() and part.isalnum()
+        for part in parts[1:]
+    ):
+        return "other"
     # Case-sensitive allowlist members already covered; reject freeform.
     return None
 
@@ -737,6 +767,15 @@ def _parse_pragmatics_response(
     return results
 
 
+def _is_source_echo(value: object, source_text: object) -> bool:
+    """True when a generated value is only the source text repeated verbatim."""
+    return (
+        isinstance(value, str)
+        and isinstance(source_text, str)
+        and value.strip() == source_text.strip()
+    )
+
+
 def _finalize_pragmatics_row(
     tweet: dict[str, Any],
     parsed: dict[str, Any],
@@ -752,12 +791,7 @@ def _finalize_pragmatics_row(
     is_already_en = _is_english_family(lang_for_family)
     _raw_en = judged.get("text_en")
     _source_text = (tweet.get("text") or "").strip()
-    _en_is_echo = (
-        _raw_en is not None
-        and isinstance(_raw_en, str)
-        and _raw_en.strip() == _source_text
-        and not is_already_en
-    )
+    _en_is_echo = not is_already_en and _is_source_echo(_raw_en, _source_text)
     text_en = None if is_already_en or _en_is_echo else _raw_en
     literal_zh_raw = (
         None if is_already_zh
@@ -846,7 +880,14 @@ def missing_pragmatics_outputs(
     source_text = tweet.get("text")
     text_en = row.get("text_en")
     literal_zh = row.get("literal_zh") or row.get("text_zh_cn")
-    if lang is not None and lang != "en" and _usable_output(text_en) is None:
+    if (
+        lang is not None
+        and lang != "en"
+        and (
+            _usable_output(text_en) is None
+            or _is_source_echo(text_en, source_text)
+        )
+    ):
         missing.append("text_en")
     if lang is not None and lang != "zh-Hans" and _usable_output(literal_zh) is None:
         missing.append("literal_zh")

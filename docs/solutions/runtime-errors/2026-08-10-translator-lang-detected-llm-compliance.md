@@ -34,7 +34,10 @@ The pragmatics translator often left `lang_detected` empty while still writing t
 
 Plan `docs/plans/2026-08-10-004-fix-translator-lang-detected-llm-compliance-plan.md`:
 
-1. Closed allowlist + normalize (`en`, `zh-Hans`, `zh-Hant`, `ja`, `ko`, `other`).
+1. Closed persisted vocabulary + normalize (`en`, `zh-Hans`, `zh-Hant`, `ja`,
+   `ko`, `other`). Registered ISO 639-1 language tags outside the named
+   families normalize to `other`; blank, free-form, undetermined, private-use,
+   and reserved labels remain invalid.
 2. Language-first prompt; remove hard 280-char-per-post rule.
 3. Post-parse validate; **one** repair LLM call for bad tweet_ids only.
 4. Repair merge: keep first-pass texts if repair only fills lang.
@@ -45,3 +48,8 @@ Plan `docs/plans/2026-08-10-004-fix-translator-lang-detected-llm-compliance-plan
 
 - `tests/test_translator_lang_detected_compliance.py` (M18 call-chain through `translate_batch_pragmatics`).
 - Never persist success rows with null `lang_detected`.
+- Do not ask the LLM to “repair” a valid precise tag such as `fr`, `ar`, or
+  `de` into the less precise `other` bucket; normalize that boundary locally.
+- Validate non-English `text_en` before finalization with the same source-echo
+  rule used by persistence. A verbatim source echo is a missing translation
+  and may use the single bounded repair call.
