@@ -22,12 +22,16 @@
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
-        <div class="follower-lead follower-bin-{{ row.follower_bin }}"
-             role="img"
-             aria-label="{{ row.followers_label }}"
-             title="{{ row.followers_label }}">
-          <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
-          <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
+        <div class="follower-lead follower-bin-{{ row.follower_bin }}">
+          <div class="follower-magnitude" role="img" aria-label="{{ row.followers_label }}" title="{{ row.followers_label }}">
+            <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
+            <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
+          </div>
+          {% if row.account.role %}
+            <span class="account-role role-{{ row.account.role }}" role="img" aria-label="{{ row.account.role_label }}" title="{{ row.account.role_label }}"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span>
+          {% else %}
+            <span class="account-role is-empty" aria-hidden="true"></span>
+          {% endif %}
         </div>
         <div class="body">
           <div class="head">
@@ -36,7 +40,8 @@
                 {% if handle %}
                   <a class="feed-handle-link"
                      href="https://x.com/{{ handle|cut:'@' }}"
-                     target="_blank" rel="noopener noreferrer">{{ row.account.display_name|default:handle }}</a>
+                     target="_blank" rel="noopener noreferrer"
+                     title="{{ row.account.display_name|default:handle }}">{{ row.account.display_name|default:handle }}</a>
                 {% else %}@unknown{% endif %}
               </span>
             {% endwith %}
@@ -57,10 +62,8 @@
                 <span class="text-layer-tag">{% trans "综合" %}</span>{{ row.commentary_zh_cn }}
               {% elif row.text_zh_cn %}
                 <span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
-              {% elif row.text_en %}
-                <span class="text-layer-tag">en</span>{{ row.text_en }}
               {% else %}
-                {{ row.text_original|default:row.text|default:'NULL' }}
+                <span class="text-layer-tag">{% trans "原文" %}</span>{{ row.text_original|default:row.text|default:'NULL' }}
               {% endif %}
             {% elif active_locale == 'original' %}
               {{ row.text_original|default:row.text|default:'NULL' }}

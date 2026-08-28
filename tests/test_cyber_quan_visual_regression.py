@@ -16,7 +16,6 @@ from monitor.views import _clear_home_pulse_cache
 from tests.test_home_v22_browser import (
     V22_BROWSER_TEST_STORAGES,
     _freeze_clock,
-    _pixel_report,
 )
 from tests.v22_support import seed_v22_metadata_regression_orm
 
@@ -145,6 +144,32 @@ def _icon_mask(page: Page) -> bytes:
     return base64.b64decode(data_url.split(",", 1)[1])
 
 
+def _release_a_mask(page: Page) -> bytes:
+    """Mask only the later owner-approved feed/headline usability surfaces."""
+    data_url = page.evaluate(
+        """() => {
+          const canvas = document.createElement('canvas');
+          canvas.width = innerWidth;
+          canvas.height = innerHeight;
+          const context = canvas.getContext('2d');
+          context.fillStyle = '#000';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.fillStyle = '#fff';
+          document.querySelectorAll('.headline-strip, .feed-strip').forEach(node => {
+            const rect = node.getBoundingClientRect();
+            context.fillRect(
+              Math.floor(rect.left - 3),
+              Math.floor(rect.top - 3),
+              Math.ceil(rect.width + 6),
+              Math.ceil(rect.height + 6)
+            );
+          });
+          return canvas.toDataURL('image/png');
+        }"""
+    )
+    return base64.b64decode(data_url.split(",", 1)[1])
+
+
 @override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
 class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
     def setUp(self) -> None:
@@ -190,11 +215,13 @@ class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
                             prechange_path = GOLDEN_ROOT / f"prechange-{stem}.png"
                             mask_path = GOLDEN_ROOT / f"mask-{stem}.png"
                             candidate = candidate_path.read_bytes()
-                            candidate_report = _pixel_report(page, actual, candidate)
+                            candidate_report = _outside_mask_report(
+                                page, candidate, actual, _release_a_mask(page)
+                            )
                             self.assertEqual(
-                                float(candidate_report["changed_fraction"]),
-                                0.0,
-                                f"candidate drifted from {candidate_path}: {candidate_report}",
+                                candidate_report["outside_changed"],
+                                0,
+                                f"Release A drift escaped approved feed/headline surfaces relative to {candidate_path}: {candidate_report}",
                             )
                             mask_report = _outside_mask_report(
                                 page,

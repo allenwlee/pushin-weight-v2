@@ -1972,7 +1972,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             cards = page.locator("article[data-pw-headline-item]")
                             self.assertEqual(cards.count(), 2)
                             self.assertEqual(
-                                cards.nth(0).locator("h2").inner_text(),
+                                cards.nth(0).locator("h2").evaluate(
+                                    """element => Array.from(element.childNodes)
+                                      .filter(node => node.nodeType === Node.TEXT_NODE)
+                                      .map(node => node.textContent).join('').trim()"""
+                                ),
                                 first_headline,
                             )
                             self.assertEqual(
@@ -1993,6 +1997,54 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertTrue(
                                 page.locator("[data-pw-headline-legacy]").is_hidden()
+                            )
+                            detail = cards.nth(0).locator("[data-pw-headline-detail]")
+                            secondary = cards.nth(0).locator(
+                                "[data-pw-headline-item-secondary]"
+                            )
+                            self.assertTrue(secondary.is_hidden())
+                            self.assertEqual(detail.get_attribute("aria-expanded"), "false")
+                            expected_detail = "详情" if locale == "zh_hans" else "detail"
+                            expected_hide = "收起" if locale == "zh_hans" else "hide"
+                            self.assertEqual(detail.inner_text(), expected_detail)
+                            detail.click()
+                            self.assertTrue(secondary.is_visible())
+                            self.assertEqual(detail.get_attribute("aria-expanded"), "true")
+                            self.assertEqual(
+                                secondary.locator("[data-pw-headline-hide]").inner_text(),
+                                expected_hide,
+                            )
+                            secondary.locator("[data-pw-headline-hide]").click()
+                            self.assertTrue(secondary.is_hidden())
+                            self.assertEqual(detail.get_attribute("aria-expanded"), "false")
+                            self.assertTrue(detail.evaluate("node => document.activeElement === node"))
+                            detail.click()
+                            secondary.click()
+                            self.assertTrue(secondary.is_hidden())
+                            self.assertEqual(detail.get_attribute("aria-expanded"), "false")
+                            detail.click()
+                            secondary.locator(
+                                "[data-pw-headline-secondary-copy]"
+                            ).press("Enter")
+                            self.assertTrue(secondary.is_hidden())
+                            self.assertTrue(detail.evaluate("node => document.activeElement === node"))
+                            detail.click()
+                            with page.expect_response(
+                                lambda response: "/chart.html" in response.url
+                                and response.status == 200
+                            ):
+                                page.evaluate(
+                                    "() => document.dispatchEvent(new CustomEvent('pw:filter-change'))"
+                                )
+                            refreshed_secondary = cards.nth(0).locator(
+                                "[data-pw-headline-item-secondary]"
+                            )
+                            self.assertTrue(refreshed_secondary.is_hidden())
+                            self.assertEqual(
+                                cards.nth(0)
+                                .locator("[data-pw-headline-detail]")
+                                .get_attribute("aria-expanded"),
+                                "false",
                             )
                             for index in range(2):
                                 bounds = cards.nth(index).bounding_box()
@@ -3035,6 +3087,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             self.assertIn(key, row)
         self.assertEqual(row["account"]["handle"], "v22metadata000")
         self.assertEqual(row["account"]["display_name"], "V22 Metadata Account 000")
+        self.assertEqual(row["account"]["role"], "official")
+        self.assertEqual(row["account"]["role_label"], "官方")
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
         self.assertEqual(row["post_type_keys"], ["buzz_releases", "hands_on_usage"])
         self.assertEqual(row["nat_cn"], "pro")
@@ -3049,16 +3103,26 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         shell = row.locator(".feed-row-shell")
         self.assertTrue(shell.evaluate("element => element.classList.contains('" + tint + "')"))
         lead = row.locator(".follower-lead")
+        magnitude = lead.locator(".follower-magnitude")
         glyph = lead.locator(".follower-glyph")
         count = lead.locator(".follower-count")
         self.assertEqual(lead.count(), 1)
         self.assertEqual(glyph.count(), 1)
-        self.assertIn("followers", lead.get_attribute("aria-label") or "")
+        self.assertIn("followers", magnitude.get_attribute("aria-label") or "")
         self.assertGreater(glyph.bounding_box()["width"], 0)
         self.assertTrue((count.inner_text() or "").strip())
         account_link = row.locator(".feed-handle-link")
         self.assertTrue(account_link.inner_text().startswith("V22 Metadata Account "))
         self.assertRegex(account_link.get_attribute("href") or "", r"/v22metadata\d{3}$")
+        if tweet_id == self.fixture["replacement_id"]:
+            role = lead.locator(".account-role.role-official")
+            self.assertEqual(role.count(), 1)
+            self.assertEqual(role.locator("use").get_attribute("href"), "#icon-role-badge")
+            locale = page.locator("body").get_attribute("data-pw-locale") or "en"
+            self.assertEqual(
+                role.get_attribute("aria-label"),
+                "官方" if locale.startswith("zh") else "Official",
+            )
         for selector in ("[data-sig-sentiment]", "[data-sig-post-type]", "[data-sig-nat]"):
             marker = row.locator(selector)
             self.assertTrue(marker.is_visible(), f"marker is hidden: {selector}")
@@ -3074,6 +3138,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "icon-heart", "icon-reply", "icon-repost",
             "icon-rise", "icon-flat", "icon-fall",
             "icon-followers-1", "icon-followers-2", "icon-followers-3", "icon-followers-4",
+            "icon-role-badge",
             "icon-sentiment", "icon-sentiment-neutral", "icon-sentiment-negative", "icon-sentiment-mixed",
             "icon-hands-on-hammer", "icon-compare", "icon-announce", "icon-question",
             "icon-marketing", "icon-event", "icon-discourse", "icon-nationalism",
@@ -3138,6 +3203,43 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertGreater(page.locator(".engagement use[href='#icon-heart']").count(), 0)
                             self.assertGreater(page.locator(".engagement use[href='#icon-repost']").count(), 0)
                             self.assertGreater(page.locator(".engagement use[href='#icon-reply']").count(), 0)
+                            semantic_slots = page.locator("[data-pw-semantic-icon] svg")
+                            self.assertGreater(semantic_slots.count(), 20)
+                            self.assertEqual(
+                                page.locator(
+                                    '[data-pw-semantic-family="sentiment"]'
+                                    '[data-pw-semantic-key="negative"] use'
+                                ).first.get_attribute("href"),
+                                "#icon-sentiment-negative",
+                            )
+                            self.assertEqual(
+                                page.locator(
+                                    '[data-pw-semantic-family="role"]'
+                                    '[data-pw-semantic-key="staff"] use'
+                                ).get_attribute("href"),
+                                "#icon-role-badge",
+                            )
+                            self.assertEqual(
+                                page.locator('[data-group="lang"] [data-pw-semantic-icon]').count(),
+                                0,
+                            )
+                            sentiment_pill = page.locator('[data-group="sentiment"]')
+                            sentiment_pill.click()
+                            visible_sentiment_icons = page.locator(
+                                '[data-pw-semantic-family="sentiment"] svg:visible'
+                            )
+                            self.assertEqual(visible_sentiment_icons.count(), 4)
+                            self.assertTrue(visible_sentiment_icons.evaluate_all(
+                                "nodes => nodes.every(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)"
+                            ))
+                            page.locator('[data-group="role"]').click()
+                            visible_role_icons = page.locator(
+                                '[data-pw-semantic-family="role"] svg:visible'
+                            )
+                            self.assertEqual(visible_role_icons.count(), 3)
+                            self.assertTrue(visible_role_icons.evaluate_all(
+                                "nodes => nodes.every(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)"
+                            ))
 
                             direction_symbols = {"up": "#icon-rise", "down": "#icon-fall", "flat": "#icon-flat"}
                             for direction, symbol in direction_symbols.items():
@@ -3170,6 +3272,20 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 follower_symbols[follower_bin] == symbol
                                 for follower_bin, symbol in follower_projection.items()
                             ))
+                            official_roles = page.locator(".account-role.role-official")
+                            self.assertGreater(official_roles.count(), 0)
+                            self.assertEqual(
+                                official_roles.first.locator("use").get_attribute("href"),
+                                "#icon-role-badge",
+                            )
+                            first_head = rows.first.locator(".head")
+                            first_link = first_head.locator(".feed-handle-link")
+                            self.assertEqual(first_link.get_attribute("title"), first_link.inner_text())
+                            self.assertEqual(first_link.evaluate("node => getComputedStyle(node).textOverflow"), "ellipsis")
+                            self.assertLessEqual(
+                                first_head.evaluate("node => node.scrollHeight"),
+                                first_head.evaluate("node => node.clientHeight") + 1,
+                            )
                             self.assertFalse(page.evaluate("() => document.documentElement.scrollWidth > innerWidth"))
                             self.assertEqual(page_errors, [])
                             self.assertEqual(console_errors, [])
@@ -3207,14 +3323,27 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     text = row.locator(".text[data-text-cycle]")
                     self.assertEqual(text.get_attribute("data-layer-key"), "synthesis")
                     self.assertIn("综合", text.inner_text())
+                    text.evaluate(
+                        """element => {
+                          element.setAttribute('data-literal-cn', '直译内容 '.repeat(80));
+                          element.setAttribute('data-text-source', 'original source '.repeat(180));
+                        }"""
+                    )
+                    default_height = row.evaluate("element => element.getBoundingClientRect().height")
                     text.click()
                     self.assertEqual(text.get_attribute("data-layer-key"), "literal_cn")
                     self.assertIn("直译", text.inner_text())
                     text.click()
-                    self.assertEqual(text.get_attribute("data-layer-key"), "en")
-                    self.assertIn("en", text.inner_text().lower())
+                    self.assertEqual(text.get_attribute("data-layer-key"), "source")
+                    self.assertIn("原文", text.inner_text())
+                    expanded_height = row.evaluate("element => element.getBoundingClientRect().height")
+                    self.assertLessEqual(expanded_height, default_height * 3 + 1)
+                    self.assertTrue(text.evaluate("element => element.classList.contains('is-expanded')"))
                     text.click()
                     self.assertEqual(text.get_attribute("data-layer-key"), "synthesis")
+
+                    page.locator(".feed-strip > h3").click()
+                    self.assertFalse(text.evaluate("element => element.classList.contains('is-expanded')"))
 
                     page.evaluate(
                         """() => {

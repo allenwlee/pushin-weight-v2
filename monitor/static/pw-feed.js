@@ -174,6 +174,18 @@
       : '';
   }
 
+  function accountRoleHtml(row) {
+    var account = row.account || {};
+    var role = account.role || '';
+    if (['official', 'staff', 'community'].indexOf(role) === -1) {
+      return '<span class="account-role is-empty" aria-hidden="true"></span>';
+    }
+    var label = account.role_label || role;
+    return '<span class="account-role role-' + role + '" role="img"' +
+      ' aria-label="' + escapeHtml(label) + '" title="' + escapeHtml(label) + '">' +
+      renderIcon('icon-role-badge', 'account-role-icon') + '</span>';
+  }
+
   // Render the production two-column grid. paintSignals() fills the reserved
   // signal column after the row enters the DOM.
   function renderRowHtml(row) {
@@ -182,7 +194,8 @@
     var handleHtml = handleRaw
       ? '<a class="feed-handle-link" ' +
           'href="https://x.com/' + escapeHtml(cleanHandle(handleRaw)) + '" ' +
-          'target="_blank" rel="noopener noreferrer">' +
+          'target="_blank" rel="noopener noreferrer" title="' +
+          escapeHtml(handleLabel) + '">' +
           escapeHtml(handleLabel) + '</a>'
       : escapeHtml(handleLabel);
     var eng = row.engagement_pretty || {};
@@ -199,21 +212,23 @@
     var englishText = row.text_en || '';
     var locale = currentLocale();
     var initialText = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
-      ? (commentaryZhCn || literalCnText || englishText || sourceText)
+      ? (commentaryZhCn || literalCnText || sourceText)
       : locale === 'original'
         ? sourceText
         : (commentaryEn || englishText || sourceText);
     return (
       '<div class="feed-row-shell ' + escapeHtml(tint) + '">' +
         '<div class="feed-main">' +
-          '<div class="follower-lead follower-bin-' + followerClass + '"' +
-            ' role="img"' +
-            ' aria-label="' + escapeHtml(followersLabel) + '"' +
-            ' title="' + escapeHtml(followersLabel) + '">' +
-            '<span class="follower-glyph" aria-hidden="true">' +
-              renderIcon(FOLLOWER_ICONS[followerClass], 'follower-icon') +
-            '</span>' +
-            '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
+          '<div class="follower-lead follower-bin-' + followerClass + '">' +
+            '<div class="follower-magnitude" role="img"' +
+              ' aria-label="' + escapeHtml(followersLabel) + '"' +
+              ' title="' + escapeHtml(followersLabel) + '">' +
+              '<span class="follower-glyph" aria-hidden="true">' +
+                renderIcon(FOLLOWER_ICONS[followerClass], 'follower-icon') +
+              '</span>' +
+              '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
+            '</div>' +
+            accountRoleHtml(row) +
           '</div>' +
           '<div class="body">' +
             '<div class="head">' +
@@ -226,7 +241,7 @@
               ' data-literal-cn="' + escapeHtml(literalCnText) + '"' +
               ' data-text-en="' + escapeHtml(englishText) + '"' +
               ' data-text-source="' + escapeHtml(sourceText) + '">' +
-              escapeHtml((initialText || '').toString().slice(0, 600)) +
+              escapeHtml((initialText || '').toString()) +
             '</div>' +
             '<div class="engagement">' +
               '<span class="likes">' + renderIcon('icon-heart', 'engagement-icon') + escapeHtml(eng.likes || '') + '</span>' +
@@ -246,20 +261,6 @@
   }
 
   // Paint Cyber-Quan symbols and existing semantic tints in the right column.
-  var SENTIMENT_ICON = {
-    positive: 'icon-sentiment',
-    neutral: 'icon-sentiment-neutral',
-    negative: 'icon-sentiment-negative',
-    mixed: 'icon-sentiment-mixed'
-  };
-  var POST_TYPE_ICON = {
-    hands_on_usage: 'icon-hands-on-hammer',
-    performance_comparisons: 'icon-compare',
-    buzz_releases: 'icon-announce',
-    feedback_questions: 'icon-question',
-    advertising_marketing: 'icon-marketing',
-    event_announcement: 'icon-event'
-  };
   var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
   var TYPE_ORDER = [
     'buzz_releases', 'hands_on_usage', 'performance_comparisons',
@@ -280,9 +281,14 @@
     });
     return out;
   }
-  function semanticIcon(mapping, key, className) {
-    var symbolId = mapping[key];
-    return symbolId ? renderIcon(symbolId, className) : '';
+  function semanticIcon(family, key, className) {
+    var renderer = typeof window !== 'undefined' && window.pwIcon;
+    if (!renderer || typeof renderer.semanticSymbol !== 'function') return '';
+    var symbolId = renderer.semanticSymbol(family, key);
+    var tone = typeof renderer.semanticClass === 'function'
+      ? renderer.semanticClass(family, key)
+      : '';
+    return symbolId ? renderIcon(symbolId, className + (tone ? ' ' + tone : '')) : '';
   }
   function paintSignals(row) {
     var sents = uniqueInOrder(parseListAttr(row.getAttribute('data-sentiments')), SENT_ORDER);
@@ -294,13 +300,13 @@
     var elS = row.querySelector('[data-sig-sentiment]');
     if (elS) {
       elS.innerHTML = sents.map(function (key) {
-        return semanticIcon(SENTIMENT_ICON, key, 'signal-icon tone-' + key);
+        return semanticIcon('sentiment', key, 'signal-icon');
       }).join('');
     }
     var elT = row.querySelector('[data-sig-post-type]');
     if (elT) {
       elT.innerHTML = types.map(function (key) {
-        return semanticIcon(POST_TYPE_ICON, key, 'signal-icon');
+        return semanticIcon('post_types', key, 'signal-icon');
       }).join('');
     }
     var elN = row.querySelector('[data-sig-nat]');
@@ -358,7 +364,7 @@
       var zhLayers = uniqueTextLayers([
         { key: 'synthesis', label: '综合', value: textValue(el, 'commentary-zh-cn') },
         { key: 'literal_cn', label: '直译', value: textValue(el, 'literal-cn') },
-        { key: 'en', label: 'en', value: english },
+        { key: 'source', label: '原文', value: source },
       ]);
       return zhLayers.length ? zhLayers : [
         { key: 'source', label: 'src', value: source },
@@ -515,12 +521,17 @@
     };
   }
 
+  function collapseText(el) {
+    el.classList.remove('is-expanded');
+    el.style.removeProperty('--feed-text-expanded-max-height');
+  }
+
   function attachCellClickHandlers(root) {
     if (!root) return;
     // iter 14: rows are divs; collapse any pre-expanded .text then wire
     // click-toggle on each .text cell. Legacy /internal/ still uses <td>
     // and is handled by its own template (unaffected by this function).
-    $$('.text.is-expanded', root).forEach(function (t) { t.classList.remove('is-expanded'); });
+    $$('.text.is-expanded', root).forEach(collapseText);
     $$('.feed-row .text[data-text-cycle]', root).forEach(function (el) {
       if (el.getAttribute('data-text-bound') === '1') {
         renderTextLayer(el);
@@ -532,7 +543,18 @@
       el.addEventListener('click', function (e) {
         var row = el.closest('.feed-row');
         if (!row) return;
-        $$('.text.is-expanded', row).forEach(function (other) { other.classList.remove('is-expanded'); });
+        if (!el.classList.contains('is-expanded')) {
+          var rowHeight = row.getBoundingClientRect().height;
+          var textHeight = el.getBoundingClientRect().height;
+          var fixedHeight = Math.max(0, rowHeight - textHeight);
+          var allowedTextHeight = Math.max(textHeight, rowHeight * 3 - fixedHeight);
+          el.style.setProperty(
+            '--feed-text-expanded-max-height', allowedTextHeight + 'px'
+          );
+        }
+        $$('.text.is-expanded', row).forEach(function (other) {
+          if (other !== el) collapseText(other);
+        });
         el.classList.add('is-expanded');
         advanceTextLayer(el);
         e.stopPropagation();
@@ -816,7 +838,7 @@
     // Click anywhere outside the expanded cell collapses it.
     document.addEventListener('click', function (e) {
       if (!e.target.closest('.feed-row .text[data-text-cycle]')) {
-        $$('.text.is-expanded').forEach(function (el) { el.classList.remove('is-expanded'); });
+        $$('.text.is-expanded').forEach(collapseText);
       }
     });
     wireSentinel();

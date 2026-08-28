@@ -45,6 +45,9 @@ def initial_state() -> dict[str, Any]:
         "brand_lens": "open",
         "nationalism_lens": "us",
         "pulse_brands": [],
+        "feed_text": "synthesis_collapsed",
+        "headline_detail": "collapsed",
+        "role_badge": "none",
         "latest_generation": 0,
         "committed_generation": 0,
     }
@@ -66,7 +69,15 @@ def set_control(state: dict[str, Any], control: str, value: Any) -> dict[str, An
             next_state["pulse_brands"] = []
     elif control in {"unsanctioned", "window"}:
         next_state["filters"][control] = int(value) if control == "window" else value
-    elif control in {"locale", "timezone", "brand_lens", "nationalism_lens"}:
+    elif control in {
+        "locale",
+        "timezone",
+        "brand_lens",
+        "nationalism_lens",
+        "feed_text",
+        "headline_detail",
+        "role_badge",
+    }:
         next_state[control] = value
     else:
         raise KeyError(f"unknown UI assurance control: {control}")
@@ -161,6 +172,11 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
         "accessibility": {
             "pulse_pressed": list(state["pulse_brands"]),
             "window_pressed": int(state["filters"]["window"]),
+            "feed_text": state["feed_text"],
+            "headline_detail": state["headline_detail"],
+            "headline_expanded": state["headline_detail"] == "expanded",
+            "role_badge": state["role_badge"],
+            "role_label": None if state["role_badge"] == "none" else state["role_badge"],
         },
         "persistence": {
             "locale": state["locale"],

@@ -1,7 +1,7 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "0da9265700bdcd902789bfc5c3467ca19411c7ce",
+  "source_revision": "e1447569c4097f2abc6af110358f10afc33a5168",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
     "sha256": "d0fef546c3ec378cb8eec92f995db806a30934272d432e538a472654b55d4027"
@@ -22,7 +22,10 @@
     {"id":"timezone","kind":"toggle","values":["local","ca"],"initial_value":"local","reversible":true},
     {"id":"brand_lens","kind":"single_select","values":["open","closed"],"initial_value":"open","reversible":true},
     {"id":"nationalism_lens","kind":"single_select","values":["us","cn"],"initial_value":"us","reversible":true},
-    {"id":"bulk_action","kind":"action","values":["idle","all","clear"],"initial_value":"idle","reversible":false}
+    {"id":"bulk_action","kind":"action","values":["idle","all","clear"],"initial_value":"idle","reversible":false},
+    {"id":"feed_text","kind":"single_select","values":["synthesis_collapsed","literal_expanded","source_expanded"],"initial_value":"synthesis_collapsed","reversible":true},
+    {"id":"headline_detail","kind":"toggle","values":["collapsed","expanded"],"initial_value":"collapsed","reversible":true},
+    {"id":"role_badge","kind":"single_select","values":["none","official","staff","community"],"initial_value":"none","reversible":true}
   ],
   "coverage_groups": [
     {"id":"filter-core","controls":["brands","sentiment","post_type","unsanctioned"],"strength":2},
@@ -30,13 +33,16 @@
     {"id":"nationalism-core","controls":["nationalism_cn","nationalism_us","unsanctioned"],"strength":2},
     {"id":"presentation-core","controls":["locale","window","timezone","brand_lens","nationalism_lens"],"strength":2},
     {"id":"chart-refresh-risk","controls":["brands","window","locale"],"strength":3},
-    {"id":"flag-partition-risk","controls":["brands","unsanctioned","window"],"strength":3}
+    {"id":"flag-partition-risk","controls":["brands","unsanctioned","window"],"strength":3},
+    {"id":"feed-disclosure-risk","controls":["locale","feed_text","headline_detail","role_badge"],"strength":2}
   ],
   "ordered_groups": [
     {"id":"chart-intent-order","actions":["brands:mimo","window:7","window:1"],"strength":3},
     {"id":"brand-reversal-order","actions":["pulse:deepseek:on","pulse:deepseek:off","window:1"],"strength":2},
     {"id":"flag-reversal-order","actions":["unsanctioned:only","unsanctioned:off","window:1"],"strength":2},
-    {"id":"preference-order","actions":["brands:minimax","timezone:ca","locale:zh_cn"],"strength":3}
+    {"id":"preference-order","actions":["brands:minimax","timezone:ca","locale:zh_cn"],"strength":3},
+    {"id":"zh-text-order","actions":["feed_text:synthesis_collapsed","feed_text:literal_expanded","feed_text:source_expanded"],"strength":3},
+    {"id":"headline-disclosure-order","actions":["headline_detail:collapsed","headline_detail:expanded","headline_detail:collapsed"],"strength":3}
   ],
   "constraints": [],
   "invariants": [
@@ -45,7 +51,8 @@
     {"id":"chart-oracle-agrees","projections":["chart","counts"]},
     {"id":"latest-intent-wins","projections":["controls","chart","network"]},
     {"id":"locale-preserves-preferences","projections":["controls","persistence"]},
-    {"id":"flagged-partition-is-exact","projections":["feed","counts","network"]}
+    {"id":"flagged-partition-is-exact","projections":["feed","counts","network"]},
+    {"id":"feed-disclosure-agrees","projections":["accessibility"]}
   ],
   "races": [
     {"id":"old-seven-day-after-new-one-day","older_action":"window:7","newer_action":"window:1","fault":"out_of_order"},

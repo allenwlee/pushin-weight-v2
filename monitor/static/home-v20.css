@@ -417,6 +417,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .filter-dropdown .filter-option-icon {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .filter-dropdown .filter-option-icon:empty { display: none; }
+  .filter-dropdown .filter-choice-icon { width: 15px; height: 15px; }
+  .filter-dropdown .filter-option-text { min-width: 0; }
+  .filter-dropdown .tone-positive { color: var(--up); }
+  .filter-dropdown .tone-neutral { color: var(--muted); }
+  .filter-dropdown .tone-negative { color: var(--down); }
+  .filter-dropdown .tone-mixed { color: #fbbf24; }
+  .filter-dropdown .role-official { color: #fbbf24; }
+  .filter-dropdown .role-staff { color: #c4b5fd; }
+  .filter-dropdown .role-community { color: #86efac; }
   .filter-dropdown input[type="checkbox"] {
     margin: 1px 0 0;
     flex: 0 0 auto;
@@ -602,6 +620,23 @@
     font-weight: 650;
     line-height: 1.4;
   }
+  .headline-disclosure {
+    appearance: none;
+    margin: 0 0 0 3px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #c4b5fd;
+    font: inherit;
+    font-size: 0.78em;
+    font-weight: 600;
+    line-height: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .headline-disclosure:hover,
+  .headline-disclosure:focus-visible { color: #fff; }
   .headline-item-secondary,
   .headline-empty {
     margin: 4px 0 0;
@@ -609,6 +644,8 @@
     font-size: 11px;
     line-height: 1.45;
   }
+  .headline-item-secondary[hidden] { display: none; }
+  .headline-item-secondary [data-pw-headline-secondary-copy] { cursor: pointer; }
   .headline-status[data-pw-status-kind="success"] {
     position: absolute;
     width: 1px;
@@ -789,6 +826,13 @@
     gap: 1px;
     line-height: 1;
   }
+  .feed-row .follower-magnitude {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
   .feed-row .follower-glyph {
     display: flex;
     align-items: center;
@@ -811,6 +855,19 @@
     text-align: center;
     white-space: nowrap;
   }
+  .feed-row .account-role {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 12px;
+    margin-top: 2px;
+  }
+  .feed-row .account-role.is-empty { visibility: hidden; }
+  .feed-row .account-role-icon { width: 12px; height: 12px; }
+  .feed-row .account-role.role-official { color: #fbbf24; }
+  .feed-row .account-role.role-staff { color: #c4b5fd; }
+  .feed-row .account-role.role-community { color: #86efac; }
   .feed-row .follower-bin-1k-10k {
     --follower-size: 15px;
     --follower-color: #8492a6;
@@ -829,22 +886,38 @@
     align-items: baseline;
     gap: 4px;
     font-size: 10.5px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
   }
-  .feed-row .handle { font-weight: 600; color: var(--text); }
-  .feed-row .meta { color: var(--muted); font-size: 9.5px; }
+  .feed-row .handle {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    color: var(--text);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .feed-row .meta { flex: 0 0 auto; color: var(--muted); font-size: 9.5px; white-space: nowrap; }
   .feed-row .text {
+    --feed-text-lines: 3;
     font-size: 10.5px;
     color: var(--text);
     line-height: 1.35;
     margin-top: 1px;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: var(--feed-text-lines);
     -webkit-box-orient: vertical;
     overflow: hidden;
     cursor: pointer;
     border-radius: 4px;
     padding: 1px 2px;
     margin-left: -2px;
+  }
+  .feed-row .text.is-expanded {
+    --feed-text-lines: 9;
+    max-height: var(--feed-text-expanded-max-height);
   }
   .feed-row .text:hover { background: rgba(255,255,255,0.04); }
   .feed-row .text .text-layer-tag {
@@ -1014,7 +1087,8 @@
     padding: 12px 14px 10px;
   }
   body.desktop-shell .feed-strip h3 { font-size: 11px; margin-bottom: 8px; }
-  body.desktop-shell .feed-row .text { font-size: 13px; -webkit-line-clamp: 4; }
+  body.desktop-shell .feed-row .text { --feed-text-lines: 4; font-size: 13px; }
+  body.desktop-shell .feed-row .text.is-expanded { --feed-text-lines: 12; }
   body.desktop-shell .feed-row .handle { font-size: 13px; }
   body.desktop-shell .feed-signals .sig-row { font-size: 15px; min-height: 18px; }
   body.desktop-shell .legend { font-size: 11px; }
@@ -1252,9 +1326,14 @@ body.desktop-shell .pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] 
   font-weight: 500;
 }
 .feed-strip .feed-handle-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--text);
   font-weight: 600;
   text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .feed-strip .feed-handle-link:hover {
   color: var(--link);

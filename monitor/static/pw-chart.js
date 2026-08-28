@@ -616,9 +616,11 @@
       container.appendChild(empty);
       return;
     }
+    var zh = isZhLocale(currentLocale(getHomeChartRegion()));
     narrative.items.forEach(function (item, index) {
       var article = document.createElement('article');
       var titleId = 'trend-narrative-' + (index + 1);
+      var detailId = titleId + '-detail';
       article.className = 'headline-item';
       article.setAttribute('data-pw-headline-item', '');
       article.setAttribute('data-pw-brand-key', item.brand.key);
@@ -655,14 +657,68 @@
       headline.setAttribute('data-pw-headline-item-title', '');
       headline.setAttribute('id', titleId);
       headline.textContent = item.headline;
+      var detail = document.createElement('button');
+      detail.type = 'button';
+      detail.className = 'headline-disclosure';
+      detail.setAttribute('data-pw-headline-detail', '');
+      detail.setAttribute('aria-controls', detailId);
+      detail.setAttribute('aria-expanded', 'false');
+      detail.textContent = zh ? '详情' : 'detail';
+      headline.appendChild(detail);
       article.appendChild(headline);
 
-      var secondary = document.createElement('p');
+      var secondary = document.createElement('div');
       secondary.className = 'headline-item-secondary';
       secondary.setAttribute('data-pw-headline-item-secondary', '');
-      secondary.textContent = item.secondary;
+      secondary.setAttribute('id', detailId);
+      secondary.hidden = true;
+      var secondaryCopy = document.createElement('span');
+      secondaryCopy.setAttribute('data-pw-headline-secondary-copy', '');
+      secondaryCopy.setAttribute('role', 'button');
+      secondaryCopy.setAttribute('tabindex', '0');
+      secondaryCopy.textContent = item.secondary;
+      secondary.appendChild(secondaryCopy);
+      var hide = document.createElement('button');
+      hide.type = 'button';
+      hide.className = 'headline-disclosure';
+      hide.setAttribute('data-pw-headline-hide', '');
+      hide.textContent = zh ? '收起' : 'hide';
+      secondary.appendChild(hide);
       article.appendChild(secondary);
       container.appendChild(article);
+    });
+  }
+
+  function setHeadlineDetail(article, expanded, restoreFocus) {
+    if (!article) return;
+    var detail = article.querySelector('[data-pw-headline-detail]');
+    var secondary = article.querySelector('[data-pw-headline-item-secondary]');
+    if (!detail || !secondary) return;
+    secondary.hidden = !expanded;
+    detail.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    if (!expanded && restoreFocus && typeof detail.focus === 'function') detail.focus();
+  }
+
+  function wireHeadlineDisclosure() {
+    document.addEventListener('click', function (event) {
+      if (!event.target || !event.target.closest) return;
+      var article = event.target.closest('[data-pw-headline-item]');
+      if (!article) return;
+      if (event.target.closest('[data-pw-headline-detail]')) {
+        setHeadlineDetail(article, true);
+        return;
+      }
+      if (event.target.closest('[data-pw-headline-hide]') ||
+          event.target.closest('[data-pw-headline-item-secondary]')) {
+        setHeadlineDetail(article, false, true);
+      }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (!event.target || !event.target.closest ||
+          !event.target.closest('[data-pw-headline-secondary-copy]')) return;
+      event.preventDefault();
+      setHeadlineDetail(event.target.closest('[data-pw-headline-item]'), false, true);
     });
   }
 
@@ -852,6 +908,7 @@
   }
 
   function boot() {
+    wireHeadlineDisclosure();
     var region = getHomeChartRegion();
     if (region) {
       disableHtmxRefresh(region);

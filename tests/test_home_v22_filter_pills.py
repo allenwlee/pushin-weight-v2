@@ -17,11 +17,23 @@ import pytest
 from django.core.management import call_command
 
 from core.models import SentimentKey
-from monitor.views import _post_matches_filter
+from monitor.views import _display_role_key, _display_role_label, _post_matches_filter
 from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
 
 
 pytestmark = pytest.mark.requires_postgres
+
+
+def test_display_role_badge_uses_deterministic_precedence_and_locale() -> None:
+    assert _display_role_key(["community", "official", "staff"]) == "official"
+    assert _display_role_key(["community", "staff"]) == "staff"
+    assert _display_role_key(["other"]) is None
+    labels = {
+        ("role", "official", "en"): "Official",
+        ("role", "official", "zh-cn"): "官方",
+    }
+    assert _display_role_label("official", "en", labels) == "Official"
+    assert _display_role_label("official", "zh_cn", labels) == "官方"
 
 
 FAKE_ROW = {
@@ -208,7 +220,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
             "温和支持", "荒诞梗", "未分类", "仅显示标记帖子",
         )
         for label in expected:
-            self.assertIn(f"<span>{label}</span>", body)
+            self.assertIn(f">{label}</span>", body)
 
         visible_raw_labels = (
             ">positive</span>", ">hands_on_usage</span>",
@@ -227,6 +239,29 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertIn('value="claude"', closed_grid)
         self.assertIn('value="positive"', sentiment_grid)
         self.assertIn('value="mixed"', sentiment_grid)
+
+    def test_feed_semantic_icons_precede_filter_option_labels(self):
+        body = self._get_home().content.decode("utf-8")
+        expected = (
+            ("sentiment", "positive"),
+            ("sentiment", "negative"),
+            ("post_types", "hands_on_usage"),
+            ("post_types", "advertising_marketing"),
+            ("role", "official"),
+            ("role", "staff"),
+            ("role", "community"),
+        )
+        for group, value in expected:
+            section = body.split(f'data-group="{group}"', 1)[1].split(
+                'class="filter-pill"', 1
+            )[0]
+            option = section.split(f'value="{value}"', 1)[1].split('</label>', 1)[0]
+            self.assertIn("data-pw-semantic-icon", option)
+            self.assertIn(f'data-pw-semantic-family="{group}"', option)
+            self.assertIn(f'data-pw-semantic-key="{value}"', option)
+        self.assertNotIn("data-pw-semantic-icon", body.split('data-group="lang"', 1)[1].split(
+            'class="filter-pill"', 1
+        )[0])
 
     def test_pulse_uses_list_items_around_native_toggle_buttons(self):
         body = self._get_home().content.decode("utf-8")

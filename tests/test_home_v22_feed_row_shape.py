@@ -146,10 +146,14 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         self.assertIn('class="follower-glyph"', body)
         self.assertIn('class="follower-count">128.4k</span>', body)
         self.assertIn('aria-label="128.4k followers"', body)
+        self.assertIn('class="account-role role-official"', body)
+        self.assertIn('href="#icon-role-badge"', body)
+        self.assertIn('aria-label="official"', body)
         self.assertNotIn('<span class="avatar"', body)
         # The name is visible, while the account handle remains the link target.
         self.assertIn('>Moonshot AI</a>', body)
         self.assertIn('href="https://x.com/kimi_moonshot"', body)
+        self.assertIn('title="Moonshot AI"', body)
         self.assertNotIn('>@kimi_moonshot</a>', body)
         # head contains account name + meta + ts-abs
         self.assertIn('class="head"', body)

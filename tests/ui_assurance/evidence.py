@@ -107,6 +107,8 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
         elif control in {"unsanctioned", "window"}:
             expected = int(value) if control == "window" else value
             assert observed["controls"][control] == expected
+        elif control in {"feed_text", "headline_detail", "role_badge"}:
+            assert observed["accessibility"][control] == value
         else:
             assert observed["persistence"][control] == value
 
@@ -150,6 +152,16 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         assert off_ids | only_ids == in_window
         assert all(not row["flagged"] for row in off)
         assert all(row["flagged"] for row in only)
+    elif invariant_id == "feed-disclosure-agrees":
+        state = set_control(initial_state(), "feed_text", "source_expanded")
+        state = set_control(state, "headline_detail", "expanded")
+        state = set_control(state, "role_badge", "staff")
+        accessibility = projection(fixture, state)["accessibility"]
+        assert accessibility["feed_text"] == "source_expanded"
+        assert accessibility["headline_detail"] == "expanded"
+        assert accessibility["headline_expanded"] is True
+        assert accessibility["role_badge"] == "staff"
+        assert accessibility["role_label"] == "staff"
     else:
         raise AssertionError(f"unimplemented invariant: {invariant_id}")
 
@@ -260,6 +272,12 @@ def _check_ordered(
             assert observed["persistence"]["locale"] == locale
         if timezone is not None:
             assert observed["persistence"]["timezone"] == timezone
+    elif group_id == "zh-text-order":
+        assert observed["accessibility"]["feed_text"] == last_value("feed_text")
+    elif group_id == "headline-disclosure-order":
+        assert observed["accessibility"]["headline_detail"] == last_value(
+            "headline_detail"
+        )
     else:
         raise AssertionError(f"unimplemented ordered group: {group_id}")
 

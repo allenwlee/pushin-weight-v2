@@ -808,6 +808,37 @@ def _enrichment_status_label(status: str, locale: str) -> str:
     return ""
 
 
+_DISPLAY_ROLE_PRECEDENCE = ("official", "staff", "community")
+
+
+def _display_role_key(role_keys: Any) -> str | None:
+    """Choose one compact badge without changing multi-role filter semantics."""
+    if isinstance(role_keys, str):
+        candidates = {role_keys}
+    else:
+        candidates = {key for key in (role_keys or []) if isinstance(key, str)}
+    return next((key for key in _DISPLAY_ROLE_PRECEDENCE if key in candidates), None)
+
+
+def _display_role_label(
+    role_key: str | None,
+    locale: str,
+    label_cache: dict[tuple[str, str, str], str],
+) -> str:
+    if not role_key:
+        return ""
+    localized = _localize_classification_value("role", role_key, locale, label_cache)
+    if localized and localized != role_key:
+        return localized
+    fallback = {
+        "official": ("官方", "Official"),
+        "staff": ("员工", "Staff"),
+        "community": ("社区", "Community"),
+    }
+    zh_label, en_label = fallback[role_key]
+    return zh_label if _is_zh_locale(locale) else en_label
+
+
 def _v22_feed_display_fields(
     classifications: dict[str, dict[str, Any]],
     *,
@@ -964,6 +995,21 @@ def _post_to_wire(
             "role": None, "role_label": "",
             "followers_count": 0, "followers_pretty": "",
         }
+
+    role_candidates = (
+        enriched.get("role_keys")
+        if enriched and enriched.get("role_keys")
+        else [account_wire.get("role")]
+    )
+    display_role = _display_role_key(role_candidates)
+    role_label_cache = (
+        enriched.get("label_cache_by_locale", {}).get(locale, {})
+        if enriched else {}
+    )
+    account_wire["role"] = display_role
+    account_wire["role_label"] = _display_role_label(
+        display_role, locale, role_label_cache
+    )
 
     created_at_raw = post.created_at.isoformat() if post.created_at else None
     created_at_iso = created_at_raw
@@ -1126,6 +1172,9 @@ def _enrich_posts_with_classifications(
         "discourse": set(),
         "sentiment": set(),
         "nationalism": set(),
+        # Keep the query shape constant even when the current page has no
+        # named roles; these are the only displayable badge values.
+        "role": set(_DISPLAY_ROLE_PRECEDENCE),
     }
     for s in signals:
         if s.get("post_type_id"):
@@ -2281,6 +2330,13 @@ def _serialize_feed_row(
     account_wire["handle"] = account_handle
     account_wire["display_name"] = _feed_account_display_name(
         account_wire.get("display_name"), post.get("author_name"), account_handle
+    )
+    display_role = _display_role_key(
+        post.get("role_keys") or [account_wire.get("role_key") or account_wire.get("role")]
+    )
+    account_wire["role"] = display_role
+    account_wire["role_label"] = _display_role_label(
+        display_role, locale, label_cache
     )
 
     display_fields = _v22_feed_display_fields(

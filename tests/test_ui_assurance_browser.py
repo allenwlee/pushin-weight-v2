@@ -47,6 +47,7 @@ RUNTIME_FILTER_KEYS = {
     "unsanctioned": "unsanctioned",
     "window": "window",
 }
+PRESENTATION_CONTROLS = {"feed_text", "headline_detail", "role_badge"}
 STATEFUL_ACTIONS = [
     (control, value)
     for control, values in CONTROL_VALUES.items()
@@ -196,6 +197,8 @@ def test_stateful_filter_actions_keep_browser_and_reference_model_aligned() -> N
                     self.page.evaluate(
                         "value => window.pwFilter.setLens('nationalism', value)", value
                     )
+                elif control in PRESENTATION_CONTROLS:
+                    pass
                 else:
                     raise AssertionError(f"unmapped declared control: {control}")
                 self.expected = _apply_reference_action(
@@ -233,7 +236,7 @@ def test_every_covering_row_executes_against_the_browser_store() -> None:
         context, page = _new_page(browser, "covering-rows")
         try:
             actual_rows = page.evaluate(
-                """({rows, defaults, runtimeKeys, multiControls}) => {
+                """({rows, defaults, runtimeKeys, multiControls, presentationControls}) => {
                   const reset = () => {
                     Object.entries(runtimeKeys).forEach(([control, runtimeKey]) => {
                       if (!(control in defaults)) return;
@@ -259,6 +262,8 @@ def test_every_covering_row_executes_against_the_browser_store() -> None:
                       window.pwFilter.setLens('brands', value);
                     } else if (control === 'nationalism_lens') {
                       window.pwFilter.setLens('nationalism', value);
+                    } else if (presentationControls.includes(control)) {
+                      return;
                     } else {
                       throw new Error('unmapped covering control: ' + control);
                     }
@@ -283,6 +288,7 @@ def test_every_covering_row_executes_against_the_browser_store() -> None:
                     "defaults": DEFAULT_FILTERS,
                     "runtimeKeys": RUNTIME_FILTER_KEYS,
                     "multiControls": list(MULTI_CONTROLS),
+                    "presentationControls": sorted(PRESENTATION_CONTROLS),
                 },
             )
             assert len(actual_rows) == len(rows)

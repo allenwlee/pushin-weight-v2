@@ -65,6 +65,10 @@ assertEq(
 );
 assertEq(pwIcon.isAllowed('icon-heart'), true, 'approved symbol is recognized');
 assertEq(pwIcon.isAllowed('not-approved'), false, 'unknown symbol is rejected');
+assertEq(pwIcon.semanticSymbol('sentiment', 'negative'), 'icon-sentiment-negative',
+  'filter and feed sentiment share the semantic symbol registry');
+assertEq(pwIcon.semanticClass('role', 'staff'), 'role-staff',
+  'role filter colors share the semantic class registry');
 
 // Anchor `now` so the tests are deterministic.
 const now = new Date('2026-07-15T21:00:00+00:00');
@@ -117,6 +121,8 @@ if (typeof renderRowHtml === 'function') {
     account: {
       handle: '@account_handle',
       display_name: 'Account Name',
+      role: 'official',
+      role_label: 'Official',
       followers_pretty: '52.1k',
     },
     follower_bin: '50k-plus',
@@ -133,11 +139,19 @@ if (typeof renderRowHtml === 'function') {
     rowHtml.includes('href="#icon-reply"'), true,
     'client-created rows use the approved engagement symbols');
   assertEq(rowHtml.includes('class="follower-count">52.1k</span>'), true,
-    'follower count sits directly under the emoji');
+    'follower count sits directly under the follower symbol');
+  assertEq(rowHtml.includes('class="account-role role-official"'), true,
+    'feed row reserves and colors the official role slot');
+  assertEq(rowHtml.includes('href="#icon-role-badge"'), true,
+    'client-created rows use the Cyber-Quan role badge');
+  assertEq(rowHtml.includes('aria-label="Official"'), true,
+    'role badge retains its localized accessible label');
   assertEq(rowHtml.includes('>Account Name</a>'), true,
     'visible account link uses the display name');
   assertEq(rowHtml.includes('href="https://x.com/account_handle"'), true,
     'display-name link still targets the account handle');
+  assertEq(rowHtml.includes('title="Account Name"'), true,
+    'truncated display name retains its full-value title');
   assertEq(rowHtml.includes('class="followers"'), false,
     'engagement no longer duplicates the follower count');
 
@@ -149,6 +163,18 @@ if (typeof renderRowHtml === 'function') {
   });
   assertEq(unknownFollowerHtml.includes('class="follower-count">0</span>'), true,
     'rows without account metadata still show their zero follower count');
+  assertEq(unknownFollowerHtml.includes('class="account-role is-empty"'), true,
+    'rows without a named role reserve an empty hidden role slot');
+
+  const longText = 'x'.repeat(701);
+  const longTextHtml = renderRowHtml({
+    text_original: longText,
+    account: { handle: '@long' },
+    follower_bin: '0-1k',
+    engagement_pretty: { followers: '0' },
+  });
+  assertEq(longTextHtml.includes(longText), true,
+    'client-created rows keep full long text in the DOM for CSS clamping');
 }
 
 // (summary + process.exit moved to end after U4 buildQuery tests)
@@ -315,8 +341,8 @@ let layers = textLayers(textElement({
 }));
 assertEq(
   layers.map((layer) => layer.key).join(','),
-  'synthesis,literal_cn,en',
-  'zh-CN cycles commentary, literal translation, then English'
+  'synthesis,literal_cn,source',
+  'zh-CN cycles commentary, literal translation, then original source'
 );
 layers = textLayers(textElement({
   'data-commentary-zh-cn': '',

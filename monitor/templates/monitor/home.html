@@ -6,15 +6,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=cyber-quan1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=usability1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-icons.js' %}?v=cyber-quan1" defer></script>
+  <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
   <script src="{% static 'pw-tz.js' %}?v=cyber-quan1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=cyber-quan1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=cyber-quan1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=usability1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=usability1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -151,7 +151,7 @@
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}情绪{% else %}Sentiment{% endif %}">
           <div class="dd-grid cols-2">
             {% for entry in sentiment_entries %}
-              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="sentiment" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -164,7 +164,7 @@
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}帖子类型{% else %}Post Type{% endif %}">
           <div class="dd-grid cols-3">
             {% for entry in post_type_entries %}
-              <label><input type="checkbox" data-pw-filter-group="post_types" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="post_types" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="post_types" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -194,7 +194,7 @@
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}角色{% else %}Role{% endif %}">
           <div class="dd-grid cols-2">
             {% for entry in role_entries %}
-              <label><input type="checkbox" data-pw-filter-group="role" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="role" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="role" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -216,12 +216,12 @@
           <div class="dd-lens-body" data-active-lens="us">
             <div class="dd-grid cols-3" data-tier-grid="us">
               {% for entry in nationalism_entries %}
-                <label><input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+                <label><input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="nationalism" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
               {% endfor %}
             </div>
             <div class="dd-grid cols-3" data-tier-grid="cn">
               {% for entry in nationalism_entries %}
-                <label><input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+                <label><input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="nationalism" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
               {% endfor %}
             </div>
           </div>
@@ -235,7 +235,7 @@
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}">
           <div class="dd-grid cols-3">
             {% for entry in discourse_entries %}
-              <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ entry.key }}" checked><span>{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="discourse" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -247,7 +247,7 @@
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}未授权{% else %}Unsanctioned{% endif %}">
           <div class="dd-grid cols-1">
-            <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span>{% trans "show only flagged posts" %}</span></label>
+            <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span data-pw-semantic-icon data-pw-semantic-family="unsanctioned" data-pw-semantic-key="only"></span><span class="filter-option-text">{% trans "show only flagged posts" %}</span></label>
           </div>
         </div>
       </div>
@@ -289,8 +289,8 @@
                       {% if item.freshness.absolute %}title="{{ item.freshness.absolute }}"{% endif %}
                       aria-label="{{ item.state_label }}{% if item.freshness.absolute %}. {{ item.freshness.absolute }}{% endif %}">{{ item.state_label }}</span>
               </div>
-              <h2 class="headline-item-title" data-pw-headline-item-title id="trend-narrative-{{ forloop.counter }}">{{ item.headline }}</h2>
-              <p class="headline-item-secondary" data-pw-headline-item-secondary>{{ item.secondary }}</p>
+              <h2 class="headline-item-title" data-pw-headline-item-title id="trend-narrative-{{ forloop.counter }}">{{ item.headline }} <button type="button" class="headline-disclosure" data-pw-headline-detail aria-controls="trend-narrative-{{ forloop.counter }}-detail" aria-expanded="false">{% if is_zh_chrome %}详情{% else %}detail{% endif %}</button></h2>
+              <div class="headline-item-secondary" data-pw-headline-item-secondary id="trend-narrative-{{ forloop.counter }}-detail" hidden><span data-pw-headline-secondary-copy role="button" tabindex="0">{{ item.secondary }}</span> <button type="button" class="headline-disclosure" data-pw-headline-hide>{% if is_zh_chrome %}收起{% else %}hide{% endif %}</button></div>
             </article>
           {% empty %}
             <p class="headline-empty" data-pw-headline-empty>{{ trend_narrative.body }}</p>

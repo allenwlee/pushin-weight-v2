@@ -19,6 +19,7 @@ from django.utils import timezone
 from core.models import (
     Account,
     Brand,
+    BrandAccount,
     DiscourseKey,
     NationalismKey,
     Post,
@@ -27,6 +28,7 @@ from core.models import (
     PostBrandSignal,
     PostTypeKey,
     PostUnsanctionedFlag,
+    Role,
     SentimentKey,
 )
 from tests.mockup_spec import build_fixture
@@ -206,6 +208,14 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
                 post=post, brand=secondary, post_type_id="hands_on_usage", sentiment_id="mixed"
             )
             discourse_brand = secondary
+            official_role, _ = Role.objects.get_or_create(key="official")
+            community_role, _ = Role.objects.get_or_create(key="community")
+            BrandAccount.objects.create(
+                brand=primary, account=account, role=official_role
+            )
+            BrandAccount.objects.create(
+                brand=secondary, account=account, role=community_role
+            )
         elif index == 51:
             PostBrandSignal.objects.create(
                 post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="negative"

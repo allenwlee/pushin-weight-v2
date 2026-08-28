@@ -72,6 +72,7 @@ RUNTIME_SYMBOLS = (
     "icon-followers-2",
     "icon-followers-3",
     "icon-followers-4",
+    "icon-role-badge",
     "icon-sentiment-neutral",
     "icon-sentiment-negative",
     "icon-sentiment-mixed",
@@ -130,7 +131,7 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     symbols = _symbols(source)
 
     assert tuple(symbol_id for symbol_id, _, _ in symbols) == RUNTIME_SYMBOLS
-    assert len(set(RUNTIME_SYMBOLS)) == 32
+    assert len(set(RUNTIME_SYMBOLS)) == 33
     assert all(view_box == "0 0 24 24" for _, view_box, _ in symbols)
     assert all(re.search(r"<(?:path|circle|line|polyline|polygon|rect)\b", body) for _, _, body in symbols)
     assert set(SOURCE_SYMBOLS) - set(RUNTIME_SYMBOLS) == {
@@ -146,10 +147,18 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
         symbol_id: re.sub(r"\s+", "", body)
         for symbol_id, _, body in _symbols(SOURCE_FILES[0].read_text(encoding="utf-8"))
     }
+    dossier_runtime_symbols = tuple(
+        symbol_id for symbol_id in RUNTIME_SYMBOLS if symbol_id != "icon-role-badge"
+    )
     assert {
         symbol_id: re.sub(r"\s+", "", body)
         for symbol_id, _, body in symbols
-    } == {symbol_id: dossier_symbols[symbol_id] for symbol_id in RUNTIME_SYMBOLS}
+        if symbol_id != "icon-role-badge"
+    } == {
+        symbol_id: dossier_symbols[symbol_id]
+        for symbol_id in dossier_runtime_symbols
+    }
+    assert "icon-role-badge" not in SOURCE_SYMBOLS
 
 
 def test_client_helper_is_constant_only_and_fail_closed() -> None:
