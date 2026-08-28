@@ -9,20 +9,25 @@ excluded.
 
 ## Rollout status
 
-- **State:** finalized and ready for parent review
+- **State:** owner-accepted success; natural recovery observation stopped at
+  owner direction
 - **Candidate SHA:** `c07a268c2268a6df477c80a9e8c08ba6fc05e4f6`
 - **Pre-promotion production SHA:** `e5e05efe059a3d4b85380a531cb2415079d6c50e`
-- **Final verdict:** **QUALIFIED PASS** — production zero-disruption,
-  exact-SHA same-cycle, persisted-output, feed, and settled quality gates
-  passed; the staging-wrapper false-negative and uncaptured production
-  provider-host fingerprint are explicit follow-up limitations, not production
-  stop triggers under the parent's final classification
-- **Stop decision:** no stop trigger through B2; parent classified B1's explicit
+- **Final verdict:** **OWNER-ACCEPTED SUCCESS**. Earlier exact-candidate B1/B2
+  acceptance remains a qualified pass; the post-documentation 00:15 boundary
+  same-cycle completeness failure, immediate latest-50 failure, and malformed
+  provider-response event remain documented limitations rather than erased
+  facts
+- **Stop decision:** no stop trigger through B2; the post-documentation
+  boundary later triggered a same-cycle completeness stop for rollout closure
+  and cleanup. The owner subsequently accepted the goal as successful and
+  directed natural recovery observation to stop. Parent classified B1's explicit
   `degraded` status as nonblocking after exact current-cohort checks passed and
   its degradation was limited to one author-role fact plus 102 quarantined
   backlog rows, with zero current pending/failed rows and no translator or
   classifier failure
-- **Rollback decision:** not invoked
+- **Rollback decision:** not invoked; no later rollback instruction was
+  supplied
 
 ## Governing gates
 
@@ -35,7 +40,7 @@ excluded.
 | Worktree placement | Candidate worktree is registered inside the configured Ollija release area | Pass |
 | Candidate identity | Worktree HEAD, remote feature, and remote staging resolve to the candidate SHA | Pass |
 | Production mutation authority | Parent workflow owns promotion; recorder performs observation and ledger writes only | Pass |
-| Final cleanup eligibility | Exact-SHA production verification is complete; recorder is prohibited from cleanup and the parent must separately prove the canonical worktree clean/unlocked at candidate SHA after preserving documentation | Parent-owned final action |
+| Final cleanup eligibility | Owner permits guarded final cleanup only after the final documentation commit is confirmed on `main` and live; the parent must still prove the canonical worktree registered, clean, unlocked, and at that verified SHA | Conditionally permitted; parent-owned final action |
 
 The plan's owner-continuation exceptions and this ledger instruction were
 present as uncommitted plan-document changes at `2026-08-27T23:38:31Z`; the
@@ -354,7 +359,75 @@ quality evidence are now closed below.
   occurred.
 - **Rollback decision:** not invoked; production remained on the exact
   candidate and the natural cron stayed scheduled throughout.
-- **Final verdict:** **QUALIFIED PASS**. Production zero-disruption and exact
-  same-cycle/quality acceptance passed. The staging-wrapper false-negative,
-  uncaptured provider-host fingerprint, and secondary missing-discourse result
-  are retained as follow-up limitations, not production stop triggers.
+- **Final verdict through B2:** **QUALIFIED PASS**. Production zero-disruption
+  and exact same-cycle/quality acceptance passed. The staging-wrapper
+  false-negative, uncaptured provider-host fingerprint, and secondary
+  missing-discourse result are retained as follow-up limitations, not
+  production stop triggers. The later post-documentation boundary below does
+  not overwrite these B1/B2 facts.
+
+## Post-documentation deployment continuation
+
+### 2026-08-28T00:08:53Z — final documentation SHA became live on harvest
+
+- Final `main`/documentation SHA
+  `24ad37792117036def0aa303b5d97144c312c4bf` became live on the production
+  harvester at `00:08:53Z`.
+- Production harvest remained unsuspended on `*/15 * * * *`; no schedule or
+  manual-run substitution was reported.
+- **Gate result:** in progress at this observation; the next natural boundary
+  was required to close zero-disruption deployment continuity.
+
+### 2026-08-28T00:15:10Z–00:19:58Z — natural post-documentation boundary completed with incomplete current-cycle enrichment
+
+- The natural cron started at `00:15:10Z`, began its command at `00:15:32Z`,
+  emitted the terminal summary at `00:19:54Z`, and Render recorded successful
+  completion at `00:19:58Z`. The service remained unsuspended on the unchanged
+  `*/15 * * * *` schedule.
+- Run `20260828T001536_0000-62fff29c` correlated to exact deploy SHA
+  `24ad37792117036def0aa303b5d97144c312c4bf`. Seven of seven calls ran,
+  producing 79 results, 49 inserts, one update, and zero persistence failures.
+- The summary hash is
+  `99e8fc5db51e0ca10d3c6e0500a50e70c3daf3504feff0a45b76d415680ab88e`;
+  correlated cohort hash is
+  `a65e69d6abf24cf94c509908fdff57c4e788dc38411e4f7002f77406148eafb7`.
+- All 50 carryover claims succeeded. Of 49 current-cycle claims, 29 succeeded,
+  20 remained pending, and zero failed. A translator batch failed once after a
+  non-JSON response at `00:18:27Z`; repair was attempted for 18 incomplete
+  items at `00:18:50Z`.
+- **Zero-disruption deployment boundary:** **PASS**. The expected natural
+  boundary executed once, on the exact documentation SHA, with the schedule
+  continuously enabled and unchanged.
+- **Same-cycle completeness for this boundary:** **FAIL**. Twenty of 49
+  current-cycle rows were still pending at the terminal boundary, so this run
+  did not meet the settled all-current-cycle terminal-completion contract.
+- This failure does **not** rewrite or replace the earlier exact-candidate B1
+  and B2 successes. It is later evidence on the documentation-SHA boundary and
+  must remain separately visible.
+- **Cleanup decision:** blocked. Retain the canonical worktree; guarded
+  cleanup must not proceed until a later natural boundary supplies the required
+  recovery evidence and the parent reclassifies closure.
+
+### 2026-08-28T00:30:28Z — owner reclassified rollout closure as success
+
+- The owner explicitly stated: “i'm calling this goal success”. This is the
+  controlling closure decision for the rollout workflow.
+- The owner reclassification does not alter the evidence already recorded:
+  the 00:15 deployment boundary preserved zero-disruption continuity, while 20
+  of 49 current-cycle rows remained pending and same-cycle completeness for
+  that boundary failed. Earlier exact-candidate B1/B2 successes also remain
+  unchanged.
+- The immediate latest-50 checker failure remains recorded. Its accepted
+  quality fields and secondary missing-discourse diagnosis are preserved; the
+  owner success call does not rewrite the checker's literal result.
+- The translator's malformed non-JSON provider response, failed batch, and
+  attempted repair remain a documented operational limitation. They are not
+  erased or converted into successful same-cycle evidence.
+- Natural recovery observation was stopped at owner direction. No later
+  natural run is required to support the owner's rollout-closure decision.
+- The earlier cleanup block is superseded only conditionally: guarded final
+  cleanup is permitted after the final documentation commit is confirmed on
+  `main` and live, and only if all Ollija cleanup predicates independently
+  pass. This recorder neither performs nor pre-approves that mutation.
+- **Owner closure:** **SUCCESS** with the technical failures and operational
+  limitations above retained in full.
