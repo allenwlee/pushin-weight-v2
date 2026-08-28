@@ -73,10 +73,12 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-1. Use the isolated staging harvester from merged PR #25 without widening its provider envelope. One candidate acceptance attempt may claim at most five current-cycle rows and zero carryover rows.
+1. Use the isolated staging harvester from merged PR #25 without widening its provider envelope. Each candidate acceptance attempt may claim at most five current-cycle rows and zero carryover rows.
 2. Do not suspend, reschedule, manually trigger, or apply a Blueprint to production. Promote immediately after a completed natural production cycle and require uninterrupted `00/15/30/45` cron history across the deployment window.
 3. Preserve and do not merge the stale `feat/deepseek-v4-flash-enrichment`, `fix/enrichment-queue-starvation`, and `fix/harvester-translation-commentary-completeness` worktrees. Current `origin/main` is the only implementation base.
-4. A zero-result or update-only staging attempt is inconclusive and blocks production promotion. Do not retry it without new owner authorization.
+4. A zero-result or update-only staging attempt is inconclusive and blocks production promotion. The owner's 2026-08-28 continuation authorizes sequential, operator-observed bounded staging attempts until one nonempty exact-candidate cohort proves same-cycle enrichment and the required quality floors. Do not use a persistent retry loop, overlap attempts, or exceed one search request, one page, five results, zero HTTP retries, five current-cycle claims, and zero carryover claims per attempt.
+5. The owner's 2026-08-28 continuation selects production delivery. Promote only the unchanged staged code candidate, preserve every natural production boundary, and stop on any continuity, SHA, cohort, feed, or quality-gate failure.
+6. Keep a timestamped success-or-failure rollout ledger at `docs/operations/2026-08-28-083648-same-cycle-enrichment-production-rollout.md`. A read-only monitoring subagent owns incremental evidence writes during delivery; it must not mutate Git refs, Render services, schedules, databases, or provider state.
 
 # Same-Cycle Enrichment and Enriched-Only Feed
 
