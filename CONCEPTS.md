@@ -40,6 +40,17 @@ it to remain registered, clean, unlocked, and at that SHA. Staging-only,
 failed, unsafe, or noncanonical worktrees are retained. Ollija supplies the
 guidance but performs no cleanup itself.
 
+## Homepage visual system
+
+### Cyber-Quan
+
+The owner-approved 24×24 SVG icon family for the public PushinWeight homepage.
+It extends the rough, uneven stroke character of the Qin weight mark into
+familiar pictograms while preserving the production page's utilitarian type,
+layout, spacing, controls, and non-icon colors. `mark-quiet` is the selected
+company mark (mark A); small-seal studies, alternative marks, and the Qin
+chisel remain design history rather than runtime symbols.
+
 ## x-monitor pipeline
 
 The x-monitor service ingests social-media posts about AI/LLM brands, classifies them, and persists the results. The vocabulary below is scoped to the run-summary layer that operators read at the end of each pipeline run.
