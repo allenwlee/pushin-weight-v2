@@ -284,6 +284,89 @@ def test_u1_evidence_reservations_roll_over_without_losing_the_window_target():
     }
 
 
+def test_u1_one_day_evidence_reserves_a_newest_30_minute_slot():
+    newest_segment_start = AS_OF - timedelta(minutes=30)
+    rows = [
+        {
+            "evidence_id": f"older-{index}",
+            "source_cluster_id": f"older-cluster-{index}",
+            "created_at": (AS_OF - timedelta(hours=2, minutes=index)).isoformat(),
+            "first_party_role": "public_opaque",
+            "source_flags": {"post_kind": "source_post"},
+            "interactions": 100 - index,
+        }
+        for index in range(6)
+    ] + [
+        {
+            "evidence_id": "newest-pending",
+            "source_cluster_id": "newest-pending-cluster",
+            "created_at": (AS_OF - timedelta(minutes=5)).isoformat(),
+            "first_party_role": "public_opaque",
+            "source_flags": {"post_kind": "source_post"},
+            "interactions": 0,
+            "translation_status": "pending",
+            "classification_status": "pending",
+        }
+    ]
+
+    selected, allocation = select_dossier_evidence(
+        1,
+        rows,
+        newest_segment_start=newest_segment_start,
+    )
+
+    assert len(selected) == allocation["target_count"] == 6
+    assert "newest-pending" in {row["evidence_id"] for row in selected}
+
+
+def test_u1_evidence_reservoir_retains_newest_pending_post_under_rank_pressure():
+    brand = Brand.objects.create(nickname="newest_reservoir")
+    account = Account.objects.create(
+        author_id="newest-reservoir-author",
+        handle="newest-reservoir",
+    )
+    older_posts = [
+        Post(
+            tweet_id=f"observed-{segment}-{index}",
+            author=account,
+            created_at=(
+                AS_OF
+                - timedelta(hours=21 - segment * 6)
+                + timedelta(seconds=index)
+            ),
+            text=f"Observed older post {segment}-{index}",
+            metrics_refreshed_at=AS_OF - timedelta(minutes=1),
+            like_count=100,
+        )
+        for segment in range(4)
+        for index in range(4)
+    ]
+    newest = Post(
+        tweet_id="newest-pending-reservoir-post",
+        author=account,
+        created_at=AS_OF - timedelta(minutes=5),
+        text="Fresh pending announcement in the newest half hour",
+    )
+    posts = [*older_posts, newest]
+    Post.objects.bulk_create(posts)
+    PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
+
+    rows = trend_candidates._fetch_evidence_rows(
+        [
+            {
+                "candidate_id": f"{brand.nickname}:full_window",
+                "brand_key": brand.nickname,
+                "start_at": AS_OF - timedelta(days=1),
+                "end_at": AS_OF,
+            }
+        ],
+        as_of=AS_OF,
+        rank_limit=4,
+    )
+
+    assert newest.tweet_id in {str(row["tweet_id"]) for row in rows}
+
+
 @pytest.mark.parametrize(
     ("window_days", "target", "first_party_reservation"),
     [(1, 6, 2), (7, 8, 3), (30, 10, 4), (365, 12, 4)],
@@ -379,6 +462,7 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
             "is_quote": False,
             "is_official": False,
             "first_party_role": "official",
+            "translation_status": "succeeded",
             "classification_status": "succeeded",
             "post_type_keys": ["buzz_releases"],
             "discourse_keys": ["comparison"],
@@ -407,6 +491,8 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
     assert "source_cluster_id" not in evidence
     assert "handle_snapshot" not in evidence
     assert evidence["first_party_role"] == "public_opaque"
+    assert evidence["translation_status"] == "succeeded"
+    assert evidence["classification_status"] == "succeeded"
     assert evidence["taxonomy"] == {
         "post_types": {"status": "available", "values": ["buzz_releases"]},
         "discourse_roles": {"status": "available", "values": ["comparison"]},
@@ -586,6 +672,45 @@ def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
     assert by_metric["positive_share_change_pp"]["display_en"] == "13 pts"
     assert by_metric["official_staff_post_count"]["display_en"] == "4 posts"
     assert all(fact["fact_id"].startswith("f:deepseek:") for fact in facts)
+
+
+def test_u1_zero_classifier_coverage_emits_no_classifier_facts():
+    facts = trend_candidates._compact_citable_facts(
+        "deepseek",
+        {
+            "volume": {"selected_count": 4, "prior_count": 2},
+            "post_type": {
+                "selected_covered_count": 0,
+                "labels": [
+                    {
+                        "key": "hands_on_usage",
+                        "selected_count": 0,
+                        "prior_count": 1,
+                        "selected_basis_count": 4,
+                        "prior_basis_count": 2,
+                        "selected_prevalence": "0",
+                        "prior_prevalence": "0.5",
+                        "brand_change_pp": "-50",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert {fact["family"] for fact in facts} == {"volume"}
+
+
+def test_u1_family_summary_marks_incomplete_classifier_coverage_partial():
+    assert (
+        trend_candidates._family_summary_status(
+            {
+                "selected_basis_count": 10,
+                "selected_covered_count": 4,
+                "labels": [],
+            }
+        )
+        == "partial"
+    )
 
 
 def test_u1_corpus_query_finds_overlapping_unseen_phrase_in_full_posts():
@@ -1052,7 +1177,7 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     pool_position = normalized_evidence_sql.index("CANDIDATE_POOL AS")
     official_position = normalized_evidence_sql.index("OFFICIAL_STREAM AS")
     assert "GENERATE_SERIES(0, 3)" in normalized_evidence_sql
-    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 7
+    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 8
     assert normalized_evidence_sql.count("LIMIT BUCKET.RANK_LIMIT") == 1
     assert pool_position < official_position
     stream_bounds = (
@@ -1060,7 +1185,8 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
         ("CATALYST_STREAM AS", "ORIGINAL_STREAM AS"),
         ("ORIGINAL_STREAM AS", "EVIDENCE_SEED AS"),
         ("DISCOURSE_STREAM AS", "CONTRAST_STREAM AS"),
-        ("CONTRAST_STREAM AS", "STREAM_ROWS AS"),
+        ("CONTRAST_STREAM AS", "RECENT_STREAM AS"),
+        ("RECENT_STREAM AS", "STREAM_ROWS AS"),
     )
     for stream_name, next_name in stream_bounds:
         stream_sql = normalized_evidence_sql[
@@ -1080,12 +1206,33 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     assert snapshot["packet_schema_version"] == 3
     assert [row["brand_key"] for row in snapshot["dossiers"]] == [brand.nickname]
     dossier = snapshot["dossiers"][0]
-    # The fixture does not create successful enrichment state, so the compact
-    # contract must refuse an editor packet rather than treating raw posts as
-    # eligible narrative evidence.
-    assert dossier["outcome"] == "data_quality_unavailable"
+    # Regression pin: fresh original text stays in the production call chain
+    # even while both enrichment stages are pending.
+    assert dossier["outcome"] == "narrative_eligible"
+    assert dossier["enrichment_coverage"] == {
+        "total_post_count": 4,
+        "translation_succeeded_count": 0,
+        "classification_succeeded_count": 0,
+        "fully_enriched_count": 0,
+        "translation_status": "unavailable",
+        "classification_status": "unavailable",
+        "newest_30m": {
+            "total_post_count": 4,
+            "translation_succeeded_count": 0,
+            "classification_succeeded_count": 0,
+            "fully_enriched_count": 0,
+        },
+    }
     assert dossier["evidence_allocation"]["target_count"] == 6
     assert 1 <= len(dossier["evidence"]) <= 6
+    assert all(
+        row["translation_status"] == row["classification_status"] == "pending"
+        for row in dossier["evidence"]
+    )
+    editor_batches = build_editor_batches(snapshot)
+    assert [batch["manifest_brand_keys"] for batch in editor_batches] == [
+        [brand.nickname]
+    ]
     provider = project_provider_packet(snapshot)
     assert provider["dossiers"][0].get("raw_series") is None
     assert len(provider["dossiers"][0]["evidence"]) <= 2

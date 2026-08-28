@@ -354,10 +354,10 @@ class HeadlineNarrativeConfig(BaseModel):
         default="headline-rank-v1", min_length=1, max_length=64
     )
     editor_prompt_version: str = Field(
-        default="headline-editor-v4", min_length=1, max_length=64
+        default="headline-editor-v5", min_length=1, max_length=64
     )
     critic_prompt_version: str = Field(
-        default="headline-critic-v4", min_length=1, max_length=64
+        default="headline-critic-v5", min_length=1, max_length=64
     )
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)

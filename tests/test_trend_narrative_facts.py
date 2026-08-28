@@ -134,12 +134,96 @@ def test_u1_all_brand_aggregate_keeps_zero_post_brand_and_enrichment_count():
     assert zero_candidate["family_facts"]["volume"] == {
         "selected_count": 0,
         "selected_authors": 0,
+        "selected_usable_raw_count": 0,
+        "selected_translation_succeeded_count": 0,
+        "selected_classification_succeeded_count": 0,
         "selected_enriched_count": 0,
+        "newest_30m_count": 0,
+        "newest_30m_translation_succeeded_count": 0,
+        "newest_30m_classification_succeeded_count": 0,
+        "newest_30m_enriched_count": 0,
         "prior_count": 0,
         "prior_authors": 0,
         "change_pct": None,
         "comparison_state": "unavailable",
     }
+
+
+def test_u1_partial_metadata_share_uses_the_classified_subset():
+    family = trend_facts._metadata_family_fact(
+        brand_key="partial_brand",
+        family="sentiment",
+        keys=["positive"],
+        counts={
+            ("partial_brand", "sentiment", "positive"): (2, 1),
+            ("__market__", "sentiment", "positive"): (3, 2),
+        },
+        coverage={
+            ("partial_brand", "sentiment"): (4, 2),
+            ("__market__", "sentiment"): (6, 4),
+        },
+        selected_basis=10,
+        prior_basis=8,
+        comparison_allowed=True,
+    )
+
+    assert family["selected_total_count"] == 10
+    assert family["selected_covered_count"] == 4
+    assert family["labels"][0]["selected_basis_count"] == 4
+    assert family["labels"][0]["selected_prevalence"] == "0.500000"
+    assert family["labels"][0]["brand_change_pp"] == "0.000000"
+
+
+def test_u1_market_coverage_dedupes_multiple_discourse_acts_per_post():
+    brand = _brand("multi_act_coverage")
+    current = _seed_posts(
+        brand,
+        total=1,
+        authors=1,
+        created_at=AS_OF - timedelta(hours=1),
+        prefix="multi-act-current",
+    )[0]
+    prior = _seed_posts(
+        brand,
+        total=1,
+        authors=1,
+        created_at=AS_OF - timedelta(days=1, hours=1),
+        prefix="multi-act-prior",
+    )[0]
+    DiscourseKey.objects.bulk_create(
+        [DiscourseKey(key="comparison"), DiscourseKey(key="technical_analysis")]
+    )
+    PostBrandDiscourse.objects.bulk_create(
+        [
+            PostBrandDiscourse(
+                post=current,
+                brand=brand,
+                discourse_id="comparison",
+                act_id=0,
+            ),
+            PostBrandDiscourse(
+                post=current,
+                brand=brand,
+                discourse_id="technical_analysis",
+                act_id=1,
+            ),
+            PostBrandDiscourse(
+                post=prior,
+                brand=brand,
+                discourse_id="comparison",
+                act_id=0,
+            ),
+        ]
+    )
+
+    _counts, coverage = trend_facts._metadata_counts(
+        candidate_keys=[brand.nickname],
+        prior_start=AS_OF - timedelta(days=2),
+        window_start=AS_OF - timedelta(days=1),
+        as_of=AS_OF,
+    )
+
+    assert coverage[("__market__", "discourse")] == (1, 1)
 
 
 def test_recent_minimax_leads_and_earlier_deepseek_is_handoff_contrast():

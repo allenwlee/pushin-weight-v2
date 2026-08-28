@@ -1,6 +1,6 @@
 # Per-brand trend narratives
 
-Current state as of 2026-08-27 JST.
+Current state as of 2026-08-28 JST.
 
 Push In Weight publishes a bilingual why-first trend narrative for every
 tracked, non-sentinel brand in each supported window. The default page shows
@@ -70,6 +70,8 @@ The provider route is pinned independently of translation and classification:
 | Editor output cap | 8,000 tokens |
 | Critic output cap | 9,000 tokens |
 | Timeout | 45 seconds |
+| Editor prompt | `headline-editor-v5` |
+| Critic prompt | `headline-critic-v5` |
 | Editor batch | at most five brands |
 | Worker concurrency | one |
 
@@ -101,13 +103,21 @@ Every tracked non-sentinel brand has exactly one dossier. A dossier has a
 terminal input outcome:
 
 - `narrative_eligible` — the editor and critic may write a narrative;
-- `no_content` — coverage is complete and the brand had no posts; or
-- `data_quality_unavailable` — posts or coverage are not complete enough for
-  an honest narrative.
+- `no_content` — coverage is complete and the brand has no usable raw post
+  text; or
+- `data_quality_unavailable` — a source or packet failure left no supportable
+  content-led narrative.
+
+Translation and classification lag do not make a nonempty brand unavailable.
+Usable original text keeps the dossier eligible while enrichment-dependent
+families declare partial or unavailable coverage.
 
 Each dossier includes:
 
 - brand key and bilingual display names;
+- an `enrichment_coverage` block with total, translated, classified, and fully
+  enriched counts plus the same counts for the newest 30 minutes of a one-day
+  window;
 - brand-local comparison availability and suppression reasons;
 - compact summaries for volume, post type, sentiment, discourse, Chinese and
   US nationalism, language, unsanctioned flags, account role, and corpus
@@ -141,11 +151,15 @@ unit
 direction
 display_en
 display_zh_cn
+coverage_scope
 ```
 
 `display_en` and `display_zh_cn` are the exact strings the editor may put in
 copy. A percentage-point fact can use a concise public display such as
 `13 pts` / `13个百分点`; the raw decimal remains in `source_value`.
+`coverage_scope` identifies complete, partial, or unavailable support with the
+covered and total post counts. A classifier-derived family with zero covered
+posts emits no citable fact.
 
 The baseline is brand-local. The top-level `baseline_context` describes the
 period, while each dossier says whether that comparison is usable for that
@@ -174,7 +188,11 @@ limits, and the 128 KiB request limit prevent it from expanding the packet.
 
 Ordinary author identity remains opaque. A trusted first-party handle may be
 sent because its identity is product evidence. Original language, English and
-Chinese translations, and translation labels may be included when needed.
+Chinese translations, and translation labels may be included when available.
+Every evidence row declares its translation and classification status; pending
+translations remain null without removing the original text. A populated
+one-day dossier reserves at least one evidence slot for the newest 30 minutes,
+even when that row is still pending enrichment.
 
 ## AI contracts
 
@@ -206,6 +224,11 @@ mentioning. Propositions own their exact bilingual claim span and packet fact
 and evidence IDs. Event objects own their bilingual label, date, support kind,
 evidence, and proposition IDs.
 
+The editor uses original text, timing, volume, language, account role, and
+corpus signals even when every post is pending enrichment. Partial classifier
+claims must name their covered subset. Unavailable sentiment, post-type,
+discourse, nationalism, or unsanctioned families cannot support a claim.
+
 ### Critic
 
 The critic returns one decision per manifest brand:
@@ -220,6 +243,9 @@ event conflation, cross-brand evidence, translation mismatch, weak secondary
 copy, proportionality, and unsafe instruction following. A held brand serves
 its prior verified row as stale when one exists. On a first attempt with no
 last-good row, the UI shows an honest unavailable state.
+Enrichment lag by itself is not a hold reason. The critic repairs an overstated
+partial-coverage claim or removes an unavailable-family claim while preserving
+a supportable raw-content narrative.
 
 ## Persistence and recovery
 

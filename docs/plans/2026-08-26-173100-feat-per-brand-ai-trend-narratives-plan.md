@@ -80,11 +80,12 @@ None.
 ## Goal Capsule
 
 - **Objective:** Give every tracked non-sentinel brand either the best available content-led trend narrative or an honest no-content/data-quality state for every supported time window, so the default dashboard and any saved brand filter can explain what people are discussing and why it is notable.
-- **Means:** Replace the current shortlist packet and regex-heavy publication gate with compact per-brand dossiers, fixed five-brand AI editor and critic batches, proof-carrying propositions, durable per-brand publication, and filter-aware projection (KTD1-KTD12).
+- **Means:** Replace the current shortlist packet and regex-heavy publication gate with compact per-brand dossiers, fixed five-brand AI editor and critic batches, proof-carrying propositions, durable per-brand publication, filter-aware projection, and coverage-aware use of fresh raw content (KTD1-KTD13).
 - **Product authority:** The Product Contract in this plan supersedes the top-two/shared-publication behavior in `docs/plans/2026-08-14-195746-feat-why-first-trend-headlines-plan.md`. Existing rows remain a rollout fallback only.
 - **Execution profile:** Deep, migration-bearing, external-model work. Implement characterization-first in the existing Ollija release worktree. Keep provider evaluation finite and explicit.
 - **Stop conditions:** Stop if implementation requires harvesting changes, exposes ordinary-user identity, adds the deferred Pro comparison surface, or allows one brand's semantic hold or mechanical failure to discard another brand's valid outcome. A shared editor/critic transport failure may hold its whole deterministic batch for that run; that bounded batch failure domain is an explicit consequence of the settled five-brand batching decision.
 - **Tail ownership:** The implementing agent owns code, migrations, tests, real-data evaluation artifacts, current-state documentation, cleanup of superseded validator code, staging delivery, and production delivery. The owner selected production through this LFG invocation; follow the generated Ollija guide without introducing additional authorization gates.
+- **Product Contract preservation:** Changed R20, R25, R30, R31, and R34 to keep nonempty raw-content windows eligible when translation or classification is pending. Existing brand coverage, editorial, batching, persistence, and serving scope is unchanged.
 
 ---
 
@@ -95,12 +96,14 @@ None.
 The headline system will analyze every tracked non-sentinel brand for each supported window and cache either one bilingual narrative or an explicit no-content/data-quality outcome per brand.
 Each narrative will lead with the post content that best explains why the conversation is notable, then use exact quantitative facts as supporting evidence.
 An internal all-brand ranking will decide which narratives appear by default, while brand filters will select the requested brands without waiting for generation.
+Fresh original post text remains eligible when translation or classification is pending; enrichment-derived fields become coverage-labeled supporting data instead of a gate on the whole narrative.
 
 ### Problem Frame
 
 The current system treats one shared window headline as both the generation result and the publication cache.
 It shortlists at most six candidates, asks one model call to choose one or two, and then applies dozens of Python lexical and regex checks to infer whether the prose is supported.
 This architecture loses good model output when metadata is incomplete, can attach a valid event phrase to the wrong proposition, and cannot serve a cached narrative for a brand that did not make the shortlist.
+The implemented all-brand path now has a second all-or-nothing failure: one pending translation or classification marks the whole nonempty brand `data_quality_unavailable` and excludes it from editor batches. This can discard the newest 30 minutes of a one-day window even though original text, timestamps, authorship, volume, shape, and corpus phrases remain available.
 
 The current provider packet is also close to its 128 KiB ceiling and measured at about 40,000 input tokens in a real evaluation.
 It sends long raw arrays and server-derived metadata that the model must reinterpret.
@@ -115,6 +118,7 @@ The replacement must send calculated summaries and a bounded dated evidence coll
 - **Allow trusted first-party evidence to support an event.** (session-settled: user-directed — chosen over requiring independent repetition: official and staff account roles are validated and may support a dated announcement when timing and text align.) Governs R11, R12.
 - **Reserve evidence capacity for first-party posts without making it a hard quota.** (session-settled: user-directed — official and staff posts need a dedicated lane because they are unusually authoritative, but an unused first-party or ordinary lane rolls into the other lane so every sufficiently populated dossier reaches the same window target.) Governs R20, R21, R30.
 - **Expose every classifier family and keep AI themes separate.** (session-settled: user-directed — absence must never ambiguously mean zero, unavailable, or not calculated, and semantic themes such as `open source` are not classifier discourse labels.) Governs R14, R31, R32.
+- **Keep fresh raw content eligible while enrichment catches up.** (session-settled: user-directed — chosen over requiring every post to finish translation and classification before any narrative call: the newest posts are the most time-sensitive part of a one-day window.) Governs R20, R25, R30, R31, R34.
 - **Keep ranking private.** (session-settled: user-directed — chosen over public rank labels: ranking controls selection but is not itself a user-facing score.) Governs R2-R4.
 - **Defer the Pro comparison surface but preserve its inputs.** (session-settled: user-approved — chosen over adding the locked comparison accordion now: the current iteration stays focused while preserving peer facts, event identity, account role, and evidence IDs.) Governs R23.
 
@@ -155,10 +159,10 @@ The replacement must send calculated summaries and a bounded dated evidence coll
 - R17. A critic may approve, repair, or hold each brand independently; a repair is the critic's final complete narrative and does not trigger an unbounded third call.
 - R18. A packet-level `baseline_context` declares the common comparison window as `prior_period`, `rolling_historical_norm`, or `unavailable`; the initial implementation uses an immediately preceding equal window only and never labels that one period as a historic norm. Each brand separately declares comparison coverage, permission, and suppression reasons because availability can differ by brand.
 - R19. Missing or suppressed prior-period comparison lowers confidence but does not remove the brand from ranking. AI ranking reasons use typed references to packet-owned `fact`, `evidence`, or `corpus_signal` IDs. The deterministic fallback uses within-window movement, then current mix and content signals, then canonical brand key as the final tie-break.
-- R20. Evidence rows preserve timestamp, source language, original text, stored English and Chinese translations, production classification fields, interaction counts, and first-party role; ordinary-user identity remains opaque. `official` and `staff` remain distinct roles but are equally trusted, and first-party status comes only from a validated author-to-brand account edge, never from text mentions or tags.
+- R20. Evidence rows preserve timestamp, source language, original text, translation status, classification status, available stored English and Chinese translations, available production classification fields, interaction counts, and first-party role; pending fields remain null or status-labeled rather than excluding the row. Ordinary-user identity remains opaque. `official` and `staff` remain distinct roles but are equally trusted, and first-party status comes only from a validated author-to-brand account edge, never from text mentions or tags.
 - R21. Evidence selection is deterministic, deduplicated for reposts and near-identical text, measured by bytes and tokens, and uses window targets of 6, 8, 10, and 12 evidence rows per brand for 1, 7, 30, and 365 days. First-party reservations are 2, 3, 4, and 4 respectively; ordinary reservations are 4, 5, 6, and 8. Fill both lanes, return unused reservations to one shared pool, then fill from any remaining eligible evidence. Send the full target when enough deduplicated evidence exists and otherwise send all eligible evidence. Semantic theme and event grouping belongs to the model.
-- R30. Evidence selection prioritizes authored first-party announcements, original posts, temporal and subject diversity, engagement, and stable-ID tie-breaking. Longer windows stratify across days, weeks, months, episodes, or themes. Packet pressure first shortens excerpts and removes redundant translated copies; it does not silently reduce the evidence target, and an irreducible oversized packet fails safely before transport.
-- R31. Every brand dossier contains stable summaries for volume, post type, sentiment, production discourse, China nationalism, US nationalism, language, unsanctioned flags, account role, and corpus-wide phrases or themes. Each summary distinguishes current leader from largest change and declares `available`, `suppressed`, or `unavailable` plus denominator and comparison status where applicable. Individual fact rows are emitted only for material citable values.
+- R30. Evidence selection prioritizes authored first-party announcements, original posts, temporal and subject diversity, engagement, and stable-ID tie-breaking. A one-day dossier with posts in its newest 30 minutes reserves at least one evidence slot for that segment even when its enrichment is pending. Longer windows stratify across days, weeks, months, episodes, or themes. Packet pressure first shortens excerpts and removes redundant translated copies; it does not silently reduce the evidence target, and an irreducible oversized packet fails safely before transport.
+- R31. Every brand dossier contains stable summaries for volume, post type, sentiment, production discourse, China nationalism, US nationalism, language, unsanctioned flags, account role, and corpus-wide phrases or themes. Each summary distinguishes current leader from largest change and declares `available`, `partial`, `suppressed`, or `unavailable` plus covered-post count, total-post denominator, and comparison status where applicable. Volume, shape, source language, account role, original-text evidence, and raw-text corpus phrases use all available posts. Classifier-derived families use only classified posts and are `partial` when coverage is between zero and complete, while zero covered posts emit no citable classifier fact. Individual fact rows are emitted only for material citable values and carry their coverage scope.
 - R32. Packet and evidence fields use production taxonomy exactly: `post_types` is an array of `buzz_releases`, `hands_on_usage`, `performance_comparisons`, `feedback_questions`, `advertising_marketing`, or `event_announcement`; `discourse_roles` is an array of the persisted discourse labels; `china_nationalism` and `us_nationalism` are separate axes; and `unsanctioned_flags` is separate. AI-discovered semantic subjects such as open weights, technical capability, competition, or a new model alias live only in `corpus_signals` or model-created event records.
 
 **Publication, freshness, and operations**
@@ -166,13 +170,13 @@ The replacement must send calculated summaries and a bounded dated evidence coll
 - R22. Review outcomes are independent per brand after a shared batch transport succeeds: approve or repair prepares that brand's candidate row, hold preserves its last-good row, and a first failure without last-good copy prepares a localized unavailable state with the latest attempt time. The run becomes visible through one window-level activation fence only after every manifest brand is terminal, so one page response never mixes facts cutoffs; an older run can never supersede a newer visible cutoff.
 - R23. Per-brand records preserve stable fact IDs, evidence IDs, model-created event identity, and official or staff role so a later Pro comparison feature can calculate peer benchmarks without adding its UI, entitlement, action recommendations, or comparison copy now.
 - R24. A successful verification timestamp advances only when that brand is successfully approved or repaired; stale copy displays `Stale · last verified 10 min ago` with a localized absolute timestamp available to tooltip and assistive technology. A held attempt also exposes its newer attempt time to operators without pretending that the old copy was reverified.
-- R25. A zero-post brand becomes deterministic no-content only when the source cycle completed and current-period raw-versus-eligible/enrichment coverage reconciles. A partial source cycle or pending/failed required enrichment becomes a deterministic data-quality-unavailable outcome instead. Neither state consumes editor or critic capacity, and both remain represented in the run and public selection instead of disappearing.
+- R25. A zero-post brand becomes deterministic no-content only when the source cycle completed and no usable raw post text exists. Any brand with usable original post text remains narrative-eligible even when every translation or classification is pending or failed; the editor and critic receive available structural facts, raw-text corpus signals, status-labeled evidence, and enrichment coverage. `data_quality_unavailable` is reserved for a source or packet failure that leaves no supportable content-led narrative, not for ordinary enrichment lag.
 - R26. The workflow records each rank, editor, and critic transport separately with its model, prompt version, request hash, response hash, tokens, latency, outcome, batch key, error code, and monotonic `reserved`/`sent`/`completed` marker. If a worker dies after `sent` but before a durable response and the provider offers no verified idempotency replay, the transport becomes an ambiguous terminal hold for that run rather than being resent.
 - R27. Model calls run as durable bounded stages on the isolated headline queue and do not extend the monolithic harvest-envelope task. A database-backed reconciler invoked by each due-window envelope and every stage completion claims ready stages transactionally, re-enqueues durable ready work that lost broker delivery, and never resends a transport marked `sent`; no Celery beat is added.
 - R28. This work does not change harvest policy, collection volume, translator or classifier behavior, Render harvest cron, or the production scheduler boundary.
 - R29. Existing activation, enqueue, provider-call, and serving controls remain fail-closed; disabled serving returns localized disabled copy without exposing an unreviewed per-brand row. A tested publication-source control can force `legacy_only` projection for rollback even after new per-brand rows exist, while new writes and provider calls are disabled.
 - R33. The critic uses a separately versioned prompt and schema, sees the identical packet plus the editor's raw response and parse diagnostics, and is calibrated on labeled supported and adversarial drafts. Activation requires zero unsupported published claims in the finite adversarial set and a recorded false-hold rate on supported drafts; a different critic model is required only if measured same-model correlation is unacceptable.
-- R34. Activation uses a deterministic bilingual evaluation matrix covering every supported window and all nonempty brands when the finite budget permits, otherwise a recorded stratified sample covering sparse, flat, unavailable-baseline, non-English, first-party-only, and ordinary-only cases. The rubric scores why-first relevance, factual support, proportionality, translation equivalence, and secondary usefulness.
+- R34. Activation uses a deterministic bilingual evaluation matrix covering every supported window and all nonempty brands when the finite budget permits, otherwise a recorded stratified sample covering sparse, flat, unavailable-baseline, non-English, first-party-only, ordinary-only, mixed-enrichment, newest-30-minutes-unenriched, and zero-enrichment cases. The rubric scores why-first relevance, factual support, proportionality, coverage-aware claims, translation equivalence, and secondary usefulness.
 - R35. Any immutable request packet, final critic payload, and cited fact/evidence provenance needed to audit a current or last-good row is retained for at least as long as that row remains eligible for serving.
 
 ### Key Flows
@@ -204,15 +208,18 @@ The replacement must send calculated summaries and a bounded dated evidence coll
 - AE4. **Covers R13, R20.** Given a Korean post has stored English and Chinese translations, when the editor quotes its localized text, then the public copy marks the quote as translated from Korean and its proposition cites that evidence ID.
 - AE5. **Covers R17, R22, R24.** Given the critic approves four brands and holds MiniMax, when all outcomes persist, then those four brands advance independently and MiniMax continues serving its last-good copy as `Stale · last verified 1 hr ago`.
 - AE6. **Covers R18, R19.** Given prior-period coverage is insufficient for MiMo, when ranking runs, then its baseline fields are unavailable but a within-window late spike and release discussion may still rank it above a brand with complete but flat data.
-- AE7. **Covers R25.** Given one brand has zero eligible posts and another has one, when the run executes, then the zero-post brand gets deterministic no-content without a model call while the one-post brand receives a narrative that says `the available discussion`.
+- AE7. **Covers R25.** Given one brand has zero posts with usable raw text and another has one, when the run executes, then the zero-post brand gets deterministic no-content without a model call while the one-post brand receives a narrative that says `the available discussion`.
 - AE8. **Covers R2, R19, R27.** Given the all-brand ranking call fails, when fixed batches run, then narrative generation continues and selection uses the last-good internal order or the deterministic fallback when no prior order exists.
 - AE9. **Covers R20, R21, R30.** Given a seven-day brand dossier has no first-party posts and at least eight ordinary posts after deduplication, when evidence is selected, then all eight ordinary posts are sent; given only two eligible ordinary posts and six eligible first-party posts, then the packet still sends eight total rows.
 - AE10. **Covers R20, R30.** Given a community post tags `@Zai_org` while a validated Z.ai account authored the actual announcement, when evidence is selected, then only the authored validated-account post may occupy a first-party reservation.
 - AE11. **Covers R14, R31, R32.** Given `buzz_releases` has the largest share but `feedback_questions` has the largest change, when the dossier is built, then both are named separately; every classifier family has an explicit status, and an AI theme such as `open weights` is represented as a corpus signal rather than a discourse label.
+- AE12. **Covers R20, R25, R30, R31.** Given a one-day brand has enriched posts for its first 23.5 hours and only pending posts in its newest 30 minutes, when the dossier is built, then the brand remains narrative-eligible, at least one newest-segment original-text row reaches evidence, volume and shape use the full day, and classifier families are marked partial with covered and total counts.
+- AE13. **Covers R20, R25, R31.** Given a nonempty one-day brand has zero translated or classified posts, when the run executes, then raw text, timing, volume, authorship, account role, and raw corpus phrases may support a narrative while translated text and classifier families are unavailable and no sentiment, post-type, discourse, nationalism, or unsanctioned claim is published.
 
 ### Success Criteria
 
 - Every non-sentinel brand has a terminal per-brand outcome for every completed due-window run.
+- Every nonempty one-day brand reaches editor and critic even when its newest posts or its entire window have no completed enrichment, and published classifier-derived claims stay within their declared coverage.
 - A malformed or held result changes no other brand's current publication.
 - A real-data evaluation demonstrates that approved narratives cite only packet-owned facts and evidence, contain no invented numeric values, and read as useful in both locales.
 - The finite critic calibration publishes zero unsupported adversarial drafts and records the supported-draft false-hold rate for owner review before activation.
@@ -279,6 +286,7 @@ The replacement must send calculated summaries and a bounded dated evidence coll
 - KTD10. **Use fixed evidence targets with deterministic rollover under a hard ceiling.** Configure the per-window targets and first-party/ordinary reservations from R21 as a versioned table. Fill reservations, roll unused capacity into a shared pool, then compact excerpts and redundant translations before considering transport. Keep the 128 KiB hard packet bound and fail safely if a complete five-brand target cannot fit; use the real-data evaluator to measure tokens, latency, quality, and cost before activation. Implements R15, R21, R26, R30.
 - KTD11. **Use a dual-read, single-write rollout with an explicit rollback source.** Write only the new per-brand schema after activation. Normal projection prefers new rows and may read the legacy shared current row only while the migration flag is enabled, no new result exists, and the legacy row contains the requested brand. A separate fail-closed `legacy_only` source mode ignores new rows and restores the prior display while provider calls and new writes are disabled. Remove the legacy generation path and semantic validators in the same implementation, retain legacy rows/source mode through production acceptance, then retire the read fallback in a follow-up cleanup. Implements R22, R27, R29.
 - KTD12. **Allow one provider transport per stage per run.** Persist `reserved` before claim and `sent` immediately before transport. Broker redelivery or lease recovery resumes completed work without another call; a lease loss after `sent` but before durable response is an ambiguous terminal hold unless the configured provider's replay semantics have been separately verified. A provider failure makes that stage terminal for the run, and the next due run is the next provider-attempt boundary. Implements R22, R26, R27.
+- KTD13. **Separate fresh-content eligibility from enrichment-derived analysis.** (session-settled: user-directed — chosen over the implemented `fully_enriched == total_posts` eligibility gate: enrichment lag must not erase the freshest usable content.) Build every nonempty dossier from all raw posts and attach an `enrichment_coverage` block with `total_post_count`, `translation_succeeded_count`, `classification_succeeded_count`, `fully_enriched_count`, `translation_status`, `classification_status`, and a nullable `newest_30m` object. The two stage statuses use `complete`, `partial`, or `unavailable`; when present, `newest_30m` repeats the four counts for that segment. Assign `available`, `partial`, or `unavailable` separately per metadata family. Editor and critic prompts may use original text regardless of enrichment state but may describe classifier-derived mix only within the declared coverage scope. Implements R20, R25, R30, R31, R34.
 
 ### High-Level Technical Design
 
@@ -337,7 +345,8 @@ sequenceDiagram
 stateDiagram-v2
   [*] --> Pending
   Pending --> NoContent: zero posts with complete current coverage
-  Pending --> DataUnavailable: incomplete source or enrichment coverage
+  Pending --> Eligible: usable raw content, including pending enrichment
+  Pending --> DataUnavailable: source or packet failure leaves no supportable content
   Pending --> Drafted: editor returns brand
   Pending --> Held: editor transport or shape fails
   Drafted --> Approved: critic approves
@@ -374,7 +383,7 @@ When more than two explicit brands are selected, localized neutral copy says `Sh
 | Available | Brand identity, bilingual headline and secondary, successful verification time |
 | Stale last-good | Same complete content plus localized stale label, successful verification time, and operator-visible latest failed attempt |
 | No content | Brand identity plus localized complete-coverage no-discussion copy and facts cutoff |
-| Data quality unavailable | Brand identity plus localized source/enrichment-incomplete copy and latest attempt time; never claims that discussion was absent |
+| Data quality unavailable | Brand identity plus localized source/packet-failure copy and latest attempt time; never converts ordinary enrichment lag into absence |
 | First-attempt unavailable | Brand identity plus localized generation-unavailable copy and latest attempt time |
 | Serving disabled | One localized disabled-state region; no unreviewed per-brand body |
 
@@ -456,32 +465,35 @@ Python does not infer event anchors, discover entities in prose, decide causalit
 ### U1. Replace shortlist projection with compact all-brand dossiers
 
 - **Goal:** Build a private all-brand snapshot and deterministic compact projections for ranking and five-brand editor batches.
-- **Requirements:** R1, R14, R15, R18-R21, R25, R28, R30-R32; KTD1, KTD2, KTD8, KTD10.
+- **Requirements:** R1, R14, R15, R18-R21, R25, R28, R30-R32; KTD1, KTD2, KTD8, KTD10, KTD13.
 - **Dependencies:** None.
 - **Files:** `monitor/trend_narrative_facts.py`, `monitor/trend_narrative_candidates.py`, `monitor/trend_narrative_evaluation.py`, `tests/test_trend_narrative_facts.py`, `tests/test_trend_narrative_candidates.py`, `tests/test_trend_narrative_evaluation.py`.
 - **Approach:**
   1. Add characterization coverage for current prior-period facts, metadata denominators, evidence identity, query bounds, and full-series snapshot behavior.
-  2. Replace candidate shortlist construction with the complete sorted non-sentinel brand universe, including sparse and zero-post brands; derive a current-period coverage status from the committed source cycle and raw-versus-eligible/enrichment counts before classifying zero as no-content.
-  3. Keep raw zero-filled series, aggregate inputs, source-row provenance, and evidence selection provenance private without copying all post bodies into the snapshot; calculate compact shape summaries and stable summaries for every R31 family.
+  2. Replace candidate shortlist construction with the complete sorted non-sentinel brand universe, including sparse and zero-post brands. Treat usable raw content as the narrative eligibility boundary and reserve no-content for a completed source window with zero usable raw posts.
+  3. Keep raw zero-filled series, aggregate inputs, source-row provenance, and evidence selection provenance private without copying all post bodies into the snapshot. Add per-dossier translation, classification, and fully-enriched counts plus a newest-segment coverage summary, then calculate compact shape summaries and coverage-aware summaries for every R31 family.
   4. Compute corpus-wide phrase and theme candidates across all deduplicated posts using prevalence, distinctiveness versus the prior period and peers, burst interval, and representative evidence IDs; keep these signals separate from persisted classifier discourse.
   5. Put the common comparison dates and label in packet-level `baseline_context`, then emit per-brand `comparison_status` with coverage, permission, and suppression reasons.
-  6. Select evidence with the R21 window targets and two reservable lanes: validated authored official/staff posts and ordinary posts. Fill both reservations, roll unused capacity into a shared pool, prioritize authored announcements/originals/diversity/engagement, and use a stable ID tie-break.
+  6. Select evidence with the R21 window targets and two reservable lanes: validated authored official/staff posts and ordinary posts. Fill both reservations, roll unused capacity into a shared pool, prioritize authored announcements/originals/diversity/engagement, reserve one one-day slot for the newest 30 minutes when populated, and use a stable ID tie-break.
   7. Project a bounded all-brand ranking summary with typed fact, evidence, and corpus-signal reasons plus at most two dated evidence previews per brand, then deterministic editor batches of up to five nonempty canonical brand keys.
-  8. Preserve source-language text and stored translations while omitting ordinary-user handles and raw post identifiers; use exact R32 production taxonomy fields and values.
+  8. Preserve source-language text, per-stage enrichment status, and available stored translations while omitting ordinary-user handles and raw post identifiers. Keep unavailable translations null and classifier-derived taxonomy status-labeled; use exact R32 production taxonomy fields and values.
   9. Measure packet bytes before transport, shorten excerpts and redundant translations without changing fact values, and fail safely rather than silently lowering the evidence target.
 - **Patterns to follow:** Repeatable-read snapshot and size guards in `monitor/trend_narrative_candidates.py`; fixed set-based query bounds in `monitor/trend_narrative_facts.py`; production projection reuse in `monitor/trend_narrative_evaluation.py`.
 - **Test scenarios:**
   - All non-sentinel brands appear exactly once even when they do not meet the current 20-post and 10-author thresholds.
   - The ranking projection contains every brand, no more than two evidence previews per nonempty brand, and no ordinary-user identity.
   - Twenty-one nonempty brands produce five deterministic batches with counts 5, 5, 5, 5, and 1 regardless of ranking result, while zero-post brands become no-content outcomes before batching.
-  - A true zero with complete source and enrichment coverage becomes no-content, while harvested-but-pending enrichment and a partial/failed source cycle become data-quality-unavailable without a provider call.
+  - A true zero with a completed source window becomes no-content, while a nonempty brand with pending enrichment remains narrative-eligible and enters an editor batch.
+  - A one-day dossier whose newest 30 minutes contain only unenriched posts preserves full-day volume and shape, marks classifier families partial, reports covered and total counts, and selects at least one original-text evidence row from that newest segment.
+  - A nonempty one-day dossier with zero translated and zero classified posts keeps source-backed families available, marks translated text and classifier families unavailable, emits no classifier-family citable fact, and remains narrative-eligible.
+  - A mixed-coverage classifier fact carries its covered-post and total-post scope so an editor can say `among classified posts` but cannot state it as a full-window mix.
   - Raw arrays `[1, 1, 1, 1, 10]` remain private while the dossier reports the total change and that the dominant net change occurred in the final transition.
   - A prior period below the coverage threshold sets the brand's `comparison_status.allowed=false`, includes a closed suppression reason, and emits no prior-comparison value, while within-window summaries remain populated.
   - The packet declares one common prior-period window at the top level while two brands can independently report `available` and `suppressed` comparisons.
   - Every R31 family appears for every brand; a suppressed nationalism comparison is distinguishable from zero change, and largest-current post type is distinguishable from largest-change post type.
   - Relative percent changes render as `45%`; percentage-point changes render as `13 pts` in English and `13个百分点` in Chinese rather than the ambiguous `13%`.
   - Corpus processing over all deduplicated brand posts surfaces a bursty unseen phrase with prevalence, prior/peer distinctiveness, burst interval, and representative evidence IDs even when the phrase was not in a predefined taxonomy.
-  - A Korean source row contains original, English, and Chinese text plus translation disclosure fields but no ordinary-user handle.
+  - A Korean source row contains original text, translation and classification statuses, available English and Chinese text plus translation disclosure fields, and no ordinary-user handle; pending translations remain null without dropping the row.
   - Trusted staff and official rows retain role and handle snapshots.
   - A community row that merely tags a trusted handle remains `public_opaque`; the validated account's authored announcement receives the first-party role and first-party reservation.
   - A seven-day dossier with zero first-party rows and at least eight ordinary rows sends eight ordinary rows; a dossier with only two ordinary rows and at least six first-party rows sends eight total rows; a dossier with seven total eligible rows sends seven.
@@ -489,7 +501,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
   - Reposts and near-identical text do not consume multiple independent evidence slots.
   - A worst-case five-brand packet preserves all target evidence rows under 128 KiB after excerpt/translation compaction or fails before provider construction with a safe bounded error; it never quietly sends fewer rows.
   - Query-count tests prove the full brand universe does not create per-brand database query growth.
-- **Verification:** The new projector can reproduce the complete Appendix A sample shape, the old shortlist limit is absent from the provider path, and no network or harvesting import enters the fact builder.
+- **Verification:** The new projector can reproduce the complete, fully enriched Appendix A sample shape including explicit coverage and per-evidence stage statuses, the old shortlist limit is absent from the provider path, and no network or harvesting import enters the fact builder.
 
 ### U2. Add normalized run, call, and per-brand publication models
 
@@ -522,7 +534,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
 ### U3. Replace semantic gates with editor, critic, and proof contracts
 
 - **Goal:** Generate useful five-brand narratives through AI semantic judgment and closed mechanical validation.
-- **Requirements:** R5-R13, R16, R17, R20, R23, R26, R29; KTD4, KTD5, KTD10.
+- **Requirements:** R5-R13, R16, R17, R20, R23, R25, R26, R29, R31, R34; KTD4, KTD5, KTD10, KTD13.
 - **Dependencies:** U1, U2.
 - **Files:** `monitor/trend_narrative_generation.py`, `x_monitor/config.py`, `config.yaml`, `tests/test_trend_narrative_generation.py`, `tests/test_headlines.py`.
 - **Approach:**
@@ -535,6 +547,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
   7. Size editor and critic output budgets from complete five-brand responses rather than copying the current 1,600-token limit.
   8. Implement the complete Appendix C discriminated critic schema with packet hash, batch key, exact manifest brand set, closed hold codes, and complete replacement narrative on `repair`.
   9. Calibrate the separately versioned critic prompt/settings against labeled supported and adversarial fixtures before activation, recording false-accept and false-hold rates.
+  10. Version the editor and critic prompts so original text remains usable regardless of enrichment status, `partial` classifier summaries are qualified to their covered subset, and `unavailable` families cannot support sentiment, post-type, discourse, nationalism, or unsanctioned claims.
 - **Execution note:** Characterize the provider boundary and existing safe transport controls before deleting validators. Keep the transport safety tests even when their editorial expectations change.
 - **Patterns to follow:** Explicit DeepSeek model routing and provider error normalization in `monitor/trend_narrative_generation.py`; one bounded repair precedent in the translator compliance solution.
 - **Test scenarios:**
@@ -546,6 +559,8 @@ Python does not infer event anchors, discover entities in prose, decide causalit
   - A proposition with display `45%` passes only when its cited fact supplies `45%`; an altered value fails.
   - Numbers in either headline are accepted when cited.
   - An undeclared organization or causal phrase is not rejected by Python; the critic decision governs semantic acceptability.
+  - With zero enrichment, the editor and critic produce a content-led narrative from original text and structural facts without citing unavailable classifier families.
+  - With partial enrichment, a classifier-derived claim is accepted only when its prose is scoped to the covered subset; the critic repairs or holds full-window wording that overstates partial metadata.
   - Four valid brands publish when the fifth is held or mechanically invalid.
   - A received malformed editor JSON body is routed with parse diagnostics to a valid critic reconstruction, while editor transport failure or malformed critic JSON holds only the affected batch and records safe error codes.
   - The critic schema round-trips `approve`, complete `repair`, and closed-code `hold` decisions and rejects a mismatched packet hash, batch key, manifest brand set, or partial repair body.
@@ -557,7 +572,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
 ### U4. Orchestrate durable ranking and five-brand stages
 
 - **Goal:** Execute the multi-call graph on the isolated worker without overloading one Celery task or coupling it to harvest success.
-- **Requirements:** R1, R2, R15-R19, R22, R25-R29; KTD2, KTD3, KTD7, KTD8, KTD12.
+- **Requirements:** R1, R2, R15-R19, R22, R25-R29; KTD2, KTD3, KTD7, KTD8, KTD12, KTD13.
 - **Dependencies:** U1-U3.
 - **Files:** `monitor/tasks.py`, `monitor/trend_narrative_tasks.py`, `monitor/trend_narrative_dispatch.py`, `monitor/trend_narrative_queue.py`, `render.yaml`, `tests/test_trend_narrative_tasks.py`, `tests/test_trend_narrative_dispatch.py`, `tests/test_trend_narrative_queue.py`, `tests/test_verify_headline_worker_boundary.py`.
 - **Approach:**
@@ -574,6 +589,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
   - A redelivered stage task makes zero duplicate provider calls after completed transport and does not convert a terminal provider failure into an in-run retry.
   - A worker commits an editor result and dies before broker enqueue; the next reconciler invocation schedules exactly one critic without another editor call.
   - Rank failure resolves to last-good or deterministic fallback, then schedules every editor batch without suppression.
+  - Pending or failed enrichment does not reduce the nonempty manifest or editor-batch count, including when every post for a brand is unenriched.
   - One editor timeout makes that batch terminal for the run without an in-run provider retry, while other batches continue and the next due run may try again.
   - One critic with mixed decisions publishes approved and repaired brands and retains held brands independently.
   - Overlapping runs whose batches finish in reverse order cannot expose the older cutoff after the newer one, and no response mixes a prepared row from one run with ranking or rows from another.
@@ -603,7 +619,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
   - A held brand serves last-good copy and derives relative freshness from the last successful verification, not the failed attempt.
   - A brand with no last-good row projects localized unavailable copy and the relative latest-attempt time.
   - A zero-post complete-coverage row projects deterministic no-content and is not replaced when explicitly selected; it sorts below nonempty narratives in default/multi-brand selection.
-  - A pending-enrichment or partial-source row projects data-quality unavailable rather than claiming no discussion.
+  - A nonempty pending-enrichment row projects its generated coverage-aware narrative, while only a source or packet failure with no supportable content projects data-quality unavailable.
   - Serving disabled returns localized disabled copy and no unreviewed per-brand payload even when current rows exist.
   - A deleted brand retains its display name and loses only its URL.
   - English and Chinese relative times use the same absolute timestamp and expose a localized absolute label.
@@ -651,7 +667,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
 - **Approach:**
   1. Extend preflight and manifests for rank, editor, and critic call counts, token ceilings, dollar ceiling, concurrency one, cancellation, and no-publication mode.
   2. Run complete synthetic one-, three-, and five-brand fixtures and bounded read-only real-data windows through the same dossier and provider request builders used by production.
-  3. Define and record the deterministic evaluation matrix: every supported window and all nonempty brands when the finite cap permits, otherwise a stratified sample that includes sparse, flat, unavailable-baseline, non-English, first-party-only, ordinary-only, and high-volume brands.
+  3. Define and record the deterministic evaluation matrix: every supported window and all nonempty brands when the finite cap permits, otherwise a stratified sample that includes sparse, flat, unavailable-baseline, non-English, first-party-only, ordinary-only, mixed-enrichment, newest-30-minutes-unenriched, zero-enrichment, and high-volume brands.
   4. Write raw packets, raw model responses, per-brand critic decisions, mechanical results, tokens, latency, cost, and a bilingual rubric verdict for why-first relevance, factual support, proportionality, translation equivalence, and secondary usefulness to timestamped analysis artifacts.
   5. Update status output with run completeness, held brands, per-stage failures, ambiguous post-send transports, backlog/drain telemetry, last verification, latest attempt, stale duration, and last-good availability.
   6. Activate a new prompt, packet, and publication epoch only after the Success Criteria pass, the critic publishes zero unsupported claims in the finite adversarial set, and the measured concurrency-one drain rate remains above the configured arrival rate.
@@ -666,6 +682,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
   - Negative-control drafts measure critic false acceptance; supported gold drafts measure false holds; activation cannot proceed with an unsupported publication in the finite adversarial set.
   - A cancellation between calls records partial artifacts and starts no further transport.
   - Every evaluated nonempty brand has quantitative evidence and proof proposition ownership results.
+  - A real one-day run with ordinary enrichment lag publishes nonempty brands instead of converting them to `data_quality_unavailable`, and the saved packet exposes exact enrichment coverage.
   - Status distinguishes editor failure, critic hold, mechanical failure, stale last-good, unavailable first attempt, and incomplete run.
   - Static checks show deleted semantic rejection codes and helpers are not imported by active code.
   - Current-state documentation names all models, stages, DTO schema, fallback behavior, and operational bounds accurately.
@@ -680,6 +697,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
 |---|---|---|
 | Django model checks | U2 | `python manage.py makemigrations core --check --dry-run` reports no missing migration after the planned migration, and `python manage.py check` passes |
 | Focused backend tests | U1-U5, U7 | `pytest tests/test_trend_narrative_facts.py tests/test_trend_narrative_candidates.py tests/test_trend_narrative_generation.py tests/test_trend_narrative_lifecycle.py tests/test_trend_narrative_tasks.py tests/test_trend_narrative_projection.py tests/test_trend_narrative_evaluation.py tests/test_evaluate_trend_headlines_command.py tests/test_headline_status.py` passes against PostgreSQL-backed test settings |
+| Enrichment-lag regression net | U1, U3, U4 | End-to-end tests build a real one-day snapshot and production editor batches for newest-30-minutes-unenriched, mixed-coverage, zero-enrichment, and fully enriched windows; each test asserts eligibility, packet statuses, citable-fact scope, and manifest cardinality |
 | Queue boundary tests | U4 | `pytest tests/test_trend_narrative_dispatch.py tests/test_trend_narrative_queue.py tests/test_verify_headline_worker_boundary.py` proves queue isolation and the single harvest scheduler |
 | Client unit tests | U5-U6 | `node --test tests/test_pw_chart_filter.js` passes DTO v3 validation, atomic rendering, and stale-response behavior |
 | Browser regression | U6 | The repo browser suite for `tests/test_home_v22_browser.py` passes focused narrative cases in both locales and captures desktop and mobile artifacts |
@@ -689,6 +707,7 @@ Python does not infer event anchors, discover entities in prose, decide causalit
 | Durable orchestration | U2, U4 | Fault injection proves lost broker handoff recovery, post-send ambiguity handling, reverse-order run fencing, and bounded backlog at concurrency one |
 | Repo regression net | All | `pytest` and `python manage.py check --deploy` pass; no harvest, translator, classifier, feed, chart, or top-voices regression is introduced |
 | Release workflow | All | Only when the owner requests delivery, follow the generated Ollija guide and its focused checks; do not replace it with direct release mutations |
+| Production one-day acceptance | U7 | At the exact deployed SHA, headline controls resolve to serving, enqueue, and provider calls enabled; a post-deploy one-day run publishes at least one per-brand narrative and the default production dashboard displays that run with a current timestamp |
 
 Provider evaluation is not part of ordinary automated tests and requires an explicit finite operator action.
 The test must exercise the differentiator: the real compact packet, editor, critic, proof mapping, brand isolation, and filter-aware projection.
@@ -697,25 +716,25 @@ The test must exercise the differentiator: the real compact packet, editor, crit
 
 ## Definition of Done
 
-- U1 is done when every non-sentinel brand appears in deterministic compact packets, private arrays stay out of provider input, and packet/query bounds are proven.
+- U1 is done when every non-sentinel brand appears in deterministic compact packets, nonempty raw-content brands remain eligible across complete, partial, and zero enrichment, private arrays stay out of provider input, and packet/query bounds are proven.
 - U2 is done when migrations, constraints, concurrent reservations, prepared per-brand outcomes, monotonic visible-run cutover, retention, and legacy preservation are proven.
-- U3 is done when complete one-to-five-brand editor and critic schemas work through the production Anthropic Messages-compatible transport, semantic Python gates are absent from the active path, critic calibration passes, and provider safety controls remain.
-- U4 is done when each task makes at most one provider transport, lost broker handoffs reconcile, post-send ambiguity cannot duplicate a call, older runs cannot supersede newer cutoffs, backlog remains bounded, ranking failure is nonblocking, and the isolated worker remains queue-only.
+- U3 is done when complete one-to-five-brand editor and critic schemas work through the production Anthropic Messages-compatible transport, semantic Python gates are absent from the active path, complete/partial/unavailable enrichment prompts are pinned, critic calibration passes, and provider safety controls remain.
+- U4 is done when each task makes at most one provider transport, lost broker handoffs reconcile, post-send ambiguity cannot duplicate a call, enrichment lag cannot suppress a nonempty batch member, older runs cannot supersede newer cutoffs, backlog remains bounded, ranking failure is nonblocking, and the isolated worker remains queue-only.
 - U5 is done when DTO v3 applies every brand-selection mode, exposes honest brand-local freshness, and leaks no private packet data.
 - U6 is done when the live bilingual page atomically renders one or two accessible cards across desktop, mobile, and filter races.
-- U7 is done when finite synthetic and real-data artifacts pass review, status tooling explains every brand outcome, configuration activates the new epoch, and current-state docs match code.
+- U7 is done when finite synthetic and real-data artifacts pass review, status tooling explains every brand outcome, configuration activates the new epoch, current-state docs match code, and the production one-day dashboard displays a successfully generated current per-brand narrative.
 - All acceptance examples are covered by named tests or evaluation evidence.
 - The deferred Pro feature has usable data extension points but no UI, entitlement, benchmark copy, or action recommendation in the diff.
-- Harvesting, translation, classification, and the single Render harvest cron are unchanged.
+- Harvesting, translation, classification, and the single Render harvest cron are unchanged; this plan changes only how headline generation represents and tolerates their pending state.
 - Dead-end experiments, obsolete semantic validator code, superseded prompt code, unused imports, and obsolete tests are removed rather than left beside the new path.
-- No launch-blocking question remains. This LFG run already records the owner's production target in the Ollija delivery guide.
+- No launch-blocking question remains. This LFG run already records the owner's production target in the Ollija delivery guide, and a deployed SHA without a successful visible production one-day result is not complete.
 
 ---
 
 ## Appendix
 
 The examples below are synthetic and non-production.
-They are complete contract examples with no omitted brands, evidence rows, fields, or placeholder ellipses.
+They are complete contract examples with no omitted brands, evidence rows, fields, or placeholder ellipses. The seven-day sample is intentionally fully enriched, so every per-stage count equals its brand total and `newest_30m` is null; the mixed and zero-enrichment one-day states are specified by KTD13 and exercised by AE12-AE13.
 
 ### Appendix A: Complete hypothetical five-brand editor packet
 
@@ -827,6 +846,15 @@ This is the exact 7-day provider payload shape after Python reads the database. 
         "distinct_author_count": 91,
         "notes": []
       },
+      "enrichment_coverage": {
+        "total_post_count": 145,
+        "translation_succeeded_count": 145,
+        "classification_succeeded_count": 145,
+        "fully_enriched_count": 145,
+        "translation_status": "complete",
+        "classification_status": "complete",
+        "newest_30m": null
+      },
       "facts": [
         {
           "fact_id": "deepseek:volume_change",
@@ -837,7 +865,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "45.0",
           "unit": "percent",
           "display_en": "45%",
-          "display_zh_cn": "45%"
+          "display_zh_cn": "45%",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 145,
+            "total_post_count": 145
+          }
         },
         {
           "fact_id": "deepseek:positive_share_change",
@@ -848,7 +881,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "13.0",
           "unit": "percentage_points",
           "display_en": "13 pts",
-          "display_zh_cn": "13个百分点"
+          "display_zh_cn": "13个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 145,
+            "total_post_count": 145
+          }
         },
         {
           "fact_id": "deepseek:buzz_releases_share_change",
@@ -859,7 +897,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "24.0",
           "unit": "percentage_points",
           "display_en": "24 pts",
-          "display_zh_cn": "24个百分点"
+          "display_zh_cn": "24个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 145,
+            "total_post_count": 145
+          }
         },
         {
           "fact_id": "deepseek:official_staff_posts",
@@ -870,7 +913,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "3",
           "unit": "posts",
           "display_en": "4 posts",
-          "display_zh_cn": "4条帖子"
+          "display_zh_cn": "4条帖子",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 145,
+            "total_post_count": 145
+          }
         }
       ],
       "shape_summary": {
@@ -896,6 +944,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:01",
           "created_at": "2026-08-23T02:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "DSv4-Flash is now available with open weights and a lower-latency inference path.",
           "text_en": "DSv4-Flash is now available with open weights and a lower-latency inference path.",
           "text_zh_cn": "DSv4-Flash现已发布，提供开放权重和更低延迟的推理路径。",
@@ -927,6 +977,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:02",
           "created_at": "2026-08-23T11:20:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Tried DSv4-Flash locally; token throughput is phenomenal for the memory footprint.",
           "text_en": "Tried DSv4-Flash locally; token throughput is phenomenal for the memory footprint.",
           "text_zh_cn": "在本地试用了DSv4-Flash；以这样的内存占用来看，令牌吞吐量非常出色。",
@@ -955,6 +1007,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:03",
           "created_at": "2026-08-24T07:45:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "新版本下载很快，代码任务比上一版稳定，但长上下文还要再测。",
           "text_en": "The new version downloaded quickly and was steadier on coding tasks than the prior version, but long context still needs testing.",
           "text_zh_cn": "新版本下载很快，代码任务比上一版稳定，但长上下文还要再测。",
@@ -983,6 +1037,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:04",
           "created_at": "2026-08-24T18:05:00Z",
           "source_language": "ko",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "오픈 웨이트가 이 정도 속도면 실제 서비스 후보로 볼 만하다.",
           "text_en": "With open weights at this speed, it is worth considering for a production service.",
           "text_zh_cn": "开放权重达到这样的速度，值得作为实际服务的候选方案。",
@@ -1011,6 +1067,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:05",
           "created_at": "2026-08-24T05:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Staff posted lower-memory DSv4-Flash serving guidance.",
           "text_en": "Staff posted lower-memory DSv4-Flash serving guidance.",
           "text_zh_cn": "员工发布了DSv4-Flash低内存服务指南。",
@@ -1043,6 +1101,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:06",
           "created_at": "2026-08-25T06:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The official account added DSv4-Flash download instructions.",
           "text_en": "The official account added DSv4-Flash download instructions.",
           "text_zh_cn": "官方账号补充了DSv4-Flash下载说明。",
@@ -1075,6 +1135,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:07",
           "created_at": "2026-08-26T07:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Long-context performance still needs a matched test.",
           "text_en": "Long-context performance still needs a matched test.",
           "text_zh_cn": "长上下文表现仍需要同条件测试。",
@@ -1104,6 +1166,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:deepseek:08",
           "created_at": "2026-08-27T08:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Quantized DSv4-Flash used less memory locally.",
           "text_en": "Quantized DSv4-Flash used less memory locally.",
           "text_zh_cn": "量化后的DSv4-Flash在本地占用更少显存。",
@@ -1299,6 +1363,15 @@ This is the exact 7-day provider payload shape after Python reads the database. 
         "distinct_author_count": 51,
         "notes": []
       },
+      "enrichment_coverage": {
+        "total_post_count": 72,
+        "translation_succeeded_count": 72,
+        "classification_succeeded_count": 72,
+        "fully_enriched_count": 72,
+        "translation_status": "complete",
+        "classification_status": "complete",
+        "newest_30m": null
+      },
       "facts": [
         {
           "fact_id": "glm:volume_change",
@@ -1309,7 +1382,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "0.0",
           "unit": "percent",
           "display_en": "0%",
-          "display_zh_cn": "0%"
+          "display_zh_cn": "0%",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 72,
+            "total_post_count": 72
+          }
         },
         {
           "fact_id": "glm:feedback_share_change",
@@ -1320,7 +1398,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "6.0",
           "unit": "percentage_points",
           "display_en": "6 pts",
-          "display_zh_cn": "6个百分点"
+          "display_zh_cn": "6个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 72,
+            "total_post_count": 72
+          }
         },
         {
           "fact_id": "glm:positive_share_change",
@@ -1331,7 +1414,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "1.0",
           "unit": "percentage_points",
           "display_en": "1 pt",
-          "display_zh_cn": "1个百分点"
+          "display_zh_cn": "1个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 72,
+            "total_post_count": 72
+          }
         },
         {
           "fact_id": "glm:official_staff_posts",
@@ -1342,7 +1430,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "-1",
           "unit": "posts",
           "display_en": "0 posts",
-          "display_zh_cn": "0条帖子"
+          "display_zh_cn": "0条帖子",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 72,
+            "total_post_count": 72
+          }
         }
       ],
       "shape_summary": {
@@ -1368,6 +1461,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:01",
           "created_at": "2026-08-20T05:15:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "GLM handled the refactor, but I had to clarify the repository layout twice.",
           "text_en": "GLM handled the refactor, but I had to clarify the repository layout twice.",
           "text_zh_cn": "GLM完成了重构，但我不得不两次说明代码库布局。",
@@ -1396,6 +1491,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:02",
           "created_at": "2026-08-21T09:30:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "有人测试过GLM的新工具调用吗？多步骤任务会不会丢参数？",
           "text_en": "Has anyone tested GLM's new tool calling? Does it lose parameters on multi-step tasks?",
           "text_zh_cn": "有人测试过GLM的新工具调用吗？多步骤任务会不会丢参数？",
@@ -1424,6 +1521,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:03",
           "created_at": "2026-08-23T14:10:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The coding answers are concise and mostly correct; the web citations still need checking.",
           "text_en": "The coding answers are concise and mostly correct; the web citations still need checking.",
           "text_zh_cn": "编码回答简洁且大多正确；网页引用仍需核查。",
@@ -1452,6 +1551,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:04",
           "created_at": "2026-08-25T03:40:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "这周关于GLM主要还是代码体验和工具调用问题，没有看到大的发布消息。",
           "text_en": "This week's GLM discussion is still mainly coding experience and tool-calling questions; I did not see a major release announcement.",
           "text_zh_cn": "这周关于GLM主要还是代码体验和工具调用问题，没有看到大的发布消息。",
@@ -1480,6 +1581,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:05",
           "created_at": "2026-08-24T05:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Tool calls failed less often in my GLM agent loop.",
           "text_en": "Tool calls failed less often in my GLM agent loop.",
           "text_zh_cn": "在我的GLM智能体循环中，工具调用失败更少。",
@@ -1509,6 +1612,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:06",
           "created_at": "2026-08-25T06:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "GLM recovered from malformed tool output more reliably.",
           "text_en": "GLM recovered from malformed tool output more reliably.",
           "text_zh_cn": "GLM更可靠地从格式错误的工具输出中恢复。",
@@ -1538,6 +1643,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:07",
           "created_at": "2026-08-26T07:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The reasoning mode is faster but still over-explains.",
           "text_en": "The reasoning mode is faster but still over-explains.",
           "text_zh_cn": "推理模式更快，但仍然解释过多。",
@@ -1567,6 +1674,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:glm:08",
           "created_at": "2026-08-27T08:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "I tagged @Zai_org to ask for an official release date.",
           "text_en": "I tagged @Zai_org to ask for an official release date.",
           "text_zh_cn": "我标记了@Zai_org询问官方发布日期。",
@@ -1762,6 +1871,15 @@ This is the exact 7-day provider payload shape after Python reads the database. 
         "distinct_author_count": 69,
         "notes": []
       },
+      "enrichment_coverage": {
+        "total_post_count": 98,
+        "translation_succeeded_count": 98,
+        "classification_succeeded_count": 98,
+        "fully_enriched_count": 98,
+        "translation_status": "complete",
+        "classification_status": "complete",
+        "newest_30m": null
+      },
       "facts": [
         {
           "fact_id": "minimax:volume_change",
@@ -1772,7 +1890,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "6.5",
           "unit": "percent",
           "display_en": "6.5%",
-          "display_zh_cn": "6.5%"
+          "display_zh_cn": "6.5%",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 98,
+            "total_post_count": 98
+          }
         },
         {
           "fact_id": "minimax:hands_on_share_change",
@@ -1783,7 +1906,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "7.0",
           "unit": "percentage_points",
           "display_en": "7 pts",
-          "display_zh_cn": "7个百分点"
+          "display_zh_cn": "7个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 98,
+            "total_post_count": 98
+          }
         },
         {
           "fact_id": "minimax:positive_share_change",
@@ -1794,7 +1922,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "2.0",
           "unit": "percentage_points",
           "display_en": "2 pts",
-          "display_zh_cn": "2个百分点"
+          "display_zh_cn": "2个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 98,
+            "total_post_count": 98
+          }
         },
         {
           "fact_id": "minimax:official_staff_posts",
@@ -1805,7 +1938,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "0",
           "unit": "posts",
           "display_en": "2 posts",
-          "display_zh_cn": "2条帖子"
+          "display_zh_cn": "2条帖子",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 98,
+            "total_post_count": 98
+          }
         }
       ],
       "shape_summary": {
@@ -1831,6 +1969,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:01",
           "created_at": "2026-08-20T01:10:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "We published a new H3 deployment guide with streaming and tool-use examples.",
           "text_en": "We published a new H3 deployment guide with streaming and tool-use examples.",
           "text_zh_cn": "我们发布了新的H3部署指南，包含流式输出和工具使用示例。",
@@ -1862,6 +2002,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:02",
           "created_at": "2026-08-21T06:30:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The H3 guide finally made streaming setup obvious; my test app worked on the first try.",
           "text_en": "The H3 guide finally made streaming setup obvious; my test app worked on the first try.",
           "text_zh_cn": "H3指南终于把流式设置讲清楚了；我的测试应用第一次就运行成功。",
@@ -1890,6 +2032,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:03",
           "created_at": "2026-08-23T10:00:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "H3的工具调用延迟不错，但复杂参数的错误提示还可以更明确。",
           "text_en": "H3 tool-call latency is good, but error messages for complex parameters could be clearer.",
           "text_zh_cn": "H3的工具调用延迟不错，但复杂参数的错误提示还可以更明确。",
@@ -1918,6 +2062,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:04",
           "created_at": "2026-08-24T16:25:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "More H3 examples are showing up this week, mostly people comparing setup time with other APIs.",
           "text_en": "More H3 examples are showing up this week, mostly people comparing setup time with other APIs.",
           "text_zh_cn": "本周出现了更多H3示例，主要是人们将其设置时间与其他API进行比较。",
@@ -1946,6 +2092,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:05",
           "created_at": "2026-08-24T05:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Hailuo starts jobs faster, but error codes remain vague.",
           "text_en": "Hailuo starts jobs faster, but error codes remain vague.",
           "text_zh_cn": "海螺启动任务更快，但错误代码仍不明确。",
@@ -1975,6 +2123,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:06",
           "created_at": "2026-08-25T06:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "New retry examples made the API easier to test.",
           "text_en": "New retry examples made the API easier to test.",
           "text_zh_cn": "新的重试示例让API更容易测试。",
@@ -2004,6 +2154,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:07",
           "created_at": "2026-08-26T07:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Developers compared retry behavior and concurrency limits.",
           "text_en": "Developers compared retry behavior and concurrency limits.",
           "text_zh_cn": "开发者比较了重试行为和并发限制。",
@@ -2033,6 +2185,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:minimax:08",
           "created_at": "2026-08-27T08:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The documentation still needs a billing example.",
           "text_en": "The documentation still needs a billing example.",
           "text_zh_cn": "文档仍需要一个计费示例。",
@@ -2230,6 +2384,15 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "prior_period_coverage_below_minimum"
         ]
       },
+      "enrichment_coverage": {
+        "total_post_count": 34,
+        "translation_succeeded_count": 34,
+        "classification_succeeded_count": 34,
+        "fully_enriched_count": 34,
+        "translation_status": "complete",
+        "classification_status": "complete",
+        "newest_30m": null
+      },
       "facts": [
         {
           "fact_id": "mimo:volume_current",
@@ -2240,7 +2403,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "34",
           "unit": "posts",
           "display_en": "34 posts",
-          "display_zh_cn": "34条帖子"
+          "display_zh_cn": "34条帖子",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 34,
+            "total_post_count": 34
+          }
         },
         {
           "fact_id": "mimo:within_window_late_change",
@@ -2251,7 +2419,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "112.5",
           "unit": "percent",
           "display_en": "113%",
-          "display_zh_cn": "113%"
+          "display_zh_cn": "113%",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 34,
+            "total_post_count": 34
+          }
         },
         {
           "fact_id": "mimo:buzz_releases_share",
@@ -2262,7 +2435,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "29.0",
           "unit": "percent",
           "display_en": "29%",
-          "display_zh_cn": "29%"
+          "display_zh_cn": "29%",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 34,
+            "total_post_count": 34
+          }
         },
         {
           "fact_id": "mimo:official_staff_posts",
@@ -2273,7 +2451,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "4",
           "unit": "posts",
           "display_en": "4 posts",
-          "display_zh_cn": "4条帖子"
+          "display_zh_cn": "4条帖子",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 34,
+            "total_post_count": 34
+          }
         }
       ],
       "shape_summary": {
@@ -2299,6 +2482,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:01",
           "created_at": "2026-08-25T01:00:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "MiMo-8B开放权重现已发布，支持商业使用和本地部署。",
           "text_en": "MiMo-8B open weights are now released, with commercial use and local deployment supported.",
           "text_zh_cn": "MiMo-8B开放权重现已发布，支持商业使用和本地部署。",
@@ -2330,6 +2515,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:02",
           "created_at": "2026-08-25T03:20:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The MiMo team published weights, a model card, and local deployment examples today.",
           "text_en": "The MiMo team published weights, a model card, and local deployment examples today.",
           "text_zh_cn": "MiMo团队今天发布了权重、模型卡和本地部署示例。",
@@ -2361,6 +2548,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:03",
           "created_at": "2026-08-25T08:45:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Downloaded MiMo-8B; the local setup was straightforward and memory use was lower than expected.",
           "text_en": "Downloaded MiMo-8B; the local setup was straightforward and memory use was lower than expected.",
           "text_zh_cn": "下载了MiMo-8B；本地设置很直接，内存占用也低于预期。",
@@ -2389,6 +2578,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:04",
           "created_at": "2026-08-25T16:10:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "参数量不大，先看真实代码和推理测试，发布当天的热度不能说明全部。",
           "text_en": "The parameter count is modest; wait for real coding and reasoning tests, because launch-day attention does not tell the whole story.",
           "text_zh_cn": "参数量不大，先看真实代码和推理测试，发布当天的热度不能说明全部。",
@@ -2417,6 +2608,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:05",
           "created_at": "2026-08-24T05:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "MiMo Free API signup worked, but quota was confusing.",
           "text_en": "MiMo Free API signup worked, but quota was confusing.",
           "text_zh_cn": "MiMo免费API注册成功，但额度说明令人困惑。",
@@ -2446,6 +2639,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:06",
           "created_at": "2026-08-25T06:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Users reported receiving MiMo trial quota today.",
           "text_en": "Users reported receiving MiMo trial quota today.",
           "text_zh_cn": "用户称今天收到了MiMo试用额度。",
@@ -2475,6 +2670,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:07",
           "created_at": "2026-08-26T07:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "XRING O3 appeared as a smaller parallel topic.",
           "text_en": "XRING O3 appeared as a smaller parallel topic.",
           "text_zh_cn": "玄戒O3作为较小的平行话题出现。",
@@ -2504,6 +2701,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:mimo:08",
           "created_at": "2026-08-27T08:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The API documentation lacks a streaming example.",
           "text_en": "The API documentation lacks a streaming example.",
           "text_zh_cn": "API文档缺少流式输出示例。",
@@ -2689,6 +2888,15 @@ This is the exact 7-day provider payload shape after Python reads the database. 
         "distinct_author_count": 83,
         "notes": []
       },
+      "enrichment_coverage": {
+        "total_post_count": 120,
+        "translation_succeeded_count": 120,
+        "classification_succeeded_count": 120,
+        "fully_enriched_count": 120,
+        "translation_status": "complete",
+        "classification_status": "complete",
+        "newest_30m": null
+      },
       "facts": [
         {
           "fact_id": "qwen:volume_change",
@@ -2699,7 +2907,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "9.1",
           "unit": "percent",
           "display_en": "9.1%",
-          "display_zh_cn": "9.1%"
+          "display_zh_cn": "9.1%",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 120,
+            "total_post_count": 120
+          }
         },
         {
           "fact_id": "qwen:nationalism_share_change",
@@ -2710,7 +2923,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "7.0",
           "unit": "percentage_points",
           "display_en": "7 pts",
-          "display_zh_cn": "7个百分点"
+          "display_zh_cn": "7个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 120,
+            "total_post_count": 120
+          }
         },
         {
           "fact_id": "qwen:buzz_releases_share_change",
@@ -2721,7 +2939,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "1.0",
           "unit": "percentage_points",
           "display_en": "1 pt",
-          "display_zh_cn": "1个百分点"
+          "display_zh_cn": "1个百分点",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 120,
+            "total_post_count": 120
+          }
         },
         {
           "fact_id": "qwen:official_staff_posts",
@@ -2732,7 +2955,12 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "source_value": "0",
           "unit": "posts",
           "display_en": "1 post",
-          "display_zh_cn": "1条帖子"
+          "display_zh_cn": "1条帖子",
+          "coverage_scope": {
+            "status": "complete",
+            "covered_post_count": 120,
+            "total_post_count": 120
+          }
         }
       ],
       "shape_summary": {
@@ -2758,6 +2986,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:01",
           "created_at": "2026-08-20T04:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Qwen keeps appearing in discussions about whether Chinese open models are closing the coding gap.",
           "text_en": "Qwen keeps appearing in discussions about whether Chinese open models are closing the coding gap.",
           "text_zh_cn": "在有关中国开放模型是否正在缩小编码差距的讨论中，Qwen不断被提及。",
@@ -2786,6 +3016,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:02",
           "created_at": "2026-08-21T12:30:00Z",
           "source_language": "zh",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "不必把每次模型对比都变成国家输赢，Qwen这次代码表现确实更稳。",
           "text_en": "Not every model comparison needs to become a national win-or-loss story; Qwen's coding performance is genuinely steadier this time.",
           "text_zh_cn": "不必把每次模型对比都变成国家输赢，Qwen这次代码表现确实更稳。",
@@ -2814,6 +3046,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:03",
           "created_at": "2026-08-23T08:20:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "I compared Qwen and two US models on the same repo; Qwen was faster, but missed one test failure.",
           "text_en": "I compared Qwen and two US models on the same repo; Qwen was faster, but missed one test failure.",
           "text_zh_cn": "我在同一代码库上比较了Qwen和两个美国模型；Qwen更快，但漏掉了一个测试失败。",
@@ -2842,6 +3076,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:04",
           "created_at": "2026-08-24T19:45:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "The Qwen thread turned into US-China scorekeeping even though the original post was a normal benchmark comparison.",
           "text_en": "The Qwen thread turned into US-China scorekeeping even though the original post was a normal benchmark comparison.",
           "text_zh_cn": "尽管原帖只是普通的基准比较，Qwen讨论串却变成了中美胜负争论。",
@@ -2870,6 +3106,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:05",
           "created_at": "2026-08-24T05:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Qwen's multi-GPU example saved setup time.",
           "text_en": "Qwen's multi-GPU example saved setup time.",
           "text_zh_cn": "Qwen的多卡示例节省了配置时间。",
@@ -2899,6 +3137,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:06",
           "created_at": "2026-08-25T06:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "US-China framing increased around Qwen comparisons.",
           "text_en": "US-China framing increased around Qwen comparisons.",
           "text_zh_cn": "围绕Qwen比较的中美框架有所增加。",
@@ -2928,6 +3168,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:07",
           "created_at": "2026-08-26T07:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Quantization was fast, but table extraction missed fields.",
           "text_en": "Quantization was fast, but table extraction missed fields.",
           "text_zh_cn": "量化速度很快，但表格抽取会漏字段。",
@@ -2957,6 +3199,8 @@ This is the exact 7-day provider payload shape after Python reads the database. 
           "evidence_id": "ev:qwen:08",
           "created_at": "2026-08-27T08:00:00Z",
           "source_language": "en",
+          "translation_status": "succeeded",
+          "classification_status": "succeeded",
           "text_original": "Mixed-GPU setup guidance remains incomplete.",
           "text_en": "Mixed-GPU setup guidance remains incomplete.",
           "text_zh_cn": "混合显卡配置指南仍不完整。",
@@ -3144,7 +3388,7 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
     "thinking": {
       "type": "disabled"
     },
-    "system": "You are the bilingual trend narrative editor. Return one complete result for each packet brand. Lead with why the conversation is notable and use numbers as corroboration. Classifier fields are fixed labels; corpus_signals are semantic leads, not proven events. Cite every checkable proposition with packet-owned fact, evidence, or corpus_signal IDs. Trust official and staff posts only when author.kind is trusted_first_party. Do not invent prior comparisons when comparison_status.allowed is false. Return JSON only.",
+    "system": "You are the bilingual trend narrative editor. Return one complete result for each packet brand. Lead with why the conversation is notable and use numbers as corroboration. Original text remains usable when enrichment is pending. Read enrichment_coverage, evidence stage statuses, family status, and fact coverage_scope. Scope partial classifier claims to the covered subset and do not use unavailable classifier families. Classifier fields are fixed labels; corpus_signals are semantic leads, not proven events. Cite every checkable proposition with packet-owned fact, evidence, or corpus_signal IDs. Trust official and staff posts only when first_party_role is official or staff. Do not invent prior comparisons when comparison_status.allowed is false. Return JSON only.",
     "messages": [
       {
         "role": "user",
@@ -3257,6 +3501,15 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
               "distinct_author_count": 91,
               "notes": []
             },
+            "enrichment_coverage": {
+              "total_post_count": 145,
+              "translation_succeeded_count": 145,
+              "classification_succeeded_count": 145,
+              "fully_enriched_count": 145,
+              "translation_status": "complete",
+              "classification_status": "complete",
+              "newest_30m": null
+            },
             "facts": [
               {
                 "fact_id": "deepseek:volume_change",
@@ -3267,7 +3520,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "45.0",
                 "unit": "percent",
                 "display_en": "45%",
-                "display_zh_cn": "45%"
+                "display_zh_cn": "45%",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 145,
+                  "total_post_count": 145
+                }
               },
               {
                 "fact_id": "deepseek:positive_share_change",
@@ -3278,7 +3536,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "13.0",
                 "unit": "percentage_points",
                 "display_en": "13 pts",
-                "display_zh_cn": "13个百分点"
+                "display_zh_cn": "13个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 145,
+                  "total_post_count": 145
+                }
               },
               {
                 "fact_id": "deepseek:buzz_releases_share_change",
@@ -3289,7 +3552,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "24.0",
                 "unit": "percentage_points",
                 "display_en": "24 pts",
-                "display_zh_cn": "24个百分点"
+                "display_zh_cn": "24个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 145,
+                  "total_post_count": 145
+                }
               },
               {
                 "fact_id": "deepseek:official_staff_posts",
@@ -3300,7 +3568,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "3",
                 "unit": "posts",
                 "display_en": "4 posts",
-                "display_zh_cn": "4条帖子"
+                "display_zh_cn": "4条帖子",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 145,
+                  "total_post_count": 145
+                }
               }
             ],
             "shape_summary": {
@@ -3326,6 +3599,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:01",
                 "created_at": "2026-08-23T02:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "DSv4-Flash is now available with open weights and a lower-latency inference path.",
                 "text_en": "DSv4-Flash is now available with open weights and a lower-latency inference path.",
                 "text_zh_cn": "DSv4-Flash现已发布，提供开放权重和更低延迟的推理路径。",
@@ -3357,6 +3632,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:02",
                 "created_at": "2026-08-23T11:20:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Tried DSv4-Flash locally; token throughput is phenomenal for the memory footprint.",
                 "text_en": "Tried DSv4-Flash locally; token throughput is phenomenal for the memory footprint.",
                 "text_zh_cn": "在本地试用了DSv4-Flash；以这样的内存占用来看，令牌吞吐量非常出色。",
@@ -3385,6 +3662,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:03",
                 "created_at": "2026-08-24T07:45:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "新版本下载很快，代码任务比上一版稳定，但长上下文还要再测。",
                 "text_en": "The new version downloaded quickly and was steadier on coding tasks than the prior version, but long context still needs testing.",
                 "text_zh_cn": "新版本下载很快，代码任务比上一版稳定，但长上下文还要再测。",
@@ -3413,6 +3692,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:04",
                 "created_at": "2026-08-24T18:05:00Z",
                 "source_language": "ko",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "오픈 웨이트가 이 정도 속도면 실제 서비스 후보로 볼 만하다.",
                 "text_en": "With open weights at this speed, it is worth considering for a production service.",
                 "text_zh_cn": "开放权重达到这样的速度，值得作为实际服务的候选方案。",
@@ -3441,6 +3722,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:05",
                 "created_at": "2026-08-24T05:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Staff posted lower-memory DSv4-Flash serving guidance.",
                 "text_en": "Staff posted lower-memory DSv4-Flash serving guidance.",
                 "text_zh_cn": "员工发布了DSv4-Flash低内存服务指南。",
@@ -3473,6 +3756,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:06",
                 "created_at": "2026-08-25T06:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The official account added DSv4-Flash download instructions.",
                 "text_en": "The official account added DSv4-Flash download instructions.",
                 "text_zh_cn": "官方账号补充了DSv4-Flash下载说明。",
@@ -3505,6 +3790,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:07",
                 "created_at": "2026-08-26T07:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Long-context performance still needs a matched test.",
                 "text_en": "Long-context performance still needs a matched test.",
                 "text_zh_cn": "长上下文表现仍需要同条件测试。",
@@ -3534,6 +3821,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:deepseek:08",
                 "created_at": "2026-08-27T08:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Quantized DSv4-Flash used less memory locally.",
                 "text_en": "Quantized DSv4-Flash used less memory locally.",
                 "text_zh_cn": "量化后的DSv4-Flash在本地占用更少显存。",
@@ -3729,6 +4018,15 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
               "distinct_author_count": 51,
               "notes": []
             },
+            "enrichment_coverage": {
+              "total_post_count": 72,
+              "translation_succeeded_count": 72,
+              "classification_succeeded_count": 72,
+              "fully_enriched_count": 72,
+              "translation_status": "complete",
+              "classification_status": "complete",
+              "newest_30m": null
+            },
             "facts": [
               {
                 "fact_id": "glm:volume_change",
@@ -3739,7 +4037,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "0.0",
                 "unit": "percent",
                 "display_en": "0%",
-                "display_zh_cn": "0%"
+                "display_zh_cn": "0%",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 72,
+                  "total_post_count": 72
+                }
               },
               {
                 "fact_id": "glm:feedback_share_change",
@@ -3750,7 +4053,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "6.0",
                 "unit": "percentage_points",
                 "display_en": "6 pts",
-                "display_zh_cn": "6个百分点"
+                "display_zh_cn": "6个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 72,
+                  "total_post_count": 72
+                }
               },
               {
                 "fact_id": "glm:positive_share_change",
@@ -3761,7 +4069,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "1.0",
                 "unit": "percentage_points",
                 "display_en": "1 pt",
-                "display_zh_cn": "1个百分点"
+                "display_zh_cn": "1个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 72,
+                  "total_post_count": 72
+                }
               },
               {
                 "fact_id": "glm:official_staff_posts",
@@ -3772,7 +4085,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "-1",
                 "unit": "posts",
                 "display_en": "0 posts",
-                "display_zh_cn": "0条帖子"
+                "display_zh_cn": "0条帖子",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 72,
+                  "total_post_count": 72
+                }
               }
             ],
             "shape_summary": {
@@ -3798,6 +4116,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:01",
                 "created_at": "2026-08-20T05:15:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "GLM handled the refactor, but I had to clarify the repository layout twice.",
                 "text_en": "GLM handled the refactor, but I had to clarify the repository layout twice.",
                 "text_zh_cn": "GLM完成了重构，但我不得不两次说明代码库布局。",
@@ -3826,6 +4146,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:02",
                 "created_at": "2026-08-21T09:30:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "有人测试过GLM的新工具调用吗？多步骤任务会不会丢参数？",
                 "text_en": "Has anyone tested GLM's new tool calling? Does it lose parameters on multi-step tasks?",
                 "text_zh_cn": "有人测试过GLM的新工具调用吗？多步骤任务会不会丢参数？",
@@ -3854,6 +4176,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:03",
                 "created_at": "2026-08-23T14:10:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The coding answers are concise and mostly correct; the web citations still need checking.",
                 "text_en": "The coding answers are concise and mostly correct; the web citations still need checking.",
                 "text_zh_cn": "编码回答简洁且大多正确；网页引用仍需核查。",
@@ -3882,6 +4206,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:04",
                 "created_at": "2026-08-25T03:40:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "这周关于GLM主要还是代码体验和工具调用问题，没有看到大的发布消息。",
                 "text_en": "This week's GLM discussion is still mainly coding experience and tool-calling questions; I did not see a major release announcement.",
                 "text_zh_cn": "这周关于GLM主要还是代码体验和工具调用问题，没有看到大的发布消息。",
@@ -3910,6 +4236,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:05",
                 "created_at": "2026-08-24T05:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Tool calls failed less often in my GLM agent loop.",
                 "text_en": "Tool calls failed less often in my GLM agent loop.",
                 "text_zh_cn": "在我的GLM智能体循环中，工具调用失败更少。",
@@ -3939,6 +4267,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:06",
                 "created_at": "2026-08-25T06:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "GLM recovered from malformed tool output more reliably.",
                 "text_en": "GLM recovered from malformed tool output more reliably.",
                 "text_zh_cn": "GLM更可靠地从格式错误的工具输出中恢复。",
@@ -3968,6 +4298,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:07",
                 "created_at": "2026-08-26T07:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The reasoning mode is faster but still over-explains.",
                 "text_en": "The reasoning mode is faster but still over-explains.",
                 "text_zh_cn": "推理模式更快，但仍然解释过多。",
@@ -3997,6 +4329,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:glm:08",
                 "created_at": "2026-08-27T08:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "I tagged @Zai_org to ask for an official release date.",
                 "text_en": "I tagged @Zai_org to ask for an official release date.",
                 "text_zh_cn": "我标记了@Zai_org询问官方发布日期。",
@@ -4192,6 +4526,15 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
               "distinct_author_count": 69,
               "notes": []
             },
+            "enrichment_coverage": {
+              "total_post_count": 98,
+              "translation_succeeded_count": 98,
+              "classification_succeeded_count": 98,
+              "fully_enriched_count": 98,
+              "translation_status": "complete",
+              "classification_status": "complete",
+              "newest_30m": null
+            },
             "facts": [
               {
                 "fact_id": "minimax:volume_change",
@@ -4202,7 +4545,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "6.5",
                 "unit": "percent",
                 "display_en": "6.5%",
-                "display_zh_cn": "6.5%"
+                "display_zh_cn": "6.5%",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 98,
+                  "total_post_count": 98
+                }
               },
               {
                 "fact_id": "minimax:hands_on_share_change",
@@ -4213,7 +4561,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "7.0",
                 "unit": "percentage_points",
                 "display_en": "7 pts",
-                "display_zh_cn": "7个百分点"
+                "display_zh_cn": "7个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 98,
+                  "total_post_count": 98
+                }
               },
               {
                 "fact_id": "minimax:positive_share_change",
@@ -4224,7 +4577,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "2.0",
                 "unit": "percentage_points",
                 "display_en": "2 pts",
-                "display_zh_cn": "2个百分点"
+                "display_zh_cn": "2个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 98,
+                  "total_post_count": 98
+                }
               },
               {
                 "fact_id": "minimax:official_staff_posts",
@@ -4235,7 +4593,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "0",
                 "unit": "posts",
                 "display_en": "2 posts",
-                "display_zh_cn": "2条帖子"
+                "display_zh_cn": "2条帖子",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 98,
+                  "total_post_count": 98
+                }
               }
             ],
             "shape_summary": {
@@ -4261,6 +4624,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:01",
                 "created_at": "2026-08-20T01:10:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "We published a new H3 deployment guide with streaming and tool-use examples.",
                 "text_en": "We published a new H3 deployment guide with streaming and tool-use examples.",
                 "text_zh_cn": "我们发布了新的H3部署指南，包含流式输出和工具使用示例。",
@@ -4292,6 +4657,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:02",
                 "created_at": "2026-08-21T06:30:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The H3 guide finally made streaming setup obvious; my test app worked on the first try.",
                 "text_en": "The H3 guide finally made streaming setup obvious; my test app worked on the first try.",
                 "text_zh_cn": "H3指南终于把流式设置讲清楚了；我的测试应用第一次就运行成功。",
@@ -4320,6 +4687,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:03",
                 "created_at": "2026-08-23T10:00:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "H3的工具调用延迟不错，但复杂参数的错误提示还可以更明确。",
                 "text_en": "H3 tool-call latency is good, but error messages for complex parameters could be clearer.",
                 "text_zh_cn": "H3的工具调用延迟不错，但复杂参数的错误提示还可以更明确。",
@@ -4348,6 +4717,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:04",
                 "created_at": "2026-08-24T16:25:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "More H3 examples are showing up this week, mostly people comparing setup time with other APIs.",
                 "text_en": "More H3 examples are showing up this week, mostly people comparing setup time with other APIs.",
                 "text_zh_cn": "本周出现了更多H3示例，主要是人们将其设置时间与其他API进行比较。",
@@ -4376,6 +4747,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:05",
                 "created_at": "2026-08-24T05:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Hailuo starts jobs faster, but error codes remain vague.",
                 "text_en": "Hailuo starts jobs faster, but error codes remain vague.",
                 "text_zh_cn": "海螺启动任务更快，但错误代码仍不明确。",
@@ -4405,6 +4778,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:06",
                 "created_at": "2026-08-25T06:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "New retry examples made the API easier to test.",
                 "text_en": "New retry examples made the API easier to test.",
                 "text_zh_cn": "新的重试示例让API更容易测试。",
@@ -4434,6 +4809,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:07",
                 "created_at": "2026-08-26T07:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Developers compared retry behavior and concurrency limits.",
                 "text_en": "Developers compared retry behavior and concurrency limits.",
                 "text_zh_cn": "开发者比较了重试行为和并发限制。",
@@ -4463,6 +4840,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:minimax:08",
                 "created_at": "2026-08-27T08:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The documentation still needs a billing example.",
                 "text_en": "The documentation still needs a billing example.",
                 "text_zh_cn": "文档仍需要一个计费示例。",
@@ -4660,6 +5039,15 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "prior_period_coverage_below_minimum"
               ]
             },
+            "enrichment_coverage": {
+              "total_post_count": 34,
+              "translation_succeeded_count": 34,
+              "classification_succeeded_count": 34,
+              "fully_enriched_count": 34,
+              "translation_status": "complete",
+              "classification_status": "complete",
+              "newest_30m": null
+            },
             "facts": [
               {
                 "fact_id": "mimo:volume_current",
@@ -4670,7 +5058,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "34",
                 "unit": "posts",
                 "display_en": "34 posts",
-                "display_zh_cn": "34条帖子"
+                "display_zh_cn": "34条帖子",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 34,
+                  "total_post_count": 34
+                }
               },
               {
                 "fact_id": "mimo:within_window_late_change",
@@ -4681,7 +5074,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "112.5",
                 "unit": "percent",
                 "display_en": "113%",
-                "display_zh_cn": "113%"
+                "display_zh_cn": "113%",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 34,
+                  "total_post_count": 34
+                }
               },
               {
                 "fact_id": "mimo:buzz_releases_share",
@@ -4692,7 +5090,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "29.0",
                 "unit": "percent",
                 "display_en": "29%",
-                "display_zh_cn": "29%"
+                "display_zh_cn": "29%",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 34,
+                  "total_post_count": 34
+                }
               },
               {
                 "fact_id": "mimo:official_staff_posts",
@@ -4703,7 +5106,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "4",
                 "unit": "posts",
                 "display_en": "4 posts",
-                "display_zh_cn": "4条帖子"
+                "display_zh_cn": "4条帖子",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 34,
+                  "total_post_count": 34
+                }
               }
             ],
             "shape_summary": {
@@ -4729,6 +5137,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:01",
                 "created_at": "2026-08-25T01:00:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "MiMo-8B开放权重现已发布，支持商业使用和本地部署。",
                 "text_en": "MiMo-8B open weights are now released, with commercial use and local deployment supported.",
                 "text_zh_cn": "MiMo-8B开放权重现已发布，支持商业使用和本地部署。",
@@ -4760,6 +5170,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:02",
                 "created_at": "2026-08-25T03:20:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The MiMo team published weights, a model card, and local deployment examples today.",
                 "text_en": "The MiMo team published weights, a model card, and local deployment examples today.",
                 "text_zh_cn": "MiMo团队今天发布了权重、模型卡和本地部署示例。",
@@ -4791,6 +5203,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:03",
                 "created_at": "2026-08-25T08:45:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Downloaded MiMo-8B; the local setup was straightforward and memory use was lower than expected.",
                 "text_en": "Downloaded MiMo-8B; the local setup was straightforward and memory use was lower than expected.",
                 "text_zh_cn": "下载了MiMo-8B；本地设置很直接，内存占用也低于预期。",
@@ -4819,6 +5233,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:04",
                 "created_at": "2026-08-25T16:10:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "参数量不大，先看真实代码和推理测试，发布当天的热度不能说明全部。",
                 "text_en": "The parameter count is modest; wait for real coding and reasoning tests, because launch-day attention does not tell the whole story.",
                 "text_zh_cn": "参数量不大，先看真实代码和推理测试，发布当天的热度不能说明全部。",
@@ -4847,6 +5263,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:05",
                 "created_at": "2026-08-24T05:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "MiMo Free API signup worked, but quota was confusing.",
                 "text_en": "MiMo Free API signup worked, but quota was confusing.",
                 "text_zh_cn": "MiMo免费API注册成功，但额度说明令人困惑。",
@@ -4876,6 +5294,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:06",
                 "created_at": "2026-08-25T06:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Users reported receiving MiMo trial quota today.",
                 "text_en": "Users reported receiving MiMo trial quota today.",
                 "text_zh_cn": "用户称今天收到了MiMo试用额度。",
@@ -4905,6 +5325,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:07",
                 "created_at": "2026-08-26T07:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "XRING O3 appeared as a smaller parallel topic.",
                 "text_en": "XRING O3 appeared as a smaller parallel topic.",
                 "text_zh_cn": "玄戒O3作为较小的平行话题出现。",
@@ -4934,6 +5356,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:mimo:08",
                 "created_at": "2026-08-27T08:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The API documentation lacks a streaming example.",
                 "text_en": "The API documentation lacks a streaming example.",
                 "text_zh_cn": "API文档缺少流式输出示例。",
@@ -5119,6 +5543,15 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
               "distinct_author_count": 83,
               "notes": []
             },
+            "enrichment_coverage": {
+              "total_post_count": 120,
+              "translation_succeeded_count": 120,
+              "classification_succeeded_count": 120,
+              "fully_enriched_count": 120,
+              "translation_status": "complete",
+              "classification_status": "complete",
+              "newest_30m": null
+            },
             "facts": [
               {
                 "fact_id": "qwen:volume_change",
@@ -5129,7 +5562,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "9.1",
                 "unit": "percent",
                 "display_en": "9.1%",
-                "display_zh_cn": "9.1%"
+                "display_zh_cn": "9.1%",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 120,
+                  "total_post_count": 120
+                }
               },
               {
                 "fact_id": "qwen:nationalism_share_change",
@@ -5140,7 +5578,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "7.0",
                 "unit": "percentage_points",
                 "display_en": "7 pts",
-                "display_zh_cn": "7个百分点"
+                "display_zh_cn": "7个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 120,
+                  "total_post_count": 120
+                }
               },
               {
                 "fact_id": "qwen:buzz_releases_share_change",
@@ -5151,7 +5594,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "1.0",
                 "unit": "percentage_points",
                 "display_en": "1 pt",
-                "display_zh_cn": "1个百分点"
+                "display_zh_cn": "1个百分点",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 120,
+                  "total_post_count": 120
+                }
               },
               {
                 "fact_id": "qwen:official_staff_posts",
@@ -5162,7 +5610,12 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "source_value": "0",
                 "unit": "posts",
                 "display_en": "1 post",
-                "display_zh_cn": "1条帖子"
+                "display_zh_cn": "1条帖子",
+                "coverage_scope": {
+                  "status": "complete",
+                  "covered_post_count": 120,
+                  "total_post_count": 120
+                }
               }
             ],
             "shape_summary": {
@@ -5188,6 +5641,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:01",
                 "created_at": "2026-08-20T04:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Qwen keeps appearing in discussions about whether Chinese open models are closing the coding gap.",
                 "text_en": "Qwen keeps appearing in discussions about whether Chinese open models are closing the coding gap.",
                 "text_zh_cn": "在有关中国开放模型是否正在缩小编码差距的讨论中，Qwen不断被提及。",
@@ -5216,6 +5671,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:02",
                 "created_at": "2026-08-21T12:30:00Z",
                 "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "不必把每次模型对比都变成国家输赢，Qwen这次代码表现确实更稳。",
                 "text_en": "Not every model comparison needs to become a national win-or-loss story; Qwen's coding performance is genuinely steadier this time.",
                 "text_zh_cn": "不必把每次模型对比都变成国家输赢，Qwen这次代码表现确实更稳。",
@@ -5244,6 +5701,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:03",
                 "created_at": "2026-08-23T08:20:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "I compared Qwen and two US models on the same repo; Qwen was faster, but missed one test failure.",
                 "text_en": "I compared Qwen and two US models on the same repo; Qwen was faster, but missed one test failure.",
                 "text_zh_cn": "我在同一代码库上比较了Qwen和两个美国模型；Qwen更快，但漏掉了一个测试失败。",
@@ -5272,6 +5731,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:04",
                 "created_at": "2026-08-24T19:45:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "The Qwen thread turned into US-China scorekeeping even though the original post was a normal benchmark comparison.",
                 "text_en": "The Qwen thread turned into US-China scorekeeping even though the original post was a normal benchmark comparison.",
                 "text_zh_cn": "尽管原帖只是普通的基准比较，Qwen讨论串却变成了中美胜负争论。",
@@ -5300,6 +5761,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:05",
                 "created_at": "2026-08-24T05:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Qwen's multi-GPU example saved setup time.",
                 "text_en": "Qwen's multi-GPU example saved setup time.",
                 "text_zh_cn": "Qwen的多卡示例节省了配置时间。",
@@ -5329,6 +5792,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:06",
                 "created_at": "2026-08-25T06:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "US-China framing increased around Qwen comparisons.",
                 "text_en": "US-China framing increased around Qwen comparisons.",
                 "text_zh_cn": "围绕Qwen比较的中美框架有所增加。",
@@ -5358,6 +5823,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:07",
                 "created_at": "2026-08-26T07:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Quantization was fast, but table extraction missed fields.",
                 "text_en": "Quantization was fast, but table extraction missed fields.",
                 "text_zh_cn": "量化速度很快，但表格抽取会漏字段。",
@@ -5387,6 +5854,8 @@ The following construction manifest shows the exact Anthropic Messages-compatibl
                 "evidence_id": "ev:qwen:08",
                 "created_at": "2026-08-27T08:00:00Z",
                 "source_language": "en",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
                 "text_original": "Mixed-GPU setup guidance remains incomplete.",
                 "text_en": "Mixed-GPU setup guidance remains incomplete.",
                 "text_zh_cn": "混合显卡配置指南仍不完整。",

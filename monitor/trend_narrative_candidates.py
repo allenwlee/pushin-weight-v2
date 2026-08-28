@@ -8,7 +8,7 @@ import unicodedata
 from collections import defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from heapq import nlargest
 from itertools import pairwise
@@ -57,8 +57,18 @@ EVIDENCE_ROLE_ORDER = (
     "dominant_discourse_representative",
     "contrasting_reaction",
 )
-EVIDENCE_QUERY_RANK_STREAMS = 5
+EVIDENCE_QUERY_RANK_STREAMS = 6
 SUPPORTING_CONTEXT_ROLE = "supporting_context"
+_CLASSIFIER_DERIVED_FAMILIES = frozenset(
+    {
+        "post_type",
+        "sentiment",
+        "discourse",
+        "china_nationalism",
+        "us_nationalism",
+        "unsanctioned_flags",
+    }
+)
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _PURE_REPOST_RE = re.compile(r"^\s*RT\s+@", re.IGNORECASE)
@@ -140,6 +150,8 @@ DOSSIER_EVIDENCE_TARGETS: dict[int, tuple[int, int]] = {
 def select_dossier_evidence(
     window_days: int,
     evidence: Sequence[Mapping[str, Any]],
+    *,
+    newest_segment_start: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Select fixed-size, deduplicated evidence with deterministic rollover.
 
@@ -181,12 +193,39 @@ def select_dossier_evidence(
         if evidence_id not in chosen:
             selected.append(dict(row))
             chosen.add(evidence_id)
+    if window_days == 1 and newest_segment_start is not None:
+        newest = [
+            row
+            for row in deduplicated
+            if _evidence_at_or_after(row, newest_segment_start)
+        ]
+        if newest and not any(
+            _evidence_at_or_after(row, newest_segment_start) for row in selected
+        ):
+            replacement = min(newest, key=_dossier_evidence_sort_key)
+            replace_at = max(
+                range(len(selected)),
+                key=lambda index: _dossier_evidence_sort_key(selected[index]),
+            )
+            selected[replace_at] = dict(replacement)
     return selected, {
         "target_count": target,
         "first_party_reservation": first_party_reservation,
         "ordinary_reservation": ordinary_reservation,
         "selected_count": len(selected),
     }
+
+
+def _evidence_at_or_after(
+    row: Mapping[str, Any], boundary: datetime
+) -> bool:
+    created_at = row.get("created_at")
+    if not created_at:
+        return False
+    try:
+        return _parse_utc(str(created_at)) >= boundary
+    except (TypeError, ValueError):
+        return False
 
 
 def _dossier_evidence_sort_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -971,25 +1010,28 @@ def _assemble_compact_snapshot(
             **dict(source.get("family_facts") or {}),
             **dict(stable_family_facts.get(brand_key) or {}),
         }
-        selected_count = int(family_facts.get("volume", {}).get("selected_count") or 0)
-        enriched_count = int(
-            family_facts.get("volume", {}).get("selected_enriched_count") or 0
-        )
+        volume = family_facts.get("volume", {})
+        selected_count = int(volume.get("selected_count") or 0)
+        usable_raw_count = int(volume.get("selected_usable_raw_count") or 0)
         current_complete = selected_coverage.get("state") == "sufficient" and not bool(
             selected_coverage.get("known_backlog_overlap")
         )
-        outcome = (
-            "narrative_eligible"
-            if selected_count and enriched_count >= selected_count
-            else "data_quality_unavailable"
-            if selected_count
-            else "no_content"
-            if current_complete
-            else "data_quality_unavailable"
+        newest_segment_start = (
+            _parse_utc(str(facts["as_of"])) - timedelta(minutes=30)
+            if int(facts["window_days"]) == 1
+            else None
         )
         selected_evidence, allocation = select_dossier_evidence(
             int(facts["window_days"]),
             pools.get(str(candidate_key["candidate_id"]), []),
+            newest_segment_start=newest_segment_start,
+        )
+        outcome = (
+            "narrative_eligible"
+            if usable_raw_count and selected_evidence
+            else "no_content"
+            if current_complete
+            else "data_quality_unavailable"
         )
         brand_corpus_signals = list(corpus_signals.get(brand_key) or [])
         family_facts["corpus_phrases"] = _corpus_phrase_family_fact(
@@ -1013,6 +1055,10 @@ def _assemble_compact_snapshot(
                 "display_name_en": source["display_name_en"],
                 "display_name_zh_cn": source["display_name_zh_cn"],
                 "outcome": outcome,
+                "enrichment_coverage": _enrichment_coverage(
+                    volume,
+                    window_days=int(facts["window_days"]),
+                ),
                 "comparison_status": {
                     "allowed": brand_comparison_allowed,
                     "current_post_count": selected_count,
@@ -1064,7 +1110,48 @@ def _assemble_compact_snapshot(
     }
 
 
+def _enrichment_coverage(
+    volume: Mapping[str, Any], *, window_days: int
+) -> dict[str, Any]:
+    total = int(volume.get("selected_count") or 0)
+    translated = int(volume.get("selected_translation_succeeded_count") or 0)
+    classified = int(volume.get("selected_classification_succeeded_count") or 0)
+    enriched = int(volume.get("selected_enriched_count") or 0)
+    newest = None
+    if window_days == 1:
+        newest = {
+            "total_post_count": int(volume.get("newest_30m_count") or 0),
+            "translation_succeeded_count": int(
+                volume.get("newest_30m_translation_succeeded_count") or 0
+            ),
+            "classification_succeeded_count": int(
+                volume.get("newest_30m_classification_succeeded_count") or 0
+            ),
+            "fully_enriched_count": int(
+                volume.get("newest_30m_enriched_count") or 0
+            ),
+        }
+    return {
+        "total_post_count": total,
+        "translation_succeeded_count": translated,
+        "classification_succeeded_count": classified,
+        "fully_enriched_count": enriched,
+        "translation_status": _enrichment_stage_status(translated, total),
+        "classification_status": _enrichment_stage_status(classified, total),
+        "newest_30m": newest,
+    }
+
+
+def _enrichment_stage_status(succeeded: int, total: int) -> str:
+    if total <= 0 or succeeded <= 0:
+        return "unavailable"
+    return "complete" if succeeded >= total else "partial"
+
+
 def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]:
+    total_post_count = int(
+        (family_facts.get("volume") or {}).get("selected_count") or 0
+    )
     result = {}
     for family in (
         "volume",
@@ -1075,11 +1162,19 @@ def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]
         "us_nationalism",
     ):
         value = dict(family_facts.get(family) or {})
+        classifier_family = family in _CLASSIFIER_DERIVED_FAMILIES
+        covered_post_count = (
+            int(value.get("selected_covered_count") or 0)
+            if classifier_family
+            else total_post_count
+        )
+        status_value = dict(value)
+        status_value["selected_total_count"] = total_post_count
         result[family] = {
-            "status": _family_summary_status(value),
-            "denominator": value.get("selected_count")
-            or value.get("selected_basis_count")
-            or 0,
+            "status": _family_summary_status(status_value),
+            "covered_post_count": covered_post_count,
+            "total_post_count": total_post_count,
+            "denominator": covered_post_count,
             "current_leader": _leading_label(value, change=False),
             "largest_change": _leading_label(value, change=True),
         }
@@ -1088,9 +1183,22 @@ def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]
     # unavailable aggregate.
     for family in ("language", "unsanctioned_flags", "account_role", "corpus_phrases"):
         value = dict(family_facts.get(family) or {})
+        classifier_family = family == "unsanctioned_flags"
+        covered_post_count = int(value.get("selected_basis_count") or 0)
+        status_value = dict(value)
+        status_value["selected_total_count"] = total_post_count
+        if classifier_family:
+            status_value.pop("status", None)
+            status_value["selected_covered_count"] = covered_post_count
         summary = {
-            "status": value.get("status", "unavailable"),
-            "denominator": value.get("selected_basis_count", 0),
+            "status": (
+                _family_summary_status(status_value)
+                if classifier_family
+                else value.get("status", "unavailable")
+            ),
+            "covered_post_count": covered_post_count,
+            "total_post_count": total_post_count,
+            "denominator": covered_post_count,
             "current_leader": _leading_label(value, change=False),
             "largest_change": _leading_label(value, change=True),
         }
@@ -1103,15 +1211,23 @@ def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]
 def _family_summary_status(value: Mapping[str, Any]) -> str:
     """Make zero, suppressed source data, and unavailable distinct."""
     explicit = value.get("status")
-    if explicit in {"available", "suppressed", "unavailable"}:
+    if explicit in {"suppressed", "unavailable"}:
         return str(explicit)
-    basis = int(value.get("selected_count") or value.get("selected_basis_count") or 0)
+    basis = int(
+        value.get("selected_total_count")
+        or value.get("selected_count")
+        or value.get("selected_basis_count")
+        or 0
+    )
     covered = value.get("selected_covered_count")
     if covered is None:
-        return "available" if value else "unavailable"
-    if int(covered or 0):
-        return "available"
-    return "suppressed" if basis else "unavailable"
+        return "available" if explicit == "available" or value else "unavailable"
+    covered_count = int(covered or 0)
+    if covered_count <= 0:
+        return "unavailable"
+    if basis and covered_count < basis:
+        return "partial"
+    return "available"
 
 
 def _corpus_phrase_family_fact(
@@ -1237,6 +1353,12 @@ def _compact_citable_facts(
         "unsanctioned_flags",
     ):
         family_fact = family_facts.get(family) or {}
+        if family in _CLASSIFIER_DERIVED_FAMILIES and not int(
+            family_fact.get("selected_covered_count")
+            or family_fact.get("selected_basis_count")
+            or 0
+        ):
+            continue
         labels = list(family_fact.get("labels") or [])
         if not labels:
             continue
@@ -1327,7 +1449,35 @@ def _compact_citable_facts(
                 unit="posts",
             )
         )
+    for fact in facts:
+        fact["coverage_scope"] = _fact_coverage_scope(
+            str(fact["family"]),
+            family_facts,
+            total_post_count=selected,
+        )
     return facts[:MAX_QUANTITATIVE_FACTS_PER_CANDIDATE]
+
+
+def _fact_coverage_scope(
+    family: str,
+    family_facts: Mapping[str, Any],
+    *,
+    total_post_count: int,
+) -> dict[str, Any]:
+    value = family_facts.get(family) or {}
+    if family in _CLASSIFIER_DERIVED_FAMILIES and family != "unsanctioned_flags":
+        covered = int(value.get("selected_covered_count") or 0)
+    elif family == "unsanctioned_flags":
+        covered = int(value.get("selected_basis_count") or 0)
+    elif family == "engagement":
+        covered = int((value.get("selected") or {}).get("eligible_count") or 0)
+    else:
+        covered = total_post_count
+    return {
+        "status": _enrichment_stage_status(covered, total_post_count),
+        "covered_post_count": covered,
+        "total_post_count": total_post_count,
+    }
 
 
 def _compact_label_fact(
@@ -2594,12 +2744,37 @@ def _fetch_evidence_rows(
                 LIMIT r.rank_limit
             )) WITH ORDINALITY AS ranked(tweet_id, stream_rank)
         ),
+        recent_stream AS (
+            SELECT
+                r.position,
+                r.candidate_id,
+                r.brand_key,
+                r.dominant_discourse,
+                r.dominant_sentiment,
+                ranked.tweet_id,
+                r.rank_limit + 1 AS official_rank,
+                r.rank_limit + 1 AS catalyst_rank,
+                r.rank_limit + 1 AS original_rank,
+                r.rank_limit + 1 AS discourse_rank,
+                r.rank_limit + 1 AS contrast_rank
+            FROM requested r
+            CROSS JOIN LATERAL unnest(ARRAY(
+                SELECT p.tweet_id::text
+                FROM candidate_pool pool
+                JOIN posts p ON p.tweet_id = pool.tweet_id
+                WHERE pool.position = r.position
+                ORDER BY p.created_at DESC, p.tweet_id ASC
+                LIMIT r.rank_limit
+            )) WITH ORDINALITY AS ranked(tweet_id, stream_rank)
+        ),
         stream_rows AS (
             SELECT * FROM seed_rows
             UNION ALL
             SELECT * FROM discourse_stream
             UNION ALL
             SELECT * FROM contrast_stream
+            UNION ALL
+            SELECT * FROM recent_stream
         ),
         bounded_ids AS (
             SELECT
@@ -2637,6 +2812,8 @@ def _fetch_evidence_rows(
                 p.text_zh_cn,
                 p.lang,
                 p.author_handle,
+                coalesce(pes.translation_status, 'pending')
+                    AS translation_status,
                 coalesce(pes.classification_status, 'pending')
                     AS classification_status,
                 p.quoted_text,
@@ -3301,6 +3478,7 @@ def _evidence_candidate(
     text_zh_cn = normalized_excerpt(
         row.get("text_zh_cn"), max_characters=excerpt_characters
     )
+    translation_status = str(row.get("translation_status") or "pending")
     classification_status = str(row.get("classification_status") or "pending")
     classifier_status = (
         "available" if classification_status == "succeeded" else classification_status
@@ -3319,6 +3497,8 @@ def _evidence_candidate(
         "excerpt": excerpt,
         "created_at": _iso_utc(row["created_at"]),
         "source_language": source_language,
+        "translation_status": translation_status,
+        "classification_status": classification_status,
         "original_text": post_text,
         "text_en": text_en,
         "text_zh_cn": text_zh_cn,
