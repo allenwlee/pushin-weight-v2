@@ -113,4 +113,5 @@ def test_escaped_regressions_are_named_permanent_seeds() -> None:
         "deepseek-select-deselect-restores-all",
         "mimo-seven-to-one-latest-wins",
         "unsanctioned-only-off-partition",
+        "hover-freeze-preserves-brand-and-restores-locale",
     }

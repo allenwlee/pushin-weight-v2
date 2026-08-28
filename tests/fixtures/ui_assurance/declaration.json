@@ -1,7 +1,7 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "7b9ede538fbd1f50ad7db165bb9d6e48d0b2537d",
+  "source_revision": "e2d48a2c642ccbf03407a7a1ecfd36161ab0f018",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
     "sha256": "d0fef546c3ec378cb8eec92f995db806a30934272d432e538a472654b55d4027"
@@ -25,7 +25,9 @@
     {"id":"bulk_action","kind":"action","values":["idle","all","clear"],"initial_value":"idle","reversible":false},
     {"id":"feed_text","kind":"single_select","values":["synthesis_collapsed","literal_expanded","source_expanded"],"initial_value":"synthesis_collapsed","reversible":true},
     {"id":"headline_detail","kind":"toggle","values":["collapsed","expanded"],"initial_value":"collapsed","reversible":true},
-    {"id":"role_badge","kind":"single_select","values":["none","official","staff","community"],"initial_value":"none","reversible":true}
+    {"id":"role_badge","kind":"single_select","values":["none","official","staff","community"],"initial_value":"none","reversible":true},
+    {"id":"chart_hover_freeze","kind":"single_select","values":["idle","hovered","frozen","released"],"initial_value":"idle","reversible":true},
+    {"id":"freeze_point","kind":"single_select","values":["none","first","same","other","empty"],"initial_value":"none","reversible":true}
   ],
   "coverage_groups": [
     {"id":"filter-core","controls":["brands","sentiment","post_type","unsanctioned"],"strength":2},
@@ -34,7 +36,8 @@
     {"id":"presentation-core","controls":["locale","window","timezone","brand_lens","nationalism_lens"],"strength":2},
     {"id":"chart-refresh-risk","controls":["brands","window","locale"],"strength":3},
     {"id":"flag-partition-risk","controls":["brands","unsanctioned","window"],"strength":3},
-    {"id":"feed-disclosure-risk","controls":["locale","feed_text","headline_detail","role_badge"],"strength":2}
+    {"id":"feed-disclosure-risk","controls":["locale","feed_text","headline_detail","role_badge"],"strength":2},
+    {"id":"hover-freeze-risk","controls":["brands","sentiment","locale","window","chart_hover_freeze","freeze_point"],"strength":2}
   ],
   "ordered_groups": [
     {"id":"chart-intent-order","actions":["brands:mimo","window:7","window:1"],"strength":3},
@@ -42,7 +45,9 @@
     {"id":"flag-reversal-order","actions":["unsanctioned:only","unsanctioned:off","window:1"],"strength":2},
     {"id":"preference-order","actions":["brands:minimax","timezone:ca","locale:zh_cn"],"strength":3},
     {"id":"zh-text-order","actions":["feed_text:synthesis_collapsed","feed_text:literal_expanded","feed_text:source_expanded"],"strength":3},
-    {"id":"headline-disclosure-order","actions":["headline_detail:collapsed","headline_detail:expanded","headline_detail:collapsed"],"strength":3}
+    {"id":"headline-disclosure-order","actions":["headline_detail:collapsed","headline_detail:expanded","headline_detail:collapsed"],"strength":3},
+    {"id":"hover-freeze-state-order","actions":["chart_hover_freeze:idle","chart_hover_freeze:hovered","chart_hover_freeze:frozen","chart_hover_freeze:released"],"strength":3},
+    {"id":"hover-freeze-point-order","actions":["freeze_point:first","freeze_point:same","freeze_point:other","freeze_point:empty"],"strength":2}
   ],
   "constraints": [],
   "invariants": [
@@ -52,19 +57,23 @@
     {"id":"latest-intent-wins","projections":["controls","chart","network"]},
     {"id":"locale-preserves-preferences","projections":["controls","persistence"]},
     {"id":"flagged-partition-is-exact","projections":["feed","counts","network"]},
-    {"id":"feed-disclosure-agrees","projections":["accessibility"]}
+    {"id":"feed-disclosure-agrees","projections":["accessibility"]},
+    {"id":"hover-freeze-agrees","projections":["controls","accessibility","feed","chart","network"]}
   ],
   "races": [
     {"id":"old-seven-day-after-new-one-day","older_action":"window:7","newer_action":"window:1","fault":"out_of_order"},
     {"id":"old-chart-delayed","older_action":"brands:__all__","newer_action":"brands:mimo","fault":"delayed"},
     {"id":"old-chart-fails","older_action":"window:7","newer_action":"window:1","fault":"failed"},
     {"id":"old-chart-aborts","older_action":"brands:deepseek","newer_action":"brands:mimo","fault":"aborted"},
-    {"id":"old-chart-duplicates","older_action":"window:7","newer_action":"window:1","fault":"duplicate"}
+    {"id":"old-chart-duplicates","older_action":"window:7","newer_action":"window:1","fault":"duplicate"},
+    {"id":"old-chart-after-freeze","older_action":"window:7","newer_action":"chart_hover_freeze:frozen","fault":"delayed"},
+    {"id":"old-frozen-feed-after-release","older_action":"chart_hover_freeze:frozen","newer_action":"chart_hover_freeze:released","fault":"out_of_order"}
   ],
   "seeded_regressions": [
     {"id":"deepseek-select-deselect-restores-all","actions":["pulse:deepseek:on","pulse:deepseek:off"],"invariants":["filter-state-agrees","feed-oracle-agrees","chart-oracle-agrees"]},
     {"id":"mimo-seven-to-one-latest-wins","actions":["window:7","brands:mimo","window:1"],"invariants":["filter-state-agrees","chart-oracle-agrees","latest-intent-wins"]},
-    {"id":"unsanctioned-only-off-partition","actions":["unsanctioned:only","unsanctioned:off"],"invariants":["filter-state-agrees","feed-oracle-agrees","flagged-partition-is-exact"]}
+    {"id":"unsanctioned-only-off-partition","actions":["unsanctioned:only","unsanctioned:off"],"invariants":["filter-state-agrees","feed-oracle-agrees","flagged-partition-is-exact"]},
+    {"id":"hover-freeze-preserves-brand-and-restores-locale","actions":["brands:qwen","chart_hover_freeze:frozen","freeze_point:same","freeze_point:other","chart_hover_freeze:released"],"invariants":["filter-state-agrees","hover-freeze-agrees","latest-intent-wins"]}
   ],
   "environments": [{"id":"desktop-chromium","browser_runtime":"playwright-chromium","required":true}],
   "gates": [

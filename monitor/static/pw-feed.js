@@ -34,6 +34,10 @@
     if (opts.sort) params.push('sort=' + encodeURIComponent(opts.sort));
     if (opts.order) params.push('order=' + encodeURIComponent(opts.order));
     if (opts.locale) params.push('locale=' + encodeURIComponent(opts.locale));
+    if (opts.freezeRange) {
+      params.push('freeze_start=' + encodeURIComponent(opts.freezeRange.start));
+      params.push('freeze_end=' + encodeURIComponent(opts.freezeRange.end));
+    }
     params.push('limit=' + (opts.limit || BATCH));
     if (filters) {
       params.push('filters=' + encodeURIComponent(JSON.stringify(filters)));
@@ -518,6 +522,13 @@
         active = null;
         return true;
       },
+      cancel: function () {
+        if (!active) return false;
+        release(active);
+        if (active.controller) active.controller.abort();
+        active = null;
+        return true;
+      },
     };
   }
 
@@ -577,14 +588,33 @@
     committedKey: null,
   };
   var requestGate = createRequestGate();
+  var freezeRange = null;
+  var pendingUnfreezeRefetch = false;
 
   function snapshotFilters(filters) {
     return JSON.parse(JSON.stringify(filters || {}));
   }
 
+  function hoverFreezeFilters(filters) {
+    var source = filters && typeof filters === 'object' && !Array.isArray(filters)
+      ? filters
+      : {};
+    return {
+      brands: Object.prototype.hasOwnProperty.call(source, 'brands')
+        ? snapshotFilters(source.brands)
+        : '__all__',
+      window: 1,
+    };
+  }
+
+  function requestFilters(filters) {
+    return freezeRange ? hoverFreezeFilters(filters) : snapshotFilters(filters);
+  }
+
   function requestKey(filters) {
     return JSON.stringify({
       filters: filters || {},
+      freeze: freezeRange,
       locale: currentLocale(),
       sort: state.sort,
       order: state.order,
@@ -609,6 +639,7 @@
       order: state.order,
       limit: BATCH,
       locale: currentLocale(),
+      freezeRange: freezeRange,
     });
     var brandScope = getBrandScope();
     if (brandScope) url += '&brand=' + encodeURIComponent(brandScope);
@@ -623,6 +654,21 @@
     var filters = event && event.detail && event.detail.filters;
     if (filters && typeof filters === 'object' && !Array.isArray(filters)) return filters;
     return (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
+  }
+
+  function setFeedTitle(text) {
+    var root = getFeedRoot();
+    var title = root && $('[data-pw-feed-title]', root);
+    if (title) title.textContent = text;
+  }
+
+  function restoreFeedTitle() {
+    var root = getFeedRoot();
+    if (!root) return;
+    var zh = ['zh_cn', 'zh-cn', 'zh_hans', 'zh-hans']
+      .indexOf(String(currentLocale()).toLowerCase()) !== -1;
+    setFeedTitle(root.getAttribute(zh ? 'data-pw-default-title-zh' : 'data-pw-default-title-en') ||
+      (zh ? '本窗口最新' : 'Latest in window'));
   }
 
   function showFeedStatus(kind) {
@@ -642,15 +688,15 @@
   }
 
   function runFeedRequest(filters, opts, commit) {
-    var requestFilters = snapshotFilters(filters);
+    var committedRequestFilters = requestFilters(filters);
     var ticket = requestGate.start(FETCH_TIMEOUT_MS);
     state.fetching = true;
     showFeedStatus('loading');
-    return fetchBatch(requestFilters, opts, ticket.signal)
+    return fetchBatch(committedRequestFilters, opts, ticket.signal)
       .then(function (payload) {
         if (!requestGate.isCurrent(ticket)) return false;
         if (!isFeedPayload(payload)) throw new Error('malformed feed payload');
-        commit(payload, requestFilters);
+        commit(payload, committedRequestFilters);
         hideFeedStatus();
         return true;
       })
@@ -674,8 +720,8 @@
     // replace the entire body. U4 (2026-07-16): pass the current
     // control-panel filter so the immediate refetch honors it (was
     // previously fetching the un-filtered feed on every toggle).
-    var requestFilters = filters || filtersForEvent();
-    return runFeedRequest(requestFilters, { cursor: null }, function (payload, committedFilters) {
+    var filterSnapshot = filters || filtersForEvent();
+    return runFeedRequest(filterSnapshot, { cursor: null }, function (payload, committedFilters) {
       replaceRows(body, payload.rows);
       state.cursor = payload.next_cursor;
       state.total = payload.rows.length;
@@ -727,7 +773,7 @@
         // Read the current cursor from the last rendered row
         // (covers filter changes that re-fetched the first page).
         var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
-        if (state.committedKey !== requestKey(filters)) {
+        if (state.committedKey !== requestKey(requestFilters(filters))) {
           clearAndRefetch(filters);
           return;
         }
@@ -776,13 +822,48 @@
 
   function wireFilterChange() {
     document.addEventListener('pw:filter-change', function (event) {
-      clearAndRefetch(filtersForEvent(event));
+      pendingUnfreezeRefetch = false;
+      var filters = filtersForEvent(event);
+      var effective = requestFilters(filters);
+      if (freezeRange && state.committedKey === requestKey(effective)) return;
+      clearAndRefetch(filters);
     });
     document.addEventListener('pw:locale-change', function () {
+      if (freezeRange) {
+        setFeedTitle(freezeRange.title);
+        return;
+      }
+      pendingUnfreezeRefetch = false;
       // Re-render existing rows; the JSON shape carries
       // text_translated already, so a full refetch is the simplest
       // path (cheaper than re-rendering cells with locale logic).
       clearAndRefetch();
+    });
+    document.addEventListener('pw:hover-freeze-start', function (event) {
+      var detail = event && event.detail;
+      if (!detail || !detail.start || !detail.end || !detail.title) return;
+      freezeRange = {
+        start: String(detail.start),
+        end: String(detail.end),
+        title: String(detail.title),
+      };
+      pendingUnfreezeRefetch = false;
+      stopAutoRefresh();
+      setFeedTitle(freezeRange.title);
+      clearAndRefetch(filtersForEvent());
+    });
+    document.addEventListener('pw:hover-freeze-end', function () {
+      if (!freezeRange) return;
+      requestGate.cancel();
+      freezeRange = null;
+      restoreFeedTitle();
+      startAutoRefresh();
+      pendingUnfreezeRefetch = true;
+      Promise.resolve().then(function () {
+        if (!pendingUnfreezeRefetch || freezeRange) return;
+        pendingUnfreezeRefetch = false;
+        clearAndRefetch(filtersForEvent());
+      });
     });
   }
 
@@ -796,7 +877,8 @@
     if (!root) return;
     var body = $('[data-pw-feed-body]', root);
     if (!body) return;
-    var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
+    if (freezeRange) return;
+    var filters = filtersForEvent();
     return runFeedRequest(filters, { cursor: null }, function (payload, committedFilters) {
         replaceRows(body, payload.rows);
         state.cursor = payload.next_cursor;
@@ -849,6 +931,7 @@
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+      buildQuery: buildQuery,
       createRequestGate: createRequestGate,
       formatRelative: formatRelative,
       formatLocalTooltip: formatLocalTooltip,
@@ -859,6 +942,7 @@
       replaceRows: replaceRows,
       isFeedPayload: isFeedPayload,
       renderRowHtml: renderRowHtml,
+      hoverFreezeFilters: hoverFreezeFilters,
     };
     return;
   }

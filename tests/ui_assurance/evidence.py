@@ -107,7 +107,13 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
         elif control in {"unsanctioned", "window"}:
             expected = int(value) if control == "window" else value
             assert observed["controls"][control] == expected
-        elif control in {"feed_text", "headline_detail", "role_badge"}:
+        elif control in {
+            "feed_text",
+            "headline_detail",
+            "role_badge",
+            "chart_hover_freeze",
+            "freeze_point",
+        }:
             assert observed["accessibility"][control] == value
         else:
             assert observed["persistence"][control] == value
@@ -162,6 +168,51 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         assert accessibility["headline_expanded"] is True
         assert accessibility["role_badge"] == "staff"
         assert accessibility["role_label"] == "staff"
+    elif invariant_id == "hover-freeze-agrees":
+        state = set_control(initial_state(), "brands", "qwen")
+        state = set_control(state, "sentiment", "negative")
+        state = set_control(state, "lang", "ja")
+        state = set_control(state, "unsanctioned", "only")
+        state = set_control(state, "freeze_point", "first")
+        frozen = projection(
+            fixture,
+            set_control(state, "chart_hover_freeze", "frozen"),
+        )
+        assert frozen["controls"]["sentiment"] == ["negative"]
+        assert frozen["controls"]["lang"] == ["ja"]
+        assert frozen["controls"]["unsanctioned"] == "only"
+        assert frozen["accessibility"]["locale_selected"] == []
+        assert frozen["accessibility"]["feed_title"] == "bucket_datetime"
+        assert frozen["network"]["effective_feed_filters"] == {
+            "brands": ["qwen"],
+            "window": 1,
+        }
+        assert frozen["network"]["chart_refresh_paused"] is True
+        assert frozen["network"]["feed_refresh_paused"] is True
+        assert frozen["network"]["bucket"] == "five-minute-half-open"
+
+        same_state = set_control(state, "chart_hover_freeze", "frozen")
+        same_state = set_control(same_state, "freeze_point", "same")
+        assert projection(fixture, same_state)["network"]["feed_refresh_paused"] is True
+
+        released_state = set_control(same_state, "freeze_point", "other")
+        released_state = set_control(
+            released_state, "chart_hover_freeze", "released"
+        )
+        released = projection(fixture, released_state)
+        assert released["accessibility"]["locale_selected"] == ["en"]
+        assert released["accessibility"]["feed_title"] == "default"
+        assert released["network"]["chart_refresh_paused"] is False
+        assert released["network"]["feed_refresh_paused"] is False
+        assert released["network"]["effective_feed_filters"] == released["controls"]
+
+        unavailable_state = set_control(state, "window", 7)
+        unavailable_state = set_control(
+            unavailable_state, "chart_hover_freeze", "frozen"
+        )
+        unavailable = projection(fixture, unavailable_state)
+        assert unavailable["network"]["chart_refresh_paused"] is False
+        assert unavailable["accessibility"]["locale_selected"] == ["en"]
     else:
         raise AssertionError(f"unimplemented invariant: {invariant_id}")
 
@@ -196,9 +247,13 @@ def _check_race(
         raise AssertionError(f"unimplemented race fault: {fault}")
     assert state["committed_generation"] == new
     expected = _apply_action(_apply_action(initial_state(), older_action), newer_action)
-    assert projection(fixture, state)["controls"] == projection(fixture, expected)[
-        "controls"
-    ]
+    observed_projection = projection(fixture, state)
+    expected_projection = projection(fixture, expected)
+    assert observed_projection["controls"] == expected_projection["controls"]
+    for key in ("chart_hover_freeze", "freeze_point", "locale_selected"):
+        assert observed_projection["accessibility"][key] == expected_projection[
+            "accessibility"
+        ][key]
 
 
 def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
@@ -222,6 +277,21 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         }
     elif seed_id == "unsanctioned-only-off-partition":
         _check_invariant(fixture, "flagged-partition-is-exact")
+    elif seed_id == "hover-freeze-preserves-brand-and-restores-locale":
+        state = set_control(initial_state(), "brands", "qwen")
+        state = set_control(state, "freeze_point", "first")
+        state = set_control(state, "chart_hover_freeze", "frozen")
+        frozen = projection(fixture, state)
+        assert frozen["controls"]["brands"] == ["qwen"]
+        assert frozen["accessibility"]["locale_selected"] == []
+        state = set_control(state, "freeze_point", "same")
+        assert projection(fixture, state)["network"]["feed_refresh_paused"] is True
+        state = set_control(state, "freeze_point", "other")
+        state = set_control(state, "chart_hover_freeze", "released")
+        released = projection(fixture, state)
+        assert released["controls"]["brands"] == ["qwen"]
+        assert released["accessibility"]["locale_selected"] == ["en"]
+        assert released["network"]["feed_refresh_paused"] is False
     else:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 
@@ -277,6 +347,14 @@ def _check_ordered(
     elif group_id == "headline-disclosure-order":
         assert observed["accessibility"]["headline_detail"] == last_value(
             "headline_detail"
+        )
+    elif group_id == "hover-freeze-state-order":
+        assert observed["accessibility"]["chart_hover_freeze"] == last_value(
+            "chart_hover_freeze"
+        )
+    elif group_id == "hover-freeze-point-order":
+        assert observed["accessibility"]["freeze_point"] == last_value(
+            "freeze_point"
         )
     else:
         raise AssertionError(f"unimplemented ordered group: {group_id}")

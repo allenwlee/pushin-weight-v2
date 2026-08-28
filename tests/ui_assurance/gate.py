@@ -22,6 +22,10 @@ FOCUSED_TESTS = [
     "tests/test_cyber_quan_icon_contract.py",
     "tests/test_cyber_quan_visual_regression.py",
     "tests/test_trend_narrative_projection_fallback_names.py",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_feed_range_is_half_open_and_keeps_only_brand_filter",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_feed_range_rejects_invalid_or_out_of_horizon_values",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_click_persists_then_restores_the_mobile_home",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_zh_cn_datetime_and_restore_at_320px",
 ]
 FULL_ADDITIONAL_TESTS = [
     "tests/test_home_chart_pulse.py",

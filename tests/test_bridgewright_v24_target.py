@@ -12,6 +12,8 @@ CHART_CONTRACT = "docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewr
 PREFERENCES_UI_CONTRACT = "docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md"
 PULSE_FEED_TIMEZONE_CONTRACT = "docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md"
 CYBER_QUAN_CONTRACT = "docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md"
+FEED_HEADLINE_CONTRACT = "docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md"
+HOVER_FREEZE_CONTRACT = "docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md"
 
 
 def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
@@ -20,7 +22,9 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == CYBER_QUAN_CONTRACT
+    assert authorities["last_approved_contract"] == HOVER_FREEZE_CONTRACT
+    assert HOVER_FREEZE_CONTRACT in authorities["approved_product_intent"]
+    assert FEED_HEADLINE_CONTRACT in authorities["approved_product_intent"]
     assert CYBER_QUAN_CONTRACT in authorities["approved_product_intent"]
     assert PULSE_FEED_TIMEZONE_CONTRACT in authorities["approved_product_intent"]
     assert PREFERENCES_UI_CONTRACT in authorities["approved_product_intent"]
@@ -53,6 +57,14 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.cyber-quan-icons",
             "description": "Owner-approved icon-only Cyber-Quan replacement and compact masthead mark.",
+        },
+        {
+            "key": "production.home.feed-headline-usability",
+            "description": "Owner-approved bounded feed text, headline disclosure, semantic option icons, account roles, and one-line identity delta.",
+        },
+        {
+            "key": "production.home.chart-hover-freeze",
+            "description": "Owner-approved one-day point freeze, local and Beijing datetime tooltip, brand-only bucket feed, and exact transient-state restoration delta.",
         },
         {
             "key": "trend.headline",
@@ -124,3 +136,21 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "exactly these 32 symbols" in cyber_quan_contract
     assert "mark A (`mark-quiet`)" in cyber_quan_contract
     assert "physical iPhone" in cyber_quan_contract
+
+    feed_headline_contract = (
+        REPO_ROOT / FEED_HEADLINE_CONTRACT
+    ).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in feed_headline_contract
+    assert "at most nine lines on mobile" in feed_headline_contract
+    assert "schema-3 secondary starts hidden" in feed_headline_contract
+    assert "rough credential-badge symbol" in feed_headline_contract
+
+    hover_freeze_contract = (
+        REPO_ROOT / HOVER_FREEZE_CONTRACT
+    ).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in hover_freeze_contract
+    assert "e2d48a2c642ccbf03407a7a1ecfd36161ab0f018" in hover_freeze_contract
+    assert "exact half-open five-minute bucket" in hover_freeze_contract
+    assert "browser-local datetime" in hover_freeze_contract
+    assert "preserves the active brand selection" in hover_freeze_contract
+    assert "7-, 30-, and 365-day charts" in hover_freeze_contract

@@ -123,3 +123,42 @@ def test_every_multi_select_bulk_clear_and_all_is_reversible() -> None:
         restored = bulk_action(cleared, control, "all")
         assert cleared["filters"][control] == []
         assert restored["filters"][control] == ALL
+
+
+def test_hover_freeze_is_transient_brand_only_and_one_day_only() -> None:
+    state = set_control(initial_state(), "brands", "qwen")
+    state = set_control(state, "sentiment", "negative")
+    state = set_control(state, "lang", "ja")
+    state = set_control(state, "unsanctioned", "only")
+    state = set_control(state, "freeze_point", "first")
+    frozen_state = set_control(state, "chart_hover_freeze", "frozen")
+    frozen = projection(FIXTURE, frozen_state)
+
+    assert frozen["controls"]["sentiment"] == ["negative"]
+    assert frozen["controls"]["lang"] == ["ja"]
+    assert frozen["controls"]["unsanctioned"] == "only"
+    assert frozen["network"]["effective_feed_filters"] == {
+        "brands": ["qwen"],
+        "window": 1,
+    }
+    assert frozen["network"]["chart_refresh_paused"] is True
+    assert frozen["network"]["feed_refresh_paused"] is True
+    assert frozen["accessibility"]["locale_selected"] == []
+
+    same_state = set_control(frozen_state, "freeze_point", "same")
+    assert projection(FIXTURE, same_state)["network"]["feed_refresh_paused"] is True
+
+    released_state = set_control(same_state, "freeze_point", "other")
+    released_state = set_control(
+        released_state, "chart_hover_freeze", "released"
+    )
+    released = projection(FIXTURE, released_state)
+    assert released["controls"] == frozen["controls"]
+    assert released["network"]["chart_refresh_paused"] is False
+    assert released["network"]["feed_refresh_paused"] is False
+    assert released["accessibility"]["locale_selected"] == ["en"]
+
+    unavailable_state = set_control(frozen_state, "window", 7)
+    unavailable = projection(FIXTURE, unavailable_state)
+    assert unavailable["network"]["chart_refresh_paused"] is False
+    assert unavailable["network"]["feed_refresh_paused"] is False

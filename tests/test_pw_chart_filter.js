@@ -164,11 +164,36 @@ function parsePayload(html) {
 }
 
 function makeCanvas(data) {
+  const attrs = {};
   return {
     tagName: 'CANVAS',
     _payload: data,
-    getAttribute(name) { return name === 'data-home' ? JSON.stringify(this._payload) : null; },
+    getAttribute(name) {
+      if (name === 'data-home') return JSON.stringify(this._payload);
+      return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
+    },
+    setAttribute(name, value) { attrs[name] = String(value); },
+    removeAttribute(name) { delete attrs[name]; },
     getContext() { return {}; },
+  };
+}
+
+function makeLocaleButton(active) {
+  const attrs = {};
+  let isActive = Boolean(active);
+  return {
+    classList: {
+      contains(name) { return name === 'is-active' && isActive; },
+      remove(name) { if (name === 'is-active') isActive = false; },
+      toggle(name, force) {
+        if (name === 'is-active') isActive = force === undefined ? !isActive : Boolean(force);
+      },
+    },
+    getAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
+    },
+    setAttribute(name, value) { attrs[name] = String(value); },
+    removeAttribute(name) { delete attrs[name]; },
   };
 }
 
@@ -310,6 +335,8 @@ function makeSandbox(options = {}) {
   const fetchQueue = [];
   const charts = [];
   const intervals = [];
+  const dispatched = [];
+  const localeButtons = [makeLocaleButton(true), makeLocaleButton(false), makeLocaleButton(false)];
   let filters = { brands: '__all__', window: 1 };
   let tzMode = options.tzMode || 'local';
   const comparison = options.comparison || {
@@ -325,6 +352,34 @@ function makeSandbox(options = {}) {
     this.config = config;
     this.data = config.data;
     this.destroyed = false;
+    this.activeElements = [];
+    this.tooltipActiveElements = [];
+    this.hitElements = [];
+    this.updateCalls = [];
+    this.setActiveElements = function (elements) { this.activeElements = elements; };
+    this.tooltip = {
+      setActiveElements: (elements, position) => {
+        this.tooltipActiveElements = elements;
+        this.tooltipPosition = position;
+      },
+    };
+    this.getElementsAtEventForMode = function (_event, mode, options) {
+      this.lastHitMode = mode;
+      this.lastHitOptions = options;
+      return this.hitElements;
+    };
+    this.getDatasetMeta = function (datasetIndex) {
+      return {
+        hidden: false,
+        data: this.data.datasets[datasetIndex].data.map((value, index) => ({
+          x: index,
+          y: Number(value) || 0,
+          getCenterPoint() { return { x: this.x, y: this.y }; },
+        })),
+      };
+    };
+    this.isDatasetVisible = function () { return true; };
+    this.update = function (mode) { this.updateCalls.push(mode); };
     this.destroy = function () { this.destroyed = true; };
     charts.push(this);
     return this;
@@ -348,11 +403,13 @@ function makeSandbox(options = {}) {
     readyState: 'complete',
     addEventListener(event, fn) { (listeners[event] ||= []).push(fn); },
     dispatchEvent(event) {
+      dispatched.push(event);
       (listeners[event.type] || []).forEach((fn) => fn(event));
       return true;
     },
     querySelectorAll(selector) {
       if (selector === 'canvas.home-chart') return options.noRoot ? [] : [region.querySelector('canvas.home-chart')];
+      if (selector === '[data-pw-locale-btn]') return localeButtons;
       return [];
     },
     querySelector(selector) {
@@ -370,10 +427,17 @@ function makeSandbox(options = {}) {
       return node;
     },
     getElementById(id) { return options.legacy && id === 'home-chart' ? region : null; },
-    body: {
+    body: (() => {
+      const attrs = { 'data-pw-locale': options.locale || 'en' };
+      return {
       addEventListener() {},
-      getAttribute(name) { return name === 'data-pw-locale' ? (options.locale || 'en') : null; },
-    },
+      getAttribute(name) {
+        return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
+      },
+      setAttribute(name, value) { attrs[name] = String(value); },
+      removeAttribute(name) { delete attrs[name]; },
+      };
+    })(),
     documentElement: { getAttribute() { return null; } },
   };
 
@@ -389,7 +453,9 @@ function makeSandbox(options = {}) {
     setTimeout,
     clearTimeout,
     setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; },
-    clearInterval() {},
+    clearInterval(id) {
+      if (intervals[id - 1]) intervals[id - 1].cleared = true;
+    },
     window: {
       pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } },
       pwIcon: {
@@ -433,7 +499,7 @@ function makeSandbox(options = {}) {
   vm.runInContext(src, sandbox, { filename: 'pw-chart.js' });
   return {
     sandbox, document, region, pulseBar, pulseStatus, headline, legend, fetchCalls,
-    fetchQueue, charts, intervals,
+    fetchQueue, charts, intervals, localeButtons, dispatched,
     setFilters(value) { filters = value; },
   };
 }
@@ -562,6 +628,137 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   const sevenDay = makeSandbox({ initial: payload(7, 4, 'qwen') });
   assert(JSON.stringify(Object.keys(sevenDay.charts[0].config.options.scales).sort()) === JSON.stringify(['x', 'y']),
     'non-1d config keeps the existing single date axis');
+
+  console.log('--- one-day hover freeze lifecycle ---');
+  const freezePayload = payload(1, 9, 'qwen');
+  freezePayload.series.qwen[freezePayload.days.length - 2] = 3;
+  const freeze = makeSandbox({ initial: freezePayload });
+  const freezeChart = freeze.charts[0];
+  const freezeIndex = freezePayload.days.length - 1;
+  const priorIndex = freezeIndex - 1;
+  const tooltipTitle = freezeChart.config.options.plugins.tooltip.callbacks.title([{
+    dataIndex: freezeIndex,
+    label: freezePayload.days[freezeIndex],
+  }]);
+  assert(Array.isArray(tooltipTitle) && tooltipTitle.length === 2 &&
+    tooltipTitle[0].startsWith('Local: ') && tooltipTitle[1].startsWith('Beijing: '),
+    'one-day tooltip identifies prettified browser-local and Beijing datetimes');
+  assert(tooltipTitle.every((line) => !line.includes('T') && !line.includes('Z')),
+    'tooltip does not expose raw ISO datetime text');
+  const zhFreeze = makeSandbox({ initial: freezePayload, locale: 'zh_cn' });
+  const zhTooltipTitle = zhFreeze.charts[0].config.options.plugins.tooltip.callbacks.title([{
+    dataIndex: freezeIndex,
+    label: freezePayload.days[freezeIndex],
+  }]);
+  assert(zhTooltipTitle[0].startsWith('本地 ') && zhTooltipTitle[1].startsWith('北京 '),
+    'zh-CN tooltip identifies local and Beijing datetime rows in Chinese');
+
+  freezeChart.hitElements = [{ datasetIndex: 0, index: freezeIndex }];
+  freezeChart.config.options.onClick({ native: { type: 'click' } }, [], freezeChart);
+  const startEvents = freeze.dispatched.filter((event) => event.type === 'pw:hover-freeze-start');
+  assert(startEvents.length === 1 &&
+    startEvents[0].detail.start === new Date(freezePayload.days[freezeIndex]).toISOString() &&
+    Date.parse(startEvents[0].detail.end) - Date.parse(startEvents[0].detail.start) === 5 * 60 * 1000,
+    'clicking an exact one-day point emits its half-open five-minute range');
+  assert(freezeChart.lastHitMode === 'nearest' &&
+    freezeChart.lastHitOptions.intersect === true &&
+    freezeChart.lastHitOptions.axis === 'xy',
+  'dense phone points resolve by nearest exact geometry instead of first overlapping index');
+  assert(startEvents[0].detail.title.includes('Local: ') &&
+    startEvents[0].detail.title.includes('Beijing: '),
+    'frozen feed title uses the same local and Beijing datetime');
+  assert(freeze.document.body.getAttribute('data-pw-hover-freeze') === 'true' &&
+    freeze.region.querySelector('canvas.home-chart').getAttribute('data-pw-hover-freeze-index') === String(freezeIndex),
+    'frozen state is exposed on the body and exact canvas point');
+  assert(freeze.localeButtons.every((button) =>
+    !button.classList.contains('is-active') && button.getAttribute('aria-pressed') === 'false'),
+    'locale controls are visually and semantically unselected while frozen');
+  assert(freeze.intervals[0].cleared === true,
+    'starting hover freeze pauses the owned chart refresh timer');
+  assert(freezeChart.activeElements.length === 1 &&
+    freezeChart.tooltipActiveElements.length === 1,
+    'the selected chart point and tooltip remain programmatically active');
+
+  freeze.document.dispatchEvent(new freeze.sandbox.CustomEvent('pw:filter-change', {
+    detail: { filters: { brands: ['qwen'], sentiment: ['negative'], window: 1 } },
+  }));
+  assert(freeze.fetchCalls.length === 0,
+    'filter changes cannot replace the chart while hover freeze is active');
+  freeze.localeButtons[1].classList.toggle('is-active', true);
+  freeze.document.dispatchEvent(new freeze.sandbox.CustomEvent('pw:locale-change', {
+    detail: { locale: 'zh_cn' },
+  }));
+  assert(freeze.fetchCalls.length === 0 && freeze.localeButtons.every((button) =>
+    !button.classList.contains('is-active')),
+  'programmatic locale changes neither refetch nor expose a selected locale while frozen');
+  freezeChart.activeElements = [];
+  freezeChart.tooltipActiveElements = [];
+  const freezePlugin = freezeChart.config.plugins.find((plugin) => plugin.id === 'pwHoverFreeze');
+  const pluginArgs = {};
+  freezePlugin.afterEvent(freezeChart, pluginArgs);
+  assert(freezeChart.activeElements.length === 1 &&
+    freezeChart.tooltipActiveElements.length === 1 && pluginArgs.changed === true,
+    'chart events reassert the frozen point and persistent tooltip');
+
+  freezeChart.config.options.onClick({ native: { type: 'click' } }, [], freezeChart);
+  assert(freeze.dispatched.filter((event) => event.type === 'pw:hover-freeze-end').length === 0 &&
+    freeze.document.body.getAttribute('data-pw-hover-freeze') === 'true',
+    'clicking the same frozen point keeps hover freeze active');
+
+  freezeChart.hitElements = [{ datasetIndex: 0, index: priorIndex }];
+  freezeChart.config.options.onClick({ native: { type: 'click' } }, [], freezeChart);
+  assert(freeze.dispatched.filter((event) => event.type === 'pw:hover-freeze-end').length === 1 &&
+    freeze.document.body.getAttribute('data-pw-hover-freeze') === null,
+    'clicking a different chart point releases instead of silently switching the bucket');
+  assert(freeze.localeButtons[0].classList.contains('is-active') &&
+    freeze.localeButtons.slice(1).every((button) => !button.classList.contains('is-active')) &&
+    freeze.localeButtons.every((button) => button.getAttribute('aria-pressed') === null),
+    'release restores the exact locale selection and original ARIA state');
+  assert(freeze.intervals.length === 2 && !freeze.intervals[1].cleared,
+    'release restarts exactly one chart refresh timer');
+
+  freezeChart.hitElements = [{ datasetIndex: 0, index: freezeIndex }];
+  freezeChart.config.options.onClick({ native: { type: 'click' } }, [], freezeChart);
+  freeze.document.dispatchEvent({ type: 'click', target: {} });
+  assert(freeze.dispatched.filter((event) => event.type === 'pw:hover-freeze-end').length === 2,
+    'a click outside the frozen canvas releases the view before downstream handlers');
+
+  freezeChart.hitElements = [{ datasetIndex: 0, index: freezeIndex }];
+  freezeChart.config.options.onClick({ native: { type: 'click' } }, [], freezeChart);
+  freezeChart.hitElements = [];
+  freezeChart.config.options.onClick({ native: { type: 'click' } }, [], freezeChart);
+  assert(freeze.dispatched.filter((event) => event.type === 'pw:hover-freeze-end').length === 3,
+    'clicking empty chart space also releases hover freeze');
+  assert(freeze.intervals.length === 4 &&
+    freeze.intervals.slice(0, -1).every((timer) => timer.cleared) &&
+    !freeze.intervals[freeze.intervals.length - 1].cleared,
+  'repeated freeze cycles retain one and only one live chart refresh timer');
+
+  const freezeRace = makeSandbox({ initial: freezePayload });
+  const staleChartResponse = deferred();
+  freezeRace.fetchQueue.push(staleChartResponse.promise);
+  freezeRace.document.dispatchEvent(new freezeRace.sandbox.CustomEvent('pw:filter-change', {
+    detail: { filters: { brands: ['qwen'], window: 7 } },
+  }));
+  const freezeRaceChart = freezeRace.charts[0];
+  freezeRaceChart.hitElements = [{ datasetIndex: 0, index: freezeIndex }];
+  freezeRaceChart.config.options.onClick(
+    { native: { type: 'click' } }, [], freezeRaceChart
+  );
+  staleChartResponse.resolve(await response(payload(7, 12, 'stale')));
+  await flush();
+  assert(freezeRace.region.currentPayload.window_days === 1 &&
+    freezeRace.document.body.getAttribute('data-pw-hover-freeze') === 'true',
+  'an in-flight chart response cannot replace a newly frozen one-day chart');
+  freezeRace.document.dispatchEvent({ type: 'click', target: {} });
+
+  const noFreezePayload = payload(7, 4, 'qwen');
+  const noFreeze = makeSandbox({ initial: noFreezePayload });
+  const noFreezeChart = noFreeze.charts[0];
+  noFreezeChart.hitElements = [{ datasetIndex: 0, index: noFreezePayload.days.length - 1 }];
+  noFreezeChart.config.options.onClick({ native: { type: 'click' } }, [], noFreezeChart);
+  assert(noFreeze.dispatched.every((event) => event.type !== 'pw:hover-freeze-start'),
+    '7/30/365-style non-one-day payloads cannot enter hover freeze');
 
   console.log('--- filter request + timed refresh ownership ---');
   const base = makeSandbox();

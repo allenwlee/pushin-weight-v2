@@ -15,7 +15,7 @@ import json
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from threading import Lock
 from time import monotonic
@@ -39,6 +39,7 @@ from django.db.models.functions import Coalesce
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
@@ -553,6 +554,8 @@ def _get_feed_posts(
     window_days: int | None = None,
     brand_nickname: str | None = None,
     limit: int = FEED_DEFAULT_LIMIT,
+    created_at_start: datetime | None = None,
+    created_at_end: datetime | None = None,
 ) -> QuerySet:
     """Return a QuerySet of Posts for the feed view, with brand and account prefetching.
 
@@ -560,6 +563,8 @@ def _get_feed_posts(
         window_days: optional time window filter
         brand_nickname: optional single-brand scope
         limit: max rows to return
+        created_at_start: optional inclusive lower bound
+        created_at_end: optional exclusive upper bound
     """
     cutoff = None
     if window_days:
@@ -581,7 +586,11 @@ def _get_feed_posts(
         )
     )
 
-    if cutoff:
+    if created_at_start is not None:
+        qs = qs.filter(created_at__gte=created_at_start)
+    if created_at_end is not None:
+        qs = qs.filter(created_at__lt=created_at_end)
+    if cutoff and created_at_start is None and created_at_end is None:
         qs = qs.filter(created_at__gte=cutoff)
     if brand_nickname:
         qs = qs.filter(brands__brand__nickname=brand_nickname).distinct()
@@ -1348,6 +1357,47 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
     if window in ALLOWED_HOME_WINDOWS:
         out["window"] = window
     return out
+
+
+_HOVER_FREEZE_MAX_DURATION = timedelta(minutes=5)
+_HOVER_FREEZE_HORIZON_TOLERANCE = timedelta(minutes=5)
+
+
+def _parse_hover_freeze_range(
+    request: HttpRequest,
+    *,
+    window_days: int,
+    now: datetime | None = None,
+) -> tuple[datetime, datetime] | None:
+    """Validate the transient one-day chart bucket used by the public feed."""
+    raw_start = request.GET.get("freeze_start")
+    raw_end = request.GET.get("freeze_end")
+    if not raw_start and not raw_end:
+        return None
+    if not raw_start or not raw_end or window_days != 1:
+        raise ValueError("invalid hover-freeze range")
+
+    start = parse_datetime(raw_start)
+    end = parse_datetime(raw_end)
+    if (
+        start is None
+        or end is None
+        or not django_timezone.is_aware(start)
+        or not django_timezone.is_aware(end)
+    ):
+        raise ValueError("invalid hover-freeze range")
+    start = start.astimezone(UTC)
+    end = end.astimezone(UTC)
+    duration = end - start
+    if duration <= timedelta(0) or duration > _HOVER_FREEZE_MAX_DURATION:
+        raise ValueError("invalid hover-freeze range")
+
+    current = (now or django_timezone.now()).astimezone(UTC)
+    horizon_start = current - timedelta(days=1) - _HOVER_FREEZE_HORIZON_TOLERANCE
+    horizon_end = current + _HOVER_FREEZE_HORIZON_TOLERANCE
+    if start < horizon_start or end > horizon_end:
+        raise ValueError("invalid hover-freeze range")
+    return start, end
 
 
 _HOME_MULTI_VALUE_FILTERS: tuple[str, ...] = (
@@ -2467,6 +2517,20 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
+    try:
+        freeze_range = _parse_hover_freeze_range(
+            request,
+            window_days=window_days,
+        )
+    except ValueError:
+        return JsonResponse({"error": "invalid hover-freeze range"}, status=400)
+    if freeze_range is not None:
+        normalized = _normalize_home_filters(filters)
+        filters = {
+            "brands": normalized.get("brands", "__all__"),
+            "unsanctioned": "any",
+            "window": 1,
+        }
 
     # Parse pagination params
     cursor = request.GET.get("cursor") or None
@@ -2493,9 +2557,11 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
 
     # Get all posts in the window
     all_posts = _get_feed_posts(
-        window_days=window_days,
+        window_days=None if freeze_range is not None else window_days,
         brand_nickname=brand_nickname,
         limit=FEED_HARD_CAP,
+        created_at_start=freeze_range[0] if freeze_range is not None else None,
+        created_at_end=freeze_range[1] if freeze_range is not None else None,
     )
 
     # Enrich with classifications for filtering

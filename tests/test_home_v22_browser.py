@@ -28,7 +28,7 @@ from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
-from core.models import Post
+from core.models import Post, PostBrand
 from monitor.views import MODEL_DISPLAY_NAMES, _clear_home_pulse_cache
 from tests.mockup_spec import DEFAULT_SOURCE, MockupSpec, load_spec
 from tests.shell_diff import AUTHORED_REGIONS, parse_rendered_html, select_one
@@ -3095,6 +3095,416 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row["nat_us"], "mild_pro")
         self.assertIn("genuine_hype", str(row["classifications"]))
         self.assertTrue(row["engagement_pretty"]["followers"])
+
+    def test_hover_freeze_feed_range_is_half_open_and_keeps_only_brand_filter(
+        self,
+    ) -> None:
+        from django.utils import timezone
+
+        now = timezone.now()
+        start = now - timedelta(hours=2)
+        end = start + timedelta(minutes=5)
+        start_id = "v22-metadata-001"  # flagged; unsanctioned=off must be ignored.
+        inside_id = self.fixture["replacement_id"]
+        end_id = self.fixture["brand_scope_id"]
+        before_id = "v22-metadata-003"
+        Post.objects.filter(tweet_id=start_id).update(created_at=start)
+        Post.objects.filter(tweet_id=inside_id).update(
+            created_at=start + timedelta(minutes=2)
+        )
+        Post.objects.filter(tweet_id=end_id).update(created_at=end)
+        Post.objects.filter(tweet_id=before_id).update(
+            created_at=start - timedelta(microseconds=1)
+        )
+        PostBrand.objects.get_or_create(post_id=start_id, brand_id="qwen")
+
+        conflicting_filters = {
+            "brands": "__all__",
+            "sentiment": [],
+            "post_types": [],
+            "role": ["staff"],
+            "lang": ["ja"],
+            "discourse": ["sarcasm"],
+            "cn_nationalism": ["anti"],
+            "us_nationalism": ["anti"],
+            "unsanctioned": "off",
+            "window": 1,
+        }
+        all_payload = self._feed_payload(
+            limit=50,
+            window=1,
+            freeze_start=start.isoformat(),
+            freeze_end=end.isoformat(),
+            filters=json.dumps(conflicting_filters),
+        )
+        self.assertEqual(
+            [row["tweet_id"] for row in all_payload["rows"]],
+            [inside_id, start_id],
+        )
+        self.assertEqual(
+            all_payload["applied_filters"],
+            {"brands": "__all__", "unsanctioned": "any", "window": 1},
+        )
+
+        qwen_payload = self._feed_payload(
+            limit=50,
+            window=1,
+            freeze_start=start.isoformat(),
+            freeze_end=end.isoformat(),
+            filters=json.dumps({**conflicting_filters, "brands": ["qwen"]}),
+        )
+        self.assertEqual(
+            [row["tweet_id"] for row in qwen_payload["rows"]],
+            [start_id],
+        )
+        self.assertFalse(qwen_payload["has_more"])
+        self.assertIsNone(qwen_payload["next_cursor"])
+
+    def test_hover_freeze_feed_range_rejects_invalid_or_out_of_horizon_values(
+        self,
+    ) -> None:
+        from django.utils import timezone
+
+        now = timezone.now()
+        valid_start = now - timedelta(hours=2)
+        valid_end = valid_start + timedelta(minutes=5)
+        cases = {
+            "missing_end": {
+                "window": 1,
+                "freeze_start": valid_start.isoformat(),
+            },
+            "malformed": {
+                "window": 1,
+                "freeze_start": "not-a-date",
+                "freeze_end": valid_end.isoformat(),
+            },
+            "naive": {
+                "window": 1,
+                "freeze_start": valid_start.replace(tzinfo=None).isoformat(),
+                "freeze_end": valid_end.replace(tzinfo=None).isoformat(),
+            },
+            "reversed": {
+                "window": 1,
+                "freeze_start": valid_end.isoformat(),
+                "freeze_end": valid_start.isoformat(),
+            },
+            "too_long": {
+                "window": 1,
+                "freeze_start": valid_start.isoformat(),
+                "freeze_end": (valid_start + timedelta(minutes=6)).isoformat(),
+            },
+            "wrong_window": {
+                "window": 7,
+                "freeze_start": valid_start.isoformat(),
+                "freeze_end": valid_end.isoformat(),
+            },
+            "too_old": {
+                "window": 1,
+                "freeze_start": (now - timedelta(days=2)).isoformat(),
+                "freeze_end": (now - timedelta(days=2) + timedelta(minutes=5)).isoformat(),
+            },
+            "future": {
+                "window": 1,
+                "freeze_start": (now + timedelta(hours=1)).isoformat(),
+                "freeze_end": (now + timedelta(hours=1, minutes=5)).isoformat(),
+            },
+        }
+        client = Client(HTTP_HOST="localhost")
+        for name, params in cases.items():
+            with self.subTest(case=name):
+                response = client.get("/feed/?" + urlencode(params))
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json(), {"error": "invalid hover-freeze range"})
+
+    def test_hover_freeze_click_persists_then_restores_the_mobile_home(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context(
+                viewport=VIEWPORTS["mobile"],
+                timezone_id="Asia/Tokyo",
+            )
+            _freeze_clock(context)
+            page_errors: list[str] = []
+            console_errors: list[str] = []
+            page = context.new_page()
+            page.on("pageerror", lambda error: page_errors.append(str(error)))
+            page.on(
+                "console",
+                lambda message: console_errors.append(message.text)
+                if message.type == "error" and "favicon.ico" not in message.text
+                else None,
+            )
+            try:
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                page.wait_for_function(
+                    """() => {
+                      const canvas = document.querySelector('canvas.home-chart');
+                      return Boolean(window.Chart && canvas && Chart.getChart(canvas));
+                    }"""
+                )
+                initial_locale = page.locator(
+                    "[data-pw-locale-btn].is-active"
+                ).get_attribute("data-pw-locale-btn")
+                self.assertEqual(initial_locale, "en")
+                self.assertEqual(
+                    page.locator("[data-pw-feed-title]").text_content(),
+                    "Latest in window",
+                )
+                initial_brands = page.evaluate("window.pwFilter.get().brands")
+
+                # Mutate stored non-brand filters without redrawing the chart.
+                # The frozen feed request must discard every one of them.
+                page.evaluate(
+                    """() => {
+                      window.pwFilter.state.sentiment = ['negative'];
+                      window.pwFilter.state.lang = ['ja'];
+                      window.pwFilter.state.role = ['staff'];
+                      window.pwFilter.state.unsanctioned = 'off';
+                    }"""
+                )
+                point = page.evaluate(
+                    """() => {
+                      const canvas = document.querySelector('canvas.home-chart');
+                      const chart = Chart.getChart(canvas);
+                      for (let datasetIndex = 0; datasetIndex < chart.data.datasets.length; datasetIndex += 1) {
+                        const dataset = chart.data.datasets[datasetIndex];
+                        if (!dataset._isTotalLine) continue;
+                        for (let index = dataset.data.length - 1; index >= 0; index -= 1) {
+                          if (!Number.isFinite(Number(dataset.data[index]))) continue;
+                          const element = chart.getDatasetMeta(datasetIndex).data[index];
+                          const center = element.getCenterPoint();
+                          const rect = canvas.getBoundingClientRect();
+                          return {
+                            x: rect.left + center.x,
+                            y: rect.top + center.y,
+                            index,
+                          };
+                        }
+                      }
+                      return null;
+                    }"""
+                )
+                self.assertIsNotNone(point, "one-day chart has no tappable production point")
+
+                with page.expect_response(
+                    lambda response: response.request.resource_type == "fetch"
+                    and "/feed/?" in response.url
+                    and "freeze_start=" in response.url
+                ) as frozen_response_info:
+                    page.mouse.click(point["x"], point["y"])
+                frozen_response = frozen_response_info.value
+                self.assertEqual(frozen_response.status, 200)
+                frozen_payload = frozen_response.json()
+                frozen_query = parse_qs(urlparse(frozen_response.url).query)
+                frozen_filters = json.loads(frozen_query["filters"][0])
+                self.assertEqual(
+                    frozen_filters,
+                    {"brands": initial_brands, "window": 1},
+                )
+                self.assertEqual(
+                    datetime.fromisoformat(frozen_query["freeze_end"][0])
+                    - datetime.fromisoformat(frozen_query["freeze_start"][0]),
+                    timedelta(minutes=5),
+                )
+                expected_ids = [row["tweet_id"] for row in frozen_payload["rows"]]
+                self.assertGreater(len(expected_ids), 0)
+                page.wait_for_function(
+                    "expected => [...document.querySelectorAll('.feed-row[data-tweet-id]')].map(row => row.dataset.tweetId).join('|') === expected.join('|')",
+                    arg=expected_ids,
+                )
+
+                self.assertEqual(
+                    page.locator("[data-pw-locale-btn].is-active").count(),
+                    0,
+                )
+                self.assertTrue(
+                    page.locator("[data-pw-locale-btn]").evaluate_all(
+                        "buttons => buttons.every(button => button.getAttribute('aria-pressed') === 'false')"
+                    )
+                )
+                frozen_title = page.locator("[data-pw-feed-title]").text_content() or ""
+                self.assertIn("Local:", frozen_title)
+                self.assertIn("Beijing:", frozen_title)
+                self.assertNotIn("T", frozen_title)
+                self.assertEqual(
+                    page.locator("body").get_attribute("data-pw-hover-freeze"),
+                    "true",
+                )
+                self.assertTrue(
+                    page.evaluate(
+                        """index => {
+                          const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                          return chart.getActiveElements().some(item => item.index === index)
+                            && chart.tooltip.getActiveElements().some(item => item.index === index)
+                            && chart.tooltip.opacity === 1
+                            && chart.tooltip.title.some(line => line.startsWith('Local: '))
+                            && chart.tooltip.title.some(line => line.startsWith('Beijing: '));
+                        }""",
+                        point["index"],
+                    )
+                )
+
+                page.mouse.move(8, 8)
+                page.wait_for_timeout(50)
+                self.assertTrue(
+                    page.evaluate(
+                        """index => {
+                          const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                          return chart.getActiveElements().some(item => item.index === index)
+                            && chart.tooltip.getActiveElements().some(item => item.index === index);
+                        }""",
+                        point["index"],
+                    ),
+                    "moving away cleared the persistent frozen tooltip",
+                )
+
+                # Re-tapping the same point is intentionally idempotent.
+                page.mouse.click(point["x"], point["y"])
+                self.assertEqual(
+                    page.locator("body").get_attribute("data-pw-hover-freeze"),
+                    "true",
+                )
+
+                with page.expect_response(
+                    lambda response: response.request.resource_type == "fetch"
+                    and "/feed/?" in response.url
+                    and "freeze_start=" not in response.url
+                ) as restored_response_info:
+                    page.locator(".app-name").click()
+                self.assertEqual(restored_response_info.value.status, 200)
+                page.wait_for_function(
+                    "() => !document.body.hasAttribute('data-pw-hover-freeze')"
+                )
+                self.assertEqual(
+                    page.locator("[data-pw-locale-btn].is-active").get_attribute(
+                        "data-pw-locale-btn"
+                    ),
+                    initial_locale,
+                )
+                self.assertEqual(
+                    page.locator("[data-pw-feed-title]").text_content(),
+                    "Latest in window",
+                )
+                self.assertEqual(page_errors, [])
+                self.assertEqual(console_errors, [])
+                self.assertFalse(
+                    page.evaluate("() => document.documentElement.scrollWidth > innerWidth")
+                )
+            finally:
+                context.close()
+                browser.close()
+
+    def test_hover_freeze_zh_cn_datetime_and_restore_at_320px(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context(
+                viewport={"width": 320, "height": 700},
+                timezone_id="Asia/Tokyo",
+            )
+            _freeze_clock(context)
+            page_errors: list[str] = []
+            console_errors: list[str] = []
+            page = context.new_page()
+            page.on("pageerror", lambda error: page_errors.append(str(error)))
+            page.on(
+                "console",
+                lambda message: console_errors.append(message.text)
+                if message.type == "error" and "favicon.ico" not in message.text
+                else None,
+            )
+            try:
+                page.goto(
+                    f"{self.live_server_url}/?locale=zh_cn",
+                    wait_until="networkidle",
+                )
+                page.wait_for_function(
+                    """() => {
+                      const canvas = document.querySelector('canvas.home-chart');
+                      return Boolean(window.Chart && canvas && Chart.getChart(canvas));
+                    }"""
+                )
+                point = page.evaluate(
+                    """() => {
+                      const canvas = document.querySelector('canvas.home-chart');
+                      const chart = Chart.getChart(canvas);
+                      for (let datasetIndex = 0; datasetIndex < chart.data.datasets.length; datasetIndex += 1) {
+                        const dataset = chart.data.datasets[datasetIndex];
+                        if (!dataset._isTotalLine) continue;
+                        for (let index = dataset.data.length - 1; index >= 0; index -= 1) {
+                          if (!Number.isFinite(Number(dataset.data[index]))) continue;
+                          const center = chart.getDatasetMeta(datasetIndex).data[index].getCenterPoint();
+                          const rect = canvas.getBoundingClientRect();
+                          return {x: rect.left + center.x, y: rect.top + center.y, index};
+                        }
+                      }
+                      return null;
+                    }"""
+                )
+                self.assertIsNotNone(point)
+                with page.expect_response(
+                    lambda response: response.request.resource_type == "fetch"
+                    and "/feed/?" in response.url
+                    and "freeze_start=" in response.url
+                ):
+                    page.mouse.click(point["x"], point["y"])
+
+                self.assertEqual(
+                    page.locator("[data-pw-locale-btn].is-active").count(),
+                    0,
+                )
+                frozen_title = page.locator("[data-pw-feed-title]").text_content() or ""
+                self.assertIn("本地 ", frozen_title)
+                self.assertIn("北京 ", frozen_title)
+                tooltip_state = page.evaluate(
+                        """() => {
+                          const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                          return {
+                            active: chart.getActiveElements().map(item => item.index),
+                            tooltipActive: chart.tooltip.getActiveElements().map(item => item.index),
+                            title: chart.tooltip.title,
+                            opacity: chart.tooltip.opacity,
+                          };
+                        }""",
+                    )
+                self.assertIn(point["index"], tooltip_state["active"])
+                self.assertIn(point["index"], tooltip_state["tooltipActive"])
+                self.assertEqual(tooltip_state["opacity"], 1)
+                self.assertTrue(
+                    any(line.startswith("本地 ") for line in tooltip_state["title"]),
+                    tooltip_state,
+                )
+                self.assertTrue(
+                    any(line.startswith("北京 ") for line in tooltip_state["title"]),
+                    tooltip_state,
+                )
+                self.assertFalse(
+                    page.evaluate("() => document.documentElement.scrollWidth > innerWidth")
+                )
+
+                with page.expect_response(
+                    lambda response: response.request.resource_type == "fetch"
+                    and "/feed/?" in response.url
+                    and "freeze_start=" not in response.url
+                ):
+                    page.locator(".app-name").click()
+                page.wait_for_function(
+                    "() => !document.body.hasAttribute('data-pw-hover-freeze')"
+                )
+                self.assertEqual(
+                    page.locator("[data-pw-locale-btn].is-active").get_attribute(
+                        "data-pw-locale-btn"
+                    ),
+                    "zh_cn",
+                )
+                self.assertEqual(
+                    page.locator("[data-pw-feed-title]").text_content(),
+                    "本窗口最新",
+                )
+                self.assertEqual(page_errors, [])
+                self.assertEqual(console_errors, [])
+            finally:
+                context.close()
+                browser.close()
 
     def _assert_visible_metadata(self, page: Page, tweet_id: str, tint: str) -> None:
         row = page.locator(f".feed-row[data-tweet-id='{tweet_id}']")

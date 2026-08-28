@@ -9,6 +9,8 @@
   var generation = 0;
   var activeController = null;
   var fallbackComparisonHourFormatter = null;
+  var chartRefreshTimer = null;
+  var frozenPoint = null;
 
   var BRAND_NAMES = {
     moonshot_kimi: 'Kimi',
@@ -52,6 +54,15 @@
         );
         ctx.restore();
       });
+    },
+  };
+
+  var HOVER_FREEZE_PLUGIN = {
+    id: 'pwHoverFreeze',
+    afterEvent: function (chart, args) {
+      if (!frozenPoint || frozenPoint.chart !== chart) return;
+      holdFrozenPoint(chart, frozenPoint.index, false);
+      if (args) args.changed = true;
     },
   };
 
@@ -328,6 +339,213 @@
     });
   }
 
+  function prettifiedBucketDateTime(timestamp, locale) {
+    var instant = new Date(timestamp);
+    if (!Number.isFinite(instant.getTime())) return null;
+    var zh = isZhLocale(locale);
+    var intlLocale = zh ? 'zh-CN' : 'en-US';
+    var options = {
+      year: 'numeric',
+      month: zh ? 'numeric' : 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    };
+    var local = new Intl.DateTimeFormat(intlLocale, options).format(instant);
+    var beijing = new Intl.DateTimeFormat(intlLocale, Object.assign({
+      timeZone: 'Asia/Shanghai',
+    }, options)).format(instant);
+    var localLine = (zh ? '本地 ' : 'Local: ') + local;
+    var beijingLine = (zh ? '北京 ' : 'Beijing: ') + beijing;
+    return {
+      local: localLine,
+      beijing: beijingLine,
+      title: localLine + ' · ' + beijingLine,
+    };
+  }
+
+  function fiveMinuteBucket(payload, index) {
+    if (!payload || Number(payload.window_days) !== 1 ||
+        (payload.granularity || 'day') !== 'minute' ||
+        !Number.isInteger(index) || index < 0 || index >= payload.days.length) return null;
+    var startMs = Date.parse(payload.days[index]);
+    if (!Number.isFinite(startMs)) return null;
+    return {
+      start: new Date(startMs).toISOString(),
+      end: new Date(startMs + 5 * 60 * 1000).toISOString(),
+    };
+  }
+
+  function activeTotalPoints(chart, index) {
+    return chart.data.datasets.reduce(function (points, dataset, datasetIndex) {
+      if (!dataset._isTotalLine || !Number.isFinite(Number(dataset.data[index]))) return points;
+      if (typeof chart.isDatasetVisible === 'function' && !chart.isDatasetVisible(datasetIndex)) {
+        return points;
+      }
+      var meta = typeof chart.getDatasetMeta === 'function'
+        ? chart.getDatasetMeta(datasetIndex)
+        : null;
+      if (meta && meta.hidden === true) return points;
+      points.push({ datasetIndex: datasetIndex, index: index });
+      return points;
+    }, []);
+  }
+
+  function frozenTooltipPosition(chart, points) {
+    if (!points.length || typeof chart.getDatasetMeta !== 'function') return { x: 0, y: 0 };
+    var element = (chart.getDatasetMeta(points[0].datasetIndex).data || [])[points[0].index];
+    if (!element) return { x: 0, y: 0 };
+    if (typeof element.getCenterPoint === 'function') return element.getCenterPoint();
+    return { x: Number(element.x) || 0, y: Number(element.y) || 0 };
+  }
+
+  function holdFrozenPoint(chart, index, update) {
+    var points = activeTotalPoints(chart, index);
+    if (!points.length) return false;
+    if (typeof chart.setActiveElements === 'function') chart.setActiveElements(points);
+    if (chart.tooltip && typeof chart.tooltip.setActiveElements === 'function') {
+      chart.tooltip.setActiveElements(points, frozenTooltipPosition(chart, points));
+    }
+    if (update && typeof chart.update === 'function') chart.update('none');
+    return true;
+  }
+
+  function clearFrozenPoint(chart) {
+    if (!chart) return;
+    if (typeof chart.setActiveElements === 'function') chart.setActiveElements([]);
+    if (chart.tooltip && typeof chart.tooltip.setActiveElements === 'function') {
+      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    }
+    if (typeof chart.update === 'function') chart.update('none');
+  }
+
+  function snapshotLocaleButtons() {
+    return Array.prototype.map.call(
+      document.querySelectorAll('[data-pw-locale-btn]'),
+      function (button) {
+        return {
+          button: button,
+          active: Boolean(button.classList && button.classList.contains('is-active')),
+          ariaPressed: button.getAttribute('aria-pressed'),
+        };
+      }
+    );
+  }
+
+  function clearLocaleSelection() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pw-locale-btn]'), function (button) {
+      if (button.classList) button.classList.remove('is-active');
+      button.setAttribute('aria-pressed', 'false');
+    });
+  }
+
+  function restoreLocaleSelection(snapshot) {
+    (snapshot || []).forEach(function (entry) {
+      if (entry.button.classList) {
+        entry.button.classList.toggle('is-active', entry.active);
+      }
+      if (entry.ariaPressed === null) entry.button.removeAttribute('aria-pressed');
+      else entry.button.setAttribute('aria-pressed', entry.ariaPressed);
+    });
+  }
+
+  function stopChartRefresh() {
+    if (chartRefreshTimer !== null) clearInterval(chartRefreshTimer);
+    chartRefreshTimer = null;
+  }
+
+  function startChartRefresh() {
+    if (chartRefreshTimer !== null || frozenPoint || !getHomeChartRegion()) return;
+    chartRefreshTimer = setInterval(requestChart, REFRESH_INTERVAL_MS);
+  }
+
+  function cancelChartRequest() {
+    generation += 1;
+    if (activeController) activeController.abort();
+    activeController = null;
+  }
+
+  function startHoverFreeze(chart, payload, index) {
+    var range = fiveMinuteBucket(payload, index);
+    var formatted = range && prettifiedBucketDateTime(
+      range.start,
+      currentLocale(getHomeChartRegion())
+    );
+    if (!range || !formatted || !holdFrozenPoint(chart, index, true)) return false;
+    var localeButtons = snapshotLocaleButtons();
+    stopChartRefresh();
+    cancelChartRequest();
+    frozenPoint = {
+      chart: chart,
+      canvas: chart.canvas,
+      index: index,
+      localeButtons: localeButtons,
+    };
+    clearLocaleSelection();
+    if (document.body && typeof document.body.setAttribute === 'function') {
+      document.body.setAttribute('data-pw-hover-freeze', 'true');
+    }
+    if (chart.canvas && typeof chart.canvas.setAttribute === 'function') {
+      chart.canvas.setAttribute('data-pw-hover-freeze-index', String(index));
+    }
+    document.dispatchEvent(new CustomEvent('pw:hover-freeze-start', {
+      detail: {
+        start: range.start,
+        end: range.end,
+        title: formatted.title,
+        local: formatted.local,
+        beijing: formatted.beijing,
+        index: index,
+      },
+    }));
+    return true;
+  }
+
+  function endHoverFreeze() {
+    if (!frozenPoint) return false;
+    var prior = frozenPoint;
+    frozenPoint = null;
+    clearFrozenPoint(prior.chart);
+    restoreLocaleSelection(prior.localeButtons);
+    if (document.body && typeof document.body.removeAttribute === 'function') {
+      document.body.removeAttribute('data-pw-hover-freeze');
+    }
+    if (prior.canvas && typeof prior.canvas.removeAttribute === 'function') {
+      prior.canvas.removeAttribute('data-pw-hover-freeze-index');
+    }
+    startChartRefresh();
+    document.dispatchEvent(new CustomEvent('pw:hover-freeze-end'));
+    return true;
+  }
+
+  function exactChartPoint(chart, event) {
+    if (!chart || typeof chart.getElementsAtEventForMode !== 'function') return null;
+    var points = chart.getElementsAtEventForMode(
+      event && event.native ? event.native : event,
+      'nearest',
+      { intersect: true, axis: 'xy' },
+      false
+    ) || [];
+    return points.find(function (point) {
+      var dataset = chart.data.datasets[point.datasetIndex];
+      return dataset && dataset._isTotalLine && Number.isFinite(Number(dataset.data[point.index]));
+    }) || null;
+  }
+
+  function handleChartClick(chart, payload, event) {
+    if (!fiveMinuteBucket(payload, 0)) return;
+    var point = exactChartPoint(chart, event);
+    if (frozenPoint) {
+      if (frozenPoint.chart === chart && point && point.index === frozenPoint.index) {
+        holdFrozenPoint(chart, frozenPoint.index, true);
+        return;
+      }
+      endHoverFreeze();
+      return;
+    }
+    if (point) startHoverFreeze(chart, payload, point.index);
+  }
+
   function renderOne(canvas) {
     var payload = readPayload(canvas);
     if (!validPayload(payload)) return null;
@@ -358,6 +576,7 @@
         backgroundColor: stroke,
         borderWidth: 2,
         pointRadius: granularity === 'minute' ? 1.5 : 0,
+        pointHitRadius: granularity === 'minute' ? 8 : 0,
         tension: granularity === 'minute' ? 0.3 : 0,
         fill: false,
         _brandIndex: brandIndex,
@@ -387,7 +606,7 @@
     return new Chart(canvas, {
       type: 'line',
       data: { labels: days, datasets: datasets },
-      plugins: [TIMEZONE_ROW_LABEL_PLUGIN],
+      plugins: [TIMEZONE_ROW_LABEL_PLUGIN, HOVER_FREEZE_PLUGIN],
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -402,6 +621,16 @@
             intersect: false,
             filter: function (item) { return item.dataset._isTotalLine === true; },
             callbacks: {
+              title: function (contexts) {
+                if (granularity !== 'minute' || !contexts || !contexts.length) {
+                  return contexts && contexts.length ? contexts[0].label : '';
+                }
+                var formatted = prettifiedBucketDateTime(
+                  days[contexts[0].dataIndex],
+                  currentLocale(getHomeChartRegion())
+                );
+                return formatted ? [formatted.local, formatted.beijing] : contexts[0].label;
+              },
               label: function (context) {
                 var value = context.parsed.y;
                 return context.dataset.label + ': ' + value + (value === 1 ? ' post' : ' posts');
@@ -411,6 +640,9 @@
         },
         scales: chartScales(days, granularity),
         onHover: function () {},
+        onClick: function (event, _elements, chart) {
+          handleChartClick(chart, payload, event);
+        },
       },
     });
   }
@@ -858,6 +1090,10 @@
   function requestChart(event) {
     var region = getHomeChartRegion();
     if (!region) return Promise.resolve(false);
+    if (frozenPoint) {
+      clearLocaleSelection();
+      return Promise.resolve(false);
+    }
     var requestGeneration = ++generation;
     if (activeController) activeController.abort();
     activeController = typeof AbortController === 'function' ? new AbortController() : null;
@@ -894,6 +1130,7 @@
   }
 
   function redrawOneDayTimeAxes() {
+    if (frozenPoint) return;
     var region = getHomeChartRegion();
     var canvas = chartIn(region);
     var payload = readPayload(canvas);
@@ -921,9 +1158,14 @@
         renderHeadline(payload.trend_narrative, payload.top_voices);
         updateProjectionStates(region, payload, false);
       }
-      setInterval(requestChart, REFRESH_INTERVAL_MS);
+      startChartRefresh();
     }
   }
+
+  document.addEventListener('click', function (event) {
+    if (!frozenPoint || event.target === frozenPoint.canvas) return;
+    endHoverFreeze();
+  }, true);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

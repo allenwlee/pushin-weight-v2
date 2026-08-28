@@ -47,7 +47,13 @@ RUNTIME_FILTER_KEYS = {
     "unsanctioned": "unsanctioned",
     "window": "window",
 }
-PRESENTATION_CONTROLS = {"feed_text", "headline_detail", "role_badge"}
+PRESENTATION_CONTROLS = {
+    "feed_text",
+    "headline_detail",
+    "role_badge",
+    "chart_hover_freeze",
+    "freeze_point",
+}
 STATEFUL_ACTIONS = [
     (control, value)
     for control, values in CONTROL_VALUES.items()

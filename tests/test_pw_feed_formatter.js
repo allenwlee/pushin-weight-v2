@@ -31,6 +31,7 @@ const sandbox = new Module('pw-feed-formatter');
 sandbox._compile(head + '\n' + tail + '\n', 'pw-feed.js');
 const {
   createRequestGate,
+  buildQuery,
   formatRelative,
   formatLocalTooltip,
   enrichmentStatusHtml,
@@ -39,6 +40,7 @@ const {
   replaceRows,
   isFeedPayload,
   renderRowHtml,
+  hoverFreezeFilters,
 } = sandbox.exports;
 
 let passed = 0;
@@ -55,6 +57,41 @@ function assertEq(actual, expected, label) {
     );
   }
 }
+
+console.log('\n--- hover-freeze feed query ---');
+const frozenFilters = hoverFreezeFilters({
+  brands: ['qwen'],
+  sentiment: ['negative'],
+  post_types: [],
+  role: ['staff'],
+  lang: ['ja'],
+  unsanctioned: 'only',
+  window: 7,
+});
+assertEq(
+  JSON.stringify(frozenFilters),
+  JSON.stringify({ brands: ['qwen'], window: 1 }),
+  'frozen feed keeps only the brand selection and one-day window'
+);
+const freezeStart = '2026-08-10T20:10:00.000Z';
+const freezeEnd = '2026-08-10T20:15:00.000Z';
+const frozenQuery = buildQuery(frozenFilters, {
+  sort: 'created_at',
+  order: 'desc',
+  limit: 50,
+  locale: 'zh_cn',
+  freezeRange: { start: freezeStart, end: freezeEnd },
+});
+const frozenParams = new URLSearchParams(frozenQuery);
+assertEq(frozenParams.get('freeze_start'), freezeStart,
+  'frozen request carries the inclusive bucket start');
+assertEq(frozenParams.get('freeze_end'), freezeEnd,
+  'frozen request carries the exclusive bucket end');
+assertEq(
+  frozenParams.get('filters'),
+  JSON.stringify({ brands: ['qwen'], window: 1 }),
+  'frozen request does not serialize non-brand filters'
+);
 
 console.log('--- Cyber-Quan icon renderer ---');
 assertEq(pwIcon.render('not-approved', 'safe'), '', 'unknown symbol fails closed');
@@ -407,6 +444,12 @@ assertEq(controllers[1].aborted, true, 'timeout aborts the current request');
 assertEq(gate.finish(newTicket), true, 'current completion releases request state');
 assertEq(gate.isCurrent(newTicket), false, 'finished request cannot commit again');
 assertEq(clearedTimers.includes(2), true, 'finishing clears the active timeout');
+const frozenTicket = gate.start(15000);
+assertEq(gate.cancel(), true, 'freeze release synchronously cancels its active request');
+assertEq(controllers[2].aborted, true, 'freeze release aborts the active controller');
+assertEq(gate.isCurrent(frozenTicket), false, 'a released frozen response cannot commit');
+assertEq(clearedTimers.includes(3), true, 'freeze release clears the active timeout');
+assertEq(gate.cancel(), false, 'cancel is idempotent when no request remains');
 
 console.log('\n--- summary ---');
 console.log(passed + ' passed, ' + failed + ' failed');

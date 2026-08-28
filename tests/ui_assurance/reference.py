@@ -48,6 +48,8 @@ def initial_state() -> dict[str, Any]:
         "feed_text": "synthesis_collapsed",
         "headline_detail": "collapsed",
         "role_badge": "none",
+        "chart_hover_freeze": "idle",
+        "freeze_point": "none",
         "latest_generation": 0,
         "committed_generation": 0,
     }
@@ -77,6 +79,8 @@ def set_control(state: dict[str, Any], control: str, value: Any) -> dict[str, An
         "feed_text",
         "headline_detail",
         "role_badge",
+        "chart_hover_freeze",
+        "freeze_point",
     }:
         next_state[control] = value
     else:
@@ -163,6 +167,11 @@ def filter_posts(
 
 def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     rows = filter_posts(fixture, state)
+    hover_freeze_active = (
+        state["chart_hover_freeze"] == "frozen"
+        and int(state["filters"]["window"]) == 1
+        and state["freeze_point"] in {"first", "same"}
+    )
     series: dict[str, int] = {}
     for post in rows:
         for brand in post["brands"]:
@@ -177,6 +186,10 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "headline_expanded": state["headline_detail"] == "expanded",
             "role_badge": state["role_badge"],
             "role_label": None if state["role_badge"] == "none" else state["role_badge"],
+            "chart_hover_freeze": state["chart_hover_freeze"],
+            "freeze_point": state["freeze_point"],
+            "locale_selected": [] if hover_freeze_active else [state["locale"]],
+            "feed_title": "bucket_datetime" if hover_freeze_active else "default",
         },
         "persistence": {
             "locale": state["locale"],
@@ -192,5 +205,18 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "window": int(state["filters"]["window"]),
             "series": series,
         },
-        "network": {"latest_generation": state["latest_generation"]},
+        "network": {
+            "latest_generation": state["latest_generation"],
+            "chart_refresh_paused": hover_freeze_active,
+            "feed_refresh_paused": hover_freeze_active,
+            "effective_feed_filters": (
+                {
+                    "brands": deepcopy(state["filters"]["brands"]),
+                    "window": 1,
+                }
+                if hover_freeze_active
+                else deepcopy(state["filters"])
+            ),
+            "bucket": "five-minute-half-open" if hover_freeze_active else None,
+        },
     }

@@ -13,8 +13,8 @@
   <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
   <script src="{% static 'pw-tz.js' %}?v=cyber-quan1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=usability1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=usability1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=hoverfreeze1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=hoverfreeze1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -327,10 +327,12 @@
 
     <div class="desktop-col-feed">
       <section class="feed-strip" data-pw-feed data-pw-locale="{{ active_locale }}"
+               data-pw-default-title-en="Latest in window"
+               data-pw-default-title-zh="本窗口最新"
                data-pw-empty-text="{% trans 'no posts in window' %}"
                data-pw-loading-text="{% trans 'loading more…' %}"
                data-pw-error-text="{% if is_zh_chrome %}信息流刷新失败，显示上次结果{% else %}Feed refresh failed; showing last result{% endif %}">
-        <h3 data-i18n="feed_title">{% if is_zh_chrome %}本窗口最新{% else %}Latest in window{% endif %}</h3>
+        <h3 data-pw-feed-title data-i18n="feed_title">{% if is_zh_chrome %}本窗口最新{% else %}Latest in window{% endif %}</h3>
         <div class="feed-scroll" id="feed-scroll" data-feed-scroll data-pw-feed-scroll>
           <div class="feed-rows" id="feed-rows" data-feed-rows data-pw-feed-body>
             {% include "monitor/_feed_initial_v22.html" %}
