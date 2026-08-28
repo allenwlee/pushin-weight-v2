@@ -51,6 +51,7 @@ class FakeClaudeClient:
                 "literal_zh": f"[zh] {t.get('text', '')}",
                 "lang_detected": "en",
                 "discourse_role": "genuine_hype",
+                "en_equivalent": "The post gives the update an analytical restatement.",
                 "cn_equivalent": "[zh equivalent]",
                 "annotation": "This is an F1 note.",
                 "noop_en": True,
@@ -84,7 +85,7 @@ def test_pragmatics_prompt_contains_four_prong_contract():
     prompt = build_pragmatics_translation_prompt(
         tweets, ["en", "zh_cn"], brand_names=["Claude"]
     )
-    for token in ("literal_zh", "cn_equivalent",
+    for token in ("literal_zh", "en_equivalent", "cn_equivalent",
                   "annotation", "bilingual pragmatic analyst",
                   "氛围编程", "套壳"):
         assert token in prompt, f"missing {token!r} in prompt"
@@ -231,6 +232,7 @@ def test_translate_batch_pragmatics_returns_four_prongs():
             "text_en": "Claude could never pull this off",
             "literal_zh": "Claude 永远做不出",
             "lang_detected": "other",
+            "en_equivalent": "Claude is being framed as unable to match the result.",
             "cn_equivalent": "Claude 不行",
             "annotation": "",
             "noop_en": False,
@@ -254,6 +256,7 @@ def test_translate_batch_pragmatics_returns_four_prongs():
     assert row["lang_detected"] == "other"
     # New prongs (no discourse_role).
     assert row["literal_zh"] == "Claude 永远做不出"
+    assert row["en_equivalent"].startswith("Claude is being framed")
     assert row["cn_equivalent"] == "Claude 不行"
     assert row["annotation"] == ""
     assert "discourse_role" not in row, (
@@ -280,6 +283,7 @@ def test_translate_batch_pragmatics_text_en_null_when_lang_is_english():
             "text_en": "Claude could never",
             "literal_zh": "Claude 永远做不出",
             "lang_detected": "en",
+            "en_equivalent": "Claude is being dismissed as unable to match this.",
             "cn_equivalent": "Claude 不行",
             "annotation": "",
             "noop_en": True,
@@ -303,13 +307,7 @@ def test_translate_batch_pragmatics_text_en_null_when_lang_is_english():
 
 
 def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
-    """Deterministic noop (U5): lang_detected='zh-Hans' → both
-    text_zh_cn + literal_zh AND text_en NULLed. The English translation
-    is intentionally NOT stored — the v10 Post 4 bug surfaced this:
-    the LLM was echoing Chinese characters into text_en instead of
-    translating, so the server-side noop now NULLs both columns
-    when the source is already Simplified Chinese. The dashboard
-    can fall back to the source text in the appropriate column."""
+    """Simplified Chinese source serves zh while English remains translated."""
     from x_monitor.translator import translate_batch_pragmatics
 
     tweets = [{"tweet_id": "1", "text": "Claude 真不错"}]
@@ -320,7 +318,8 @@ def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
             "text_en": "Claude is really good",
             "literal_zh": "Claude 真不错",
             "lang_detected": "zh-Hans",
-            "cn_equivalent": "Claude 真不错",
+            "en_equivalent": "Claude is receiving a strongly positive assessment.",
+            "cn_equivalent": "这波 Claude 确实挺能打。",
             "annotation": "",
             "noop_en": False,
             "noop_zh": True,
@@ -338,10 +337,8 @@ def test_translate_batch_pragmatics_text_zh_cn_null_when_lang_is_already_zh():
     assert row["text_zh_cn"] is None
     assert row["literal_zh"] is None
     assert row["noop_zh"] is True
-    # U5 fix: text_en ALSO NULLed when source is Simplified Chinese
-    # (the LLM often echoes the source into text_en, see v10 Post 4).
-    assert row["text_en"] is None
-    assert row["noop_en"] is True
+    assert row["text_en"] == "Claude is really good"
+    assert row["noop_en"] is False
 
 
 def test_translate_batch_pragmatics_backward_compat_columns():
@@ -357,6 +354,7 @@ def test_translate_batch_pragmatics_backward_compat_columns():
             "text_en": "Claude is really good",
             "literal_zh": "Claude 真的很好",
             "lang_detected": "other",
+            "en_equivalent": "Claude is receiving a positive assessment.",
             "cn_equivalent": "太棒了",
             "annotation": "should be zeroed by fixed-dict match",
             "noop_en": False,
@@ -394,7 +392,8 @@ def test_translate_batch_pragmatics_applies_friction_judge():
             "text_en": "vibe coding is the new norm",
             "literal_zh": "氛围编程是新常态",
             "lang_detected": "en",
-            "cn_equivalent": "氛围编程是新常态",
+            "en_equivalent": "The post treats vibe coding as mainstream practice.",
+            "cn_equivalent": "氛围编程这下算彻底进入主流了。",
             "annotation": "a long note that the fixed-dict should zero",
             "noop_en": True,
             "noop_zh": False,
@@ -480,6 +479,7 @@ def test_translate_batch_pragmatics_invalid_response_marked_failed():
         # Only 1 result for 2 tweets → length mismatch → parse fail.
         return {"results": [{"tweet_id": "1", "text_en": "x",
                              "literal_zh": "x", "lang_detected": "en",
+                             "en_equivalent": "The post makes a minimal statement.",
                              "cn_equivalent": "x", "annotation": "",
                              "noop_en": True, "noop_zh": False}]}
     client._factory = short_factory

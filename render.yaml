@@ -41,8 +41,10 @@ services:
         value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
+      - key: X_MONITOR_HEADLINE_PUBLICATION_SOURCE
+        value: prefer_per_brand
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-why-first-owner-override-v1
+        value: v23-per-brand-why-first-v2-activation-20260827
       - fromGroup: pushinweight-secrets
 
   # --------------------------------------------------------------------------
@@ -84,7 +86,7 @@ services:
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-why-first-owner-override-v1
+        value: v23-per-brand-why-first-v2-activation-20260827
 
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
@@ -124,7 +126,7 @@ services:
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v22-why-first-owner-override-v1
+        value: v23-per-brand-why-first-v2-activation-20260827
       - fromGroup: pushinweight-secrets
 
 databases:

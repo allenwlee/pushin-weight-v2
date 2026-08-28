@@ -352,6 +352,7 @@ def test_run_post_fetch_happy_path_writes_all_three_tables(tmp_path):
                 "text_zh_cn": "Claude 永远做不出",
                 "lang_detected": "en",
                 "discourse_role": "dunk_yingyang",
+                "en_equivalent": "The post dismisses Claude's capability.",
                 "cn_equivalent": "Claude 不行",
                 "annotation": "",
                 "noop_en": True,

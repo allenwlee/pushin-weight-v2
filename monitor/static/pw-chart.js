@@ -8,7 +8,7 @@
   var REQUEST_TIMEOUT_MS = 12000;
   var generation = 0;
   var activeController = null;
-  var californiaHourFormatter = null;
+  var fallbackComparisonHourFormatter = null;
 
   var BRAND_NAMES = {
     moonshot_kimi: 'Kimi',
@@ -16,6 +16,43 @@
     minimax: 'MiniMax',
     qwen: 'Qwen',
     ernie: 'ERNIE',
+  };
+
+  var TIMEZONE_ROW_LABEL_PLUGIN = {
+    id: 'pwTimezoneRowLabels',
+    afterDraw: function (chart, _args, options) {
+      if (!options || options.display !== true || !chart.chartArea) return;
+      var ctx = chart.ctx;
+      ['x', 'xComparison'].forEach(function (scaleKey) {
+        var scale = chart.scales[scaleKey];
+        if (!scale) return;
+        var scaleOptions = scale.options || {};
+        var title = scaleOptions.title || {};
+        var ticks = scaleOptions.ticks || {};
+        var grid = scaleOptions.grid || {};
+        if (!title.text) return;
+        var font = ticks.font || {};
+        var size = Number(font.size) || 9;
+        var weight = font.weight || 400;
+        var family = (Chart.defaults.font && Chart.defaults.font.family) || 'sans-serif';
+        var tickLength = grid.display === false || grid.drawTicks === false
+          ? 0
+          : Number(grid.tickLength) || 0;
+        var padding = Number(ticks.padding) || 0;
+
+        ctx.save();
+        ctx.fillStyle = ticks.color || title.color || Chart.defaults.color;
+        ctx.font = weight + ' ' + size + 'px ' + family;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(
+          String(title.text),
+          chart.chartArea.left - 4,
+          scale.top + tickLength + padding + size / 2
+        );
+        ctx.restore();
+      });
+    },
   };
 
   function getHomeChartRegion() {
@@ -46,14 +83,19 @@
         !isObject(payload.series) || !isObject(payload.totals) ||
         !isObject(payload.pulse) || !Array.isArray(payload.pulse.entries) ||
         !isObject(payload.trend_narrative) ||
-        ![1, 2].includes(Number(payload.trend_narrative.schema_version)) ||
-        typeof payload.trend_narrative.body !== 'string' ||
-        (payload.trend_narrative.body_prefix !== undefined &&
-         typeof payload.trend_narrative.body_prefix !== 'string') ||
-        (payload.trend_narrative.body_remainder !== undefined &&
-         typeof payload.trend_narrative.body_remainder !== 'string') ||
         typeof payload.trend_narrative.state_label !== 'string' ||
         !isObject(payload.top_voices) || !Array.isArray(payload.top_voices.entries)) return false;
+    var narrativeSchema = Number(payload.trend_narrative.schema_version);
+    if (![1, 2, 3].includes(narrativeSchema)) return false;
+    if (narrativeSchema === 3) {
+      if (!validPerBrandNarrative(payload.trend_narrative)) return false;
+    } else if (
+      typeof payload.trend_narrative.body !== 'string' ||
+      (payload.trend_narrative.body_prefix !== undefined &&
+       typeof payload.trend_narrative.body_prefix !== 'string') ||
+      (payload.trend_narrative.body_remainder !== undefined &&
+       typeof payload.trend_narrative.body_remainder !== 'string')
+    ) return false;
     if ([payload.pulse, payload.trend_narrative, payload.top_voices].some(function (projection) {
       return Number(payload.window_days) !== Number(projection.window_days) ||
         payload.computed_at !== projection.computed_at;
@@ -82,6 +124,38 @@
     return Object.keys(payload.series).every(function (brand) {
       return Array.isArray(payload.series[brand]);
     });
+  }
+
+  function validPerBrandNarrative(narrative) {
+    var states = [
+      'available', 'stale', 'unavailable', 'no_content',
+      'data_quality_unavailable', 'disabled'
+    ];
+    if (!Array.isArray(narrative.items) || narrative.items.length > 2 ||
+        !isObject(narrative.selection)) return false;
+    if (!narrative.items.every(function (item) {
+      return isObject(item) && (item.id === null || typeof item.id === 'string') &&
+        isObject(item.brand) && typeof item.brand.key === 'string' &&
+        typeof item.brand.display_name === 'string' &&
+        (item.brand.url === null || typeof item.brand.url === 'string') &&
+        states.includes(item.state) && typeof item.state_label === 'string' &&
+        typeof item.headline === 'string' && item.headline.trim().length > 0 &&
+        typeof item.secondary === 'string' && item.secondary.trim().length > 0 &&
+        (item.verified_at === null || typeof item.verified_at === 'string') &&
+        (item.attempted_at === null || typeof item.attempted_at === 'string') &&
+        isObject(item.freshness) &&
+        (item.freshness.kind === null || ['verified', 'attempted'].includes(item.freshness.kind)) &&
+        typeof item.freshness.relative === 'string' &&
+        typeof item.freshness.absolute === 'string' &&
+        (item.freshness.absolute_iso === null || typeof item.freshness.absolute_iso === 'string');
+    })) return false;
+    var selection = narrative.selection;
+    return ['all', 'explicit'].includes(selection.mode) &&
+      Number.isInteger(selection.requested_count) && selection.requested_count >= 0 &&
+      Number.isInteger(selection.returned_count) &&
+      selection.returned_count === narrative.items.length &&
+      typeof selection.truncated === 'boolean' &&
+      typeof selection.summary === 'string';
   }
 
   function colorVarFor(discourseKey) {
@@ -113,25 +187,65 @@
     });
   }
 
-  function californiaHour(timestamp) {
-    if (!californiaHourFormatter) {
-      californiaHourFormatter = new Intl.DateTimeFormat('en-US', {
+  function comparisonState() {
+    if (window.__pwTz && typeof window.__pwTz.getComparison === 'function') {
+      return window.__pwTz.getComparison();
+    }
+    return {
+      key: 'california',
+      timezone: 'America/Los_Angeles',
+      shortLabel: 'CA',
+      localLabel: isZhLocale(currentLocale(getHomeChartRegion())) ? '本地' : 'local',
+    };
+  }
+
+  function comparisonHour(timestamp) {
+    if (window.__pwTz && typeof window.__pwTz.comparisonHour === 'function') {
+      return String(Number(window.__pwTz.comparisonHour(timestamp)) % 24);
+    }
+    if (!fallbackComparisonHourFormatter) {
+      fallbackComparisonHourFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Los_Angeles',
         hour: 'numeric',
         hourCycle: 'h23',
       });
     }
-    var parts = californiaHourFormatter.formatToParts(new Date(timestamp));
+    var parts = fallbackComparisonHourFormatter.formatToParts(new Date(timestamp));
     var hour = parts.find(function (part) { return part.type === 'hour'; });
     return String(Number(hour ? hour.value : 0) % 24);
+  }
+
+  function colorWithAlpha(color, alpha) {
+    var value = String(color || '').trim();
+    var shortHex = value.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+    var longHex = value.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (shortHex) {
+      return 'rgba(' + [shortHex[1], shortHex[2], shortHex[3]].map(function (part) {
+        return parseInt(part + part, 16);
+      }).join(', ') + ', ' + alpha + ')';
+    }
+    if (longHex) {
+      return 'rgba(' + [longHex[1], longHex[2], longHex[3]].map(function (part) {
+        return parseInt(part, 16);
+      }).join(', ') + ', ' + alpha + ')';
+    }
+    return value;
   }
 
   function oneDayScales(days) {
     var hourlyTicks = fixedHourlyTicks(days);
     if (hourlyTicks.length !== 24) return null;
-    var localColor = (Chart.defaults && Chart.defaults.color) || '#666666';
+    var defaultColor = (Chart.defaults && Chart.defaults.color) || '#666666';
+    var timezone = comparisonState();
+    var activeMode = window.__pwTz && window.__pwTz.mode === 'ca' ? 'ca' : 'local';
+    var localColor = activeMode === 'local'
+      ? defaultColor
+      : colorWithAlpha(defaultColor, 0.55);
+    var comparisonColor = activeMode === 'ca'
+      ? 'rgba(251, 191, 36, 1)'
+      : 'rgba(251, 191, 36, 0.45)';
 
-    function hourlyScale(weight, color, formatter, fontWeight) {
+    function hourlyScale(weight, color, formatter, fontWeight, title, drawBorder) {
       return {
         type: 'category',
         position: 'bottom',
@@ -147,32 +261,42 @@
           font: { size: 9, weight: fontWeight },
           maxRotation: 0,
           minRotation: 0,
-          padding: 3,
+          padding: drawBorder ? 2 : 0,
           callback: function (_value, index) {
             var hour = Number(formatter(hourlyTicks[index].instant)) % 24;
             return hour % 2 === 0 ? hour + ':00' : '';
           },
         },
         grid: {
-          display: true,
+          display: drawBorder,
           drawOnChartArea: false,
-          drawTicks: true,
-          tickLength: 4,
+          drawTicks: drawBorder,
+          tickLength: drawBorder ? 4 : 0,
           color: color,
         },
-        border: { color: color, width: weight === 0 ? 1.5 : 1 },
+        border: { display: drawBorder, color: color, width: 1.5 },
+        title: {
+          display: false,
+          text: title,
+          align: 'start',
+          color: color,
+          font: { size: 9, weight: fontWeight },
+          padding: { top: 0, bottom: 0 },
+        },
       };
     }
 
     return {
       x: hourlyScale(0, localColor, function (timestamp) {
         return String(new Date(timestamp).getHours());
-      }, 600),
-      xCalifornia: hourlyScale(
+      }, 600, timezone.localLabel || 'local', true),
+      xComparison: hourlyScale(
         1,
-        'rgba(251, 191, 36, 0.45)',
-        californiaHour,
-        400
+        comparisonColor,
+        comparisonHour,
+        activeMode === 'ca' ? 600 : 400,
+        timezone.shortLabel || 'CA',
+        false
       ),
     };
   }
@@ -263,6 +387,7 @@
     return new Chart(canvas, {
       type: 'line',
       data: { labels: days, datasets: datasets },
+      plugins: [TIMEZONE_ROW_LABEL_PLUGIN],
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -270,6 +395,7 @@
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
+          pwTimezoneRowLabels: { display: granularity === 'minute' },
           tooltip: {
             enabled: true,
             mode: 'index',
@@ -369,11 +495,34 @@
   function renderHeadline(narrative, topVoices) {
     var strip = document.querySelector('[data-pw-headline]');
     if (!strip) return;
+    var perBrand = Number(narrative.schema_version) === 3;
+    var items = strip.querySelector('[data-pw-headline-items]');
+    var selection = strip.querySelector('[data-pw-headline-selection]');
+    var legacy = strip.querySelector('[data-pw-headline-legacy]');
+    if (perBrand) {
+      renderPerBrandNarratives(items, narrative);
+      if (items) items.hidden = false;
+      if (legacy) legacy.hidden = true;
+      if (selection) {
+        selection.textContent = narrative.selection.summary || '';
+        selection.hidden = !narrative.selection.summary;
+      }
+    } else {
+      if (items) {
+        clearChildren(items);
+        items.hidden = true;
+      }
+      if (legacy) legacy.hidden = false;
+      if (selection) {
+        selection.textContent = '';
+        selection.hidden = true;
+      }
+    }
     var prefix = strip.querySelector('[data-pw-headline-prefix]');
     var body = strip.querySelector('[data-pw-headline-body]');
     var state = strip.querySelector('[data-pw-headline-state]');
     var oldBrand = strip.querySelector('[data-pw-headline-brand]');
-    if (narrative.primary_brand) {
+    if (!perBrand && narrative.primary_brand) {
       var desiredTag = narrative.primary_brand.url ? 'A' : 'SPAN';
       var brand = oldBrand && oldBrand.tagName === desiredTag
         ? oldBrand
@@ -386,16 +535,16 @@
         if (oldBrand && oldBrand.parentNode) oldBrand.parentNode.removeChild(oldBrand);
         body.parentNode.insertBefore(brand, body);
       }
-    } else if (oldBrand && oldBrand.parentNode) {
+    } else if (!perBrand && oldBrand && oldBrand.parentNode) {
       oldBrand.parentNode.removeChild(oldBrand);
     }
-    if (prefix) prefix.textContent = narrative.body_prefix || '';
-    if (body) body.textContent = typeof narrative.body_remainder === 'string'
+    if (!perBrand && prefix) prefix.textContent = narrative.body_prefix || '';
+    if (!perBrand && body) body.textContent = typeof narrative.body_remainder === 'string'
       ? narrative.body_remainder
       : narrative.body;
     if (state) state.textContent = narrative.state_label;
     var observations = strip.querySelector('[data-pw-headline-observations]');
-    if (observations) {
+    if (observations && !perBrand) {
       clearChildren(observations);
       (narrative.observations || []).forEach(function (observation) {
         var item = document.createElement('li');
@@ -440,6 +589,67 @@
     strip.setAttribute('data-pw-state', narrative.state);
   }
 
+  function renderPerBrandNarratives(container, narrative) {
+    if (!container) throw new Error('trend narrative items container is missing');
+    clearChildren(container);
+    if (narrative.items.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'headline-empty';
+      empty.setAttribute('data-pw-headline-empty', '');
+      empty.textContent = narrative.body || '';
+      container.appendChild(empty);
+      return;
+    }
+    narrative.items.forEach(function (item, index) {
+      var article = document.createElement('article');
+      var titleId = 'trend-narrative-' + (index + 1);
+      article.className = 'headline-item';
+      article.setAttribute('data-pw-headline-item', '');
+      article.setAttribute('data-pw-brand-key', item.brand.key);
+      article.setAttribute('data-pw-state', item.state);
+      article.setAttribute('data-pw-verified-at', item.verified_at || '');
+      article.setAttribute('aria-labelledby', titleId);
+
+      var meta = document.createElement('div');
+      meta.className = 'headline-item-meta';
+      var brand = document.createElement(item.brand.url ? 'a' : 'span');
+      brand.className = 'brand';
+      brand.setAttribute('data-pw-headline-item-brand', '');
+      brand.textContent = item.brand.display_name || item.brand.key;
+      if (item.brand.url) brand.setAttribute('href', item.brand.url);
+      meta.appendChild(brand);
+
+      var itemState = document.createElement('span');
+      itemState.className = 'headline-item-state';
+      itemState.setAttribute('data-pw-headline-item-state', '');
+      itemState.textContent = item.state_label;
+      if (item.freshness.absolute) {
+        itemState.setAttribute('title', item.freshness.absolute);
+        itemState.setAttribute(
+          'aria-label', item.state_label + '. ' + item.freshness.absolute
+        );
+      } else {
+        itemState.setAttribute('aria-label', item.state_label);
+      }
+      meta.appendChild(itemState);
+      article.appendChild(meta);
+
+      var headline = document.createElement('h2');
+      headline.className = 'headline-item-title';
+      headline.setAttribute('data-pw-headline-item-title', '');
+      headline.setAttribute('id', titleId);
+      headline.textContent = item.headline;
+      article.appendChild(headline);
+
+      var secondary = document.createElement('p');
+      secondary.className = 'headline-item-secondary';
+      secondary.setAttribute('data-pw-headline-item-secondary', '');
+      secondary.textContent = item.secondary;
+      article.appendChild(secondary);
+      container.appendChild(article);
+    });
+  }
+
   function setStatus(node, text, visible) {
     if (!node) return;
     node.textContent = visible ? text : '';
@@ -452,7 +662,7 @@
     }, 0) === 0;
   }
 
-  function updateProjectionStates(region, payload) {
+  function updateProjectionStates(region, payload, announce) {
     setStatus(
       region.querySelector('[data-pw-chart-status]'),
       region.getAttribute('data-pw-chart-empty-text') || 'No chart data in this window',
@@ -463,7 +673,15 @@
       region.getAttribute('data-pw-pulse-empty-text') || 'No pulse data in this window',
       payload.pulse.entries.length === 0
     );
-    setStatus(document.querySelector('[data-pw-headline-status]'), '', false);
+    var headlineStatus = document.querySelector('[data-pw-headline-status]');
+    if (headlineStatus) {
+      headlineStatus.setAttribute('data-pw-status-kind', announce ? 'success' : '');
+    }
+    setStatus(
+      headlineStatus,
+      region.getAttribute('data-pw-headline-updated-text') || 'Trend summaries updated',
+      Boolean(announce)
+    );
     region.setAttribute('data-pw-refresh-failed', 'false');
     var bar = document.querySelector('[data-pw-pulse]');
     if (bar) bar.setAttribute('data-pw-refresh-failed', 'false');
@@ -477,8 +695,10 @@
       region.getAttribute('data-pw-chart-error-text') || 'Chart refresh failed; showing last result',
       true
     );
+    var headlineStatus = document.querySelector('[data-pw-headline-status]');
+    if (headlineStatus) headlineStatus.setAttribute('data-pw-status-kind', 'error');
     setStatus(
-      document.querySelector('[data-pw-headline-status]'),
+      headlineStatus,
       region.getAttribute('data-pw-headline-error-text') || 'Trend summary refresh failed; showing last result',
       true
     );
@@ -518,7 +738,7 @@
       renderLegend(region, payload);
       renderPulse(region, payload.pulse);
       renderHeadline(payload.trend_narrative, payload.top_voices);
-      updateProjectionStates(region, payload);
+      updateProjectionStates(region, payload, true);
     } catch (error) {
       // A valid response must replace all four projections together. Restore
       // every projection if a renderer or DOM operation fails mid-commit.
@@ -601,6 +821,14 @@
     });
   }
 
+  function redrawOneDayTimeAxes() {
+    var region = getHomeChartRegion();
+    var canvas = chartIn(region);
+    var payload = readPayload(canvas);
+    if (!validPayload(payload) || (payload.granularity || 'day') !== 'minute') return;
+    renderOne(canvas);
+  }
+
   function disableHtmxRefresh(region) {
     ['hx-get', 'hx-trigger', 'hx-vals', 'hx-swap'].forEach(function (name) {
       region.removeAttribute(name);
@@ -618,7 +846,7 @@
         renderLegend(region, payload);
         renderPulse(region, payload.pulse);
         renderHeadline(payload.trend_narrative, payload.top_voices);
-        updateProjectionStates(region, payload);
+        updateProjectionStates(region, payload, false);
       }
       setInterval(requestChart, REFRESH_INTERVAL_MS);
     }
@@ -632,4 +860,5 @@
 
   document.addEventListener('pw:filter-change', requestChart);
   document.addEventListener('pw:locale-change', requestChart);
+  document.addEventListener('pw:timezone-change', redrawOneDayTimeAxes);
 })();

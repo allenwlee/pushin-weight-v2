@@ -42,10 +42,13 @@ def _post(**overrides):
         "tweet_id": "100",
         "fetched_at": "2026-08-25T00:00:00+00:00",
         "age_seconds": 60,
+        "lang_detected": "en",
         "has_text": True,
         "has_lang_detected": True,
         "has_text_en": True,
         "has_text_zh_cn": True,
+        "has_commentary_en": True,
+        "has_commentary_zh_cn": True,
         "translation_status": "succeeded",
         "translation_error_code": "",
         "classification_status": "succeeded",
@@ -73,7 +76,7 @@ def _detailed_post(**overrides):
         lang_detected="ja",
         text_en="Full English translation.",
         text_zh_cn="完整中文翻译。",
-        commentary_en=None,
+        commentary_en="English analyst commentary.",
         commentary_zh_cn="中文语境说明。",
         source_query_id="C1",
         author_id="author-1",
@@ -174,6 +177,9 @@ def test_query_is_bounded_before_joins_and_declares_read_only_mode(checker):
     assert "LIMIT 20" in sql
     assert "CURRENT_TIMESTAMP - es.created_at" in sql
     assert "CURRENT_TIMESTAMP - p.fetched_at" not in sql
+    assert "BTRIM(p.lang_detected) IN" in sql
+    assert "LOWER(BTRIM(p.commentary_en)) NOT IN ('n/a', 'na')" in sql
+    assert "IS DISTINCT FROM LOWER(BTRIM(p.text_zh_cn))" in sql
     assert sql.index("LIMIT 20") < sql.index("posts_brands")
 
     command = checker.build_command(sql)
@@ -200,6 +206,7 @@ def test_detailed_query_adds_report_facts_without_expanding_default_snapshot(che
     for detailed_fact in (
         "'text', p.text",
         "'text_en', p.text_en",
+        "'commentary_en', p.commentary_en",
         "'commentary_zh_cn', p.commentary_zh_cn",
         "'translation_attempts', es.translation_attempts",
         "'classification_last_attempt_at', es.classification_last_attempt_at",
@@ -216,11 +223,14 @@ def test_detailed_query_adds_report_facts_without_expanding_default_snapshot(che
 def test_complete_and_fresh_pending_rows_exit_zero_with_distinct_counts(checker):
     pending = _post(
         tweet_id="101",
+        lang_detected=None,
         translation_status="pending",
         classification_status="pending",
         has_lang_detected=False,
         has_text_en=False,
         has_text_zh_cn=False,
+        has_commentary_en=False,
+        has_commentary_zh_cn=False,
         brands=[{"brand_id": "glm", "signals": [], "discourses": []}],
     )
 
@@ -231,9 +241,10 @@ def test_complete_and_fresh_pending_rows_exit_zero_with_distinct_counts(checker)
         grace_hours=24,
     )
 
-    assert exit_code == 0
+    assert exit_code == 1
     assert payload["status"] == "healthy_with_pending"
     assert payload["regression_gate"] == "inconclusive"
+    assert payload["acceptance_gate"] == "failed"
     assert payload["summary"] == {
         "total": 2,
         "complete": 1,
@@ -251,6 +262,8 @@ def test_complete_and_fresh_pending_rows_exit_zero_with_distinct_counts(checker)
         ("has_lang_detected", "missing_lang_detected"),
         ("has_text_en", "missing_text_en"),
         ("has_text_zh_cn", "missing_text_zh_cn"),
+        ("has_commentary_en", "missing_commentary_en"),
+        ("has_commentary_zh_cn", "missing_commentary_zh_cn"),
     ],
 )
 def test_succeeded_translation_requires_each_persisted_fact(checker, field, reason):
@@ -389,9 +402,13 @@ def test_exact_cohort_reports_requested_ids_missing_from_database(checker):
     assert payload["posts"][1] == {
         "tweet_id": "100",
         "state": "unhealthy",
-        "translation_status": "missing",
-        "classification_status": "missing",
-        "brand_count": 0,
+            "translation_status": "missing",
+            "classification_status": "missing",
+            "lang_detected": None,
+            "has_text_zh_cn": False,
+            "has_commentary_en": False,
+            "has_commentary_zh_cn": False,
+            "brand_count": 0,
         "reasons": [{"stage": "persistence", "reason": "missing_post"}],
     }
 
@@ -411,6 +428,97 @@ def test_empty_snapshot_and_read_write_transaction_are_unhealthy(checker):
     assert empty["summary"]["total"] == 0
     assert writable_code == 2
     assert writable["error"] == {"class": "query", "code": "transaction_not_read_only"}
+
+
+def test_latest_fifty_acceptance_requires_all_commentary_rows(checker):
+    posts = [_post(tweet_id=str(1000 + index)) for index in range(50)]
+
+    passing, passing_code = checker.evaluate_snapshot(
+        _snapshot(*posts), latest=50, requested_ids=None, grace_hours=24
+    )
+    failing_posts = list(posts)
+    failing_posts[-1] = _post(
+        tweet_id="1049",
+        has_commentary_en=False,
+    )
+    failing, failing_code = checker.evaluate_snapshot(
+        _snapshot(*failing_posts), latest=50, requested_ids=None, grace_hours=24
+    )
+
+    assert passing_code == 0
+    assert passing["acceptance_gate"] == "complete"
+    assert passing["acceptance"]["commentary_en"] == {
+        "numerator": 50,
+        "denominator": 50,
+        "rate": 1.0,
+        "percentage": 100.0,
+        "threshold": 0.99,
+        "passed": True,
+    }
+    assert failing_code == 1
+    assert failing["acceptance_gate"] == "failed"
+    assert failing["acceptance"]["commentary_en"]["rate"] == 0.98
+    assert failing["acceptance"]["commentary_en"]["percentage"] == 98.0
+    assert failing["acceptance"]["commentary_en"]["passed"] is False
+
+
+def test_human_output_exposes_each_acceptance_percentage(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post()), latest=1, requested_ids=None, grace_hours=24
+    )
+
+    rendered = checker._render_human(payload)
+
+    assert exit_code == 0
+    assert "non_zh_hans_text_zh_cn=1/1(100.0%)" in rendered
+    assert "commentary_en=1/1(100.0%)" in rendered
+    assert "commentary_zh_cn=1/1(100.0%)" in rendered
+
+
+def test_non_zh_hans_translation_rate_uses_only_eligible_posts(checker):
+    posts = [
+        _post(tweet_id="1", lang_detected="zh-Hans", has_text_zh_cn=True),
+        _post(tweet_id="2", lang_detected="en", has_text_zh_cn=True),
+        _post(tweet_id="3", lang_detected="ja", has_text_zh_cn=False),
+    ]
+
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(*posts), latest=3, requested_ids=None, grace_hours=24
+    )
+
+    metric = payload["acceptance"]["non_zh_hans_text_zh_cn"]
+    assert metric["numerator"] == 1
+    assert metric["denominator"] == 2
+    assert metric["rate"] == 0.5
+    assert metric["passed"] is False
+
+
+def test_noncanonical_language_cannot_satisfy_acceptance(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(lang_detected="english")),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 1
+    assert payload["acceptance"]["lang_detected_present"]["numerator"] == 0
+    assert payload["acceptance_gate"] == "failed"
+
+
+def test_zero_non_zh_hans_posts_is_not_a_translation_failure(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(lang_detected="zh-Hans")),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    metric = payload["acceptance"]["non_zh_hans_text_zh_cn"]
+    assert metric["denominator"] == 0
+    assert metric["rate"] is None
+    assert metric["passed"] is True
+    assert exit_code == 0
 
 
 def test_render_failure_is_sanitized_and_never_retried(checker):
@@ -550,7 +658,11 @@ def test_request_reconstruction_uses_selected_text_and_brands_without_clients(
                 "classifier_model": "classifier-model",
             }
         },
-        prompt_builders=(translation_builder, classification_builder),
+        prompt_builders=(
+            translation_builder,
+            classification_builder,
+            lambda size: min(65536, max(16384, 1500 * size)),
+        ),
     )
 
     assert [call[0] for call in builder_inputs] == [
@@ -601,6 +713,7 @@ def test_request_reconstruction_remains_bounded_at_two_hundred_posts(
         prompt_builders=(
             lambda tweets, locales: f"translate {len(tweets)} {locales}",
             lambda tweets: f"classify {len(tweets)}",
+            lambda size: min(65536, max(16384, 1500 * size)),
         ),
     )
 
@@ -681,6 +794,7 @@ def test_detailed_report_contains_full_evidence_and_explicit_provenance(
         "Harvester latest-N health report",
         "Full source post with `inline code` and a ``` fence.",
         "Full English translation.",
+        "English analyst commentary.",
         "完整中文翻译。",
         "中文语境说明。",
         "minimax",
@@ -899,7 +1013,11 @@ def test_report_reconstruction_failure_is_stable_and_writes_no_partial(
     monkeypatch.setattr(
         checker,
         "_prompt_builders",
-        lambda _repo_root: (fail_prompt_builder, fail_prompt_builder),
+        lambda _repo_root: (
+            fail_prompt_builder,
+            fail_prompt_builder,
+            lambda size: 16384,
+        ),
     )
     monkeypatch.setattr(
         checker,

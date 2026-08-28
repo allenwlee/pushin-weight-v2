@@ -434,11 +434,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         self.fixture = fixture_from_oracle()
         seed_real_home_orm(self.fixture)
         _clear_home_pulse_cache()
-        from core.models import Post, PostEnrichmentState
-
-        pending_post = Post.objects.order_by("-created_at").first()
-        self.assertIsNotNone(pending_post)
-        PostEnrichmentState.objects.create(post=pending_post)
         from django.contrib.auth import get_user_model
 
         self.browser_user = get_user_model().objects.create_user(
@@ -948,12 +943,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                   return {
                                     scaleKeys: Object.keys(chart.scales).sort(),
                                     localPosition: chart.scales.x?.position,
-                                    californiaPosition: chart.scales.xCalifornia?.position,
+                                    comparisonPosition: chart.scales.xComparison?.position,
                                     localTop: chart.scales.x?.top,
-                                    californiaTop: chart.scales.xCalifornia?.top,
+                                    localBottom: chart.scales.x?.bottom,
+                                    comparisonTop: chart.scales.xComparison?.top,
                                     localLabels: chart.scales.x ? tickLabels(chart.scales.x) : [],
-                                    californiaLabels: chart.scales.xCalifornia
-                                      ? tickLabels(chart.scales.xCalifornia)
+                                    comparisonLabels: chart.scales.xComparison
+                                      ? tickLabels(chart.scales.xComparison)
                                       : [],
                                     expectedLocal: instants.map((instant) => {
                                       const hour = instant.getHours();
@@ -965,7 +961,25 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     }),
                                     localColor: chart.scales.x?.options.ticks.color,
                                     defaultColor: Chart.defaults.color,
-                                    californiaColor: chart.scales.xCalifornia?.options.ticks.color,
+                                    comparisonColor: chart.scales.xComparison?.options.ticks.color,
+                                    localTitle: chart.scales.x?.options.title.text,
+                                    comparisonTitle: chart.scales.xComparison?.options.title.text,
+                                    localTitleDisplay: chart.scales.x?.options.title.display,
+                                    comparisonTitleDisplay: chart.scales.xComparison?.options.title.display,
+                                    localDrawTicks: chart.scales.x?.options.grid.drawTicks,
+                                    comparisonDrawTicks: chart.scales.xComparison?.options.grid.drawTicks,
+                                    comparisonGridDisplay: chart.scales.xComparison?.options.grid.display,
+                                    timezoneLabelPlugin: chart.config.plugins.some(
+                                      (plugin) => plugin.id === 'pwTimezoneRowLabels'
+                                    ),
+                                    alignedTickPixels: chart.scales.x.ticks.every(
+                                      (_, index) => Math.abs(
+                                        chart.scales.x.getPixelForTick(index) -
+                                        chart.scales.xComparison.getPixelForTick(index)
+                                      ) <= 0.5
+                                    ),
+                                    localBorder: chart.scales.x?.options.border.display,
+                                    comparisonBorder: chart.scales.xComparison?.options.border.display,
                                     legendOrder: [...region.querySelectorAll('[data-pw-chart-legend] [data-pw-chart-brand]')]
                                       .map((node) => node.dataset.pwChartBrand),
                                     expectedLegendOrder: pulseOrder.concat(chartOnly),
@@ -978,22 +992,37 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                   };
                                 }"""
                             )
-                            self.assertEqual(runtime["scaleKeys"], ["x", "xCalifornia", "y"])
+                            self.assertEqual(runtime["scaleKeys"], ["x", "xComparison", "y"])
                             self.assertEqual(runtime["localPosition"], "bottom")
-                            self.assertEqual(runtime["californiaPosition"], "bottom")
-                            self.assertLess(runtime["localTop"], runtime["californiaTop"])
+                            self.assertEqual(runtime["comparisonPosition"], "bottom")
+                            self.assertLess(runtime["localTop"], runtime["comparisonTop"])
+                            self.assertLessEqual(
+                                abs(runtime["localBottom"] - runtime["comparisonTop"]),
+                                1,
+                            )
                             self.assertEqual(runtime["localLabels"], runtime["expectedLocal"])
                             self.assertEqual(
-                                runtime["californiaLabels"],
+                                runtime["comparisonLabels"],
                                 runtime["expectedCalifornia"],
                             )
                             self.assertEqual(len(runtime["localLabels"]), 24)
-                            self.assertEqual(len(runtime["californiaLabels"]), 24)
+                            self.assertEqual(len(runtime["comparisonLabels"]), 24)
                             self.assertEqual(runtime["localColor"], runtime["defaultColor"])
                             self.assertEqual(
-                                runtime["californiaColor"].replace(" ", ""),
+                                runtime["comparisonColor"].replace(" ", ""),
                                 "rgba(251,191,36,0.45)",
                             )
+                            self.assertEqual(runtime["localTitle"], "local")
+                            self.assertEqual(runtime["comparisonTitle"], "CA")
+                            self.assertFalse(runtime["localTitleDisplay"])
+                            self.assertFalse(runtime["comparisonTitleDisplay"])
+                            self.assertTrue(runtime["timezoneLabelPlugin"])
+                            self.assertTrue(runtime["localDrawTicks"])
+                            self.assertFalse(runtime["comparisonDrawTicks"])
+                            self.assertFalse(runtime["comparisonGridDisplay"])
+                            self.assertTrue(runtime["alignedTickPixels"])
+                            self.assertTrue(runtime["localBorder"])
+                            self.assertFalse(runtime["comparisonBorder"])
                             self.assertEqual(
                                 runtime["legendOrder"],
                                 runtime["expectedLegendOrder"],
@@ -1150,7 +1179,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             hour: 'numeric',
                             hourCycle: 'h23',
                           });
-                          const ticks = chart.scales.xCalifornia.ticks;
+                          const ticks = chart.scales.xComparison.ticks;
                           const firstHour = new Date(chart.data.labels[0]);
                           firstHour.setMinutes(0, 0, 0);
                           firstHour.setHours(firstHour.getHours() + 1);
@@ -1824,6 +1853,164 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_per_brand_narratives_render_bilingually_as_semantic_cards(self) -> None:
+        """The active DTO v3 paints two readable cards on desktop and mobile."""
+        from core.models import Brand, BrandTrendNarrative, TrendNarrativeRun
+        from monitor.trend_narrative_lifecycle import (
+            activate_trend_narrative_run,
+            prepare_brand_trend_narrative,
+        )
+        from x_monitor.config import HeadlineNarrativeConfig
+
+        now = datetime.now(UTC)
+        brands = []
+        for key, name in (("deepseek", "DeepSeek"), ("minimax", "MiniMax")):
+            brand, _ = Brand.objects.update_or_create(
+                nickname=key,
+                defaults={
+                    "display_name": name,
+                    "display_name_en": name,
+                    "display_name_zh_cn": name,
+                },
+            )
+            brands.append(brand)
+        run = TrendNarrativeRun.objects.create(
+            source_cycle_id="browser-u6-per-brand",
+            window_days=1,
+            facts_as_of=now,
+            packet_schema_version=3,
+            snapshot={"private": True},
+            brand_manifest=[brand.nickname for brand in brands],
+            batch_manifest=[[brand.nickname for brand in brands]],
+            internal_order=[brand.nickname for brand in brands],
+        )
+        copy = (
+            (
+                brands[0],
+                now - timedelta(minutes=5),
+                "DeepSeek discussion rose after developers shared hands-on tests.",
+                "Users highlighted faster local inference and steadier coding output.",
+                "开发者分享上手测试后，DeepSeek讨论量上升。",
+                "用户重点提到更快的本地推理和更稳定的代码输出。",
+            ),
+            (
+                brands[1],
+                now - timedelta(hours=2),
+                "MiniMax conversation stayed flat while usage questions gained share.",
+                "Posts focused on deployment setup rather than a new release.",
+                "MiniMax讨论量基本持平，但使用问题的占比上升。",
+                "帖子主要讨论部署设置，而非新版本发布。",
+            ),
+        )
+        for brand, verified_at, headline_en, secondary_en, headline_zh, secondary_zh in copy:
+            prepare_brand_trend_narrative(
+                run=run,
+                brand_key=brand.nickname,
+                brand_name_en=brand.display_name_en,
+                brand_name_zh_cn=brand.display_name_zh_cn,
+                status=BrandTrendNarrative.Status.APPROVED,
+                attempted_at=verified_at,
+                verified_at=verified_at,
+                headline_en=headline_en,
+                headline_zh_cn=headline_zh,
+                secondary_en=secondary_en,
+                secondary_zh_cn=secondary_zh,
+                critic_decision=BrandTrendNarrative.CriticDecision.APPROVE,
+                narrative_kind=BrandTrendNarrative.NarrativeKind.CONTENT_SHIFT,
+                confidence=BrandTrendNarrative.Confidence.HIGH,
+            )
+        self.assertTrue(activate_trend_narrative_run(run.pk, now=now))
+        _clear_home_pulse_cache()
+
+        config = HeadlineNarrativeConfig(
+            serving_enabled=True,
+            activation_state="owner_override",
+            publication_source="prefer_per_brand",
+            legacy_fallback_enabled=False,
+        )
+        artifact_dir = _artifact_dir()
+        cases = (
+            (
+                "en",
+                self._anonymous_cookies("en"),
+                VIEWPORTS["desktop"],
+                "DeepSeek discussion rose after developers shared hands-on tests.",
+                "Stale · last verified 2 hr ago",
+            ),
+            (
+                "zh_hans",
+                self._anonymous_cookies("zh_hans"),
+                VIEWPORTS["mobile"],
+                "开发者分享上手测试后，DeepSeek讨论量上升。",
+                "过期 · 上次验证于2小时前",
+            ),
+        )
+        with (
+            patch(
+                "monitor.trend_narrative_projection._load_config",
+                return_value=config,
+            ),
+            sync_playwright() as playwright,
+        ):
+            browser = playwright.chromium.launch()
+            try:
+                for locale, cookies, viewport, first_headline, stale_label in cases:
+                    with self.subTest(locale=locale, viewport=viewport):
+                        context = self._context_with_cookies(
+                            browser,
+                            cookies,
+                            viewport,
+                        )
+                        page = context.new_page()
+                        try:
+                            response = page.goto(
+                                self.live_server_url,
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            cards = page.locator("article[data-pw-headline-item]")
+                            self.assertEqual(cards.count(), 2)
+                            self.assertEqual(
+                                cards.nth(0).locator("h2").inner_text(),
+                                first_headline,
+                            )
+                            self.assertEqual(
+                                cards.nth(1)
+                                .locator("[data-pw-headline-item-state]")
+                                .inner_text(),
+                                stale_label,
+                            )
+                            stale_state = cards.nth(1).locator(
+                                "[data-pw-headline-item-state]"
+                            )
+                            absolute = stale_state.get_attribute("title")
+                            self.assertIsNotNone(absolute)
+                            self.assertIn("UTC", absolute)
+                            self.assertIn(
+                                absolute,
+                                stale_state.get_attribute("aria-label"),
+                            )
+                            self.assertTrue(
+                                page.locator("[data-pw-headline-legacy]").is_hidden()
+                            )
+                            for index in range(2):
+                                bounds = cards.nth(index).bounding_box()
+                                self.assertIsNotNone(bounds)
+                                self.assertGreater(bounds["width"], 0)
+                                self.assertGreater(bounds["height"], 0)
+                                self.assertLessEqual(
+                                    bounds["x"] + bounds["width"],
+                                    viewport["width"] + 1,
+                                )
+                            page.locator("[data-pw-headline]").screenshot(
+                                path=str(artifact_dir / f"per-brand-{locale}.png")
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_anonymous_filters_window_and_pulse_share_one_request_state(self) -> None:
         """One V22 action emits one immutable state to feed and chart."""
 
@@ -2413,6 +2600,22 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "[data-pw-window-btn].is-active"
                     ).evaluate("element => getComputedStyle(element).backgroundColor")
                     self.assertEqual(selected_background, active_window_background)
+                    selected_edge = page.locator(
+                        f'[data-pw-pulse-entry="{nicknames[1]}"]'
+                    ).evaluate(
+                        """element => {
+                          const probe = document.createElement('span');
+                          probe.style.color = getComputedStyle(element).getPropertyValue('--chip-color');
+                          document.body.appendChild(probe);
+                          const expected = getComputedStyle(probe).color;
+                          probe.remove();
+                          return {
+                            expected,
+                            actual: getComputedStyle(element).borderLeftColor,
+                          };
+                        }"""
+                    )
+                    self.assertEqual(selected_edge["actual"], selected_edge["expected"])
 
                     chart_runtime = page.evaluate(
                         """() => {
@@ -2507,6 +2710,92 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 ).first.inner_text(),
                                 initial_stamp,
                             )
+                            axis_colors = page.evaluate(
+                                """() => {
+                                  const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                                  return {
+                                    local: chart.scales.x.options.ticks.color,
+                                    comparison: chart.scales.xComparison.options.ticks.color,
+                                  };
+                                }"""
+                            )
+                            self.assertEqual(
+                                axis_colors["local"].replace(" ", ""),
+                                "rgba(102,102,102,0.55)",
+                            )
+                            self.assertEqual(
+                                axis_colors["comparison"].replace(" ", ""),
+                                "rgba(251,191,36,1)",
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
+    def test_california_browser_compares_against_localized_beijing_time(self) -> None:
+        """California-local browsers get the Beijing comparison contract."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, expected_local, expected_title in (
+                    ("en", "local", "Beijing"),
+                    ("zh_hans", "本地", "北京"),
+                ):
+                    with self.subTest(locale=locale):
+                        context = browser.new_context(
+                            viewport=VIEWPORTS["desktop"],
+                            timezone_id="America/Los_Angeles",
+                        )
+                        page = context.new_page()
+                        try:
+                            page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            page.wait_for_function("() => window.__pwTz")
+                            pill = page.locator("[data-tz-widget]")
+                            icon = pill.locator("[data-tz-comparison-icon]")
+                            self.assertEqual(
+                                pill.get_attribute("data-tz-comparison"),
+                                "beijing",
+                            )
+                            self.assertTrue(
+                                icon.evaluate("element => element.classList.contains('tz-bj-icon')")
+                            )
+                            self.assertEqual(icon.inner_text(), "京")
+                            self.assertEqual(icon.get_attribute("aria-label"), expected_title)
+                            chart_state = page.evaluate(
+                                """() => {
+                                  const canvas = document.querySelector('canvas.home-chart');
+                                  const chart = Chart.getChart(canvas);
+                                  const payload = JSON.parse(canvas.dataset.home);
+                                  const firstHour = new Date(payload.days[0]);
+                                  firstHour.setMinutes(0, 0, 0);
+                                  firstHour.setHours(firstHour.getHours() + 1);
+                                  const formatter = new Intl.DateTimeFormat('en-US', {
+                                    timeZone: 'Asia/Shanghai',
+                                    hour: 'numeric',
+                                    hourCycle: 'h23',
+                                  });
+                                  const expected = Array.from({length: 24}, (_, index) => {
+                                    const instant = new Date(firstHour.getTime() + index * 60 * 60 * 1000);
+                                    const hour = Number(formatter.format(instant));
+                                    return hour % 2 === 0 ? `${hour}:00` : '';
+                                  });
+                                  return {
+                                    timezone: window.__pwTz.getComparison().timezone,
+                                    localTitle: chart.scales.x.options.title.text,
+                                    title: chart.scales.xComparison.options.title.text,
+                                    labels: chart.scales.xComparison.ticks.map((tick) => String(tick.label)),
+                                    expected,
+                                  };
+                                }"""
+                            )
+                            self.assertEqual(chart_state["timezone"], "Asia/Shanghai")
+                            self.assertEqual(chart_state["localTitle"], expected_local)
+                            self.assertEqual(chart_state["title"], expected_title)
+                            self.assertEqual(len(chart_state["labels"]), 24)
+                            self.assertEqual(chart_state["labels"], chart_state["expected"])
                         finally:
                             context.close()
             finally:
@@ -2627,20 +2916,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                             tz = page.locator("[data-tz-widget]")
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
-                            pending_row = page.locator(
-                                ".feed-row[data-enrichment-status='pending']"
-                            ).first
-                            pending_signal = pending_row.locator(
-                                ".enrichment-status-pending[role='status']"
-                            )
-                            self.assertEqual(pending_signal.count(), 1)
-                            self.assertTrue(pending_signal.is_visible())
-                            self.assertNotEqual((pending_signal.inner_text() or "").strip(), "")
                             self.assertEqual(
-                                page.locator(
-                                    ".feed-row[data-enrichment-status='succeeded'] "
-                                    ".enrichment-status"
-                                ).count(),
+                                page.locator(".feed-row .enrichment-status").count(),
                                 0,
                             )
                             initial_feed_stamp = feed_stamp.text_content()
@@ -2750,6 +3027,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         ):
             self.assertIn(key, row)
         self.assertEqual(row["account"]["handle"], "v22metadata000")
+        self.assertEqual(row["account"]["display_name"], "V22 Metadata Account 000")
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
         self.assertEqual(row["post_type_keys"], ["buzz_releases", "hands_on_usage"])
         self.assertEqual(row["nat_cn"], "pro")
@@ -2763,10 +3041,17 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row.get_attribute("data-tint"), tint)
         shell = row.locator(".feed-row-shell")
         self.assertTrue(shell.evaluate("element => element.classList.contains('" + tint + "')"))
-        glyph = row.locator(".follower-glyph")
+        lead = row.locator(".follower-lead")
+        glyph = lead.locator(".follower-glyph")
+        count = lead.locator(".follower-count")
+        self.assertEqual(lead.count(), 1)
         self.assertEqual(glyph.count(), 1)
-        self.assertIn("followers", glyph.get_attribute("aria-label") or "")
+        self.assertIn("followers", lead.get_attribute("aria-label") or "")
         self.assertGreater(glyph.bounding_box()["width"], 0)
+        self.assertTrue((count.inner_text() or "").strip())
+        account_link = row.locator(".feed-handle-link")
+        self.assertTrue(account_link.inner_text().startswith("V22 Metadata Account "))
+        self.assertRegex(account_link.get_attribute("href") or "", r"/v22metadata\d{3}$")
         for selector in ("[data-sig-sentiment]", "[data-sig-post-type]", "[data-sig-nat]"):
             marker = row.locator(selector)
             self.assertTrue(marker.is_visible(), f"marker is hidden: {selector}")
@@ -2902,6 +3187,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             buttons: bar.querySelectorAll('button').length,
                             window: bar.dataset.pwWindow,
                             computedAt: bar.dataset.pwComputedAt,
+                            overflowX: getComputedStyle(bar).overflowX,
+                            scrollbarWidth: getComputedStyle(bar).scrollbarWidth,
+                            webkitScrollbarDisplay: getComputedStyle(bar, '::-webkit-scrollbar').display,
+                            overflows: bar.scrollWidth > bar.clientWidth,
+                            reachesLast: (() => {
+                              bar.scrollLeft = bar.scrollWidth;
+                              const barBox = bar.getBoundingClientRect();
+                              const lastBox = entries.at(-1).getBoundingClientRect();
+                              return lastBox.right <= barBox.right + 1 && lastBox.left >= barBox.left - 1;
+                            })(),
                           };
                         }"""
                     )
@@ -2911,6 +3206,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(projection["buttons"], 20)
                     self.assertEqual(projection["window"], "1")
                     self.assertRegex(projection["computedAt"], r"^\d{4}-\d{2}-\d{2}T")
+                    self.assertEqual(projection["overflowX"], "auto")
+                    self.assertTrue(projection["overflows"])
+                    self.assertNotEqual(projection["scrollbarWidth"], "none")
+                    self.assertNotEqual(projection["webkitScrollbarDisplay"], "none")
+                    self.assertTrue(projection["reachesLast"])
                     zero = projection["details"]["upstage"]
                     self.assertEqual(zero["text"], "0%")
                     self.assertEqual(zero["glyph"], "→")
@@ -2931,6 +3231,35 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     ).evaluate_all("inputs => inputs.map(input => input.value)")
                     self.assertEqual(closed_models, ["gemini", "gpt", "claude", "grok"])
                     self.assertTrue(set(open_models).isdisjoint(closed_models))
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_mobile_pulse_remains_touch_scrollable_without_desktop_scrollbar(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport={"width": 390, "height": 844},
+                    timezone_id="Asia/Tokyo",
+                )
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    pulse = page.locator("[data-pw-pulse]")
+                    mobile_overflow = pulse.evaluate(
+                        """bar => ({
+                          overflowX: getComputedStyle(bar).overflowX,
+                          scrollbarWidth: getComputedStyle(bar).scrollbarWidth,
+                          webkitScrollbarDisplay: getComputedStyle(bar, '::-webkit-scrollbar').display,
+                          overflows: bar.scrollWidth > bar.clientWidth,
+                        })"""
+                    )
+                    self.assertEqual(mobile_overflow["overflowX"], "auto")
+                    self.assertTrue(mobile_overflow["overflows"])
+                    self.assertEqual(mobile_overflow["scrollbarWidth"], "none")
+                    self.assertEqual(mobile_overflow["webkitScrollbarDisplay"], "none")
                 finally:
                     context.close()
             finally:
@@ -2960,6 +3289,41 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         flagged = next(row for row in all_rows["rows"] if row["unsanctioned"])
         self.assertIn("unsanctioned", flagged)
         self.assertTrue(flagged["unsanctioned"])
+
+    def test_follower_lead_keeps_feed_bodies_aligned_across_all_bins(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    geometry = page.locator(".feed-row[data-pw-feed-row]").evaluate_all(
+                        """rows => rows.slice(0, 4).map((row) => {
+                          const lead = row.querySelector('.follower-lead');
+                          const glyph = row.querySelector('.follower-glyph');
+                          const body = row.querySelector('.feed-main > .body');
+                          return {
+                            leadWidth: lead.getBoundingClientRect().width,
+                            bodyLeft: body.getBoundingClientRect().left,
+                            glyphSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
+                            count: row.querySelector('.follower-count').textContent.trim(),
+                          };
+                        })"""
+                    )
+                    self.assertEqual(len(geometry), 4)
+                    self.assertEqual(len({row["leadWidth"] for row in geometry}), 1)
+                    self.assertEqual(len({row["bodyLeft"] for row in geometry}), 1)
+                    self.assertEqual(
+                        [row["glyphSize"] for row in geometry],
+                        sorted(row["glyphSize"] for row in geometry),
+                    )
+                    self.assertEqual(len({row["glyphSize"] for row in geometry}), 4)
+                    self.assertTrue(all(row["count"] for row in geometry))
+                finally:
+                    context.close()
+            finally:
+                browser.close()
 
     def test_brand_scope_changes_display_tint_without_losing_classifications(self) -> None:
         target = self.fixture["brand_scope_id"]
@@ -3029,6 +3393,102 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             30,
             "52 enriched rows must use bounded bulk metadata queries, not per-row lookups",
         )
+
+    def test_feed_eligibility_query_keeps_request_latency_and_roundtrips_bounded(
+        self,
+    ) -> None:
+        from contextlib import nullcontext
+        from statistics import median
+        from time import monotonic
+
+        from django.db.models import Prefetch
+        from django.utils import timezone
+
+        from core.models import PostBrand
+        from monitor.views import _get_feed_posts
+
+        Post.objects.filter(tweet_id__startswith="v22-pulse-").delete()
+
+        def baseline_get_feed_posts(
+            window_days: int | None = None,
+            brand_nickname: str | None = None,
+            limit: int = 50,
+        ):
+            cutoff = (
+                timezone.now() - timedelta(days=window_days)
+                if window_days
+                else None
+            )
+            queryset = Post.objects.select_related("author").prefetch_related(
+                Prefetch(
+                    "brands",
+                    queryset=PostBrand.objects.select_related("brand"),
+                )
+            )
+            if cutoff:
+                queryset = queryset.filter(created_at__gte=cutoff)
+            if brand_nickname:
+                queryset = queryset.filter(
+                    brands__brand__nickname=brand_nickname
+                ).distinct()
+            return queryset.order_by("-created_at")[:limit]
+
+        client = Client(HTTP_HOST="localhost")
+
+        def request_sample(*, baseline: bool) -> tuple[float, int]:
+            patch_context = (
+                patch(
+                    "monitor.views._get_feed_posts",
+                    side_effect=baseline_get_feed_posts,
+                )
+                if baseline
+                else nullcontext()
+            )
+            with patch_context:
+                started = monotonic()
+                with CaptureQueriesContext(connection) as queries:
+                    response = client.get("/feed/?limit=50")
+                elapsed = monotonic() - started
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()["rows"]), 50)
+            return elapsed, len(queries)
+
+        request_sample(baseline=True)
+        request_sample(baseline=False)
+        baseline_samples = [request_sample(baseline=True) for _ in range(5)]
+        candidate_samples = [request_sample(baseline=False) for _ in range(5)]
+        baseline_times = [elapsed for elapsed, _ in baseline_samples]
+        candidate_times = [elapsed for elapsed, _ in candidate_samples]
+        baseline_roundtrips = [count for _, count in baseline_samples]
+        candidate_roundtrips = [count for _, count in candidate_samples]
+        baseline_median = median(baseline_times)
+        candidate_median = median(candidate_times)
+        allowed_median = baseline_median + max(baseline_median * 0.25, 0.05)
+        baseline_plan = baseline_get_feed_posts(limit=500).explain()
+        candidate_plan = _get_feed_posts(limit=500).explain()
+
+        print(
+            "FEED_ELIGIBILITY_BENCHMARK "
+            + json.dumps(
+                {
+                    "baseline_seconds": baseline_times,
+                    "candidate_seconds": candidate_times,
+                    "baseline_median_seconds": baseline_median,
+                    "candidate_median_seconds": candidate_median,
+                    "allowed_median_seconds": allowed_median,
+                    "baseline_roundtrips": baseline_roundtrips,
+                    "candidate_roundtrips": candidate_roundtrips,
+                    "baseline_plan": baseline_plan,
+                    "candidate_plan": candidate_plan,
+                },
+                sort_keys=True,
+            )
+        )
+        self.assertTrue(baseline_plan.strip())
+        self.assertTrue(candidate_plan.strip())
+        self.assertEqual(candidate_roundtrips, baseline_roundtrips)
+        self.assertLessEqual(candidate_median, allowed_median)
+        self.assertTrue(all(elapsed < 2 for elapsed in candidate_times))
 
     def test_anonymous_browser_refetch_and_page_two_append_paint_metadata(self) -> None:
         with sync_playwright() as playwright:
@@ -3351,6 +3811,146 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         page.locator(f".feed-row[data-tweet-id='{recovered_id}']").wait_for()
                         self.assertTrue(page.locator("[data-pw-feed-status]").is_hidden())
                         current_id = recovered_id
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_terminal_completion_reveals_the_exact_hidden_row_on_first_page_refresh(self) -> None:
+        from core.models import PostEnrichmentState
+
+        ordered_posts = list(Post.objects.order_by("-created_at")[:3])
+        pending_post = ordered_posts[0]
+        failed_post = ordered_posts[1]
+        expected_fill = ordered_posts[2]
+        PostEnrichmentState.objects.create(post=pending_post)
+        PostEnrichmentState.objects.create(
+            post=failed_post,
+            translation_status=PostEnrichmentState.Status.FAILED,
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+        )
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                context.add_init_script(
+                    """
+                    (() => {
+                      const realSetInterval = window.setInterval.bind(window);
+                      const realClearInterval = window.clearInterval.bind(window);
+                      window.__feedEligibilityMinuteCallbacks = [];
+                      window.__feedEligibilityIntervalDelays = [];
+                      window.setInterval = (fn, delay, ...args) => {
+                        window.__feedEligibilityIntervalDelays.push(delay);
+                        if (delay === 60000) {
+                          window.__feedEligibilityMinuteCallbacks.push(fn);
+                          return -window.__feedEligibilityMinuteCallbacks.length;
+                        }
+                        return realSetInterval(fn, delay, ...args);
+                      };
+                      window.clearInterval = (id) => id < 0 ? undefined : realClearInterval(id);
+                    })();
+                    """
+                )
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{pending_post.tweet_id}']"
+                        ).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
+                        ).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{expected_fill.tweet_id}']"
+                        ).count(),
+                        1,
+                    )
+                    first_page = page.evaluate(
+                        """async () => {
+                          const response = await fetch('/feed/?limit=1');
+                          if (!response.ok) throw new Error(`feed status ${response.status}`);
+                          return response.json();
+                        }"""
+                    )
+                    self.assertEqual(
+                        [row["tweet_id"] for row in first_page["rows"]],
+                        [expected_fill.tweet_id],
+                    )
+                    callback_names = page.evaluate(
+                        "() => window.__feedEligibilityMinuteCallbacks.map(fn => fn.name)"
+                    )
+                    self.assertIn("refreshFirstPage", callback_names)
+                    self.assertIn(
+                        60000,
+                        page.evaluate(
+                            "() => window.__feedEligibilityIntervalDelays"
+                        ),
+                    )
+
+                    update_results: list[int] = []
+
+                    def mark_terminal_complete() -> None:
+                        from django.db import close_old_connections
+
+                        close_old_connections()
+                        try:
+                            update_results.append(
+                                PostEnrichmentState.objects.filter(
+                                    post_id=pending_post.tweet_id
+                                ).update(
+                                    translation_status=PostEnrichmentState.Status.SUCCEEDED,
+                                    classification_status=PostEnrichmentState.Status.SUCCEEDED,
+                                )
+                            )
+                        finally:
+                            close_old_connections()
+
+                    update_thread = threading.Thread(target=mark_terminal_complete)
+                    update_thread.start()
+                    update_thread.join(timeout=5)
+                    self.assertFalse(update_thread.is_alive())
+                    self.assertEqual(update_results, [1])
+
+                    with page.expect_response(
+                        lambda response: "/feed/?" in response.url
+                        and response.status == 200
+                    ):
+                        page.evaluate(
+                            """async () => {
+                              const refresh = window.__feedEligibilityMinuteCallbacks.find(
+                                fn => fn.name === 'refreshFirstPage'
+                              );
+                              await refresh();
+                            }"""
+                        )
+                    revealed = page.locator(
+                        f".feed-row[data-tweet-id='{pending_post.tweet_id}']"
+                    )
+                    revealed.wait_for()
+                    self.assertTrue(revealed.is_visible())
+                    box = revealed.bounding_box()
+                    self.assertIsNotNone(box)
+                    self.assertGreater(box["width"], 0)
+                    self.assertGreater(box["height"], 0)
+                    self.assertEqual(
+                        revealed.get_attribute("data-enrichment-status"), "succeeded"
+                    )
+                    self.assertEqual(revealed.locator(".enrichment-status").count(), 0)
+                    self.assertEqual(
+                        page.locator(
+                            f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
+                        ).count(),
+                        0,
+                    )
                 finally:
                     context.close()
             finally:

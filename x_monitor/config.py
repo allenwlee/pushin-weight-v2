@@ -45,7 +45,13 @@ KNOWN_MODELS: frozenset[str] = frozenset(
 )
 
 VALID_REVIEW_REASONS: frozenset[str] = frozenset(
-    {"low_engagement", "off_topic", "suspicious_actor", "ambiguous_role", "banned_token"}
+    {
+        "low_engagement",
+        "off_topic",
+        "suspicious_actor",
+        "ambiguous_role",
+        "banned_token",
+    }
 )
 
 VALID_QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
@@ -112,7 +118,6 @@ class QuoteTweetConfig(BaseModel):
     daily_enabled: bool = True
     daily_recency_days: int = Field(default=7, ge=1)
     daily_call_budget: int = Field(default=50, ge=0)
-
 
 
 class MetricsRefreshConfig(BaseModel):
@@ -200,14 +205,73 @@ class ListMembershipConfig(BaseModel):
     request_timeout_seconds: int = Field(default=30, ge=1)
 
 
+@dataclass(frozen=True)
+class EnrichmentAttemptDeadline:
+    """One monotonic budget for a single enrichment stage."""
+
+    deadline_at: float
+    request_timeout_seconds: float
+    monotonic: Callable[[], float] = time.monotonic
+
+    def remaining(self) -> float:
+        return max(self.deadline_at - self.monotonic(), 0.0)
+
+    def expired(self) -> bool:
+        return self.remaining() <= 0.0
+
+    def request_timeout(self) -> float:
+        return min(float(self.request_timeout_seconds), self.remaining())
+
+
 class EnrichmentConfig(BaseModel):
     """Bounded durable translation/classification queue."""
 
-    claim_per_cycle: int = Field(default=20, ge=1)
+    claim_per_cycle: int = Field(default=100, ge=1)
+    current_cycle_claim_per_cycle: int = Field(default=50, ge=0)
+    carryover_claim_per_cycle: int = Field(default=50, ge=0)
     max_attempts: int = Field(default=8, ge=1)
     max_age_hours: int = Field(default=24, ge=1)
-    claim_ttl_seconds: int = Field(default=180, ge=1)
-    attempt_budget_seconds: int = Field(default=90, ge=1)
+    claim_ttl_seconds: int = Field(default=660, ge=1)
+    request_timeout_seconds: int = Field(default=90, ge=1)
+    attempt_budget_seconds: int = Field(default=300, ge=1)
+    terminalization_reserve_seconds: int = Field(default=30, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_attempt_budget(self) -> EnrichmentConfig:
+        if (
+            self.current_cycle_claim_per_cycle + self.carryover_claim_per_cycle
+            > self.claim_per_cycle
+        ):
+            raise ValueError(
+                "current_cycle_claim_per_cycle + carryover_claim_per_cycle "
+                "must not exceed claim_per_cycle"
+            )
+        if self.request_timeout_seconds > self.attempt_budget_seconds:
+            raise ValueError(
+                "request_timeout_seconds must not exceed attempt_budget_seconds"
+            )
+        if self.claim_ttl_seconds < self.claim_safe_envelope_seconds:
+            raise ValueError(
+                "claim_ttl_seconds must cover both enrichment stage budgets "
+                "and terminalization reserve"
+            )
+        return self
+
+    @property
+    def claim_safe_envelope_seconds(self) -> int:
+        return (
+            2 * self.attempt_budget_seconds
+            + self.terminalization_reserve_seconds
+        )
+
+    def start_attempt_deadline(
+        self, *, monotonic: Callable[[], float] = time.monotonic
+    ) -> EnrichmentAttemptDeadline:
+        return EnrichmentAttemptDeadline(
+            deadline_at=monotonic() + self.attempt_budget_seconds,
+            request_timeout_seconds=self.request_timeout_seconds,
+            monotonic=monotonic,
+        )
 
 
 class HarvestConfig(BaseModel):
@@ -234,8 +298,7 @@ class HarvestConfig(BaseModel):
             )
         if self.relevancy_timeout_seconds > self.tip_sweep_target_seconds:
             raise ValueError(
-                "relevancy_timeout_seconds must not exceed "
-                "tip_sweep_target_seconds"
+                "relevancy_timeout_seconds must not exceed tip_sweep_target_seconds"
             )
         return self
 
@@ -287,7 +350,19 @@ class HeadlineNarrativeConfig(BaseModel):
     provider: Literal["anthropic", "deepseek", "minimax"] = "deepseek"
     base_url: str = "https://api.deepseek.com/anthropic"
     model: str = "deepseek-v4-pro"
-    timeout_seconds: int = Field(default=45, ge=5, le=120)
+    rank_prompt_version: str = Field(
+        default="headline-rank-v1", min_length=1, max_length=64
+    )
+    editor_prompt_version: str = Field(
+        default="headline-editor-v6", min_length=1, max_length=64
+    )
+    critic_prompt_version: str = Field(
+        default="headline-critic-v6", min_length=1, max_length=64
+    )
+    rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
+    editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
+    critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
+    timeout_seconds: int = Field(default=60, ge=5, le=120)
     prompt_version: str = Field(
         default="headline-v10-why-first-quantitative-color",
         min_length=1,
@@ -330,16 +405,40 @@ class HeadlineNarrativeConfig(BaseModel):
         le=128 * 1024,
     )
     call_cap: Literal[4] = 4
+    # U4's durable per-brand graph has a separate budget from the retired
+    # shared-headline four-window cap.  It intentionally permits the exact
+    # successful graph: one rank plus editor and critic for each five-brand
+    # batch (seventeen calls for forty eligible brands).
+    per_brand_call_cap: int = Field(default=25, ge=1, le=200)
+    per_brand_input_token_cap: int = Field(default=700_000, ge=1_000)
+    per_brand_output_token_cap: int = Field(default=160_000, ge=1_000)
+    per_brand_cost_cap_usd: Decimal = Field(
+        default=Decimal("1.50"), gt=0, decimal_places=4
+    )
+    per_brand_input_usd_per_million: Decimal = Field(
+        default=Decimal("1.32"), ge=0, decimal_places=4
+    )
+    per_brand_output_usd_per_million: Decimal = Field(
+        default=Decimal("3.96"), ge=0, decimal_places=4
+    )
+    per_brand_pricing_version: str = Field(
+        default="deepseek-v4-pro-peak-2026-08-27", min_length=1, max_length=64
+    )
+    per_brand_expected_max_brands: int = Field(default=40, ge=1, le=100)
+    per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
+    per_brand_worker_concurrency: Literal[1] = 1
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
     task_expiry_seconds: int = Field(default=1800, ge=60, le=3600)
-    lease_seconds: int = Field(default=90, ge=30, le=300)
+    lease_seconds: int = Field(default=900, ge=30, le=900)
     retention_days: int = Field(default=90, ge=1)
     retention_rows_per_window: int = Field(default=20, ge=1)
     activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
     serving_enabled: bool = False
     enqueue_enabled: bool = False
     provider_calls_enabled: bool = False
+    publication_source: Literal["prefer_per_brand", "legacy_only"] = "prefer_per_brand"
+    legacy_fallback_enabled: bool = True
     control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
 
     @property
@@ -385,9 +484,7 @@ class HeadlineNarrativeConfig(BaseModel):
             for window in windows
         ):
             raise ValueError("headline stale limits must be twice each cadence")
-        if not (
-            self.surging_ratio >= self.rising_ratio >= self.steady_ratio
-        ):
+        if not (self.surging_ratio >= self.rising_ratio >= self.steady_ratio):
             raise ValueError("headline momentum ratios must descend")
         if not (
             self.evidence_floor
@@ -397,12 +494,52 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline evidence allocation limits must ascend")
         if self.lease_seconds <= self.timeout_seconds:
             raise ValueError("headline lease must exceed provider timeout")
+        expected_batches = (self.per_brand_expected_max_brands + 4) // 5
+        expected_calls = 1 + 2 * expected_batches
+        if expected_calls > self.per_brand_call_cap:
+            raise ValueError("per-brand call cap cannot fit the expected brand graph")
+        packet_tokens = (self.evidence_provider_packet_bytes + 3) // 4 + 1_000
+        expected_input_tokens = packet_tokens + expected_batches * (
+            packet_tokens + packet_tokens + self.editor_max_tokens
+        )
+        if expected_input_tokens > self.per_brand_input_token_cap:
+            raise ValueError("per-brand input cap cannot fit the expected brand graph")
+        expected_output_tokens = self.rank_max_tokens + expected_batches * (
+            self.editor_max_tokens + self.critic_max_tokens
+        )
+        if expected_output_tokens > self.per_brand_output_token_cap:
+            raise ValueError("per-brand output cap cannot fit the expected brand graph")
+        expected_cost = (
+            Decimal(expected_input_tokens) * self.per_brand_input_usd_per_million
+            + Decimal(expected_output_tokens) * self.per_brand_output_usd_per_million
+        ) / Decimal(1_000_000)
+        if expected_cost > self.per_brand_cost_cap_usd:
+            raise ValueError("per-brand dollar cap cannot fit the expected brand graph")
+        calls_per_hour = sum(
+            Decimal(expected_calls * 60) / Decimal(self.cadence_minutes[window])
+            for window in windows
+        )
+        drain_utilization = (
+            calls_per_hour
+            * self.per_brand_p95_latency_seconds
+            / Decimal(3600 * self.per_brand_worker_concurrency)
+        )
+        if self.provider_calls_active and drain_utilization >= Decimal("1"):
+            raise ValueError(
+                "headline concurrency-one drain rate must exceed the arrival rate"
+            )
         if (
             self.activation_state == "reviewed"
             and self.materiality_policy_version.strip().casefold().startswith("pending")
         ):
             raise ValueError(
                 "reviewed headline activation requires a reviewed materiality policy"
+            )
+        if self.publication_source == "legacy_only" and (
+            self.enqueue_enabled or self.provider_calls_enabled
+        ):
+            raise ValueError(
+                "legacy-only headline rollback requires enqueue and provider calls disabled"
             )
         return self
 
@@ -421,7 +558,9 @@ class Config(BaseModel):
     headline_narrative: HeadlineNarrativeConfig = HeadlineNarrativeConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
-    review_reasons: list[str] = Field(default_factory=lambda: list(VALID_REVIEW_REASONS))
+    review_reasons: list[str] = Field(
+        default_factory=lambda: list(VALID_REVIEW_REASONS)
+    )
     # R17 (legacy): skip order was Q6 → Q5 → Q3 → Q2 → Q4 → Q1 (Q6
     # praise is high-volume / low-decision-signal).
     #
@@ -482,6 +621,7 @@ class Config(BaseModel):
         brand also matches (the empty-brands fallback to "*" is treated
         as a match for that spec).
         """
+
         def _placeholder(spec: XQuerySpec) -> str:
             if spec.is_wide_net and spec.wide_net_brands:
                 return spec.wide_net_brands[0]
@@ -573,7 +713,8 @@ class Config(BaseModel):
                 "co-occurrence; removing them from B halves TwitterAPI "
                 "credit spend on the wide-net path with no recall "
                 "loss. See plan 2026-07-13-002 U4.",
-                len(dupes), dupes,
+                len(dupes),
+                dupes,
             )
         return self
 
@@ -612,15 +753,18 @@ def load_config(path: Path) -> Config:
     # differ from config.yaml. Merge env vars into Config.llm only
     # when the field is not already explicitly set in yaml — yaml wins.
     import os
+
     raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
     env_llm_overrides = {
-        k: v for k, v in {
+        k: v
+        for k, v in {
             "translator_model": os.environ.get("X_MONITOR_TRANSLATOR_MODEL"),
             "classifier_model": os.environ.get("X_MONITOR_CLASSIFIER_MODEL"),
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
-        }.items() if v is not None
+        }.items()
+        if v is not None
     }
     # Plan 2026-08-04-001: yaml wins over env, BUT a yaml `null` is
     # not "set" — it uses the role-specific env value when present and
@@ -628,7 +772,10 @@ def load_config(path: Path) -> Config:
     # when no role-specific env value exists.
     raw_llm_filtered = {k: v for k, v in raw_llm.items() if v is not None}
     if raw_llm or env_llm_overrides:
-        merged_llm = {**env_llm_overrides, **raw_llm_filtered}  # yaml wins over env (non-null only)
+        merged_llm = {
+            **env_llm_overrides,
+            **raw_llm_filtered,
+        }  # yaml wins over env (non-null only)
         raw = {**raw, "llm": merged_llm}
     raw_headline = (
         raw.get("headline_narrative", {})
@@ -646,6 +793,8 @@ def load_config(path: Path) -> Config:
         "serving_enabled": "X_MONITOR_HEADLINE_SERVING_ENABLED",
         "enqueue_enabled": "X_MONITOR_HEADLINE_ENQUEUE_ENABLED",
         "provider_calls_enabled": "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED",
+        "publication_source": "X_MONITOR_HEADLINE_PUBLICATION_SOURCE",
+        "legacy_fallback_enabled": "X_MONITOR_HEADLINE_LEGACY_FALLBACK_ENABLED",
         "control_revision": "X_MONITOR_HEADLINE_CONTROL_REVISION",
     }
     env_headline_overrides = {

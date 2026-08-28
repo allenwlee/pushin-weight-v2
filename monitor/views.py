@@ -62,6 +62,7 @@ from core.models import (
     SentimentKey,
     SentimentLabel,
 )
+from monitor.post_enrichment import persisted_output_complete_q
 
 log = logging.getLogger(__name__)
 
@@ -70,9 +71,9 @@ log = logging.getLogger(__name__)
 # ============================================================================
 
 MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "minimax": "MiniMax AI",
-    "qwen": "Qwen",
     "deepseek": "DeepSeek",
+    "qwen": "Qwen",
+    "minimax": "MiniMax AI",
     "glm": "Zhipu GLM",
     "mimo": "Xiaomi MiMo",
     "moonshot_kimi": "Moonshot Kimi",
@@ -200,6 +201,29 @@ _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
     "gemini", "gpt", "claude", "grok",
 )
 
+# Explicit current UI inventory. New production brands require a declaration
+# update, while the known fixture-only row is never rendered as a control.
+HOME_SELECTABLE_BRAND_NICKNAMES: tuple[str, ...] = (
+    *MODEL_DISPLAY_NAMES,
+    "chatglm",
+    "gemma",
+    "kwaiyii",
+    "seed",
+    "sensenova",
+    "step",
+    "wenxin",
+    *_HOME_CLOSED_BRAND_NICKNAMES,
+)
+_HOME_EXCLUDED_BRAND_NICKNAMES: tuple[str, ...] = ("test_brand",)
+_HOME_BRAND_ORDER = {
+    nickname: index
+    for index, nickname in enumerate(HOME_SELECTABLE_BRAND_NICKNAMES)
+}
+
+
+def _home_brand_sort_key(nickname: str) -> tuple[int, str]:
+    return _HOME_BRAND_ORDER.get(nickname, 999), nickname
+
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
 HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
 HOME_WINDOW_DEFAULT_BEFORE: int = 7  # pinned for Net B regression (BEFORE value, not used in code)
@@ -260,6 +284,15 @@ def _pretty_followers(count: int | None) -> str:
             return f"{v:.1f}k"
         return f"{v:.2f}k"
     return str(count)
+
+
+def _feed_account_display_name(
+    account_name: str | None,
+    snapshot_name: str | None,
+    handle: str | None,
+) -> str:
+    """Resolve the public feed identity without changing its handle-based link."""
+    return account_name or snapshot_name or handle or "@unknown"
 
 
 def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
@@ -532,19 +565,28 @@ def _get_feed_posts(
     if window_days:
         cutoff = django_timezone.now() - timedelta(days=window_days)
 
-    qs = Post.objects.select_related("author").prefetch_related(
-        Prefetch(
-            "brands",
-            queryset=PostBrand.objects.select_related("brand"),
-        ),
-    ).order_by("-created_at")
+    terminal_state = Q(
+        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+    qs = (
+        Post.objects.filter(persisted_output_complete_q())
+        .filter(Q(enrichment_state__isnull=True) | terminal_state)
+        .select_related("author")
+        .prefetch_related(
+            Prefetch(
+                "brands",
+                queryset=PostBrand.objects.select_related("brand"),
+            ),
+        )
+    )
 
     if cutoff:
         qs = qs.filter(created_at__gte=cutoff)
     if brand_nickname:
         qs = qs.filter(brands__brand__nickname=brand_nickname).distinct()
 
-    return qs[:limit]
+    return qs.order_by("-created_at")[:limit]
 
 
 # ============================================================================
@@ -891,24 +933,35 @@ def _post_to_wire(
     # Account data — from enrichment when available
     if enriched and enriched.get("account"):
         acc = enriched["account"]
+        handle = acc.get("handle") or post.author_handle or "@unknown"
         account_wire = {
-            "handle": acc.get("handle") or "@unknown",
+            "handle": handle,
+            "display_name": _feed_account_display_name(
+                acc.get("display_name"), post.author_name, handle
+            ),
             "role": acc.get("role_key"),
             "role_label": acc.get("role_label") or "",
             "followers_count": acc.get("followers_count") or 0,
             "followers_pretty": acc.get("followers_pretty") or "",
         }
     elif post.author:
+        handle = post.author.handle or post.author_handle or "@unknown"
         account_wire = {
-            "handle": post.author.handle or "@unknown",
+            "handle": handle,
+            "display_name": _feed_account_display_name(
+                post.author.display_name, post.author_name, handle
+            ),
             "role": None,
             "role_label": "",
             "followers_count": post.author.followers_count or 0,
             "followers_pretty": _pretty_followers(post.author.followers_count),
         }
     else:
+        handle = post.author_handle or "@unknown"
         account_wire = {
-            "handle": "@unknown", "role": None, "role_label": "",
+            "handle": handle,
+            "display_name": _feed_account_display_name(None, post.author_name, handle),
+            "role": None, "role_label": "",
             "followers_count": 0, "followers_pretty": "",
         }
 
@@ -1100,6 +1153,14 @@ def _enrich_posts_with_classifications(
     result: list[dict[str, Any]] = []
     for post in posts:
         tid = post.tweet_id
+        account_handle = (
+            post.author.handle if post.author else post.author_handle
+        ) or "@unknown"
+        account_display_name = _feed_account_display_name(
+            post.author.display_name if post.author else None,
+            post.author_name,
+            account_handle,
+        )
         row: dict[str, Any] = {
             "tweet_id": tid,
             "created_at": post.created_at.isoformat() if post.created_at else None,
@@ -1113,6 +1174,7 @@ def _enrich_posts_with_classifications(
             "reply_count": post.reply_count or 0,
             "lang_detected": post.lang_detected,
             "author_handle": post.author_handle,
+            "author_name": post.author_name,
             "author_id": post.author_id,
             "headline": post.headline,
             "headline_source": post.headline_source,
@@ -1133,7 +1195,8 @@ def _enrich_posts_with_classifications(
             "brands": [],
             "classifications_by_brand": {},
             "account": {
-                "handle": post.author.handle if post.author else (post.author_handle or "@unknown"),
+                "handle": account_handle,
+                "display_name": account_display_name,
                 "role": None,
                 "role_key": None,
                 "role_label": "",
@@ -1541,12 +1604,14 @@ def _build_home_chart_payload(
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
 
-    # Get enabled brands
+    # Exclude only the known fixture leak. The assurance inventory gate reports
+    # any other production drift instead of changing runtime query semantics.
     brand_nicknames = list(
         Brand.objects.filter(is_sentinel=False)
-        .order_by("nickname")
+        .exclude(nickname__in=_HOME_EXCLUDED_BRAND_NICKNAMES)
         .values_list("nickname", flat=True)
     )
+    brand_nicknames.sort(key=_home_brand_sort_key)
 
     # Brand narrowing from filter
     brands_filter = normalized_filters.get("brands")
@@ -1649,9 +1714,13 @@ def _build_home_chart_payload(
     computed_at = pulse["computed_at"]
     from monitor.trend_narrative_projection import project_trend_narrative
 
+    selected_narrative_brands = normalized_filters.get("brands")
+    if selected_narrative_brands in (None, "__all__"):
+        selected_narrative_brands = None
     trend_narrative = project_trend_narrative(
         window_days,
         locale=locale,
+        selected_brand_keys=selected_narrative_brands,
         now=now,
         computed_at=computed_at,
     )
@@ -1875,14 +1944,9 @@ def _build_brands_context() -> list[dict[str, Any]]:
     Pulse values are intentionally absent here; they live in the chart payload
     so initial and refreshed chart/pulse projections share one timestamp.
     """
-    _BRAND_ORDER = [
-        "deepseek", "qwen", "glm", "minimax", "llama", "mistral",
-        "mimo", "doubao", "yi", "hunyuan", "stepfun", "ernie",
-        "kuaishou", "upstage", "inclusionai",
-    ]
-    _order_map = {nick: i for i, nick in enumerate(_BRAND_ORDER)}
-
-    brand_qs = Brand.objects.filter(is_sentinel=False)
+    brand_qs = Brand.objects.filter(is_sentinel=False).exclude(
+        nickname__in=_HOME_EXCLUDED_BRAND_NICKNAMES
+    )
     brands = []
     for b in brand_qs:
         brands.append({
@@ -1892,7 +1956,7 @@ def _build_brands_context() -> list[dict[str, Any]]:
             "display_name_en": b.display_name_en or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
             "display_name_zh_cn": b.display_name_zh_cn or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
         })
-    brands.sort(key=lambda b: (_order_map.get(b["nickname"], 999), b["nickname"]))
+    brands.sort(key=lambda brand: _home_brand_sort_key(brand["nickname"]))
     return brands
 
 
@@ -2212,11 +2276,18 @@ def _serialize_feed_row(
             "role_label": cls.get("role_label"),
         }
 
+    account_wire = dict(post.get("account") or {})
+    account_handle = account_wire.get("handle") or post.get("author_handle") or "@unknown"
+    account_wire["handle"] = account_handle
+    account_wire["display_name"] = _feed_account_display_name(
+        account_wire.get("display_name"), post.get("author_name"), account_handle
+    )
+
     display_fields = _v22_feed_display_fields(
         classifications,
         active_brand_scope=active_brand_scope,
         created_at=post.get("created_at"),
-        account=post.get("account") or {},
+        account=account_wire,
         like_count=post.get("like_count"),
         retweet_count=post.get("retweet_count"),
         reply_count=post.get("reply_count"),
@@ -2250,7 +2321,7 @@ def _serialize_feed_row(
             post.get("enrichment_status", PostEnrichmentState.Status.SUCCEEDED),
             locale,
         ),
-        "account": post.get("account", {}),
+        "account": account_wire,
         **display_fields,
     }
 

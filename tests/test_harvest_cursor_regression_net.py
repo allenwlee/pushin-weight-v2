@@ -237,7 +237,7 @@ def test_window_is_bounded_in_size(cycle):
 # --- scope note ----------------------------------------------------------
 
 
-def test_operator_backfill_is_exempt_from_the_unbounded_check(cycle, monkeypatch):
+def test_operator_backfill_is_exempt_from_the_unbounded_check(cycle):
     """Documents that this net targets SCHEDULED cycles.
 
     The backfill command legitimately supplies its own historical window; it
@@ -245,12 +245,12 @@ def test_operator_backfill_is_exempt_from_the_unbounded_check(cycle, monkeypatch
     """
     since = int((datetime.now(timezone.utc) - timedelta(days=3)).timestamp())
     until = int((datetime.now(timezone.utc) - timedelta(days=2)).timestamp())
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_SINCE_TIME", since, raising=False
-    )
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_UNTIL_TIME", until, raising=False
-    )
-    api, _ = cycle(calls=_full_cycle_plan()[:1])
+    from django.test import override_settings
+
+    with override_settings(
+        X_MONITOR_CYCLE_SINCE_TIME=since,
+        X_MONITOR_CYCLE_UNTIL_TIME=until,
+    ):
+        api, _ = cycle(calls=_full_cycle_plan()[:1])
     assert api.calls[0]["since_time"] == since
     assert api.calls[0]["until_time"] == until

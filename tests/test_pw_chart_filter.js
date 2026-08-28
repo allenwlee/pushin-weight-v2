@@ -97,6 +97,62 @@ function payload(windowDays, count, pulseName) {
   };
 }
 
+function payloadV3(windowDays, brands) {
+  const data = payload(windowDays, 8, brands[0]);
+  const computedAt = data.computed_at;
+  data.trend_narrative = {
+    schema_version: 3,
+    window_days: windowDays,
+    computed_at: computedAt,
+    facts_as_of: computedAt,
+    state: brands.length > 1 ? 'mixed' : 'available',
+    state_label: brands.length > 1 ? 'Mixed' : 'Available',
+    items: brands.map((brand, index) => ({
+      id: 'brand-trend:' + (index + 1),
+      brand: {
+        key: brand,
+        display_name: brand,
+        url: '/brands/' + brand + '/',
+      },
+      state: index === 1 ? 'stale' : 'available',
+      state_label: index === 1
+        ? 'Stale · last verified 10 min ago'
+        : 'Available',
+      headline: brand + ' conversation focused on hands-on use.',
+      secondary: 'Users discussed setup and performance tradeoffs.',
+      verified_at: computedAt,
+      attempted_at: computedAt,
+      freshness: {
+        kind: 'verified',
+        relative: 'last verified 10 min ago',
+        absolute: 'Aug 10, 2026, 20:34 UTC',
+        absolute_iso: computedAt,
+      },
+    })),
+    selection: {
+      mode: 'explicit',
+      requested_count: brands.length,
+      returned_count: Math.min(2, brands.length),
+      truncated: brands.length > 2,
+      summary: brands.length > 2 ? '2 of ' + brands.length + ' selected' : '',
+    },
+    body: brands[0] + ' conversation focused on hands-on use.',
+    body_prefix: '',
+    body_remainder: ' conversation focused on hands-on use.',
+    observations: ['Users discussed setup and performance tradeoffs.'],
+    subjects: [],
+    primary_brand: {
+      key: brands[0],
+      display_name: brands[0],
+      url: '/brands/' + brands[0] + '/',
+    },
+    generated_at: computedAt,
+    checked_at: computedAt,
+    coverage_state: 'unknown',
+  };
+  return data;
+}
+
 function fragment(data) {
   return '<canvas class="home-chart" data-home=\'' + JSON.stringify(data) + '\'></canvas>' +
     '<p class="chart-state" data-pw-chart-status hidden></p>';
@@ -123,6 +179,7 @@ function makeRegion(data, isLegacy, legend) {
     'data-pw-pulse-empty-text': 'No pulse data',
     'data-pw-pulse-error-text': 'Pulse refresh failed',
     'data-pw-pulse-new-text': 'NEW',
+    'data-pw-headline-updated-text': 'Trend summaries updated',
     'data-pw-locale': 'en',
   };
   const status = { hidden: true, textContent: '' };
@@ -165,10 +222,10 @@ function makePulseBar() {
 
 function makeNode() {
   const attrs = {};
-  return {
+  let ownText = '';
+  const node = {
     children: [],
     hidden: true,
-    textContent: '',
     className: '',
     tagName: 'SPAN',
     href: '',
@@ -184,6 +241,16 @@ function makeNode() {
     },
     setAttribute(name, value) { attrs[name] = String(value); },
   };
+  Object.defineProperty(node, 'textContent', {
+    get() {
+      return ownText + this.children.map((child) => child.textContent).join('');
+    },
+    set(value) {
+      ownText = String(value || '');
+      this.children = [];
+    },
+  });
+  return node;
 }
 
 function makeHeadline() {
@@ -196,6 +263,8 @@ function makeHeadline() {
   voices.setAttribute('data-pw-empty-text', 'no top voices this period');
   const observations = makeNode();
   const status = makeNode();
+  const items = makeNode();
+  const selection = makeNode();
   body.parentNode = bodyParent;
   root.querySelector = function (selector) {
     if (selector === '[data-pw-headline-prefix]') return prefix;
@@ -207,9 +276,12 @@ function makeHeadline() {
     }
     if (selector === '[data-pw-headline-voice-entries]') return voices;
     if (selector === '[data-pw-headline-observations]') return observations;
+    if (selector === '[data-pw-headline-items]') return items;
+    if (selector === '[data-pw-headline-selection]') return selection;
+    if (selector === '[data-pw-headline-legacy]') return bodyParent;
     return null;
   };
-  return { root, prefix, body, state, voices, observations, status };
+  return { root, prefix, body, state, voices, observations, status, items, selection, bodyParent };
 }
 
 function response(data, ok = true) {
@@ -239,6 +311,14 @@ function makeSandbox(options = {}) {
   const charts = [];
   const intervals = [];
   let filters = { brands: '__all__', window: 1 };
+  let tzMode = options.tzMode || 'local';
+  const comparison = options.comparison || {
+    key: 'california',
+    timezone: 'America/Los_Angeles',
+    label: 'California',
+    shortLabel: 'CA',
+    shortLabelZh: '加州',
+  };
 
   function FakeChart(canvas, config) {
     this.canvas = canvas;
@@ -290,7 +370,11 @@ function makeSandbox(options = {}) {
       return node;
     },
     getElementById(id) { return options.legacy && id === 'home-chart' ? region : null; },
-    body: { addEventListener() {} },
+    body: {
+      addEventListener() {},
+      getAttribute(name) { return name === 'data-pw-locale' ? (options.locale || 'en') : null; },
+    },
+    documentElement: { getAttribute() { return null; } },
   };
 
   const sandbox = {
@@ -306,7 +390,28 @@ function makeSandbox(options = {}) {
     clearTimeout,
     setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; },
     clearInterval() {},
-    window: { pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } } },
+    window: {
+      pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } },
+      __pwTz: {
+        get mode() { return tzMode; },
+        getComparison() {
+          const zh = (options.locale || 'en') === 'zh_cn';
+          return Object.assign({}, comparison, {
+            localLabel: zh ? '本地' : 'local',
+            shortLabel: zh && comparison.shortLabelZh
+              ? comparison.shortLabelZh
+              : comparison.shortLabel,
+          });
+        },
+        comparisonHour(timestamp) {
+          return Number(new Intl.DateTimeFormat('en-US', {
+            timeZone: comparison.timezone,
+            hour: 'numeric',
+            hourCycle: 'h23',
+          }).format(new Date(timestamp)));
+        },
+      },
+    },
     document,
     Chart: FakeChart,
     CustomEvent: function (type, init) { this.type = type; this.detail = (init && init.detail) || {}; },
@@ -351,7 +456,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     qwen: '#f97316', deepseek: '#3b82f6', minimax: '#22c55e', chart_only: '#9ca3af',
   };
   oneDay.totals = { qwen: 1, deepseek: 2, minimax: 3, chart_only: 4 };
-  oneDay.pulse.entries = ['deepseek', 'minimax', 'qwen'].map((nickname, index) => ({
+  oneDay.pulse.entries = ['deepseek', 'qwen', 'minimax'].map((nickname, index) => ({
     nickname,
     display_name: nickname,
     display_name_en: nickname,
@@ -365,43 +470,73 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   }));
   const axis = makeSandbox({ initial: oneDay });
   const scales = axis.charts[0].config.options.scales;
-  assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xCalifornia', 'y']),
-    '1d config creates local, California, and y scales');
-  assert(scales.x.position === 'bottom' && scales.xCalifornia.position === 'bottom',
-    'local and California time are both below the plot');
-  assert(scales.x.weight < scales.xCalifornia.weight,
-    'local time is the inner bottom axis immediately above California time');
-  assert(scales.x.ticks.autoSkip === false && scales.xCalifornia.ticks.autoSkip === false,
+  assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xComparison', 'y']),
+    '1d config creates local, comparison, and y scales');
+  assert(scales.x.position === 'bottom' && scales.xComparison.position === 'bottom',
+    'local and comparison time are both below the plot');
+  assert(scales.x.weight < scales.xComparison.weight,
+    'local time is the inner bottom axis immediately above comparison time');
+  assert(scales.x.ticks.autoSkip === false && scales.xComparison.ticks.autoSkip === false,
     'both 1d axes keep the fixed 24 ticks at narrow widths');
   const localScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
-  const californiaScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
+  const comparisonScale = { ticks: [], getLabelForValue(value) { return oneDay.days[value]; } };
   scales.x.afterBuildTicks(localScale);
-  scales.xCalifornia.afterBuildTicks(californiaScale);
-  assert(localScale.ticks.length === 24 && californiaScale.ticks.length === 24,
+  scales.xComparison.afterBuildTicks(comparisonScale);
+  assert(localScale.ticks.length === 24 && comparisonScale.ticks.length === 24,
     'both 1d scales build exactly 24 positions');
   const localLabels = localScale.ticks.map((tick, index, ticks) =>
     scales.x.ticks.callback.call(localScale, tick.value, index, ticks));
-  const californiaLabels = californiaScale.ticks.map((tick, index, ticks) =>
-    scales.xCalifornia.ticks.callback.call(californiaScale, tick.value, index, ticks));
+  const comparisonLabels = comparisonScale.ticks.map((tick, index, ticks) =>
+    scales.xComparison.ticks.callback.call(comparisonScale, tick.value, index, ticks));
   assert(JSON.stringify(localLabels) === JSON.stringify([
     '6:00', '', '8:00', '', '10:00', '', '12:00', '', '14:00', '', '16:00', '',
     '18:00', '', '20:00', '', '22:00', '', '0:00', '', '2:00', '', '4:00', '',
   ]), 'local labels cover the next whole hour through the current hour');
-  assert(californiaLabels.length === 24 && californiaLabels.every((label) => label === '' || /^\d{1,2}:00$/.test(label)),
-    'California labels show only even wall-clock hours with minute suffixes');
-  assert(scales.x.grid.drawTicks === true && scales.xCalifornia.grid.drawTicks === true &&
-    scales.x.grid.drawOnChartArea === false && scales.xCalifornia.grid.drawOnChartArea === false,
-    'odd hours retain hash marks without adding vertical plot grid lines');
-  assert(scales.x.ticks.color === '#666666' && scales.xCalifornia.ticks.color === 'rgba(251, 191, 36, 0.45)',
-    'axis colors retain the chart default locally and dim the CA pill tint below');
+  assert(comparisonLabels.length === 24 && comparisonLabels.every((label) => label === '' || /^\d{1,2}:00$/.test(label)),
+    'comparison labels show only even wall-clock hours with minute suffixes');
+  assert(scales.x.grid.drawTicks === true && scales.x.grid.drawOnChartArea === false,
+    'local odd hours retain hash marks without adding vertical plot grid lines');
+  assert(scales.xComparison.grid.display === false && scales.xComparison.grid.drawTicks === false,
+    'comparison time draws no hourly hash marks');
+  assert(scales.x.border.display === true && scales.xComparison.border.display === false,
+    'only the local time row draws a horizontal axis baseline');
+  assert(scales.x.title.text === 'local' && scales.xComparison.title.text === 'CA' &&
+    scales.x.title.display === false && scales.xComparison.title.display === false,
+    'one-day row labels do not consume separate full-width title rows');
+  assert(axis.charts[0].config.plugins.some((plugin) => plugin.id === 'pwTimezoneRowLabels') &&
+    axis.charts[0].config.options.plugins.pwTimezoneRowLabels.display === true,
+    'compact timezone labels are drawn inline with their time rows');
+  assert(scales.x.ticks.color === '#666666' && scales.xComparison.ticks.color === 'rgba(251, 191, 36, 0.45)',
+    'local mode keeps local fully opaque and dims the comparison row');
+
+  const comparisonMode = makeSandbox({ initial: oneDay, tzMode: 'ca' });
+  const comparisonModeScales = comparisonMode.charts[0].config.options.scales;
+  assert(comparisonModeScales.x.ticks.color === 'rgba(102, 102, 102, 0.55)' &&
+    comparisonModeScales.xComparison.ticks.color === 'rgba(251, 191, 36, 1)',
+    'comparison mode makes its row fully opaque and dims local lettering');
+
+  const beijing = makeSandbox({
+    initial: oneDay,
+    locale: 'zh_cn',
+    comparison: {
+      key: 'beijing',
+      timezone: 'Asia/Shanghai',
+      label: 'Beijing',
+      shortLabel: 'Beijing',
+      shortLabelZh: '北京',
+    },
+  });
+  const beijingScales = beijing.charts[0].config.options.scales;
+  assert(beijingScales.x.title.text === '本地' && beijingScales.xComparison.title.text === '北京',
+    'Chinese California-local browsers label local and Beijing rows');
   assert(
     axis.legend.innerHTML.indexOf('data-pw-chart-brand="deepseek"') <
-      axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
-    axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') <
       axis.legend.innerHTML.indexOf('data-pw-chart-brand="qwen"') &&
     axis.legend.innerHTML.indexOf('data-pw-chart-brand="qwen"') <
+      axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') &&
+    axis.legend.innerHTML.indexOf('data-pw-chart-brand="minimax"') <
       axis.legend.innerHTML.indexOf('data-pw-chart-brand="chart_only"'),
-    'legend follows pulse ranking before deterministic chart-only brands'
+    'legend keeps the fixed DeepSeek, Qwen, MiniMax order before chart-only brands'
   );
 
   const dstPayload = payload(1, 4, 'qwen');
@@ -410,7 +545,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     new Date(dstEnd - (288 - index) * 5 * 60 * 1000).toISOString());
   dstPayload.series.qwen = dstPayload.days.map(() => 1);
   const dst = makeSandbox({ initial: dstPayload });
-  const dstScale = dst.charts[0].config.options.scales.xCalifornia;
+  const dstScale = dst.charts[0].config.options.scales.xComparison;
   const dstRuntime = { ticks: [] };
   dstScale.afterBuildTicks(dstRuntime);
   const dstLabels = dstRuntime.ticks.map((tick, index, ticks) =>
@@ -492,6 +627,26 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(['hx-get', 'hx-trigger', 'hx-vals', 'hx-swap'].every((name) => base.region.removed.includes(name)),
     'racing htmx refresh attributes are disabled');
 
+  console.log('--- DTO v3 per-brand narrative cards ---');
+  const cards = makeSandbox();
+  cards.fetchQueue.push(response(payloadV3(7, ['deepseek', 'minimax'])));
+  cards.document.dispatchEvent(new cards.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
+  await flush();
+  assert(cards.headline.items.children.length === 2,
+    'DTO v3 renders one semantic card for each returned brand');
+  assert(cards.headline.items.children.every((node) => node.tagName === 'ARTICLE'),
+    'DTO v3 brand narratives render as semantic articles');
+  assert(cards.headline.items.children[0].getAttribute('data-pw-brand-key') === 'deepseek' &&
+    cards.headline.items.children[1].getAttribute('data-pw-brand-key') === 'minimax',
+    'DTO v3 preserves the server-selected brand order');
+  assert(cards.headline.items.children[1].textContent.includes('Stale · last verified 10 min ago'),
+    'each card exposes its own stale relative timestamp');
+  assert(cards.headline.items.children[1].getAttribute('data-pw-verified-at') ===
+    '2026-08-10T20:34:00+00:00',
+    'each card retains the exact absolute verification timestamp');
+  assert(cards.headline.bodyParent.hidden,
+    'DTO v3 hides the legacy shared-headline body');
+
   console.log('--- latest response wins atomically ---');
   const race = makeSandbox();
   const oldRequest = deferred();
@@ -510,6 +665,58 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(race.headline.root.getAttribute('data-pw-window') === '7', 'older headline response cannot overwrite newer state');
   assert(race.pulseBar.innerHTML.includes('new') && !race.pulseBar.innerHTML.includes('old'),
     'chart and pulse values come from the winning response only');
+
+  const obsoleteFailure = makeSandbox();
+  const obsoleteRequest = deferred();
+  const winningRequest = deferred();
+  obsoleteFailure.fetchQueue.push(obsoleteRequest.promise, winningRequest.promise);
+  obsoleteFailure.setFilters({ window: 7, brands: ['mimo'] });
+  obsoleteFailure.document.dispatchEvent(
+    new obsoleteFailure.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  obsoleteFailure.setFilters({ window: 1, brands: ['mimo'] });
+  obsoleteFailure.document.dispatchEvent(
+    new obsoleteFailure.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  winningRequest.resolve(await response(payload(1, 5, 'mimo')));
+  await flush();
+  obsoleteRequest.reject(new Error('obsolete seven-day request failed'));
+  await flush();
+  assert(obsoleteFailure.region.currentPayload.window_days === 1,
+    'Mimo 7d to 1d keeps the successful one-day chart after an obsolete failure');
+  assert(obsoleteFailure.region.status.hidden && obsoleteFailure.pulseStatus.hidden,
+    'an obsolete Mimo failure cannot surface stale chart or pulse warnings');
+
+  const aborted = makeSandbox();
+  const abortedRequest = deferred();
+  aborted.fetchQueue.push(abortedRequest.promise);
+  aborted.document.dispatchEvent(
+    new aborted.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  const abortError = new Error('request aborted');
+  abortError.name = 'AbortError';
+  abortedRequest.reject(abortError);
+  await flush();
+  assert(aborted.region.status.hidden && aborted.pulseStatus.hidden,
+    'an aborted chart request does not masquerade as a refresh failure');
+
+  const duplicate = makeSandbox();
+  const firstDuplicate = deferred();
+  const secondDuplicate = deferred();
+  duplicate.fetchQueue.push(firstDuplicate.promise, secondDuplicate.promise);
+  duplicate.setFilters({ window: 1, brands: ['mimo'] });
+  duplicate.document.dispatchEvent(
+    new duplicate.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  duplicate.document.dispatchEvent(
+    new duplicate.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  secondDuplicate.resolve(await response(payload(1, 9, 'mimo')));
+  await flush();
+  firstDuplicate.resolve(await response(payload(1, 2, 'mimo')));
+  await flush();
+  assert(duplicate.region.currentPayload.totals.qwen === 9,
+    'a duplicate older request cannot commit after the latest duplicate intent');
 
   console.log('--- failures preserve last-good and allow retry ---');
   const recovery = makeSandbox();

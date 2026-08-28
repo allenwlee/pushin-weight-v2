@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
@@ -24,19 +25,62 @@ def _state(tweet_id: str):
 def test_claims_are_bounded_and_active_claims_are_not_double_owned():
     from monitor.cycle import _claim_enrichment_states
 
-    for index in range(21):
+    for index in range(51):
         _state(f"claim-{index:02d}")
     cfg = _cfg().harvest.enrichment
 
     first = _claim_enrichment_states(cfg=cfg, run_id="run-1")
     second = _claim_enrichment_states(cfg=cfg, run_id="run-2")
 
-    assert len(first.states) == 20
+    assert len(first.states) == 50
     assert len(second.states) == 1
     assert {state.claim_run_id for state in first.states} == {"run-1"}
     assert {state.claim_run_id for state in second.states} == {"run-2"}
     assert all(state.translation_attempts == 1 for state in first.states)
     assert all(state.classification_attempts == 1 for state in first.states)
+
+
+def test_two_lane_claim_rolls_back_all_ownership_and_attempts_on_failure(
+    monkeypatch,
+):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now()
+    carryover = [_state(f"rollback-old-{index}") for index in range(2)]
+    current = [_state(f"rollback-new-{index}") for index in range(2)]
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in carryover]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in current]).update(
+        created_at=cutoff + timedelta(seconds=1)
+    )
+    original_save = PostEnrichmentState.save
+    claim_saves = 0
+
+    def fail_second_claim_save(self, *args, **kwargs):
+        nonlocal claim_saves
+        if self.claim_run_id == "rollback-run":
+            claim_saves += 1
+            if claim_saves == 2:
+                raise RuntimeError("forced two-lane rollback")
+        return original_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(PostEnrichmentState, "save", fail_second_claim_save)
+
+    with pytest.raises(RuntimeError, match="forced two-lane rollback"):
+        _claim_enrichment_states(
+            cfg=_cfg().harvest.enrichment,
+            run_id="rollback-run",
+            now=cutoff + timedelta(seconds=2),
+            prefer_created_before=cutoff,
+        )
+
+    for state in [*carryover, *current]:
+        state.refresh_from_db()
+        assert state.claim_run_id == ""
+        assert state.translation_attempts == 0
+        assert state.classification_attempts == 0
 
 
 def test_expired_claim_is_recoverable_by_the_next_cycle():
@@ -98,7 +142,7 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
     PostEnrichmentState.objects.filter(pk__in=[state.pk for state in expired]).update(
         created_at=timezone.now() - timedelta(hours=25)
     )
-    older_due = [_state(f"older-due-{index:02d}") for index in range(20)]
+    older_due = [_state(f"older-due-{index:02d}") for index in range(50)]
     PostEnrichmentState.objects.filter(pk__in=[state.pk for state in older_due]).update(
         created_at=timezone.now() - timedelta(hours=23)
     )
@@ -124,6 +168,8 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
                 "tweet_id": tweet["tweet_id"],
                 "text_en": tweet["text"],
                 "text_zh_cn": "深度求索发布",
+                "en_equivalent": "The release signals another competitive step.",
+                "cn_equivalent": "这次发布表明竞争又向前推进了一步。",
                 "lang_detected": "en",
             }
             for tweet in tweets
@@ -143,8 +189,8 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
 
     fresh.refresh_from_db()
     assert fresh.pk in classified_ids
-    assert len(classified_ids) == 20
-    assert counters["n_enrichment_claimed"] == 20
+    assert len(classified_ids) == 50
+    assert counters["n_enrichment_claimed"] == 50
     assert counters["n_enrichment_quarantined"] == 25
     assert fresh.translation_status == PostEnrichmentState.Status.SUCCEEDED
     assert fresh.classification_status == PostEnrichmentState.Status.SUCCEEDED
@@ -193,10 +239,619 @@ def test_deadline_defers_work_without_claiming_or_spending_an_attempt():
     state.refresh_from_db()
     assert (
         deadline.requested_seconds
-        == _cfg().harvest.enrichment.attempt_budget_seconds
+        == _cfg().harvest.enrichment.claim_safe_envelope_seconds
     )
     assert counters["n_enrichment_claimed"] == 0
     assert counters["n_enrichment_deferred"] == 1
     assert state.translation_attempts == 0
     assert state.classification_attempts == 0
     assert state.claim_run_id == ""
+
+
+def test_claims_disjoint_current_and_carryover_lanes_without_borrowing():
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now()
+    previous = [_state(f"previous-{index:02d}") for index in range(75)]
+    current = [_state(f"current-{index:02d}") for index in range(75)]
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in previous]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in current]).update(
+        created_at=cutoff + timedelta(seconds=1)
+    )
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="two-lane",
+        now=cutoff + timedelta(seconds=2),
+        prefer_created_before=cutoff,
+    )
+
+    assert len(batch.states) == 100
+    assert len(batch.carryover_post_ids) == 50
+    assert len(batch.current_cycle_post_ids) == 50
+    assert set(batch.carryover_post_ids).isdisjoint(batch.current_cycle_post_ids)
+    assert set(batch.carryover_post_ids) <= {state.pk for state in previous}
+    assert set(batch.current_cycle_post_ids) <= {state.pk for state in current}
+
+
+def test_claim_lanes_do_not_borrow_unused_capacity():
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now().astimezone(ZoneInfo("Asia/Tokyo"))
+    retained = [_state(f"retained-{index:02d}") for index in range(50)]
+    current = [_state(f"new-arrival-{index:02d}") for index in range(37)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retained]).update(
+        created_at=cutoff - timedelta(minutes=30)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in current]).update(
+        created_at=cutoff + timedelta(minutes=1)
+    )
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="production-displacement-shape",
+        now=cutoff + timedelta(minutes=2),
+        prefer_created_before=cutoff,
+    )
+
+    assert len(batch.states) == 87
+    assert set(batch.carryover_post_ids) == {state.pk for state in retained}
+    assert set(batch.current_cycle_post_ids) == {state.pk for state in current}
+
+
+def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
+    monkeypatch,
+):
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    cutoff = timezone.now()
+    carryover = [_state(f"combined-old-{index:02d}") for index in range(50)]
+    current = [_state(f"combined-new-{index:02d}") for index in range(37)]
+    from core.models import PostEnrichmentState
+
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in carryover]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[s.pk for s in current]).update(
+        created_at=cutoff + timedelta(seconds=1)
+    )
+    client = object()
+    translator_calls = []
+    classifier_calls = []
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+
+    def translate(tweets, locales, translator_client, **kwargs):
+        translator_calls.append((list(tweets), kwargs))
+        return [
+            {
+                "tweet_id": tweet["tweet_id"],
+                "text_en": tweet["text"],
+                "text_zh_cn": "深度求索发布了更新",
+                "en_equivalent": "The release adds competitive pressure.",
+                "cn_equivalent": "这次发布增加了竞争压力。",
+                "lang_detected": "en",
+            }
+            for tweet in tweets
+        ]
+
+    def classify(tweets, brands, classifier_client, **kwargs):
+        classifier_calls.append((list(tweets), kwargs))
+        return [
+            {"by_brand": {}, "unsanctioned_flags": []}
+            for _tweet in tweets
+        ]
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+        [],
+        run_id="combined-two-lane-provider-path",
+        prefer_created_before=cutoff,
+    )
+
+    expected_ids = {state.pk for state in [*carryover, *current]}
+    assert counters["n_enrichment_claimed"] == 87
+    assert counters["n_enrichment_claimed_carryover"] == 50
+    assert counters["n_enrichment_claimed_current_cycle"] == 37
+    assert len(translator_calls) == 1
+    assert len(classifier_calls) == 1
+    assert {row["tweet_id"] for row in translator_calls[0][0]} == expected_ids
+    assert {row["tweet_id"] for row in classifier_calls[0][0]} == expected_ids
+    assert translator_calls[0][1]["max_workers"] == 3
+    assert classifier_calls[0][1]["max_workers"] == 3
+    assert classifier_calls[0][1]["model"] == "deepseek-v4-flash"
+    assert translator_calls[0][1]["cfg"].llm.translator_model == "deepseek-v4-flash"
+    assert translator._TRANSLATION_BATCH_SIZE == 20
+    assert attribution._CLASSIFY_BATCH_SIZE == 20
+
+
+def test_no_cutoff_preserves_legacy_fifty_row_capacity():
+    from monitor.cycle import _claim_enrichment_states
+
+    for index in range(75):
+        _state(f"legacy-no-cutoff-{index:02d}")
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="legacy-no-cutoff",
+    )
+
+    assert len(batch.states) == 50
+    assert len(batch.carryover_post_ids) == 50
+    assert batch.current_cycle_post_ids == ()
+
+
+@pytest.mark.parametrize(
+    ("cycle_kind", "expects_cutoff"),
+    [("manual", True), ("scheduled", True), ("backfill", False)],
+)
+def test_cycle_runner_threads_cutoff_to_normal_runs_but_not_backfill(
+    monkeypatch, cycle_kind, expects_cutoff
+):
+    from datetime import UTC, datetime
+
+    from monitor import cycle as cycle_module
+    from monitor.cycle import CycleRunner
+    from x_monitor.query_plan import PlannedCall
+
+    started = datetime(2026, 8, 27, 2, 30, tzinfo=UTC)
+    captured = {}
+    call = PlannedCall(
+        call_id="B1",
+        call_kind="brand_wide",
+        brand_id="deepseek",
+        bucket=None,
+        query_string="DeepSeek",
+        query_length=8,
+    )
+
+    class EmptyApi:
+        timeout_s = 60
+        max_retries = 2
+
+        def run_search(self, query, **kwargs):
+            return [], False
+
+    monkeypatch.setattr(CycleRunner, "_plan_calls", lambda self: [call])
+    monkeypatch.setattr(
+        cycle_module.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls: EmptyApi()),
+    )
+
+    def capture_post_fetch(self, items, **kwargs):
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", capture_post_fetch)
+    monkeypatch.setattr(
+        "monitor.metrics_refresh.run_metrics_refresh",
+        lambda *args, **kwargs: {},
+    )
+
+    CycleRunner(
+        cfg=_cfg(),
+        cycle_kind=cycle_kind,
+        _clock=lambda: started,
+    ).run()
+
+    assert (captured["prefer_created_before"] == started) is expects_cutoff
+
+
+def test_claim_preserves_fresh_pre_cycle_cohort_ahead_of_older_retries():
+    """Production pin: retry debt must not starve the retained latest 50."""
+    from core.models import PostEnrichmentState
+    from monitor.cycle import _claim_enrichment_states
+
+    cutoff = timezone.now()
+    retained = [_state(f"fresh-retained-{index:02d}") for index in range(50)]
+    retries = [_state(f"older-retry-{index:02d}") for index in range(50)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retained]).update(
+        created_at=cutoff - timedelta(minutes=1)
+    )
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retries]).update(
+        created_at=cutoff - timedelta(minutes=30),
+        translation_attempts=1,
+    )
+
+    batch = _claim_enrichment_states(
+        cfg=_cfg().harvest.enrichment,
+        run_id="fresh-before-retry-debt",
+        now=cutoff + timedelta(minutes=1),
+        prefer_created_before=cutoff,
+    )
+
+    assert len(batch.states) == 50
+    assert {state.pk for state in batch.states} == {state.pk for state in retained}
+
+
+def test_translation_timeout_does_not_consume_classifier_stage_budget(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("separate-stage-deadlines")
+    client = object()
+    clock = [0.0]
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+
+    def translate(tweets, locales, client, **kwargs):
+        assert kwargs["deadline"].remaining() == 300
+        clock[0] = 300.0
+        return [
+            {
+                "tweet_id": tweet["tweet_id"],
+                "text_en": tweet["text"],
+                "text_zh_cn": "深度求索发布",
+                "en_equivalent": "The release is strategically relevant.",
+                "cn_equivalent": "这次发布具有战略意义。",
+                "lang_detected": "en",
+            }
+            for tweet in tweets
+        ]
+
+    def classify(tweets, brands, client, **kwargs):
+        assert kwargs["deadline"].remaining() == 300
+        return [{"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets]
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    CycleRunner(cfg=_cfg(), _monotonic=lambda: clock[0])._run_post_fetch(
+        [], run_id="separate-stage-deadlines"
+    )
+
+    state.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
+
+
+def _complete_translation(tweet_id: str, source: str) -> dict:
+    return {
+        "tweet_id": tweet_id,
+        "text_en": None,
+        "text_zh_cn": "深度求索发布了更新",
+        "en_equivalent": "DeepSeek has a new release worth evaluating.",
+        "cn_equivalent": "DeepSeek 又上新了，值得关注。",
+        "lang_detected": "en",
+    }
+
+
+def test_recent_incomplete_translation_success_is_reopened_without_touching_classification():
+    from core.models import Post, PostEnrichmentState
+    from monitor.cycle import _requeue_recent_incomplete_translations
+
+    now = timezone.now()
+    incomplete = _state("recent-false-success")
+    incomplete.translation_status = PostEnrichmentState.Status.SUCCEEDED
+    incomplete.classification_status = PostEnrichmentState.Status.SUCCEEDED
+    incomplete.save()
+
+    complete_post = Post.objects.create(
+        tweet_id="recent-complete",
+        text="DeepSeek shipped",
+        text_en="DeepSeek shipped",
+        text_zh_cn="DeepSeek 发布了更新",
+        commentary_en="DeepSeek has a release worth evaluating.",
+        commentary_zh_cn="DeepSeek 又上新了，值得关注。",
+        lang_detected="en",
+    )
+    complete = PostEnrichmentState.objects.create(
+        post=complete_post,
+        translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+
+    invalid_lang_post = Post.objects.create(
+        tweet_id="recent-invalid-lang",
+        text="DeepSeek shipped",
+        text_en="DeepSeek shipped",
+        text_zh_cn="DeepSeek 发布了更新",
+        commentary_en="DeepSeek has a release worth evaluating.",
+        commentary_zh_cn="DeepSeek 又上新了，值得关注。",
+        lang_detected="english",
+    )
+    invalid_lang = PostEnrichmentState.objects.create(
+        post=invalid_lang_post,
+        translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+
+    copied_commentary_post = Post.objects.create(
+        tweet_id="recent-copied-commentary",
+        text="DeepSeek shipped",
+        text_en="DeepSeek shipped",
+        text_zh_cn="DeepSeek 发布了更新",
+        commentary_en="DeepSeek 发布了更新",
+        commentary_zh_cn="DeepSeek 又上新了，值得关注。",
+        lang_detected="en",
+    )
+    copied_commentary = PostEnrichmentState.objects.create(
+        post=copied_commentary_post,
+        translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+
+    aged = _state("aged-false-success")
+    aged.translation_status = PostEnrichmentState.Status.SUCCEEDED
+    aged.classification_status = PostEnrichmentState.Status.SUCCEEDED
+    aged.save()
+    PostEnrichmentState.objects.filter(pk=aged.pk).update(
+        created_at=now - timedelta(hours=25)
+    )
+
+    reopened = _requeue_recent_incomplete_translations(
+        cfg=_cfg().harvest.enrichment,
+        now=now,
+    )
+
+    incomplete.refresh_from_db()
+    complete.refresh_from_db()
+    invalid_lang.refresh_from_db()
+    copied_commentary.refresh_from_db()
+    aged.refresh_from_db()
+    assert reopened == 3
+    assert incomplete.translation_status == PostEnrichmentState.Status.PENDING
+    assert incomplete.translation_error_code == "translation_output_incomplete"
+    assert incomplete.classification_status == PostEnrichmentState.Status.SUCCEEDED
+    assert complete.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert invalid_lang.translation_status == PostEnrichmentState.Status.PENDING
+    assert copied_commentary.translation_status == PostEnrichmentState.Status.PENDING
+    assert aged.translation_status == PostEnrichmentState.Status.SUCCEEDED
+
+
+def test_translation_only_debt_does_not_rerun_classifier(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("translation-only")
+    state.classification_status = PostEnrichmentState.Status.SUCCEEDED
+    state.save()
+    client = object()
+    classifier_calls: list[list[dict]] = []
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        lambda tweets, locales, client, **kwargs: [
+            _complete_translation(tweet["tweet_id"], tweet["text"])
+            for tweet in tweets
+        ],
+    )
+
+    def classify(tweets, brands, client, **kwargs):
+        classifier_calls.append(tweets)
+        return []
+
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="translation-only-run")
+
+    state.refresh_from_db()
+    state.post.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.post.commentary_en
+    assert state.post.commentary_zh_cn
+    assert classifier_calls == []
+
+
+def test_classification_only_debt_does_not_rerun_translator(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("classification-only")
+    state.translation_status = PostEnrichmentState.Status.SUCCEEDED
+    state.post.text_en = state.post.text
+    state.post.text_zh_cn = "深度求索发布了更新"
+    state.post.commentary_en = "DeepSeek has a release worth evaluating."
+    state.post.commentary_zh_cn = "DeepSeek 又上新了，值得关注。"
+    state.post.lang_detected = "en"
+    state.post.save()
+    state.save()
+    client = object()
+    translator_calls: list[list[dict]] = []
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+
+    def translate(tweets, locales, client, **kwargs):
+        translator_calls.append(tweets)
+        return []
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        lambda tweets, brands, client, **kwargs: [
+            {"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets
+        ],
+    )
+
+    CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="classification-only-run")
+
+    state.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
+    assert translator_calls == []
+
+
+def test_failed_translation_does_not_erase_previously_valid_fields(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("preserve-partial-output")
+    state.classification_status = PostEnrichmentState.Status.SUCCEEDED
+    state.post.text_zh_cn = "已有中文翻译"
+    state.post.commentary_zh_cn = "已有中文评论"
+    state.post.save()
+    state.save()
+    client = object()
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        lambda tweets, locales, client, **kwargs: [
+            {
+                "tweet_id": tweets[0]["tweet_id"],
+                "text_en": None,
+                "text_zh_cn": None,
+                "en_equivalent": None,
+                "cn_equivalent": None,
+                "lang_detected": None,
+                "translation_failed": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        lambda *args, **kwargs: pytest.fail("classification should not rerun"),
+    )
+
+    CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="preserve-output-run")
+
+    state.refresh_from_db()
+    state.post.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.PENDING
+    assert state.translation_error_code == "translation_incomplete"
+    assert state.post.text_zh_cn == "已有中文翻译"
+    assert state.post.commentary_zh_cn == "已有中文评论"
+
+
+def test_copied_commentary_cannot_mark_translation_succeeded(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("copied-commentary-boundary")
+    state.classification_status = PostEnrichmentState.Status.SUCCEEDED
+    state.save()
+    client = object()
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        lambda tweets, locales, client, **kwargs: [
+            {
+                "tweet_id": tweets[0]["tweet_id"],
+                "text_en": tweets[0]["text"],
+                "text_zh_cn": "深度求索发布了更新",
+                "en_equivalent": "深度求索发布了更新",
+                "cn_equivalent": "这次发布值得继续关注。",
+                "lang_detected": "en",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        lambda *args, **kwargs: pytest.fail("classification should not rerun"),
+    )
+
+    CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="copied-commentary-run")
+
+    state.refresh_from_db()
+    state.post.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.PENDING
+    assert state.translation_error_code == "translation_incomplete"
+    assert state.post.commentary_en is None
+
+
+def test_zh_hans_source_is_persisted_as_text_zh_cn(monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("zh-hans-source")
+    state.post.text = "深度求索发布了更新"
+    state.post.save()
+    state.classification_status = PostEnrichmentState.Status.SUCCEEDED
+    state.save()
+    client = object()
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        lambda tweets, locales, client, **kwargs: [
+            {
+                "tweet_id": tweets[0]["tweet_id"],
+                "text_en": "DeepSeek shipped an update",
+                "text_zh_cn": None,
+                "en_equivalent": "DeepSeek has a new release worth evaluating.",
+                "cn_equivalent": "DeepSeek 又上新了，值得关注。",
+                "lang_detected": "zh-Hans",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        lambda *args, **kwargs: pytest.fail("classification should not rerun"),
+    )
+
+    CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="zh-hans-source-run")
+
+    state.refresh_from_db()
+    state.post.refresh_from_db()
+    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.post.text_zh_cn == state.post.text
+
+
+def test_classifier_deadline_preserves_flags_and_keeps_stage_pending(monkeypatch):
+    from core.models import PostEnrichmentState, PostUnsanctionedFlag
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+
+    state = _state("classifier-deadline")
+    state.translation_status = PostEnrichmentState.Status.SUCCEEDED
+    state.post.text_en = state.post.text
+    state.post.text_zh_cn = "深度求索发布了更新"
+    state.post.commentary_en = "DeepSeek has a release worth evaluating."
+    state.post.commentary_zh_cn = "DeepSeek 又上新了，值得关注。"
+    state.post.lang_detected = "en"
+    state.post.save()
+    state.save()
+    PostUnsanctionedFlag.objects.create(
+        post=state.post,
+        flags='["market_manipulation"]',
+        flag_set=["market_manipulation"],
+    )
+    client = object()
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(
+        translator,
+        "translate_batch_pragmatics",
+        lambda *args, **kwargs: pytest.fail("translation should not rerun"),
+    )
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            TimeoutError("enrichment_attempt_deadline_exhausted")
+        ),
+    )
+
+    CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="classifier-deadline-run")
+
+    state.refresh_from_db()
+    assert state.classification_status == PostEnrichmentState.Status.PENDING
+    assert state.classification_error_code == "classifier_exception"
+    assert PostUnsanctionedFlag.objects.get(post=state.post).flag_set == [
+        "market_manipulation"
+    ]

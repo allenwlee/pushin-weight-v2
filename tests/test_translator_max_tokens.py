@@ -3,9 +3,10 @@
 Pins (plan 2026-08-05-003): see test docstrings below for the per-pin
 contracts. This file owns three regression pins:
 
-  1. _max_tokens_for_batch_size(n) returns min(65536, max(16384, 1000*n))
+  1. _max_tokens_for_batch_size(n) returns min(65536, max(16384, 1500*n))
      for any n >= 1. At _TRANSLATION_BATCH_SIZE=20, this evaluates to
-     20000 (1000 * 20). Raised from the prior 8192 ceiling after
+     30000 (1500 * 20). The extra headroom covers required English
+     commentary added to the previous rich response shape. Raised from the prior 8192 ceiling after
      2026-08-05 prod observation: a 20-post rich-content batch
      consumed 19,554 output tokens at DS V4 Pro, halting the response
      at stop_reason=max_tokens with mid-JSON truncation. The 8192 cap
@@ -121,18 +122,15 @@ def test_max_tokens_helper_rejects_pre_8192_truncation():
 
 
 # Pin values.
-# _max_tokens_for_batch_size(20) = min(65536, max(16384, 1000*20))
-#                              = min(65536, max(16384, 20000))
-#                              = min(65536, 20000)
-#                              = 20000
-EXPECTED_MAX_TOKENS_AT_BATCH_20 = 20000  # 1000 tokens/post * 20 posts. Raised from 8192 on 2026-08-05 (plan 2026-08-05-003) after a 20-post rich batch needed 19,554 output tokens at DS V4 Pro.
+# _max_tokens_for_batch_size(20) = min(65536, max(16384, 1500*20))
+#                              = 30000
+EXPECTED_MAX_TOKENS_AT_BATCH_20 = 30000
 
-# _max_tokens_for_batch_size(40) = min(65536, max(16384, 1000*40))
-#                              = min(65536, 40000)
-#                              = 40000
-EXPECTED_MAX_TOKENS_AT_BATCH_40 = 40000  # 1000 tokens/post * 40 posts. Scales linearly until the 65536 cap.
+# _max_tokens_for_batch_size(40) = min(65536, max(16384, 1500*40))
+#                              = 60000
+EXPECTED_MAX_TOKENS_AT_BATCH_40 = 60000
 
-# _max_tokens_for_batch_size(100) = min(65536, max(16384, 1000*100))
+# _max_tokens_for_batch_size(100) = min(65536, max(16384, 1500*100))
 #                              = min(65536, 100000)
 #                              = 65536  (capped at DS V4 max)
 EXPECTED_MAX_TOKENS_AT_BATCH_100 = 65536  # Capped at DS V4's documented max output.
@@ -141,11 +139,10 @@ EXPECTED_MAX_TOKENS_AT_BATCH_100 = 65536  # Capped at DS V4's documented max out
 def test_max_tokens_helper_returns_expected_per_batch():
     """Unit-level pin: _max_tokens_for_batch_size is the contract.
 
-    At batch_size=20, the helper returns 20000 (1000 * 20). At
-    batch_size=40 it returns 40000. At batch_size=100 it caps at
-    65536 (DS V4 max). The cap prevents runaway cost on large
-    batches; the coefficient gives 5% headroom over the observed
-    prod worst case (19,554 tokens on 20 posts).
+    At batch_size=20, the helper returns 30000 (1500 * 20). At
+    batch_size=40 it returns 60000. At batch_size=100 it caps at
+    65536 (DS V4 max). The coefficient retains room for the added
+    required English commentary field.
     """
     from x_monitor.translator import _max_tokens_for_batch_size
 
@@ -168,7 +165,7 @@ def test_translator_calls_messages_create_with_per_batch_max_tokens():
     """When translate_batch runs, every messages_create call from the
     translator must request max_tokens sized to the batch.
 
-    Pin: 20-tweet batch -> 20000 tokens (1000 tokens/post * 20
+    Pin: 20-tweet batch -> 30000 tokens (1500 tokens/post * 20
     posts). Lower values caused JSON truncation on rich-content
     batches (per prod observation 2026-08-05, plan 2026-08-05-003;
     8192-cap prior fix truncated at 19,554 output tokens for a

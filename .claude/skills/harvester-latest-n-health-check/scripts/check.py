@@ -26,6 +26,7 @@ LLM_BATCH_SIZE = 20
 _TWEET_ID_RE = re.compile(r"^[0-9]{1,32}$")
 _SAFE_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _VALID_STAGE_STATUSES = {"pending", "succeeded", "failed"}
+_CANONICAL_LANG_CODES = {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
 
 
 class HealthCheckError(Exception):
@@ -126,7 +127,6 @@ def build_query(
         'created_at', p.created_at,
         'text', p.text,
         'lang', p.lang,
-        'lang_detected', p.lang_detected,
         'text_en', p.text_en,
         'text_zh_cn', p.text_zh_cn,
         'commentary_en', p.commentary_en,
@@ -196,9 +196,32 @@ WITH
           )::bigint
         END,
         'has_text', NULLIF(BTRIM(p.text), '') IS NOT NULL,
-        'has_lang_detected', NULLIF(BTRIM(p.lang_detected), '') IS NOT NULL,
+        'lang_detected', NULLIF(BTRIM(p.lang_detected), ''),
+        'has_lang_detected', BTRIM(p.lang_detected) IN (
+          'en', 'zh-Hans', 'zh-Hant', 'ja', 'ko', 'other'
+        ),
         'has_text_en', NULLIF(BTRIM(p.text_en), '') IS NOT NULL,
         'has_text_zh_cn', NULLIF(BTRIM(p.text_zh_cn), '') IS NOT NULL,
+        'has_commentary_en', (
+          NULLIF(BTRIM(p.commentary_en), '') IS NOT NULL
+          AND LOWER(BTRIM(p.commentary_en)) NOT IN ('n/a', 'na')
+          AND LOWER(BTRIM(p.commentary_en))
+            IS DISTINCT FROM LOWER(BTRIM(p.text))
+          AND LOWER(BTRIM(p.commentary_en))
+            IS DISTINCT FROM LOWER(BTRIM(p.text_en))
+          AND LOWER(BTRIM(p.commentary_en))
+            IS DISTINCT FROM LOWER(BTRIM(p.text_zh_cn))
+        ),
+        'has_commentary_zh_cn', (
+          NULLIF(BTRIM(p.commentary_zh_cn), '') IS NOT NULL
+          AND LOWER(BTRIM(p.commentary_zh_cn)) NOT IN ('n/a', 'na')
+          AND LOWER(BTRIM(p.commentary_zh_cn))
+            IS DISTINCT FROM LOWER(BTRIM(p.text))
+          AND LOWER(BTRIM(p.commentary_zh_cn))
+            IS DISTINCT FROM LOWER(BTRIM(p.text_en))
+          AND LOWER(BTRIM(p.commentary_zh_cn))
+            IS DISTINCT FROM LOWER(BTRIM(p.text_zh_cn))
+        ),
         'translation_status', es.translation_status,
         'translation_error_code', es.translation_error_code,
         'classification_status', es.classification_status,
@@ -406,6 +429,8 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
             ("has_lang_detected", "missing_lang_detected"),
             ("has_text_en", "missing_text_en"),
             ("has_text_zh_cn", "missing_text_zh_cn"),
+            ("has_commentary_en", "missing_commentary_en"),
+            ("has_commentary_zh_cn", "missing_commentary_zh_cn"),
         ):
             if not row.get(field):
                 reasons.append(_reason("translation", reason))
@@ -461,6 +486,10 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
         "state": state,
         "translation_status": translation_status,
         "classification_status": classification_status,
+        "lang_detected": row.get("lang_detected"),
+        "has_text_zh_cn": bool(row.get("has_text_zh_cn")),
+        "has_commentary_en": bool(row.get("has_commentary_en")),
+        "has_commentary_zh_cn": bool(row.get("has_commentary_zh_cn")),
         "brand_count": len(brands),
         "reasons": reasons,
     }
@@ -472,6 +501,10 @@ def _missing_post(tweet_id: str) -> dict[str, Any]:
         "state": "unhealthy",
         "translation_status": "missing",
         "classification_status": "missing",
+        "lang_detected": None,
+        "has_text_zh_cn": False,
+        "has_commentary_en": False,
+        "has_commentary_zh_cn": False,
         "brand_count": 0,
         "reasons": [_reason("persistence", "missing_post")],
     }
@@ -483,6 +516,62 @@ def _error_payload(error_class: str, code: str) -> dict[str, Any]:
         "status": "error",
         "error": {"class": error_class, "code": code},
     }
+
+
+def _rate_metric(
+    numerator: int, denominator: int, *, threshold: float, empty_passes: bool = False
+) -> dict[str, Any]:
+    rate = None if denominator == 0 else round(numerator / denominator, 6)
+    passed = empty_passes if rate is None else rate >= threshold
+    return {
+        "numerator": numerator,
+        "denominator": denominator,
+        "rate": rate,
+        "percentage": None if rate is None else round(rate * 100, 4),
+        "threshold": threshold,
+        "passed": passed,
+    }
+
+
+def _acceptance_metrics(posts: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Calculate the explicit latest-N enrichment completeness contract."""
+    total = len(posts)
+    with_language = [
+        post
+        for post in posts
+        if isinstance(post.get("lang_detected"), str)
+        and post["lang_detected"].strip() in _CANONICAL_LANG_CODES
+    ]
+    non_zh_hans = [
+        post for post in with_language if post["lang_detected"].strip() != "zh-Hans"
+    ]
+    language = _rate_metric(len(with_language), total, threshold=1.0)
+    translation = _rate_metric(
+        sum(bool(post.get("has_text_zh_cn")) for post in non_zh_hans),
+        len(non_zh_hans),
+        threshold=0.99,
+        empty_passes=True,
+    )
+    commentary_en = _rate_metric(
+        sum(bool(post.get("has_commentary_en")) for post in posts),
+        total,
+        threshold=0.99,
+    )
+    commentary_zh_cn = _rate_metric(
+        sum(bool(post.get("has_commentary_zh_cn")) for post in posts),
+        total,
+        threshold=0.99,
+    )
+    metrics = {
+        "lang_detected_present": language,
+        "non_zh_hans_text_zh_cn": translation,
+        "commentary_en": commentary_en,
+        "commentary_zh_cn": commentary_zh_cn,
+    }
+    metrics["passed"] = total > 0 and all(
+        metric["passed"] for metric in metrics.values()
+    )
+    return metrics
 
 
 def evaluate_snapshot(
@@ -531,6 +620,8 @@ def evaluate_snapshot(
         "pending": sum(post["state"] == "pending" for post in posts),
         "unhealthy": sum(post["state"] == "unhealthy" for post in posts),
     }
+    acceptance = _acceptance_metrics(posts)
+    acceptance_gate = "complete" if acceptance["passed"] else "failed"
     unhealthy = summary["total"] == 0 or summary["unhealthy"] > 0
     if unhealthy:
         status = "unhealthy"
@@ -545,6 +636,8 @@ def evaluate_snapshot(
         "schema_version": 1,
         "status": status,
         "regression_gate": regression_gate,
+        "acceptance_gate": acceptance_gate,
+        "acceptance": acceptance,
         "mode": mode,
         "database_resource": DATABASE_RESOURCE,
         "latest_limit": latest,
@@ -556,7 +649,7 @@ def evaluate_snapshot(
         "missing_tweet_ids": missing_tweet_ids,
         "posts": posts,
     }
-    return payload, 1 if unhealthy else 0
+    return payload, 1 if unhealthy or not acceptance["passed"] else 0
 
 
 def _render_human(payload: dict[str, Any]) -> str:
@@ -569,6 +662,7 @@ def _render_human(payload: dict[str, Any]) -> str:
             "harvester-health "
             f"status={payload['status']} "
             f"regression_gate={payload['regression_gate']} "
+            f"acceptance_gate={payload['acceptance_gate']} "
             f"mode={payload['mode']} "
             f"grace_hours={payload['grace_hours']} "
             f"total={summary['total']} "
@@ -577,6 +671,29 @@ def _render_human(payload: dict[str, Any]) -> str:
             f"unhealthy={summary['unhealthy']}"
         )
     ]
+    acceptance = payload["acceptance"]
+    metric_names = (
+        "lang_detected_present",
+        "non_zh_hans_text_zh_cn",
+        "commentary_en",
+        "commentary_zh_cn",
+    )
+    lines.append(
+        "acceptance "
+        + " ".join(
+            (
+                f"{name}={acceptance[name]['numerator']}/"
+                f"{acceptance[name]['denominator']}"
+                f"({acceptance[name]['percentage']}%)"
+                if acceptance[name]["percentage"] is not None
+                else (
+                    f"{name}={acceptance[name]['numerator']}/"
+                    f"{acceptance[name]['denominator']}(n/a)"
+                )
+            )
+            for name in metric_names
+        )
+    )
     for post in payload["posts"]:
         reason_text = (
             ",".join(
@@ -619,13 +736,18 @@ def _load_report_config(repo_root: Path) -> dict[str, Any]:
     return data
 
 
-def _prompt_builders(repo_root: Path) -> tuple[Callable[..., str], Callable[..., str]]:
+def _prompt_builders(
+    repo_root: Path,
+) -> tuple[Callable[..., str], Callable[..., str], Callable[[int], int]]:
     inserted = str(repo_root) not in sys.path
     if inserted:
         sys.path.insert(0, str(repo_root))
     try:
         from x_monitor.attribution import build_batch_pragmatics_full_prompt
-        from x_monitor.translator import build_pragmatics_translation_prompt
+        from x_monitor.translator import (
+            _max_tokens_for_batch_size,
+            build_pragmatics_translation_prompt,
+        )
     except (ImportError, OSError):
         raise HealthCheckError("report", "prompt_reconstruction_failed") from None
     finally:
@@ -634,7 +756,11 @@ def _prompt_builders(repo_root: Path) -> tuple[Callable[..., str], Callable[...,
                 sys.path.remove(str(repo_root))
             except ValueError:
                 pass
-    return build_pragmatics_translation_prompt, build_batch_pragmatics_full_prompt
+    return (
+        build_pragmatics_translation_prompt,
+        build_batch_pragmatics_full_prompt,
+        _max_tokens_for_batch_size,
+    )
 
 
 def build_request_reconstructions(
@@ -642,7 +768,10 @@ def build_request_reconstructions(
     *,
     repo_root: Path,
     config_data: dict[str, Any] | None = None,
-    prompt_builders: tuple[Callable[..., str], Callable[..., str]] | None = None,
+    prompt_builders: tuple[
+        Callable[..., str], Callable[..., str], Callable[[int], int]
+    ]
+    | None = None,
 ) -> list[dict[str, Any]]:
     """Reconstruct current-code request kwargs without creating a client."""
 
@@ -659,7 +788,9 @@ def build_request_reconstructions(
 
     if prompt_builders is None:
         prompt_builders = _prompt_builders(repo_root)
-    translation_builder, classification_builder = prompt_builders
+    translation_builder, classification_builder, translation_max_tokens_for = (
+        prompt_builders
+    )
 
     tweets: list[dict[str, Any]] = []
     for row in rows:
@@ -691,7 +822,7 @@ def build_request_reconstructions(
             raise HealthCheckError(
                 "report", "prompt_reconstruction_failed"
             ) from None
-        translation_max_tokens = min(65536, max(16384, 1000 * len(batch)))
+        translation_max_tokens = translation_max_tokens_for(len(batch))
         calls.append(
             {
                 "stage": "translation",
@@ -988,6 +1119,7 @@ def render_detailed_report(
             [
                 ("Overall status", payload.get("status")),
                 ("Regression gate", payload.get("regression_gate")),
+                ("Acceptance gate", payload.get("acceptance_gate")),
                 ("Cohort mode", payload.get("mode")),
                 ("Total posts", summary.get("total")),
                 ("Complete", summary.get("complete")),
@@ -1001,6 +1133,10 @@ def render_detailed_report(
         "Ordered cohort tweet IDs:",
         "",
         _json_block(payload.get("cohort_tweet_ids") or []),
+        "",
+        "Acceptance metrics:",
+        "",
+        _json_block(payload.get("acceptance") or {}),
         "",
         "## Methodology and safety",
         "",

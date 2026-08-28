@@ -8,8 +8,17 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
+from django.utils import timezone
 
-from core.models import Brand, TrendNarrative, TrendNarrativeSubject
+from core.models import (
+    Brand,
+    BrandTrendNarrative,
+    TrendNarrative,
+    TrendNarrativeProviderCall,
+    TrendNarrativeRun,
+    TrendNarrativeSubject,
+    TrendNarrativeWorkSlot,
+)
 from monitor.trend_narrative_lifecycle import (
     mark_transport_completed,
     mark_transport_started,
@@ -27,7 +36,7 @@ def test_empty_status_is_redacted_and_does_not_call_provider_or_queue(monkeypatc
     monkeypatch.setenv("X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED", "True")
     monkeypatch.setenv("X_MONITOR_HEADLINE_ACTIVATION_STATE", "pending")
     monkeypatch.setattr(
-        "monitor.trend_narrative_generation.generate_trend_narrative",
+        "monitor.trend_narrative_generation.execute_per_brand_provider_request",
         lambda *_args, **_kwargs: pytest.fail("status called provider"),
     )
     monkeypatch.setattr(
@@ -202,3 +211,158 @@ def test_status_reports_schema_two_subjects_without_private_evidence():
     ]
     assert "private-evidence" not in stdout.getvalue()
     assert "PrivateObservedName" not in stdout.getvalue()
+
+
+def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
+    now = timezone.now()
+    alpha = Brand.objects.create(
+        nickname="alpha",
+        display_name="Alpha",
+        display_name_en="Alpha",
+        display_name_zh_cn="阿尔法",
+    )
+    bravo = Brand.objects.create(
+        nickname="bravo",
+        display_name="Bravo",
+        display_name_en="Bravo",
+        display_name_zh_cn="布拉沃",
+    )
+    run = TrendNarrativeRun.objects.create(
+        source_cycle_id="per-brand-status",
+        window_days=1,
+        facts_as_of=now - timedelta(minutes=10),
+        packet_schema_version=3,
+        snapshot={
+            "dossiers": [
+                {"brand_key": "alpha", "outcome": "narrative_eligible"},
+                {"brand_key": "bravo", "outcome": "narrative_eligible"},
+                {"brand_key": "charlie", "outcome": "narrative_eligible"},
+            ],
+            "private_packet_must_not_appear": "do-not-expose",
+        },
+        brand_manifest=["alpha", "bravo", "charlie"],
+    )
+    approved = BrandTrendNarrative.objects.create(
+        run=run,
+        brand=alpha,
+        brand_key_snapshot="alpha",
+        brand_name_en_snapshot="Alpha",
+        brand_name_zh_cn_snapshot="阿尔法",
+        status=BrandTrendNarrative.Status.APPROVED,
+        headline_en="Alpha headline",
+        headline_zh_cn="阿尔法标题",
+        secondary_en="Alpha secondary",
+        secondary_zh_cn="阿尔法补充",
+        critic_decision=BrandTrendNarrative.CriticDecision.APPROVE,
+        attempted_at=now - timedelta(hours=2),
+        verified_at=now - timedelta(hours=2),
+        selected_evidence_packet={"private_evidence": "never expose"},
+        final_critic_payload={"private_response": "never expose"},
+    )
+    BrandTrendNarrative.objects.create(
+        run=run,
+        brand=bravo,
+        brand_key_snapshot="bravo",
+        brand_name_en_snapshot="Bravo",
+        brand_name_zh_cn_snapshot="布拉沃",
+        status=BrandTrendNarrative.Status.HELD,
+        attempted_at=now - timedelta(minutes=5),
+        error_code="critic_rejected",
+        last_good=approved,
+    )
+    TrendNarrativeProviderCall.objects.create(
+        run=run,
+        stage=TrendNarrativeProviderCall.Stage.RANK,
+        batch_key="",
+        request_identity="per-brand-status:rank",
+        request_hash="a" * 64,
+        request_packet={"private_request": "never expose"},
+        state=TrendNarrativeProviderCall.State.FAILED,
+        reserved_at=now - timedelta(minutes=9),
+        sent_at=now - timedelta(minutes=8),
+        error_code="rank_http_500",
+    )
+    TrendNarrativeProviderCall.objects.create(
+        run=run,
+        stage=TrendNarrativeProviderCall.Stage.EDITOR,
+        batch_key="batch-01",
+        request_identity="per-brand-status:editor",
+        request_hash="b" * 64,
+        request_packet={"private_request": "never expose"},
+        state=TrendNarrativeProviderCall.State.AMBIGUOUS,
+        reserved_at=now - timedelta(minutes=7),
+        sent_at=now - timedelta(minutes=6),
+        error_code="editor_timeout",
+    )
+    TrendNarrativeWorkSlot.objects.create(
+        window_days=1,
+        active_source_cycle_id=run.source_cycle_id,
+        active_facts_as_of=run.facts_as_of,
+        active_run=run,
+        queued_source_cycle_id="newer-cycle",
+        queued_facts_as_of=now,
+    )
+    stdout = StringIO()
+
+    call_command("headline_status", "--json", stdout=stdout)
+
+    payload = json.loads(stdout.getvalue())
+    status = payload["windows"][0]["per_brand"]
+    assert status["run"] == {
+        "id": run.pk,
+        "source_cycle_id": "per-brand-status",
+        "status": TrendNarrativeRun.Status.PREPARING,
+        "suspension_reason": "",
+        "facts_as_of": run.facts_as_of.isoformat(),
+        "created_at": run.created_at.isoformat(),
+        "activated_at": None,
+        "manifest_brand_count": 3,
+        "outcome_count": 2,
+        "terminal_outcome_count": 2,
+        "missing_brand_keys": ["charlie"],
+        "complete": False,
+        "visible": False,
+    }
+    assert status["held_brands"] == [
+        {
+            "brand_key": "bravo",
+            "status": "held",
+            "critic_decision": "",
+            "error_code": "critic_rejected",
+            "latest_attempt_at": (now - timedelta(minutes=5)).isoformat(),
+            "last_verification_at": (now - timedelta(hours=2)).isoformat(),
+            "stale_duration_seconds": pytest.approx(7200, abs=2),
+            "last_good_available": True,
+        }
+    ]
+    assert status["latest_attempt_at"] == (now - timedelta(minutes=5)).isoformat()
+    assert status["last_verification_at"] == (now - timedelta(hours=2)).isoformat()
+    assert status["transport"]["failed_count"] == 1
+    assert status["transport"]["ambiguous_count"] == 1
+    assert status["transport"]["stages"]["rank"]["failure_codes"] == [
+        "rank_http_500"
+    ]
+    assert status["transport"]["stages"]["editor"]["ambiguous_codes"] == [
+        "editor_timeout"
+    ]
+    assert status["backlog"]["active"] is True
+    assert status["backlog"]["queued"] is True
+    assert status["backlog"]["queued_source_cycle_id"] == "newer-cycle"
+    assert status["drain"] == {
+        "eligible_brand_count": 3,
+        "expected_call_count": 3,
+        "recorded_call_count": 2,
+        "worker_concurrency": 1,
+        "p95_latency_seconds": 45.0,
+        "estimated_run_drain_seconds": 135.0,
+        "window_expected_arrival_calls_per_hour": 6.0,
+        "fleet_expected_call_count_per_window": 17,
+        "fleet_expected_arrival_calls_per_hour": pytest.approx(54.5416666667),
+        "p95_capacity_calls_per_hour": 80.0,
+        "fleet_expected_utilization": pytest.approx(0.6817708333),
+    }
+    assert "private_packet_must_not_appear" not in stdout.getvalue()
+    assert "do-not-expose" not in stdout.getvalue()
+    assert "private_evidence" not in stdout.getvalue()
+    assert "private_response" not in stdout.getvalue()
+    assert "private_request" not in stdout.getvalue()

@@ -164,17 +164,17 @@
   // populated by paintSignals() once the row is in the DOM.
   function renderRowHtml(row) {
     var handleRaw = (row.account && row.account.handle) || '';
-    var handleLabel = handleRaw || '@unknown';
+    var handleLabel = (row.account && row.account.display_name) || handleRaw || '@unknown';
     var handleHtml = handleRaw
       ? '<a class="feed-handle-link" ' +
           'href="https://x.com/' + escapeHtml(cleanHandle(handleRaw)) + '" ' +
           'target="_blank" rel="noopener noreferrer">' +
           escapeHtml(handleLabel) + '</a>'
       : escapeHtml(handleLabel);
-    var followersPretty = (row.account && row.account.followers_pretty) || '';
+    var eng = row.engagement_pretty || {};
+    var followersPretty = (row.account && row.account.followers_pretty) || eng.followers || '0';
     var followersLabel = row.followers_label || (followersPretty || '0') + ' followers';
     var followerClass = followerBin(row);
-    var eng = row.engagement_pretty || {};
     var tint = row.tint_class || 'tint-neutral';
     var metaText = row.meta_text || '';
     var tsAbs = row.ts_abs_text || '';
@@ -192,9 +192,13 @@
     return (
       '<div class="feed-row-shell ' + escapeHtml(tint) + '">' +
         '<div class="feed-main">' +
-          '<span class="follower-glyph follower-bin-' + followerClass + '" role="img"' +
+          '<div class="follower-lead follower-bin-' + followerClass + '"' +
+            ' role="img"' +
             ' aria-label="' + escapeHtml(followersLabel) + '"' +
-            ' title="' + escapeHtml(followersLabel) + '"></span>' +
+            ' title="' + escapeHtml(followersLabel) + '">' +
+            '<span class="follower-glyph" role="img" aria-hidden="true">👥</span>' +
+            '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
+          '</div>' +
           '<div class="body">' +
             '<div class="head">' +
               '<span class="handle">' + handleHtml + '</span>' +
@@ -209,7 +213,6 @@
               escapeHtml((initialText || '').toString().slice(0, 600)) +
             '</div>' +
             '<div class="engagement">' +
-              '<span class="followers">' + escapeHtml(eng.followers || '') + '</span>' +
               '<span class="likes">' + escapeHtml(eng.likes || '') + '</span>' +
               '<span class="rts">' + escapeHtml(eng.retweets || '') + '</span>' +
               '<span class="replies">' + escapeHtml(eng.replies || '') + '</span>' +
@@ -799,6 +802,7 @@
       paintSignals: paintSignals,
       replaceRows: replaceRows,
       isFeedPayload: isFeedPayload,
+      renderRowHtml: renderRowHtml,
     };
     return;
   }

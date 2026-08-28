@@ -10,7 +10,16 @@ from typing import Any
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q, QuerySet
 
-from core.models import Brand, Product, TrendNarrative, TrendNarrativeSubject
+from core.models import (
+    Brand,
+    BrandTrendNarrative,
+    Product,
+    TrendNarrative,
+    TrendNarrativeProviderCall,
+    TrendNarrativeRun,
+    TrendNarrativeSubject,
+    TrendNarrativeVisibleRun,
+)
 from monitor.trend_narrative_candidates import project_provider_packet
 from monitor.trend_narrative_coverage import selected_coverage_state
 
@@ -27,6 +36,360 @@ _FAILURE_STATUSES = (
     TrendNarrative.Status.FAILED,
     TrendNarrative.Status.ABANDONED,
 )
+TERMINAL_BRAND_STATUSES = frozenset(
+    {
+        BrandTrendNarrative.Status.APPROVED,
+        BrandTrendNarrative.Status.HELD,
+        BrandTrendNarrative.Status.UNAVAILABLE,
+        BrandTrendNarrative.Status.NO_CONTENT,
+        BrandTrendNarrative.Status.DATA_QUALITY_UNAVAILABLE,
+    }
+)
+
+
+def reserve_trend_narrative_provider_call(
+    *,
+    run: TrendNarrativeRun,
+    stage: str,
+    batch_key: str,
+    request_identity: str,
+    request_hash: str,
+    request_packet: dict[str, Any],
+    now,
+) -> TrendNarrativeProviderCall | None:
+    """Durably reserve one immutable transport identity for a stage/batch."""
+    if stage not in TrendNarrativeProviderCall.Stage.values:
+        raise ValueError("unsupported trend narrative provider stage")
+    if not request_identity or not request_hash:
+        raise ValueError("request identity and hash are required")
+    try:
+        with transaction.atomic():
+            return TrendNarrativeProviderCall.objects.create(
+                run=run,
+                stage=stage,
+                batch_key=batch_key,
+                request_identity=request_identity,
+                request_hash=request_hash,
+                request_packet=request_packet,
+                reserved_at=now,
+            )
+    except IntegrityError:
+        return None
+
+
+def claim_trend_narrative_provider_call(
+    call_id: int,
+    *,
+    owner: str,
+    now,
+    lease_seconds: int,
+) -> TrendNarrativeProviderCall | None:
+    """Claim or reclaim only an unsent reservation under a growing fence."""
+    if not owner or lease_seconds < 1:
+        raise ValueError("owner and positive lease_seconds are required")
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state != TrendNarrativeProviderCall.State.RESERVED:
+            return None
+        if call.claim_expires_at is not None and call.claim_expires_at > now:
+            return None
+        call.claim_owner = owner[:128]
+        call.claim_fence += 1
+        call.claimed_at = now
+        call.claim_expires_at = now + timedelta(seconds=lease_seconds)
+        call.save(
+            update_fields=[
+                "claim_owner",
+                "claim_fence",
+                "claimed_at",
+                "claim_expires_at",
+                "updated_at",
+            ]
+        )
+        return call
+
+
+def mark_trend_narrative_provider_call_sent(
+    call_id: int, *, owner: str, fence: int, now
+) -> bool:
+    """Set ``sent`` immediately before outbound transport; never reopen it."""
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if not _owns_provider_call(call, owner=owner, fence=fence, now=now):
+            return False
+        call.state = TrendNarrativeProviderCall.State.SENT
+        call.sent_at = now
+        call.save(update_fields=["state", "sent_at", "updated_at"])
+        return True
+
+
+def complete_trend_narrative_provider_call(
+    call_id: int,
+    *,
+    owner: str,
+    fence: int,
+    response_hash: str,
+    response_payload: dict[str, Any],
+    now,
+) -> bool:
+    """Persist a response once; a completed call cannot become a new send."""
+    if not response_hash:
+        raise ValueError("response_hash is required")
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state == TrendNarrativeProviderCall.State.COMPLETED:
+            return call.claim_owner == owner and call.claim_fence == fence
+        if call.state != TrendNarrativeProviderCall.State.SENT:
+            return False
+        if call.claim_owner != owner or call.claim_fence != fence:
+            return False
+        call.state = TrendNarrativeProviderCall.State.COMPLETED
+        call.response_hash = response_hash
+        call.response_payload = response_payload
+        call.completed_at = now
+        call.save(
+            update_fields=[
+                "state",
+                "response_hash",
+                "response_payload",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+        return True
+
+
+def mark_trend_narrative_provider_call_ambiguous(
+    call_id: int, *, owner: str, fence: int, error_code: str, now
+) -> bool:
+    """Record post-send uncertainty as terminal instead of retrying transport."""
+    if not error_code:
+        raise ValueError("error_code is required")
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state == TrendNarrativeProviderCall.State.AMBIGUOUS:
+            return call.claim_owner == owner and call.claim_fence == fence
+        if call.state != TrendNarrativeProviderCall.State.SENT:
+            return False
+        if call.claim_owner != owner or call.claim_fence != fence:
+            return False
+        call.state = TrendNarrativeProviderCall.State.AMBIGUOUS
+        call.error_code = error_code[:64]
+        call.save(update_fields=["state", "error_code", "updated_at"])
+        return True
+
+
+def expire_sent_trend_narrative_provider_call(call_id: int, *, now) -> bool:
+    """Terminalize an expired post-send lease without risking another send."""
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state == TrendNarrativeProviderCall.State.AMBIGUOUS:
+            return True
+        if call.state != TrendNarrativeProviderCall.State.SENT:
+            return False
+        if call.claim_expires_at is None or call.claim_expires_at > now:
+            return False
+        call.state = TrendNarrativeProviderCall.State.AMBIGUOUS
+        call.error_code = "lease_expired_after_send"
+        call.save(update_fields=["state", "error_code", "updated_at"])
+        return True
+
+
+def fail_trend_narrative_provider_call(
+    call_id: int, *, owner: str, fence: int, error_code: str, now
+) -> bool:
+    """Terminally record a known failed transport; it is never resent in-run."""
+    if not error_code:
+        raise ValueError("error_code is required")
+    with transaction.atomic():
+        call = TrendNarrativeProviderCall.objects.select_for_update().get(pk=call_id)
+        if call.state == TrendNarrativeProviderCall.State.FAILED:
+            return call.claim_owner == owner and call.claim_fence == fence
+        if call.state != TrendNarrativeProviderCall.State.SENT:
+            return False
+        if call.claim_owner != owner or call.claim_fence != fence:
+            return False
+        call.state = TrendNarrativeProviderCall.State.FAILED
+        call.error_code = error_code[:64]
+        call.save(update_fields=["state", "error_code", "updated_at"])
+        return True
+
+
+def prepare_brand_trend_narrative(
+    *,
+    run: TrendNarrativeRun,
+    brand_key: str,
+    brand_name_en: str,
+    brand_name_zh_cn: str,
+    status: str,
+    attempted_at,
+    verified_at=None,
+    headline_en: str = "",
+    headline_zh_cn: str = "",
+    secondary_en: str = "",
+    secondary_zh_cn: str = "",
+    critic_decision: str = "",
+    narrative_kind: str = "",
+    confidence: str = "",
+    selected_evidence_packet: dict[str, Any] | None = None,
+    final_critic_payload: dict[str, Any] | None = None,
+    propositions: list[dict[str, Any]] | None = None,
+    events: list[dict[str, Any]] | None = None,
+    cited_fact_ids: list[str] | None = None,
+    cited_evidence_ids: list[str] | None = None,
+    error_code: str = "",
+) -> BrandTrendNarrative:
+    """Write one immutable per-brand terminal/prepared outcome for a run."""
+    if status not in BrandTrendNarrative.Status.values:
+        raise ValueError("unsupported brand narrative status")
+    with transaction.atomic():
+        existing = (
+            BrandTrendNarrative.objects.select_for_update()
+            .filter(run=run, brand_key_snapshot=brand_key)
+            .first()
+        )
+        if existing is not None:
+            return existing
+        last_good = None
+        if status == BrandTrendNarrative.Status.HELD:
+            visible = (
+                TrendNarrativeVisibleRun.objects.select_for_update()
+                .filter(window_days=run.window_days)
+                .select_related("run")
+                .first()
+            )
+            if visible is not None:
+                prior = (
+                    BrandTrendNarrative.objects.select_related("last_good")
+                    .filter(
+                        run=visible.run,
+                        brand_key_snapshot=brand_key,
+                    )
+                    .first()
+                )
+                if prior is not None:
+                    last_good = (
+                        prior
+                        if prior.status == BrandTrendNarrative.Status.APPROVED
+                        else prior.last_good
+                        if prior.status == BrandTrendNarrative.Status.HELD
+                        else None
+                    )
+            if last_good is None:
+                status = BrandTrendNarrative.Status.UNAVAILABLE
+        return BrandTrendNarrative.objects.create(
+            run=run,
+            brand=Brand.objects.filter(pk=brand_key).first(),
+            brand_key_snapshot=brand_key,
+            brand_name_en_snapshot=brand_name_en,
+            brand_name_zh_cn_snapshot=brand_name_zh_cn,
+            status=status,
+            headline_en=headline_en,
+            headline_zh_cn=headline_zh_cn,
+            secondary_en=secondary_en,
+            secondary_zh_cn=secondary_zh_cn,
+            critic_decision=critic_decision,
+            narrative_kind=narrative_kind,
+            confidence=confidence,
+            propositions=propositions or [],
+            events=events or [],
+            cited_fact_ids=cited_fact_ids or [],
+            cited_evidence_ids=cited_evidence_ids or [],
+            selected_evidence_packet=selected_evidence_packet,
+            final_critic_payload=final_critic_payload,
+            attempted_at=attempted_at,
+            verified_at=verified_at,
+            error_code=error_code[:64],
+            last_good=last_good,
+        )
+
+
+def activate_trend_narrative_run(run_id: int, *, now) -> bool:
+    """Advance a visible cutoff only after every manifest brand is terminal."""
+    with transaction.atomic():
+        run = TrendNarrativeRun.objects.select_for_update().get(pk=run_id)
+        # Row locking cannot serialize first-pointer creation because no
+        # pointer row exists yet. The window advisory lock covers that cold
+        # path and the ordinary pointer replacement path alike.
+        _lock_window(run.window_days)
+        manifest = [str(key) for key in run.brand_manifest]
+        if len(manifest) != len(set(manifest)):
+            raise ValueError("run brand manifest must have unique keys")
+        outcomes = list(BrandTrendNarrative.objects.select_for_update().filter(run=run))
+        if {row.brand_key_snapshot for row in outcomes} != set(manifest) or any(
+            row.status not in TERMINAL_BRAND_STATUSES for row in outcomes
+        ):
+            return False
+        pointer = (
+            TrendNarrativeVisibleRun.objects.select_for_update()
+            .filter(window_days=run.window_days)
+            .select_related("run")
+            .first()
+        )
+        if pointer is not None and run.facts_as_of <= pointer.facts_as_of:
+            return False
+        if pointer is not None:
+            previous = pointer.run
+            if previous.status == TrendNarrativeRun.Status.ACTIVE:
+                previous.status = TrendNarrativeRun.Status.SUPERSEDED
+                # Historical activation marks the moment this cutoff became
+                # visible, not the later moment a newer cutoff superseded it.
+                previous.save(update_fields=["status", "updated_at"])
+            pointer.run = run
+            pointer.facts_as_of = run.facts_as_of
+            pointer.activated_at = now
+            pointer.save(
+                update_fields=["run", "facts_as_of", "activated_at", "updated_at"]
+            )
+        else:
+            TrendNarrativeVisibleRun.objects.create(
+                window_days=run.window_days,
+                run=run,
+                facts_as_of=run.facts_as_of,
+                activated_at=now,
+            )
+        run.status = TrendNarrativeRun.Status.ACTIVE
+        run.activated_at = now
+        run.save(update_fields=["status", "activated_at", "updated_at"])
+        return True
+
+
+def prune_per_brand_trend_narrative_history(
+    *, now, keep_days: int = 90, keep_per_window: int = 20
+) -> int:
+    """Prune only unreferenced old runs; visible and last-good proof pins win."""
+    if keep_days < 1 or keep_per_window < 1:
+        raise ValueError("retention limits must be positive")
+    cutoff = now - timedelta(days=keep_days)
+    deleted = 0
+    with transaction.atomic():
+        pinned_run_ids = set(
+            TrendNarrativeVisibleRun.objects.values_list("run_id", flat=True)
+        )
+        pinned_run_ids.update(
+            BrandTrendNarrative.objects.filter(last_good__isnull=False).values_list(
+                "last_good__run_id", flat=True
+            )
+        )
+        for window_days in (1, 7, 30, 365):
+            _lock_window(window_days)
+            newest_ids = set(
+                TrendNarrativeRun.objects.filter(window_days=window_days)
+                .order_by("-created_at", "-pk")
+                .values_list("pk", flat=True)[:keep_per_window]
+            )
+            protected = pinned_run_ids | newest_ids
+            count, _ = (
+                TrendNarrativeRun.objects.filter(
+                    window_days=window_days,
+                    created_at__lt=cutoff,
+                    status=TrendNarrativeRun.Status.SUPERSEDED,
+                )
+                .exclude(pk__in=protected)
+                .delete()
+            )
+            deleted += count
+    return deleted
 
 
 def record_no_call_check(
@@ -575,12 +938,16 @@ def prune_narrative_history(
                 ).values_list("pk", flat=True)
             )
             protected.update(current_ids)
-            count, _ = TrendNarrative.objects.filter(
-                window_days=window_days,
-                status__in=_TERMINAL_STATUSES,
-                created_at__lt=cutoff,
-                is_current=False,
-            ).exclude(pk__in=protected).delete()
+            count, _ = (
+                TrendNarrative.objects.filter(
+                    window_days=window_days,
+                    status__in=_TERMINAL_STATUSES,
+                    created_at__lt=cutoff,
+                    is_current=False,
+                )
+                .exclude(pk__in=protected)
+                .delete()
+            )
             deleted += count
     return deleted
 
@@ -624,9 +991,7 @@ def _validate_publication_payload(
         return payload
     if row.output_schema_version not in {2, 3}:
         raise ValueError("unsupported trend narrative output schema")
-    payload["subjects"] = _resolve_evidence_subject_identities(
-        payload["subjects"]
-    )
+    payload["subjects"] = _resolve_evidence_subject_identities(payload["subjects"])
     if len(payload["observations_en"]) != len(payload["observations_zh_cn"]):
         raise ValueError("schema-2 observations must be bilingual")
     if len(payload["observations_en"]) > 2:
@@ -684,9 +1049,9 @@ def _validate_publication_payload(
     for candidate_id, candidate in candidates.items():
         for evidence in candidate.get("evidence", []):
             if isinstance(evidence, Mapping) and evidence.get("evidence_id"):
-                evidence_owners.setdefault(
-                    str(evidence["evidence_id"]), set()
-                ).add(candidate_id)
+                evidence_owners.setdefault(str(evidence["evidence_id"]), set()).add(
+                    candidate_id
+                )
     selected_ids = set(payload["selected_candidate_ids"])
     for claim in payload["claims"]:
         claim_candidate_ids = set(
@@ -699,9 +1064,7 @@ def _validate_publication_payload(
     for subject in evidence_only:
         evidence_ids = list(subject.get("evidence_ids") or [])
         if not evidence_ids or any(
-            not evidence_owners.get(str(evidence_id), set()).intersection(
-                selected_ids
-            )
+            not evidence_owners.get(str(evidence_id), set()).intersection(selected_ids)
             for evidence_id in evidence_ids
         ):
             raise ValueError(
@@ -709,8 +1072,7 @@ def _validate_publication_payload(
             )
     if len(measured) == 2:
         measured_keys = [
-            str(subject.get("canonical_key_snapshot") or "")
-            for subject in measured
+            str(subject.get("canonical_key_snapshot") or "") for subject in measured
         ]
         if not all(measured_keys) or len(set(measured_keys)) != 2:
             raise ValueError("two measured subjects must have distinct identities")
@@ -784,9 +1146,7 @@ def _validate_schema_three_claims(
             names_en.union(str(fact["display_en"]) for fact in cited),
         ) or _uncited_digit(
             text_zh_cn,
-            names_zh_cn.union(
-                str(fact["display_zh_cn"]) for fact in cited
-            ),
+            names_zh_cn.union(str(fact["display_zh_cn"]) for fact in cited),
         ):
             raise ValueError("schema-3 prose contains an uncited digit")
 
@@ -827,10 +1187,7 @@ def _write_subjects(
                 product = Product.objects.filter(pk=product_id).first()
             if product is None and canonical_key:
                 product = Product.objects.filter(repo_id=canonical_key).first()
-        if (
-            identity_type == TrendNarrativeSubject.IdentityType.BRAND
-            and brand is None
-        ):
+        if identity_type == TrendNarrativeSubject.IdentityType.BRAND and brand is None:
             raise ValueError("known brand subjects require an existing brand")
         if (
             identity_type == TrendNarrativeSubject.IdentityType.PRODUCT
@@ -849,9 +1206,7 @@ def _write_subjects(
                 observed_name=str(subject.get("observed_name") or ""),
                 canonical_key_snapshot=canonical_key,
                 name_en_snapshot=str(subject.get("name_en_snapshot") or ""),
-                name_zh_cn_snapshot=str(
-                    subject.get("name_zh_cn_snapshot") or ""
-                ),
+                name_zh_cn_snapshot=str(subject.get("name_zh_cn_snapshot") or ""),
                 candidate_id=str(subject.get("candidate_id") or ""),
                 evidence_ids=list(subject.get("evidence_ids") or []),
             )
@@ -887,8 +1242,7 @@ def _resolve_evidence_subject_identities(
         )
         products = list(
             Product.objects.filter(
-                Q(repo_id__iexact=observed_name)
-                | Q(display_name__iexact=observed_name)
+                Q(repo_id__iexact=observed_name) | Q(display_name__iexact=observed_name)
             )
             .distinct()
             .order_by("repo_id")[:2]
@@ -926,15 +1280,11 @@ def _write_legacy_subject_snapshots(
     row.primary_brand = _subject_brand(primary)
     row.primary_brand_key = str(primary.get("canonical_key_snapshot") or "")[:64]
     row.primary_brand_name_en = str(primary.get("name_en_snapshot") or "")
-    row.primary_brand_name_zh_hans = str(
-        primary.get("name_zh_cn_snapshot") or ""
-    )
+    row.primary_brand_name_zh_hans = str(primary.get("name_zh_cn_snapshot") or "")
     secondary = subjects[1] if len(subjects) == 2 else None
     row.secondary_brand = _subject_brand(secondary)
     row.secondary_brand_key = (
-        str(secondary.get("canonical_key_snapshot") or "")[:64]
-        if secondary
-        else ""
+        str(secondary.get("canonical_key_snapshot") or "")[:64] if secondary else ""
     )
     row.secondary_brand_name_en = (
         str(secondary.get("name_en_snapshot") or "") if secondary else ""
@@ -971,6 +1321,22 @@ def _owns_generating(
         and row.claim_fence == fence
         and row.claim_expires_at is not None
         and row.claim_expires_at > now
+    )
+
+
+def _owns_provider_call(
+    call: TrendNarrativeProviderCall,
+    *,
+    owner: str,
+    fence: int,
+    now,
+) -> bool:
+    return (
+        call.state == TrendNarrativeProviderCall.State.RESERVED
+        and call.claim_owner == owner
+        and call.claim_fence == fence
+        and call.claim_expires_at is not None
+        and call.claim_expires_at > now
     )
 
 

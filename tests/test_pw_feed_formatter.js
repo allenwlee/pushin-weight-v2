@@ -36,6 +36,7 @@ const {
   hydrateRows,
   replaceRows,
   isFeedPayload,
+  renderRowHtml,
 } = sandbox.exports;
 
 let passed = 0;
@@ -92,6 +93,46 @@ assertEq(
   '',
   'succeeded state clears the signal'
 );
+
+console.log('\n--- feed row identity and follower lead ---');
+assertEq(typeof renderRowHtml, 'function', 'renderRowHtml is available to contract tests');
+if (typeof renderRowHtml === 'function') {
+  global.document = {
+    body: { getAttribute: () => 'en' },
+    querySelector: () => null,
+  };
+  const rowHtml = renderRowHtml({
+    account: {
+      handle: '@account_handle',
+      display_name: 'Account Name',
+      followers_pretty: '52.1k',
+    },
+    follower_bin: '50k-plus',
+    followers_label: '52.1k followers',
+    engagement_pretty: { followers: '52.1k', likes: '3', retweets: '2', replies: '1' },
+  });
+  assertEq(rowHtml.includes('class="follower-lead follower-bin-50k-plus"'), true,
+    'feed row reserves a fixed follower lead column');
+  assertEq(rowHtml.includes('class="follower-glyph"'), true,
+    'feed row shows a size-binned followers emoji');
+  assertEq(rowHtml.includes('class="follower-count">52.1k</span>'), true,
+    'follower count sits directly under the emoji');
+  assertEq(rowHtml.includes('>Account Name</a>'), true,
+    'visible account link uses the display name');
+  assertEq(rowHtml.includes('href="https://x.com/account_handle"'), true,
+    'display-name link still targets the account handle');
+  assertEq(rowHtml.includes('class="followers"'), false,
+    'engagement no longer duplicates the follower count');
+
+  const unknownFollowerHtml = renderRowHtml({
+    account: { handle: '@unknown' },
+    follower_bin: '0-1k',
+    followers_label: '0 followers',
+    engagement_pretty: { followers: '0' },
+  });
+  assertEq(unknownFollowerHtml.includes('class="follower-count">0</span>'), true,
+    'rows without account metadata still show their zero follower count');
+}
 
 // (summary + process.exit moved to end after U4 buildQuery tests)
 

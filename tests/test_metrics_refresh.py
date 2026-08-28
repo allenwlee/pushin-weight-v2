@@ -95,3 +95,120 @@ def test_run_metrics_refresh_api_error_does_not_stamp():
     out = run_metrics_refresh(api, load_config(REPO / "config.yaml"), now=now)
     assert out["n_errors"] == 1
     assert Post.objects.get(tweet_id="P2_m").metrics_refreshed_at is None
+
+
+def test_run_metrics_refresh_defers_before_a_request_that_cannot_fit():
+    from django.utils import timezone
+    from core.models import Post
+    from monitor.metrics_refresh import run_metrics_refresh
+    from x_monitor.config import load_config
+
+    class NoWindow:
+        requested_seconds = None
+
+        def can_start(self, seconds):
+            self.requested_seconds = seconds
+            return False
+
+    now = timezone.now()
+    Post.objects.create(tweet_id="late_metrics", text="x")
+    Post.objects.filter(tweet_id="late_metrics").update(
+        fetched_at=now - timedelta(hours=5)
+    )
+    api = MagicMock(timeout_s=60, max_retries=2)
+    deadline = NoWindow()
+
+    out = run_metrics_refresh(
+        api,
+        load_config(REPO / "config.yaml"),
+        now=now,
+        deadline=deadline,
+    )
+
+    assert deadline.requested_seconds == 188
+    assert out["n_deferred"] >= 1
+    api.get_tweets_by_ids.assert_not_called()
+
+
+def test_run_metrics_refresh_rechecks_deadline_before_each_chunk():
+    from django.utils import timezone
+    from core.models import Post
+    from monitor.metrics_refresh import run_metrics_refresh
+    from x_monitor.config import load_config
+
+    class OneWindow:
+        checks = 0
+
+        def can_start(self, seconds):
+            assert seconds == 188
+            self.checks += 1
+            return self.checks == 1
+
+    class RecordingApi:
+        timeout_s = 60
+        max_retries = 2
+
+        def __init__(self):
+            self.calls = []
+
+        def get_tweets_by_ids(self, ids):
+            self.calls.append(list(ids))
+            return {}
+
+    now = timezone.now()
+    for index in range(55):
+        tweet_id = f"chunked_metrics_{index:02d}"
+        Post.objects.create(tweet_id=tweet_id, text="x")
+        Post.objects.filter(tweet_id=tweet_id).update(
+            fetched_at=now - timedelta(hours=5)
+        )
+    api = RecordingApi()
+
+    out = run_metrics_refresh(
+        api,
+        load_config(REPO / "config.yaml"),
+        now=now,
+        deadline=OneWindow(),
+    )
+
+    assert len(api.calls) == 1
+    assert len(api.calls[0]) == 50
+    assert out["n_deferred"] == 5
+    assert out["n_missing"] == 50
+
+
+def test_later_chunk_failure_preserves_updates_from_earlier_chunk(monkeypatch):
+    from monitor import metrics_refresh
+    from x_monitor.config import load_config
+
+    due = [f"partial-{index:02d}" for index in range(21)]
+    calls: list[list[str]] = []
+    applied: list[str] = []
+
+    class Api:
+        timeout_s = 60
+        max_retries = 2
+
+        def get_tweets_by_ids(self, ids):
+            calls.append(list(ids))
+            if len(calls) == 2:
+                raise RuntimeError("second chunk failed")
+            return {tweet_id: {"like_count": 1} for tweet_id in ids}
+
+    monkeypatch.setattr(metrics_refresh, "_TWEETS_BY_IDS_CHUNK", 20)
+    monkeypatch.setattr(metrics_refresh, "select_due_posts", lambda **_kwargs: due)
+    monkeypatch.setattr(
+        metrics_refresh,
+        "apply_metrics_to_post",
+        lambda tweet_id, _info, **_kwargs: applied.append(tweet_id) or True,
+    )
+
+    out = metrics_refresh.run_metrics_refresh(
+        Api(), load_config(REPO / "config.yaml")
+    )
+
+    assert calls == [due[:20], due[20:]]
+    assert applied == due[:20]
+    assert out["n_refreshed"] == 20
+    assert out["n_errors"] == 1
+    assert out["n_deferred"] == 1

@@ -443,7 +443,7 @@ class RegressionNet:
 
     def _check_follower_glyphs(self, html):
         glyphs = re.findall(
-            r'<span class="follower-glyph follower-bin-([^" ]+)"[^>]*aria-label="([^"]*followers)"',
+            r'<div class="follower-lead follower-bin-([^" ]+)"[^>]*aria-label="([^"]*followers)"',
             html,
         )
         self.assert_("feed has >= 1 follower-count glyph",
@@ -487,10 +487,13 @@ class RegressionNet:
             self.assert_(f".sig-row.{sig} present",
                          f'class="sig-row {sig}"' in html,
                          f"missing — right column missing emoji signals")
-        # Inside feed-main: follower glyph, head (handle + meta), text, engagement
-        self.assert_(".feed-main .follower-glyph present",
-                     re.search(r'<div class="feed-main">\s*<span class="follower-glyph', html, re.DOTALL) is not None,
-                     "follower glyph must be first child of .feed-main")
+        # Inside feed-main: fixed follower lead, head (name + meta), text, engagement
+        self.assert_(".feed-main .follower-lead present",
+                     re.search(r'<div class="feed-main">\s*<div class="follower-lead', html, re.DOTALL) is not None,
+                     "follower lead must be first child of .feed-main")
+        self.assert_("follower emoji and count present",
+                     'class="follower-glyph"' in html and 'class="follower-count"' in html,
+                     "follower emoji/count column incomplete")
         self.assert_(".feed-main .head present",
                      '<div class="head">' in html,
                      "head row missing from .feed-main")
@@ -500,9 +503,12 @@ class RegressionNet:
         self.assert_(".text-layer-tag present (en 'synthesis' or zh '综合')",
                      'class="text-layer-tag"' in html,
                      "text layer tag missing — synthesis/综合 indicator absent")
-        self.assert_(".engagement with 4 .followers/.likes/.rts/.replies present",
-                     all(f'class="{k}"' in html for k in ('followers', 'likes', 'rts', 'replies')),
-                     "engagement spans missing one of followers/likes/rts/replies")
+        self.assert_(".engagement with .likes/.rts/.replies present",
+                     all(f'class="{k}"' in html for k in ('likes', 'rts', 'replies')),
+                     "engagement spans missing one of likes/rts/replies")
+        self.assert_("follower count is not duplicated in engagement",
+                     'class="followers"' not in html,
+                     "legacy engagement follower span still present")
 
     def _check_filter_contract(self, html):
         # Net C — Filter contract (unchanged wire).

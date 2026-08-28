@@ -205,22 +205,18 @@ def aggregate_trend_family_facts(
         window_start=window_start,
         as_of=as_of_utc,
     )
-    eligible_rows = [
-        row
-        for row in aggregate_rows
-        if int(row["selected_posts"] or 0) >= thresholds.min_posts
-        and int(row["selected_authors"] or 0) >= thresholds.min_authors
-    ]
-    eligible_keys = [str(row["brand_key"]) for row in eligible_rows]
+    # The compact narrative contract is not a shortlist: every non-sentinel
+    # brand has a full-window fact row, including true zero-post brands.
+    all_brand_keys = [str(row["brand_key"]) for row in aggregate_rows]
     episode_rows = _aggregate_episode_rows(
-        candidate_keys=eligible_keys,
+        candidate_keys=all_brand_keys,
         window_start=window_start,
         as_of=as_of_utc,
         schedule=_WINDOW_SCHEDULES[window_days],
         thresholds=thresholds,
     )
     episodes_by_brand: dict[str, list[dict[str, Any]]] = {
-        brand_key: [] for brand_key in eligible_keys
+        brand_key: [] for brand_key in all_brand_keys
     }
     for episode in episode_rows:
         episodes_by_brand[str(episode["brand_key"])].append(
@@ -235,21 +231,16 @@ def aggregate_trend_family_facts(
 
     taxonomy = _metadata_taxonomy()
     metadata_counts, metadata_coverage = _metadata_counts(
-        candidate_keys=eligible_keys,
+        candidate_keys=all_brand_keys,
         prior_start=prior_start,
         window_start=window_start,
         as_of=as_of_utc,
     )
-    market_selected_basis = sum(
-        int(row["selected_posts"] or 0) for row in aggregate_rows
-    )
-    market_prior_basis = sum(int(row["prior_posts"] or 0) for row in aggregate_rows)
-
     candidates: list[dict[str, Any]] = []
     scores: dict[str, dict[str, Decimal]] = {
         family: {} for family in _RANK_FAMILY_KEYS
     }
-    for row in eligible_rows:
+    for row in aggregate_rows:
         brand_key = str(row["brand_key"])
         candidate_id = f"{brand_key}:full_window"
         volume = _volume_fact(row, comparison_allowed=comparison_allowed)
@@ -267,8 +258,6 @@ def aggregate_trend_family_facts(
                 coverage=metadata_coverage,
                 selected_basis=int(row["selected_posts"] or 0),
                 prior_basis=int(row["prior_posts"] or 0),
-                market_selected_basis=market_selected_basis,
-                market_prior_basis=market_prior_basis,
                 comparison_allowed=comparison_allowed,
             )
         candidate = {
@@ -285,7 +274,7 @@ def aggregate_trend_family_facts(
             ),
             "family_ranks": {},
             "family_facts": family_facts,
-            "episodes": episodes_by_brand[brand_key],
+            "episodes": episodes_by_brand.get(brand_key, []),
         }
         candidates.append(candidate)
         scores["volume"][candidate_id] = Decimal(int(row["selected_posts"] or 0))
@@ -380,14 +369,20 @@ def fetch_trend_candidate_series(
     as_of: datetime,
     candidate_keys: Sequence[str | Mapping[str, Any]],
     earliest_at: datetime | None | object = _EARLIEST_NOT_PROVIDED,
+    allow_unbounded: bool = False,
 ) -> dict[str, Any]:
-    """Return complete zero-filled graph series for a bounded candidate set."""
+    """Return complete zero-filled graph series for a candidate set.
+
+    Provider-facing callers use the default bounded form.  The immutable U1
+    snapshot explicitly opts into the all-brand form and retains those raw
+    series privately; it never projects them across the provider boundary.
+    """
     return _fetch_trend_candidate_series(
         window_days,
         as_of=as_of,
         candidate_keys=candidate_keys,
         earliest_at=earliest_at,
-        enforce_candidate_limit=True,
+        enforce_candidate_limit=not allow_unbounded,
     )
 
 
@@ -1173,15 +1168,31 @@ def _aggregate_brand_rows(
     sql = """
         WITH windowed_posts AS (
             SELECT
-                pb.brand_id::text AS brand_key,
+                b.nickname::text AS brand_key,
                 b.display_name,
                 b.display_name_en,
                 b.display_name_zh_cn,
                 p.tweet_id,
                 p.author_id,
                 p.created_at >= %s::timestamptz AS is_selected,
+                p.created_at >= %s::timestamptz AS is_newest_30m,
+                (
+                    (
+                        nullif(btrim(p.text), '') IS NOT NULL
+                        AND (
+                            NOT coalesce(p.is_retweet, false)
+                            OR p.text !~* '^\\s*RT\\s+@'
+                        )
+                    )
+                    OR (
+                        NOT coalesce(p.is_retweet, false)
+                        AND nullif(btrim(p.quoted_text), '') IS NOT NULL
+                    )
+                ) AS has_usable_raw_text,
                 p.metrics_refreshed_at <= %s::timestamptz AS metrics_observed,
                 p.metrics_refreshed_at,
+                pes.translation_status,
+                pes.classification_status,
                 coalesce(p.like_count, 0)::bigint AS likes,
                 coalesce(p.retweet_count, 0)::bigint AS reposts,
                 coalesce(p.quote_count, 0)::bigint AS quotes,
@@ -1192,12 +1203,14 @@ def _aggregate_brand_rows(
                     + coalesce(p.quote_count, 0)
                     + coalesce(p.reply_count, 0)
                 )::bigint AS interactions
-            FROM posts_brands pb
-            JOIN posts p ON p.tweet_id = pb.post_id
-            JOIN brands b ON b.nickname = pb.brand_id
+            FROM brands b
+            LEFT JOIN posts_brands pb ON pb.brand_id = b.nickname
+            LEFT JOIN posts p
+              ON p.tweet_id = pb.post_id
+             AND p.created_at >= %s::timestamptz
+             AND p.created_at < %s::timestamptz
+            LEFT JOIN post_enrichment_states pes ON pes.post_id = p.tweet_id
             WHERE NOT b.is_sentinel
-              AND p.created_at >= %s::timestamptz
-              AND p.created_at < %s::timestamptz
         )
         SELECT
             brand_key,
@@ -1209,6 +1222,36 @@ def _aggregate_brand_rows(
                 AS selected_posts,
             count(DISTINCT author_id) FILTER (WHERE is_selected)::integer
                 AS selected_authors,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND has_usable_raw_text
+            )::integer AS selected_usable_raw,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND translation_status = 'succeeded'
+            )::integer AS selected_translated,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND classification_status = 'succeeded'
+            )::integer AS selected_classified,
+            count(tweet_id) FILTER (
+                WHERE is_selected
+                  AND translation_status = 'succeeded'
+                  AND classification_status = 'succeeded'
+            )::integer AS selected_enriched,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND is_newest_30m
+            )::integer AS newest_30m_posts,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND is_newest_30m
+                  AND translation_status = 'succeeded'
+            )::integer AS newest_30m_translated,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND is_newest_30m
+                  AND classification_status = 'succeeded'
+            )::integer AS newest_30m_classified,
+            count(tweet_id) FILTER (
+                WHERE is_selected AND is_newest_30m
+                  AND translation_status = 'succeeded'
+                  AND classification_status = 'succeeded'
+            )::integer AS newest_30m_enriched,
             count(tweet_id) FILTER (WHERE NOT is_selected)::integer
                 AS prior_posts,
             count(DISTINCT author_id) FILTER (WHERE NOT is_selected)::integer
@@ -1256,7 +1299,13 @@ def _aggregate_brand_rows(
         GROUP BY brand_key, display_name_en, display_name_zh_cn, display_name
         ORDER BY lower(brand_key), brand_key
     """
-    params = [window_start, as_of, prior_start, as_of]
+    params = [
+        window_start,
+        as_of - timedelta(minutes=30),
+        as_of,
+        prior_start,
+        as_of,
+    ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
         return _dict_rows(cursor)
@@ -1396,16 +1445,27 @@ def _metadata_counts(
             FROM labels l
             JOIN requested r ON r.brand_key = l.brand_id
         ),
+        scoped_family_edges AS (
+            SELECT post_id, period, family, brand_id AS scope_key
+            FROM candidate_family_edges
+            UNION ALL
+            SELECT
+                post_id,
+                period,
+                family,
+                '__market__'::text AS scope_key
+            FROM candidate_family_edges
+        ),
         coverage_counts AS (
             SELECT
-                brand_id AS scope_key,
+                scope_key,
                 family,
                 count(*) FILTER (WHERE period = 'selected')::integer
                     AS selected_count,
                 count(*) FILTER (WHERE period = 'prior')::integer
                     AS prior_count
-            FROM candidate_family_edges
-            GROUP BY brand_id, family
+            FROM scoped_family_edges
+            GROUP BY scope_key, family
         )
         SELECT 'label' AS row_type, scope_key, family, label_key,
                selected_count, prior_count FROM label_counts
@@ -1437,6 +1497,22 @@ def _volume_fact(
     return {
         "selected_count": selected,
         "selected_authors": int(row["selected_authors"] or 0),
+        "selected_usable_raw_count": int(row["selected_usable_raw"] or 0),
+        "selected_translation_succeeded_count": int(
+            row["selected_translated"] or 0
+        ),
+        "selected_classification_succeeded_count": int(
+            row["selected_classified"] or 0
+        ),
+        "selected_enriched_count": int(row["selected_enriched"] or 0),
+        "newest_30m_count": int(row["newest_30m_posts"] or 0),
+        "newest_30m_translation_succeeded_count": int(
+            row["newest_30m_translated"] or 0
+        ),
+        "newest_30m_classification_succeeded_count": int(
+            row["newest_30m_classified"] or 0
+        ),
+        "newest_30m_enriched_count": int(row["newest_30m_enriched"] or 0),
         "prior_count": prior,
         "prior_authors": int(row["prior_authors"] or 0),
         "change_pct": change,
@@ -1524,23 +1600,24 @@ def _metadata_family_fact(
     coverage: Mapping[tuple[str, str], tuple[int, int]],
     selected_basis: int,
     prior_basis: int,
-    market_selected_basis: int,
-    market_prior_basis: int,
     comparison_allowed: bool,
 ) -> dict[str, Any]:
     selected_covered, prior_covered = coverage.get((brand_key, family), (0, 0))
+    market_selected_covered, market_prior_covered = coverage.get(
+        ("__market__", family), (0, 0)
+    )
     labels = []
     for key in keys:
         selected, prior = counts.get((brand_key, family, key), (0, 0))
         market_selected, market_prior = counts.get(
             ("__market__", family, key), (0, 0)
         )
-        selected_prevalence = _ratio(selected, selected_basis)
-        prior_prevalence = _ratio(prior, prior_basis)
+        selected_prevalence = _ratio(selected, selected_covered)
+        prior_prevalence = _ratio(prior, prior_covered)
         market_selected_prevalence = _ratio(
-            market_selected, market_selected_basis
+            market_selected, market_selected_covered
         )
-        market_prior_prevalence = _ratio(market_prior, market_prior_basis)
+        market_prior_prevalence = _ratio(market_prior, market_prior_covered)
         brand_change = (
             (selected_prevalence - prior_prevalence) * 100
             if comparison_allowed
@@ -1554,8 +1631,8 @@ def _metadata_family_fact(
         labels.append(
             {
                 "key": key,
-                "selected_basis_count": selected_basis,
-                "prior_basis_count": prior_basis,
+                "selected_basis_count": selected_covered,
+                "prior_basis_count": prior_covered,
                 "selected_count": selected,
                 "prior_count": prior,
                 "selected_prevalence": _decimal_string(selected_prevalence),
@@ -1576,6 +1653,8 @@ def _metadata_family_fact(
             }
         )
     return {
+        "selected_total_count": selected_basis,
+        "prior_total_count": prior_basis,
         "selected_covered_count": selected_covered,
         "prior_covered_count": prior_covered,
         "selected_coverage_ratio": _decimal_string(

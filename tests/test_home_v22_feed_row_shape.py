@@ -46,7 +46,7 @@ def _fake_row():
         "brand_nicknames": ["kimi"],
         "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "buzz_releases"}], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}, "discourse": []}},
         "unsanctioned": False,
-        "account": {"handle": "@kimi_moonshot", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
+        "account": {"handle": "@kimi_moonshot", "display_name": "Moonshot AI", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
     }
 
 
@@ -134,18 +134,24 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         for sig in ("sig-sentiment", "sig-post-type", "sig-nat", "sig-unsanctioned"):
             self.assertIn(f'sig-row {sig}"', body, f"missing .sig-row.{sig}")
 
-    def test_feed_main_has_follower_glyph_handle_text_engagement(self):
+    def test_feed_main_has_fixed_follower_column_name_text_engagement(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
-        # Follower-count glyph is the first child of feed-main; initials avatars
-        # no longer carry the primary at-a-glance signal on the public feed.
+        # Follower count owns a fixed lead column. The emoji changes size by
+        # bin while the text body remains aligned across rows.
         self.assertRegex(
             body,
-            r'<div class="feed-main">\s*<span class="follower-glyph follower-bin-50k-plus"',
+            r'<div class="feed-main">\s*<div class="follower-lead follower-bin-50k-plus"',
         )
+        self.assertIn('class="follower-glyph"', body)
+        self.assertIn('class="follower-count">128.4k</span>', body)
         self.assertIn('aria-label="128.4k followers"', body)
         self.assertNotIn('<span class="avatar"', body)
-        # head contains handle + meta + ts-abs
+        # The name is visible, while the account handle remains the link target.
+        self.assertIn('>Moonshot AI</a>', body)
+        self.assertIn('href="https://x.com/kimi_moonshot"', body)
+        self.assertNotIn('>@kimi_moonshot</a>', body)
+        # head contains account name + meta + ts-abs
         self.assertIn('class="head"', body)
         self.assertIn('class="handle"', body)
         self.assertIn('class="meta"', body)
@@ -153,9 +159,10 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         # text + text-layer-tag
         self.assertIn('class="text"', body)
         self.assertIn('class="text-layer-tag"', body)
-        # engagement with 4 stats
+        # Follower count moved out of engagement, leaving interaction stats.
         self.assertIn('class="engagement"', body)
-        for stat in ("followers", "likes", "rts", "replies"):
+        self.assertNotIn('class="followers"', body)
+        for stat in ("likes", "rts", "replies"):
             self.assertIn(f'class="{stat}"', body, f"missing engagement stat .{stat}")
 
     def test_signal_data_attributes_present(self):

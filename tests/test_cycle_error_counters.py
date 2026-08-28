@@ -53,12 +53,12 @@ def test_error_counter_increments_are_visible():
 
 
 def test_commentary_normalization_treats_translator_sentinel_as_missing():
-    from monitor.cycle import _commentary_or_none
+    from monitor.post_enrichment import present_text
 
-    assert _commentary_or_none("  Chinese commentary  ") == "Chinese commentary"
-    assert _commentary_or_none("N/A") is None
-    assert _commentary_or_none("  ") is None
-    assert _commentary_or_none(None) is None
+    assert present_text("  Chinese commentary  ") == "Chinese commentary"
+    assert present_text("N/A") is None
+    assert present_text("  ") is None
+    assert present_text(None) is None
 
 
 @pytest.mark.requires_postgres
@@ -66,26 +66,35 @@ def test_commentary_normalization_treats_translator_sentinel_as_missing():
 def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeypatch):
     """Production post-fetch wiring owns state and Django flag persistence."""
     _django_setup()
-    from core.models import Post, PostEnrichmentState, PostUnsanctionedFlag
+    from core.models import (
+        Post,
+        PostEnrichmentState,
+        PostUnsanctionedFlag,
+        UnsanctionedFlagKey,
+    )
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
     from x_monitor.config import Config
 
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
     PostEnrichmentState.objects.create(post=post)
+    UnsanctionedFlagKey.objects.get_or_create(key="scam")
     client = object()
     translator_calls = []
     classifier_calls = []
+    attempt_deadlines = []
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
     monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
 
     def translate(tweets, locales, translator_client, **kwargs):
         translator_calls.append((tweets, locales, translator_client))
+        attempt_deadlines.append(kwargs["deadline"])
         return [
             {
                 "tweet_id": post.pk,
                 "text_en": post.text,
                 "text_zh_cn": "深度求索发布",
+                "en_equivalent": "The release signals another competitive step.",
                 "cn_equivalent": "深度求索这波很能打",
                 "lang_detected": "en",
             }
@@ -93,6 +102,7 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
 
     def classify(tweets, brands, classifier_client, **kwargs):
         classifier_calls.append((tweets, brands, classifier_client))
+        attempt_deadlines.append(kwargs["deadline"])
         return [{"by_brand": {}, "unsanctioned_flags": ["scam"]}]
 
     monkeypatch.setattr(
@@ -111,17 +121,122 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
 
     state = PostEnrichmentState.objects.get(post=post)
     assert counters["n_enrichment_claimed"] == 1
+    assert counters["n_enrichment_claimed_carryover"] == 1
+    assert counters["n_enrichment_claimed_current_cycle"] == 0
     assert counters["n_enrichment_succeeded"] == 1
+    assert counters["enrichment_carryover_post_ids"] == [post.pk]
+    assert counters["enrichment_current_cycle_post_ids"] == []
+    assert counters["enrichment_state_facts"] == [
+        {
+            "post_id": post.pk,
+            "lane": "carryover",
+            "translation_status": PostEnrichmentState.Status.SUCCEEDED,
+            "classification_status": PostEnrichmentState.Status.SUCCEEDED,
+            "output_complete": True,
+        }
+    ]
     assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
     assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
     assert state.claim_run_id == ""
     assert len(translator_calls) == 1
     assert translator_calls[0][1:] == (["en", "zh_cn"], client)
     assert len(classifier_calls) == 1
+    assert attempt_deadlines[0] is not attempt_deadlines[1]
+    assert all(deadline.request_timeout_seconds == 90 for deadline in attempt_deadlines)
     post.refresh_from_db()
     assert post.commentary_zh_cn == "深度求索这波很能打"
-    assert post.commentary_en is None
+    assert post.commentary_en == "The release signals another competitive step."
     assert PostUnsanctionedFlag.objects.filter(post=post).exists()
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_persistence_marker_flows_to_current_cycle_post_fetch_evidence(monkeypatch):
+    _django_setup()
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute, translator
+    from x_monitor.config import Config
+
+    cutoff = timezone.now() - timedelta(seconds=1)
+    item = {
+        "id": "same-cycle-insert",
+        "author_id": "same-cycle-author",
+        "author_handle": "same-cycle-author",
+        "text": "DeepSeek release",
+        "created_at": cutoff.isoformat(),
+        "brand_ids": [],
+        "mentions": [],
+        "classifications": {},
+    }
+    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100)
+    runner = CycleRunner(cfg=cfg)
+    inserted, updated, _attributed, failed = runner._persist_items([item])
+    assert (inserted, updated, failed) == (1, 0, 0)
+    assert item["_db_inserted"] is True
+    assert item["_persisted_post_id"] == item["id"]
+
+    client = object()
+    translator_call = {}
+    classifier_call = {}
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: client)
+
+    def translate(tweets, locales, translator_client, **kwargs):
+        translator_call.update(
+            n=len(tweets),
+            max_workers=kwargs["max_workers"],
+            model=kwargs["cfg"].llm.translator_model,
+        )
+        return [
+            {
+                "tweet_id": item["id"],
+                "text_en": item["text"],
+                "text_zh_cn": "深度求索发布",
+                "en_equivalent": "The release adds competitive pressure.",
+                "cn_equivalent": "这次发布增加了竞争压力。",
+                "lang_detected": "en",
+            }
+        ]
+
+    def classify(tweets, brands, classifier_client, **kwargs):
+        classifier_call.update(
+            n=len(tweets),
+            max_workers=kwargs["max_workers"],
+            model=kwargs["model"],
+        )
+        return [{"by_brand": {}, "unsanctioned_flags": []}]
+
+    monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+
+    counters = runner._run_post_fetch(
+        [item],
+        run_id="same-cycle-evidence",
+        prefer_created_before=cutoff,
+    )
+
+    state = PostEnrichmentState.objects.get(post_id=item["id"])
+    assert counters["inserted_post_ids"] == [item["id"]]
+    assert counters["enrichment_current_cycle_post_ids"] == [item["id"]]
+    assert counters["n_enrichment_claimed_current_cycle"] == 1
+    assert counters["enrichment_state_facts"][0]["lane"] == "current_cycle"
+    assert counters["enrichment_state_facts"][0]["output_complete"] is True
+    assert translator_call == {
+        "n": 1,
+        "max_workers": 3,
+        "model": "deepseek-v4-flash",
+    }
+    assert classifier_call == {
+        "n": 1,
+        "max_workers": 3,
+        "model": "deepseek-v4-flash",
+    }
+    assert state.claim_run_id == ""
 
 
 @pytest.mark.requires_postgres

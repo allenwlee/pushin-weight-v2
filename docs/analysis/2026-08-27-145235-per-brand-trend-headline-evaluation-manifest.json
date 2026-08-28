@@ -1,0 +1,17 @@
+{
+  "brand_cap": 25,
+  "concurrency": 1,
+  "context_window_tokens": 1000000,
+  "dollar_budget": "5.00",
+  "input_dollars_per_million_tokens": "1.32",
+  "input_token_budget": 2000000,
+  "max_calls": 40,
+  "max_packet_bytes": 131072,
+  "model": "deepseek-v4-pro",
+  "output_dollars_per_million_tokens": "3.96",
+  "output_token_budget": 700000,
+  "pricing_checked_at": "2026-08-27T14:52:35+09:00",
+  "pricing_version": "deepseek-v4-pro-official-peak-cache-miss-2026-08-27",
+  "reviewer": "codex:fuchitalee:lfg",
+  "run_id": "2026-08-27-145235-per-brand-production-activation"
+}

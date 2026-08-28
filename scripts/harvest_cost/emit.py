@@ -12,9 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from monitor.harvest_summary import (
+    build_cohort_receipt,
     build_summary_envelope,
     redact_http_log,
     redacted_summary_payload,
+    serialize_cohort_receipt,
     serialize_summary_envelope,
 )
 
@@ -102,6 +104,9 @@ def finalize_and_persist(
     try:
         envelope = build_summary_envelope(summary)
         logger.info(serialize_summary_envelope(envelope))
+        cohort = build_cohort_receipt(summary, envelope=envelope)
+        if cohort is not None:
+            logger.info(serialize_cohort_receipt(cohort))
     except Exception as exc:
         logger.warning("cycle_summary_emit: canonical envelope failed: %s", exc)
     return persist_cycle_summary(

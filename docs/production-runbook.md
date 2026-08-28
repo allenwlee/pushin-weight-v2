@@ -1,6 +1,11 @@
 # Production Runbook -- v1-to-v2 Cutover
 
-Last updated: 2026-07-22
+Last updated: 2026-08-27
+
+> This historical cutover runbook does not authorize copying production data.
+> The current guarded production-to-staging snapshot procedure, including its
+> dedicated read-only role and recovery controls, is
+> [`docs/operations/staging-data-refresh.md`](operations/staging-data-refresh.md).
 
 This document covers the cutover from the legacy v1 Flask/SQLite/launchd
 stack to the v2 Django/PostgreSQL/Render stack. Read it fully before

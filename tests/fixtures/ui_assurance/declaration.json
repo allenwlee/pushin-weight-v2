@@ -1,0 +1,67 @@
+{
+  "schema_version": "bridgewright.assurance.declaration/v1",
+  "profile": "stateful-ui-assurance/v1",
+  "source_revision": "e34d67b50329024d54348f314f3091ab80247afe",
+  "fixture": {
+    "path": "tests/fixtures/ui_assurance/data.json",
+    "sha256": "d0fef546c3ec378cb8eec92f995db806a30934272d432e538a472654b55d4027"
+  },
+  "generator": {"name": "pushinweight-covering-array", "version": "1.0", "seed": 501},
+  "controls": [
+    {"id":"brands","kind":"multi_select","values":["__all__","deepseek","qwen","minimax","glm","mimo","moonshot_kimi","inclusionai","mistral","stepfun","ernie","hunyuan","llama","nemo_megatron","doubao","yi","sensechat","exaone","kuaishou","sakana_ai","upstage","chatglm","gemma","kwaiyii","seed","sensenova","step","wenxin","gemini","gpt","claude","grok"],"initial_value":"__all__","reversible":true},
+    {"id":"sentiment","kind":"multi_select","values":["__all__","mixed","negative","neutral","positive"],"initial_value":"__all__","reversible":true},
+    {"id":"post_type","kind":"multi_select","values":["__all__","buzz_releases","hands_on_usage","performance_comparisons","feedback_questions","advertising_marketing","event_announcement"],"initial_value":"__all__","reversible":true},
+    {"id":"lang","kind":"multi_select","values":["__all__","en","zh-hans","ja","es","tr","fr","pt","ko","id","ar","pl","undetected","other"],"initial_value":"__all__","reversible":true},
+    {"id":"role","kind":"multi_select","values":["__all__","official","staff","community","other"],"initial_value":"__all__","reversible":true},
+    {"id":"nationalism_cn","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
+    {"id":"nationalism_us","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
+    {"id":"discourse","kind":"multi_select","values":["__all__","genuine_hype","sarcasm","dunk_yingyang","self_deprecation","cope","fud","distillation_accusation","ai_slop_critique","absurdist_meme","advertising-marketing","uncategorized"],"initial_value":"__all__","reversible":true},
+    {"id":"unsanctioned","kind":"toggle","values":["off","only"],"initial_value":"off","reversible":true},
+    {"id":"locale","kind":"single_select","values":["en","zh_cn","original"],"initial_value":"en","reversible":true},
+    {"id":"window","kind":"single_select","values":["1","7","30","365"],"initial_value":"1","reversible":true},
+    {"id":"timezone","kind":"toggle","values":["local","ca"],"initial_value":"local","reversible":true},
+    {"id":"brand_lens","kind":"single_select","values":["open","closed"],"initial_value":"open","reversible":true},
+    {"id":"nationalism_lens","kind":"single_select","values":["us","cn"],"initial_value":"us","reversible":true},
+    {"id":"bulk_action","kind":"action","values":["idle","all","clear"],"initial_value":"idle","reversible":false}
+  ],
+  "coverage_groups": [
+    {"id":"filter-core","controls":["brands","sentiment","post_type","unsanctioned"],"strength":2},
+    {"id":"taxonomy-core","controls":["lang","role","discourse"],"strength":2},
+    {"id":"nationalism-core","controls":["nationalism_cn","nationalism_us","unsanctioned"],"strength":2},
+    {"id":"presentation-core","controls":["locale","window","timezone","brand_lens","nationalism_lens"],"strength":2},
+    {"id":"chart-refresh-risk","controls":["brands","window","locale"],"strength":3},
+    {"id":"flag-partition-risk","controls":["brands","unsanctioned","window"],"strength":3}
+  ],
+  "ordered_groups": [
+    {"id":"chart-intent-order","actions":["brands:mimo","window:7","window:1"],"strength":3},
+    {"id":"brand-reversal-order","actions":["pulse:deepseek:on","pulse:deepseek:off","window:1"],"strength":2},
+    {"id":"flag-reversal-order","actions":["unsanctioned:only","unsanctioned:off","window:1"],"strength":2},
+    {"id":"preference-order","actions":["brands:minimax","timezone:ca","locale:zh_cn"],"strength":3}
+  ],
+  "constraints": [],
+  "invariants": [
+    {"id":"filter-state-agrees","projections":["controls","accessibility","persistence"]},
+    {"id":"feed-oracle-agrees","projections":["feed","counts"]},
+    {"id":"chart-oracle-agrees","projections":["chart","counts"]},
+    {"id":"latest-intent-wins","projections":["controls","chart","network"]},
+    {"id":"locale-preserves-preferences","projections":["controls","persistence"]},
+    {"id":"flagged-partition-is-exact","projections":["feed","counts","network"]}
+  ],
+  "races": [
+    {"id":"old-seven-day-after-new-one-day","older_action":"window:7","newer_action":"window:1","fault":"out_of_order"},
+    {"id":"old-chart-delayed","older_action":"brands:__all__","newer_action":"brands:mimo","fault":"delayed"},
+    {"id":"old-chart-fails","older_action":"window:7","newer_action":"window:1","fault":"failed"},
+    {"id":"old-chart-aborts","older_action":"brands:deepseek","newer_action":"brands:mimo","fault":"aborted"},
+    {"id":"old-chart-duplicates","older_action":"window:7","newer_action":"window:1","fault":"duplicate"}
+  ],
+  "seeded_regressions": [
+    {"id":"deepseek-select-deselect-restores-all","actions":["pulse:deepseek:on","pulse:deepseek:off"],"invariants":["filter-state-agrees","feed-oracle-agrees","chart-oracle-agrees"]},
+    {"id":"mimo-seven-to-one-latest-wins","actions":["window:7","brands:mimo","window:1"],"invariants":["filter-state-agrees","chart-oracle-agrees","latest-intent-wins"]},
+    {"id":"unsanctioned-only-off-partition","actions":["unsanctioned:only","unsanctioned:off"],"invariants":["filter-state-agrees","feed-oracle-agrees","flagged-partition-is-exact"]}
+  ],
+  "environments": [{"id":"desktop-chromium","browser_runtime":"playwright-chromium","required":true}],
+  "gates": [
+    {"id":"affected","scope":"affected","required":true},
+    {"id":"candidate","scope":"full","required":true}
+  ]
+}

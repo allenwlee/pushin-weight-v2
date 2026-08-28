@@ -84,6 +84,11 @@ def test_closing_owner_connection_releases_advisory_lock():
 def test_all_write_entrypoints_stop_before_calls_or_state_writes_on_contention(
     monkeypatch,
 ):
+    # Import module-level aliases before replacing their source functions.
+    # Importing tasks after patching x_monitor.config.load_config would bind the
+    # fake as the value monkeypatch later "restores", leaking it to later tests.
+    import monitor.management.commands.backfill as backfill_module
+    import monitor.tasks as tasks_module
     from monitor.run_lock import WriterLockContention, WriterLockLease
 
     invocations = []
@@ -118,9 +123,6 @@ def test_all_write_entrypoints_stop_before_calls_or_state_writes_on_contention(
     monkeypatch.setattr("monitor.run_lock.harvest_writer_lock", contended_lock)
     monkeypatch.setattr("monitor.cycle.CycleRunner", forbidden)
     monkeypatch.setattr("x_monitor.config.load_config", forbidden)
-
-    import monitor.management.commands.backfill as backfill_module
-    import monitor.tasks as tasks_module
 
     monkeypatch.setattr(backfill_module, "load_config", forbidden)
     monkeypatch.setattr(backfill_module, "_save_state", forbidden)
@@ -158,9 +160,7 @@ def test_backfill_dry_run_is_truly_read_only(monkeypatch, tmp_path):
 
     monkeypatch.setattr(backfill_module, "_state_path", lambda *_: state_file)
     monkeypatch.setattr(backfill_module, "load_config", lambda *_: object())
-    monkeypatch.setattr(
-        "monitor.cycle.plan_calls_for_cycle", lambda _cfg: []
-    )
+    monkeypatch.setattr("monitor.cycle.plan_calls_for_cycle", lambda _cfg: [])
 
     call_command(
         "backfill",

@@ -1,123 +1,155 @@
-# Evaluate why-first trend headlines
+# Evaluate per-brand trend headlines
 
-This command evaluates synthetic conversation stories through the production
-provider-packet, request, and output-validation contracts. It is an explicit
-operator tool: scheduled tasks and ordinary tests never invoke it.
-
-It cannot publish a headline, enqueue a worker, run harvesting, or write
-historical facts. Synthetic execution writes only its requested report files.
-Calibration reads stored posts in bounded PostgreSQL read-only transactions and
-does not change `config.yaml`.
+`evaluate_trend_headlines` runs the production all-brand dossier, rank,
+five-brand editor batch, critic, transport, and mechanical-validation
+contracts without enqueueing work or publishing a headline. It is an explicit,
+finite operator tool; tests, scheduled workers, browser requests, and harvest
+cycles never invoke it.
 
 ## Prepare a finite manifest
 
-Before authorizing transport, recheck the current `deepseek-v4-pro` context
-limit and input/output token prices in DeepSeek's official
-[pricing documentation](https://api-docs.deepseek.com/quick_start/pricing) and
-[token-usage guidance](https://api-docs.deepseek.com/quick_start/token_usage).
-Put the checked values and timestamp in a local manifest; do not commit
-credentials or treat an old example price as current.
+Before live transport, verify the configured route's current context and
+pricing with the provider or the project's contracted rate card. Record the
+source revision and check time. The manifest is a hard cap, not an estimate:
 
 ```json
 {
   "run_id": "owner-chosen-run-id",
+  "reviewer": "operator-or-agent-identity",
   "model": "deepseek-v4-pro",
-  "max_calls": 28,
-  "input_token_budget": 20000000,
-  "dollar_budget": "OWNER-SET-FINITE-LIMIT",
-  "input_dollars_per_million_tokens": "CURRENT-OFFICIAL-PRICE",
-  "output_dollars_per_million_tokens": "CURRENT-OFFICIAL-PRICE",
-  "pricing_checked_at": "YYYY-MM-DDTHH:MM:SSZ",
-  "context_window_tokens": "CURRENT-OFFICIAL-LIMIT",
+  "max_calls": 40,
+  "input_token_budget": 2000000,
+  "output_token_budget": 700000,
+  "dollar_budget": "5.00",
+  "input_dollars_per_million_tokens": "CURRENT-VERIFIED-RATE",
+  "output_dollars_per_million_tokens": "CURRENT-VERIFIED-RATE",
+  "pricing_version": "rate-card-name-and-date",
+  "pricing_checked_at": "YYYY-MM-DDTHH:MM:SS+00:00",
+  "context_window_tokens": 500000,
+  "brand_cap": 25,
   "concurrency": 1,
-  "max_output_tokens": 1600,
   "max_packet_bytes": 131072
 }
 ```
 
-The command rejects missing or non-positive call, input-token, and dollar
-budgets; a model other than the explicit `deepseek-v4-pro` route; concurrency
-other than one; or a changed output cap. UTF-8 request bytes are used as a
-conservative upper bound for input tokens. Before every transport it reserves
-that input estimate plus the maximum output-token cost. Provider-reported usage
-then becomes the accounted usage for the next boundary check.
+The command rejects incomplete, non-positive, or over-budget manifests; a
+model other than the explicit `deepseek-v4-pro` route; concurrency other than
+one; more than 100 brands; a packet over the declared byte limit; or a request
+that exceeds the declared context window. It reserves the deterministic
+canonical request graph's calls, input estimates, maximum outputs, and cost
+before transport. After the rank response determines the live batch order,
+the evaluator checks each actual packet and context footprint again before
+sending it. Credentials come from the normal DeepSeek environment and never
+enter the manifest or artifact.
 
-## Preflight without transport
+## Synthetic preflight and execution
+
+Synthetic mode contains closed one-, three-, and five-brand fixtures covering
+sparse data, flat volume, unavailable comparison, non-English evidence,
+first-party evidence, and high volume. It also sends eight critic controls:
+one fully supported narrative plus unsupported event, causality, event
+conflation, mistranslation, cross-evidence synthesis, invented-detail, and
+unsafe-instruction drafts. The fixed graph is 17 calls:
+
+- three rank calls;
+- three editor calls;
+- three critic calls;
+- eight critic-control calls.
+
+For compatibility with the original operator command, omitting both dataset
+selectors means `--synthetic`. Real-data access always requires `--real`.
+
+Inspect the deterministic reservation plan without resolving a credential or
+writing an artifact:
 
 ```bash
 python manage.py evaluate_trend_headlines \
-  --dry-run \
-  --manifest /absolute/path/to/local-manifest.json
+  --dry-run --synthetic \
+  --manifest /absolute/path/to/manifest.json
 ```
 
-Inspect the exact model, call count, fixed concurrency, evidence budgets,
-packet bytes, conservative input-token estimates, total reserved cost, and
-whether the plan fits the declared call cap. Dry-run does not resolve an API
-credential or create an artifact.
-
-The deterministic corpus contains sixteen pairwise-covering scenarios across
-quantity, rate, mix, content, evidence strength, shape, data quality, and
-candidate competition. Two sentinels repeat at 4, 12, 24, and 48 excerpts with
-a fixed 1,000-character cap. A separate density sweep holds 24 excerpts fixed
-while varying the character cap, so count and text density are not confounded.
-
-## Execute only after owner authorization
-
-No live execution is implied by a successful preflight. After the owner
-explicitly authorizes that exact manifest:
+After the finite manifest is authorized, execute it sequentially:
 
 ```bash
 python manage.py evaluate_trend_headlines \
-  --execute \
-  --manifest /absolute/path/to/local-manifest.json \
+  --execute --synthetic \
+  --manifest /absolute/path/to/manifest.json \
   --cancel-file /absolute/path/to/evaluation.cancel \
   --output-dir docs/analysis
 ```
 
-To cancel cleanly, create the declared cancellation file. The current call is
-allowed to finish; the runner checks the file before the next call and stops
-without starting another transport.
+Creating the cancellation file stops before the next provider call; there are
+no automatic retries or repair calls:
 
 ```bash
 touch /absolute/path/to/evaluation.cancel
 ```
 
-Execution is sequential. A provider response is captured before contract
-validation, so malformed or rejected bilingual output remains visible in the
-report. A provider request failure consumes one call attempt but never triggers
-an automatic retry or repair call.
+Activation requires completion, a decision for every eligible brand, all
+eight mechanically valid control responses, zero false acceptance across the
+seven adversarial controls, and zero false holds of the supported control.
+
+## Real-data evaluation
+
+Real mode builds deterministic, read-only snapshots for the requested fixed
+windows. When all brands fit under `brand_cap`, it evaluates all of them. If
+the cap is smaller, selection is deterministic and stratified to retain sparse,
+flat, unavailable-baseline, non-English, first-party, ordinary, and
+high-volume cases. It still does not create queue, lifecycle, visible-run, or
+publication rows.
+
+Real mode intentionally does not repeat the synthetic critic controls. Its
+artifact therefore records calibration as `not_run` and cannot by itself
+claim activation readiness; pair it with a green synthetic control artifact.
+
+```bash
+python manage.py evaluate_trend_headlines \
+  --dry-run --real \
+  --windows 1,7,30,365 \
+  --as-of 2026-08-27T00:00:00+00:00 \
+  --manifest /absolute/path/to/manifest.json
+
+python manage.py evaluate_trend_headlines \
+  --execute --real \
+  --windows 1,7,30,365 \
+  --as-of 2026-08-27T00:00:00+00:00 \
+  --manifest /absolute/path/to/manifest.json \
+  --cancel-file /absolute/path/to/evaluation.cancel \
+  --output-dir docs/analysis
+```
+
+Do not put credentials, connection strings, or private author identifiers in
+committed artifacts. Production text may be reviewed only under the
+repository's existing data-handling authorization.
 
 ## Review the artifacts
 
-The output directory receives timestamped siblings:
+Execution writes timestamped JSON and Markdown siblings under the selected
+output directory. The JSON is authoritative and includes:
 
-```text
-docs/analysis/
-  YYYY-MM-DD-HHMMSS-why-first-headline-evaluation.json
-  YYYY-MM-DD-HHMMSS-why-first-headline-evaluation.md
-```
+- the manifest and exact preflight estimates;
+- every closed snapshot, stage envelope, and provider request;
+- every raw provider response and mechanical verdict;
+- provider-reported or conservatively estimated token usage, latency, and
+  reserved/accounted cost;
+- each brand's approve, repair, hold, no-content, or data-quality result;
+- bilingual rubric results for why-first relevance, factual support,
+  proportionality, translation equivalence, and secondary usefulness;
+- critic-control false accepts/holds and the final activation assessment.
 
-The JSON file is authoritative. It records the manifest and preflight, stop
-reason, every scenario dimension, evidence and excerpt budgets, packet bytes,
-estimated input tokens, reserved and accounted cost, provider token usage,
-latency, raw output, extracted English and Chinese bodies, validator verdict,
-and all nine editorial-rubric fields. Rubric entries begin as
-`not_applicable` with a pending-review note; a human reviewer must change every
-applicable field to `pass` or `fail` and explain the decision. Never discard an
-invalid call or average away a critical failure.
+The Markdown sibling is the human review surface. Keep invalid and held calls
+in the artifact; never average away a critical failure.
 
-The Markdown sibling is a short decision surface. The reviewed U6 report must
-also record the quality plateau, rejected budgets, materiality decision, and
-owner verdict before any production policy is frozen.
+## Materiality calibration
 
-## Propose materiality bands read-only
-
-Historical calibration is separate from provider execution:
+Materiality calibration is provider-free and read-only. Each anchor/window
+uses a fresh repeatable-read PostgreSQL transaction and emits proposals only
+when it has enough samples:
 
 ```bash
 python manage.py evaluate_trend_headlines \
   --calibrate \
-  --as-of 2026-08-14T00:00:00Z \
+  --as-of 2026-08-14T00:00:00+00:00 \
   --anchor-count 12 \
   --anchor-step-days 7 \
   --minimum-samples 20 \
@@ -126,22 +158,15 @@ python manage.py evaluate_trend_headlines \
   --output-dir docs/analysis
 ```
 
-At most 64 anchors are accepted. Each window/anchor reconstruction owns a fresh
-repeatable-read, read-only PostgreSQL transaction. The report includes usable
-sample and anchor counts, anchor coverage, absolute-change median and robust
-upper quantiles, explicit near-zero epsilon, and proposed flat/small/meaningful/
-sharp boundaries. Under-sampled groups have status `insufficient_samples` and
-no proposal. The command never writes fixed bands back to configuration; that
-requires the separate reviewed U6 change.
+The command never writes proposed flat/small/meaningful/sharp bands back to
+configuration.
 
 ## Safety boundary
 
-- Use only synthetic post text for provider evaluation; do not substitute raw
-  production posts into the live report.
-- Keep the manifest and cancellation path local. API credentials come from the
-  configured DeepSeek environment variables and are never written to artifacts.
-- Do not run `--execute` from pytest, a scheduled worker, harvest cron, or a
-  release command.
-- Stop policy freeze on any unsupported why or number, wrong leader, omitted
-  supported why, quiet-window exaggeration, divergent locale judgment,
-  under-sampled calibration group, or incomplete budget accounting.
+- Evaluation never publishes, enqueues, harvests, or mutates narrative state.
+- Browser loads and filters never trigger this command or any provider call.
+- Provider transport is serial, finite, and cancellation-aware.
+- A transport failure is not retried automatically.
+- Production activation stops on an incomplete run, an undecided eligible
+  brand, a supported-control false hold, an unsupported-control false accept,
+  or incomplete budget accounting.

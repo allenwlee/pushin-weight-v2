@@ -6,14 +6,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=preferences-ui1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=pulse-feed-timezone1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=dynamic-comparison1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=dual-bottom-axes1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=follower-glyph1" defer></script>
-  <script src="{% static 'pw-tz.js' %}?v=preferences1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=timezone-axis-polish2" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=follower-lead1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -75,9 +75,9 @@
         </span>
         <span class="tz-divider" aria-hidden="true"></span>
         <span class="tz-choice" data-tz-choice="ca">
-          <span class="tz-emoji" data-tz-ca-emoji>🌙</span>
-          <span class="tz-time" data-tz-ca-time>00:00</span>
-          <span class="tz-ca-icon" title="California" aria-label="California">CA</span>
+          <span class="tz-emoji" data-tz-comparison-emoji data-tz-ca-emoji>🌙</span>
+          <span class="tz-time" data-tz-comparison-time data-tz-ca-time>00:00</span>
+          <span class="tz-ca-icon" data-tz-comparison-icon title="California" aria-label="California">CA</span>
         </span>
       </button>
     </div>
@@ -259,7 +259,8 @@
                data-pw-pulse-empty-text="{% if is_zh_chrome %}本窗口暂无脉冲数据{% else %}No pulse data in this window{% endif %}"
                data-pw-pulse-error-text="{% if is_zh_chrome %}脉冲刷新失败，显示上次结果{% else %}Pulse refresh failed; showing last result{% endif %}"
                data-pw-pulse-new-text="{% if is_zh_chrome %}新{% else %}NEW{% endif %}"
-               data-pw-headline-error-text="{% trans 'Trend summary refresh failed; showing last result' %}">
+               data-pw-headline-error-text="{% trans 'Trend summary refresh failed; showing last result' %}"
+               data-pw-headline-updated-text="{% trans 'Trend summaries updated' %}">
         {% include "monitor/_home_chart.html" %}
         <div class="legend" data-pw-chart-legend></div>
       </section>
@@ -272,15 +273,36 @@
           <span>{% trans "Trend summary" %}</span>
           <span class="headline-state" data-pw-headline-state>{{ trend_narrative.state_label }}</span>
         </div>
-        <div class="body">
-          <span data-pw-headline-prefix>{{ trend_narrative.body_prefix }}</span>{% if trend_narrative.primary_brand %}{% if trend_narrative.primary_brand.url %}<a class="brand" data-pw-headline-brand href="{{ trend_narrative.primary_brand.url }}">{{ trend_narrative.primary_brand.display_name }}</a>{% else %}<span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>{% endif %}{% endif %}<span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
-        </div>
-        <ul class="headline-observations" data-pw-headline-observations{% if not trend_narrative.observations %} hidden{% endif %}>
-          {% for observation in trend_narrative.observations %}
-            <li>{{ observation }}</li>
+        <p class="headline-selection muted" data-pw-headline-selection{% if not trend_narrative.selection.summary %} hidden{% endif %}>{{ trend_narrative.selection.summary }}</p>
+        <div class="headline-items" data-pw-headline-items{% if trend_narrative.schema_version != 3 %} hidden{% endif %}>
+          {% for item in trend_narrative.items %}
+            <article class="headline-item" data-pw-headline-item data-pw-brand-key="{{ item.brand.key }}"
+                     data-pw-state="{{ item.state }}" data-pw-verified-at="{{ item.verified_at|default:'' }}"
+                     aria-labelledby="trend-narrative-{{ forloop.counter }}">
+              <div class="headline-item-meta">
+                {% if item.brand.url %}<a class="brand" data-pw-headline-item-brand href="{{ item.brand.url }}">{{ item.brand.display_name }}</a>{% else %}<span class="brand" data-pw-headline-item-brand>{{ item.brand.display_name }}</span>{% endif %}
+                <span class="headline-item-state" data-pw-headline-item-state
+                      {% if item.freshness.absolute %}title="{{ item.freshness.absolute }}"{% endif %}
+                      aria-label="{{ item.state_label }}{% if item.freshness.absolute %}. {{ item.freshness.absolute }}{% endif %}">{{ item.state_label }}</span>
+              </div>
+              <h2 class="headline-item-title" data-pw-headline-item-title id="trend-narrative-{{ forloop.counter }}">{{ item.headline }}</h2>
+              <p class="headline-item-secondary" data-pw-headline-item-secondary>{{ item.secondary }}</p>
+            </article>
+          {% empty %}
+            <p class="headline-empty" data-pw-headline-empty>{{ trend_narrative.body }}</p>
           {% endfor %}
-        </ul>
-        <p class="headline-status muted" data-pw-headline-status hidden></p>
+        </div>
+        <div data-pw-headline-legacy{% if trend_narrative.schema_version == 3 %} hidden{% endif %}>
+          <div class="body">
+            <span data-pw-headline-prefix>{{ trend_narrative.body_prefix }}</span>{% if trend_narrative.primary_brand %}{% if trend_narrative.primary_brand.url %}<a class="brand" data-pw-headline-brand href="{{ trend_narrative.primary_brand.url }}">{{ trend_narrative.primary_brand.display_name }}</a>{% else %}<span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>{% endif %}{% endif %}<span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
+          </div>
+          <ul class="headline-observations" data-pw-headline-observations{% if not trend_narrative.observations %} hidden{% endif %}>
+            {% for observation in trend_narrative.observations %}
+              <li>{{ observation }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <p class="headline-status muted" data-pw-headline-status role="status" aria-live="polite" aria-atomic="true" hidden></p>
         <div class="headline-voices" data-pw-headline-voices>
           <span class="headline-label">{% trans "Top voices" %}</span>
           <span class="headline-meta muted">☆ {% trans "by followers" %}</span>

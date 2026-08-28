@@ -18,8 +18,14 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from monitor.post_enrichment import ENRICHMENT_COUNT_KEYS, enrichment_stage_outcome
+
 HARVEST_SUMMARY_PREFIX = "HARVEST_SUMMARY "
-HARVEST_SUMMARY_SCHEMA_VERSION = "1"
+HARVEST_SUMMARY_SCHEMA_VERSION = "2"
+HARVEST_COHORT_PREFIX = "HARVEST_COHORT "
+HARVEST_COHORT_SCHEMA_VERSION = "1"
+
+_SUPPORTED_SUMMARY_SCHEMA_VERSIONS = frozenset({"1", "2"})
 
 _ENVELOPE_KEYS = {
     "schema_version",
@@ -101,7 +107,7 @@ _TOTAL_KEYS = {
     "keep_rate_mean",
     "keep_rate_max",
 }
-_POST_FETCH_KEYS = {
+_POST_FETCH_KEYS_V1 = {
     "n_translated",
     "n_classified",
     "n_translator_unavailable",
@@ -115,7 +121,11 @@ _POST_FETCH_KEYS = {
     "completed_at",
     "wall_clock_ms",
 }
-_METRICS_KEYS = {"n_due", "n_refreshed", "n_missing", "wall_clock_ms"}
+_POST_FETCH_KEYS_V2 = _POST_FETCH_KEYS_V1 | set(ENRICHMENT_COUNT_KEYS)
+_POST_FETCH_KEYS = _POST_FETCH_KEYS_V2
+_METRICS_KEYS_V1 = {"n_due", "n_refreshed", "n_missing", "wall_clock_ms"}
+_METRICS_KEYS_V2 = _METRICS_KEYS_V1 | {"n_deferred", "n_errors"}
+_METRICS_KEYS = _METRICS_KEYS_V2
 _LATENCY_KEYS = {
     "cycle_started_at",
     "post_fetch_completed_at",
@@ -164,6 +174,28 @@ _MULTILINE_RE = re.compile(r"[\r\n]")
 _SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.*:@+-]{1,160}$")
 _SAFE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _SAFE_HTTP_PATH_RE = re.compile(r"^/[A-Za-z0-9_./-]{1,200}$")
+_SAFE_POST_ID_RE = re.compile(r"^[0-9]{1,32}$")
+_SAFE_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
+
+_COHORT_KEYS = {
+    "schema_version",
+    "service_id",
+    "deploy_sha",
+    "run_id",
+    "summary_hash",
+    "inserted_post_ids",
+    "current_cycle_post_ids",
+    "carryover_post_ids",
+    "enrichment_state_facts",
+    "hash",
+}
+_COHORT_FACT_KEYS = {
+    "post_id",
+    "lane",
+    "translation_status",
+    "classification_status",
+    "output_complete",
+}
 
 
 class SummaryValidationError(ValueError):
@@ -589,7 +621,8 @@ def parse_summary_line(line: str) -> dict[str, Any]:
 def _validate_envelope(envelope: Mapping[str, Any], *, verify_hash: bool) -> None:
     if set(envelope) != _ENVELOPE_KEYS:
         raise SummaryValidationError("unknown or missing envelope fields")
-    if envelope.get("schema_version") != HARVEST_SUMMARY_SCHEMA_VERSION:
+    schema_version = envelope.get("schema_version")
+    if schema_version not in _SUPPORTED_SUMMARY_SCHEMA_VERSIONS:
         raise SummaryValidationError("unsupported summary schema")
     for key in ("service_id", "deploy_sha", "run_id"):
         value = envelope.get(key)
@@ -643,13 +676,39 @@ def _validate_envelope(envelope: Mapping[str, Any], *, verify_hash: bool) -> Non
     for row in observations:
         if not isinstance(row, Mapping) or set(row) != _OBSERVATION_KEYS:
             raise SummaryValidationError("invalid api_to_db evidence")
+    post_fetch_keys = (
+        _POST_FETCH_KEYS_V1
+        if schema_version == "1"
+        else _POST_FETCH_KEYS_V2
+    )
+    metrics_keys = (
+        _METRICS_KEYS_V1 if schema_version == "1" else _METRICS_KEYS_V2
+    )
     for key in ("post_fetch", "metrics_refresh"):
         value = summary.get(key)
         if value is None:
             continue
-        allowed = _POST_FETCH_KEYS if key == "post_fetch" else _METRICS_KEYS
+        allowed = post_fetch_keys if key == "post_fetch" else metrics_keys
         if not isinstance(value, Mapping) or set(value) - allowed:
             raise SummaryValidationError(f"unknown {key} fields")
+        if key == "post_fetch":
+            for field, raw in value.items():
+                if field == "completed_at":
+                    if _safe_datetime(raw) != raw:
+                        raise SummaryValidationError(
+                            "invalid post_fetch completed_at"
+                        )
+                    continue
+                if (
+                    not isinstance(raw, (int, float))
+                    or isinstance(raw, bool)
+                    or not math.isfinite(float(raw))
+                    or raw < 0
+                    or (field.startswith("n_") and int(raw) != raw)
+                ):
+                    raise SummaryValidationError(
+                        f"invalid post_fetch field: {field}"
+                    )
     for key in ("calls", "planned_calls", "backlog_replays"):
         rows = envelope["summary"].get(key)
         if not isinstance(rows, list):
@@ -671,6 +730,262 @@ def _validate_envelope(envelope: Mapping[str, Any], *, verify_hash: bool) -> Non
                     raise SummaryValidationError("invalid provider-late evidence")
                 if evidence.get("eligible") is not True or evidence.get("tweet_id_absent") is not True:
                     raise SummaryValidationError("provider-late evidence is not eligible")
+
+
+def _cohort_post_ids(value: Any, *, maximum: int) -> list[str]:
+    if not isinstance(value, (list, tuple)) or len(value) > maximum:
+        raise SummaryValidationError("invalid cohort post IDs")
+    post_ids = [str(item) for item in value]
+    if len(set(post_ids)) != len(post_ids) or any(
+        not _SAFE_POST_ID_RE.fullmatch(post_id) for post_id in post_ids
+    ):
+        raise SummaryValidationError("invalid cohort post IDs")
+    return sorted(post_ids, key=int)
+
+
+def _cohort_facts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, (list, tuple)) or len(value) > 100:
+        raise SummaryValidationError("invalid cohort enrichment facts")
+    facts: list[dict[str, Any]] = []
+    for value_fact in value:
+        if not isinstance(value_fact, Mapping) or set(value_fact) != _COHORT_FACT_KEYS:
+            raise SummaryValidationError("invalid cohort enrichment facts")
+        fact = dict(value_fact)
+        if (
+            not isinstance(fact["post_id"], str)
+            or not _SAFE_POST_ID_RE.fullmatch(fact["post_id"])
+            or fact["lane"] not in {"current_cycle", "carryover"}
+            or not isinstance(fact["output_complete"], bool)
+        ):
+            raise SummaryValidationError("invalid cohort enrichment facts")
+        try:
+            enrichment_stage_outcome(
+                translation_status=fact["translation_status"],
+                classification_status=fact["classification_status"],
+            )
+        except ValueError as exc:
+            raise SummaryValidationError("invalid cohort enrichment facts") from exc
+        facts.append(fact)
+    if len({fact["post_id"] for fact in facts}) != len(facts):
+        raise SummaryValidationError("invalid cohort enrichment facts")
+    return sorted(facts, key=lambda fact: int(fact["post_id"]))
+
+
+def _cohort_count(source: Mapping[str, Any], key: str) -> int:
+    value = source.get(key)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise SummaryValidationError("invalid cohort enrichment counts")
+    return value
+
+
+def build_cohort_receipt(
+    summary: Mapping[str, Any],
+    *,
+    envelope: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Build exact, bounded per-post evidence for one nonempty cycle.
+
+    The ordinary summary remains counts-only. This separate line is emitted
+    only when the cycle inserted posts and is correlated to the canonical
+    summary by run identity and hash.
+    """
+
+    _validate_envelope(envelope, verify_hash=True)
+    if envelope.get("schema_version") != HARVEST_SUMMARY_SCHEMA_VERSION:
+        raise SummaryValidationError("cohort requires current summary schema")
+    if str(summary.get("run_id") or "unknown") != envelope["run_id"]:
+        raise SummaryValidationError("cohort run identity mismatch")
+
+    totals = summary.get("totals")
+    post_fetch = summary.get("post_fetch")
+    if not isinstance(totals, Mapping):
+        raise SummaryValidationError("invalid cohort totals")
+    n_inserted = totals.get("n_inserted")
+    if not isinstance(n_inserted, int) or isinstance(n_inserted, bool) or n_inserted < 0:
+        raise SummaryValidationError("invalid cohort inserted count")
+    raw_inserted = post_fetch.get("inserted_post_ids", []) if isinstance(post_fetch, Mapping) else []
+    inserted_ids = _cohort_post_ids(raw_inserted, maximum=500)
+    if len(inserted_ids) != n_inserted:
+        raise SummaryValidationError("cohort inserted identity mismatch")
+    if n_inserted == 0:
+        return None
+    if not isinstance(post_fetch, Mapping):
+        raise SummaryValidationError("invalid cohort post-fetch evidence")
+
+    current_ids = _cohort_post_ids(
+        post_fetch.get("enrichment_current_cycle_post_ids"), maximum=100
+    )
+    carryover_ids = _cohort_post_ids(
+        post_fetch.get("enrichment_carryover_post_ids"), maximum=100
+    )
+    facts = _cohort_facts(post_fetch.get("enrichment_state_facts"))
+    current_set = set(current_ids)
+    carryover_set = set(carryover_ids)
+    fact_by_id = {fact["post_id"]: fact for fact in facts}
+    if (
+        current_set & carryover_set
+        or not current_set.issubset(inserted_ids)
+        or set(fact_by_id) != current_set | carryover_set
+        or any(
+            fact_by_id[post_id]["lane"] != lane
+            for lane, post_ids in (
+                ("current_cycle", current_ids),
+                ("carryover", carryover_ids),
+            )
+            for post_id in post_ids
+        )
+    ):
+        raise SummaryValidationError("inconsistent cohort identities")
+
+    counts = {
+        key: _cohort_count(post_fetch, key)
+        for key in ENRICHMENT_COUNT_KEYS
+        if key not in {"n_enrichment_deferred", "n_enrichment_quarantined"}
+    }
+    derived = {
+        f"n_enrichment_{outcome}_{lane}": sum(
+            enrichment_stage_outcome(
+                translation_status=fact["translation_status"],
+                classification_status=fact["classification_status"],
+            )
+            == outcome
+            and fact["lane"] == lane
+            for fact in facts
+        )
+        for lane in ("current_cycle", "carryover")
+        for outcome in ("succeeded", "pending", "failed")
+    }
+    derived.update(
+        {
+            f"n_enrichment_{outcome}": sum(
+                derived[f"n_enrichment_{outcome}_{lane}"]
+                for lane in ("current_cycle", "carryover")
+            )
+            for outcome in ("succeeded", "pending", "failed")
+        }
+    )
+    if (
+        counts["n_enrichment_claimed"] != len(facts)
+        or counts["n_enrichment_claimed_current_cycle"] != len(current_ids)
+        or counts["n_enrichment_claimed_carryover"] != len(carryover_ids)
+        or any(counts[key] != value for key, value in derived.items())
+    ):
+        raise SummaryValidationError("inconsistent cohort enrichment counts")
+
+    receipt: dict[str, Any] = {
+        "schema_version": HARVEST_COHORT_SCHEMA_VERSION,
+        "service_id": envelope["service_id"],
+        "deploy_sha": envelope["deploy_sha"],
+        "run_id": envelope["run_id"],
+        "summary_hash": envelope["hash"],
+        "inserted_post_ids": inserted_ids,
+        "current_cycle_post_ids": current_ids,
+        "carryover_post_ids": carryover_ids,
+        "enrichment_state_facts": facts,
+    }
+    receipt["hash"] = _hash_unsigned(receipt)
+    _validate_cohort_receipt(receipt, summary_envelope=envelope, verify_hash=True)
+    return receipt
+
+
+def serialize_cohort_receipt(receipt: Mapping[str, Any]) -> str:
+    """Serialize one strict cohort receipt as a reserved log line."""
+
+    _validate_cohort_receipt(receipt, summary_envelope=None, verify_hash=True)
+    return HARVEST_COHORT_PREFIX + _canonical_json(dict(receipt))
+
+
+def parse_cohort_line(
+    line: str,
+    *,
+    summary_envelope: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Parse a cohort line and optionally prove its summary correlation."""
+
+    if not isinstance(line, str) or not line.startswith(HARVEST_COHORT_PREFIX):
+        raise SummaryValidationError("missing HARVEST_COHORT prefix")
+    try:
+        value = json.loads(line[len(HARVEST_COHORT_PREFIX):])
+    except json.JSONDecodeError as exc:
+        raise SummaryValidationError("invalid HARVEST_COHORT JSON") from exc
+    if not isinstance(value, dict):
+        raise SummaryValidationError("HARVEST_COHORT must be an object")
+    _validate_cohort_receipt(
+        value, summary_envelope=summary_envelope, verify_hash=True
+    )
+    return value
+
+
+def _validate_cohort_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    summary_envelope: Mapping[str, Any] | None,
+    verify_hash: bool,
+) -> None:
+    if set(receipt) != _COHORT_KEYS:
+        raise SummaryValidationError("unknown or missing cohort fields")
+    if receipt.get("schema_version") != HARVEST_COHORT_SCHEMA_VERSION:
+        raise SummaryValidationError("unsupported cohort schema")
+    for key in ("service_id", "deploy_sha", "run_id"):
+        value = receipt.get(key)
+        if (
+            not isinstance(value, str)
+            or not value
+            or _SENSITIVE_RE.search(value)
+            or _MULTILINE_RE.search(value)
+            or not _SAFE_TOKEN_RE.fullmatch(value)
+        ):
+            raise SummaryValidationError("unsafe cohort identity")
+    if not isinstance(receipt.get("summary_hash"), str) or not _SAFE_HASH_RE.fullmatch(receipt["summary_hash"]):
+        raise SummaryValidationError("invalid cohort summary hash")
+    inserted_ids = _cohort_post_ids(receipt.get("inserted_post_ids"), maximum=500)
+    current_ids = _cohort_post_ids(receipt.get("current_cycle_post_ids"), maximum=100)
+    carryover_ids = _cohort_post_ids(receipt.get("carryover_post_ids"), maximum=100)
+    facts = _cohort_facts(receipt.get("enrichment_state_facts"))
+    if (
+        list(receipt["inserted_post_ids"]) != inserted_ids
+        or list(receipt["current_cycle_post_ids"]) != current_ids
+        or list(receipt["carryover_post_ids"]) != carryover_ids
+        or list(receipt["enrichment_state_facts"]) != facts
+    ):
+        raise SummaryValidationError("cohort evidence is not canonical")
+    current_set = set(current_ids)
+    carryover_set = set(carryover_ids)
+    fact_by_id = {fact["post_id"]: fact for fact in facts}
+    if (
+        not inserted_ids
+        or current_set & carryover_set
+        or not current_set.issubset(inserted_ids)
+        or set(fact_by_id) != current_set | carryover_set
+        or any(
+            fact_by_id[post_id]["lane"] != lane
+            for lane, post_ids in (
+                ("current_cycle", current_ids),
+                ("carryover", carryover_ids),
+            )
+            for post_id in post_ids
+        )
+    ):
+        raise SummaryValidationError("inconsistent cohort evidence")
+    if verify_hash and (
+        not isinstance(receipt.get("hash"), str)
+        or not _SAFE_HASH_RE.fullmatch(receipt["hash"])
+        or receipt["hash"] != _hash_unsigned(receipt)
+    ):
+        raise SummaryValidationError("cohort hash mismatch")
+    if summary_envelope is not None:
+        _validate_envelope(summary_envelope, verify_hash=True)
+        correlations = {
+            "service_id": "service_id",
+            "deploy_sha": "deploy_sha",
+            "run_id": "run_id",
+            "summary_hash": "hash",
+        }
+        if any(
+            receipt[cohort_key] != summary_envelope[summary_key]
+            for cohort_key, summary_key in correlations.items()
+        ):
+            raise SummaryValidationError("cohort summary correlation mismatch")
 
 
 def provider_late_evidence(

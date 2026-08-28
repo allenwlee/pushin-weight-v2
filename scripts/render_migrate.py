@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import os
+import sys
+from collections.abc import Callable, Mapping
+from typing import Any
 
 import django
+
+if __package__:
+    from .database_lock import DatabaseLockError, acquire_cluster_lock
+else:
+    from database_lock import DatabaseLockError, acquire_cluster_lock
 
 _MIGRATION_LOCK_ID = 8_675_309
 
@@ -20,19 +28,41 @@ def run_migrations(*, connection, execute_migrate) -> None:
         print("Released migration advisory lock", flush=True)
 
 
-def main() -> int:
+def main(
+    *,
+    environ: Mapping[str, str] | None = None,
+    connect: Callable[..., Any] | None = None,
+    app_connection: Any | None = None,
+    execute_migrate: Callable[[], None] | None = None,
+    setup_django: Callable[[], None] = django.setup,
+) -> int:
+    values = os.environ if environ is None else environ
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    django.setup()
+    setup_django()
 
     from django.core.management import execute_from_command_line
     from django.db import connection
 
-    run_migrations(
-        connection=connection,
-        execute_migrate=lambda: execute_from_command_line(
-            ["manage.py", "migrate", "--noinput"]
-        ),
+    database_url = values.get("DATABASE_URL")
+    if not database_url:
+        print("Migration cluster lock unavailable; set DATABASE_URL and retry.", file=sys.stderr)
+        return 75
+    migration_connection = app_connection or connection
+    migration_command = execute_migrate or (
+        lambda: execute_from_command_line(["manage.py", "migrate", "--noinput"])
     )
+    lock_options: dict[str, object] = {}
+    if connect is not None:
+        lock_options["connect"] = connect
+    try:
+        with acquire_cluster_lock(database_url, wait_seconds=900, **lock_options):
+            run_migrations(
+                connection=migration_connection,
+                execute_migrate=migration_command,
+            )
+    except DatabaseLockError as exc:
+        print(f"Migration cluster lock failed ({exc}); retry the deploy.", file=sys.stderr)
+        return 75
     return 0
 
 

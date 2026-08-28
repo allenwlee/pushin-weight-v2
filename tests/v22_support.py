@@ -87,6 +87,7 @@ def seed_real_home_orm(fixture: dict) -> None:
         account = Account.objects.create(
             author_id=f"u3-account-{index}",
             handle=source["handle"].removeprefix("@"),
+            display_name=f"U3 Account {index}",
             followers_count=10_000 - index,
         )
         post = Post.objects.create(
@@ -96,6 +97,7 @@ def seed_real_home_orm(fixture: dict) -> None:
             text=source["text"]["original"],
             text_en=source["text"]["en"],
             text_zh_cn=source["text"]["zh_cn"],
+            commentary_en=f"Integrated commentary {index}",
             commentary_zh_cn=f"综合评论 {index}",
             lang_detected="en",
             created_at=now - timedelta(minutes=source["offset_minutes"]),
@@ -168,10 +170,14 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             if index == 2
             else f"v22-metadata-{index:03d}"
         )
+        follower_bins = (500, 5_000, 20_000, 50_000)
         account = Account.objects.create(
             author_id=f"v22-metadata-account-{index:03d}",
             handle=f"v22metadata{index:03d}",
-            followers_count=12_800 - index,
+            display_name=f"V22 Metadata Account {index:03d}",
+            followers_count=(
+                follower_bins[index] if index < len(follower_bins) else 12_800 - index
+            ),
         )
         post = Post.objects.create(
             tweet_id=tweet_id,
@@ -180,6 +186,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             text=f"Original metadata fixture post {index}",
             text_en=f"English metadata fixture post {index}",
             text_zh_cn=f"中文元数据样本 {index}",
+            commentary_en=f"English metadata commentary {index}",
             commentary_zh_cn=f"中文综合评论 {index}",
             lang_detected="en",
             created_at=now - timedelta(minutes=index),

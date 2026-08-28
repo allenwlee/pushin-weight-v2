@@ -102,14 +102,27 @@ Do not describe reconstructed calls as historical observations. The report may
 show the configured model name, but must label runtime-only values unavailable
 instead of reading secrets or constructing a provider client.
 
-Interpret both `status` and `regression_gate`:
+Interpret `status`, `regression_gate`, and `acceptance_gate`:
 
 - `status=healthy` and `regression_gate=complete`: every selected row is complete.
 - `status=healthy_with_pending` and `regression_gate=inconclusive`: pending is fresh and neutral, but completion is not proven.
 - `status=unhealthy` and `regression_gate=failed`: one or more persisted facts are failed, missing, invalid, or overdue.
+- `acceptance_gate=complete`: all posts have a canonical `lang_detected`; at least 99% of
+  non-`zh-Hans` posts have `text_zh_cn`; and at least 99% of all posts have
+  each of `commentary_en` and `commentary_zh_cn`. Commentary counts only when
+  it is nonblank, not an `N/A` sentinel, and distinct from the source and both
+  translations after trimming and case normalization.
+- `acceptance_gate=failed`: one or more of those explicit completeness rates
+  missed its threshold. Inspect the `acceptance` numerators, denominators, and
+  rates and percentages. A zero non-`zh-Hans` denominator is valid and does not fail the
+  translation metric; an empty cohort fails the gate.
 - Exit 2 or `status=error`: the invocation, configuration, Render transport, query, or parser failed. Report the stable error code only.
 
-Exit 0 covers both healthy states. Always report the separate complete, pending, and unhealthy counts so fresh pending is not confused with completion.
+Exit 0 requires an operationally healthy state and
+`acceptance_gate=complete`. Fresh pending remains operationally neutral, but
+exits 1 when its persisted fields miss the acceptance thresholds. Always
+report the separate complete, pending, and unhealthy counts so fresh pending
+is not confused with completion.
 
 ## Enrichment-relevant route
 
@@ -129,6 +142,9 @@ The exact cohort fails if a requested ID disappeared. Never substitute newer pos
 - `regression_gate=complete` completes the enrichment regression gate.
 - `regression_gate=inconclusive` means the cohort remains fresh-pending. Report it as non-alarming but incomplete verification.
 - `regression_gate=failed` means persisted health is unhealthy. Report the affected tweet IDs, brands, stages, and reason codes.
+- `acceptance_gate=failed` means the selected cohort missed one or more of the
+  explicit translation/commentary completeness targets, even if pending rows
+  remain within their grace period.
 
 Do not retry after the exact-cohort observation. Return the result to the calling plan, LFG pipeline, or operator.
 
@@ -139,7 +155,9 @@ Include:
 - route used: immediate or enrichment-relevant
 - cohort size and exact tweet IDs
 - complete, pending, and unhealthy counts
-- overall `status` and `regression_gate`
+- overall `status`, `regression_gate`, and `acceptance_gate`
+- numerator, denominator, rate, and percentage for non-`zh-Hans` `text_zh_cn`,
+  `commentary_en`, and `commentary_zh_cn`
 - bounded per-post stage and reason details for unhealthy rows
 - any stable operational error code
 - the saved report path when `--report` was requested
