@@ -11,6 +11,7 @@ PRODUCTION_CONTRACT = "docs/reference/2026-08-19-174833-production-filter-feed-b
 CHART_CONTRACT = "docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md"
 PREFERENCES_UI_CONTRACT = "docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md"
 PULSE_FEED_TIMEZONE_CONTRACT = "docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md"
+CYBER_QUAN_CONTRACT = "docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md"
 
 
 def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
@@ -19,7 +20,8 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == PULSE_FEED_TIMEZONE_CONTRACT
+    assert authorities["last_approved_contract"] == CYBER_QUAN_CONTRACT
+    assert CYBER_QUAN_CONTRACT in authorities["approved_product_intent"]
     assert PULSE_FEED_TIMEZONE_CONTRACT in authorities["approved_product_intent"]
     assert PREFERENCES_UI_CONTRACT in authorities["approved_product_intent"]
     assert CHART_CONTRACT in authorities["approved_product_intent"]
@@ -47,6 +49,10 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.pulse-feed-timezone-polish",
             "description": "Owner-approved pulse navigation, timezone chart, and feed identity delta.",
+        },
+        {
+            "key": "production.home.cyber-quan-icons",
+            "description": "Owner-approved icon-only Cyber-Quan replacement and compact masthead mark.",
         },
         {
             "key": "trend.headline",
@@ -110,3 +116,11 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "account display name" in pulse_feed_timezone_contract
     assert "current hosted staging appearance" in pulse_feed_timezone_contract.lower()
     assert "exact staged candidate SHA" in pulse_feed_timezone_contract
+
+    cyber_quan_contract = (REPO_ROOT / CYBER_QUAN_CONTRACT).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in cyber_quan_contract
+    assert "icon-only delta" in cyber_quan_contract
+    assert "9a5fd90add8e5d60baf87796054b0211fbb94d9ad92e952fc5133465eb9da658" in cyber_quan_contract
+    assert "exactly these 32 symbols" in cyber_quan_contract
+    assert "mark A (`mark-quiet`)" in cyber_quan_contract
+    assert "physical iPhone" in cyber_quan_contract

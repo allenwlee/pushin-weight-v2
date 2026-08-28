@@ -17,14 +17,14 @@
         key: 'beijing',
         timezone: BEIJING_TIMEZONE,
         iconClass: 'tz-bj-icon',
-        iconText: '京',
+        iconSymbol: 'icon-beijing',
       };
     }
     return {
       key: 'california',
       timezone: CA_TIMEZONE,
       iconClass: 'tz-ca-icon',
-      iconText: 'CA',
+      iconSymbol: 'icon-california',
     };
   }
 
@@ -109,11 +109,17 @@
     return hour ? Number(hour.value) : 0;
   }
 
-  function dayEmoji(hour) {
-    if (hour >= 5 && hour < 8) return '🌅';
-    if (hour >= 8 && hour < 17) return '☀️';
-    if (hour >= 17 && hour < 20) return '🌆';
-    return '🌙';
+  function renderIcon(symbolId, className) {
+    return window.pwIcon && typeof window.pwIcon.render === 'function'
+      ? window.pwIcon.render(symbolId, className)
+      : '';
+  }
+
+  function daySymbol(hour) {
+    if (hour >= 5 && hour < 8) return 'icon-sunrise';
+    if (hour >= 8 && hour < 17) return 'icon-day';
+    if (hour >= 17 && hour < 20) return 'icon-dusk';
+    return 'icon-night';
   }
 
   function activeTimezone() {
@@ -122,7 +128,8 @@
 
   function comparisonIconHTML(copy) {
     return '<span class="' + comparison.iconClass + '" title="' + copy.comparisonName +
-      '" aria-label="' + copy.comparisonName + '">' + comparison.iconText + '</span>';
+      '" aria-label="' + copy.comparisonName + '">' +
+      renderIcon(comparison.iconSymbol, 'tz-place-icon') + '</span>';
   }
 
   function renderFeedStamps(copy) {
@@ -175,8 +182,11 @@
     var comparisonIcon = root.querySelector('[data-tz-comparison-icon]');
     if (localChoice) localChoice.classList.toggle('is-selected', active === 'local');
     if (comparisonChoice) comparisonChoice.classList.toggle('is-selected', active === 'ca');
-    setText(localEmoji, dayEmoji(zoneHour(now)));
-    setText(comparisonEmoji, dayEmoji(zoneHour(now, comparison.timezone)));
+    setHTML(localEmoji, renderIcon(daySymbol(zoneHour(now)), 'tz-daypart-icon'));
+    setHTML(comparisonEmoji, renderIcon(
+      daySymbol(zoneHour(now, comparison.timezone)),
+      'tz-daypart-icon'
+    ));
     setText(localTime, zoneTime(now));
     setText(comparisonTime, zoneTime(now, comparison.timezone));
     setText(localLabelElement, copy.localLabel);
@@ -185,7 +195,7 @@
       comparisonIcon.classList.add(comparison.iconClass);
       comparisonIcon.setAttribute('title', copy.comparisonName);
       comparisonIcon.setAttribute('aria-label', copy.comparisonName);
-      setText(comparisonIcon, comparison.iconText);
+      setHTML(comparisonIcon, renderIcon(comparison.iconSymbol, 'tz-place-icon'));
     }
     renderFeedStamps(copy);
     if (notify) notifyTimezoneChange(copy);

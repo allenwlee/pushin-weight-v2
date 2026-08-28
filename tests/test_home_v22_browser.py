@@ -2762,7 +2762,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertTrue(
                                 icon.evaluate("element => element.classList.contains('tz-bj-icon')")
                             )
-                            self.assertEqual(icon.inner_text(), "京")
+                            self.assertEqual(
+                                icon.locator("use").get_attribute("href"),
+                                "#icon-beijing",
+                            )
                             self.assertEqual(icon.get_attribute("aria-label"), expected_title)
                             chart_state = page.evaluate(
                                 """() => {
@@ -2927,7 +2930,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             tz.click()
                             page.wait_for_function("() => window.__pwTz?.mode === 'ca'")
                             self.assertEqual(tz.get_attribute("data-tz-active"), "ca")
-                            self.assertIn("CA", tz.inner_text())
+                            self.assertTrue(tz.get_attribute("aria-label"))
+                            self.assertEqual(
+                                tz.locator("[data-tz-comparison-icon] use").get_attribute("href"),
+                                "#icon-california",
+                            )
                             self.assertNotEqual(feed_stamp.text_content(), initial_feed_stamp)
 
                             local_assets = page.evaluate(
@@ -3059,7 +3066,117 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             self.assertIsNotNone(box, f"marker has no geometry: {selector}")
             self.assertGreater(box["width"], 0, f"marker has zero width: {selector}")
             self.assertGreater(box["height"], 0, f"marker has zero height: {selector}")
-            self.assertTrue((marker.text_content() or "").strip(), f"marker is blank: {selector}")
+            self.assertGreater(marker.locator("use").count(), 0, f"marker has no symbol: {selector}")
+
+    def test_cyber_quan_symbols_cover_the_public_surface_without_layout_errors(self) -> None:
+        expected_symbols = {
+            "mark-quiet",
+            "icon-heart", "icon-reply", "icon-repost",
+            "icon-rise", "icon-flat", "icon-fall",
+            "icon-followers-1", "icon-followers-2", "icon-followers-3", "icon-followers-4",
+            "icon-sentiment", "icon-sentiment-neutral", "icon-sentiment-negative", "icon-sentiment-mixed",
+            "icon-hands-on-hammer", "icon-compare", "icon-announce", "icon-question",
+            "icon-marketing", "icon-event", "icon-discourse", "icon-nationalism",
+            "icon-unsanctioned", "icon-caret", "icon-star",
+            "icon-sunrise", "icon-day", "icon-dusk", "icon-night",
+            "icon-california", "icon-beijing",
+        }
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport, locale in ((VIEWPORTS["desktop"], "en"), (VIEWPORTS["mobile"], "zh_cn"), ({"width": 320, "height": 700}, "en")):
+                    with self.subTest(viewport=viewport, locale=locale):
+                        context = browser.new_context(viewport=viewport, timezone_id="Asia/Tokyo")
+                        _freeze_clock(context)
+                        page_errors: list[str] = []
+                        console_errors: list[str] = []
+                        page = context.new_page()
+                        page.on("pageerror", lambda error: page_errors.append(str(error)))
+                        page.on(
+                            "console",
+                            lambda message: console_errors.append(message.text)
+                            if message.type == "error" and "favicon.ico" not in message.text
+                            else None,
+                        )
+                        try:
+                            page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
+                            page.wait_for_function("() => window.pwIcon && window.__pwTz")
+
+                            self.assertEqual(
+                                set(page.locator(".pw-icon-sprite symbol").evaluate_all(
+                                    "nodes => nodes.map(node => node.id)"
+                                )),
+                                expected_symbols,
+                            )
+                            broken_uses = page.locator("svg.pw-icon use").evaluate_all(
+                                """nodes => nodes.map(node => node.getAttribute('href'))
+                                  .filter(href => !href || !document.querySelector(href))"""
+                            )
+                            self.assertEqual(broken_uses, [])
+                            self.assertEqual(
+                                page.locator(".app-name > .app-mark use").get_attribute("href"),
+                                "#mark-quiet",
+                            )
+                            self.assertEqual(
+                                page.locator(".app-name").evaluate(
+                                    "node => [...node.children].map(child => child.classList[0])"
+                                ),
+                                ["pw-icon", "zh", "en"],
+                            )
+                            self.assertEqual(page.locator(".filter-pill .carat use").count(), 8)
+                            self.assertEqual(
+                                page.locator(".filter-pill .carat use").evaluate_all(
+                                    "nodes => [...new Set(nodes.map(node => node.getAttribute('href')))]"
+                                ),
+                                ["#icon-caret"],
+                            )
+                            self.assertEqual(
+                                page.locator("[data-tz-comparison-icon] use").get_attribute("href"),
+                                "#icon-california",
+                            )
+                            self.assertGreater(page.locator(".headline-voices use[href='#icon-star']").count(), 0)
+                            self.assertGreater(page.locator(".engagement use[href='#icon-heart']").count(), 0)
+                            self.assertGreater(page.locator(".engagement use[href='#icon-repost']").count(), 0)
+                            self.assertGreater(page.locator(".engagement use[href='#icon-reply']").count(), 0)
+
+                            direction_symbols = {"up": "#icon-rise", "down": "#icon-fall", "flat": "#icon-flat"}
+                            for direction, symbol in direction_symbols.items():
+                                deltas = page.locator(f".pulse-chip .delta.{direction}")
+                                if deltas.count():
+                                    self.assertEqual(
+                                        deltas.locator("use").evaluate_all(
+                                            "nodes => [...new Set(nodes.map(node => node.getAttribute('href')))]"
+                                        ),
+                                        [symbol],
+                                    )
+
+                            rows = page.locator(".feed-row[data-pw-feed-row]")
+                            self.assertGreater(rows.count(), 3)
+                            follower_projection = rows.evaluate_all(
+                                """rows => Object.fromEntries(rows.slice(0, 12).map(row => [
+                                  [...row.querySelector('.follower-lead').classList]
+                                    .find(name => name.startsWith('follower-bin-')),
+                                  row.querySelector('.follower-glyph use')?.getAttribute('href')
+                                ]))"""
+                            )
+                            follower_symbols = {
+                                "follower-bin-0-1k": "#icon-followers-1",
+                                "follower-bin-1k-10k": "#icon-followers-2",
+                                "follower-bin-10k-50k": "#icon-followers-3",
+                                "follower-bin-50k-plus": "#icon-followers-4",
+                            }
+                            self.assertGreaterEqual(len(follower_projection), 3)
+                            self.assertTrue(all(
+                                follower_symbols[follower_bin] == symbol
+                                for follower_bin, symbol in follower_projection.items()
+                            ))
+                            self.assertFalse(page.evaluate("() => document.documentElement.scrollWidth > innerWidth"))
+                            self.assertEqual(page_errors, [])
+                            self.assertEqual(console_errors, [])
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
 
     def test_locale_text_cycle_and_row_link_targets_are_independent(self) -> None:
         with sync_playwright() as playwright:
@@ -3166,14 +3283,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                           const entries = [...bar.querySelectorAll('[data-pw-pulse-entry]')];
                           const details = Object.fromEntries(entries.map((button) => {
                             const delta = button.querySelector('.delta');
-                            const rawGlyph = getComputedStyle(delta, '::before').content;
-                            const glyph = rawGlyph === 'none'
-                              ? ''
-                              : rawGlyph.replace(/^['\"]|['\"]$/g, '').trim();
+                            const symbol = delta.querySelector('use')?.getAttribute('href') || '';
                             const rect = button.getBoundingClientRect();
                             return [button.dataset.pwPulseEntry, {
                               text: delta.textContent.trim(),
-                              glyph,
+                              symbol,
                               aria: button.getAttribute('aria-label'),
                               pressed: button.getAttribute('aria-pressed'),
                               width: rect.width,
@@ -3213,7 +3327,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertTrue(projection["reachesLast"])
                     zero = projection["details"]["upstage"]
                     self.assertEqual(zero["text"], "0%")
-                    self.assertEqual(zero["glyph"], "→")
+                    self.assertEqual(zero["symbol"], "#icon-flat")
                     self.assertIn("flat 0 percent", zero["aria"])
                     for nickname in MODEL_DISPLAY_NAMES:
                         with self.subTest(nickname=nickname):
@@ -3299,26 +3413,34 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 try:
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
                     geometry = page.locator(".feed-row[data-pw-feed-row]").evaluate_all(
-                        """rows => rows.slice(0, 4).map((row) => {
+                        """rows => rows.slice(0, 12).map((row) => {
                           const lead = row.querySelector('.follower-lead');
-                          const glyph = row.querySelector('.follower-glyph');
+                          const glyph = row.querySelector('.follower-glyph .follower-icon');
                           const body = row.querySelector('.feed-main > .body');
                           return {
+                            bin: [...lead.classList].find(name => name.startsWith('follower-bin-')),
                             leadWidth: lead.getBoundingClientRect().width,
                             bodyLeft: body.getBoundingClientRect().left,
-                            glyphSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
+                            glyphSize: glyph.getBoundingClientRect().width,
+                            glyphSymbol: glyph.querySelector('use')?.getAttribute('href'),
                             count: row.querySelector('.follower-count').textContent.trim(),
                           };
                         })"""
                     )
-                    self.assertEqual(len(geometry), 4)
+                    self.assertGreaterEqual(len(geometry), 4)
                     self.assertEqual(len({row["leadWidth"] for row in geometry}), 1)
                     self.assertEqual(len({row["bodyLeft"] for row in geometry}), 1)
-                    self.assertEqual(
-                        [row["glyphSize"] for row in geometry],
-                        sorted(row["glyphSize"] for row in geometry),
-                    )
-                    self.assertEqual(len({row["glyphSize"] for row in geometry}), 4)
+                    expected = {
+                        "follower-bin-0-1k": (12, "#icon-followers-1"),
+                        "follower-bin-1k-10k": (15, "#icon-followers-2"),
+                        "follower-bin-10k-50k": (19, "#icon-followers-3"),
+                        "follower-bin-50k-plus": (22, "#icon-followers-4"),
+                    }
+                    self.assertGreaterEqual(len({row["bin"] for row in geometry}), 3)
+                    self.assertTrue(all(
+                        (row["glyphSize"], row["glyphSymbol"]) == expected[row["bin"]]
+                        for row in geometry
+                    ))
                     self.assertTrue(all(row["count"] for row in geometry))
                 finally:
                     context.close()
@@ -3542,7 +3664,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     row.wait_for()
                     self.assertEqual(row.get_attribute("data-sentiments"), "negative")
                     self.assertTrue(row.locator(".feed-row-shell").evaluate("element => element.classList.contains('tint-pos-mixed')"))
-                    self.assertEqual(row.locator("[data-sig-sentiment]").text_content(), "🙁")
+                    self.assertEqual(
+                        row.locator("[data-sig-sentiment] use").get_attribute("href"),
+                        "#icon-sentiment-negative",
+                    )
                     self.assertTrue(intercepted["done"])
                 finally:
                     context.close()
@@ -4022,8 +4147,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     refreshed = page.locator(".feed-row[data-tweet-id='periodic-refresh-row']")
                     refreshed.wait_for()
                     self.assertEqual(refreshed.get_attribute("data-tint"), "tint-neg-mixed")
-                    self.assertEqual(refreshed.locator("[data-sig-sentiment]").text_content(), "🙁😐")
-                    self.assertEqual(refreshed.locator("[data-sig-post-type]").text_content(), "🤚")
+                    self.assertEqual(
+                        refreshed.locator("[data-sig-sentiment] use").evaluate_all(
+                            "nodes => nodes.map(node => node.getAttribute('href'))"
+                        ),
+                        ["#icon-sentiment-negative", "#icon-sentiment-mixed"],
+                    )
+                    self.assertEqual(
+                        refreshed.locator("[data-sig-post-type] use").get_attribute("href"),
+                        "#icon-hands-on-hammer",
+                    )
                     self.assertTrue((refreshed.locator("[data-sig-nat]").text_content() or "").strip())
                 finally:
                     context.close()

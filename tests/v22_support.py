@@ -299,15 +299,15 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             ],
             "details": {
                 "pulse_up": {
-                    "text": "50%", "glyph": "▲", "aria": "Pulse Up, up 50 percent",
+                    "text": "50%", "symbol": "#icon-rise", "aria": "Pulse Up, up 50 percent",
                 },
                 "pulse_down": {
-                    "text": "50%", "glyph": "▼", "aria": "Pulse Down, down 50 percent",
+                    "text": "50%", "symbol": "#icon-fall", "aria": "Pulse Down, down 50 percent",
                 },
                 "pulse_flat": {
-                    "text": "0%", "glyph": "→", "aria": "Pulse Flat, flat 0 percent",
+                    "text": "0%", "symbol": "#icon-flat", "aria": "Pulse Flat, flat 0 percent",
                 },
-                "pulse_new": {"text": "NEW", "glyph": "", "aria": "Pulse New, NEW"},
+                "pulse_new": {"text": "NEW", "symbol": "", "aria": "Pulse New, NEW"},
             },
         },
     }

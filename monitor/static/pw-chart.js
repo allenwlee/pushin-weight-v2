@@ -424,6 +424,12 @@
       .replace(/'/g, '&#39;');
   }
 
+  function renderIcon(symbolId, className) {
+    return window.pwIcon && typeof window.pwIcon.render === 'function'
+      ? window.pwIcon.render(symbolId, className)
+      : '';
+  }
+
   function isZhLocale(locale) {
     return ['zh_cn', 'zh-cn', 'zh_hans', 'zh-hans'].indexOf(String(locale || '').toLowerCase()) !== -1;
   }
@@ -471,7 +477,9 @@
       } else {
         var direction = ['up', 'down', 'flat'].indexOf(entry.direction) === -1 ? 'flat' : entry.direction;
         var magnitude = Math.abs(Number(entry.delta_percent) || 0);
-        trend = '<span class="delta ' + direction + '">' + magnitude + '%</span>';
+        var trendSymbol = { up: 'icon-rise', down: 'icon-fall', flat: 'icon-flat' }[direction];
+        trend = '<span class="delta ' + direction + '">' +
+          renderIcon(trendSymbol, 'pulse-trend-icon') + magnitude + '%</span>';
         var localizedDirection = zh
           ? { up: '上升', down: '下降', flat: '持平' }[direction]
           : direction;
@@ -578,7 +586,15 @@
           link.href = 'https://x.com/' + String(entry.handle || '').replace(/^@/, '');
           link.target = '_blank';
           link.rel = 'noopener noreferrer';
-          link.textContent = '@' + String(entry.handle || '').replace(/^@/, '') + ' (☆ ' + entry.voice_star + ')';
+          var handle = document.createElement('span');
+          handle.className = 'voice-handle';
+          handle.textContent = '@' + String(entry.handle || '').replace(/^@/, '');
+          var score = document.createElement('span');
+          score.className = 'voice-star';
+          score.innerHTML = ' (' + renderIcon('icon-star', 'voice-star-icon') + ' ' +
+            escapeHtml(entry.voice_star) + ')';
+          link.appendChild(handle);
+          link.appendChild(score);
           voices.appendChild(link);
         });
         voices.setAttribute('data-pw-voice-signature', signature);

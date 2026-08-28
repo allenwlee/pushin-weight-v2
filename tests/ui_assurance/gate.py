@@ -19,6 +19,8 @@ FOCUSED_TESTS = [
     "tests/test_ui_assurance_reference.py",
     "tests/test_ui_assurance_browser.py",
     "tests/test_fix_ui_skill_assurance.py",
+    "tests/test_cyber_quan_icon_contract.py",
+    "tests/test_cyber_quan_visual_regression.py",
     "tests/test_trend_narrative_projection_fallback_names.py",
 ]
 FULL_ADDITIONAL_TESTS = [
@@ -49,8 +51,15 @@ def main(argv: list[str] | None = None) -> int:
     tests = FOCUSED_TESTS + (FULL_ADDITIONAL_TESTS if args.scope == "candidate" else [])
     # The existing Django browser suites intentionally use HTTP live-server
     # URLs; isolate their test-only DEBUG setting from Bridgewright and Node.
-    _run("pytest", "-q", *tests, env_overrides={"DEBUG": "1"})
+    _run(
+        "pytest",
+        "-q",
+        *tests,
+        env_overrides={"DEBUG": "1", "CYBER_QUAN_CAPTURE_ONLY": ""},
+    )
     _run("node", "tests/test_pw_chart_filter.js")
+    _run("node", "tests/test_pw_feed_formatter.js")
+    _run("node", "tests/test_pw_tz.js")
 
     if args.scope == "candidate":
         if not args.candidate_revision:

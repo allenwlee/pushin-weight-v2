@@ -42,10 +42,11 @@ VISUAL_TOKENS = {
         "background-color": "rgb(59, 130, 246)",
         "_note": "iter 4 verified; mockup pin pending — capture from mockup next iter.",
     },
-    ".delta.up::before": {
-        "content": "\"▲ \"",
+    ".delta.up .pulse-trend-icon": {
         "color": "rgb(34, 197, 94)",
-        "_note": "Pin only asserted when at least one .delta.up exists in current window. Otherwise tolerate absence (data-dependent).",
+        "width": "10.75px",
+        "height": "10px",
+        "_note": "Cyber-Quan rise symbol; only asserted when at least one .delta.up exists in the current window.",
     },
     ".locale-toggle button": {
         "color": "rgb(148, 163, 184)",
@@ -85,7 +86,7 @@ VISUAL_TOKENS = {
         "max-width": "20%",
         "display": "flex",
         "flex-direction": "column",
-        "_note": "iter 14: 20% column for 4 emoji .sig-rows.",
+        "_note": "iter 14: 20% column for 4 classification .sig-rows.",
     },
     ".feed-row .avatar": {
         "border-radius": "50%",
@@ -96,7 +97,7 @@ VISUAL_TOKENS = {
     ".feed-signals .sig-row": {
         "min-height": "16px",
         "display": "flex",
-        "_note": "iter 14: emoji row in right column.",
+        "_note": "iter 14: icon row in right column.",
     },
 }
 

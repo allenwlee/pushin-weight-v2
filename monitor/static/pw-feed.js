@@ -160,8 +160,22 @@
     return '0-1k';
   }
 
-  // iter 14 (U5): render mockup-canon 2-column grid. Emoji + tint are
-  // populated by paintSignals() once the row is in the DOM.
+  var FOLLOWER_ICONS = {
+    '0-1k': 'icon-followers-1',
+    '1k-10k': 'icon-followers-2',
+    '10k-50k': 'icon-followers-3',
+    '50k-plus': 'icon-followers-4'
+  };
+
+  function renderIcon(symbolId, className) {
+    var renderer = typeof window !== 'undefined' && window.pwIcon;
+    return renderer && typeof renderer.render === 'function'
+      ? renderer.render(symbolId, className)
+      : '';
+  }
+
+  // Render the production two-column grid. paintSignals() fills the reserved
+  // signal column after the row enters the DOM.
   function renderRowHtml(row) {
     var handleRaw = (row.account && row.account.handle) || '';
     var handleLabel = (row.account && row.account.display_name) || handleRaw || '@unknown';
@@ -196,7 +210,9 @@
             ' role="img"' +
             ' aria-label="' + escapeHtml(followersLabel) + '"' +
             ' title="' + escapeHtml(followersLabel) + '">' +
-            '<span class="follower-glyph" role="img" aria-hidden="true">👥</span>' +
+            '<span class="follower-glyph" aria-hidden="true">' +
+              renderIcon(FOLLOWER_ICONS[followerClass], 'follower-icon') +
+            '</span>' +
             '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
           '</div>' +
           '<div class="body">' +
@@ -213,9 +229,9 @@
               escapeHtml((initialText || '').toString().slice(0, 600)) +
             '</div>' +
             '<div class="engagement">' +
-              '<span class="likes">' + escapeHtml(eng.likes || '') + '</span>' +
-              '<span class="rts">' + escapeHtml(eng.retweets || '') + '</span>' +
-              '<span class="replies">' + escapeHtml(eng.replies || '') + '</span>' +
+              '<span class="likes">' + renderIcon('icon-heart', 'engagement-icon') + escapeHtml(eng.likes || '') + '</span>' +
+              '<span class="rts">' + renderIcon('icon-repost', 'engagement-icon') + escapeHtml(eng.retweets || '') + '</span>' +
+              '<span class="replies">' + renderIcon('icon-reply', 'engagement-icon') + escapeHtml(eng.replies || '') + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -229,23 +245,20 @@
     );
   }
 
-  // ---------------------------------------------------------------------
-  // iter 14 (U5): signal painter — emoji + tint for the right column.
-  // Mirrors mockup script (06-tier1-composed.v22-master.html ~L1660).
-  // ---------------------------------------------------------------------
-  var SENT_FACE = {
-    positive: '\uD83D\uDE0A',  // 😊
-    neutral:  '\uD83D\uDE36',  // 😶
-    negative: '\uD83D\uDE41',  // 🙁
-    mixed:    '\uD83D\uDE10'   // 😐
+  // Paint Cyber-Quan symbols and existing semantic tints in the right column.
+  var SENTIMENT_ICON = {
+    positive: 'icon-sentiment',
+    neutral: 'icon-sentiment-neutral',
+    negative: 'icon-sentiment-negative',
+    mixed: 'icon-sentiment-mixed'
   };
-  var POST_TYPE_EMOJI = {
-    hands_on_usage:           '\uD83E\uDD1A', // 🤚
-    performance_comparisons:  '\uD83D\uDCCA', // 📊
-    buzz_releases:            '\uD83D\uDCE2', // 📢
-    feedback_questions:       '\u2754',         // ❓
-    advertising_marketing:    '\u5186',         // 円 (intentional, matches mockup)
-    event_announcement:       '\uD83D\uDCC5'  // 📅
+  var POST_TYPE_ICON = {
+    hands_on_usage: 'icon-hands-on-hammer',
+    performance_comparisons: 'icon-compare',
+    buzz_releases: 'icon-announce',
+    feedback_questions: 'icon-question',
+    advertising_marketing: 'icon-marketing',
+    event_announcement: 'icon-event'
   };
   var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
   var TYPE_ORDER = [
@@ -267,6 +280,10 @@
     });
     return out;
   }
+  function semanticIcon(mapping, key, className) {
+    var symbolId = mapping[key];
+    return symbolId ? renderIcon(symbolId, className) : '';
+  }
   function paintSignals(row) {
     var sents = uniqueInOrder(parseListAttr(row.getAttribute('data-sentiments')), SENT_ORDER);
     var types = uniqueInOrder(parseListAttr(row.getAttribute('data-post-types')), TYPE_ORDER);
@@ -275,24 +292,41 @@
     var showCn = natCn && natCn !== 'none';
     var showUs = natUs && natUs !== 'none';
     var elS = row.querySelector('[data-sig-sentiment]');
-    if (elS) elS.textContent = sents.map(function (k) { return SENT_FACE[k] || ''; }).join('');
+    if (elS) {
+      elS.innerHTML = sents.map(function (key) {
+        return semanticIcon(SENTIMENT_ICON, key, 'signal-icon tone-' + key);
+      }).join('');
+    }
     var elT = row.querySelector('[data-sig-post-type]');
-    if (elT) elT.textContent = types.map(function (k) { return POST_TYPE_EMOJI[k] || ''; }).join('');
+    if (elT) {
+      elT.innerHTML = types.map(function (key) {
+        return semanticIcon(POST_TYPE_ICON, key, 'signal-icon');
+      }).join('');
+    }
     var elN = row.querySelector('[data-sig-nat]');
     if (elN) {
       if (!showCn && !showUs) { elN.innerHTML = ''; elN.classList.add('is-empty'); }
       else {
         elN.classList.remove('is-empty');
-        var flags = (showCn ? '\uD83C\uDDE8\uD83C\uDDF3' : '') +
-                    (showUs ? '\uD83C\uDDFA\uD83C\uDDF8' : '');
-        elN.innerHTML = '<span class="sig-nat-prefix">\uD83D\uDDAC:</span> ' + flags;
+        var regions = (showCn
+          ? '<span class="nationalism-region nationalism-cn">' +
+              renderIcon('icon-nationalism', 'signal-icon') + '<b>中</b></span>'
+          : '') + (showUs
+          ? '<span class="nationalism-region nationalism-us">' +
+              renderIcon('icon-nationalism', 'signal-icon') + '<b>美</b></span>'
+          : '');
+        elN.innerHTML = '<span class="sig-nat-prefix">' +
+          renderIcon('icon-discourse', 'signal-icon') + ':</span>' + regions;
       }
     }
     var elU = row.querySelector('[data-sig-unsanctioned]');
     if (elU) {
       var uns = (row.getAttribute('data-unsanctioned') || '').trim();
       var isUn = uns === '1' || uns === 'true' || uns === 'yes';
-      if (isUn) { elU.classList.remove('is-empty'); elU.textContent = '\uD83D\uDEAB'; }
+      if (isUn) {
+        elU.classList.remove('is-empty');
+        elU.innerHTML = renderIcon('icon-unsanctioned', 'signal-icon tone-negative');
+      }
       else      { elU.textContent = ''; elU.classList.add('is-empty'); }
     }
   }

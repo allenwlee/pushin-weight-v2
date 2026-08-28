@@ -392,6 +392,12 @@ function makeSandbox(options = {}) {
     clearInterval() {},
     window: {
       pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } },
+      pwIcon: {
+        render(symbolId, className) {
+          return '<svg class="pw-icon ' + className + '" aria-hidden="true"><use href="#' +
+            symbolId + '"></use></svg>';
+        },
+      },
       __pwTz: {
         get mode() { return tzMode; },
         getComparison() {

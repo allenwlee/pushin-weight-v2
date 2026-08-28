@@ -26,7 +26,7 @@
              role="img"
              aria-label="{{ row.followers_label }}"
              title="{{ row.followers_label }}">
-          <span class="follower-glyph" role="img" aria-hidden="true">👥</span>
+          <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
           <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
         </div>
         <div class="body">
@@ -73,9 +73,9 @@
             {% endif %}
           </div>
           <div class="engagement">
-            <span class="likes">{{ row.engagement_pretty.likes }}</span>
-            <span class="rts">{{ row.engagement_pretty.retweets }}</span>
-            <span class="replies">{{ row.engagement_pretty.replies }}</span>
+            <span class="likes"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>{{ row.engagement_pretty.likes }}</span>
+            <span class="rts"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-repost"></use></svg>{{ row.engagement_pretty.retweets }}</span>
+            <span class="replies"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-reply"></use></svg>{{ row.engagement_pretty.replies }}</span>
           </div>
         </div>
       </div>

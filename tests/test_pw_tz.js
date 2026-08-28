@@ -34,12 +34,12 @@ function assert(condition, message) {
 const tokyo = comparisonForLocalTimezone('Asia/Tokyo');
 assert(tokyo.key === 'california', 'Tokyo compares against California');
 assert(tokyo.timezone === 'America/Los_Angeles', 'California uses its IANA zone');
-assert(tokyo.iconClass === 'tz-ca-icon' && tokyo.iconText === 'CA', 'California keeps the CA mark');
+assert(tokyo.iconClass === 'tz-ca-icon' && tokyo.iconSymbol === 'icon-california', 'California uses the Cyber-Quan outline');
 
 const california = comparisonForLocalTimezone('America/Los_Angeles');
 assert(california.key === 'beijing', 'California compares against Beijing');
 assert(california.timezone === 'Asia/Shanghai', 'Beijing uses the Asia/Shanghai IANA zone');
-assert(california.iconClass === 'tz-bj-icon' && california.iconText === '京', 'Beijing uses the 京 mark');
+assert(california.iconClass === 'tz-bj-icon' && california.iconSymbol === 'icon-beijing', 'Beijing uses the rough 京 symbol');
 
 assert(timezoneCopy('en', california).shortLabel === 'Beijing', 'English chart row says Beijing');
 assert(timezoneCopy('zh_cn', california).shortLabel === '北京', 'Chinese chart row says 北京');

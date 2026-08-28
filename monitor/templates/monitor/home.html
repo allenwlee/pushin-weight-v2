@@ -6,14 +6,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=pulse-feed-timezone1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=cyber-quan1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-tz.js' %}?v=dynamic-comparison1" defer></script>
+  <script src="{% static 'pw-icons.js' %}?v=cyber-quan1" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=cyber-quan1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=timezone-axis-polish2" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=follower-lead1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=cyber-quan1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=cyber-quan1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -30,11 +31,14 @@
       data-pw-layout="desktop"
       data-pw-variant="v20">
 
+{% include "monitor/_cyber_quan_sprite.html" %}
+
 <div class="app-shell">
 
   <header class="topbar tz-hitch">
     <div class="topbar-title-row">
       <h1 class="app-name">
+        <svg class="pw-icon app-mark" aria-hidden="true" focusable="false"><use href="#mark-quiet"></use></svg>
         <span class="zh">{{ app_name_zh }}</span>
         <span class="en"><span class="en-line">Pushin'</span><span class="en-line">Weight</span></span>
       </h1>
@@ -69,15 +73,15 @@
               title="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% else %}Toggle local ⇄ California time{% endif %}"
               aria-label="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% else %}Toggle local ⇄ California time{% endif %}">
         <span class="tz-choice is-selected" data-tz-choice="local">
-          <span class="tz-emoji" data-tz-local-emoji>☀️</span>
+          <span class="tz-emoji" data-tz-local-emoji><svg class="pw-icon tz-daypart-icon" aria-hidden="true" focusable="false"><use href="#icon-day"></use></svg></span>
           <span class="tz-time" data-tz-local-time data-tz-time>00:00</span>
           <span class="tz-label tz-zone" data-tz-local-label data-tz-zone data-i18n-tz-local="1">{% if is_zh_chrome %}本地{% else %}local{% endif %}</span>
         </span>
         <span class="tz-divider" aria-hidden="true"></span>
         <span class="tz-choice" data-tz-choice="ca">
-          <span class="tz-emoji" data-tz-comparison-emoji data-tz-ca-emoji>🌙</span>
+          <span class="tz-emoji" data-tz-comparison-emoji data-tz-ca-emoji><svg class="pw-icon tz-daypart-icon" aria-hidden="true" focusable="false"><use href="#icon-night"></use></svg></span>
           <span class="tz-time" data-tz-comparison-time data-tz-ca-time>00:00</span>
-          <span class="tz-ca-icon" data-tz-comparison-icon title="California" aria-label="California">CA</span>
+          <span class="tz-ca-icon" data-tz-comparison-icon title="California" aria-label="California"><svg class="pw-icon tz-place-icon" aria-hidden="true" focusable="false"><use href="#icon-california"></use></svg></span>
         </span>
       </button>
     </div>
@@ -94,7 +98,7 @@
             {% if entry.status == "new" %}
               <span class="delta new">{% if is_zh_chrome %}新{% else %}NEW{% endif %}</span>
             {% else %}
-              <span class="delta {{ entry.direction }}">{{ entry.delta_magnitude }}%</span>
+              <span class="delta {{ entry.direction }}"><svg class="pw-icon pulse-trend-icon" aria-hidden="true" focusable="false"><use href="{% if entry.direction == 'up' %}#icon-rise{% elif entry.direction == 'down' %}#icon-fall{% else %}#icon-flat{% endif %}"></use></svg>{{ entry.delta_magnitude }}%</span>
             {% endif %}
           </button>
         </li>
@@ -111,7 +115,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="brands">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_brands">{% if is_zh_chrome %}品牌{% else %}Brands{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}品牌{% else %}Brands{% endif %}" data-idea="b" data-lens-pair="open,closed">
           <div class="dd-segment" role="tablist" aria-label="{% if is_zh_chrome %}品牌类型{% else %}Brand tier{% endif %}">
             <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true"><span data-i18n="lens_open">{% if is_zh_chrome %}开源{% else %}Open{% endif %}</span> <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
@@ -143,7 +147,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="sentiment">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_sentiment">{% if is_zh_chrome %}情绪{% else %}Sentiment{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}情绪{% else %}Sentiment{% endif %}">
           <div class="dd-grid cols-2">
             {% for entry in sentiment_entries %}
@@ -156,7 +160,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="post_types">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_post_type">{% if is_zh_chrome %}帖子类型{% else %}Post Type{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}帖子类型{% else %}Post Type{% endif %}">
           <div class="dd-grid cols-3">
             {% for entry in post_type_entries %}
@@ -169,7 +173,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="lang">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_lang">{% if is_zh_chrome %}语言{% else %}Lang{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}语言{% else %}Lang{% endif %}">
           <div class="dd-toolbar">
             <button type="button" data-dd-action="all" data-i18n="btn_all">{% if is_zh_chrome %}全选{% else %}all{% endif %}</button>
@@ -186,7 +190,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="role">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_role">{% if is_zh_chrome %}角色{% else %}Role{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}角色{% else %}Role{% endif %}">
           <div class="dd-grid cols-2">
             {% for entry in role_entries %}
@@ -199,7 +203,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="nationalism">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_nationalism">{% if is_zh_chrome %}民族主义{% else %}Nationalism{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}民族主义{% else %}Nationalism{% endif %}" data-idea="b" data-lens-pair="us,cn">
           <div class="dd-segment" role="tablist" aria-label="{% if is_zh_chrome %}民族主义地区{% else %}Nationalism region{% endif %}">
             <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">美 <span class="n" data-lens-count="us">· {{ nationalism_entries|length }}</span></button>
@@ -227,7 +231,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_discourse">{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}">
           <div class="dd-grid cols-3">
             {% for entry in discourse_entries %}
@@ -240,7 +244,7 @@
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="unsanctioned">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_unsanctioned">{% if is_zh_chrome %}未授权{% else %}Unsanctioned{% endif %}</span>
-        <span class="carat" aria-hidden="true">▾</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}未授权{% else %}Unsanctioned{% endif %}">
           <div class="dd-grid cols-1">
             <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span>{% trans "show only flagged posts" %}</span></label>
@@ -305,13 +309,13 @@
         <p class="headline-status muted" data-pw-headline-status role="status" aria-live="polite" aria-atomic="true" hidden></p>
         <div class="headline-voices" data-pw-headline-voices>
           <span class="headline-label">{% trans "Top voices" %}</span>
-          <span class="headline-meta muted">☆ {% trans "by followers" %}</span>
+          <span class="headline-meta muted"><svg class="pw-icon voice-star-icon" aria-hidden="true" focusable="false"><use href="#icon-star"></use></svg> {% trans "by followers" %}</span>
           <span class="headline-voice-entries" data-pw-headline-voice-entries
                 data-pw-empty-text="{% trans 'no top voices this period' %}">
             {% for voice in top_voices %}
               <a class="voice-chip" href="https://x.com/{{ voice.handle|cut:'@' }}" target="_blank" rel="noopener noreferrer">
                 <span class="voice-handle">@{{ voice.handle }}</span>
-                <span class="voice-star">(☆ {{ voice.voice_star }})</span>
+                <span class="voice-star">(<svg class="pw-icon voice-star-icon" aria-hidden="true" focusable="false"><use href="#icon-star"></use></svg> {{ voice.voice_star }})</span>
               </a>{% if not forloop.last %}, {% endif %}
             {% empty %}
               <span class="muted">{% trans "no top voices this period" %}</span>

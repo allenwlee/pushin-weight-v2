@@ -460,7 +460,8 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(root.status_code, 200)
         self.assertContains(root, '<canvas class="home-chart"', html=False)
         self.assertContains(root, "data-pw-pulse", html=False)
-        self.assertNotContains(root, "<svg", html=False)
+        self.assertContains(root, 'class="pw-icon-sprite"', html=False)
+        self.assertNotContains(root, '<svg class="home-chart"', html=False)
 
         partial = self.client.get("/chart.html?renderer=canvas")
         self.assertEqual(partial.status_code, 200)

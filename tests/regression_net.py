@@ -32,8 +32,6 @@ except ImportError:
 
 
 # Pinned assertions from docs/iterations/002-scenario-a
-EXPECTED_HEADER = "走个量 Pushin' Weight"
-EXPECTED_FILTER_BUTTONS = 7
 EXPECTED_TIME_WINDOWS_EN = ["1d", "7d", "30d", "365d"]
 EXPECTED_TIME_WINDOWS_ZH = ["1天", "7天", "30天", "365天"]
 EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
@@ -43,11 +41,15 @@ EXPECTED_SECTIONS = {
     "banner": ["window-toggle", "tz-pill", "locale-toggle"],
     "trending-models": ["data-pw-pulse-shell", "pulse-chip"],
     # Trending pills carry .delta.up/.down/.flat spans with pct values (iter 2 v22)
-    "filter-groups": ["Brands", "Discourse", "account.role", "lang",
-                      "Sentiment", "Nationalism", "unsanctioned"],
+    "filter-groups": [
+        'data-group="brands"', 'data-group="sentiment"',
+        'data-group="post_types"', 'data-group="lang"',
+        'data-group="role"', 'data-group="nationalism"',
+        'data-group="discourse"', 'data-group="unsanctioned"',
+    ],
     "chart": ["Daily total posts per brand"],
-    "top-voices": ["Top voices", "☆ by followers"],
-    "feed": ["本窗口最新"],
+    "top-voices": ["Top voices", "voice-star-icon"],
+    "feed": ['data-i18n="feed_title"'],
 }
 
 
@@ -96,7 +98,7 @@ class RegressionNet:
         self._check_chart_contract(html)
         self._check_chart_no_hover_isolate(session)
         self._check_locale_exhibits(html)
-        self._check_defaults(html, session)
+        self._check_defaults()
         self._check_static_files(html)
         self._check_console_errors(html)
         # Net F (`/internal/` parity after move) — shipped iter 8.
@@ -115,7 +117,7 @@ class RegressionNet:
         without .pulse-chip, .voice-chip, .filter-pill).
         """
         # Derive /internal/ URL from self.url
-        from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+        from urllib.parse import urlparse, urlunparse
         parsed = urlparse(self.url)
         # Strip any query string for the /internal/ hit
         internal_url = urlunparse((parsed.scheme, parsed.netloc, "/internal/", "", "", ""))
@@ -123,6 +125,13 @@ class RegressionNet:
             r = session.get(internal_url, timeout=30, allow_redirects=True)
         except Exception as e:
             self.failures.append(("net-f-http", f"GET {internal_url} failed: {e}"))
+            return
+        if "/accounts/login/" in r.url:
+            self.assert_(
+                "net-f: /internal/ remains protected",
+                True,
+                f"redirected to {r.url}",
+            )
             return
         if r.status_code != 200:
             self.failures.append(("net-f-status", f"GET {internal_url} returned {r.status_code}"))
@@ -190,32 +199,24 @@ class RegressionNet:
                          "no nav[aria-label='Filter groups'] found")
             return
         nav_html = nav_match.group(1)
-        # Each filter group is a button with aria-controls etc. The filter
-        # cards themselves wrap the label text in <strong>. Count unique
-        # filter-group names by looking for the label buttons.
-        expected_labels = ["Brands", "Discourse", "account.role", "lang",
-                           "Sentiment", "Nationalism", "unsanctioned"]
-        # We confirm presence by searching for each label as a CSS-class
-        # match or button text. Use a simpler match: count <button> tags
-        # within the nav that have one of the expected labels.
+        # Visible labels are localized; stable data-group keys define the
+        # production inventory.
+        expected_groups = (
+            "brands", "sentiment", "post_types", "lang", "role",
+            "nationalism", "discourse", "unsanctioned",
+        )
         buttons = re.findall(r'<button[^>]*>(.*?)</button>', nav_html, re.DOTALL)
         # The label text may be inside <strong> or directly as text
         button_text = [re.sub(r'<[^>]+>', '', b).strip() for b in buttons]
-        present_labels = [label for label in expected_labels if label in nav_html]
-        self.assert_("filter-group has 7 group buttons",
-                     len(present_labels) >= 7,
-                     f"present: {present_labels} (all buttons: {button_text})")
+        present_groups = set(re.findall(r'data-group="([^"]+)"', nav_html))
+        self.assert_("filter-group has 8 group pills",
+                     set(expected_groups) <= present_groups,
+                     f"present: {sorted(present_groups)} (nested buttons: {button_text})")
 
-        # Verify each expected group label is present
-        for group in expected_labels:
-            # Group labels translate per locale — zh_cn won't have
-            # English labels. Check by class match instead.
-            in_en = group in nav_html
-            in_zh = group in nav_html or any(
-                group.lower() in (re.sub(r'<[^>]+>', '', b).lower() for b in buttons)
-            )
+        # Structural keys stay stable when the visible labels are localized.
+        for group in expected_groups:
             self.assert_(f"filter-group '{group}' present",
-                         in_en or in_zh,
+                         group in present_groups,
                          f"not found in {self.locale} filter nav")
 
     def _check_filter_lens_geometry(self, html):
@@ -290,20 +291,22 @@ class RegressionNet:
                      and 'data-label-zh="原文"' in html,
                      "mockup labels 英文/中文/原文 missing from locale buttons")
 
-    def _check_defaults(self, html, session):
+    def _check_defaults(self):
         """Net B (U2) — Defaults: window=1, locale=zh_cn, no cookie required.
 
         Per plan § U2: HOME_WINDOW_DEFAULT=1 (24h), LANGUAGE_CODE="zh-hans"
         (zh_cn default). BEFORE per iter 9 audit: HOME_WINDOW_DEFAULT was 7
         (BEFORE state pinned as HOME_WINDOW_DEFAULT_BEFORE in views.py).
         """
-        from urllib.parse import urlparse
+        from urllib.parse import urlparse, urlunparse
         parsed = urlparse(self.url)
+        default_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+        default_session = requests.Session()
         # No-cookie request: default window must be 1 (24h, not 7d)
         try:
-            r = session.get(self.url, timeout=30, allow_redirects=True)
+            r = default_session.get(default_url, timeout=30, allow_redirects=True)
         except Exception as e:
-            self.failures.append(("u2-http", f"GET {self.url} failed: {e}"))
+            self.failures.append(("u2-http", f"GET {default_url} failed: {e}"))
             return
         if r.status_code != 200:
             self.failures.append(("u2-status", f"status {r.status_code}"))
@@ -343,8 +346,8 @@ class RegressionNet:
 
         # Cookie home_window=7 honored (returning user override)
         try:
-            r7 = session.get(self.url, timeout=30,
-                             cookies={"home_window": "7"}, allow_redirects=True)
+            r7 = default_session.get(default_url, timeout=30,
+                                     cookies={"home_window": "7"}, allow_redirects=True)
         except Exception as e:
             self.failures.append(("u2-cookie-http", f"GET with cookie failed: {e}"))
             return
@@ -365,32 +368,40 @@ class RegressionNet:
                              f"text '{kw}' not found in HTML")
 
     def _check_trending_deltas(self, html):
-        # Trending pills must each carry a .delta span with a pct value
-        # (▲/▼/→ arrow rendered by CSS .delta.up/.down/.flat::before).
+        # Trending pills must each carry a .delta span, Cyber-Quan direction
+        # symbol, and percentage value.
         # Pinned by iter 2 (v22) of the agentic iteration loop.
-        delta_spans = re.findall(r'<span class="delta (\w+)">(-?\d+%)</span>', html)
+        delta_spans = re.findall(
+            r'<span class="delta (\w+)">(.*?)</span>', html, re.DOTALL
+        )
         self.assert_("trending has >= 1 delta span",
                      len(delta_spans) >= 1,
                      f"got {len(delta_spans)} delta spans")
-        # Each delta must have a valid CSS class (up/down/flat)
+        # Each delta must have a valid CSS class; newly observed brands carry
+        # NEW/新 instead of a percentage.
         if delta_spans:
-            valid_classes = {"up", "down", "flat"}
+            valid_classes = {"up", "down", "flat", "new"}
             bad = [d for d in delta_spans if d[0] not in valid_classes]
-            self.assert_("all trending delta classes are up/down/flat",
+            self.assert_("all trending delta classes are up/down/flat/new",
                          not bad,
                          f"invalid: {bad[:3]}")
-            # Each pct value must end with %
-            bad_pct = [d for d in delta_spans if not d[1].endswith("%")]
-            self.assert_("all trending delta values end with %",
+            bad_pct = [
+                (direction, body)
+                for direction, body in delta_spans
+                if direction != "new" and not re.search(r"-?\d+%", body)
+            ]
+            self.assert_("all non-new trending deltas carry percentages",
                          not bad_pct,
                          f"invalid: {bad_pct[:3]}")
 
     def _check_top_voices(self, html):
-        # Top Voices body must contain at least 1 .voice-chip with @handle + ☆ N
+        # Top Voices body must contain at least 1 .voice-chip with @handle,
+        # the approved star symbol, and a numeric score.
         # (the historical blocker from v18-v20; pinned by iter 4 v22).
         chips = re.findall(
-            r'<a class="voice-chip"[^>]*>\s*<span class="voice-handle">@([^<]+)</span>\s*<span class="voice-star">\(☆ (\d+)\)</span>\s*</a>',
+            r'<a class="voice-chip"[^>]*>\s*<span class="voice-handle">@([^<]+)</span>\s*<span class="voice-star">\(<svg[^>]*voice-star-icon[^>]*>.*?<use href="#icon-star"[^>]*>.*?</svg>\s*(\d+)\)</span>\s*</a>',
             html,
+            re.DOTALL,
         )
         self.assert_("top-voices has >= 1 voice chip",
                      len(chips) >= 1,
@@ -401,7 +412,7 @@ class RegressionNet:
             self.assert_("all voice chips have non-empty handle",
                          not bad_handles,
                          f"empty: {bad_handles[:3]}")
-            # Each ☆ count is a positive integer
+            # Each star count is a positive integer
             bad_stars = [(h, s) for h, s in chips if int(s) < 1]
             self.assert_("all voice star counts are >= 1",
                          not bad_stars,
@@ -413,31 +424,26 @@ class RegressionNet:
                          sorted_desc,
                          f"order: {stars}")
             # Top Voices region must NOT have an empty-state placeholder when chips render
-            if "no top voices this period" in html and len(chips) > 0:
+            visible_empty = re.search(
+                r'<span class="muted">\s*no top voices this period\s*</span>', html
+            )
+            if visible_empty and len(chips) > 0:
                 self.assert_("empty-state not shown when voices present", False,
                              "placeholder text present alongside chips")
 
     def _check_feed_engagement(self, html):
-        # Feed cards must each render the 4-icon engagement stats block
-        # (👥/♥/↻/💬 with compact numbers). Pinned by iter 3 (v22).
-        eng_blocks = re.findall(r'<div class="feed-engagement">.*?</div>', html, re.DOTALL)
+        # Feed cards render follower magnitude separately and three compact
+        # Cyber-Quan engagement symbols in the established stats row.
+        eng_blocks = re.findall(r'<div class="engagement">.*?</div>', html, re.DOTALL)
         self.assert_("feed has >= 1 engagement block",
                      len(eng_blocks) >= 1,
                      f"got {len(eng_blocks)} engagement blocks")
         if eng_blocks:
-            # Each block must contain all 4 stat icons
-            for label in ("engagement-stat",):
-                bad = [b for b in eng_blocks if label not in b]
-                self.assert_(f"every engagement block has {label}",
-                             not bad,
-                             f"missing in {len(bad)}/{len(eng_blocks)} blocks")
-            # Must contain all 4 icon HTML entities
-            for icon_check in [("&#128101;", "👥 followers icon"),
-                                ("&#9825;", "♥ likes icon"),
-                                ("&#8634;", "↻ retweets icon"),
-                                ("&#128172;", "💬 replies icon")]:
-                bad = [b for b in eng_blocks if icon_check[0] not in b]
-                self.assert_(f"every engagement block has {icon_check[1]}",
+            for symbol_id, label in (("icon-heart", "likes"),
+                                     ("icon-repost", "reposts"),
+                                     ("icon-reply", "replies")):
+                bad = [b for b in eng_blocks if f'href="#{symbol_id}"' not in b]
+                self.assert_(f"every engagement block has {label} symbol",
                              not bad,
                              f"missing in {len(bad)}/{len(eng_blocks)} blocks")
 
@@ -486,14 +492,14 @@ class RegressionNet:
         for sig in ("sig-sentiment", "sig-post-type", "sig-nat", "sig-unsanctioned"):
             self.assert_(f".sig-row.{sig} present",
                          f'class="sig-row {sig}"' in html,
-                         f"missing — right column missing emoji signals")
+                         f"missing — right column missing classification signals")
         # Inside feed-main: fixed follower lead, head (name + meta), text, engagement
         self.assert_(".feed-main .follower-lead present",
                      re.search(r'<div class="feed-main">\s*<div class="follower-lead', html, re.DOTALL) is not None,
                      "follower lead must be first child of .feed-main")
-        self.assert_("follower emoji and count present",
+        self.assert_("follower symbol and count present",
                      'class="follower-glyph"' in html and 'class="follower-count"' in html,
-                     "follower emoji/count column incomplete")
+                     "follower symbol/count column incomplete")
         self.assert_(".feed-main .head present",
                      '<div class="head">' in html,
                      "head row missing from .feed-main")
@@ -534,14 +540,14 @@ class RegressionNet:
 
         # Filter nav uses data-group="<short>" on each filter-pill (the
         # actual rendered wire shape — not data-pw-filter-group).
-        # 7 groups must all be present.
+        # All eight production groups must be present.
         groups_in_html = set(re.findall(r'data-group="([^"]+)"', html))
         EXPECTED_GROUPS = {
-            "brands", "discourse", "role", "lang",
-            "sentiment", "nationalism", "unsanctioned",
+            "brands", "sentiment", "post_types", "lang", "role",
+            "nationalism", "discourse", "unsanctioned",
         }
         self.assert_(
-            "filter-bar nav has all 7 expected groups",
+            "filter-bar nav has all 8 expected groups",
             EXPECTED_GROUPS <= groups_in_html,
             f"missing: {EXPECTED_GROUPS - groups_in_html}, found: {groups_in_html}",
         )

@@ -5,6 +5,8 @@
 
 const path = require('path');
 const fs = require('fs');
+const pwIcon = require('../monitor/static/pw-icons.js');
+global.window = { pwIcon };
 
 // Load the formatter by reading the file and stripping the IIFE wrapper.
 // (We can't require the file directly because it's wrapped in an IIFE.)
@@ -53,6 +55,16 @@ function assertEq(actual, expected, label) {
     );
   }
 }
+
+console.log('--- Cyber-Quan icon renderer ---');
+assertEq(pwIcon.render('not-approved', 'safe'), '', 'unknown symbol fails closed');
+assertEq(
+  pwIcon.render('icon-heart', 'safe bad\" onclick=alert(1)'),
+  '<svg class="pw-icon safe" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>',
+  'class tokens are allowlisted by syntax'
+);
+assertEq(pwIcon.isAllowed('icon-heart'), true, 'approved symbol is recognized');
+assertEq(pwIcon.isAllowed('not-approved'), false, 'unknown symbol is rejected');
 
 // Anchor `now` so the tests are deterministic.
 const now = new Date('2026-07-15T21:00:00+00:00');
@@ -114,7 +126,12 @@ if (typeof renderRowHtml === 'function') {
   assertEq(rowHtml.includes('class="follower-lead follower-bin-50k-plus"'), true,
     'feed row reserves a fixed follower lead column');
   assertEq(rowHtml.includes('class="follower-glyph"'), true,
-    'feed row shows a size-binned followers emoji');
+    'feed row shows a size-binned follower symbol');
+  assertEq(rowHtml.includes('href="#icon-followers-4"'), true,
+    'highest follower bin uses the approved four-person symbol');
+  assertEq(rowHtml.includes('href="#icon-heart"') && rowHtml.includes('href="#icon-repost"') &&
+    rowHtml.includes('href="#icon-reply"'), true,
+    'client-created rows use the approved engagement symbols');
   assertEq(rowHtml.includes('class="follower-count">52.1k</span>'), true,
     'follower count sits directly under the emoji');
   assertEq(rowHtml.includes('>Account Name</a>'), true,
@@ -208,7 +225,7 @@ assertEq(feedSrc.includes(rootSelector), true, "getFeedRoot prefers data-pw-feed
 
 // ---------------------------------------------------------------------------
 // V22 feed metadata: the server owns tint selection.  The browser only paints
-// marker glyphs from raw attributes, even when those attributes intentionally
+// marker symbols from raw attributes, even when those attributes intentionally
 // disagree with the server-provided tint class.
 // ---------------------------------------------------------------------------
 
@@ -223,10 +240,10 @@ function classList(initial) {
 
 function markerRow(attrs, serverTint) {
   const shell = { className: 'feed-row-shell ' + serverTint };
-  const sentiment = { textContent: '' };
-  const postType = { textContent: '' };
+  const sentiment = { textContent: '', innerHTML: '' };
+  const postType = { textContent: '', innerHTML: '' };
   const nationalism = { textContent: '', innerHTML: '', classList: classList() };
-  const unsanctioned = { textContent: '', classList: classList() };
+  const unsanctioned = { textContent: '', innerHTML: '', classList: classList() };
   const nodes = {
     '.feed-row-shell': shell,
     '[data-sig-sentiment]': sentiment,
@@ -259,7 +276,11 @@ assertEq(
   true,
   'hydrateRows preserves the server-owned tint when raw sentiments differ'
 );
-assertEq(serverTintRow.sentiment.textContent, '🙁', 'hydrateRows still hydrates sentiment marker glyphs');
+assertEq(
+  serverTintRow.sentiment.innerHTML.includes('href="#icon-sentiment-negative"'),
+  true,
+  'hydrateRows paints the approved negative-sentiment symbol'
+);
 
 console.log('\n--- valid empty and malformed payload handling ---');
 const feedRoot = { getAttribute: (name) => name === 'data-pw-empty-text' ? 'no posts in window' : '' };
