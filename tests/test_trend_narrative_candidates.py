@@ -480,6 +480,16 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
             "aggregate_inputs": {"private": True},
             "source_row_provenance": {"post": "raw-post-id"},
             "evidence_selection_provenance": {"author": "raw-author-id"},
+            "family_summaries": {
+                "sentiment": {
+                    "status": "partial",
+                    "covered_post_count": 8,
+                    "total_post_count": 10,
+                    "denominator": 8,
+                    "current_leader": "positive",
+                    "largest_change": "positive",
+                }
+            },
             "evidence": [ordinary],
         }
     )
@@ -487,6 +497,12 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
 
     assert "raw_series" not in provider
     assert "aggregate_inputs" not in provider
+    assert provider["family_summaries"]["sentiment"] == {
+        "status": "partial",
+        "covered_post_count": 8,
+        "current_leader": "positive",
+        "largest_change": "positive",
+    }
     assert "author_group_id" not in evidence
     assert "source_cluster_id" not in evidence
     assert "handle_snapshot" not in evidence

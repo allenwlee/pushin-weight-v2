@@ -308,6 +308,14 @@ def _provider_dossier(dossier: Mapping[str, Any]) -> dict[str, Any]:
             "evidence_selection_provenance",
         }
     }
+    projected["family_summaries"] = {
+        family: {
+            key: value
+            for key, value in dict(summary).items()
+            if key not in {"denominator", "total_post_count"}
+        }
+        for family, summary in dict(dossier.get("family_summaries") or {}).items()
+    }
     projected["evidence"] = []
     for evidence in dossier.get("evidence", []):
         row = {
