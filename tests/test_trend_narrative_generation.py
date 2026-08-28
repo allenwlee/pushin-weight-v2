@@ -73,12 +73,16 @@ def test_editor_and_critic_prompts_pin_publishable_output_contract():
     assert "original text remains usable" in editor
     assert "partial" in editor
     assert "unavailable" in editor
+    assert "no more than two propositions per brand" in editor
+    assert "below 3,500 output tokens" in editor
     assert "repair any otherwise supported narrative" in critic
     assert "output-contract or length problem" in critic
     assert "repair a disproportionate or overstated draft" in critic
     assert "quiet_context" in critic
     assert "hold only when no substantive narrative" in critic
     assert "enrichment lag alone is not a reason to hold" in critic
+    assert "no more than two propositions per approved or repaired brand" in critic
+    assert "below 3,500 output tokens" in critic
 
 
 def test_u3_editor_contract_keeps_messages_boundary_and_closed_id_ownership():
@@ -277,7 +281,7 @@ def test_u3_malformed_editor_body_is_critic_input_but_absence_is_not():
     )
     assert critic["editor_response_raw"] == "{malformed"
     assert critic["editor_parse"]["status"] == "invalid"
-    assert critic["prompt_version"] == "headline-critic-v5"
+    assert critic["prompt_version"] == "headline-critic-v6"
     assert "{malformed" in request["messages"][0]["content"]
     with pytest.raises(HeadlineGenerationError, match="editor_response_absent"):
         build_per_brand_critic_request(
@@ -313,7 +317,7 @@ def test_u3_production_transport_uses_the_exact_messages_request_once():
         {
             "api_key": "headline-secret",
             "base_url": "https://api.deepseek.com/anthropic",
-            "timeout": 45.0,
+            "timeout": 60.0,
             "max_retries": 0,
         }
     ]
@@ -518,8 +522,8 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.base_url == "https://api.deepseek.com/anthropic"
     assert config.model == "deepseek-v4-pro"
     assert config.rank_prompt_version == "headline-rank-v1"
-    assert config.editor_prompt_version == "headline-editor-v5"
-    assert config.critic_prompt_version == "headline-critic-v5"
+    assert config.editor_prompt_version == "headline-editor-v6"
+    assert config.critic_prompt_version == "headline-critic-v6"
     assert (
         config.rank_max_tokens,
         config.editor_max_tokens,
