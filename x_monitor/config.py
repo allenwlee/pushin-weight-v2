@@ -430,7 +430,7 @@ class HeadlineNarrativeConfig(BaseModel):
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
     task_expiry_seconds: int = Field(default=1800, ge=60, le=3600)
-    lease_seconds: int = Field(default=300, ge=30, le=300)
+    lease_seconds: int = Field(default=900, ge=30, le=900)
     retention_days: int = Field(default=90, ge=1)
     retention_rows_per_window: int = Field(default=20, ge=1)
     activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"

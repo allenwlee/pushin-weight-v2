@@ -536,7 +536,7 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.prompt_version == "headline-v10-why-first-quantitative-color"
     assert config.publication_epoch == 10
     assert config.materiality_policy_version == "pending-live-review-v1"
-    assert config.lease_seconds == 300
+    assert config.lease_seconds == 900
     assert config.max_body_zh_cn_chars == 120
     assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
     assert config.call_cap == 4

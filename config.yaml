@@ -194,7 +194,7 @@ headline_narrative:
   max_body_en_chars: 240
   max_body_zh_cn_chars: 120
   task_expiry_seconds: 1800
-  lease_seconds: 300
+  lease_seconds: 900
   retention_days: 90
   retention_rows_per_window: 20
   activation_state: null
