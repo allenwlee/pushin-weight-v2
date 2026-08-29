@@ -6,7 +6,8 @@
   },
   "inventory": {
     "country_count": 197,
-    "identity_sha256": "7985cf36af3bf8eea53150d8de9c9f77bd3f0dd4d72fb8b13d0deca2df440eff"
+    "identity_sha256": "7985cf36af3bf8eea53150d8de9c9f77bd3f0dd4d72fb8b13d0deca2df440eff",
+    "pixels_sha256": "0508e997d36281160df7a3d1e457afc453557553b4eb768373b76b22267d93b8"
   },
   "source": {
     "top_gun_commit": "5ad0dbda9140ffa52ea791a0ec51c975b8c9a97b",

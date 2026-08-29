@@ -223,6 +223,9 @@ EXPECTED_CODES = (
 EXPECTED_IDENTITY_SHA256 = (
     "7985cf36af3bf8eea53150d8de9c9f77bd3f0dd4d72fb8b13d0deca2df440eff"
 )
+EXPECTED_PIXELS_SHA256 = (
+    "0508e997d36281160df7a3d1e457afc453557553b4eb768373b76b22267d93b8"
+)
 COLOR_PATTERN = re.compile(r"#[0-9A-F]{6}")
 SOURCE_NAME_PATTERN = re.compile(r"[a-z0-9]+(?:_[a-z0-9]+)*")
 
@@ -233,6 +236,16 @@ def load_manifest(path: Path = MANIFEST_PATH) -> dict:
     manifest = json.loads(path.read_text(encoding="utf-8"))
     validate_manifest(manifest)
     return manifest
+
+
+def _pixels_sha256(flags: list[dict]) -> str:
+    payload = json.dumps(
+        [{"code": flag["code"], "pixels": flag["pixels"]} for flag in flags],
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def validate_manifest(manifest: dict) -> None:
@@ -253,6 +266,7 @@ def validate_manifest(manifest: dict) -> None:
     if manifest.get("inventory") != {
         "country_count": len(EXPECTED_CODES),
         "identity_sha256": EXPECTED_IDENTITY_SHA256,
+        "pixels_sha256": EXPECTED_PIXELS_SHA256,
     }:
         raise ValueError("flag manifest inventory metadata is invalid")
     source = manifest.get("source")
@@ -304,6 +318,9 @@ def validate_manifest(manifest: dict) -> None:
                     not isinstance(cell, str) or not COLOR_PATTERN.fullmatch(cell)
                 ):
                     raise ValueError(f"{code} contains invalid pixel color {cell!r}")
+
+    if _pixels_sha256(flags) != EXPECTED_PIXELS_SHA256:
+        raise ValueError("flag manifest pixel matrices have drifted")
 
 
 def _paths_by_color(pixels: list[list[str | None]]) -> dict[str, list[str]]:

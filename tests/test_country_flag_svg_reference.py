@@ -227,6 +227,9 @@ EXPECTED_CODES = (
 EXPECTED_IDENTITY_SHA256 = (
     "7985cf36af3bf8eea53150d8de9c9f77bd3f0dd4d72fb8b13d0deca2df440eff"
 )
+EXPECTED_PIXELS_SHA256 = (
+    "0508e997d36281160df7a3d1e457afc453557553b4eb768373b76b22267d93b8"
+)
 EXPECTED_NAME_SAMPLES = {
     "CD": "Congo - Kinshasa",
     "CI": "Côte d’Ivoire",
@@ -263,6 +266,16 @@ def _load_manifest() -> dict:
     return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
 
+def _pixels_sha256(flags: list[dict]) -> str:
+    payload = json.dumps(
+        [{"code": flag["code"], "pixels": flag["pixels"]} for flag in flags],
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
 def test_manifest_is_the_exact_portable_country_source() -> None:
     generator = _load_generator()
     manifest = _load_manifest()
@@ -273,6 +286,7 @@ def test_manifest_is_the_exact_portable_country_source() -> None:
     assert manifest["inventory"] == {
         "country_count": COUNTRY_COUNT,
         "identity_sha256": EXPECTED_IDENTITY_SHA256,
+        "pixels_sha256": EXPECTED_PIXELS_SHA256,
     }
     assert manifest["source"] == {
         "top_gun_commit": "5ad0dbda9140ffa52ea791a0ec51c975b8c9a97b",
@@ -288,6 +302,7 @@ def test_manifest_is_the_exact_portable_country_source() -> None:
         EXPECTED_NAME_SAMPLES
     )
     assert sum(len(row) for flag in flags for row in flag["pixels"]) == 28_368
+    assert _pixels_sha256(flags) == EXPECTED_PIXELS_SHA256
 
 
 @pytest.mark.parametrize(
@@ -300,6 +315,7 @@ def test_manifest_is_the_exact_portable_country_source() -> None:
         lambda data: data["flags"][0]["pixels"].pop(),
         lambda data: data["flags"][0]["pixels"][0].pop(),
         lambda data: data["flags"][0]["pixels"][0].__setitem__(0, "red"),
+        lambda data: data["flags"][0]["pixels"][0].__setitem__(0, "#010203"),
     ),
 )
 def test_manifest_rejects_inventory_and_pixel_shape_drift(mutate) -> None:
