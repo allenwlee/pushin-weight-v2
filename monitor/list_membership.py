@@ -42,38 +42,34 @@ class AuthorRoleContext:
 
 
 def _upsert_account(
-    member: dict[str, Any], *, degraded: list[str]
+    member: dict[str, Any], *, degraded: list[str], observed_at: datetime | None = None
 ) -> tuple[Account, bool]:
     author_id = str(member.get("author_id") or "").strip()
     if not author_id:
         raise ValueError("list member is missing a stable author_id")
     handle = str(member.get("handle") or "").strip() or None
     display_name = str(member.get("display_name") or "").strip() or None
-    defaults = {"handle": handle, "display_name": display_name}
-    try:
-        with transaction.atomic():
-            account, created = Account.objects.get_or_create(
-                author_id=author_id, defaults=defaults
-            )
-    except IntegrityError:
-        account, created = Account.objects.get_or_create(author_id=author_id)
-        degraded.append(f"handle_conflict:{author_id}")
-
-    changed: list[str] = []
-    if handle and account.handle != handle:
-        account.handle = handle
-        changed.append("handle")
-    if display_name and account.display_name != display_name:
-        account.display_name = display_name
-        changed.append("display_name")
-    if changed:
-        try:
-            with transaction.atomic():
-                account.save(update_fields=[*changed, "last_seen_at"])
-        except IntegrityError:
-            account.refresh_from_db()
-            degraded.append(f"handle_conflict:{author_id}")
-    return account, created
+    candidates = {
+        field_name: value
+        for field_name, value in {
+            "handle": handle,
+            "display_name": display_name,
+        }.items()
+        if value is not None
+    }
+    outcome = Account.apply_observation(
+        author_id=author_id,
+        observed_author_id=author_id,
+        source="list",
+        observed_at=observed_at or timezone.now(),
+        candidates=candidates,
+        present_fields=set(candidates),
+    )
+    if outcome.account is None:
+        raise ValueError("list Account observation failed identity validation")
+    for field_name in sorted(outcome.rejected_fields):
+        degraded.append(f"account_observation_rejected:{field_name}")
+    return outcome.account, outcome.created
 
 
 def _upsert_membership(
@@ -140,7 +136,11 @@ def observe_call_a_authors(
         }
         try:
             with transaction.atomic():
-                account, created = _upsert_account(member, degraded=result.degraded)
+                account, created = _upsert_account(
+                    member,
+                    degraded=result.degraded,
+                    observed_at=observed_at,
+                )
                 if created:
                     result.degraded.append(f"unknown_account:{author_id}")
                 _upsert_membership(
@@ -248,7 +248,11 @@ def reconcile_complete_snapshot(
     with transaction.atomic():
         active_ids: set[str] = set()
         for member in snapshot.members:
-            account, created = _upsert_account(member, degraded=result.degraded)
+            account, created = _upsert_account(
+                member,
+                degraded=result.degraded,
+                observed_at=completed_at,
+            )
             if created:
                 result.degraded.append(f"unknown_account:{account.author_id}")
             active_ids.add(account.author_id)

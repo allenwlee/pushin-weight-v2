@@ -6,17 +6,14 @@ Unit U3.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from monitor.twitterapi.caller import (
     CircuitBreaker,
-    LookupResult,
     LookupStats,
     _classify_response,
-    lookup_batch,
 )
 
 
@@ -102,6 +99,25 @@ def test_circuit_breaker_does_not_count_auth_invalid():
     assert "http_5xx" in CIRCUIT_BREAKER_REASONS
 
 
+@pytest.mark.asyncio
+async def test_global_pace_gate_spaces_request_starts():
+    from monitor.twitterapi.caller import GlobalPaceGate
+
+    now = [0.0]
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    gate = GlobalPaceGate(rate_qps=5, clock=lambda: now[0], sleep=fake_sleep)
+    await gate.wait()
+    await gate.wait()
+    await gate.wait()
+
+    assert sleeps == pytest.approx([0.2, 0.2])
+
+
 def test_classify_200_malformed_json():
     """Garbage 200 body -- treat as 5xx-style dead-letter."""
     reason, canonical = _classify_response(200, "not json at all")
@@ -117,6 +133,23 @@ def test_classify_200_success_no_id():
     )
     assert reason == "http_5xx"
     assert canonical is None
+
+
+@pytest.mark.asyncio
+async def test_429_retry_then_success():
+    from monitor.twitterapi.caller import _do_one
+
+    fake_resp_429 = MagicMock()
+    fake_resp_429.status = 429
+    fake_resp_429.headers = {"Retry-After": "1"}
+    fake_resp_429.text = AsyncMock(return_value="Too Many Requests")
+    fake_resp_429.__aenter__ = AsyncMock(return_value=fake_resp_429)
+    fake_resp_429.__aexit__ = AsyncMock(return_value=None)
+
+    fake_resp_200 = MagicMock()
+    fake_resp_200.status = 200
+    fake_resp_200.headers = {}
+    fake_resp_200.text = AsyncMock(
         return_value='{"status":"success","data":{"id":"42","screen_name":"x"}}'
     )
     fake_resp_200.__aenter__ = AsyncMock(return_value=fake_resp_200)
@@ -273,9 +306,7 @@ async def test_stats_track_resolved_and_dead_lettered():
     from monitor.twitterapi.caller import lookup_batch
 
     def make_resp(status, body):
-        class R:
-            pass
-        r = R()
+        r = MagicMock()
         r.status = status
         r.headers = {}
         async def text():

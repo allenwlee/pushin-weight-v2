@@ -22,6 +22,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from django.test import override_settings
 
 from monitor import cycle as cycle_mod
 from monitor.cycle import CycleRunner, _cursor_key
@@ -88,10 +89,9 @@ def wired(monkeypatch):
         monkeypatch.setattr(
             CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
-        for key, val in (settings_over or {}).items():
-            monkeypatch.setattr(cycle_mod.settings, key, val, raising=False)
-        runner = CycleRunner(cycle_kind="scheduled")
-        stats = runner.run()
+        with override_settings(**(settings_over or {})):
+            runner = CycleRunner(cycle_kind="scheduled")
+            stats = runner.run()
         return api, stats
 
     return _run
@@ -530,13 +530,11 @@ def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
     )
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_LIMIT_PER_CALL", 50, raising=False
-    )
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL", 5, raising=False
-    )
-    CycleRunner(cycle_kind="scheduled").run()
+    with override_settings(
+        X_MONITOR_CYCLE_LIMIT_PER_CALL=50,
+        X_MONITOR_CYCLE_MAX_PAGES_PER_CALL=5,
+    ):
+        CycleRunner(cycle_kind="scheduled").run()
     assert seen["max_results"] == 20, seen
     assert seen["max_pages"] == 1, seen
 

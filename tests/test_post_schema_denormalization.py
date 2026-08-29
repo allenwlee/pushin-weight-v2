@@ -17,7 +17,6 @@ introspection); the harvest pin is pure Python.
 from __future__ import annotations
 
 import pytest
-from django.test import SimpleTestCase
 
 from tests.conftest import requires_postgres
 
@@ -146,7 +145,6 @@ def _introspect_columns() -> dict[str, dict]:
     IS the source of truth; this test catches model drift, not DB drift
     (a separate `requires_postgres` test catches DB-vs-model drift).
     """
-    from django.db import models
     from core.models import Post
 
     result: dict[str, dict] = {}
@@ -442,7 +440,9 @@ def test_normalize_uses_none_for_absent_new_fields():
     # raw value via .get() so missing → None. This test pins that contract.
     assert out.get("is_retweet") is None
     assert out.get("is_quote") is None
-    assert out.get("author_followers_count") == 0  # legacy path: int(... or 0)
+    assert out.get("author_followers_count") is None
+    assert out.get("author_verified") is None
+    assert out.get("author_is_blue_verified") is None
     # New author fields default to None when the TwitterAPI key is missing
     assert out.get("author_can_dm") is None
     assert out.get("author_is_translator") is None

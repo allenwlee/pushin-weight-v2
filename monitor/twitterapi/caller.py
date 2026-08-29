@@ -36,10 +36,10 @@ Hardening (user guidance 2026-07-31):
 from __future__ import annotations
 
 import asyncio
-import os
 import random
+import time
 from dataclasses import dataclass, field
-from typing import AsyncIterator
+from typing import AsyncIterator, Awaitable, Callable
 
 import aiohttp
 
@@ -55,6 +55,34 @@ CIRCUIT_BREAKER_THRESHOLD = 10  # consecutive 429/5xx -> trip
 # auth_invalid and writes partial=true with error="auth_invalid" so
 # the operator can rotate the key without burning the candidate pool.
 CIRCUIT_BREAKER_REASONS = ("rate_limited", "http_5xx")
+
+
+class GlobalPaceGate:
+    """Serialize request starts so aggregate throughput cannot exceed QPS."""
+
+    def __init__(
+        self,
+        *,
+        rate_qps: float,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ):
+        if rate_qps <= 0:
+            raise ValueError("rate_qps must be positive")
+        self._interval = 1.0 / float(rate_qps)
+        self._clock = clock
+        self._sleep = sleep
+        self._lock = asyncio.Lock()
+        self._next_start = clock()
+
+    async def wait(self) -> None:
+        async with self._lock:
+            now = self._clock()
+            delay = max(0.0, self._next_start - now)
+            if delay:
+                await self._sleep(delay)
+            started = self._clock()
+            self._next_start = max(started, self._next_start) + self._interval
 
 
 @dataclass
@@ -128,7 +156,7 @@ class CircuitBreaker:
             self._consecutive += 1
             if self._consecutive >= self.threshold and not self._tripped:
                 self._tripped = True
-                self._tripped_at = asyncio.get_event_loop().time()
+                self._tripped_at = time.monotonic()
         else:
             # Any non-trip error resets the counter.
             self._consecutive = 0

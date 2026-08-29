@@ -840,62 +840,86 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
     author_id = str(raw.get("author_id") or raw.get("authorId") or "")
     if not author_id:
         return None
-    defaults: dict[str, Any] = {}
-    handle = raw.get("author_handle") or raw.get("authorHandle") or ""
-    if handle:
-        defaults["handle"] = handle
-    display_name = raw.get("author_display_name") or raw.get("author_name") or raw.get("authorName") or ""
-    if display_name:
-        defaults["display_name"] = display_name
-    # Per U3 § 1.7, new metric columns use NULL-when-absent. The Account dual-write
-    # was already using 0-coercion in the prior implementation; preserve that for
-    # backward-compat with existing Account readers that expect an int.
-    verified = bool(
-        raw.get("author_verified")
-        or raw.get("author_is_blue_verified")
-        or raw.get("authorVerified")
+    candidates: dict[str, Any] = {}
+    present: set[str] = set()
+    field_keys = {
+        "handle": ("author_handle", "authorHandle"),
+        "display_name": ("author_display_name", "author_name", "authorName"),
+        "verified": ("author_verified", "authorVerified"),
+        "followers_count": ("author_followers_count",),
+        "following_count": ("author_following_count",),
+        "favourites_count": ("author_favourites_count",),
+        "statuses_count": ("author_statuses_count",),
+        "media_count": ("author_media_count",),
+        "fast_followers_count": ("author_fast_followers_count",),
+        "is_blue_verified": ("author_is_blue_verified",),
+        "protected": ("author_protected",),
+        "verified_type": ("author_verified_type",),
+        "profile_picture": ("author_profile_picture",),
+        "location": ("author_location",),
+        "description": ("author_description",),
+        "profile_bio_text": ("author_profile_bio_text",),
+        "created_at": ("author_created_at_raw",),
+    }
+    for field_name, source_keys in field_keys.items():
+        for source_key in source_keys:
+            if source_key in raw and raw[source_key] is not None:
+                candidates[field_name] = raw[source_key]
+                present.add(field_name)
+                break
+
+    if "created_at" in candidates and isinstance(candidates["created_at"], str):
+        parsed = None
+        for fmt in (
+            "%a %b %d %H:%M:%S %z %Y",
+            "%Y-%m-%dT%H:%M:%S.%fZ",
+            "%Y-%m-%dT%H:%M:%SZ",
+        ):
+            try:
+                parsed = datetime.strptime(candidates["created_at"], fmt)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                break
+            except ValueError:
+                continue
+        candidates["created_at"] = parsed or candidates["created_at"]
+
+    if "author_affiliates_highlighted_label" in raw:
+        from monitor.twitterapi.user_about import SchemaDriftError, flatten_label
+
+        try:
+            label_values, label_fields = flatten_label(
+                raw["author_affiliates_highlighted_label"],
+                prefix="affiliate_label",
+                path="post.author_affiliates_highlighted_label",
+            )
+        except SchemaDriftError:
+            label_fields = {
+                "affiliate_label_badge_url",
+                "affiliate_label_description",
+                "affiliate_label_url",
+                "affiliate_label_url_type",
+                "affiliate_label_user_label_display_type",
+                "affiliate_label_user_label_type",
+            }
+            label_values = {field: object() for field in label_fields}
+        candidates.update(label_values)
+        present.update(label_fields)
+
+    outcome = Account.apply_observation(
+        author_id=author_id,
+        observed_author_id=author_id,
+        source="post",
+        observed_at=django_timezone.now(),
+        candidates=candidates,
+        present_fields=present,
     )
-    defaults["verified"] = verified
-    followers = raw.get("author_followers_count")
-    if followers is not None:
-        defaults["followers_count"] = int(followers)
-    following = raw.get("author_following_count")
-    if following is not None:
-        defaults["following_count"] = int(following)
-    favourites = raw.get("author_favourites_count")
-    if favourites is not None:
-        defaults["favourites_count"] = int(favourites)
-    statuses = raw.get("author_statuses_count")
-    if statuses is not None:
-        defaults["statuses_count"] = int(statuses)
-    media = raw.get("author_media_count")
-    if media is not None:
-        defaults["media_count"] = int(media)
-    fast_followers = raw.get("author_fast_followers_count")
-    if fast_followers is not None:
-        defaults["fast_followers_count"] = int(fast_followers)
-    is_blue = raw.get("author_is_blue_verified")
-    if is_blue is not None:
-        defaults["is_blue_verified"] = bool(is_blue)
-    verified_type = raw.get("author_verified_type")
-    if verified_type is not None:
-        defaults["verified_type"] = verified_type
-    profile_pic = raw.get("author_profile_picture")
-    if profile_pic is not None:
-        defaults["profile_picture"] = profile_pic
-    location = raw.get("author_location")
-    if location is not None:
-        defaults["location"] = location
-    description = raw.get("author_description")
-    if description is not None:
-        defaults["description"] = description
-    profile_bio = raw.get("author_profile_bio_text")
-    if profile_bio is not None:
-        defaults["profile_bio_text"] = profile_bio
-    acc, _created = Account.objects.update_or_create(
-        author_id=author_id, defaults=defaults
-    )
-    return acc
+    if outcome.rejected_fields:
+        logger.warning(
+            "account post observation rejected fields=%s",
+            sorted(outcome.rejected_fields),
+        )
+    return outcome.account
 
 
 def _upsert_post(
@@ -999,6 +1023,15 @@ def _upsert_post(
     # Per § 1.7: new fields use NULL-when-absent, not 0/false coercion. The
     # `is not None` guard skips both missing keys AND None sentinels; the
     # normalize layer uses None for absent keys (not 0).
+    account_count_columns = {
+        "author_followers_count",
+        "author_following_count",
+        "author_media_count",
+        "author_statuses_count",
+        "author_favourites_count",
+        "author_fast_followers_count",
+    }
+    account_boolean_columns = {"author_verified", "author_is_blue_verified"}
     for col, val in (
         ("created_at_raw", raw.get("created_at_raw")),
         ("bookmark_count", raw.get("bookmark_count")),
@@ -1061,6 +1094,12 @@ def _upsert_post(
         ("author_created_at_raw", raw.get("author_created_at_raw")),
         ("author_status", raw.get("author_status")),
     ):
+        if col in account_count_columns and (
+            type(val) is not int or val < 0 or val > 2_147_483_647
+        ):
+            continue
+        if col in account_boolean_columns and type(val) is not bool:
+            continue
         if val is not None:
             defaults[col] = val
 

@@ -10,6 +10,7 @@ description = "Daily multi-language X monitoring for 20 AI model brands — Djan
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",
+    "aiohttp>=3.10,<4",
     "pyyaml>=6",
     "python-dateutil>=2.9",
     "pydantic>=2",
@@ -32,6 +33,7 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-django>=4.8",
+    "pytest-asyncio>=0.24",
     "pytest-celery>=1.0",
     "ruff>=0.6",
 ]

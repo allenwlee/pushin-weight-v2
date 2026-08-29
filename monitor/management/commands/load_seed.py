@@ -22,6 +22,7 @@ import sys
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from core.models import Account, Brand, BrandAccount, BrandCompany, Company, Role
 
@@ -333,9 +334,13 @@ class Command(BaseCommand):
                             )
                         else:
                             try:
-                                Account.objects.update_or_create(
+                                Account.apply_observation(
                                     author_id=author_id,
-                                    defaults={"handle": handle},
+                                    observed_author_id=author_id,
+                                    source="seed",
+                                    observed_at=timezone.now(),
+                                    candidates={"handle": handle},
+                                    present_fields={"handle"},
                                 )
                             except Exception as exc:
                                 self.stderr.write(

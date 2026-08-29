@@ -1,0 +1,403 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
+
+import pytest
+
+from monitor.twitterapi.user_about import (
+    FetchSelection,
+    IdentityMismatchError,
+    SchemaDriftError,
+    fetch_user_about_batch,
+    parse_user_about,
+)
+
+
+def _complete_payload() -> dict:
+    return {
+        "status": "success",
+        "data": {
+            "id": "42",
+            "name": "Example Account",
+            "userName": "example",
+            "createdAt": "Wed Jul 22 03:40:35 +0000 2026",
+            "isBlueVerified": True,
+            "protected": False,
+            "affiliates_highlighted_label": {
+                "label": {
+                    "badge": {"url": "https://cdn.example/badge.png"},
+                    "description": "Affiliate",
+                    "url": {"url": "https://x.com/example", "urlType": "DeepLink"},
+                    "userLabelDisplayType": "Badge",
+                    "userLabelType": "BusinessLabel",
+                }
+            },
+            "about_profile": {
+                "account_based_in": "United States",
+                "location_accurate": True,
+                "learn_more_url": "https://help.x.com/about",
+                "affiliate_username": "parent",
+                "source": "ip",
+                "username_changes": {"count": "2"},
+            },
+            "identity_profile_labels_highlighted_label": {
+                "label": {
+                    "badge": {"url": "https://cdn.example/identity.png"},
+                    "description": "Identity",
+                    "url": {"url": "https://x.com/identity", "urlType": "DeepLink"},
+                    "userLabelDisplayType": "Badge",
+                    "userLabelType": "IdentityLabel",
+                }
+            },
+        },
+    }
+
+
+def test_complete_response_flattens_every_documented_leaf():
+    observed_at = datetime(2026, 8, 29, tzinfo=UTC)
+    observation = parse_user_about(
+        _complete_payload(), expected_author_id="42", observed_at=observed_at
+    )
+
+    assert observation.author_id == "42"
+    assert observation.candidates["display_name"] == "Example Account"
+    assert observation.candidates["handle"] == "example"
+    assert observation.candidates["created_at"].year == 2026
+    assert observation.candidates["is_blue_verified"] is True
+    assert observation.candidates["protected"] is False
+    assert observation.candidates["affiliate_label_description"] == "Affiliate"
+    assert observation.candidates["account_based_in"] == "United States"
+    assert observation.candidates["country_code"] == "US"
+    assert observation.candidates["username_changes_count"] == 2
+    assert observation.candidates["identity_profile_label_description"] == "Identity"
+    assert observation.candidates["account_based_in_fetched_at"] == observed_at
+
+
+def test_missing_optional_objects_checkpoint_without_implicit_clears():
+    observed_at = datetime(2026, 8, 29, tzinfo=UTC)
+    observation = parse_user_about(
+        {"status": "success", "data": {"id": "42", "name": "Example"}},
+        expected_author_id="42",
+        observed_at=observed_at,
+    )
+
+    assert observation.present_fields == {
+        "display_name",
+        "account_based_in_fetched_at",
+    }
+    assert observation.candidates["account_based_in_fetched_at"] == observed_at
+
+
+def test_unsupported_country_stores_exact_value_without_code():
+    payload = _complete_payload()
+    payload["data"]["about_profile"]["account_based_in"] = "Asia Pacific"
+    observation = parse_user_about(
+        payload,
+        expected_author_id="42",
+        observed_at=datetime(2026, 8, 29, tzinfo=UTC),
+    )
+
+    assert observation.candidates["account_based_in"] == "Asia Pacific"
+    assert "country_code" not in observation.present_fields
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload["data"].__setitem__("surprise", "drift"),
+        lambda payload: payload["data"].__setitem__("protected", "false"),
+        lambda payload: payload["data"]["about_profile"][
+            "username_changes"
+        ].__setitem__("count", "two"),
+    ],
+)
+def test_unknown_leaf_or_wrong_type_rejects_entire_response(mutate):
+    payload = _complete_payload()
+    mutate(payload)
+    with pytest.raises(SchemaDriftError):
+        parse_user_about(
+            payload,
+            expected_author_id="42",
+            observed_at=datetime(2026, 8, 29, tzinfo=UTC),
+        )
+
+
+def test_returned_id_must_match_selected_account():
+    with pytest.raises(IdentityMismatchError):
+        parse_user_about(
+            _complete_payload(),
+            expected_author_id="99",
+            observed_at=datetime(2026, 8, 29, tzinfo=UTC),
+        )
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_reuses_session_and_counts_429_retry(monkeypatch):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    payload = _complete_payload()
+
+    def response(status, body, headers=None):
+        item = MagicMock()
+        item.status = status
+        item.headers = headers or {}
+        item.text = AsyncMock(return_value=body)
+        item.__aenter__ = AsyncMock(return_value=item)
+        item.__aexit__ = AsyncMock(return_value=None)
+        return item
+
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(
+        side_effect=[
+            response(429, "rate limited", {"Retry-After": "0"}),
+            response(200, json.dumps(payload)),
+        ]
+    )
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
+    result = await fetch_user_about_batch(
+        [FetchSelection(author_id="42", handle="example")],
+        api_key="secret",
+        rate_qps=5,
+        max_attempts=2,
+        max_credits=36,
+        max_wall_seconds=60,
+    )
+
+    assert result.attempts == 2
+    assert result.retries == 1
+    assert result.projected_credits == 36
+    assert result.stop_reason is None
+    assert result.outcomes[0].observation is not None
+    assert session.get.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_stops_on_schema_drift_without_raw_payload(monkeypatch):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    payload = _complete_payload()
+    payload["data"]["unknown"] = "secret-value"
+    response = MagicMock()
+    response.status = 200
+    response.headers = {}
+    response.text = AsyncMock(return_value=json.dumps(payload))
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(return_value=response)
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
+    result = await fetch_user_about_batch(
+        [FetchSelection(author_id="42", handle="example")],
+        api_key="secret",
+        rate_qps=5,
+        max_attempts=2,
+        max_credits=36,
+        max_wall_seconds=60,
+    )
+
+    assert result.stop_reason == "schema_drift"
+    assert result.outcomes[0].reason == "schema_drift"
+    assert "secret-value" not in repr(result)
+
+
+def _fake_response(status, body="error", headers=None):
+    from unittest.mock import AsyncMock, MagicMock
+
+    response = MagicMock()
+    response.status = status
+    response.headers = headers or {}
+    response.text = AsyncMock(return_value=body)
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=None)
+    return response
+
+
+def _fake_session(monkeypatch, side_effect):
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(side_effect=side_effect)
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    return session
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_stops_exactly_at_attempt_budget(monkeypatch):
+    session = _fake_session(
+        monkeypatch,
+        [_fake_response(500) for _ in range(3)],
+    )
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id=str(index), handle=f"user{index}")
+            for index in range(3)
+        ],
+        api_key="secret",
+        rate_qps=100,
+        max_attempts=3,
+        max_credits=180,
+        max_wall_seconds=60,
+        sleep=AsyncMock(),
+    )
+
+    assert result.attempts == 3
+    assert result.projected_credits == 54
+    assert result.stop_reason == "attempt_budget"
+    assert session.get.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_stops_exactly_at_credit_budget(monkeypatch):
+    session = _fake_session(
+        monkeypatch,
+        [_fake_response(500) for _ in range(2)],
+    )
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id="1", handle="one"),
+            FetchSelection(author_id="2", handle="two"),
+        ],
+        api_key="secret",
+        rate_qps=100,
+        max_attempts=10,
+        max_credits=36,
+        max_wall_seconds=60,
+        sleep=AsyncMock(),
+    )
+
+    assert result.attempts == 2
+    assert result.projected_credits == 36
+    assert result.stop_reason == "credit_budget"
+    assert session.get.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_retry_cannot_cross_wall_budget(monkeypatch):
+    now = [0.0]
+
+    async def advance(seconds):
+        now[0] += seconds
+
+    session = _fake_session(
+        monkeypatch,
+        [_fake_response(429, headers={"Retry-After": "30"})],
+    )
+    monkeypatch.setattr("random.uniform", lambda _low, _high: 0.1)
+
+    result = await fetch_user_about_batch(
+        [FetchSelection(author_id="1", handle="one")],
+        api_key="secret",
+        rate_qps=5,
+        max_attempts=2,
+        max_credits=36,
+        max_wall_seconds=5,
+        clock=lambda: now[0],
+        sleep=advance,
+    )
+
+    assert result.attempts == 1
+    assert result.wall_seconds == 5
+    assert result.stop_reason == "wall_time_budget"
+    assert session.get.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_paces_retry_request(monkeypatch):
+    import json
+
+    now = [0.0]
+    starts = []
+
+    async def advance(seconds):
+        now[0] += seconds
+
+    responses = iter(
+        [
+            _fake_response(429, headers={"Retry-After": "0"}),
+            _fake_response(200, json.dumps(_complete_payload())),
+        ]
+    )
+    session = _fake_session(monkeypatch, [])
+
+    def get(*args, **kwargs):
+        starts.append(now[0])
+        return next(responses)
+
+    session.get.side_effect = get
+    monkeypatch.setattr("random.uniform", lambda _low, _high: 0.1)
+
+    result = await fetch_user_about_batch(
+        [FetchSelection(author_id="42", handle="example")],
+        api_key="secret",
+        rate_qps=5,
+        max_attempts=2,
+        max_credits=36,
+        max_wall_seconds=60,
+        clock=lambda: now[0],
+        sleep=advance,
+    )
+
+    assert result.stop_reason is None
+    assert starts == pytest.approx([0.0, 0.2])
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_stops_immediately_on_auth_failure(monkeypatch):
+    session = _fake_session(monkeypatch, [_fake_response(401)])
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id="1", handle="one"),
+            FetchSelection(author_id="2", handle="two"),
+        ],
+        api_key="secret",
+        rate_qps=5,
+        max_attempts=2,
+        max_credits=36,
+        max_wall_seconds=60,
+    )
+
+    assert result.attempts == 1
+    assert result.stop_reason == "auth_invalid"
+    assert session.get.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_opens_circuit_after_ten_failed_accounts(monkeypatch):
+    session = _fake_session(
+        monkeypatch,
+        [_fake_response(500) for _ in range(20)],
+    )
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id=str(index), handle=f"user{index}")
+            for index in range(11)
+        ],
+        api_key="secret",
+        rate_qps=100,
+        max_attempts=22,
+        max_credits=396,
+        max_wall_seconds=60,
+        sleep=AsyncMock(),
+    )
+
+    assert result.attempts == 20
+    assert len(result.outcomes) == 10
+    assert result.stop_reason == "circuit_open"
+    assert session.get.call_count == 20

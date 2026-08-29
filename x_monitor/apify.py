@@ -803,28 +803,31 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         # (caller is expected to fall back to handle-based matching).
         "author_id": str(author.get("id") or ""),
         "author_name": author.get("name") or "",
-        "author_followers_count": int(author.get("followers") or 0),
-        "author_verified": bool(
-            author.get("isBlueVerified") or author.get("verified")
+        "author_followers_count": author.get("followers"),
+        "author_verified": (
+            author.get("isBlueVerified")
+            if "isBlueVerified" in author
+            else author.get("verified")
         ),
         # --- Inline author metadata (migration 039) ---
-        # Engagement counters — defensive default 0 for missing/null fields.
-        "author_following_count": int(author.get("following") or 0),
-        "author_favourites_count": int(author.get("favouritesCount") or 0),
-        "author_statuses_count": int(author.get("statusesCount") or 0),
-        "author_media_count": int(author.get("mediaCount") or 0),
-        "author_fast_followers_count": int(author.get("fastFollowersCount") or 0),
+        # Preserve missing-vs-present semantics for Account validation.
+        "author_following_count": author.get("following"),
+        "author_favourites_count": author.get("favouritesCount"),
+        "author_statuses_count": author.get("statusesCount"),
+        "author_media_count": author.get("mediaCount"),
+        "author_fast_followers_count": author.get("fastFollowersCount"),
         # Verification detail (KTD3): isBlueVerified specifically —
         # author_verified above already carries the union for backward compat.
-        "author_is_blue_verified": bool(author.get("isBlueVerified")),
-        "author_verified_type": author.get("verifiedType") or "",
+        "author_is_blue_verified": author.get("isBlueVerified"),
+        "author_protected": author.get("protected"),
+        "author_verified_type": author.get("verifiedType"),
         # Profile metadata (KTD5/KTD6).
-        "author_profile_picture": author.get("profilePicture") or "",
-        "author_location": author.get("location") or "",
-        "author_description": author.get("description") or "",
+        "author_profile_picture": author.get("profilePicture"),
+        "author_location": author.get("location"),
+        "author_description": author.get("description"),
         # profile_bio is a nested object in TwitterAPI.io's response shape.
         "author_profile_bio_text": (
-            (author.get("profile_bio") or {}).get("description") or ""
+            (author.get("profile_bio") or {}).get("description")
         ),
         # --- Posts.raw denormalization (U3) — author fields the prior normalize
         # didn't extract. None-when-absent per § 1.7; the inner author envelope

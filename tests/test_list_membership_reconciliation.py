@@ -70,6 +70,27 @@ def test_complete_snapshot_activates_updates_and_deactivates_atomically():
     )
 
 
+def test_invalid_list_handle_does_not_clobber_account_or_block_membership():
+    account = Account.objects.create(author_id="1", handle="stable")
+
+    result = reconcile_complete_snapshot(
+        list_id=42,
+        snapshot=_snapshot(
+            [{"author_id": "1", "handle": "bad handle", "display_name": "Valid"}]
+        ),
+        snapshot_id="invalid-handle",
+    )
+
+    account.refresh_from_db()
+    assert result.status == "degraded"
+    assert result.degraded == ["account_observation_rejected:handle"]
+    assert account.handle == "stable"
+    assert account.display_name == "Valid"
+    assert TwitterListMembership.objects.filter(
+        list_id=42, account=account, active=True
+    ).exists()
+
+
 def test_incomplete_snapshot_does_not_change_last_complete_active_set():
     account = Account.objects.create(author_id="1", handle="kept")
     membership = TwitterListMembership.objects.create(

@@ -29,10 +29,11 @@ Conventions:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
-from typing import Literal
+from datetime import datetime, timedelta
+from typing import Any, Literal
+from urllib.parse import urlparse
 
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 # ============================================================================
@@ -321,6 +322,197 @@ class HFOrg(models.Model):
 # ============================================================================
 
 
+@dataclass(frozen=True)
+class AccountObservationOutcome:
+    account: Account | None
+    created: bool
+    applied_fields: tuple[str, ...]
+    unchanged_fields: tuple[str, ...]
+    rejected_fields: dict[str, str]
+    identity_rejected: bool = False
+
+
+_ACCOUNT_COUNT_FIELDS = {
+    "followers_count",
+    "following_count",
+    "favourites_count",
+    "statuses_count",
+    "media_count",
+    "fast_followers_count",
+    "username_changes_count",
+}
+_ACCOUNT_BOOLEAN_FIELDS = {
+    "verified",
+    "is_blue_verified",
+    "protected",
+    "location_accurate",
+}
+_ACCOUNT_URL_FIELDS = {
+    "affiliate_label_badge_url",
+    "affiliate_label_url",
+    "learn_more_url",
+    "identity_profile_label_badge_url",
+    "identity_profile_label_url",
+}
+_ACCOUNT_SHORT_TEXT_FIELDS = {
+    "handle": 64,
+    "affiliate_label_url_type": 128,
+    "affiliate_label_user_label_display_type": 128,
+    "affiliate_label_user_label_type": 128,
+    "affiliate_username": 64,
+    "source": 128,
+    "identity_profile_label_url_type": 128,
+    "identity_profile_label_user_label_display_type": 128,
+    "identity_profile_label_user_label_type": 128,
+    "country_code": 2,
+}
+_ACCOUNT_TEXT_FIELDS = {
+    "display_name",
+    "affiliate_label_description",
+    "account_based_in",
+    "identity_profile_label_description",
+    "verified_type",
+    "profile_picture",
+    "location",
+    "description",
+    "profile_bio_text",
+}
+_AFFILIATE_LABEL_FIELDS = {
+    "affiliate_label_badge_url",
+    "affiliate_label_description",
+    "affiliate_label_url",
+    "affiliate_label_url_type",
+    "affiliate_label_user_label_display_type",
+    "affiliate_label_user_label_type",
+}
+_IDENTITY_LABEL_FIELDS = {
+    "identity_profile_label_badge_url",
+    "identity_profile_label_description",
+    "identity_profile_label_url",
+    "identity_profile_label_url_type",
+    "identity_profile_label_user_label_display_type",
+    "identity_profile_label_user_label_type",
+}
+_ABOUT_ONLY_FIELDS = {
+    "account_based_in",
+    "location_accurate",
+    "learn_more_url",
+    "affiliate_username",
+    "source",
+    "username_changes_count",
+    "country_code",
+    "account_based_in_fetched_at",
+    *_IDENTITY_LABEL_FIELDS,
+}
+_POST_FIELDS = {
+    "handle",
+    "display_name",
+    "created_at",
+    "verified",
+    "followers_count",
+    "following_count",
+    "favourites_count",
+    "statuses_count",
+    "media_count",
+    "fast_followers_count",
+    "is_blue_verified",
+    "protected",
+    "verified_type",
+    "profile_picture",
+    "location",
+    "description",
+    "profile_bio_text",
+    *_AFFILIATE_LABEL_FIELDS,
+}
+_WRITER_FIELDS = {
+    "post": _POST_FIELDS,
+    "list": {"handle", "display_name"},
+    "seed": {"handle", "display_name"},
+    "user_about": {
+        "handle",
+        "display_name",
+        "created_at",
+        "is_blue_verified",
+        "protected",
+        *_AFFILIATE_LABEL_FIELDS,
+        *_ABOUT_ONLY_FIELDS,
+    },
+}
+
+
+def _contains_control(value: str, *, allow_layout: bool = False) -> bool:
+    allowed = {"\t", "\n", "\r"} if allow_layout else set()
+    return any(
+        (ord(character) < 32 and character not in allowed)
+        or ord(character) == 127
+        for character in value
+    )
+
+
+def _validate_account_field(
+    field_name: str,
+    value: Any,
+    *,
+    observed_at: datetime,
+) -> tuple[Any, str | None]:
+    if value is None:
+        return None, None
+    if field_name in _ACCOUNT_COUNT_FIELDS:
+        if type(value) is not int or value < 0 or value > 2_147_483_647:
+            return None, "invalid_nonnegative_integer"
+        return value, None
+    if field_name in _ACCOUNT_BOOLEAN_FIELDS:
+        if type(value) is not bool:
+            return None, "invalid_boolean"
+        return value, None
+    if field_name in _ACCOUNT_URL_FIELDS:
+        if not isinstance(value, str) or len(value) > 2_048 or _contains_control(value):
+            return None, "invalid_url"
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return None, "invalid_url"
+        return value, None
+    if field_name == "created_at":
+        if not isinstance(value, datetime) or timezone.is_naive(value):
+            return None, "invalid_datetime"
+        if value < datetime(2006, 3, 21, tzinfo=value.tzinfo):
+            return None, "invalid_datetime"
+        if value > observed_at + timedelta(days=1):
+            return None, "invalid_datetime"
+        return value, None
+    if field_name == "account_based_in_fetched_at":
+        if not isinstance(value, datetime) or timezone.is_naive(value):
+            return None, "invalid_datetime"
+        if value > observed_at + timedelta(minutes=5):
+            return None, "invalid_datetime"
+        return value, None
+    if field_name in _ACCOUNT_SHORT_TEXT_FIELDS:
+        if not isinstance(value, str):
+            return None, "invalid_string"
+        if not value or value != value.strip() or _contains_control(value):
+            return None, "invalid_string"
+        if len(value) > _ACCOUNT_SHORT_TEXT_FIELDS[field_name]:
+            return None, "too_long"
+        if field_name == "handle" and (
+            value.startswith("@")
+            or any(character.isspace() for character in value)
+        ):
+            return None, "invalid_handle"
+        if field_name == "country_code":
+            from monitor.country_codes import COUNTRY_NAMES
+
+            if value not in COUNTRY_NAMES:
+                return None, "unsupported_country_code"
+        return value, None
+    if field_name in _ACCOUNT_TEXT_FIELDS:
+        if not isinstance(value, str) or _contains_control(value, allow_layout=True):
+            return None, "invalid_string"
+        if value != value.strip():
+            return None, "invalid_string"
+        return value, None
+    return None, "unsupported_field"
+
+
 class Account(models.Model):
     author_id = models.TextField(primary_key=True)
     handle = models.CharField(
@@ -354,6 +546,44 @@ class Account(models.Model):
     description = models.TextField(blank=True, null=True)
     profile_bio_text = models.TextField(blank=True, null=True)
     followers_fetched_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    protected = models.BooleanField(blank=True, null=True)
+    affiliate_label_badge_url = models.URLField(max_length=2048, blank=True, null=True)
+    affiliate_label_description = models.TextField(blank=True, null=True)
+    affiliate_label_url = models.URLField(max_length=2048, blank=True, null=True)
+    affiliate_label_url_type = models.CharField(max_length=128, blank=True, null=True)
+    affiliate_label_user_label_display_type = models.CharField(
+        max_length=128, blank=True, null=True
+    )
+    affiliate_label_user_label_type = models.CharField(
+        max_length=128, blank=True, null=True
+    )
+    account_based_in = models.TextField(blank=True, null=True)
+    location_accurate = models.BooleanField(blank=True, null=True)
+    learn_more_url = models.URLField(max_length=2048, blank=True, null=True)
+    affiliate_username = models.CharField(max_length=64, blank=True, null=True)
+    source = models.CharField(max_length=128, blank=True, null=True)
+    username_changes_count = models.PositiveIntegerField(blank=True, null=True)
+    identity_profile_label_badge_url = models.URLField(
+        max_length=2048, blank=True, null=True
+    )
+    identity_profile_label_description = models.TextField(blank=True, null=True)
+    identity_profile_label_url = models.URLField(
+        max_length=2048, blank=True, null=True
+    )
+    identity_profile_label_url_type = models.CharField(
+        max_length=128, blank=True, null=True
+    )
+    identity_profile_label_user_label_display_type = models.CharField(
+        max_length=128, blank=True, null=True
+    )
+    identity_profile_label_user_label_type = models.CharField(
+        max_length=128, blank=True, null=True
+    )
+    country_code = models.CharField(
+        max_length=2, blank=True, null=True, db_index=True
+    )
+    account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = "accounts"
@@ -365,6 +595,171 @@ class Account(models.Model):
 
     def __str__(self) -> str:
         return f"@{self.handle}"
+
+    @classmethod
+    def apply_observation(
+        cls,
+        *,
+        author_id: str,
+        observed_author_id: str,
+        source: Literal["post", "list", "seed", "user_about"],
+        observed_at: datetime,
+        candidates: dict[str, Any],
+        present_fields: set[str],
+    ) -> AccountObservationOutcome:
+        """Apply the valid subset of one explicitly-present Account snapshot."""
+        target_id = str(author_id).strip()
+        observed_id = str(observed_author_id).strip()
+        if not target_id or target_id != observed_id:
+            return AccountObservationOutcome(
+                account=None,
+                created=False,
+                applied_fields=(),
+                unchanged_fields=(),
+                rejected_fields={"author_id": "identity_mismatch"},
+                identity_rejected=True,
+            )
+        if source not in _WRITER_FIELDS:
+            raise ValueError(f"unsupported Account observation source: {source}")
+        if not isinstance(observed_at, datetime) or timezone.is_naive(observed_at):
+            raise ValueError("observed_at must be a timezone-aware datetime")
+
+        rejected: dict[str, str] = {}
+        applied: list[str] = []
+        unchanged: list[str] = []
+        allowed = _WRITER_FIELDS[source]
+        supplied = set(present_fields)
+        for field_name in supplied:
+            if field_name not in candidates:
+                rejected[field_name] = "missing_candidate"
+            elif field_name not in allowed:
+                rejected[field_name] = "writer_not_allowed"
+
+        with transaction.atomic():
+            account, created = cls.objects.select_for_update().get_or_create(
+                author_id=target_id
+            )
+
+            accepted: dict[str, Any] = {}
+            for group in (_AFFILIATE_LABEL_FIELDS, _IDENTITY_LABEL_FIELDS):
+                group_present = supplied & group
+                if not group_present:
+                    continue
+                if not group <= allowed:
+                    for field_name in group_present:
+                        rejected[field_name] = "writer_not_allowed"
+                    continue
+                if group_present != group:
+                    for field_name in group_present:
+                        rejected[field_name] = "incomplete_label_group"
+                    continue
+                if any(field_name in rejected for field_name in group):
+                    for field_name in group:
+                        rejected.setdefault(field_name, "missing_candidate")
+                    continue
+                group_values: dict[str, Any] = {}
+                group_errors: dict[str, str] = {}
+                for field_name in group:
+                    validated, error = _validate_account_field(
+                        field_name,
+                        candidates[field_name],
+                        observed_at=observed_at,
+                    )
+                    if error:
+                        group_errors[field_name] = error
+                    else:
+                        group_values[field_name] = validated
+                if group_errors:
+                    reason = next(iter(group_errors.values()))
+                    for field_name in group:
+                        rejected[field_name] = reason
+                else:
+                    accepted.update(group_values)
+
+            grouped = _AFFILIATE_LABEL_FIELDS | _IDENTITY_LABEL_FIELDS
+            for field_name in supplied - grouped:
+                if field_name in rejected:
+                    continue
+                validated, error = _validate_account_field(
+                    field_name,
+                    candidates[field_name],
+                    observed_at=observed_at,
+                )
+                if error:
+                    rejected[field_name] = error
+                    continue
+                if validated is None:
+                    unchanged.append(field_name)
+                    continue
+                if field_name == "created_at" and account.created_at is not None:
+                    if account.created_at == validated:
+                        unchanged.append(field_name)
+                    else:
+                        rejected[field_name] = "conflict"
+                    continue
+                if (
+                    field_name == "handle"
+                    and account.handle != validated
+                    and cls.objects.filter(handle__iexact=validated)
+                    .exclude(author_id=target_id)
+                    .exists()
+                ):
+                    rejected[field_name] = "conflict"
+                    continue
+                accepted[field_name] = validated
+
+            update_fields: set[str] = set()
+            for field_name, value in accepted.items():
+                if getattr(account, field_name) == value:
+                    unchanged.append(field_name)
+                else:
+                    setattr(account, field_name, value)
+                    applied.append(field_name)
+                    update_fields.add(field_name)
+
+            if (
+                source == "post"
+                and "followers_count" in supplied
+                and "followers_count" not in rejected
+                and candidates.get("followers_count") is not None
+                and account.followers_fetched_at != observed_at
+            ):
+                account.followers_fetched_at = observed_at
+                applied.append("followers_fetched_at")
+                update_fields.add("followers_fetched_at")
+
+            if update_fields:
+                try:
+                    with transaction.atomic():
+                        account.save(
+                            update_fields=[*sorted(update_fields), "last_seen_at"]
+                        )
+                except IntegrityError:
+                    if "handle" not in update_fields:
+                        raise
+                    rejected["handle"] = "conflict"
+                    applied = [field for field in applied if field != "handle"]
+                    update_fields.remove("handle")
+                    account.refresh_from_db()
+                    for field_name in update_fields:
+                        value = (
+                            observed_at
+                            if field_name == "followers_fetched_at"
+                            else accepted[field_name]
+                        )
+                        setattr(account, field_name, value)
+                    if update_fields:
+                        account.save(
+                            update_fields=[*sorted(update_fields), "last_seen_at"]
+                        )
+
+        return AccountObservationOutcome(
+            account=account,
+            created=created,
+            applied_fields=tuple(sorted(set(applied))),
+            unchanged_fields=tuple(sorted(set(unchanged))),
+            rejected_fields=rejected,
+        )
 
 
 class TwitterListMembership(models.Model):
