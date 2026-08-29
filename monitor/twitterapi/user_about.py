@@ -83,6 +83,8 @@ _DATA_KEYS = {
     "protected",
     "profilePicture",
     "verification_info",
+    "unavailable",
+    "unavailableReason",
     "affiliates_highlighted_label",
     "about_profile",
     "identity_profile_labels_highlighted_label",
@@ -327,6 +329,44 @@ def parse_user_about(
     if not isinstance(data, dict):
         raise SchemaDriftError("response.data must be an object on success")
     _assert_keys(data, _DATA_KEYS, "response.data")
+
+    if data.get("unavailable") is True:
+        _assert_keys(
+            data,
+            {"unavailable", "unavailableReason"},
+            "response.data",
+        )
+        candidates: dict[str, Any] = {}
+        present: set[str] = set()
+        _put(
+            candidates,
+            present,
+            data,
+            "unavailable",
+            "unavailable",
+            _strict_bool,
+            "response.data",
+        )
+        _put(
+            candidates,
+            present,
+            data,
+            "unavailableReason",
+            "unavailable_reason",
+            _strict_string,
+            "response.data",
+        )
+        candidates["account_based_in_fetched_at"] = observed_at
+        present.add("account_based_in_fetched_at")
+        return UserAboutObservation(
+            author_id=str(expected_author_id),
+            candidates=candidates,
+            present_fields=present,
+        )
+    if "unavailable" in data or "unavailableReason" in data:
+        raise SchemaDriftError(
+            "response.data unavailable variant must set unavailable=true"
+        )
 
     returned_id = _strict_string(data.get("id"), "response.data.id")
     if not returned_id:

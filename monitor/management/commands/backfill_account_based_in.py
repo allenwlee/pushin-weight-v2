@@ -184,6 +184,9 @@ class Command(BaseCommand):
         )
 
         selected_ids = {selection.author_id for selection in selections}
+        selected_handles = {
+            selection.author_id: selection.handle for selection in selections
+        }
         provider_reasons: Counter[str] = Counter()
         rejected_fields: Counter[str] = Counter()
         leaf_coverage: Counter[str] = Counter()
@@ -206,6 +209,11 @@ class Command(BaseCommand):
                 observed_at=observation.candidates["account_based_in_fetched_at"],
                 candidates=observation.candidates,
                 present_fields=observation.present_fields,
+                expected_handle=(
+                    selected_handles[fetched.author_id]
+                    if observation.candidates.get("unavailable") is True
+                    else None
+                ),
             )
             if outcome.identity_rejected:
                 provider_reasons["identity_mismatch"] += 1

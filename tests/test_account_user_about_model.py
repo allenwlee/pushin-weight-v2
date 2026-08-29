@@ -32,6 +32,8 @@ def test_account_model_exposes_typed_user_about_fields():
         "verification_info_id",
         "verification_info_is_identity_verified",
         "verification_info_reason_verified_since_msec",
+        "unavailable",
+        "unavailable_reason",
         "identity_profile_label_badge_url",
         "identity_profile_label_description",
         "identity_profile_label_url",
@@ -118,6 +120,35 @@ def test_valid_observation_applies_and_invalid_sibling_is_contained():
         "followers_count",
         "is_blue_verified",
     }
+
+
+def test_unavailable_observation_requires_selected_handle_to_still_match():
+    observed_at = datetime(2026, 8, 30, tzinfo=UTC)
+    account = Account.objects.create(author_id="42", handle="current")
+
+    outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=observed_at,
+        candidates={
+            "unavailable": True,
+            "unavailable_reason": "Account unavailable",
+            "account_based_in_fetched_at": observed_at,
+        },
+        present_fields={
+            "unavailable",
+            "unavailable_reason",
+            "account_based_in_fetched_at",
+        },
+        expected_handle="stale-selection",
+    )
+
+    account.refresh_from_db()
+    assert outcome.identity_rejected is True
+    assert account.unavailable is None
+    assert account.unavailable_reason is None
+    assert account.account_based_in_fetched_at is None
 
 
 def test_identity_mismatch_rejects_without_creating_or_writing():

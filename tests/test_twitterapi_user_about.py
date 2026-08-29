@@ -132,6 +132,47 @@ def test_missing_optional_objects_checkpoint_without_implicit_clears():
     assert observation.candidates["account_based_in_fetched_at"] == observed_at
 
 
+def test_unavailable_variant_checkpoints_only_typed_availability_fields():
+    observed_at = datetime(2026, 8, 30, tzinfo=UTC)
+    observation = parse_user_about(
+        {
+            "status": "success",
+            "msg": "ok",
+            "data": {
+                "unavailable": True,
+                "unavailableReason": "Account unavailable",
+            },
+        },
+        expected_author_id="42",
+        observed_at=observed_at,
+    )
+
+    assert observation.author_id == "42"
+    assert observation.candidates == {
+        "unavailable": True,
+        "unavailable_reason": "Account unavailable",
+        "account_based_in_fetched_at": observed_at,
+    }
+    assert observation.present_fields == set(observation.candidates)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"unavailable": False, "unavailableReason": "Account unavailable"},
+        {"unavailableReason": "Account unavailable"},
+        {"unavailable": "true", "unavailableReason": "Account unavailable"},
+    ],
+)
+def test_malformed_unavailable_variant_is_schema_drift(data):
+    with pytest.raises(SchemaDriftError):
+        parse_user_about(
+            {"status": "success", "data": data},
+            expected_author_id="42",
+            observed_at=datetime(2026, 8, 30, tzinfo=UTC),
+        )
+
+
 def test_unsupported_country_stores_exact_value_without_code():
     payload = _complete_payload()
     payload["data"]["about_profile"]["account_based_in"] = "Asia Pacific"

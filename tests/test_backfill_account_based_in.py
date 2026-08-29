@@ -57,6 +57,29 @@ def _batch(outcomes):
     )
 
 
+def _unavailable(author_id: str) -> FetchOutcome:
+    observed_at = datetime(2026, 8, 30, tzinfo=UTC)
+    return FetchOutcome(
+        author_id=author_id,
+        observation=UserAboutObservation(
+            author_id=author_id,
+            candidates={
+                "unavailable": True,
+                "unavailable_reason": "Account unavailable",
+                "account_based_in_fetched_at": observed_at,
+            },
+            present_fields={
+                "unavailable",
+                "unavailable_reason",
+                "account_based_in_fetched_at",
+            },
+        ),
+        reason="success",
+        status_code=200,
+        latency_ms=10,
+    )
+
+
 def test_default_dry_run_selects_without_http_or_writes():
     for index in range(3):
         Account.objects.create(author_id=str(index), handle=f"user{index}")
@@ -116,6 +139,42 @@ def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
     assert "user0" not in report
     assert '"accepted": 2' in report
     assert markdown_path.exists()
+
+
+@override_settings(OLLIJA_STAGING_MODE=True)
+def test_unavailable_result_checkpoints_selected_handle_without_leaking_reason(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    account = Account.objects.create(author_id="42", handle="selected_handle")
+
+    with patch(
+        "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
+        new=AsyncMock(return_value=_batch([_unavailable(account.author_id)])),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            seed="test-seed",
+            json_report=str(tmp_path / "unavailable.json"),
+            markdown_report=str(tmp_path / "unavailable.md"),
+            stdout=StringIO(),
+        )
+
+    account.refresh_from_db()
+    report = (tmp_path / "unavailable.json").read_text()
+    assert account.unavailable is True
+    assert account.unavailable_reason == "Account unavailable"
+    assert account.account_based_in_fetched_at is not None
+    assert '"success_empty": 1' in report
+    assert "Account unavailable" not in report
 
 
 @override_settings(OLLIJA_STAGING_MODE=True)

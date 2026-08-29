@@ -352,6 +352,7 @@ _ACCOUNT_BOOLEAN_FIELDS = {
     "location_accurate",
     "created_country_accurate",
     "verification_info_is_identity_verified",
+    "unavailable",
 }
 _ACCOUNT_URL_FIELDS = {
     "affiliate_label_badge_url",
@@ -383,6 +384,7 @@ _ACCOUNT_TEXT_FIELDS = {
     "location",
     "description",
     "profile_bio_text",
+    "unavailable_reason",
 }
 _AFFILIATE_LABEL_FIELDS = {
     "affiliate_label_badge_url",
@@ -412,6 +414,8 @@ _ABOUT_ONLY_FIELDS = {
     "verification_info_id",
     "verification_info_is_identity_verified",
     "verification_info_reason_verified_since_msec",
+    "unavailable",
+    "unavailable_reason",
     "country_code",
     "account_based_in_fetched_at",
     *_IDENTITY_LABEL_FIELDS,
@@ -595,6 +599,8 @@ class Account(models.Model):
     verification_info_reason_verified_since_msec = models.PositiveBigIntegerField(
         blank=True, null=True
     )
+    unavailable = models.BooleanField(blank=True, null=True)
+    unavailable_reason = models.TextField(blank=True, null=True)
     identity_profile_label_badge_url = models.URLField(
         max_length=2048, blank=True, null=True
     )
@@ -637,6 +643,7 @@ class Account(models.Model):
         observed_at: datetime,
         candidates: dict[str, Any],
         present_fields: set[str],
+        expected_handle: str | None = None,
     ) -> AccountObservationOutcome:
         """Apply the valid subset of one explicitly-present Account snapshot."""
         target_id = str(author_id).strip()
@@ -666,10 +673,40 @@ class Account(models.Model):
             elif field_name not in allowed:
                 rejected[field_name] = "writer_not_allowed"
 
+        if expected_handle is not None and source != "user_about":
+            raise ValueError("expected_handle is supported only for User About")
+        if expected_handle is not None and (
+            not isinstance(expected_handle, str)
+            or not expected_handle
+            or expected_handle != expected_handle.strip()
+        ):
+            raise ValueError("expected_handle must be a nonblank trimmed string")
+
         with transaction.atomic():
-            account, created = cls.objects.select_for_update().get_or_create(
-                author_id=target_id
-            )
+            if expected_handle is None:
+                account, created = cls.objects.select_for_update().get_or_create(
+                    author_id=target_id
+                )
+            else:
+                account = (
+                    cls.objects.select_for_update()
+                    .filter(author_id=target_id)
+                    .first()
+                )
+                if (
+                    account is None
+                    or not account.handle
+                    or account.handle.casefold() != expected_handle.casefold()
+                ):
+                    return AccountObservationOutcome(
+                        account=None,
+                        created=False,
+                        applied_fields=(),
+                        unchanged_fields=(),
+                        rejected_fields={"handle": "identity_mismatch"},
+                        identity_rejected=True,
+                    )
+                created = False
 
             accepted: dict[str, Any] = {}
             for group in (_AFFILIATE_LABEL_FIELDS, _IDENTITY_LABEL_FIELDS):

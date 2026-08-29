@@ -3,7 +3,7 @@
 Current project reference for TwitterAPI's `GET /twitter/user_about` endpoint.
 It combines the provider's public schema with a value-free live response-shape
 probe run on 2026-08-30. The public example is incomplete: the live success
-response includes seven leaves that the example omits.
+response includes nine leaves that the example omits.
 
 - Method and path: `GET https://api.twitterapi.io/twitter/user_about`
 - Authentication: `X-API-Key` header
@@ -13,6 +13,8 @@ response includes seven leaves that the example omits.
   `c4ca6be2672458c5fac54784859dc0ec3dc38d64`
 - Conditional-leaf evidence: staging job `job-da9ktc9f2nfc73fs568g`, exact SHA
   `284e1fc18307b288eae63bb977bc3cb532da56ba`
+- Unavailable-variant evidence: staging job `job-da9l1j2jnfac73e6ajvg`, exact
+  SHA `12f67affc56f0d67476c54028ef0dc98b9c23601`
 
 The probe retained JSON paths and JSON types only. It discarded response
 values, handles, account IDs, URLs, credentials, headers, and the raw payload.
@@ -77,6 +79,25 @@ Optional objects or leaves may be absent, null, or empty. The live probe saw
 both highlighted-label wrappers as empty objects; the nested label shapes above
 come from the provider's public schema and remain valid conditional leaves.
 
+The endpoint also returns a success envelope whose `data` is an unavailable
+variant instead of a profile:
+
+```json
+{
+  "status": "<string>",
+  "msg": "<string>",
+  "data": {
+    "unavailable": true,
+    "unavailableReason": "<string>"
+  }
+}
+```
+
+This variant has no `data.id`. PushinWeight therefore permits it to update only
+`unavailable`, `unavailable_reason`, and `account_based_in_fetched_at` on the
+originally selected Account, and only while that row still owns the exact
+case-insensitive handle used for the request. It cannot update profile facts.
+
 ## Live additions missing from the public example
 
 | JSON path | Live JSON type | PushinWeight destination |
@@ -86,9 +107,11 @@ come from the provider's public schema and remain valid conditional leaves.
 | `data.verification_info.id` | string | `Account.verification_info_id` |
 | `data.verification_info.is_identity_verified` | boolean | `Account.verification_info_is_identity_verified` |
 | `data.verification_info.reason.verified_since_msec` | string | `Account.verification_info_reason_verified_since_msec`, parsed as a nonnegative bigint |
+| `data.unavailable` | boolean | `Account.unavailable` |
+| `data.unavailableReason` | string | `Account.unavailable_reason` |
 | `data.about_profile.created_country_accurate` | boolean | `Account.created_country_accurate` |
 | `data.about_profile.username_changes.last_changed_at_msec` | string | `Account.username_changes_last_changed_at_msec`, parsed as a nonnegative bigint |
 
 `isVerified` and `profilePicture` deliberately reuse fields populated by fresh
-post-author payloads. The other five leaves receive nullable typed columns. No
+post-author payloads. The other seven leaves receive nullable typed columns. No
 raw response column is used.
