@@ -30,6 +30,7 @@ def _complete_payload() -> dict:
             "verification_info": {
                 "id": "verification-42",
                 "is_identity_verified": True,
+                "reason": {"verified_since_msec": "1784691635000"},
             },
             "affiliates_highlighted_label": {
                 "label": {
@@ -81,6 +82,10 @@ def test_complete_response_flattens_every_documented_leaf():
     assert observation.candidates["profile_picture"].endswith("avatar.png")
     assert observation.candidates["verification_info_id"] == "verification-42"
     assert observation.candidates["verification_info_is_identity_verified"] is True
+    assert (
+        observation.candidates["verification_info_reason_verified_since_msec"]
+        == 1_784_691_635_000
+    )
     assert observation.candidates["affiliate_label_description"] == "Affiliate"
     assert observation.candidates["account_based_in"] == "United States"
     assert observation.candidates["created_country_accurate"] is False
@@ -151,6 +156,9 @@ def test_unsupported_country_stores_exact_value_without_code():
         lambda payload: payload["data"]["about_profile"][
             "username_changes"
         ].__setitem__("last_changed_at_msec", "yesterday"),
+        lambda payload: payload["data"]["verification_info"]["reason"].__setitem__(
+            "verified_since_msec", "yesterday"
+        ),
     ],
 )
 def test_unknown_leaf_or_wrong_type_rejects_entire_response(mutate):

@@ -343,6 +343,7 @@ _ACCOUNT_COUNT_FIELDS = {
 }
 _ACCOUNT_BIGINT_FIELDS = {
     "username_changes_last_changed_at_msec",
+    "verification_info_reason_verified_since_msec",
 }
 _ACCOUNT_BOOLEAN_FIELDS = {
     "verified",
@@ -410,6 +411,7 @@ _ABOUT_ONLY_FIELDS = {
     "username_changes_last_changed_at_msec",
     "verification_info_id",
     "verification_info_is_identity_verified",
+    "verification_info_reason_verified_since_msec",
     "country_code",
     "account_based_in_fetched_at",
     *_IDENTITY_LABEL_FIELDS,
@@ -588,6 +590,9 @@ class Account(models.Model):
         max_length=128, blank=True, null=True
     )
     verification_info_is_identity_verified = models.BooleanField(
+        blank=True, null=True
+    )
+    verification_info_reason_verified_since_msec = models.PositiveBigIntegerField(
         blank=True, null=True
     )
     identity_profile_label_badge_url = models.URLField(

@@ -206,6 +206,7 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
                     "verification_info": {
                         "id": "verification-42",
                         "is_identity_verified": True,
+                        "reason": {"verified_since_msec": "1784691635000"},
                     },
                     "affiliates_highlighted_label": {},
                     "about_profile": {
@@ -257,6 +258,7 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
     assert account.username_changes_last_changed_at_msec == 1_784_691_635_000
     assert account.verification_info_id == "verification-42"
     assert account.verification_info_is_identity_verified is True
+    assert account.verification_info_reason_verified_since_msec == 1_784_691_635_000
     assert account.country_code == "US"
     assert account.account_based_in_fetched_at is not None
     assert '"accepted": 1' in report

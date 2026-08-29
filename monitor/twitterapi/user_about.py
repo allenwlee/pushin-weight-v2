@@ -97,7 +97,8 @@ _ABOUT_KEYS = {
     "username_changes",
 }
 _USERNAME_CHANGES_KEYS = {"count", "last_changed_at_msec"}
-_VERIFICATION_INFO_KEYS = {"id", "is_identity_verified"}
+_VERIFICATION_INFO_KEYS = {"id", "is_identity_verified", "reason"}
+_VERIFICATION_REASON_KEYS = {"verified_since_msec"}
 _LABEL_KEYS = {
     "badge",
     "description",
@@ -404,6 +405,30 @@ def parse_user_about(
                 _strict_string,
                 "response.data.verification_info",
             )
+            if "reason" in verification_info:
+                reason = _optional_dict(
+                    verification_info["reason"],
+                    "response.data.verification_info.reason",
+                )
+                present.add("verification_info_reason_verified_since_msec")
+                candidates["verification_info_reason_verified_since_msec"] = None
+                if reason is not None:
+                    _assert_keys(
+                        reason,
+                        _VERIFICATION_REASON_KEYS,
+                        "response.data.verification_info.reason",
+                    )
+                    if (
+                        "verified_since_msec" in reason
+                        and reason["verified_since_msec"] is not None
+                    ):
+                        candidates[
+                            "verification_info_reason_verified_since_msec"
+                        ] = _strict_numeric_string(
+                            reason["verified_since_msec"],
+                            "response.data.verification_info.reason."
+                            "verified_since_msec",
+                        )
             _put(
                 candidates,
                 present,

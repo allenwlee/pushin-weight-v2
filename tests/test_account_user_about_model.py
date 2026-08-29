@@ -31,6 +31,7 @@ def test_account_model_exposes_typed_user_about_fields():
         "created_country_accurate",
         "verification_info_id",
         "verification_info_is_identity_verified",
+        "verification_info_reason_verified_since_msec",
         "identity_profile_label_badge_url",
         "identity_profile_label_description",
         "identity_profile_label_url",
@@ -59,6 +60,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
             "username_changes_last_changed_at_msec": 1_784_691_635_000,
             "verification_info_id": "verification-42",
             "verification_info_is_identity_verified": True,
+            "verification_info_reason_verified_since_msec": 1_784_691_635_000,
         },
         present_fields={
             "verified",
@@ -67,6 +69,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
             "username_changes_last_changed_at_msec",
             "verification_info_id",
             "verification_info_is_identity_verified",
+            "verification_info_reason_verified_since_msec",
         },
     )
 
@@ -77,6 +80,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
     assert account.username_changes_last_changed_at_msec == 1_784_691_635_000
     assert account.verification_info_id == "verification-42"
     assert account.verification_info_is_identity_verified is True
+    assert account.verification_info_reason_verified_since_msec == 1_784_691_635_000
     assert outcome.rejected_fields == {}
     assert not hasattr(account, "is_verified")
 

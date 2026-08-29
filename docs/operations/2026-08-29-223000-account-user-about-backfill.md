@@ -39,8 +39,9 @@ population, a recurring schedule, or feed rendering.
    service has at least 100 eligible Accounts. Do not print connection
    strings.
 3. Verify migrations `core.0020_account_account_based_in_and_more` and
-   `core.0021_account_user_about_live_schema` are applied.
-4. Verify the 26 additive nullable columns and the `country_code` index exist.
+   `core.0021_account_user_about_live_schema`, and
+   `core.0022_account_verification_reason_timestamp` are applied.
+4. Verify the 27 additive nullable columns and the `country_code` index exist.
 5. Run a dry selection and confirm it reports zero calls and zero writes:
 
 ```bash

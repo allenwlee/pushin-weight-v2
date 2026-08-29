@@ -239,6 +239,7 @@ A successful `data.id` must match `Account.author_id`. Nullable types reflect op
 | `data.profilePicture` | `profile_picture` | existing `TextField(null=True)` | About or explicit Post; deduplicated shared field |
 | `data.verification_info.id` | `verification_info_id` | `CharField(128, null=True)` | About only |
 | `data.verification_info.is_identity_verified` | `verification_info_is_identity_verified` | `BooleanField(null=True)` | About only |
+| `data.verification_info.reason.verified_since_msec` | `verification_info_reason_verified_since_msec` | `PositiveBigIntegerField(null=True)` | About only; strictly parse numeric-string epoch milliseconds |
 | `data.affiliates_highlighted_label.label.badge.url` | `affiliate_label_badge_url` | `URLField(2048, null=True)` | About or explicit Post label |
 | `data.affiliates_highlighted_label.label.description` | `affiliate_label_description` | `TextField(null=True)` | About or explicit Post label |
 | `data.affiliates_highlighted_label.label.url.url` | `affiliate_label_url` | `URLField(2048, null=True)` | About or explicit Post label |
@@ -313,7 +314,7 @@ flowchart TB
 ### Assumptions
 
 - Staging contains at least 100 unique Accounts with nonblank handles. If not, use the existing guarded staging refresh procedure before the pilot; never read handles directly from production inside the command.
-- The public endpoint example checked on 2026-08-29 omitted six leaves present in the value-free live schema probe on 2026-08-30. The corrected field map and `docs/external_vendors/twitterapi_docs/endpoint/get_user_about.md` are the current project reference; strict parsing remains the drift detector.
+- The public endpoint example checked on 2026-08-29 omitted seven leaves present across value-free live schema probes on 2026-08-30. The seventh conditional leaf appeared only on a verified account in the guarded replacement pilot. The corrected field map and `docs/external_vendors/twitterapi_docs/endpoint/get_user_about.md` are the current project reference; strict parsing remains the drift detector.
 - TwitterAPI pricing checked on 2026-08-29 is 18 credits per returned profile, with a 15-credit minimum per call and USD 1 per 100,000 credits. The 110-attempt cap therefore budgets at most 1,980 credits under the profile-rate assumption.
 - The provider QPS ceiling depends on account balance. The command uses the lower of its explicit operator cap and the verified provider allowance. It never relies on the stale 200-QPS note in repository research.
 - `account_based_in` is stored as the provider reports it. This plan does not independently verify how X calculates the value.
@@ -321,7 +322,7 @@ flowchart TB
 
 ### System-Wide Impact
 
-- **Schema:** `Account` gains 26 typed fields across migrations 0020 and 0021. The four live-only additions are additive and nullable; `isVerified` and `profilePicture` reuse existing shared fields.
+- **Schema:** `Account` gains 27 typed fields across migrations 0020 through 0022. The five live-only additions are additive and nullable; `isVerified` and `profilePicture` reuse existing shared fields.
 - **Country identity:** A generated backend-only code/name map supports R6. It carries no SVG, zh-CN display name, template, CSS, or client rendering.
 - **Writers:** Post, list, seed, and User About inputs share one Account write boundary.
 - **Freshness:** `followers_fetched_at` becomes active. `account_based_in_fetched_at` records successful About lookup completion. Other fields do not gain timestamps.
