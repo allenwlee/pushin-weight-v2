@@ -13,7 +13,9 @@ population, a recurring schedule, or feed rendering.
 ## Safety boundary
 
 - Run paid apply only on `pushinweight-staging-web` with
-  `OLLIJA_STAGING_MODE=True`.
+  `OLLIJA_STAGING_MODE=True`, or on `pushinweight-staging-harvest` when its
+  managed deployment environment is `staging` and PostgreSQL identifies
+  exactly as `pushinweight_staging`.
 - Read `TWITTERAPI_IO_API_KEY` from the Render-managed environment. Never pass
   the key as an argument or print request headers.
 - The apply command refuses more than 100 Accounts, 110 attempts, 1,980
@@ -25,6 +27,9 @@ population, a recurring schedule, or feed rendering.
 - On schema drift, reports may persist only bounded JSON paths, field names,
   and JSON types. Response values and selected Account identity are redacted
   before the diagnostic leaves the HTTP caller.
+- The TwitterAPI credential is owned by `pushinweight-staging-harvest`; use an
+  exact-SHA one-off job from that service for the pilot instead of copying the
+  key to the web service.
 
 ## Staging preflight
 

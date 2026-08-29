@@ -9,7 +9,10 @@ from django.core.management import call_command
 from django.test import override_settings
 
 from core.models import Account
-from monitor.management.commands.backfill_account_based_in import _select_accounts
+from monitor.management.commands.backfill_account_based_in import (
+    _is_authorized_staging_executor,
+    _select_accounts,
+)
 from monitor.twitterapi.user_about import (
     FetchBatchResult,
     FetchOutcome,
@@ -190,6 +193,40 @@ def test_apply_refuses_outside_staging(monkeypatch, tmp_path):
             json_report=str(tmp_path / "report.json"),
             markdown_report=str(tmp_path / "report.md"),
         )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+@pytest.mark.parametrize(
+    ("deployment_environment", "database_name", "expected"),
+    [
+        ("staging", "pushinweight_staging", True),
+        ("staging", "pushinweight_shadow", False),
+        ("production", "pushinweight_staging", False),
+    ],
+)
+def test_staging_harvester_guard_requires_environment_and_database_identity(
+    monkeypatch,
+    deployment_environment,
+    database_name,
+    expected,
+):
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv(
+        "X_MONITOR_DEPLOYMENT_ENVIRONMENT",
+        deployment_environment,
+    )
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (database_name,)
+    context = MagicMock()
+    context.__enter__.return_value = cursor
+    context.__exit__.return_value = None
+
+    with patch(
+        "monitor.management.commands.backfill_account_based_in.connection.cursor",
+        return_value=context,
+    ):
+        assert _is_authorized_staging_executor() is expected
 
 
 @override_settings(OLLIJA_STAGING_MODE=True)

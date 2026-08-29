@@ -12,6 +12,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
@@ -23,6 +24,7 @@ PILOT_ATTEMPTS = 110
 PILOT_CREDITS = 1_980
 PILOT_WALL_SECONDS = 1_800
 PILOT_QPS = 5.0
+STAGING_DATABASE_NAME = "pushinweight_staging"
 
 
 def _percentile(values: list[float], percentile: float) -> float | None:
@@ -43,6 +45,17 @@ def _select_accounts(*, limit: int, seed: str, refresh: bool) -> list[FetchSelec
         FetchSelection(author_id=str(author_id), handle=str(handle))
         for author_id, handle in rows[:limit]
     ]
+
+
+def _is_authorized_staging_executor() -> bool:
+    if settings.OLLIJA_STAGING_MODE:
+        return True
+    if os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") != "staging":
+        return False
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_database()")
+        row = cursor.fetchone()
+    return bool(row and row[0] == STAGING_DATABASE_NAME)
 
 
 def _render_markdown(report: dict[str, Any]) -> str:
@@ -115,6 +128,8 @@ class Command(BaseCommand):
             or options["max_qps"] > PILOT_QPS
         ):
             raise CommandError("requested value exceeds the staging pilot cap")
+        if options["apply"] and not _is_authorized_staging_executor():
+            raise CommandError("apply is restricted to the managed staging environment")
         selections = _select_accounts(
             limit=limit,
             seed=options["seed"],
@@ -136,8 +151,6 @@ class Command(BaseCommand):
             self.stdout.write(json.dumps(summary, indent=2, sort_keys=True))
             return
 
-        if not settings.OLLIJA_STAGING_MODE:
-            raise CommandError("apply is restricted to the Ollija staging environment")
         if options["max_attempts"] < limit:
             raise CommandError("max-attempts cannot be lower than selected Accounts")
         if options["max_credits"] < limit * 18:
