@@ -22,6 +22,9 @@ SPRITE_PATH = (
     REPO_ROOT
     / "docs/ideation/assets/2026-08-29-162947-country-flag-sprite.svg"
 )
+HTML_PATH = (
+    REPO_ROOT / "docs/ideation/2026-08-29-162947-country-flag-svg-reference.html"
+)
 EXPECTED_CODES = ("CN", "KR", "US")
 EXPECTED_NAMES = {
     "CN": "China",
@@ -137,3 +140,58 @@ def test_sprite_inventory_excludes_deferred_flags_and_sentinels() -> None:
     assert source.count("<symbol ") == 3
     for excluded in ("flag-ww", "flag-hf", "flag-jp", "flag-gb", "flag-xk"):
         assert excluded not in source
+
+
+def _symbol_bodies(source: str) -> dict[str, str]:
+    return {
+        symbol_id: re.sub(r"\s+", "", body)
+        for symbol_id, body in re.findall(
+            r'<symbol id="(flag-[^"]+)"[^>]*>(.*?)</symbol>',
+            source,
+            flags=re.DOTALL,
+        )
+    }
+
+
+def test_review_page_is_generated_from_the_same_three_symbols() -> None:
+    generator = _load_generator()
+    manifest = _load_manifest()
+    source = HTML_PATH.read_text(encoding="utf-8")
+
+    assert generator.render_html(manifest) == source
+    assert _symbol_bodies(source) == _symbol_bodies(
+        SPRITE_PATH.read_text(encoding="utf-8")
+    )
+    assert tuple(re.findall(r'<article class="flag-card" data-country-code="([A-Z]{2})">', source)) == EXPECTED_CODES
+    for code, name in EXPECTED_NAMES.items():
+        assert source.count(f'<span class="country-code">{code}</span>') == 1
+        assert source.count(f"<h3>{name}</h3>") == 1
+
+
+def test_review_page_exposes_all_treatments_in_realistic_feed_headers() -> None:
+    source = HTML_PATH.read_text(encoding="utf-8")
+
+    assert source.count('data-treatment="original"') == 3
+    assert source.count('data-treatment="recommended"') == 3
+    assert source.count('data-treatment="quiet"') == 3
+    assert source.count('class="feed-sample"') == 9
+    assert source.count('class="flag-art flag-native" width="16" height="9"') == 9
+    assert source.count('class="flag-art flag-compact" width="14" height="7.875"') == 9
+    assert source.count('class="role-badge" width="12" height="12"') == 9
+    assert "filter: saturate(0.72) brightness(0.90);" in source
+    assert "opacity: 0.90;" in source
+    assert "filter: saturate(0.52) brightness(0.82);" in source
+    assert "opacity: 0.82;" in source
+
+
+def test_review_page_is_standalone_and_decorative_svgs_are_accessible() -> None:
+    source = HTML_PATH.read_text(encoding="utf-8")
+
+    specimens = re.findall(r'<svg class="flag-art[^>]+>', source)
+    assert len(specimens) == 27
+    assert all('aria-hidden="true"' in specimen for specimen in specimens)
+    assert all('focusable="false"' in specimen for specimen in specimens)
+    assert all(re.search(r'<use href="#flag-(?:cn|kr|us)"></use>', source) for _ in [0])
+    assert not re.search(r'(?:src|href)="(?!#)[^"]+"', source)
+    assert "Pixel flags by R74n" in source
+    assert "Review artifact only — no live feed integration" in source
