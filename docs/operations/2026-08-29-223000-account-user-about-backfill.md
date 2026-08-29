@@ -119,5 +119,14 @@ The exact-SHA staging pilot is recorded in
 `docs/analysis/2026-08-30-000424-twitterapi-user-about-staging-pilot.md` and its
 matching JSON report. It stopped safely after one attempt on strict schema
 drift, made no retry, and changed zero Account rows. Production remained
-unmigrated and unwritten. Do not rerun or expand until the live response-shape
-gap, durable staging executor, and provider-ledger reconciliation are reviewed.
+unmigrated and unwritten.
+
+The owner-authorized diagnostic, schema corrections, and replacement pilot are
+recorded in
+`docs/analysis/2026-08-30-065017-twitterapi-user-about-replacement-staging-pilot.md`
+and matching JSON. The same deterministic 100-Account sample finished with 99
+checkpoints and one provider error. Cumulative usage was 104 calls and 1,872
+projected credits, within the original 110-call / 1,980-credit ceiling. Exact
+provider burn remains inconclusive without the separate dashboard ledger
+session. Production remained unmigrated and unwritten; full population remains
+owner-gated.

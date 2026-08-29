@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "mode": "staging_apply",
+  "result": "completed_with_one_provider_error",
+  "deployment": {
+    "pilot_code_sha": "c4197fbd22def1a5934bf9a824f02093128a29d3",
+    "pilot_staging_branch_sha": "c4197fbd22def1a5934bf9a824f02093128a29d3",
+    "web_service_id": "srv-d9vb8t49v7es738lf2ng",
+    "web_deploy_id": "dep-da9l54eq1p3s738kkfj0",
+    "executor_service_id": "crn-da7vrdqd0e5s739uvcs0",
+    "executor_deploy_id": "dep-da9l54mq1p3s738kkg7g"
+  },
+  "preflight": {
+    "database": "pushinweight_staging",
+    "database_role": "pushinweight_staging",
+    "migrations_applied": [
+      "0020_account_account_based_in_and_more",
+      "0021_account_user_about_live_schema",
+      "0022_account_verification_reason_timestamp",
+      "0023_account_user_about_unavailable"
+    ],
+    "typed_nullable_columns": 29,
+    "accounts_total": 57084,
+    "eligible_handles": 57082,
+    "dry_run_selected": 100,
+    "dry_run_http_calls": 0,
+    "dry_run_writes": 0,
+    "provider_qps": 20,
+    "operator_qps": 5,
+    "effective_qps_cap": 5
+  },
+  "sample": {
+    "unique_accounts": 100,
+    "seed": "account-based-in-pilot-v1",
+    "selection": "missing-first deterministic SHA-256 order",
+    "checkpointed": 99,
+    "provider_error_uncheckpointed": 1
+  },
+  "authorized_cumulative_budget": {
+    "attempts": 110,
+    "projected_credits": 1980,
+    "projected_usd": 0.0198,
+    "operator_qps": 5,
+    "provider_qps": 20
+  },
+  "authorized_cumulative_usage": {
+    "attempts": 104,
+    "retries": 0,
+    "projected_credits": 1872,
+    "projected_usd": 0.01872,
+    "provider_network_wall_seconds": 84.785,
+    "provider_reasons": {
+      "provider_error": 1,
+      "schema_drift": 4,
+      "success": 99
+    }
+  },
+  "replacement_pilot": {
+    "attempts": 102,
+    "retries": 0,
+    "projected_credits": 1836,
+    "projected_usd": 0.01836,
+    "provider_network_wall_seconds": 82.998,
+    "observed_calls_per_second": 1.228945,
+    "calendar_seconds_including_two_schema_corrections_and_deploys": 1245.377,
+    "segments": [
+      {
+        "job_id": "job-da9ktc9f2nfc73fs568g",
+        "selected": 100,
+        "attempted": 3,
+        "accepted": 2,
+        "schema_drift": 1,
+        "projected_credits": 54,
+        "wall_seconds": 2.878,
+        "p50_latency_ms": 1023.533,
+        "p95_latency_ms": 1027.003
+      },
+      {
+        "job_id": "job-da9l1j2jnfac73e6ajvg",
+        "selected": 98,
+        "attempted": 10,
+        "accepted": 9,
+        "schema_drift": 1,
+        "projected_credits": 180,
+        "wall_seconds": 8.185,
+        "p50_latency_ms": 798.925,
+        "p95_latency_ms": 1002.877
+      },
+      {
+        "job_id": "job-da9l6he7bikc739l2mng",
+        "selected": 89,
+        "attempted": 89,
+        "accepted": 88,
+        "provider_error": 1,
+        "projected_credits": 1602,
+        "wall_seconds": 71.935,
+        "p50_latency_ms": 790.137,
+        "p95_latency_ms": 984.135
+      }
+    ]
+  },
+  "staging_reconciliation": {
+    "account_based_in_fetched_before": 0,
+    "account_based_in_fetched_after": 99,
+    "account_based_in_after": 97,
+    "country_code_after": 84,
+    "created_country_accurate_after": 97,
+    "verification_reason_timestamp_after": 62,
+    "unavailable_after": 1,
+    "fetched_yield_percent_of_sample": 99.0,
+    "account_based_in_yield_percent_of_sample": 97.0,
+    "country_code_yield_percent_of_sample": 84.0,
+    "country_code_yield_percent_of_nonempty_based_in": 86.6
+  },
+  "live_schema_corrections": {
+    "diagnostic_job_id": "job-da9kmc8n74is738e4gpg",
+    "replacement_schema_drift_stops": 2,
+    "public_example_omitted_leaf_count": 9,
+    "raw_values_persisted_in_reports": false,
+    "external_vendor_reference": "docs/external_vendors/twitterapi_docs/endpoint/get_user_about.md"
+  },
+  "provider_ledger": {
+    "status": "inconclusive_missing_dashboard_session",
+    "actual_credits": null,
+    "reason": "The Recent API Calls endpoint requires a separate dashboard session token; the managed X API key cannot query it, and the provider balance is shared with production activity.",
+    "expansion_authorized": false
+  },
+  "full_population_projection": {
+    "callable_staging_accounts": 57082,
+    "credits": 1027476,
+    "usd": 10.27476,
+    "seconds_at_five_qps_cap": 11416.4,
+    "hours_at_five_qps_cap": 3.171,
+    "seconds_at_observed_sequential_rate": 46447.959,
+    "hours_at_observed_sequential_rate": 12.902
+  },
+  "production_verification": {
+    "database": "pushinweight_shadow",
+    "migrations_0020_through_0023_applied": 0,
+    "sample_user_about_columns_present": 0,
+    "accounts_total": 59645,
+    "writes_performed": 0
+  },
+  "decision": {
+    "staging_pilot_complete": true,
+    "production_authorized": false,
+    "full_population_authorized": false,
+    "next_step": "owner_review"
+  }
+}

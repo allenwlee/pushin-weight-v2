@@ -496,6 +496,16 @@ Implement U5 with fake network evidence. Implement U6 and prove every Account wr
 - No full population, recurring schedule, UI successor work, raw response payload, credential, handle, or Account ID is committed.
 - Abandoned experimental code and temporary pilot data are removed. The staging-only worktree remains registered.
 
+## Staging Implementation Evidence — 2026-08-30
+
+- Pilot-executed exact staging code SHA: `c4197fbd22def1a5934bf9a824f02093128a29d3`.
+- Migrations 0020 through 0023 and all 29 typed nullable Account additions are applied on `pushinweight_staging`.
+- The deterministic 100-Account replacement sample checkpointed 99 Accounts; one provider error remains eligible. It produced 97 nonempty `account_based_in` values and 84 normalized country codes.
+- Across the original stop, diagnostic, and replacement, usage was 104 calls, zero retries, and 1,872 projected credits. Exact provider credits remain inconclusive without the dashboard session token.
+- Aggregate evidence: `docs/analysis/2026-08-30-065017-twitterapi-user-about-replacement-staging-pilot.md` and matching JSON.
+- Read-only production verification found migrations 0020–0023 absent and no sampled User About columns. No production write occurred.
+- Delivery stops at staging. Production migration, full population, scheduling, and feed UI remain unauthorized.
+
 ---
 
 ## Appendix
