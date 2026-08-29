@@ -1,11 +1,12 @@
 ---
-title: Feed Country Flags and Reversible Headline Disclosure - Plan
+title: Account User About Enrichment Staging Pilot - Plan
 type: feat
 date: 2026-08-29
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
-product_contract_source: ollija-annotate-plan
+product_contract_source: session-split-from-feed-country-flags
 execution: code
+deepened: 2026-08-29
 ollija:
   change_id: feat-feed-country-flags-disclosure-2026-08-29-093958
   branch: feat/feed-country-flags-disclosure
@@ -65,18 +66,21 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+- This plan supersedes the enrichment portion of the former combined feed-country plan. The flag and headline work is deferred to `docs/plans/2026-08-29-223000-feed-country-flags-disclosure-successor-plan.md` and is not part of this LFG run.
+- Apply and verify the Django migration on the isolated staging database before making a paid User About call.
+- Run the first paid population only from the staging environment against 100 unique staging `Account` rows with callable handles. Permit at most 110 attempts and at most 1,980 credits. Apply accepted values only to the staging database.
+- Stop after the staging pilot report. Do not migrate or write production, run a full-account population, schedule User About, or ship feed UI under this delivery target.
 
-# Feed Country Flags and Reversible Headline Disclosure
+# Account User About Enrichment Staging Pilot
 
 ## Goal Capsule
 
-- **Objective:** Let homepage readers identify an account's country at a glance and expand or collapse each trend explanation through one clear localized control.
-- **Means:** Reuse the feed's existing account-location projection, normalize it against the approved 197-country manifest, render the approved subdued SVG flag, and replace the dual headline controls with one `more`/`less` toggle (KTD1-KTD6).
-- **Authority:** The user's visible-behavior instructions govern the product. The approved country manifest and sprite govern country identity and artwork. The latest Bridgewright target chain governs protected homepage behavior. The Ollija Delivery Guide governs delivery location and staging scope.
-- **Execution profile:** Work only in the canonical feature worktree. Prove the real authenticated homepage in English and zh-CN through the initial HTML and JavaScript refresh paths. Do not query or mutate production data to rediscover the country source.
-- **Stop conditions:** Stop if implementation needs a new country provider, geocoder, database schema, or production deployment; if the 197-code manifest changes identity; if `/internal/` changes; or if required Bridgewright obligations are skipped, missing, errored, unknown, or failed.
-- **Tail ownership:** LFG owns commits, PR creation, CI observation, and exact-SHA staging delivery. The worktree remains after staging-only delivery.
+- **Objective:** Give the operator verified evidence that X About-this-account data can safely enrich PushinWeight Accounts before any production migration, full population, or feed dependency is authorized.
+- **Means:** Add typed Account fields, a model-owned observation gateway, and a bounded User About command; deploy the migration to staging; then populate 100 staging Accounts under hard call, credit, time, and schema-drift limits (KTD10-KTD18).
+- **Authority:** The Product Contract governs stored data and write semantics. The official TwitterAPI User About schema and current pricing govern the provider boundary. The Ollija Delivery Guide and Delivery Exceptions govern staging-only delivery.
+- **Execution profile:** Build and test with fakes locally. Push one exact candidate to staging. Let `build.sh` apply the migration under the existing cluster lock. Run one explicit staging-only paid pilot and emit aggregate evidence.
+- **Stop conditions:** Stop before a provider call if the staging service, database identity, API credential, balance-derived QPS, account sample, or migration state is not verified. Stop during the pilot on unknown response leaves, type drift, returned-ID mismatch, authentication failure, open circuit, 110 attempts, a projected spend above 1,980 credits, or 30 minutes of wall time.
+- **Tail ownership:** LFG owns implementation, review, commits, PR creation, exact-SHA staging delivery, the capped staging pilot, and CI observation. The owner retains production migration, full population, and UI authorization.
 
 ---
 
@@ -84,96 +88,122 @@ None.
 
 ### Summary
 
-Move the completed flag review page into reference documentation, make each headline explanation use a reversible `more`/`less` disclosure, and add the account's localized country flag to the homepage follower column. Preserve the current feed, role, locale, and refresh behavior outside these named deltas.
+Persist TwitterAPI User About account data in typed `Account` fields without a raw JSON column. Route User About, post-author, list-member, and seed observations through one model-owned validation path. Prove the migration and a 100-account paid population on the isolated staging database, then stop for review.
 
 ### Problem Frame
 
-The trend headline currently exposes separate `detail` and `hide` controls, and the secondary copy itself also behaves like a collapse control. Readers cannot predict one stable control or label across the collapsed and expanded states.
+`Account.location` and `Post.author_location` are optional free-form profile text. `Post.place.country_code` is a rare post geotag. Neither represents the About-this-account value selected for country flags.
 
-The homepage feed already persists the account location used by the post's real feed path, but it does not project a normalized country identity. The approved 197-country SVG set and English names now exist, yet the live follower column still reserves only the follower and role slots. Readers therefore cannot see account origin or obtain a locale-matched country name without leaving the feed.
+TwitterAPI exposes `about_profile.account_based_in` through `/twitter/user_about`, one handle per call. The production-sized population is roughly 59,225 calls before retries. The endpoint also returns profile identity, creation, verification, affiliate-label, About, and identity-label values. Storing only country would discard account data already paid for; storing a raw response would weaken queryability and validation.
+
+The Django harvester currently writes Account snapshots directly with `update_or_create`. Missing booleans can be coerced to false, malformed values can replace good values, and `followers_fetched_at` is not advanced by the Django post path. A paid backfill must not amplify those defects.
 
 ### Key Decisions
 
-- PD1. **Use one headline disclosure control.** (session-settled: user-directed — chosen over the current separate `detail` and `hide` controls: one control should describe and reverse its own state.) Governs R2-R5.
-- PD2. **Place the flag relative to the official-role slot.** (session-settled: user-directed — chosen over a fixed flag slot: an official account's flag belongs under its credential badge, while an account without that badge needs the flag directly under followers.) Governs R9-R10.
-- PD3. **Localize the full country-name hover text.** (session-settled: user-directed — chosen over a country code or English-only tooltip: the locale toggle should govern the name the reader sees.) Governs R7, R10, and R11.
-- PD4. **Reuse the existing feed country source.** (session-settled: user-directed — chosen over repeating the production-data investigation or adding a second source: the session already established where the account location reaches the homepage data path.) Governs R6-R8 and R12.
-- PD5. **Use the approved subdued SVG treatment.** (session-settled: user-approved — chosen over the CSS pixel grid and full-brightness artwork: the reviewed SVG stays compact and visually subordinate in the feed.) Governs R8-R10.
-- PD6. **Promote only to staging.** (session-settled: user-directed — chosen over production delivery: this run is authorized to stop after exact-SHA staging verification.) Governs R15.
-- PD7. **Promote the completed review page to reference documentation.** (session-settled: user-directed — chosen over leaving it under ideation: the artifact is now an approved implementation reference.) Governs R1.
-- PD8. **Use official zh-CN territory display names.** (session-settled: user-directed — chosen over agent-written translations: the 197 Chinese names must be imported from the standard entries in Unicode CLDR 48 `common/main/zh.xml`, with the upstream release, URL, and source digest pinned.) Governs R7-R8 and R11.
+- PD4. **Use About-this-account as the account-country source.** (session-settled: user-approved — chosen over profile location and post geotags: `account_based_in` is the selected X-reported account signal.) Governs R6 and R21.
+- PD6. **Deliver and test only on staging.** (session-settled: user-directed — chosen over production delivery: migration, paid calls, and writes must be proven on the isolated staging database first.) Governs R15-R18.
+- PD9. **Persist typed fields, not raw JSON.** (session-settled: user-directed — chosen over one raw response column: every account-valued response leaf should be queryable with an appropriate type.) Governs R12 and R19.
+- PD10. **Evaluate about 100 calls before a larger run.** (session-settled: user-directed — chosen over immediate population of every Account: actual schema, yield, time, and credit burn must be confirmed first.) Governs R16-R18 and R20.
+- PD11. **Allow valid post observations to refresh shared mutable fields.** (session-settled: user-directed — chosen over freezing the User About snapshot or adding history now: post author payloads are generally fresher.) Governs R22 and R24.
+- PD12. **Validate at the Django model boundary.** (session-settled: user-directed — chosen over parser-only validation and direct ORM defaults: faulty observations must not clobber good Account values.) Governs R22-R24.
 
 ### Requirements
 
-**Reference artifact**
+**Typed persistence**
 
-- R1. Move `docs/ideation/2026-08-29-162947-country-flag-svg-reference.html` to `docs/reference/2026-08-29-162947-country-flag-svg-reference.html`, and update deterministic generation and tests so no stale ideation copy remains.
+- R6. Derive `Account.country_code` only from an exact supported two-letter code or exact canonical English country name in the approved 197-country source. Preserve the exact provider value separately. Do not infer from free-form profile location, post geotags, cities, regions, or fuzzy matches.
+- R12. Give every documented leaf under a successful User About `data` object one typed Account destination in the field map below. Reuse semantically identical existing fields and add only missing columns.
+- R19. Add no raw User About JSON column. Flatten nested label objects into typed nullable fields, convert camelCase leaves to snake_case, and keep concise provider terminology.
+- R21. Reject the full User About observation on returned-ID mismatch, unknown response leaf, or documented type mismatch. Record the failure without an Account write. An otherwise valid response whose exact `account_based_in` value is unsupported still checkpoints and stores that exact value, but derives no `country_code`.
 
-**Headline disclosure**
+**Account write ownership and freshness**
 
-- R2. A collapsed headline item shows one disclosure button labeled `more` in English and `更多` in zh-CN, with its secondary copy hidden and `aria-expanded="false"`.
-- R3. Activating that button expands only its item, changes the same button to `less` or `收起`, reveals the secondary copy, and sets `aria-expanded="true"`.
-- R4. Activating `less` or `收起` collapses the item, restores the collapsed label and ARIA state, and leaves keyboard focus on the disclosure button.
-- R5. Server-rendered and JavaScript-rendered headline items use the same one-button contract; a narrative refresh resets replacement items to the collapsed state.
+- R22. Apply serialized last-valid-write semantics to shared mutable fields. An explicitly present, valid post or list value may replace the current value. A missing or invalid value may not clear, false-coerce, or replace it. `created_at` is fill-once and conflicts are reported.
+- R23. Every current Django Account writer must submit source, observation time, field presence, and candidates through one model-owned gateway. Reject identity mismatch for the whole observation. Reject malformed independent fields or coupled label groups without blocking other valid Account fields or the related Post write.
+- R24. An accepted explicit post `followers_count` observation updates `followers_fetched_at` in the same transaction even when the count is unchanged. Missing or rejected follower values update neither field.
 
-**Country identity and flag rendering**
+**Bounded staging pilot**
 
-- R6. Country resolution uses `Account.location` and falls back to `Post.author_location` when the account snapshot is absent; it accepts a supported two-letter code or an exact canonical country name without guessing arbitrary free-form locations.
-- R7. Each recognized feed account carries the normalized uppercase code and the full locale-selected country name through the shared wire projection; zh locales use the standard Simplified Chinese territory name imported from Unicode CLDR 48, while English or original locales use the existing English name.
-- R8. Runtime country data and the external SVG sprite derive from the approved 197-entry manifest, retain the `XK` exception, exclude `WW` and `HF`, pin the CLDR 48 Chinese-name provenance, and render no flag for an unsupported or missing value.
-- R9. An official account renders follower magnitude, the `account-role role-official` badge, then the country flag; without `role-official`, the flag is the first item directly below follower magnitude.
-- R10. Every country flag uses the approved sprite symbol's standardized `0 0 16 9` pixel grid at 14 pixels wide within the existing lead column and the review document's exact Recommended presentation (`saturate(0.72) brightness(0.90)` and `opacity: 0.90`); no runtime flag may use the Original or Quieter treatment, distort the audited pixel grid, or displace follower or role semantics.
-- R11. Hovering the flag shows the full locale-selected country name through `title`, and assistive technology receives the same name through `aria-label` on a non-focusable image; initial HTML and client-refreshed rows produce identical identity and geometry without adding one tab stop per feed row.
-
-**Boundaries and assurance**
-
-- R12. The change adds no model field, migration, database backfill, geocoding, provider call, harvester behavior, or production-data mutation.
-- R13. `/internal/`, feed ordering, pagination, filters, row navigation, headline storage, role filtering, and all unnamed homepage surfaces remain unchanged.
-- R14. A new Bridgewright target extends the existing feed/headline contract with the one-button transition and country-flag placement, locale, static-asset, accessibility, and SSR/refresh obligations.
-- R15. LFG may push the exact candidate to the feature branch and staging lane, but it must not promote or deploy that candidate to production.
+- R15. Deploy only to the exact-SHA staging lane. Apply the migration to staging and verify its database schema before paid calls. Do not mutate `main`, production services, or the production database.
+- R16. Select 100 unique staging Accounts with nonblank handles using a recorded seed. Call `/twitter/user_about` once per selected handle. Permit at most 110 attempts, a projected spend of 1,980 credits under the published profile rate, 30 minutes of wall time, and the lower of 5 QPS or the verified balance-derived provider allowance.
+- R17. Apply only accepted responses to their matching staging Account rows. Produce timestamped JSON and Markdown reports with sample definition, response distribution, leaf coverage, country yield, `location_accurate` and `source` distributions, rejections, retries, latency percentiles, wall time, effective QPS, credits, and projected full-run cost and duration.
+- R18. Stop after the 100-account staging report. Continuing to a production migration, a larger provider run, or the UI successor requires a later owner decision.
+- R20. The command is default-dry-run, explicit-apply, resumable, idempotent for successful empty results, globally rate-limited, bounded by account, attempt, credit, and wall-time budgets, and absent from cron, Celery beat, and `run_cycle`.
+- R25. A later production apply requires a current encrypted pre-write Account snapshot, row count, digest, and disposable restore proof. This staging plan documents that gate but does not execute it.
+- R26. Read the TwitterAPI credential only from the staging service's managed environment. Fail closed when it is absent or invalid. Never accept it as a command argument or write it, request headers, connection strings, handles, Account IDs, or raw provider payloads to tracked reports or normal logs.
 
 ### Acceptance Examples
 
-- AE1. **Reference move.** Given deterministic generation, when outputs are checked, then the reference HTML exists only under `docs/reference/`, the generator writes that path, and all 197 cards remain byte-reproducible.
-- AE2. **English headline toggle.** Given a collapsed English headline, when the reader clicks `more`, then the secondary copy appears and the same button reads `less`; clicking `less` hides it and returns focus to `more`.
-- AE3. **Chinese headline toggle.** Given a zh-CN headline rendered initially or after refresh, the equivalent labels are `更多` and `收起`, with the same hidden, visible, ARIA, and focus transitions as AE2.
-- AE4. **Official account.** Given country `US` and role `official`, the follower column orders follower magnitude, official badge, then a subdued 14-pixel flag whose English accessible name and hover title are `United States`.
-- AE5. **No official role.** Given country `CN`, no official role, and zh-CN locale, the flag appears immediately below follower magnitude with accessible name and title `中国`.
-- AE5a. **Official Chinese names.** Given the approved `CN`, `US`, `KR`, and `XK` codes in zh-CN, the display names are the CLDR 48 standard values `中国`, `美国`, `韩国`, and `科索沃`; the importer rejects missing, duplicate, inherited-arrow, or alternate-form values.
-- AE6. **Unknown location.** Given an empty or unsupported free-form location, the row emits no country code, name, flag, broken SVG request, or non-country sentinel.
-- AE7. **Refresh parity.** Given the same account returned by the initial page and `/feed/` refresh, both paths render the same flag symbol, localized name, placement, size, and filter treatment without horizontal overflow at 320, 390, or desktop widths.
-- AE8. **Staging boundary.** Given a clean candidate whose local, browser, and Bridgewright gates pass, the feature and staging refs and `pushinweight-staging-web` report that exact SHA while `main` remains unchanged.
+- AE9. **Capped staging population**
+  - **Covers:** R15-R18 and R20.
+  - **Given:** The exact candidate migration is applied to staging and 100 unique staging Accounts are selected with a recorded seed.
+  - **When:** The operator runs explicit apply and two calls retry.
+  - **Then:** The report records 100 selected Accounts, 102 attempts, exact writes and rejections, wall time, and credits without any production write.
+- AE10. **Identity or schema drift**
+  - **Covers:** R21.
+  - **Given:** A response returns another user ID, an undocumented leaf, or a documented field with the wrong type.
+  - **When:** The strict parser evaluates it.
+  - **Then:** No Account field or fetched timestamp changes and the pilot stops with a redacted reason.
+- AE17. **Unsupported country value remains observable**
+  - **Covers:** R6 and R21.
+  - **Given:** A structurally valid matching response contains an exact `account_based_in` value that is absent from the approved country source.
+  - **When:** The strict parser and Account gateway accept the response.
+  - **Then:** The exact provider value and fetched timestamp are stored, `country_code` remains unchanged or null, the outcome is counted as unmapped, and the row is not retried merely because normalization failed.
+- AE11. **Typed deduplicated persistence**
+  - **Covers:** R6, R12, and R19.
+  - **Given:** A complete documented response.
+  - **When:** The Account observation gateway accepts it.
+  - **Then:** Shared fields and every missing typed destination are populated, exact country normalization derives `country_code`, and no Account JSON field exists.
+- AE12. **Successful empty lookup is resumable**
+  - **Covers:** R20.
+  - **Given:** A successful response omits optional About and label values.
+  - **When:** The command checkpoints the row and restarts.
+  - **Then:** `account_based_in_fetched_at` records completion and default missing-only selection does not charge for it again.
+- AE13. **Newer post values can win safely**
+  - **Covers:** R22-R23.
+  - **Given:** User About populated shared mutable fields and About-only country fields.
+  - **When:** A later post explicitly carries a new valid handle, display name, blue-verification value, and affiliate label.
+  - **Then:** Shared values change while About-only values and their fetched time remain intact.
+- AE14. **Missing post fields do not erase**
+  - **Covers:** R22-R23.
+  - **Given:** An Account has non-null shared values.
+  - **When:** A later author payload omits blue verification or affiliate label.
+  - **Then:** Existing values remain unchanged.
+- AE15. **Faulty post fields are contained**
+  - **Covers:** R22-R23.
+  - **Given:** A post carries a malformed handle, negative count, invalid URL, or future creation time alongside one valid display-name update.
+  - **When:** The production post-to-Account call chain runs.
+  - **Then:** The gateway preserves rejected fields, accepts the display name, records redacted rejection reasons, and still persists the Post.
+- AE16. **Follower observation freshness**
+  - **Covers:** R23-R24.
+  - **Given:** An Account has follower count 1,000 observed at T1.
+  - **When:** A post at T2 explicitly supplies 1,000 and a post at T3 omits or malforms the count.
+  - **Then:** The count remains 1,000, `followers_fetched_at` advances to T2, and T3 changes neither field.
 
 ### Scope Boundaries
 
 **In scope**
 
-- The reference HTML move and its deterministic path contract.
-- Approved country manifest enrichment from pinned Unicode CLDR 48 standard Simplified Chinese territory names and runtime derivation.
-- Homepage country projection, external SVG sprite, follower-column presentation, and localized tooltip.
-- The one-button headline disclosure across SSR and JavaScript-rendered narratives.
-- A new Bridgewright target, assurance declaration coverage, real browser evidence, PR, and staging delivery.
+- User About protocol, strict parsing, shared pacing, typed Account columns, exact country normalization, and the model-owned observation gateway.
+- Current Account writers in post ingestion, list reconciliation, and seed loading.
+- A default-dry-run management command and one 100-account staging apply.
+- Exact-SHA staging deployment, staging migration verification, aggregate pilot evidence, and a production recovery gate in the runbook.
 
-**Deferred to Follow-Up Work**
+### Deferred to Follow-Up Work
 
-- Persisting a normalized `accounts.country_code` field or broadening recognition beyond supported exact codes and country names.
-- Adding geocoding, fuzzy city or region inference, operator corrections, or account-country analytics.
-- Redrawing flags, changing the approved 197-code inventory, or changing the Recommended color treatment.
+- Production migration and full Account population.
+- Country-flag rendering, localized country names, headline disclosure, Bridgewright UI assurance, and reference-page movement. These belong to `docs/plans/2026-08-29-223000-feed-country-flags-disclosure-successor-plan.md`.
+- Account observation history or per-field timestamps beyond `followers_fetched_at` and `account_based_in_fetched_at`.
+- Scheduling or recurring refresh of User About.
 
-**Outside this product change**
+**Outside this plan**
 
-- Production deployment, database mutation, provider traffic, harvester changes, and `/internal/` redesign.
-
-### Success Criteria
-
-- A reader can reveal and hide each headline explanation using one label that always describes the next reversible state.
-- Recognized account origin is readable at a glance without making the feed brighter or changing row alignment.
-- English and zh-CN browser sessions expose the correct full country name and preserve the existing feed and headline behavior at desktop and narrow mobile widths.
-- The exact candidate produces zero failed, skipped, errored, missing, or unknown Bridgewright obligations and deploys successfully to staging only.
+- Treating `account_based_in` as nationality, citizenship, permanent residence, or a guarantee of physical location.
+- Changing the seven-call search plan, live cursors, metrics refresh, headline worker, production scheduler, or retired v1 stack.
 
 ### Product Contract Preservation
 
-The Ollija placeholder is replaced with the complete user-directed product contract. No earlier requirement IDs existed to preserve.
+Changed by explicit owner direction: the former combined plan's UI requirements and units moved to the successor plan. The enrichment requirements, stable R/AE/KTD/U IDs, typed field map, and validation semantics retain their prior meaning. The latest direction replaces the former read-only production pilot with a migration-first, write-enabled staging pilot.
 
 ---
 
@@ -181,198 +211,251 @@ The Ollija placeholder is replaced with the complete user-directed product contr
 
 ### Key Technical Decisions
 
-- KTD1. **Normalize at the existing projection boundary.** Convert the persisted account or post location to a supported code while building the shared feed row, rather than adding schema or a second data-loading path. This implements PD4 and R6-R8, R11-R12.
-- KTD2. **Import official Chinese names once, then generate runtime identity from the approved manifest.** Import only standard (no `alt`) territory values for the approved 197 codes from Unicode CLDR release 48 at `https://raw.githubusercontent.com/unicode-org/cldr/release-48/common/main/zh.xml`, reject inheritance markers and missing or duplicate values, record that upstream URL/release/SHA-256 (`b1ef8bcadcf19fa8914d9ba812a7bcec124c72fecbf4acea02e4c8bd2fe51866`) plus the Unicode License v3 source notice in manifest metadata, and vendor the resulting `name_zh_cn` values. A one-time generator option accepts a local XML file only after verifying that digest; ordinary generation and tests use the vendored values without network or Babel. Generate a small Python country-data module and validate it against the existing identity and pixel digests. Implements PD3, PD5, PD8, and R7-R8.
-- KTD3. **Serve one external multicolor sprite through Django static resolution.** Generate a runtime SVG under `monitor/static/` whose bytes match the committed reference sprite, resolve its fingerprinted URL once with Django's `static` template tag, and expose that URL on the feed root so both the server include and JavaScript replacement renderer append the same symbol fragment. This avoids hard-coded `/static/` paths and injecting the 497 KB sprite or per-pixel paths into every page or row. Implements PD5 and R8-R11.
-- KTD4. **Let the server own localized identity.** Add normalized country fields to the existing account wire object and escape them in the JavaScript formatter; both renderers consume the same code and selected name rather than duplicating locale or normalization logic in the browser. Implements PD3-PD4 and R6-R7, R11.
-- KTD5. **Make disclosure a two-state button.** Keep one button in the headline title and make its label, `aria-expanded`, and controlled secondary region derive from the collapsed or expanded state. Remove the secondary-copy button semantics and separate hide control. Implements PD1 and R2-R5.
-- KTD6. **Use DOM order for flag placement.** Emit the official badge before the flag only for `role-official`; otherwise emit the flag before any preserved non-official badge. Keep the lead column as a vertical flex stack without absolute positioning. Implements PD2 and R9-R10.
-- KTD7. **Extend the approved Bridgewright chain.** Create `docs/reference/2026-08-29-184556-feed-country-flags-disclosure-bridgewright-target.md`, make it the latest approved contract, and add the country-flag presentation state to the declaration and executable model. Implements R14.
-- KTD8. **Bind assurance to the product-source commit.** Land behavior and regression pins first, record that product-source SHA in the assurance declaration, then run the full candidate gate before shipping the resulting candidate. Bridgewright is a required evidence gate but does not authorize a deployment; Ollija's owner-selected staging guide remains the release authority. Implements R14-R15.
-- KTD9. **Keep the reference basename stable.** Move the generated HTML without renaming it, then update the generator and tests to the reference path. Implements PD7 and R1.
+- KTD10. **Flatten every documented User About `data` leaf into a typed Account destination.** (session-settled: user-directed — chosen over raw JSON and redundant account-prefixed names: provider-shaped fields should remain queryable and type-safe.) Reuse semantic matches, snake-case camelCase, and drop structural wrappers. Implements PD9, R12, and R19.
+- KTD11. **Extend the hardened TwitterAPI caller instead of creating a parallel client.** Reuse one `aiohttp` session, a bounded connector, Retry-After, jitter, split timeouts, and circuit breaking from `monitor/twitterapi/caller.py`. Add one aggregate pace gate capped by the current balance-derived provider QPS and by the command's lower operator cap. Implements R16 and R20.
+- KTD12. **Make Account own observation validation and application.** (session-settled: user-directed — chosen over parser-only validation and direct `update_or_create` defaults: every writer needs the same protection.) A transactional model gateway accepts explicitly present fields, validates the proposed subset and cross-field invariants, locks only the target row during comparison and apply, and returns structured applied, unchanged, and rejected outcomes. Implements PD12 and R22-R24.
+- KTD13. **Checkpoint successful responses, including success-empty.** Set `account_based_in_fetched_at` after an accepted provider success even when optional About fields are absent. Leave transport, provider, identity, or schema failures retryable. Implements R20-R21.
+- KTD14. **Use a migration-first staging pilot.** (session-settled: user-directed — chosen over testing migration or API writes on production: both must be proven against the isolated staging database.) The candidate deploy applies its migration through `build.sh` before the command can select or update staging Accounts. Implements PD6 and R15-R18.
+- KTD15. **Use field presence and serialized last-valid-write ownership.** (session-settled: user-directed — chosen over preserving User About snapshots or adding change history: later valid post values should refresh overlapping mutable facts.) “Latest” means the most recently accepted database commit, not event-time arbitration. `created_at` is fill-once. Implements PD11 and R22.
+- KTD16. **Activate the existing follower freshness field.** Update `followers_fetched_at` for each accepted explicit follower observation, including an unchanged count. PostgreSQL does not provide a durable per-column last-write timestamp. Implements R24.
+- KTD17. **Keep request envelopes out of Account.** Store `status`, `msg`, HTTP status, attempt, latency, and error reason in the run report or dead letter. They describe a call, not an account. Implements R19-R21.
+- KTD18. **Reconcile paid usage with provider evidence.** Before each call, refuse an attempt whose published-rate projection would exceed 1,980 credits. Record application attempts and expected pricing, then reconcile the exact UTC pilot window to the TwitterAPI Recent API Calls ledger when dashboard credentials are available. A missing or inconsistent ledger makes the cost result inconclusive and stops the run after staging writes; it never authorizes expansion. Implements PD10 and R17-R18.
+- KTD19. **Generate a backend-only country map from the already approved source.** Build code and canonical English-name normalization from `docs/ideation/assets/2026-08-29-162947-country-flag-pixels.json` without moving the review page, generating the runtime SVG sprite, or changing feed code. This keeps R6 executable while preserving the UI successor boundary.
+
+### Typed Account Column and Writer Map
+
+A successful `data.id` must match `Account.author_id`. Nullable types reflect optional provider objects. URL fields use a 2,048-character limit. `Post` means the tweet author payload in `x_monitor/apify.py` and `monitor/cycle.py`. `List` means `monitor/list_membership.py`.
+
+| TwitterAPI path | Account column | Django type | Valid writers |
+| --- | --- | --- | --- |
+| `data.id` | `author_id` | existing `TextField(primary_key=True)` | Identity key; About validates only |
+| `data.name` | `display_name` | existing `TextField(null=True)` | About, Post, List |
+| `data.userName` | `handle` | existing `CharField(64, null=True)` | About, Post, List |
+| `data.createdAt` | `created_at` | `DateTimeField(null=True)` | About or Post fills null |
+| `data.isBlueVerified` | `is_blue_verified` | existing `BooleanField(null=True)` | About or explicit Post |
+| `data.protected` | `protected` | `BooleanField(null=True)` | About or explicit Post |
+| `data.affiliates_highlighted_label.label.badge.url` | `affiliate_label_badge_url` | `URLField(2048, null=True)` | About or explicit Post label |
+| `data.affiliates_highlighted_label.label.description` | `affiliate_label_description` | `TextField(null=True)` | About or explicit Post label |
+| `data.affiliates_highlighted_label.label.url.url` | `affiliate_label_url` | `URLField(2048, null=True)` | About or explicit Post label |
+| `data.affiliates_highlighted_label.label.url.urlType` | `affiliate_label_url_type` | `CharField(128, null=True)` | About or explicit Post label |
+| `data.affiliates_highlighted_label.label.userLabelDisplayType` | `affiliate_label_user_label_display_type` | `CharField(128, null=True)` | About or explicit Post label |
+| `data.affiliates_highlighted_label.label.userLabelType` | `affiliate_label_user_label_type` | `CharField(128, null=True)` | About or explicit Post label |
+| `data.about_profile.account_based_in` | `account_based_in` | `TextField(null=True)` | About only |
+| `data.about_profile.location_accurate` | `location_accurate` | `BooleanField(null=True)` | About only |
+| `data.about_profile.learn_more_url` | `learn_more_url` | `URLField(2048, null=True)` | About only |
+| `data.about_profile.affiliate_username` | `affiliate_username` | `CharField(64, null=True)` | About only |
+| `data.about_profile.source` | `source` | `CharField(128, null=True)` | About only |
+| `data.about_profile.username_changes.count` | `username_changes_count` | `PositiveIntegerField(null=True)` | About only; strictly parse numeric string |
+| `data.identity_profile_labels_highlighted_label.label.badge.url` | `identity_profile_label_badge_url` | `URLField(2048, null=True)` | About only |
+| `data.identity_profile_labels_highlighted_label.label.description` | `identity_profile_label_description` | `TextField(null=True)` | About only |
+| `data.identity_profile_labels_highlighted_label.label.url.url` | `identity_profile_label_url` | `URLField(2048, null=True)` | About only |
+| `data.identity_profile_labels_highlighted_label.label.url.urlType` | `identity_profile_label_url_type` | `CharField(128, null=True)` | About only |
+| `data.identity_profile_labels_highlighted_label.label.userLabelDisplayType` | `identity_profile_label_user_label_display_type` | `CharField(128, null=True)` | About only |
+| `data.identity_profile_labels_highlighted_label.label.userLabelType` | `identity_profile_label_user_label_type` | `CharField(128, null=True)` | About only |
+| Exact supported country derived from About | `country_code` | `CharField(2, null=True, db_index=True)` | Derived with accepted About only |
+| Successful About observation time | `account_based_in_fetched_at` | `DateTimeField(null=True)` | About only |
+
+### Account Observation Validation
+
+| Field family | Model rule | Rejection behavior |
+| --- | --- | --- |
+| Identity | Nonblank immutable `author_id` must match the selected row | Reject the whole observation |
+| Handle | Trimmed nonblank string without `@`, whitespace, or controls; fits the field | Preserve the current handle |
+| Display/profile text | Correct string type, valid Unicode, control-free, and field-length safe | Preserve the affected field |
+| Counts | Integer but not Boolean, nonnegative, and database-range safe | Preserve the affected count |
+| Booleans | Exact Boolean when present; no string or integer coercion | Preserve the affected Boolean |
+| URLs | Null or absolute HTTP(S) URL within 2,048 characters | Preserve the affected URL or label group |
+| `created_at` | Timezone-aware, not before X launch, not beyond observation time plus tolerance, and fill-once | Preserve current value and report conflict |
+| Affiliate/identity labels | Validate six related leaves as one group; explicit empty object may clear the group | Preserve the whole current group |
+| About provider strings | Correct type, trimmed, control-free, and within pilot-observed limits | Preserve the affected field |
+| `country_code` | Uppercase supported two-letter code | Preserve the current code or null; count an exact-but-unsupported About value as unmapped without rejecting the otherwise valid observation |
 
 ### High-Level Technical Design
 
 ```mermaid
-flowchart TB
-  A[Approved 197-country manifest] --> B[Deterministic flag generator]
-  B --> C[Reference HTML under docs/reference]
-  B --> D[External runtime SVG sprite]
-  B --> E[Runtime country identity data]
-  F[Account.location] --> G[Shared feed country resolver]
-  H[Post.author_location fallback] --> G
-  E --> G
-  G --> I[Localized account wire]
-  I --> J[SSR feed row]
-  I --> K[JavaScript replacement row]
-  D --> J
-  D --> K
+sequenceDiagram
+  participant L as LFG
+  participant S as Staging deploy
+  participant D as Staging PostgreSQL
+  participant T as TwitterAPI
+  L->>S: Push exact candidate SHA
+  S->>D: Apply migration under cluster lock
+  L->>D: Verify columns and migration receipt
+  L->>S: Invoke explicit 100-account apply
+  S->>D: Select seeded staging Accounts
+  S->>T: Globally paced User About calls
+  T-->>S: Typed responses or failures
+  S->>D: Validate and apply accepted observations
+  S-->>L: Aggregate report and hard stop
 ```
 
 ```mermaid
-stateDiagram-v2
-  [*] --> Collapsed
-  Collapsed: secondary hidden
-  Collapsed: label more / 更多
-  Collapsed --> Expanded: activate disclosure
-  Expanded: secondary visible
-  Expanded: label less / 收起
-  Expanded --> Collapsed: activate disclosure
-  Expanded --> Collapsed: narrative refresh
+flowchart TB
+  A[User About response] --> G[Account observation gateway]
+  P[Post author payload] --> G
+  L[List member payload] --> G
+  E[Seed account payload] --> G
+  G --> V{Identity and field validation}
+  V -->|accepted subset| C[Typed Account columns]
+  V -->|rejected field or group| R[Redacted receipt counters]
+  C --> F[followers_fetched_at]
+  C --> B[account_based_in_fetched_at]
+  C --> K[country_code]
 ```
 
 ### Assumptions
 
-- The earlier session finding remains valid: `Account.location`, with `Post.author_location` fallback, is the persisted account-location source to reuse for homepage country resolution.
-- Unsupported free-form values fail closed by omitting the flag; this run does not infer countries from cities, regions, prose, or partial matches.
-- The `original` locale uses the English country display name because the requested localized variants are English and zh-CN.
-- Staff and community role badges remain visible. When `role-official` is absent, the flag is placed before those badges so it remains directly below follower magnitude.
-- Native `title` behavior is the hover presentation, paired with an accessible name; no custom tooltip component is introduced.
+- Staging contains at least 100 unique Accounts with nonblank handles. If not, use the existing guarded staging refresh procedure before the pilot; never read handles directly from production inside the command.
+- The official endpoint schema checked on 2026-08-29 lists the `data` leaves in the field map. The live pilot is the drift detector.
+- TwitterAPI pricing checked on 2026-08-29 is 18 credits per returned profile, with a 15-credit minimum per call and USD 1 per 100,000 credits. The 110-attempt cap therefore budgets at most 1,980 credits under the profile-rate assumption.
+- The provider QPS ceiling depends on account balance. The command uses the lower of its explicit operator cap and the verified provider allowance. It never relies on the stale 200-QPS note in repository research.
+- `account_based_in` is stored as the provider reports it. This plan does not independently verify how X calculates the value.
+- A successful response with absent optional objects is a completed lookup. Transport, HTTP, provider-status, identity, and schema failures are not.
 
 ### System-Wide Impact
 
-- **Request lifecycle:** The existing homepage and feed endpoints gain country identity in their account wire object without another query or persistence path.
-- **Static delivery:** WhiteNoise serves one generated SVG sprite. Browsers fetch it once and reuse fragments across visible and refreshed rows.
-- **Localization:** Country identity data carries English and Chinese names. The `more` and `less` interface strings enter both Django catalogs and the JavaScript-rendered narrative path.
-- **Assurance:** The Bridgewright declaration gains a country-flag state dimension combined with locale, headline disclosure, and role-badge coverage.
-- **Operations:** No migration, cron, provider, database, or production action is required. Staging uses the ordinary exact-SHA web deployment path.
+- **Schema:** `Account` gains 22 typed fields. The migration is additive and nullable.
+- **Country identity:** A generated backend-only code/name map supports R6. It carries no SVG, zh-CN display name, template, CSS, or client rendering.
+- **Writers:** Post, list, seed, and User About inputs share one Account write boundary.
+- **Freshness:** `followers_fetched_at` becomes active. `account_based_in_fetched_at` records successful About lookup completion. Other fields do not gain timestamps.
+- **Harvester:** Existing seven-call search, cursors, post columns, classification, translation, metrics, headlines, cron, and concurrency remain unchanged.
+- **Cost:** Only the explicit command performs User About calls. Staging and production share the provider quota, so the command enforces global pacing and fixed budgets.
+- **Recovery:** Staging changes can be rebuilt from its snapshot. Production rollback preparation is documented but not executed.
 
 ### Risks and Mitigations
 
 | Risk | Mitigation |
 | --- | --- |
-| Raw profile location is not a country | Match only exact supported codes and names; omit unknown values and test no-sentinel behavior. |
-| External SVG fragments fail or have zero geometry | Resolve the static URL through the real page and assert the `<use>` target, nonzero bounds, and no request errors in Chromium. |
-| SSR and refresh markup diverge | Add the same fields to the shared row projection and assert both renderers in unit and real-browser tests. |
-| The flag makes the follower column too bright or tall | Pin the approved 14-pixel size and exact Recommended filter/opacity; verify every rendered flag uses it at 320, 390, and desktop geometry without overflow. |
-| Chinese country names drift or become ad hoc translations | Import CLDR 48 standard territory values once, pin provenance and digest in the manifest, and exhaustively require one valid value for every approved code. |
-| Locale changes leave stale English titles | Exercise English and zh-CN initial and refreshed rows, including `title`, accessible name, and response locale. |
-| Disclosure retains competing collapse targets | Remove the separate hide control and secondary-copy button semantics; test the single-button focus and ARIA transition. |
-| Assurance evidence names the wrong revision | Record the product-source commit in the declaration and run the candidate gate against that exact revision before shipping. |
+| Live schema differs from docs | Strict leaf inventory stops on the first unknown or wrong type before that Account write. |
+| Handle now belongs to another account | Require returned ID equality. |
+| Missing post booleans become false | Preserve key presence through normalization and validate exact booleans. |
+| Malformed post data clobbers good values | Route all current writers through KTD12 and preserve rejected fields. |
+| Provider I/O holds database locks | Fetch and parse outside transactions; lock one row only for compare-and-apply. |
+| Parallel workers exceed QPS | Use one shared limiter and one bounded session for the command. |
+| Retries exceed spend | Enforce attempt, credit, wall-time, and circuit limits before each outbound call. |
+| Report leaks account identity | Commit aggregates only; keep handles, IDs, credentials, and raw payloads out of tracked reports. |
+| Credential crosses an environment or logging boundary | Read `TWITTERAPI_IO_API_KEY` only from the staging service environment; reject CLI-provided secrets and redact request headers and connection strings. |
+| Migration and staging data are out of sync | Verify deployed SHA, Django migration leaf, actual columns, types, and row counts before the pilot. |
+| Vendor ledger is unavailable | Mark cost reconciliation inconclusive and stop after the bounded staging result. |
 
 ### Sequencing
 
-U1 establishes the moved reference and deterministic runtime country source. U2 uses that source in the shared feed projection and both row renderers. U3 replaces the headline disclosure state machine and localized copy. U4 binds the complete visible delta into Bridgewright and proves the authenticated browser surface before LFG ships to staging.
+Implement U5 with fake network evidence. Implement U6 and prove every Account writer call chain. Commit a clean candidate with the deferred UI diff isolated. U7 deploys that exact SHA to staging, verifies the migration, runs the 100-account staging apply, and stops with evidence.
 
 ---
 
 ## Implementation Units
 
-### U1. Promote the flag reference and generate runtime country assets
+### U5. Add the User About protocol and bounded command
 
-- **Goal:** Make the approved 197-country source usable by both reference documentation and the Django runtime without identity drift.
-- **Requirements:** R1, R7-R8, R10, R12; AE1, AE6.
+- **Goal:** Provide one strict, globally paced User About client and a default-dry-run Account population command.
+- **Requirements:** R16-R21 and R26; AE9-AE12 and AE17. Implements KTD10-KTD11, KTD13, KTD17-KTD18.
 - **Dependencies:** None.
 - **Files:**
-  - Move `docs/ideation/2026-08-29-162947-country-flag-svg-reference.html` to `docs/reference/2026-08-29-162947-country-flag-svg-reference.html`.
-  - Modify `docs/ideation/assets/2026-08-29-162947-country-flag-pixels.json`.
-  - Modify `scripts/build_country_flag_svg_reference.py`.
-  - Create `monitor/country_flags.py`.
-  - Create `monitor/static/pw-country-flags.svg`.
-  - Modify `tests/test_country_flag_svg_reference.py`.
-  - Create `tests/test_country_flags.py`.
+  - Modify `monitor/twitterapi/caller.py`.
+  - Create `monitor/twitterapi/user_about.py`.
+  - Create `monitor/management/commands/backfill_account_based_in.py`.
+  - Create `tests/test_twitterapi_user_about.py`.
+  - Modify `tests/test_twitterapi_caller_shape.py`.
+  - Create `tests/test_backfill_account_based_in.py`.
 - **Approach:**
-  1. Add an explicit one-time `--import-cldr-zh <local-xml>` generator path that verifies the pinned release-48 digest, imports one standard zh-CN display name per existing code, records its provenance, and preserves the audited code, source-name, English-name, and pixel identities.
-  2. Change the generator's HTML output path per KTD9 and emit the runtime identity module and static sprite per KTD2-KTD3.
-  3. Keep normalization exact and fail closed for blank, malformed, unsupported, `WW`, and `HF` inputs.
-- **Execution note:** Add the moved-path, localized-name, and normalization assertions before changing generator outputs; retain the approved pixel and symbol digests.
-- **Patterns to follow:** `scripts/build_country_flag_svg_reference.py` for deterministic output and `tests/test_country_flag_svg_reference.py` for exhaustive identity and pixel reconstruction.
+  1. Add strict response-envelope and leaf parsing against the field map.
+  2. Extend the existing caller with an aggregate pace gate and pre-call budget checks.
+  3. Make selection deterministic, missing-first, resumable, default-dry-run, and explicit-apply.
+  4. Keep detailed runtime receipts outside the repository. Emit tracked aggregate JSON and Markdown after the pilot.
+- **Execution note:** Pin parser, pacing, retry, circuit, and zero-write behavior with fake HTTP and a real ORM call chain before any live request.
+- **Patterns to follow:** `monitor/twitterapi/caller.py`, `monitor/management/commands/resolve_lonely_placeholders.py`, and `scripts/harvest_cost/emit.py`.
 - **Test scenarios:**
-  - Covers AE1. One generation run writes the reference path and no ideation HTML; check mode passes only when all committed outputs match.
-  - Every one of the 197 codes has a nonempty English and zh-CN display name from the pinned CLDR standard territory entries while code, source name, and pixel digests remain pinned; uniqueness is required for the code, not for human display strings.
-  - CLDR provenance records release 48, the exact upstream URL, SHA-256, and Unicode License v3 notice; a fixture-driven importer test rejects `alt` entries, inheritance markers, missing codes, duplicate standard entries, and an upstream digest mismatch without network access.
-  - `us`, `US`, and `United States` resolve to `US`; `China` and `中国` resolve to `CN`.
-  - Empty, arbitrary city text, malformed code, `WW`, and `HF` resolve to no country.
-  - The runtime sprite has exactly the approved 197 symbols and matches the reference sprite byte-for-byte.
-- **Verification:** The reference move is complete, generation is deterministic, all names are present, and runtime artifacts contain no independent hand-edited identity source.
+  - A complete documented response produces every mapped candidate and no unknown leaf.
+  - Missing optional objects produce present/absent metadata without implicit clears.
+  - Covers AE10. Unknown leaf, invalid count or datetime, returned-ID mismatch, or provider error performs no write.
+  - Covers AE17. An exact but unsupported country string stores the provider value, checkpoints success, and derives no code.
+  - Aggregate request timestamps remain within the selected QPS under concurrent completion.
+  - One 429 honors Retry-After; repeated 429/5xx opens the circuit; 401/403 stops immediately.
+  - Default invocation performs zero HTTP calls and zero Account writes.
+  - Covers AE12. Accepted success-empty checkpoints once; a restart skips it unless refresh is explicit.
+  - Account, attempt, projected-credit, 30-minute wall-time, and effective-QPS budgets are checked before the next request and cannot overshoot.
+  - The credential is sourced only from `TWITTERAPI_IO_API_KEY`; command arguments, reports, and ordinary logs never expose it or request headers.
+- **Verification:** Focused tests prove the command-to-caller boundary, strict schema, budgets, redaction, and no recurring scheduler edge.
 
-### U2. Project and render localized account country flags
+### U6. Add typed Account persistence and validated writer ownership
 
-- **Goal:** Show recognized account origin in the follower column with identical SSR and refresh behavior.
-- **Requirements:** R6-R13; AE4-AE7.
-- **Dependencies:** U1.
+- **Goal:** Add every missing typed destination and make all current Django Account writers use one last-valid-write gateway.
+- **Requirements:** R6, R12, R19, R21-R25; AE10-AE16. Implements KTD10, KTD12-KTD16.
+- **Dependencies:** U5.
 - **Files:**
-  - Modify `monitor/views.py`.
-  - Modify `monitor/templates/monitor/_feed_initial_v22.html`.
-  - Modify `monitor/static/pw-feed.js`.
-  - Modify `monitor/static/home-v20.css`.
-  - Modify `tests/test_views.py`.
-  - Modify `tests/test_home_v22_feed_row_shape.py`.
-  - Modify `tests/test_pw_feed_formatter.js`.
-  - Modify `tests/test_home_v22_browser.py`.
+  - Modify `core/models.py`.
+  - Create `core/account_validation.py` only if reusable validators do not fit cleanly in the model module.
+  - Create the next migration after `core/migrations/0019_guard_per_brand_narrative_reverse.py`.
+  - Modify `monitor/twitterapi/user_about.py`.
+  - Modify `x_monitor/apify.py`.
+  - Modify `monitor/cycle.py`.
+  - Modify `monitor/list_membership.py`.
+  - Modify `monitor/management/commands/load_seed.py`.
+  - Modify `monitor/harvest_summary.py` only if it is the existing structured rejection owner.
+  - Create `monitor/country_codes.py`.
+  - Create `scripts/build_country_codes.py`.
+  - Create `docs/operations/2026-08-29-223000-account-user-about-backfill.md`.
+  - Create `tests/test_account_user_about_model.py`.
+  - Create `tests/test_account_field_freshness.py`.
+  - Create `tests/test_load_seed_account_observation.py`.
+  - Modify `tests/test_list_membership_reconciliation.py`.
+  - Modify `tests/test_post_schema_denormalization.py`.
+  - Modify `tests/test_backfill_account_based_in.py`.
+  - Create `tests/test_country_codes.py`.
 - **Approach:**
-  1. Add `location` to the account enrichment snapshot, then resolve and localize country identity in both the ORM serializer and the enriched-dictionary serializer using `Account.location` with `Post.author_location` fallback per KTD1 and KTD4.
-  2. Resolve the fingerprinted sprite URL once on the homepage feed root, then render one accessible fragment reference in each server and client row per KTD3.
-  3. Order the official badge and flag per KTD6 and apply the exact Recommended size, filter, and opacity to every runtime flag in the existing follower-column flex stack.
-- **Execution note:** Start with failing real caller-to-template and refresh-path tests; do not accept a helper-only normalization test as the regression net.
-- **Patterns to follow:** `_v22_feed_display_fields`, `_post_to_wire`, `_feed_initial_v22.html`, `renderRowHtml`, and the role-badge browser assertions in `tests/test_home_v22_browser.py`.
+  1. Add only missing nullable fields from the field map and generate one additive migration from the current leaf.
+  2. Add the KTD12 gateway and model validators before changing writer call sites.
+  3. Preserve provider-key presence through post normalization. Flatten explicit post affiliate labels into the shared Account label fields while retaining existing typed Post fields.
+  4. Route About, post, list, and seed Account mutations through the gateway. Keep provider I/O outside its transaction.
+  5. Generate the KTD19 backend-only country map and derive country only from accepted exact About values. Do not move or regenerate visual flag artifacts in this plan.
+  6. Record bounded rejection counts and redacted reasons without rolling back a valid Post.
+  7. Document the R25 production snapshot and restore gate without executing it.
+- **Execution note:** Begin with model and production-caller regression tests. Helper-only validation tests are insufficient.
+- **Patterns to follow:** `_normalize_tweet` in `x_monitor/apify.py`, `_upsert_account` in `monitor/cycle.py`, and `_upsert_account` in `monitor/list_membership.py`.
 - **Test scenarios:**
-  - Covers AE4. An ORM-backed official US account renders the official badge before a `flag-us` fragment with `United States` in English.
-  - Covers AE5. An ORM-backed no-role China account renders `flag-cn` immediately below followers and exposes `中国` in zh-CN.
-  - A staff or community account preserves its role badge while the recognized flag remains the first item below followers.
-  - Covers AE6. Blank and unsupported locations omit all flag markup and country wire values without reserving a broken target.
-  - Covers AE7. `/feed/` replacement markup equals the initial row's code, localized title, accessible name, order, computed width, aspect ratio, and exact Recommended filter and opacity; no Original or Quieter treatment is present.
-  - The server include and JavaScript formatter use the same Django-resolved fingerprinted sprite URL; no renderer hard-codes `/static/` or emits a missing fragment request.
-  - Country, role, and title strings are escaped in client-created markup.
-  - `/internal/` retains the legacy table and contains no new V22 flag markup.
-- **Verification:** Real ORM rows traverse URL, view, wire projection, template or formatter, and Chromium with nonzero flag geometry and no request, console, page, or overflow errors.
+  - Covers AE11. A complete About response populates shared and new typed fields with no Account JSON field.
+  - Account creation and update use the same validation semantics.
+  - `created_at` fills null, accepts equality, and preserves/report conflicts.
+  - Covers AE13. Explicit valid post values refresh shared mutable and affiliate-label fields without changing About-only fields.
+  - Covers AE14. Missing post/list values preserve current fields.
+  - Covers AE15. Malformed independent values are rejected field-by-field while a valid sibling value and the Post persist.
+  - A malformed coupled label preserves the whole current label group.
+  - Exact supported codes and canonical English names normalize; cities, regions, fuzzy names, `WW`, `HF`, and unsupported values do not. Unsupported exact values still store and checkpoint the accepted About observation.
+  - Covers AE16. Accepted equal follower counts advance freshness; omitted or rejected counts do not.
+  - List handle collision remains degraded rather than corrupting identity.
+  - Seed loading remains idempotent and cannot bypass validation.
+  - Migration applies from current main, reverses on a disposable database, and leaves existing Account rows intact.
+- **Verification:** Model tests and real post/list/seed/About call-chain tests prove the mapped schema, validation containment, writer ownership, and timestamp rules.
 
-### U3. Replace headline detail and hide controls with one reversible toggle
+### U7. Deploy, migrate, and populate the 100-account staging pilot
 
-- **Goal:** Give every trend narrative one localized disclosure button whose label and ARIA state match the next action.
-- **Requirements:** R2-R5, R13; AE2-AE3, AE7.
-- **Dependencies:** None.
+- **Goal:** Prove the exact candidate's migration and paid write path on isolated staging, then stop with decision-grade evidence.
+- **Requirements:** R15-R18 and R20; AE9-AE12. Implements KTD14 and KTD18.
+- **Dependencies:** U5-U6 and all local verification gates.
 - **Files:**
-  - Modify `monitor/templates/monitor/home.html`.
-  - Modify `monitor/static/pw-chart.js`.
-  - Modify `monitor/static/home-v20.css`.
-  - Modify `locale/en/LC_MESSAGES/django.po`.
-  - Modify `locale/zh_Hans/LC_MESSAGES/django.po`.
-  - Modify `tests/test_i18n_catalog_pinned.py`.
-  - Modify `tests/test_home_v22_browser.py`.
+  - Create `docs/analysis/YYYY-MM-DD-HHMMSS-twitterapi-user-about-staging-pilot.json` at pilot runtime.
+  - Create `docs/analysis/YYYY-MM-DD-HHMMSS-twitterapi-user-about-staging-pilot.md` at pilot runtime with the same timestamp.
+  - Modify `docs/operations/2026-08-29-223000-account-user-about-backfill.md` with verified staging evidence and recovery notes.
 - **Approach:**
-  1. Render one initially collapsed button and plain secondary copy in the server template.
-  2. Make the client renderer emit the same structure and let the shared state transition update visibility, label, ARIA, and focus per KTD5.
-  3. Remove the separate hide button and secondary-click or keyboard-collapse behavior so the visible toggle is the sole collapse target.
-- **Execution note:** Pin the current real-browser differentiator red first in English and zh-CN, then change product source and compile catalogs.
-- **Patterns to follow:** The existing `setHeadlineDetail` state owner, cookie-driven locale behavior, and the locale regression guidance in `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md`.
+  1. Isolate the existing flag/disclosure working diff and exclude it from the candidate.
+  2. Push the exact candidate to the staging lane and wait for `build.sh` migration success.
+  3. Verify staging service identity, candidate SHA, database identity, migration row, actual columns/types, and at least 100 callable Accounts.
+  4. Run dry-run selection and confirm zero HTTP and database writes.
+  5. Run one explicit apply as `python manage.py backfill_account_based_in --apply --limit 100 --max-attempts 110 --max-credits 1980 --max-wall-seconds 1800 --max-qps 5 --seed <recorded-seed> --json-report <timestamped-path> --markdown-report <timestamped-path>`; the command must lower QPS further when the verified provider allowance requires it.
+  6. Compare before/after staging rows, reconcile provider usage, emit aggregate reports, and stop.
+- **Execution note:** This is the only live-call unit. Do not run it locally or against production. Do not refresh staging unless its verified Account sample is insufficient and the guarded refresh preflight succeeds.
+- **Patterns to follow:** `build.sh`, `scripts/render_migrate.py`, `docs/deploy/render.md`, and `docs/operations/staging-data-refresh.md`.
 - **Test scenarios:**
-  - Covers AE2. English SSR and refreshed cards transition `more` → `less` → `more`, hide and reveal one secondary, synchronize `aria-expanded`, and return focus after collapse.
-  - Covers AE3. zh-CN cards perform the same transition with `更多` and `收起`, and the response language agrees with the visible text.
-  - Expanding one item leaves sibling items collapsed.
-  - Refreshing narratives replaces an expanded item with a collapsed item labeled for its locale.
-  - The secondary copy has no button role or tab stop, and no separate hide control remains.
-  - Keyboard activation of the native button follows the same transition without duplicate event handling.
-- **Verification:** The authenticated homepage proves one stable disclosure control across locale, initial render, client replacement, focus, and refresh state.
-
-### U4. Bind the delta into Bridgewright and prove the release candidate
-
-- **Goal:** Make the country-flag and headline transitions a durable, exact-revision homepage assurance contract before staging delivery.
-- **Requirements:** R11, R13-R15; AE2-AE8.
-- **Dependencies:** U1-U3.
-- **Files:**
-  - Create `docs/reference/2026-08-29-184556-feed-country-flags-disclosure-bridgewright-target.md`.
-  - Modify `bridgewright.yaml`.
-  - Modify `tests/fixtures/ui_assurance/declaration.json`.
-  - Modify `tests/ui_assurance/reference.py`.
-  - Modify `tests/ui_assurance/evidence.py`.
-  - Modify `tests/test_ui_assurance_browser.py`.
-  - Modify `tests/test_bridgewright_v24_target.py`.
-  - Modify `tests/test_home_v22_browser.py`.
-- **Approach:**
-  1. Add the approved delta and protected boundaries to the target chain per KTD7.
-  2. Extend the presentation model with recognized, absent, and unsupported country-flag states combined with locale, headline detail, and role badge.
-  3. Freeze the product-source commit and run affected and full candidate assessment per KTD8.
-  4. Capture desktop English and narrow zh-CN staging evidence without committing screenshots or treating assessment as deployment authority.
-- **Execution note:** Run Bridgewright validate and prescribe before product edits, affected assurance during the fix loop, and the exact-revision candidate gate only after the product-source commit exists.
-- **Patterns to follow:** `docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md`, `tests/fixtures/ui_assurance/declaration.json`, and `.claude/skills/fix-ui/SKILL.md`.
-- **Test scenarios:**
-  - Every declared country-flag value is mapped in the reference model and executable browser harness; unmapped values fail loudly.
-  - Pairwise coverage combines country flag, role badge, headline detail, and locale, while the ordered headline sequence remains collapsed → expanded → collapsed.
-  - Removing a country-flag or headline evidence row produces a stable missing obligation rather than a skip.
-  - The affected and candidate gates report exact executed, skipped, errored, failed, missing, and unknown totals, with every non-executed or unsuccessful total equal to zero.
-  - Covers AE8. The feature, staging ref, and staging Render web deployment match the candidate SHA while production remains at its pre-run SHA.
-- **Verification:** The target chain names this delta, the full candidate assessment is clean at the recorded product-source revision, and exact-SHA staging health and browser checks pass.
+  - Candidate SHA and staging deployment SHA match before the command runs.
+  - Migration row and all mapped columns/types exist on staging; production migration state is unchanged.
+  - Dry run chooses the same seeded 100 Accounts as apply and performs no calls or writes.
+  - Covers AE9. Apply stays within 100 Accounts, 110 attempts, a 1,980-credit projected budget, 30 minutes, and the lower of 5 QPS or the authorized provider QPS.
+  - Covers AE10. Drift or identity mismatch stops without changing that Account.
+  - Covers AE12. Successful empty and populated responses both checkpoint; transient failures remain eligible.
+  - Before/after SQL reconciles selected, attempted, accepted, rejected, changed, unchanged, success-empty, and remaining counts.
+  - Reports contain no handle, Account ID, credential, connection string, or raw payload.
+- **Verification:** Staging reports the exact SHA and migration, the 100-account receipt reconciles to staging SQL and provider evidence, and production remains unchanged.
 
 ---
 
@@ -380,26 +463,52 @@ U1 establishes the moved reference and deterministic runtime country source. U2 
 
 | Gate | Command | Required evidence |
 | --- | --- | --- |
-| Bridgewright preflight | `uv run --extra dev bridgewright assurance-validate --project-root .` and `uv run --extra dev bridgewright assurance-prescribe --project-root .` | Pinned build identity, declaration, fixture digest, controls, and obligations are valid before edits. |
-| Flag generation | `uv run python scripts/build_country_flag_svg_reference.py --check` | Reference path, 197-country identity, localized names, reference sprite, runtime sprite, and runtime data are deterministic. |
-| Focused Python | `uv run --extra dev pytest tests/test_country_flag_svg_reference.py tests/test_country_flags.py tests/test_views.py tests/test_home_v22_feed_row_shape.py tests/test_i18n_catalog_pinned.py -q` | Country source, real feed call chain, SSR shape, and catalog copy pass with zero skips or errors. |
-| Focused JavaScript | `node tests/test_pw_feed_formatter.js` | Client replacement escapes and renders country identity and preserves existing row behavior. |
-| Real browser | `uv run --extra dev pytest tests/test_home_v22_browser.py -q` | Authenticated initial and refresh paths prove headline transitions, role-aware flag placement, localized hover names, nonzero geometry, and no page, console, request, or overflow errors. |
-| Affected assurance | `uv run --extra dev python -m tests.ui_assurance.gate --scope affected` | Every prescribed affected obligation executes and all unsuccessful or missing totals are zero. |
-| Candidate assurance | `uv run --extra dev python -m tests.ui_assurance.gate --scope candidate --candidate-revision <product-source-sha>` | Full normalized obligation set and Bridgewright assessment are clean at the declaration's recorded source revision. |
-| Django and locale | `uv run python manage.py compilemessages` and `uv run python manage.py check --deploy` | Catalogs compile and Django reports no new deployment errors. |
-| Ollija | `uv run --extra dev pytest tests/ollija -q` and `./bin/ollija annotate-plan docs/plans/2026-08-29-093958-feat-feed-country-flags-disclosure-plan.md --check` | Delivery guidance remains unchanged and selects staging with owner authorization. |
-| Staging | Exact-SHA ref, Render deployment, health route, and authenticated browser checks | `pushinweight-staging-web` reports the candidate SHA, health returns 200, named UI behavior passes, and production is unchanged. |
+| Protocol and command | `pytest tests/test_twitterapi_user_about.py tests/test_twitterapi_caller_shape.py tests/test_backfill_account_based_in.py -q` | Strict schema, pacing, retries, circuit, budgets, redaction, dry-run, apply, and restart pass. |
+| Model and writer ownership | `pytest tests/test_account_user_about_model.py tests/test_account_field_freshness.py tests/test_load_seed_account_observation.py tests/test_list_membership_reconciliation.py tests/test_post_schema_denormalization.py tests/test_country_codes.py -q` | Typed fields, exact country normalization, invalid-value containment, and About/post/list/seed call chains pass. |
+| Migration | `python manage.py makemigrations --check --dry-run` and `python manage.py migrate --plan` | No model drift; the additive migration follows `0019` and plans cleanly. |
+| Harvester regression | `pytest tests/test_cycle_regression_net.py tests/test_cycle_search_caps.py tests/test_cycle_cursor_wiring.py tests/test_cycle_error_counters.py tests/test_list_membership_reconciliation.py tests/test_post_schema_denormalization.py -q` | Seven-call shape, cursors, post persistence, Account isolation, and rejection behavior remain correct. |
+| Django | `python manage.py check --deploy` | No new deployment errors; existing environment warnings are named. |
+| Ollija | `pytest tests/ollija -q` and `./bin/ollija annotate-plan docs/plans/2026-08-29-093958-feat-feed-country-flags-disclosure-plan.md --check` | Guidance remains unchanged and target remains owner-selected staging. |
+| Staging migration | Render build log plus staging SQL | Candidate SHA, migration row, all column names/types, and existing row preservation are verified before calls. |
+| Staging pilot | Explicit U7 command and before/after SQL | Exactly 100 selected staging Accounts, at most 110 attempts and 1,980 credits, complete aggregate evidence, and no production write. |
 
 ---
 
 ## Definition of Done
 
-- U1 is done when the HTML exists only in `docs/reference`, the runtime and reference assets regenerate byte-for-byte, and all 197 English and official CLDR 48 Chinese names are present with pinned provenance without changing audited pixels or identities.
-- U2 is done when recognized country identity crosses the real ORM-to-wire-to-SSR and refresh call chains, role-aware placement and localized hover names pass, and unknown location produces no flag.
-- U3 is done when one native disclosure button owns the localized collapsed and expanded transition for server and client narratives with correct visibility, ARIA, focus, and refresh reset.
-- U4 is done when the new Bridgewright target is latest, every affected and candidate obligation is successful, and desktop and narrow zh-CN browser evidence names the product-source revision.
-- All required checks run with zero required skips and zero test errors. Any pre-existing warning is identified precisely and is not described as newly green.
-- The final diff contains no migration, production data mutation, harvester change, `/internal/` redesign, duplicate ideation HTML, abandoned generated artifact, temporary screenshot, or unrelated root-checkout file.
-- The plan retains `delivery_target: staging` and `delivery_selected_by_user: true`; feature, staging, and Render staging identities match the unchanged candidate SHA while `main` and production remain unchanged.
-- LFG leaves the staging-only worktree registered for later review or promotion.
+- U5 is done when fake caller and command tests prove strict response parsing, aggregate pacing, retry/circuit behavior, all four concrete budgets, environment-only credential loading, default dry-run, explicit apply, idempotent success-empty checkpointing, and aggregate-only reports.
+- U6 is done when the migration contains every missing typed destination and no raw response field; every current Django Account writer uses the model gateway; invalid observations cannot clobber good data; post ingestion remains successful; and `followers_fetched_at` follows R24.
+- U7 is done when the exact candidate deploys to staging, the migration and schema are verified there before calls, the 100-account apply completes or stops safely within all caps, and reports reconcile to staging rows and provider evidence.
+- Every behavior change has at least one production-caller-to-ORM regression test. Helper-only coverage is insufficient.
+- The candidate diff excludes the deferred flag/disclosure implementation and unrelated working-tree changes.
+- Required checks have zero unexpected failures or skips. Pre-existing warnings and unrelated suite failures are named precisely.
+- Production branch, service SHA, database schema, and Account data remain unchanged.
+- No full population, recurring schedule, UI successor work, raw response payload, credential, handle, or Account ID is committed.
+- Abandoned experimental code and temporary pilot data are removed. The staging-only worktree remains registered.
+
+---
+
+## Appendix
+
+### Research Sources
+
+- `core/models.py` — current Account fields and the unused `followers_fetched_at`.
+- `x_monitor/apify.py` — post author normalization, including `createdAt` and affiliate labels.
+- `monitor/cycle.py` — direct post-driven Account `update_or_create`.
+- `monitor/list_membership.py` — list-driven handle and display-name updates.
+- `monitor/twitterapi/caller.py` — reusable session, connector, retry, timeout, and circuit patterns.
+- `docs/external_vendors/twitterapi_docs/twitterapi_index.md` — local pricing and dashboard-ledger research.
+- `docs/deploy/render.md` and `docs/operations/staging-data-refresh.md` — isolated staging and migration behavior.
+- [TwitterAPI User About](https://docs.twitterapi.io/api-reference/endpoint/get_user_about) — official query parameter and response schema checked 2026-08-29.
+- [TwitterAPI pricing](https://twitterapi.io/pricing) — official credit and USD rates checked 2026-08-29.
+- [TwitterAPI QPS limits](https://twitterapi.io/qps-limits) — official balance-derived ceiling checked 2026-08-29.
+
+### Sizing Baseline
+
+| Measure | Current planning value | Use |
+| --- | --- | --- |
+| Callable production-sized population | about 59,225 | Re-measure before later production authorization |
+| 100 successful profiles | 1,800 credits / USD 0.018 | Pilot expectation |
+| 110-attempt maximum | 1,980 credits / USD 0.0198 | Hard pilot cap under profile pricing |
+| 59,225 successful profiles | 1,066,050 credits / USD 10.6605 | Nominal full run before retries |
+| Provider QPS | 3, 6, 10, or 20 by balance | Command uses the verified lower ceiling |
