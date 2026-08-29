@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
-"""Build the deterministic three-country SVG flag review artifacts."""
+"""Build the deterministic complete-country SVG flag review artifacts."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import re
@@ -11,25 +11,220 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = (
-    REPO_ROOT
-    / "docs/ideation/assets/2026-08-29-162947-country-flag-pixels.json"
+    REPO_ROOT / "docs/ideation/assets/2026-08-29-162947-country-flag-pixels.json"
 )
 SPRITE_PATH = (
-    REPO_ROOT
-    / "docs/ideation/assets/2026-08-29-162947-country-flag-sprite.svg"
+    REPO_ROOT / "docs/ideation/assets/2026-08-29-162947-country-flag-sprite.svg"
 )
 HTML_PATH = (
     REPO_ROOT / "docs/ideation/2026-08-29-162947-country-flag-svg-reference.html"
 )
-EXPECTED_FLAGS = (
-    ("CN", "China", "china"),
-    ("KR", "South Korea", "south_korea"),
-    ("US", "United States", "united_states"),
+EXPECTED_CODES = (
+    "AD",
+    "AE",
+    "AF",
+    "AG",
+    "AL",
+    "AM",
+    "AO",
+    "AR",
+    "AT",
+    "AU",
+    "AZ",
+    "BA",
+    "BB",
+    "BD",
+    "BE",
+    "BF",
+    "BG",
+    "BH",
+    "BI",
+    "BJ",
+    "BN",
+    "BO",
+    "BR",
+    "BS",
+    "BT",
+    "BW",
+    "BY",
+    "BZ",
+    "CA",
+    "CD",
+    "CF",
+    "CG",
+    "CH",
+    "CI",
+    "CL",
+    "CM",
+    "CN",
+    "CO",
+    "CR",
+    "CU",
+    "CV",
+    "CY",
+    "CZ",
+    "DE",
+    "DJ",
+    "DK",
+    "DM",
+    "DO",
+    "DZ",
+    "EC",
+    "EE",
+    "EG",
+    "ER",
+    "ES",
+    "ET",
+    "FI",
+    "FJ",
+    "FM",
+    "FR",
+    "GA",
+    "GB",
+    "GD",
+    "GE",
+    "GH",
+    "GM",
+    "GN",
+    "GQ",
+    "GR",
+    "GT",
+    "GW",
+    "GY",
+    "HN",
+    "HR",
+    "HT",
+    "HU",
+    "ID",
+    "IE",
+    "IL",
+    "IN",
+    "IQ",
+    "IR",
+    "IS",
+    "IT",
+    "JM",
+    "JO",
+    "JP",
+    "KE",
+    "KG",
+    "KH",
+    "KI",
+    "KM",
+    "KN",
+    "KP",
+    "KR",
+    "KW",
+    "KZ",
+    "LA",
+    "LB",
+    "LC",
+    "LI",
+    "LK",
+    "LR",
+    "LS",
+    "LT",
+    "LU",
+    "LV",
+    "LY",
+    "MA",
+    "MC",
+    "MD",
+    "ME",
+    "MG",
+    "MH",
+    "MK",
+    "ML",
+    "MM",
+    "MN",
+    "MR",
+    "MT",
+    "MU",
+    "MV",
+    "MW",
+    "MX",
+    "MY",
+    "MZ",
+    "NA",
+    "NE",
+    "NG",
+    "NI",
+    "NL",
+    "NO",
+    "NP",
+    "NR",
+    "NZ",
+    "OM",
+    "PA",
+    "PE",
+    "PG",
+    "PH",
+    "PK",
+    "PL",
+    "PS",
+    "PT",
+    "PW",
+    "PY",
+    "QA",
+    "RO",
+    "RS",
+    "RU",
+    "RW",
+    "SA",
+    "SB",
+    "SC",
+    "SD",
+    "SE",
+    "SG",
+    "SI",
+    "SK",
+    "SL",
+    "SM",
+    "SN",
+    "SO",
+    "SR",
+    "SS",
+    "ST",
+    "SV",
+    "SY",
+    "SZ",
+    "TD",
+    "TG",
+    "TH",
+    "TJ",
+    "TL",
+    "TM",
+    "TN",
+    "TO",
+    "TR",
+    "TT",
+    "TV",
+    "TW",
+    "TZ",
+    "UA",
+    "UG",
+    "US",
+    "UY",
+    "UZ",
+    "VA",
+    "VC",
+    "VE",
+    "VN",
+    "VU",
+    "WS",
+    "XK",
+    "YE",
+    "ZA",
+    "ZM",
+    "ZW",
+)
+EXPECTED_IDENTITY_SHA256 = (
+    "7985cf36af3bf8eea53150d8de9c9f77bd3f0dd4d72fb8b13d0deca2df440eff"
 )
 COLOR_PATTERN = re.compile(r"#[0-9A-F]{6}")
+SOURCE_NAME_PATTERN = re.compile(r"[a-z0-9]+(?:_[a-z0-9]+)*")
 
 
 def load_manifest(path: Path = MANIFEST_PATH) -> dict:
@@ -43,10 +238,23 @@ def load_manifest(path: Path = MANIFEST_PATH) -> dict:
 def validate_manifest(manifest: dict) -> None:
     """Reject inventory, identity, dimension, or color drift."""
 
+    if set(manifest) != {
+        "schema_version",
+        "dimensions",
+        "inventory",
+        "source",
+        "flags",
+    }:
+        raise ValueError("flag manifest top-level fields are invalid")
     if manifest.get("schema_version") != 1:
         raise ValueError("flag manifest schema_version must be 1")
     if manifest.get("dimensions") != {"width": 16, "height": 9}:
         raise ValueError("flag manifest dimensions must be 16x9")
+    if manifest.get("inventory") != {
+        "country_count": len(EXPECTED_CODES),
+        "identity_sha256": EXPECTED_IDENTITY_SHA256,
+    }:
+        raise ValueError("flag manifest inventory metadata is invalid")
     source = manifest.get("source")
     if not isinstance(source, dict) or set(source) != {
         "top_gun_commit",
@@ -58,14 +266,20 @@ def validate_manifest(manifest: dict) -> None:
 
     flags = manifest.get("flags")
     if not isinstance(flags, list):
-        raise ValueError("flag manifest flags must be a list")
-    identities = tuple(
-        (flag.get("code"), flag.get("name"), flag.get("source_name"))
+        raise TypeError("flag manifest flags must be a list")
+    if not all(isinstance(flag, dict) for flag in flags):
+        raise ValueError("flag manifest entries must be objects")
+    codes = tuple(flag.get("code") for flag in flags)
+    if codes != EXPECTED_CODES:
+        raise ValueError("flag manifest must contain the exact 197-country code set")
+
+    identity_text = "\n".join(
+        f"{flag.get('code')}\t{flag.get('source_name')}\t{flag.get('name')}"
         for flag in flags
-        if isinstance(flag, dict)
     )
-    if len(identities) != len(flags) or identities != EXPECTED_FLAGS:
-        raise ValueError("flag manifest inventory must be exactly CN, KR, and US")
+    identity_sha256 = hashlib.sha256(identity_text.encode()).hexdigest()
+    if identity_sha256 != EXPECTED_IDENTITY_SHA256:
+        raise ValueError("flag manifest country identity mapping has drifted")
 
     for flag in flags:
         if set(flag) != {"code", "name", "source_name", "pixels"}:
@@ -73,6 +287,12 @@ def validate_manifest(manifest: dict) -> None:
         code = flag["code"]
         if not re.fullmatch(r"[A-Z]{2}", code):
             raise ValueError(f"{code!r} is not an uppercase alpha-2 code")
+        if not isinstance(flag["name"], str) or not flag["name"].strip():
+            raise ValueError(f"{code} must have a review name")
+        if not isinstance(
+            flag["source_name"], str
+        ) or not SOURCE_NAME_PATTERN.fullmatch(flag["source_name"]):
+            raise ValueError(f"{code} has an invalid source name")
         pixels = flag["pixels"]
         if not isinstance(pixels, list) or len(pixels) != 9:
             raise ValueError(f"{code} must contain 9 pixel rows")
@@ -111,8 +331,10 @@ def render_sprite(manifest: dict) -> str:
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">',
-        "  <!-- Pixel flags by R74n; source revisions: "
-        f"Top Gun {source['top_gun_commit']}, R74n {source['r74n_revision']}. -->",
+        (
+            "  <!-- Pixel flags by R74n; source revisions: "
+            f"Top Gun {source['top_gun_commit']}, R74n {source['r74n_revision']}. -->"
+        ),
     ]
     for flag in manifest["flags"]:
         lines.append(
@@ -148,16 +370,16 @@ def _role_badge() -> str:
         '<svg class="role-badge" width="12" height="12" viewBox="0 0 24 24" '
         'aria-hidden="true" focusable="false">'
         '<path d="M11.83 3.18c1.1-.88 2.2-.83 3.08.18.63.73 1.3 1.01 '
-        '2.25.91 1.38-.14 2.19.62 2.2 2.04.01.98.34 1.62 1.12 2.22 '
-        '1.13.86 1.2 1.99.22 3.02-.67.7-.89 1.41-.7 2.36.28 1.39-.41 '
-        '2.28-1.83 2.43-.96.1-1.58.49-2.1 1.31-.77 1.2-1.88 1.36-3 '
-        '.46-.76-.61-1.49-.76-2.42-.48-1.36.41-2.32-.19-2.59-1.59-.19 '
-        '-.95-.63-1.53-1.5-1.98-1.27-.66-1.52-1.75-.72-2.91.54-.8.63 '
-        '-1.53.27-2.44-.52-1.32 0-2.32 1.37-2.7.94-.27 1.49-.75 '
+        "2.25.91 1.38-.14 2.19.62 2.2 2.04.01.98.34 1.62 1.12 2.22 "
+        "1.13.86 1.2 1.99.22 3.02-.67.7-.89 1.41-.7 2.36.28 1.39-.41 "
+        "2.28-1.83 2.43-.96.1-1.58.49-2.1 1.31-.77 1.2-1.88 1.36-3 "
+        ".46-.76-.61-1.49-.76-2.42-.48-1.36.41-2.32-.19-2.59-1.59-.19 "
+        "-.95-.63-1.53-1.5-1.98-1.27-.66-1.52-1.75-.72-2.91.54-.8.63 "
+        "-1.53.27-2.44-.52-1.32 0-2.32 1.37-2.7.94-.27 1.49-.75 "
         '1.86-1.65.53-1.32 1.59-1.65 2.83-1.18Z" fill="none" '
         'stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"></path>'
         '<path d="M15.65 10.72c.08 2.16-1.45 3.8-3.65 3.9-2.18.1-3.81-1.39 '
-        '-3.9-3.54-.1-2.21 1.42-3.87 3.66-3.97 2.23-.1 3.8 1.39 '
+        "-3.9-3.54-.1-2.21 1.42-3.87 3.66-3.97 2.23-.1 3.8 1.39 "
         '3.89 3.61Z" fill="none" stroke="currentColor" stroke-width="1.35"></path>'
         "</svg></span>"
     )
@@ -165,11 +387,7 @@ def _role_badge() -> str:
 
 def _treatment_panel(flag: dict, treatment: str, label: str, note: str) -> str:
     code = flag["code"]
-    handle = {
-        "CN": "@beijing_signal",
-        "KR": "@seoul_signal",
-        "US": "@dc_signal",
-    }[code]
+    handle = f"@{code.lower()}_signal"
     return f"""      <section class="treatment treatment--{treatment}" data-treatment="{treatment}">
         <header class="treatment-head">
           <span>{html.escape(label)}</span>
@@ -202,12 +420,15 @@ def _treatment_panel(flag: dict, treatment: str, label: str, note: str) -> str:
 
 
 def _flag_card(flag: dict) -> str:
-    return f"""  <article class="flag-card" data-country-code="{flag['code']}">
+    code_kind = (
+        "source-assigned country code" if flag["code"] == "XK" else "ISO 3166-1 alpha-2"
+    )
+    return f"""  <article class="flag-card" data-country-code="{flag["code"]}">
     <header class="country-head">
-      <span class="country-code">{flag['code']}</span>
+      <span class="country-code">{flag["code"]}</span>
       <div>
-        <h3>{html.escape(flag['name'])}</h3>
-        <p>ISO alpha-2 · source key {html.escape(flag['source_name'])}</p>
+        <h3>{html.escape(flag["name"])}</h3>
+        <p>{code_kind} · source key {html.escape(flag["source_name"])}</p>
       </div>
     </header>
     <div class="treatment-grid">
@@ -229,7 +450,7 @@ def render_html(manifest: dict) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PushinWeight — Three-country SVG flag trial</title>
+  <title>PushinWeight — Complete country SVG flag reference</title>
   <style>
     :root {
       color-scheme: dark;
@@ -364,23 +585,23 @@ def render_html(manifest: dict) -> str:
 {{SPRITE}}
 <header class="shell masthead">
   <div>
-    <p class="eyebrow">PushinWeight / design trial / 2026-08-29</p>
+    <p class="eyebrow">PushinWeight / design reference / 2026-08-29</p>
     <h1>Country flags at feed weight.</h1>
-    <p class="lede">Three exact 16×9 pixel flags, converted to reusable SVG symbols. Compare source color against two presentation-only reductions before the remaining 194 flags or any homepage integration.</p>
+    <p class="lede">All 197 exact 16×9 country flags, converted to reusable SVG symbols. Compare source color against the approved presentation-only reductions before any homepage integration.</p>
   </div>
   <aside class="status-card">
     <span class="status">Review boundary</span>
-    <strong>3 flags · 0 runtime changes</strong>
+    <strong>197 flags · 0 runtime changes</strong>
     <p>Review artifact only — no live feed integration. The sprite stays under ideation until a size and color treatment are approved.</p>
   </aside>
 </header>
 
 <main class="shell">
-  <section class="facts" aria-label="Trial facts">
-    <div class="fact"><span class="fact-label">Inventory</span><strong>CN · KR · US</strong></div>
+  <section class="facts" aria-label="Reference facts">
+    <div class="fact"><span class="fact-label">Inventory</span><strong>197 countries</strong></div>
     <div class="fact"><span class="fact-label">Source grid</span><strong>16 × 9 pixels</strong></div>
     <div class="fact"><span class="fact-label">Feed peers</span><strong>12 px role badge</strong></div>
-    <div class="fact"><span class="fact-label">SVG units</span><strong>3 symbols</strong></div>
+    <div class="fact"><span class="fact-label">Country codes</span><strong>196 ISO · XK source code</strong></div>
   </section>
 
   <aside class="decision-note">
@@ -412,8 +633,14 @@ def render_html(manifest: dict) -> str:
 
 
 def _check_file(path: Path, expected: str) -> bool:
-    if not path.exists() or path.read_text(encoding="utf-8") != expected:
-        display_path = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+    try:
+        current = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        current = None
+    if current != expected:
+        display_path = (
+            path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+        )
         print(f"out of date: {display_path}", file=sys.stderr)
         return False
     return True
