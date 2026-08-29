@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "dimensions": {
     "width": 16,
     "height": 9
@@ -15,10 +15,21 @@
     "attribution": "Pixel flags by R74n",
     "license_clearance": "Owner confirmed for this PushinWeight use on 2026-08-29"
   },
+  "locale_sources": {
+    "zh_cn": {
+      "provider": "Unicode CLDR",
+      "release": "48",
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr/release-48/common/main/zh.xml",
+      "sha256": "b1ef8bcadcf19fa8914d9ba812a7bcec124c72fecbf4acea02e4c8bd2fe51866",
+      "license": "Unicode License v3",
+      "license_url": "https://www.unicode.org/license.txt"
+    }
+  },
   "flags": [
     {
       "code": "AD",
       "name": "Andorra",
+      "name_zh_cn": "安道尔",
       "source_name": "andorra",
       "pixels": [
         ["#0029FF","#0029FF","#0029FF","#052CFA","#001AFF","#7F857F","#FFF000","#F8DC06","#FCDB01","#FFF300","#D77000","#AA0000","#B10400","#B00000","#B00000","#B00000"],
@@ -35,6 +46,7 @@
     {
       "code": "AE",
       "name": "United Arab Emirates",
+      "name_zh_cn": "阿拉伯联合酋长国",
       "source_name": "united_arab_emirates",
       "pixels": [
         ["#FF0000","#FE0000","#FF0000","#F10701","#0F750F","#017F10","#027D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10"],
@@ -51,6 +63,7 @@
     {
       "code": "AF",
       "name": "Afghanistan",
+      "name_zh_cn": "阿富汗",
       "source_name": "afghanistan",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFFFF","#FEFEFE","#FCFCFC","#FEFEFE","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FDFDFD","#FFFFFF","#FDFDFD","#FCFCFC","#FCFCFC","#FFFFFF"],
@@ -67,6 +80,7 @@
     {
       "code": "AG",
       "name": "Antigua & Barbuda",
+      "name_zh_cn": "安提瓜和巴布达",
       "source_name": "antigua_and_barbuda",
       "pixels": [
         ["#2E0000","#000000","#030000","#000101","#010101","#0C0B01","#1C1A01","#5D5201","#5D5201","#1C1A01","#0C0B01","#010101","#000101","#030000","#000000","#2E0000"],
@@ -83,6 +97,7 @@
     {
       "code": "AL",
       "name": "Albania",
+      "name_zh_cn": "阿尔巴尼亚",
       "source_name": "albania",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FA0000","#FF0000","#FF0000","#920000","#B20000","#B20000","#920000","#FF0000","#FF0000","#FA0000","#FF0000","#FF0000","#FF0000"],
@@ -99,6 +114,7 @@
     {
       "code": "AM",
       "name": "Armenia",
+      "name_zh_cn": "亚美尼亚",
       "source_name": "armenia",
       "pixels": [
         ["#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001","#FE0001"],
@@ -115,6 +131,7 @@
     {
       "code": "AO",
       "name": "Angola",
+      "name_zh_cn": "安哥拉",
       "source_name": "angola",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0100","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -131,6 +148,7 @@
     {
       "code": "AR",
       "name": "Argentina",
+      "name_zh_cn": "阿根廷",
       "source_name": "argentina",
       "pixels": [
         ["#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FE","#96B0FE","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF"],
@@ -147,6 +165,7 @@
     {
       "code": "AT",
       "name": "Austria",
+      "name_zh_cn": "奥地利",
       "source_name": "austria",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -163,6 +182,7 @@
     {
       "code": "AU",
       "name": "Australia",
+      "name_zh_cn": "澳大利亚",
       "source_name": "australia",
       "pixels": [
         ["#A2305A","#E57981","#928CBD","#F27076","#FF0E06","#8A7DB3","#752E70","#ED7C7C","#6F407B","#01067D","#020279","#1C208B","#5052A5","#010378","#05087E","#00047C"],
@@ -179,6 +199,7 @@
     {
       "code": "AZ",
       "name": "Azerbaijan",
+      "name_zh_cn": "阿塞拜疆",
       "source_name": "azerbaijan",
       "pixels": [
         ["#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BCFF","#01BCFF","#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BBFE","#01BBFE"],
@@ -195,6 +216,7 @@
     {
       "code": "BA",
       "name": "Bosnia & Herzegovina",
+      "name_zh_cn": "波斯尼亚和黑塞哥维那",
       "source_name": "bosnia_and_herzegovina",
       "pixels": [
         ["#1336FF","#5A74FC","#3E5CF9","#B9B04F","#FFF300","#FADD05","#FFE100","#FFE100","#FFE100","#FEE001","#FFE400","#F1D70E","#0E33F1","#0026FF","#012AFE","#0029FF"],
@@ -211,6 +233,7 @@
     {
       "code": "BB",
       "name": "Barbados",
+      "name_zh_cn": "巴巴多斯",
       "source_name": "barbados",
       "pixels": [
         ["#00047C","#00047C","#01057C","#00017E","#0E1075","#F0D507","#FDE400","#F7DA00","#F7DA00","#FDE400","#F0D507","#0E1075","#00017E","#01057C","#00047C","#00047C"],
@@ -227,6 +250,7 @@
     {
       "code": "BD",
       "name": "Bangladesh",
+      "name_zh_cn": "孟加拉国",
       "source_name": "bangladesh",
       "pixels": [
         ["#007C0F","#007C0F","#007C0F","#007C0F","#027B10","#007F0D","#00820C","#00820C","#007F0D","#027B10","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F"],
@@ -243,6 +267,7 @@
     {
       "code": "BE",
       "name": "Belgium",
+      "name_zh_cn": "比利时",
       "source_name": "belgium",
       "pixels": [
         ["#000000","#000000","#000000","#050400","#000000","#7F7000","#FFF300","#FADD00","#FFDD00","#FFF300","#FF7000","#FF0000","#FF0400","#FF0000","#FF0000","#FF0000"],
@@ -259,6 +284,7 @@
     {
       "code": "BF",
       "name": "Burkina Faso",
+      "name_zh_cn": "布基纳法索",
       "source_name": "burkina_faso",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0300","#FF0300","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -275,6 +301,7 @@
     {
       "code": "BG",
       "name": "Bulgaria",
+      "name_zh_cn": "保加利亚",
       "source_name": "bulgaria",
       "pixels": [
         ["#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE","#FEFFFE"],
@@ -291,6 +318,7 @@
     {
       "code": "BH",
       "name": "Bahrain",
+      "name_zh_cn": "巴林",
       "source_name": "bahrain",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFDFD","#FFFDFD","#FFC7C7","#FF5858","#FF0404","#FF0202","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -307,6 +335,7 @@
     {
       "code": "BI",
       "name": "Burundi",
+      "name_zh_cn": "布隆迪",
       "source_name": "burundi",
       "pixels": [
         ["#FFC3CB","#FF8284","#FB1411","#FE0000","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0101","#FF0000","#FE0000","#FB1411","#FF8284","#FFC3CB"],
@@ -323,6 +352,7 @@
     {
       "code": "BJ",
       "name": "Benin",
+      "name_zh_cn": "贝宁",
       "source_name": "benin",
       "pixels": [
         ["#007C0F","#007C0F","#007C0F","#017C0F","#007B0F","#0B8010","#BEC01B","#CCC51C","#C8C41C","#C9C41C","#C9C41C","#C9C41C","#C9C41C","#C9C41C","#C9C41C","#C9C41C"],
@@ -339,6 +369,7 @@
     {
       "code": "BN",
       "name": "Brunei",
+      "name_zh_cn": "文莱",
       "source_name": "brunei",
       "pixels": [
         ["#FADE09","#FCDE00","#FEDD00","#FEDF00","#FFE100","#FFE504","#FFE901","#FFDE00","#FFDE00","#FFE900","#FFE400","#FFE000","#FFE100","#FFE100","#FFE100","#FFE100"],
@@ -355,6 +386,7 @@
     {
       "code": "BO",
       "name": "Bolivia",
+      "name_zh_cn": "玻利维亚",
       "source_name": "bolivia",
       "pixels": [
         ["#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100"],
@@ -371,6 +403,7 @@
     {
       "code": "BR",
       "name": "Brazil",
+      "name_zh_cn": "巴西",
       "source_name": "brazil",
       "pixels": [
         ["#00B015","#00B015","#00B015","#00B015","#03B114","#00B016","#00AC17","#03B311","#03B311","#00AC17","#00B016","#03B114","#00B015","#00B015","#00B015","#00B015"],
@@ -387,6 +420,7 @@
     {
       "code": "BS",
       "name": "Bahamas",
+      "name_zh_cn": "巴哈马",
       "source_name": "bahamas",
       "pixels": [
         ["#00222E","#00658A","#0098CE","#0088B9","#0087B7","#018ABA","#0189B9","#0189B9","#0189B9","#0189B9","#0189B9","#0189B9","#0189B9","#0189B9","#0189B9","#0189B9"],
@@ -403,6 +437,7 @@
     {
       "code": "BT",
       "name": "Bhutan",
+      "name_zh_cn": "不丹",
       "source_name": "bhutan",
       "pixels": [
         ["#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FEDF00","#FFEA16","#F1D601","#FADE00","#FFE810","#FFC000"],
@@ -419,6 +454,7 @@
     {
       "code": "BW",
       "name": "Botswana",
+      "name_zh_cn": "博茨瓦纳",
       "source_name": "botswana",
       "pixels": [
         ["#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF"],
@@ -435,6 +471,7 @@
     {
       "code": "BY",
       "name": "Belarus",
+      "name_zh_cn": "白俄罗斯",
       "source_name": "belarus",
       "pixels": [
         ["#FF7676","#FFC8C8","#FF7070","#FF0D0D","#FF0202","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -451,6 +488,7 @@
     {
       "code": "BZ",
       "name": "Belize",
+      "name_zh_cn": "伯利兹",
       "source_name": "belize",
       "pixels": [
         ["#A60007","#A60007","#A60007","#A60007","#A60007","#A80208","#A20005","#950000","#900000","#9B0002","#A50007","#A60008","#A60007","#A60007","#A60007","#A60007"],
@@ -467,6 +505,7 @@
     {
       "code": "CA",
       "name": "Canada",
+      "name_zh_cn": "加拿大",
       "source_name": "canada",
       "pixels": [
         ["#FF0000","#FF0101","#FF0000","#FF0E0E","#FFEFEF","#FFF7F7","#FFFFFF","#FFAEAE","#FFAEAE","#FFFFFF","#FFF7F7","#FFEFEF","#FF0E0E","#FF0000","#FF0101","#FF0000"],
@@ -483,6 +522,7 @@
     {
       "code": "CD",
       "name": "Congo - Kinshasa",
+      "name_zh_cn": "刚果（金）",
       "source_name": "dr_congo",
       "pixels": [
         ["#00BAFF","#0BBEF4","#42C6BD","#00B8FF","#01BCFE","#00BCFF","#00BCFF","#01BCFE","#04BCFB","#01B9FE","#00B8FF","#00C7FF","#15D2EA","#86C179","#F96906","#FE0A01"],
@@ -499,6 +539,7 @@
     {
       "code": "CF",
       "name": "Central African Republic",
+      "name_zh_cn": "中非共和国",
       "source_name": "central_african_republic",
       "pixels": [
         ["#002E7B","#022F79","#888F36","#C4C119","#375261","#002A80","#0C2E73","#F50205","#F50205","#092D74","#00307C","#002F7A","#002F7A","#002F7A","#002F7A","#002F7A"],
@@ -515,6 +556,7 @@
     {
       "code": "CG",
       "name": "Congo - Brazzaville",
+      "name_zh_cn": "刚果（布）",
       "source_name": "republic_of_the_congo",
       "pixels": [
         ["#00B015","#00B015","#00B015","#00B015","#00B015","#00B015","#01B015","#03B115","#00AC17","#49BC10","#C3D705","#FCE300","#FDE000","#FFDB00","#FFEE00","#FFE500"],
@@ -531,6 +573,7 @@
     {
       "code": "CH",
       "name": "Switzerland",
+      "name_zh_cn": "瑞士",
       "source_name": "switzerland",
       "pixels": [
         [null,null,null,null,"#FF0000","#FF0000","#FF0101","#FF0E0E","#FF0E0E","#FF0101","#FF0000","#FF0000",null,null,null,null],
@@ -547,6 +590,7 @@
     {
       "code": "CI",
       "name": "Côte d’Ivoire",
+      "name_zh_cn": "科特迪瓦",
       "source_name": "cote_divoire",
       "pixels": [
         ["#FF7000","#FF7000","#FF7000","#FF7305","#FF6400","#FFB77F","#FFFFFF","#FFFCFA","#FAFDFB","#FFFFFF","#7FBD87","#007100","#057E13","#007C0F","#007C0F","#007C0F"],
@@ -563,6 +607,7 @@
     {
       "code": "CL",
       "name": "Chile",
+      "name_zh_cn": "智利",
       "source_name": "chile",
       "pixels": [
         ["#001EFF","#001EFF","#788EFF","#001BFF","#0129FF","#F3F5FF","#FFFFFF","#FEFEFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -579,6 +624,7 @@
     {
       "code": "CM",
       "name": "Cameroon",
+      "name_zh_cn": "喀麦隆",
       "source_name": "cameroon",
       "pixels": [
         ["#007C0F","#007C0F","#017C0F","#007E0F","#0E750E","#F10701","#FF0000","#FE0000","#FF0000","#FF0000","#FF0C00","#FFD500","#FFE400","#FFE000","#FFE100","#FFE100"],
@@ -595,6 +641,7 @@
     {
       "code": "CN",
       "name": "China",
+      "name_zh_cn": "中国",
       "source_name": "china",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF4700","#FF1700","#FF0000","#FF0100","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -611,6 +658,7 @@
     {
       "code": "CO",
       "name": "Colombia",
+      "name_zh_cn": "哥伦比亚",
       "source_name": "colombia",
       "pixels": [
         ["#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100"],
@@ -627,6 +675,7 @@
     {
       "code": "CR",
       "name": "Costa Rica",
+      "name_zh_cn": "哥斯达黎加",
       "source_name": "costa_rica",
       "pixels": [
         ["#001B6C","#001B6C","#001B6C","#001C6C","#001C6D","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C","#001B6C"],
@@ -643,6 +692,7 @@
     {
       "code": "CU",
       "name": "Cuba",
+      "name_zh_cn": "古巴",
       "source_name": "cuba",
       "pixels": [
         ["#BF0B40","#4B1FB4","#002DFF","#0029FF","#0023FC","#0025FF","#0026FF","#0026FF","#0026FF","#0026FF","#0026FF","#0026FF","#0026FF","#0026FF","#0026FF","#0026FF"],
@@ -659,6 +709,7 @@
     {
       "code": "CV",
       "name": "Cape Verde",
+      "name_zh_cn": "佛得角",
       "source_name": "cape_verde",
       "pixels": [
         ["#00327C","#01327C","#01337C","#04357A","#01337C","#01327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C"],
@@ -675,6 +726,7 @@
     {
       "code": "CY",
       "name": "Cyprus",
+      "name_zh_cn": "塞浦路斯",
       "source_name": "cyprus",
       "pixels": [
         ["#FFFFFF","#FFFFFE","#FFFEFD","#FFFEFC","#FFFEFC","#FFFDFB","#FFFBF4","#FFFFFF","#FFFDFA","#FFFDFB","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -691,6 +743,7 @@
     {
       "code": "CZ",
       "name": "Czechia",
+      "name_zh_cn": "捷克",
       "source_name": "czechia",
       "pixels": [
         ["#405D98","#B4C0D7","#FFFFFF","#FFFFFF","#FCFCFD","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -707,6 +760,7 @@
     {
       "code": "DE",
       "name": "Germany",
+      "name_zh_cn": "德国",
       "source_name": "germany",
       "pixels": [
         ["#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000","#010000"],
@@ -723,6 +777,7 @@
     {
       "code": "DJ",
       "name": "Djibouti",
+      "name_zh_cn": "吉布提",
       "source_name": "djibouti",
       "pixels": [
         ["#F8FDFF","#89E0FF","#13C0FF","#00B6FF","#00BBFF","#04BDFF","#01BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF"],
@@ -739,6 +794,7 @@
     {
       "code": "DK",
       "name": "Denmark",
+      "name_zh_cn": "丹麦",
       "source_name": "denmark",
       "pixels": [
         ["#FF0000","#FF0101","#FF0000","#FF0D0D","#FFF5F5","#FFF5F5","#FF0D0D","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -755,6 +811,7 @@
     {
       "code": "DM",
       "name": "Dominica",
+      "name_zh_cn": "多米尼克",
       "source_name": "dominica",
       "pixels": [
         ["#017C0F","#017C0F","#017C0F","#017C0F","#067E0F","#017010","#9AC30C","#796201","#797795","#9AD49A","#016C00","#067E13","#017C0F","#017C0F","#017C0F","#017C0F"],
@@ -771,6 +828,7 @@
     {
       "code": "DO",
       "name": "Dominican Republic",
+      "name_zh_cn": "多米尼加共和国",
       "source_name": "dominican_republic",
       "pixels": [
         ["#00327C","#00327C","#00327C","#00327C","#01337C","#002F7A","#0E3C82","#F1F8FC","#FFF4F3","#FE0D0D","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -787,6 +845,7 @@
     {
       "code": "DZ",
       "name": "Algeria",
+      "name_zh_cn": "阿尔及利亚",
       "source_name": "algeria",
       "pixels": [
         ["#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#047A10","#00800B","#008F1E","#F0FFFF","#FFFFFF","#FEFEFD","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -803,6 +862,7 @@
     {
       "code": "EC",
       "name": "Ecuador",
+      "name_zh_cn": "厄瓜多尔",
       "source_name": "ecuador",
       "pixels": [
         ["#FFE100","#FFE100","#FFE100","#FFE100","#FFE000","#FFE602","#EBC602","#DCB500","#D8B600","#EAC702","#FFE602","#FFE000","#FFE100","#FFE100","#FFE100","#FFE100"],
@@ -819,6 +879,7 @@
     {
       "code": "EE",
       "name": "Estonia",
+      "name_zh_cn": "爱沙尼亚",
       "source_name": "estonia",
       "pixels": [
         ["#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9","#0088B9"],
@@ -835,6 +896,7 @@
     {
       "code": "EG",
       "name": "Egypt",
+      "name_zh_cn": "埃及",
       "source_name": "egypt",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0100","#FF0100","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -851,6 +913,7 @@
     {
       "code": "ER",
       "name": "Eritrea",
+      "name_zh_cn": "厄立特里亚",
       "source_name": "eritrea",
       "pixels": [
         ["#F80500","#8F4F09","#80530A","#169C13","#0DA614","#00BE17","#00BF17","#00B315","#00B215","#04AD15","#05AD15","#01AF15","#01AF15","#00B015","#00B015","#00B015"],
@@ -867,6 +930,7 @@
     {
       "code": "ES",
       "name": "Spain",
+      "name_zh_cn": "西班牙",
       "source_name": "spain",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -883,6 +947,7 @@
     {
       "code": "ET",
       "name": "Ethiopia",
+      "name_zh_cn": "埃塞俄比亚",
       "source_name": "ethiopia",
       "pixels": [
         ["#017C0F","#017C0F","#017C0F","#017C0F","#017D0F","#007B13","#018102","#038600","#038600","#018102","#007B13","#017D0F","#017C0F","#017C0F","#017C0F","#017C0F"],
@@ -899,6 +964,7 @@
     {
       "code": "FI",
       "name": "Finland",
+      "name_zh_cn": "芬兰",
       "source_name": "finland",
       "pixels": [
         ["#FFFFFF","#FEFEFF","#FFFFFF","#F2F4FF","#0A31FF","#0A31FF","#F2F4FF","#FFFFFF","#FEFEFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -915,6 +981,7 @@
     {
       "code": "FJ",
       "name": "Fiji",
+      "name_zh_cn": "斐济",
       "source_name": "fiji",
       "pixels": [
         ["#A2305A","#E57981","#928CBD","#F27076","#FF0E06","#8A7DB3","#753173","#EB6D70","#B78BB1","#8FB8FE","#91B5FF","#90B6FF","#90B4FF","#8DBEFF","#92B7FF","#97AFFF"],
@@ -931,6 +998,7 @@
     {
       "code": "FM",
       "name": "Micronesia",
+      "name_zh_cn": "密克罗尼西亚",
       "source_name": "micronesia",
       "pixels": [
         ["#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#04BDFF","#00B5FF","#42CDFF","#42CDFF","#00B5FF","#04BDFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF"],
@@ -947,6 +1015,7 @@
     {
       "code": "FR",
       "name": "France",
+      "name_zh_cn": "法国",
       "source_name": "france",
       "pixels": [
         ["#0029FF","#0029FF","#012AFF","#0026FF","#0E34FF","#F1F4FF","#FFFFFF","#FEFEFF","#FFFEFE","#FFFFFF","#FFF1F1","#FF0E0E","#FF0000","#FF0101","#FF0000","#FF0000"],
@@ -963,6 +1032,7 @@
     {
       "code": "GA",
       "name": "Gabon",
+      "name_zh_cn": "加蓬",
       "source_name": "gabon",
       "pixels": [
         ["#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015"],
@@ -979,6 +1049,7 @@
     {
       "code": "GB",
       "name": "United Kingdom",
+      "name_zh_cn": "英国",
       "source_name": "united_kingdom",
       "pixels": [
         ["#FF9E95","#C9AAC1","#475BAD","#00097E","#000073","#010176","#8278B3","#FF1912","#FF1B13","#7F73AF","#00006F","#011488","#474C9B","#C88398","#FF9384","#F1A7AD"],
@@ -995,6 +1066,7 @@
     {
       "code": "GD",
       "name": "Grenada",
+      "name_zh_cn": "格林纳达",
       "source_name": "grenada",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FC9B00","#FF3D00","#FF0000","#FF9F00","#FF9F00","#FF0000","#FF3D00","#FC9B00","#FE0000","#FF0000","#FF0000","#FF0000"],
@@ -1011,6 +1083,7 @@
     {
       "code": "GE",
       "name": "Georgia",
+      "name_zh_cn": "格鲁吉亚",
       "source_name": "georgia",
       "pixels": [
         ["#FFFEFE","#FFFFFF","#FFFFFF","#FF8989","#FFFFFF","#FFFFFF","#FFF1F1","#FF0A0A","#FF0A0A","#FFF1F1","#FFFFFF","#FFFFFF","#FF8989","#FFFFFF","#FFFFFF","#FFFEFE"],
@@ -1027,6 +1100,7 @@
     {
       "code": "GH",
       "name": "Ghana",
+      "name_zh_cn": "加纳",
       "source_name": "ghana",
       "pixels": [
         ["#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FE0000","#FE0000","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100","#FF0100"],
@@ -1043,6 +1117,7 @@
     {
       "code": "GM",
       "name": "Gambia",
+      "name_zh_cn": "冈比亚",
       "source_name": "gambia",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -1059,6 +1134,7 @@
     {
       "code": "GN",
       "name": "Guinea",
+      "name_zh_cn": "几内亚",
       "source_name": "guinea",
       "pixels": [
         ["#B00000","#B00000","#B00000","#B00401","#AE0000","#BC620E","#CBD41E","#C9C01B","#C5C31C","#D9CA1D","#64A015","#00760E","#047D0F","#007C0F","#007C0F","#007C0F"],
@@ -1075,6 +1151,7 @@
     {
       "code": "GQ",
       "name": "Equatorial Guinea",
+      "name_zh_cn": "赤道几内亚",
       "source_name": "equatorial_guinea",
       "pixels": [
         ["#00938F","#00B013","#00B012","#00B018","#01B016","#01B016","#01B016","#01B015","#01B015","#01B015","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016"],
@@ -1091,6 +1168,7 @@
     {
       "code": "GR",
       "name": "Greece",
+      "name_zh_cn": "希腊",
       "source_name": "greece",
       "pixels": [
         ["#0087B9","#0085B8","#0D8FBE","#E3F2F8","#0D8FBE","#0084B8","#0087B9","#1291BF","#1492BF","#1392BF","#1492BF","#1492BF","#1492BF","#1492BF","#1492BF","#1492BF"],
@@ -1107,6 +1185,7 @@
     {
       "code": "GT",
       "name": "Guatemala",
+      "name_zh_cn": "危地马拉",
       "source_name": "guatemala",
       "pixels": [
         ["#96B0FF","#96B0FF","#96B0FF","#94AFFF","#9CB4FF","#F9FBFF","#FFFFFF","#FFFEFF","#FFFFFF","#FFFFFF","#F9FBFF","#9CB4FF","#94AFFF","#96B0FF","#96B0FF","#96B0FF"],
@@ -1123,6 +1202,7 @@
     {
       "code": "GW",
       "name": "Guinea-Bissau",
+      "name_zh_cn": "几内亚比绍",
       "source_name": "guinea_bissau",
       "pixels": [
         ["#B00000","#B00000","#AD0100","#AF0000","#B40C00","#FBD500","#FFE400","#FFE000","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100"],
@@ -1139,6 +1219,7 @@
     {
       "code": "GY",
       "name": "Guyana",
+      "name_zh_cn": "圭亚那",
       "source_name": "guyana",
       "pixels": [
         ["#847C78","#6AB180","#90CF7B","#1E8D37","#09802F","#007101","#007100","#007906","#007A07","#047E12","#057E13","#017D10","#017C10","#007C0F","#007C0F","#007C0F"],
@@ -1155,6 +1236,7 @@
     {
       "code": "HN",
       "name": "Honduras",
+      "name_zh_cn": "洪都拉斯",
       "source_name": "honduras",
       "pixels": [
         ["#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA"],
@@ -1171,6 +1253,7 @@
     {
       "code": "HR",
       "name": "Croatia",
+      "name_zh_cn": "克罗地亚",
       "source_name": "croatia",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FE0102","#FF0000","#FF0000","#F20005","#F20004","#FF0000","#FF0000","#FE0102","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -1187,6 +1270,7 @@
     {
       "code": "HT",
       "name": "Haiti",
+      "name_zh_cn": "海地",
       "source_name": "haiti",
       "pixels": [
         ["#00047C","#00047C","#00047C","#00047C","#00047C","#00047C","#01057C","#01057C","#00047C","#01057C","#00047C","#00047C","#00047C","#00047C","#00047C","#00047C"],
@@ -1203,6 +1287,7 @@
     {
       "code": "HU",
       "name": "Hungary",
+      "name_zh_cn": "匈牙利",
       "source_name": "hungary",
       "pixels": [
         ["#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101"],
@@ -1219,6 +1304,7 @@
     {
       "code": "ID",
       "name": "Indonesia",
+      "name_zh_cn": "印度尼西亚",
       "source_name": "indonesia",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1235,6 +1321,7 @@
     {
       "code": "IE",
       "name": "Ireland",
+      "name_zh_cn": "爱尔兰",
       "source_name": "ireland",
       "pixels": [
         ["#00B015","#00B015","#01B016","#00AF11","#0EB422","#F1FBF2","#FFFFFF","#FEFFFE","#FFFEFE","#FFFFFF","#FFF7F1","#FF780E","#FF6E00","#FF7101","#FF7000","#FF7000"],
@@ -1251,6 +1338,7 @@
     {
       "code": "IL",
       "name": "Israel",
+      "name_zh_cn": "以色列",
       "source_name": "israel",
       "pixels": [
         ["#0016FF","#0016FF","#0016FF","#0016FF","#0016FF","#0016FF","#0015FF","#0019FF","#0019FF","#0015FF","#0016FF","#0016FF","#0016FF","#0016FF","#0016FF","#0016FF"],
@@ -1267,6 +1355,7 @@
     {
       "code": "IN",
       "name": "India",
+      "name_zh_cn": "印度",
       "source_name": "india",
       "pixels": [
         ["#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FE7001","#FE7001","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101"],
@@ -1283,6 +1372,7 @@
     {
       "code": "IQ",
       "name": "Iraq",
+      "name_zh_cn": "伊拉克",
       "source_name": "iraq",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -1299,6 +1389,7 @@
     {
       "code": "IR",
       "name": "Iran",
+      "name_zh_cn": "伊朗",
       "source_name": "iran",
       "pixels": [
         ["#037E12","#057E13","#037E12","#057E13","#037E12","#047D12","#057F14","#057E13","#057E13","#057F14","#037D11","#057E13","#037E12","#057E13","#037E12","#047E13"],
@@ -1315,6 +1406,7 @@
     {
       "code": "IS",
       "name": "Iceland",
+      "name_zh_cn": "冰岛",
       "source_name": "iceland",
       "pixels": [
         ["#00327C","#01337C","#002A75","#0D569C","#F56366","#F56366","#0D569C","#002A75","#01337C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C"],
@@ -1331,6 +1423,7 @@
     {
       "code": "IT",
       "name": "Italy",
+      "name_zh_cn": "意大利",
       "source_name": "italy",
       "pixels": [
         ["#007C0F","#007C0F","#017C10","#007A0B","#0E831C","#F1F8F2","#FFFFFF","#FEFFFE","#FFFEFE","#FFFFFF","#FFF1F1","#FF0E0E","#FF0000","#FF0101","#FF0000","#FF0000"],
@@ -1347,6 +1440,7 @@
     {
       "code": "JM",
       "name": "Jamaica",
+      "name_zh_cn": "牙买加",
       "source_name": "jamaica",
       "pixels": [
         ["#FFEE00","#C2D605","#48BA10","#00AE16","#00AD16","#01B115","#03B115","#00B015","#00B015","#03B115","#01B115","#00AD16","#00AE16","#48BA10","#C2D605","#FFEE00"],
@@ -1363,6 +1457,7 @@
     {
       "code": "JO",
       "name": "Jordan",
+      "name_zh_cn": "约旦",
       "source_name": "jordan",
       "pixels": [
         ["#BF0000","#4C0000","#000000","#000000","#050000","#010000","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101"],
@@ -1379,6 +1474,7 @@
     {
       "code": "JP",
       "name": "Japan",
+      "name_zh_cn": "日本",
       "source_name": "japan",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFDFD","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFDFD","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -1395,6 +1491,7 @@
     {
       "code": "KE",
       "name": "Kenya",
+      "name_zh_cn": "肯尼亚",
       "source_name": "kenya",
       "pixels": [
         ["#050404","#050404","#050404","#050404","#050404","#100F0F","#000000","#000000","#000000","#000000","#100F0F","#050404","#050404","#050404","#050404","#050404"],
@@ -1411,6 +1508,7 @@
     {
       "code": "KG",
       "name": "Kyrgyzstan",
+      "name_zh_cn": "吉尔吉斯斯坦",
       "source_name": "kyrgyzstan",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0A00","#FF2C00","#FF2600","#FF2300","#FF2300","#FF2600","#FF2C00","#FF0A00","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1427,6 +1525,7 @@
     {
       "code": "KH",
       "name": "Cambodia",
+      "name_zh_cn": "柬埔寨",
       "source_name": "cambodia",
       "pixels": [
         ["#002AFF","#002AFF","#002AFF","#002AFF","#002AFF","#002AFF","#002AFF","#002DFF","#002DFF","#002AFF","#002AFF","#002AFF","#002AFF","#002AFF","#002AFF","#002AFF"],
@@ -1443,6 +1542,7 @@
     {
       "code": "KI",
       "name": "Kiribati",
+      "name_zh_cn": "基里巴斯",
       "source_name": "kiribati",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0300","#FF0200","#FF5E00","#FFCF00","#FFBA00","#FF5700","#FF0400","#FF0200","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1459,6 +1559,7 @@
     {
       "code": "KM",
       "name": "Comoros",
+      "name_zh_cn": "科摩罗",
       "source_name": "comoros",
       "pixels": [
         ["#077E0E","#79AC0B","#F1DD05","#FFEA00","#FFE300","#FBDE00","#FEE000","#FFE000","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100","#FFE100"],
@@ -1475,6 +1576,7 @@
     {
       "code": "KN",
       "name": "St. Kitts & Nevis",
+      "name_zh_cn": "圣基茨和尼维斯",
       "source_name": "saint_kitts_and_nevis",
       "pixels": [
         ["#00B015","#00B015","#00B015","#00B015","#00B015","#00B015","#01B015","#05B115","#00AE15","#00A817","#1BBB17","#9EDE0C","#E9D100","#7A6B00","#060600","#010100"],
@@ -1491,6 +1593,7 @@
     {
       "code": "KP",
       "name": "North Korea",
+      "name_zh_cn": "朝鲜",
       "source_name": "north_korea",
       "pixels": [
         ["#002A75","#002A75","#002A75","#002A75","#002B76","#002A75","#002A75","#002A75","#002A75","#002A75","#002A75","#002A75","#002A75","#002A75","#002A75","#002A75"],
@@ -1507,6 +1610,7 @@
     {
       "code": "KR",
       "name": "South Korea",
+      "name_zh_cn": "韩国",
       "source_name": "south_korea",
       "pixels": [
         ["#FFFFFF","#FDFDFD","#FFFFFF","#C1C1C1","#EDEEEE","#FFFDFD","#FEFFFF","#FFFFFF","#FFFFFF","#FEFFFF","#FFFDFD","#EDEEEE","#C1C1C1","#FFFFFF","#FDFDFD","#FFFFFF"],
@@ -1523,6 +1627,7 @@
     {
       "code": "KW",
       "name": "Kuwait",
+      "name_zh_cn": "科威特",
       "source_name": "kuwait",
       "pixels": [
         ["#001F04","#005C0B","#008A11","#007C0F","#007A0F","#017D10","#017C10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10"],
@@ -1539,6 +1644,7 @@
     {
       "code": "KZ",
       "name": "Kazakhstan",
+      "name_zh_cn": "哈萨克斯坦",
       "source_name": "kazakhstan",
       "pixels": [
         ["#41C5BE","#42C6BD","#4FC7B0","#11BFEE","#00BBFF","#00BCFF","#01BCFE","#00BBFF","#0BBEF4","#11BFEE","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF"],
@@ -1555,6 +1661,7 @@
     {
       "code": "LA",
       "name": "Laos",
+      "name_zh_cn": "老挝",
       "source_name": "laos",
       "pixels": [
         ["#FA0105","#FA0105","#FA0105","#FA0105","#FA0105","#FA0105","#FB0105","#FF0505","#FF0505","#FB0105","#FA0105","#FA0105","#FA0105","#FA0105","#FA0105","#FA0105"],
@@ -1571,6 +1678,7 @@
     {
       "code": "LB",
       "name": "Lebanon",
+      "name_zh_cn": "黎巴嫩",
       "source_name": "lebanon",
       "pixels": [
         ["#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FC0402","#FC0402","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505"],
@@ -1587,6 +1695,7 @@
     {
       "code": "LC",
       "name": "St. Lucia",
+      "name_zh_cn": "圣卢西亚",
       "source_name": "saint_lucia",
       "pixels": [
         ["#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BDFF","#00B9FE","#00B9FE","#00BDFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF"],
@@ -1603,6 +1712,7 @@
     {
       "code": "LI",
       "name": "Liechtenstein",
+      "name_zh_cn": "列支敦士登",
       "source_name": "liechtenstein",
       "pixels": [
         ["#00317D","#083878","#6F8348","#537058","#476661","#6F8349","#3F5F5E","#002C80","#02337B","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C"],
@@ -1619,6 +1729,7 @@
     {
       "code": "LK",
       "name": "Sri Lanka",
+      "name_zh_cn": "斯里兰卡",
       "source_name": "sri_lanka",
       "pixels": [
         ["#C8C41C","#BEC01B","#BEC01B","#CBBF1A","#CCBF1B","#CAC51C","#C0AD19","#C0AE19","#C6BA1B","#C4B81A","#C4B81A","#C5BA1B","#C5B81A","#C0AF19","#C0AD19","#CAC61C"],
@@ -1635,6 +1746,7 @@
     {
       "code": "LR",
       "name": "Liberia",
+      "name_zh_cn": "利比里亚",
       "source_name": "liberia",
       "pixels": [
         ["#0024FF","#0025FF","#0E34FE","#0025FF","#0924F2","#F21520","#FF1314","#FE1314","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414"],
@@ -1651,6 +1763,7 @@
     {
       "code": "LS",
       "name": "Lesotho",
+      "name_zh_cn": "莱索托",
       "source_name": "lesotho",
       "pixels": [
         ["#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#0029FE","#0029FE","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF"],
@@ -1667,6 +1780,7 @@
     {
       "code": "LT",
       "name": "Lithuania",
+      "name_zh_cn": "立陶宛",
       "source_name": "lithuania",
       "pixels": [
         ["#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100","#FEE100"],
@@ -1683,6 +1797,7 @@
     {
       "code": "LU",
       "name": "Luxembourg",
+      "name_zh_cn": "卢森堡",
       "source_name": "luxembourg",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -1699,6 +1814,7 @@
     {
       "code": "LV",
       "name": "Latvia",
+      "name_zh_cn": "拉脱维亚",
       "source_name": "latvia",
       "pixels": [
         ["#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000"],
@@ -1715,6 +1831,7 @@
     {
       "code": "LY",
       "name": "Libya",
+      "name_zh_cn": "利比亚",
       "source_name": "libya",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0303","#FF0505","#FF0404","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1731,6 +1848,7 @@
     {
       "code": "MA",
       "name": "Morocco",
+      "name_zh_cn": "摩洛哥",
       "source_name": "morocco",
       "pixels": [
         ["#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7D0000","#7D0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000"],
@@ -1747,6 +1865,7 @@
     {
       "code": "MC",
       "name": "Monaco",
+      "name_zh_cn": "摩纳哥",
       "source_name": "monaco",
       "pixels": [
         ["#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000"],
@@ -1763,6 +1882,7 @@
     {
       "code": "MD",
       "name": "Moldova",
+      "name_zh_cn": "摩尔多瓦",
       "source_name": "moldova",
       "pixels": [
         ["#0029FF","#0029FF","#012AFE","#0026FF","#0E33F1","#F0D60E","#FDE301","#FEDF01","#FBDC03","#FDE301","#FFD500","#FF0C00","#FF0000","#FF0100","#FF0000","#FF0000"],
@@ -1779,6 +1899,7 @@
     {
       "code": "ME",
       "name": "Montenegro",
+      "name_zh_cn": "黑山",
       "source_name": "montenegro",
       "pixels": [
         ["#C28D14","#BB5C0D","#BC5E0D","#BB530C","#BC5B0D","#BC5F0D","#BD670F","#BC590D","#BC590D","#BD670F","#BC5F0D","#BC5B0D","#BB530C","#BC5E0D","#BB5C0D","#C28D14"],
@@ -1795,6 +1916,7 @@
     {
       "code": "MG",
       "name": "Madagascar",
+      "name_zh_cn": "马达加斯加",
       "source_name": "madagascar",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFEFE","#FFFFFF","#FFF1F1","#FF0E0E","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1811,6 +1933,7 @@
     {
       "code": "MH",
       "name": "Marshall Islands",
+      "name_zh_cn": "马绍尔群岛",
       "source_name": "marshall_islands",
       "pixels": [
         ["#00317B","#002976","#0A3A81","#00307B","#002B77","#00337D","#00327C","#00327C","#00327C","#00327C","#03337A","#00327D","#002D86","#133775","#89563E","#F86D00"],
@@ -1827,6 +1950,7 @@
     {
       "code": "MK",
       "name": "North Macedonia",
+      "name_zh_cn": "北马其顿",
       "source_name": "north_macedonia",
       "pixels": [
         ["#FF6E00","#FFD500","#FFC700","#FF4900","#FF0000","#FF0000","#FF0900","#FFD200","#FFD200","#FF0900","#FF0000","#FF0000","#FF4900","#FFC700","#FFD500","#FF6E00"],
@@ -1843,6 +1967,7 @@
     {
       "code": "ML",
       "name": "Mali",
+      "name_zh_cn": "马里",
       "source_name": "mali",
       "pixels": [
         ["#00B015","#00B015","#00B015","#05B115","#00AC17","#7FC80A","#FFE500","#FAE000","#FFDD00","#FFF300","#FF7000","#FF0000","#FF0400","#FF0000","#FF0000","#FF0000"],
@@ -1859,6 +1984,7 @@
     {
       "code": "MM",
       "name": "Myanmar (Burma)",
+      "name_zh_cn": "缅甸",
       "source_name": "myanmar",
       "pixels": [
         ["#FEE100","#FEE100","#FEE100","#FFE101","#FFE101","#FFE101","#FFE101","#FFE207","#FFE207","#FFE101","#FFE101","#FFE101","#FFE101","#FEE100","#FEE100","#FEE100"],
@@ -1875,6 +2001,7 @@
     {
       "code": "MN",
       "name": "Mongolia",
+      "name_zh_cn": "蒙古",
       "source_name": "mongolia",
       "pixels": [
         ["#B00100","#AF0000","#B30C01","#B50400","#A6060A","#0982B0","#008BBD","#0188B9","#0188B9","#008BBD","#0982B0","#A7070A","#B30000","#AF0101","#B00000","#B00000"],
@@ -1891,6 +2018,7 @@
     {
       "code": "MR",
       "name": "Mauritania",
+      "name_zh_cn": "毛里塔尼亚",
       "source_name": "mauritania",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1907,6 +2035,7 @@
     {
       "code": "MT",
       "name": "Malta",
+      "name_zh_cn": "马耳他",
       "source_name": "malta",
       "pixels": [
         ["#FAFAFA","#DBDBDB","#FAFAFA","#FFFFFF","#FFFFFF","#FFFEFE","#FFFFFF","#FFF1F1","#FF0E0E","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1923,6 +2052,7 @@
     {
       "code": "MU",
       "name": "Mauritius",
+      "name_zh_cn": "毛里求斯",
       "source_name": "mauritius",
       "pixels": [
         ["#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002","#FA0002"],
@@ -1939,6 +2069,7 @@
     {
       "code": "MV",
       "name": "Maldives",
+      "name_zh_cn": "马尔代夫",
       "source_name": "maldives",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0003","#FF0004","#FF0002","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -1955,6 +2086,7 @@
     {
       "code": "MW",
       "name": "Malawi",
+      "name_zh_cn": "马拉维",
       "source_name": "malawi",
       "pixels": [
         ["#010000","#010000","#010000","#010000","#000000","#1B0000","#440000","#350000","#350000","#440000","#1B0000","#000000","#010000","#010000","#010000","#010000"],
@@ -1971,6 +2103,7 @@
     {
       "code": "MX",
       "name": "Mexico",
+      "name_zh_cn": "墨西哥",
       "source_name": "mexico",
       "pixels": [
         ["#007C0F","#007C0F","#017C10","#007A0B","#0E831C","#F3F9F3","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFEFEF","#FF0E0F","#FF0000","#FF0101","#FF0000","#FF0000"],
@@ -1987,6 +2120,7 @@
     {
       "code": "MY",
       "name": "Malaysia",
+      "name_zh_cn": "马来西亚",
       "source_name": "malaysia",
       "pixels": [
         ["#000086","#4C4657","#8C7D38","#090B7B","#403A5D","#4E4856","#1F206E","#07027A","#F31518","#FF1414","#FE1314","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414"],
@@ -2003,6 +2137,7 @@
     {
       "code": "MZ",
       "name": "Mozambique",
+      "name_zh_cn": "莫桑比克",
       "source_name": "mozambique",
       "pixels": [
         ["#BC1F04","#465D0B","#008810","#027A0F","#047D13","#047E13","#047E13","#047E13","#047E13","#047E13","#047E13","#047E13","#047E13","#047E13","#047E13","#047E13"],
@@ -2019,6 +2154,7 @@
     {
       "code": "NA",
       "name": "Namibia",
+      "name_zh_cn": "纳米比亚",
       "source_name": "namibia",
       "pixels": [
         ["#032AFC","#1438EB","#5764A8","#1538EA","#032AFC","#0029FF","#0029FF","#0029FF","#012AFF","#042CFE","#0021FB","#001CFF","#134CFF","#868DEF","#F67274","#FE0000"],
@@ -2035,6 +2171,7 @@
     {
       "code": "NE",
       "name": "Niger",
+      "name_zh_cn": "尼日尔",
       "source_name": "niger",
       "pixels": [
         ["#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101","#FF7101"],
@@ -2051,6 +2188,7 @@
     {
       "code": "NG",
       "name": "Nigeria",
+      "name_zh_cn": "尼日利亚",
       "source_name": "nigeria",
       "pixels": [
         ["#007C0F","#007C0F","#017C10","#007A0B","#0E831C","#F1F8F2","#FFFFFF","#FEFFFE","#FEFFFE","#FFFFFF","#F1F8F2","#0E831C","#007A0B","#017C10","#007C0F","#007C0F"],
@@ -2067,6 +2205,7 @@
     {
       "code": "NI",
       "name": "Nicaragua",
+      "name_zh_cn": "尼加拉瓜",
       "source_name": "nicaragua",
       "pixels": [
         ["#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA","#0189BA"],
@@ -2083,6 +2222,7 @@
     {
       "code": "NL",
       "name": "Netherlands",
+      "name_zh_cn": "荷兰",
       "source_name": "netherlands",
       "pixels": [
         ["#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101","#B00101"],
@@ -2099,6 +2239,7 @@
     {
       "code": "NO",
       "name": "Norway",
+      "name_zh_cn": "挪威",
       "source_name": "norway",
       "pixels": [
         ["#FF0000","#FF0101","#FA0000","#FF220D","#6B79F5","#6B79F5","#FF220D","#FA0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2115,6 +2256,7 @@
     {
       "code": "NP",
       "name": "Nepal",
+      "name_zh_cn": "尼泊尔",
       "source_name": "nepal",
       "pixels": [
         [null,null,null,null,null,"#140679",null,null,null,null,null,null,null,null,null,null],
@@ -2131,6 +2273,7 @@
     {
       "code": "NR",
       "name": "Nauru",
+      "name_zh_cn": "瑙鲁",
       "source_name": "nauru",
       "pixels": [
         ["#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C","#00327C"],
@@ -2147,6 +2290,7 @@
     {
       "code": "NZ",
       "name": "New Zealand",
+      "name_zh_cn": "新西兰",
       "source_name": "new_zealand",
       "pixels": [
         ["#A2305A","#E57981","#928CBD","#F27076","#FF0E06","#8A7DB3","#752E70","#ED7C7C","#6F407B","#01057C","#03067D","#000483","#000480","#000481","#01047B","#00047C"],
@@ -2163,6 +2307,7 @@
     {
       "code": "OM",
       "name": "Oman",
+      "name_zh_cn": "阿曼",
       "source_name": "oman",
       "pixels": [
         ["#FF2B2B","#FF4B4B","#FF4040","#FF1818","#FFEDED","#FFFEFE","#FFFDFD","#FFFEFE","#FFFEFE","#FFFEFE","#FFFEFE","#FFFEFE","#FFFEFE","#FFFEFE","#FFFEFE","#FFFEFE"],
@@ -2179,6 +2324,7 @@
     {
       "code": "PA",
       "name": "Panama",
+      "name_zh_cn": "巴拿马",
       "source_name": "panama",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFE","#FFFFFF","#FFF1F1","#FF0E0E","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2195,6 +2341,7 @@
     {
       "code": "PE",
       "name": "Peru",
+      "name_zh_cn": "秘鲁",
       "source_name": "peru",
       "pixels": [
         ["#FF0000","#FF0000","#FF0101","#FF0000","#FF0E0E","#FFF1F1","#FFFFFF","#FFFEFE","#FFFEFE","#FFFFFF","#FFF1F1","#FF0E0E","#FF0000","#FF0101","#FF0000","#FF0000"],
@@ -2211,6 +2358,7 @@
     {
       "code": "PG",
       "name": "Papua New Guinea",
+      "name_zh_cn": "巴布亚新几内亚",
       "source_name": "papua_new_guinea",
       "pixels": [
         ["#B80000","#FF0000","#FF0000","#FE0000","#FC0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0F00","#FF0000","#FF3E00","#FF6300","#FF0000","#FF0000"],
@@ -2227,6 +2375,7 @@
     {
       "code": "PH",
       "name": "Philippines",
+      "name_zh_cn": "菲律宾",
       "source_name": "philippines",
       "pixels": [
         ["#4767FF","#0021FF","#0024FE","#032CFF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF"],
@@ -2243,6 +2392,7 @@
     {
       "code": "PK",
       "name": "Pakistan",
+      "name_zh_cn": "巴基斯坦",
       "source_name": "pakistan",
       "pixels": [
         ["#FFFFFF","#FEFFFE","#FFFFFF","#F1F8F2","#0E831C","#007A0B","#017C10","#027D12","#00790A","#007100","#007C0F","#037E12","#017D10","#007C0F","#007C0F","#007C0F"],
@@ -2259,6 +2409,7 @@
     {
       "code": "PL",
       "name": "Poland",
+      "name_zh_cn": "波兰",
       "source_name": "poland",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -2275,6 +2426,7 @@
     {
       "code": "PS",
       "name": "Palestinian Territories",
+      "name_zh_cn": "巴勒斯坦领土",
       "source_name": "palestine",
       "pixels": [
         ["#B90000","#050000","#010000","#020000","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101","#010101"],
@@ -2291,6 +2443,7 @@
     {
       "code": "PT",
       "name": "Portugal",
+      "name_zh_cn": "葡萄牙",
       "source_name": "portugal",
       "pixels": [
         ["#007C0F","#007C0F","#017D0F","#06780F","#007C11","#783007","#FF0000","#FA0000","#FF0100","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2307,6 +2460,7 @@
     {
       "code": "PW",
       "name": "Palau",
+      "name_zh_cn": "帕劳",
       "source_name": "palau",
       "pixels": [
         ["#00BCFF","#00BCFF","#00BCFF","#03BCFC","#01BCFE","#00BBFF","#01BCFE","#03BCFC","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF"],
@@ -2323,6 +2477,7 @@
     {
       "code": "PY",
       "name": "Paraguay",
+      "name_zh_cn": "巴拉圭",
       "source_name": "paraguay",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FE0000","#FE0000","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -2339,6 +2494,7 @@
     {
       "code": "QA",
       "name": "Qatar",
+      "name_zh_cn": "卡塔尔",
       "source_name": "qatar",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFEFE","#FFFFFF","#FBF7F7","#B46D6D","#7E0606","#7B0101","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000","#7C0000"],
@@ -2355,6 +2511,7 @@
     {
       "code": "RO",
       "name": "Romania",
+      "name_zh_cn": "罗马尼亚",
       "source_name": "romania",
       "pixels": [
         ["#0029FF","#0029FF","#0029FF","#052CFA","#001AFF","#7F857F","#FFF000","#FADE05","#FFDD00","#FFF300","#FF7000","#FF0000","#FF0400","#FF0000","#FF0000","#FF0000"],
@@ -2371,6 +2528,7 @@
     {
       "code": "RS",
       "name": "Serbia",
+      "name_zh_cn": "塞尔维亚",
       "source_name": "serbia",
       "pixels": [
         ["#AF0001","#B00303","#AE0303","#C44142","#D78083","#D78083","#C44142","#AE0303","#B00303","#AF0001","#AF0000","#AF0000","#AF0000","#AF0000","#AF0000","#AF0000"],
@@ -2387,6 +2545,7 @@
     {
       "code": "RU",
       "name": "Russia",
+      "name_zh_cn": "俄罗斯",
       "source_name": "russia",
       "pixels": [
         ["#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF"],
@@ -2403,6 +2562,7 @@
     {
       "code": "RW",
       "name": "Rwanda",
+      "name_zh_cn": "卢旺达",
       "source_name": "rwanda",
       "pixels": [
         ["#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#00BCFF","#01BCFE","#00BBFF","#21C1DE","#40C5BF","#41C5BE","#20C1DF","#00BBFF"],
@@ -2419,6 +2579,7 @@
     {
       "code": "SA",
       "name": "Saudi Arabia",
+      "name_zh_cn": "沙特阿拉伯",
       "source_name": "saudi_arabia",
       "pixels": [
         ["#007C0F","#007C0F","#007C0F","#007C0F","#027D11","#027D11","#007B0E","#007A0A","#047E13","#00790A","#007B0E","#037E12","#007C0F","#007C0F","#007C0F","#007C0F"],
@@ -2435,6 +2596,7 @@
     {
       "code": "SB",
       "name": "Solomon Islands",
+      "name_zh_cn": "所罗门群岛",
       "source_name": "solomon_islands",
       "pixels": [
         ["#1E42FF","#4F6CFF","#001DFF","#1F43FF","#506CFF","#0022FF","#022AFF","#0029FF","#0029FF","#012AFE","#042CFB","#0026FF","#0019FF","#1234EC","#969275","#FDE006"],
@@ -2451,6 +2613,7 @@
     {
       "code": "SC",
       "name": "Seychelles",
+      "name_zh_cn": "塞舌尔",
       "source_name": "seychelles",
       "pixels": [
         ["#00327C","#00327C","#05357A","#002486","#858D3B","#FFEF00","#F9D902","#FFF400","#E79B00","#AF0500","#B00200","#B00000","#B00101","#B10404","#AF0000","#A90000"],
@@ -2467,6 +2630,7 @@
     {
       "code": "SD",
       "name": "Sudan",
+      "name_zh_cn": "苏丹",
       "source_name": "sudan",
       "pixels": [
         ["#01820F","#415D0B","#FC0100","#FD0100","#FD0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -2483,6 +2647,7 @@
     {
       "code": "SE",
       "name": "Sweden",
+      "name_zh_cn": "瑞典",
       "source_name": "sweden",
       "pixels": [
         ["#0089BA","#0189B9","#0088BD","#0D8DB1","#F5DE07","#F5DE07","#0D8DB1","#0088BD","#0189B9","#0089BA","#0089BA","#0089BA","#0089BA","#0089BA","#0089BA","#0089BA"],
@@ -2499,6 +2664,7 @@
     {
       "code": "SG",
       "name": "Singapore",
+      "name_zh_cn": "新加坡",
       "source_name": "singapore",
       "pixels": [
         ["#FF0000","#FF0101","#FF8E8E","#FF8484","#FF0404","#FF1111","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2515,6 +2681,7 @@
     {
       "code": "SI",
       "name": "Slovenia",
+      "name_zh_cn": "斯洛文尼亚",
       "source_name": "slovenia",
       "pixels": [
         ["#FEFEFF","#FEFEFF","#FEFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FEFFFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF"],
@@ -2531,6 +2698,7 @@
     {
       "code": "SK",
       "name": "Slovakia",
+      "name_zh_cn": "斯洛伐克",
       "source_name": "slovakia",
       "pixels": [
         ["#FEFEFF","#FEFEFF","#FFFEFE","#FFFEFE","#FFFFFF","#FFFDFD","#FFFFFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF","#FEFEFF"],
@@ -2547,6 +2715,7 @@
     {
       "code": "SL",
       "name": "Sierra Leone",
+      "name_zh_cn": "塞拉利昂",
       "source_name": "sierra_leone",
       "pixels": [
         ["#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016","#01B016"],
@@ -2563,6 +2732,7 @@
     {
       "code": "SM",
       "name": "San Marino",
+      "name_zh_cn": "圣马力诺",
       "source_name": "san_marino",
       "pixels": [
         ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFEFC","#FDFEFC","#ECF0CD","#ECF0CD","#FDFEFC","#FFFEFC","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -2579,6 +2749,7 @@
     {
       "code": "SN",
       "name": "Senegal",
+      "name_zh_cn": "塞内加尔",
       "source_name": "senegal",
       "pixels": [
         ["#007C0F","#007C0F","#017C0F","#007A0F","#0E810E","#F1DC01","#FFE300","#FBE000","#FCDF00","#FFE400","#FFD500","#FF0C00","#FF0000","#FF0100","#FF0000","#FF0000"],
@@ -2595,6 +2766,7 @@
     {
       "code": "SO",
       "name": "Somalia",
+      "name_zh_cn": "索马里",
       "source_name": "somalia",
       "pixels": [
         ["#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#97B1FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF","#96B0FF"],
@@ -2611,6 +2783,7 @@
     {
       "code": "SR",
       "name": "Suriname",
+      "name_zh_cn": "苏里南",
       "source_name": "suriname",
       "pixels": [
         ["#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00","#006C00"],
@@ -2627,6 +2800,7 @@
     {
       "code": "SS",
       "name": "South Sudan",
+      "name_zh_cn": "南苏丹",
       "source_name": "south_sudan",
       "pixels": [
         ["#0095BF","#003649","#010000","#000102","#020405","#050404","#050404","#050404","#050404","#050404","#050404","#050404","#050404","#050404","#050404","#050404"],
@@ -2643,6 +2817,7 @@
     {
       "code": "ST",
       "name": "São Tomé & Príncipe",
+      "name_zh_cn": "圣多美和普林西比",
       "source_name": "sao_tome_and_principe",
       "pixels": [
         ["#813006","#03B215","#01B315","#02AE15","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015","#01B015"],
@@ -2659,6 +2834,7 @@
     {
       "code": "SV",
       "name": "El Salvador",
+      "name_zh_cn": "萨尔瓦多",
       "source_name": "el_salvador",
       "pixels": [
         ["#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF","#012AFF"],
@@ -2675,6 +2851,7 @@
     {
       "code": "SY",
       "name": "Syria",
+      "name_zh_cn": "叙利亚",
       "source_name": "syria",
       "pixels": [
         ["#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10","#017D10"],
@@ -2691,6 +2868,7 @@
     {
       "code": "SZ",
       "name": "Eswatini",
+      "name_zh_cn": "斯威士兰",
       "source_name": "swaziland",
       "pixels": [
         ["#002985","#002985","#002985","#002985","#002985","#002985","#002885","#002985","#002783","#002481","#002D89","#002C88","#002985","#002985","#002985","#002985"],
@@ -2707,6 +2885,7 @@
     {
       "code": "TD",
       "name": "Chad",
+      "name_zh_cn": "乍得",
       "source_name": "chad",
       "pixels": [
         ["#00047C","#00047C","#01057C","#00017E","#0E1075","#F1D507","#FFE400","#FEE000","#FFE000","#FFE400","#FBD500","#B40C00","#AF0000","#B00100","#B00000","#B00000"],
@@ -2723,6 +2902,7 @@
     {
       "code": "TG",
       "name": "Togo",
+      "name_zh_cn": "多哥",
       "source_name": "togo",
       "pixels": [
         ["#FF0000","#FF0000","#FF0404","#FE0000","#FF0000","#F10701","#0B740E","#007D0F","#007B0F","#007B0F","#007B0F","#007B0F","#007B0F","#007B0F","#007B0F","#007B0F"],
@@ -2739,6 +2919,7 @@
     {
       "code": "TH",
       "name": "Thailand",
+      "name_zh_cn": "泰国",
       "source_name": "thailand",
       "pixels": [
         ["#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000","#FE0000"],
@@ -2755,6 +2936,7 @@
     {
       "code": "TJ",
       "name": "Tajikistan",
+      "name_zh_cn": "塔吉克斯坦",
       "source_name": "tajikistan",
       "pixels": [
         ["#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0503","#FF0502","#FF0502","#FF0503","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505","#FF0505"],
@@ -2771,6 +2953,7 @@
     {
       "code": "TL",
       "name": "Timor-Leste",
+      "name_zh_cn": "东帝汶",
       "source_name": "timor_leste",
       "pixels": [
         ["#BA7400","#FF5500","#FB0000","#FF0000","#FF0300","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2787,6 +2970,7 @@
     {
       "code": "TM",
       "name": "Turkmenistan",
+      "name_zh_cn": "土库曼斯坦",
       "source_name": "turkmenistan",
       "pixels": [
         ["#008610","#714508","#AA2704","#724408","#078918","#0C7D16","#0A8118","#007A0B","#007A0B","#017C10","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F"],
@@ -2803,6 +2987,7 @@
     {
       "code": "TN",
       "name": "Tunisia",
+      "name_zh_cn": "突尼斯",
       "source_name": "tunisia",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0303","#FF0000","#FF0000","#FF0000","#FF0000","#FF0303","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2819,6 +3004,7 @@
     {
       "code": "TO",
       "name": "Tonga",
+      "name_zh_cn": "汤加",
       "source_name": "tonga",
       "pixels": [
         ["#FEFCFC","#FFFFFF","#EDC4C4","#D47878","#FFFFFF","#FFFFFF","#D77F7F","#AA0000","#B10505","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000","#B00000"],
@@ -2835,6 +3021,7 @@
     {
       "code": "TR",
       "name": "Türkiye",
+      "name_zh_cn": "土耳其",
       "source_name": "turkey",
       "pixels": [
         ["#FF0000","#FF0303","#FF0000","#FF0000","#FF0E0E","#FF1010","#FF0000","#FF0000","#FF0101","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2851,6 +3038,7 @@
     {
       "code": "TT",
       "name": "Trinidad & Tobago",
+      "name_zh_cn": "特立尼达和多巴哥",
       "source_name": "trinidad_and_tobago",
       "pixels": [
         ["#474F4F","#000E0E","#000000","#454040","#EC8282","#FF0E0E","#FE0000","#FE0404","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2867,6 +3055,7 @@
     {
       "code": "TV",
       "name": "Tuvalu",
+      "name_zh_cn": "图瓦卢",
       "source_name": "tuvalu",
       "pixels": [
         ["#A2305A","#E57981","#928CBD","#F27076","#FF0E06","#8A7DB3","#753173","#ED6C70","#6F92B1","#01C3FD","#06BAFB","#03BDFC","#00BBFF","#00B7FF","#59C9A6","#CADB35"],
@@ -2883,6 +3072,7 @@
     {
       "code": "TW",
       "name": "Taiwan",
+      "name_zh_cn": "台湾",
       "source_name": "taiwan",
       "pixels": [
         ["#0021FF","#274AFF","#2B4DFF","#526EFF","#2B4DFF","#2D4AFA","#0024FF","#81167F","#FF0000","#FA0105","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -2899,6 +3089,7 @@
     {
       "code": "TZ",
       "name": "Tanzania",
+      "name_zh_cn": "坦桑尼亚",
       "source_name": "tanzania",
       "pixels": [
         ["#00B015","#00B015","#00B015","#00B015","#00B015","#00B015","#01B015","#05B115","#00AE15","#00A817","#18B713","#9CDC0A","#E9D100","#7B6C00","#0A0A00","#000001"],
@@ -2915,6 +3106,7 @@
     {
       "code": "UA",
       "name": "Ukraine",
+      "name_zh_cn": "乌克兰",
       "source_name": "ukraine",
       "pixels": [
         ["#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF","#0029FF"],
@@ -2931,6 +3123,7 @@
     {
       "code": "UG",
       "name": "Uganda",
+      "name_zh_cn": "乌干达",
       "source_name": "uganda",
       "pixels": [
         ["#000000","#000000","#000000","#000000","#000000","#000003","#000000","#000000","#000000","#000000","#000001","#000000","#000000","#000000","#000000","#000000"],
@@ -2947,6 +3140,7 @@
     {
       "code": "US",
       "name": "United States",
+      "name_zh_cn": "美国",
       "source_name": "united_states",
       "pixels": [
         ["#3253FF","#3757FF","#3556FF","#3554FE","#3A5BFF","#142DF2","#EF1420","#FF1414","#FE1314","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414","#FF1414"],
@@ -2963,6 +3157,7 @@
     {
       "code": "UY",
       "name": "Uruguay",
+      "name_zh_cn": "乌拉圭",
       "source_name": "uruguay",
       "pixels": [
         ["#FFFFFE","#FFFAF5","#FFE1C2","#FFEEDC","#FFFCF9","#FFFFFE","#FFFFFE","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
@@ -2979,6 +3174,7 @@
     {
       "code": "UZ",
       "name": "Uzbekistan",
+      "name_zh_cn": "乌兹别克斯坦",
       "source_name": "uzbekistan",
       "pixels": [
         ["#0B85B7","#C4E0EB","#ACD5E5","#0783B5","#1189B8","#44A4C8","#50AACC","#56ADCD","#158EBB","#0585B6","#0687B7","#0587B7","#0587B7","#0587B7","#0587B7","#0587B7"],
@@ -2995,6 +3191,7 @@
     {
       "code": "VA",
       "name": "Vatican City",
+      "name_zh_cn": "梵蒂冈",
       "source_name": "vatican_city",
       "pixels": [
         [null,null,null,"#FFE100","#FFE400","#FFE001","#FFE100","#FFE30E","#FFFDF1","#FFFFFF","#FDFAE4","#FFFFFF","#FFFFFF",null,null,null],
@@ -3011,6 +3208,7 @@
     {
       "code": "VC",
       "name": "St. Vincent & Grenadines",
+      "name_zh_cn": "圣文森特和格林纳丁斯",
       "source_name": "saint_vincent_and_the_grenadines",
       "pixels": [
         ["#012674","#022774","#002375","#0E2F70","#EEC727","#FFD322","#FACF23","#FBD023","#FBD023","#FAD023","#FFD123","#EECB24","#0D812D","#007B2E","#017C2E","#007C2E"],
@@ -3027,6 +3225,7 @@
     {
       "code": "VE",
       "name": "Venezuela",
+      "name_zh_cn": "委内瑞拉",
       "source_name": "venezuela",
       "pixels": [
         ["#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001","#FEE001"],
@@ -3043,6 +3242,7 @@
     {
       "code": "VN",
       "name": "Vietnam",
+      "name_zh_cn": "越南",
       "source_name": "vietnam",
       "pixels": [
         ["#FF0000","#FF0000","#FF0000","#FF0000","#FF0100","#FF0100","#FF0100","#FF0600","#FF0600","#FF0100","#FF0100","#FF0100","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -3059,6 +3259,7 @@
     {
       "code": "VU",
       "name": "Vanuatu",
+      "name_zh_cn": "瓦努阿图",
       "source_name": "vanuatu",
       "pixels": [
         ["#9A8400","#901700","#D30000","#FF0000","#FF0400","#FC0100","#FE0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -3075,6 +3276,7 @@
     {
       "code": "WS",
       "name": "Samoa",
+      "name_zh_cn": "萨摩亚",
       "source_name": "samoa",
       "pixels": [
         ["#0026FF","#0022FF","#0022FF","#C3CFFF","#5873FF","#0016FE","#0026FF","#0E28F1","#F1020E","#FF0000","#FE0001","#FF0000","#FF0000","#FF0000","#FF0000","#FF0000"],
@@ -3091,6 +3293,7 @@
     {
       "code": "XK",
       "name": "Kosovo",
+      "name_zh_cn": "科索沃",
       "source_name": "kosovo",
       "pixels": [
         ["#00327C","#00337D","#002D79","#002675","#002E79","#002775","#194789","#4F72A1","#144286","#5375A7","#002573","#002E7A","#002A77","#002775","#00337D","#00327C"],
@@ -3107,6 +3310,7 @@
     {
       "code": "YE",
       "name": "Yemen",
+      "name_zh_cn": "也门",
       "source_name": "yemen",
       "pixels": [
         ["#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -3123,6 +3327,7 @@
     {
       "code": "ZA",
       "name": "South Africa",
+      "name_zh_cn": "南非",
       "source_name": "south_africa",
       "pixels": [
         ["#00760E","#007A15","#7CB67B","#ED7F77","#FF1E26","#FF0000","#FB0000","#FE0403","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101","#FF0101"],
@@ -3139,6 +3344,7 @@
     {
       "code": "ZM",
       "name": "Zambia",
+      "name_zh_cn": "赞比亚",
       "source_name": "zambia",
       "pixels": [
         ["#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#007C0F","#017C0F","#007C0F","#137E0E","#147F0F","#56770A","#59760A","#127E0F"],
@@ -3155,6 +3361,7 @@
     {
       "code": "ZW",
       "name": "Zimbabwe",
+      "name_zh_cn": "津巴布韦",
       "source_name": "zimbabwe",
       "pixels": [
         ["#476148","#005000","#1D910B","#128511","#0B7D0F","#0D7E0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E","#0D7D0E"],
