@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "mode": "staging_apply",
+  "started_at": "2026-08-29T15:04:24.862204+00:00",
+  "finished_at": "2026-08-29T15:04:25.874252+00:00",
+  "deployment": {
+    "candidate_sha": "b17affada9d0f2237e050b589d7b83afe96ebc52",
+    "staging_branch_sha": "b17affada9d0f2237e050b589d7b83afe96ebc52",
+    "web_service_id": "srv-d9vb8t49v7es738lf2ng",
+    "web_deploy_id": "dep-da9f69s9v7es73dj5940",
+    "executor_service": "pushinweight-staging-harvest",
+    "executor_service_id": "crn-da7vrdqd0e5s739uvcs0",
+    "executor_job_id": "job-da9f9pijnfac73dmsd6g"
+  },
+  "preflight": {
+    "database": "pushinweight_staging",
+    "database_role": "pushinweight_staging",
+    "migration_0020_applied": true,
+    "typed_columns": 22,
+    "nullable_typed_columns": 22,
+    "country_code_indexes": [
+      "accounts_country_code_535e2221",
+      "accounts_country_code_535e2221_like"
+    ],
+    "accounts_total": 57084,
+    "eligible_handles": 57082,
+    "dry_run_selected": 100,
+    "dry_run_http_calls": 0,
+    "dry_run_writes": 0,
+    "managed_credential_present": true,
+    "recharge_credits_before": 8808062,
+    "provider_qps": 20,
+    "operator_qps": 5,
+    "effective_qps_cap": 5
+  },
+  "sample": {
+    "selected": 100,
+    "seed": "account-based-in-pilot-v1",
+    "selection": "missing-first deterministic SHA-256 order"
+  },
+  "budgets": {
+    "accounts": 100,
+    "attempts": 110,
+    "projected_credits": 1980,
+    "wall_seconds": 1800,
+    "operator_qps": 5.0,
+    "provider_qps": 20.0,
+    "effective_qps": 5.0
+  },
+  "usage": {
+    "attempts": 1,
+    "retries": 0,
+    "projected_credits": 18,
+    "projected_usd": 0.00018,
+    "actual_credits": null,
+    "wall_seconds": 1.011,
+    "effective_qps": 0.989,
+    "latency_ms": {
+      "p50": 1010.433,
+      "p95": 1010.433
+    }
+  },
+  "outcome": {
+    "attempted_accounts": 1,
+    "accepted": 0,
+    "changed": 0,
+    "unchanged": 0,
+    "success_empty": 0,
+    "not_attempted": 99,
+    "provider_reasons": {
+      "schema_drift": 1
+    },
+    "rejected_fields": {},
+    "leaf_coverage": {},
+    "country_yield": {},
+    "location_accurate": {},
+    "about_source": {},
+    "stop_reason": "schema_drift"
+  },
+  "staging_reconciliation": {
+    "account_based_in_fetched_before": 0,
+    "account_based_in_fetched_after": 0,
+    "account_based_in_before": 0,
+    "account_based_in_after": 0,
+    "country_code_before": 0,
+    "country_code_after": 0,
+    "rows_changed": 0
+  },
+  "provider_ledger": {
+    "status": "inconclusive_shared_balance_window",
+    "recharge_credits_after": 8805032,
+    "shared_window_delta": 3030,
+    "projected_pilot_credits": 18,
+    "actual_credits": null,
+    "reason": "Staging and production share one provider balance, and the Recent API Calls dashboard session was unavailable.",
+    "expansion_authorized": false
+  },
+  "projection": {
+    "callable_accounts": 57082,
+    "credits": 1027476,
+    "usd": 10.27476,
+    "seconds_at_effective_qps": 11416.4
+  },
+  "production_verification": {
+    "database": "pushinweight_shadow",
+    "migration_0020_applied": false,
+    "typed_columns": 0,
+    "accounts_total": 59337,
+    "writes_performed": 0
+  },
+  "decision": {
+    "status": "stopped_safe_schema_drift",
+    "retry_authorized": false,
+    "production_authorized": false,
+    "full_population_authorized": false
+  }
+}

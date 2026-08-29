@@ -96,3 +96,12 @@ Before any later production apply:
 Application rollback can stop future User About calls while leaving nullable
 columns in place. Data recovery uses the verified Account snapshot. Do not
 drop columns or overwrite production Accounts as an improvised rollback.
+
+## Staging pilot receipt — 2026-08-30
+
+The exact-SHA staging pilot is recorded in
+`docs/analysis/2026-08-30-000424-twitterapi-user-about-staging-pilot.md` and its
+matching JSON report. It stopped safely after one attempt on strict schema
+drift, made no retry, and changed zero Account rows. Production remained
+unmigrated and unwritten. Do not rerun or expand until the live response-shape
+gap, durable staging executor, and provider-ledger reconciliation are reviewed.
