@@ -65,6 +65,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Wall seconds: {usage['wall_seconds']}",
         f"- Effective QPS: {usage['effective_qps']}",
         f"- Stop reason: {outcome['stop_reason'] or 'none'}",
+        f"- Schema diagnostics: `{json.dumps(outcome['schema_diagnostics'])}`",
         "",
         "## Aggregate distributions",
         "",
@@ -176,9 +177,12 @@ class Command(BaseCommand):
         country_yield: Counter[str] = Counter()
         location_accurate: Counter[str] = Counter()
         about_source: Counter[str] = Counter()
+        schema_diagnostics: set[str] = set()
         accepted = changed = unchanged = success_empty = 0
         for fetched in batch.outcomes:
             provider_reasons[fetched.reason] += 1
+            if fetched.schema_diagnostic:
+                schema_diagnostics.update(fetched.schema_diagnostic)
             observation = fetched.observation
             if observation is None or fetched.author_id not in selected_ids:
                 continue
@@ -262,6 +266,7 @@ class Command(BaseCommand):
                 "country_yield": dict(sorted(country_yield.items())),
                 "location_accurate": dict(sorted(location_accurate.items())),
                 "about_source": dict(sorted(about_source.items())),
+                "schema_diagnostics": sorted(schema_diagnostics),
                 "stop_reason": batch.stop_reason,
             },
             "projection": {

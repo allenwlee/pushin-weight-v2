@@ -9,6 +9,7 @@ from monitor.twitterapi.user_about import (
     FetchSelection,
     IdentityMismatchError,
     SchemaDriftError,
+    describe_json_shape,
     fetch_user_about_batch,
     parse_user_about,
 )
@@ -123,6 +124,26 @@ def test_unknown_leaf_or_wrong_type_rejects_entire_response(mutate):
         )
 
 
+def test_schema_shape_contains_paths_and_types_without_values_or_identity():
+    payload = _complete_payload()
+    payload["data"]["unknownLeaf"] = "secret-value"
+    payload["data"]["example"] = {"nested": "also-secret"}
+
+    shape = describe_json_shape(
+        payload,
+        sensitive_values={"42"},
+    )
+    rendered = repr(shape)
+
+    assert "$.data.unknownLeaf:string" in shape
+    assert "$.data.about_profile.location_accurate:boolean" in shape
+    assert "secret-value" not in rendered
+    assert "also-secret" not in rendered
+    assert "42" not in rendered
+    assert "$.data.example" not in rendered
+    assert "<redacted-key>" in rendered
+
+
 def test_returned_id_must_match_selected_account():
     with pytest.raises(IdentityMismatchError):
         parse_user_about(
@@ -208,6 +229,12 @@ async def test_fetch_batch_stops_on_schema_drift_without_raw_payload(monkeypatch
 
     assert result.stop_reason == "schema_drift"
     assert result.outcomes[0].reason == "schema_drift"
+    assert "parser_error:unknown_leaves:response.data" in (
+        result.outcomes[0].schema_diagnostic or ()
+    )
+    assert "$.data.unknown:string" in (
+        result.outcomes[0].schema_diagnostic or ()
+    )
     assert "secret-value" not in repr(result)
 
 

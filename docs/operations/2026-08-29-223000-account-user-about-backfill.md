@@ -22,6 +22,9 @@ population, a recurring schedule, or feed rendering.
   QPS is the lower provider/operator limit.
 - Reports are aggregate-only. Do not persist handles, X IDs, database URLs,
   credentials, request headers, or raw provider payloads.
+- On schema drift, reports may persist only bounded JSON paths, field names,
+  and JSON types. Response values and selected Account identity are redacted
+  before the diagnostic leaves the HTTP caller.
 
 ## Staging preflight
 

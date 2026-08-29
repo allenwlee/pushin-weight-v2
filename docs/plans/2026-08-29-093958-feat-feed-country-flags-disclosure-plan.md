@@ -69,6 +69,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - This plan supersedes the enrichment portion of the former combined feed-country plan. The flag and headline work is deferred to `docs/plans/2026-08-29-223000-feed-country-flags-disclosure-successor-plan.md` and is not part of this LFG run.
 - Apply and verify the Django migration on the isolated staging database before making a paid User About call.
 - Run the first paid population only from the staging environment against 100 unique staging `Account` rows with callable handles. Permit at most 110 attempts and at most 1,980 credits. Apply accepted values only to the staging database.
+- Owner follow-up on 2026-08-30 authorizes one schema-diagnostic staging call, a parser correction backed by redacted path/type evidence, and one replacement 100-Account staging pilot. Across the original failed call, diagnostic call, and replacement pilot, remain within the original cumulative ceiling of 110 attempts and 1,980 projected credits. Schema diagnostics may contain JSON paths, field names, and JSON types only; they must not contain response values, handles, Account IDs, URLs, credentials, headers, connection strings, or raw payloads. Correct the mirrored external-vendor endpoint reference from the observed schema before the replacement pilot.
 - Stop after the staging pilot report. Do not migrate or write production, run a full-account population, schedule User About, or ship feed UI under this delivery target.
 
 # Account User About Enrichment Staging Pilot

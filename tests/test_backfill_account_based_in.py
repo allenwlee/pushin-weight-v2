@@ -115,6 +115,67 @@ def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
     assert markdown_path.exists()
 
 
+@override_settings(OLLIJA_STAGING_MODE=True)
+def test_schema_drift_reaches_report_without_response_values_or_account_identity(
+    tmp_path,
+    monkeypatch,
+):
+    import json
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    account = Account.objects.create(author_id="424242", handle="selected_handle")
+    response = MagicMock()
+    response.status = 200
+    response.headers = {}
+    response.text = AsyncMock(
+        return_value=json.dumps(
+            {
+                "status": "success",
+                "data": {
+                    "id": account.author_id,
+                    "userName": account.handle,
+                    "unknownLeaf": "private-response-value",
+                },
+            }
+        )
+    )
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(return_value=response)
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    json_path = tmp_path / "schema-drift.json"
+    markdown_path = tmp_path / "schema-drift.md"
+
+    call_command(
+        "backfill_account_based_in",
+        apply=True,
+        limit=1,
+        max_attempts=1,
+        max_credits=18,
+        max_wall_seconds=60,
+        max_qps=1,
+        provider_qps=1,
+        seed="test-seed",
+        json_report=str(json_path),
+        markdown_report=str(markdown_path),
+        stdout=StringIO(),
+    )
+
+    report = json_path.read_text()
+    account.refresh_from_db()
+    assert '"stop_reason": "schema_drift"' in report
+    assert "$.data.unknownLeaf:string" in report
+    assert "private-response-value" not in report
+    assert "managed-secret" not in report
+    assert account.author_id not in report
+    assert account.handle not in report
+    assert account.account_based_in_fetched_at is None
+
+
 @override_settings(OLLIJA_STAGING_MODE=False)
 def test_apply_refuses_outside_staging(monkeypatch, tmp_path):
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")

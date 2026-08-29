@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -58,6 +59,7 @@ class FetchOutcome:
     reason: str
     status_code: int | None
     latency_ms: float
+    schema_diagnostic: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,82 @@ _LABEL_SUFFIXES = {
     "user_label_display_type",
     "user_label_type",
 }
+_SAFE_SCHEMA_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+_MAX_SCHEMA_PATHS = 128
+
+
+def _json_type(value: object) -> str:
+    if value is None:
+        return "null"
+    if type(value) is bool:
+        return "boolean"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    return "unsupported"
+
+
+def _redacted_schema_key(key: object, sensitive_values: set[str]) -> str:
+    text = str(key)
+    if text in sensitive_values or not _SAFE_SCHEMA_KEY.fullmatch(text):
+        return "<redacted-key>"
+    return text
+
+
+def _schema_error_summary(error: SchemaDriftError) -> str:
+    message = str(error)
+    if message.startswith("unknown leaves at "):
+        path = message.removeprefix("unknown leaves at ").split(":", 1)[0]
+        return f"unknown_leaves:{path}"
+    return message
+
+
+def describe_json_shape(
+    payload: object,
+    *,
+    sensitive_values: set[str] | None = None,
+) -> tuple[str, ...]:
+    """Return bounded JSON paths and types without retaining response values."""
+    sensitive = {str(value) for value in (sensitive_values or set()) if value}
+    paths: list[str] = []
+
+    def collect_scalar_values(value: object) -> None:
+        if isinstance(value, dict):
+            for child in value.values():
+                collect_scalar_values(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_scalar_values(child)
+        elif isinstance(value, (str, int, float)) and type(value) is not bool:
+            text = str(value)
+            if 0 < len(text) <= 64:
+                sensitive.add(text)
+
+    def walk(value: object, path: str, depth: int) -> None:
+        if len(paths) >= _MAX_SCHEMA_PATHS:
+            return
+        paths.append(f"{path}:{_json_type(value)}")
+        if depth >= 8:
+            return
+        if isinstance(value, dict):
+            for key in sorted(value, key=str):
+                safe_key = _redacted_schema_key(key, sensitive)
+                walk(value[key], f"{path}.{safe_key}", depth + 1)
+                if len(paths) >= _MAX_SCHEMA_PATHS:
+                    return
+        elif isinstance(value, list) and value:
+            walk(value[0], f"{path}[]", depth + 1)
+
+    collect_scalar_values(payload)
+    walk(payload, "$", 0)
+    if len(paths) >= _MAX_SCHEMA_PATHS:
+        paths.append("<truncated>")
+    return tuple(paths)
 
 
 def _assert_keys(value: dict[str, Any], allowed: set[str], path: str) -> None:
@@ -454,6 +532,7 @@ async def fetch_user_about_batch(
                 body_text = ""
                 headers_out: dict[str, str] = {}
                 reason: str
+                schema_diagnostic: tuple[str, ...] | None = None
                 request_budget = remaining_wall()
                 if request_budget <= 0:
                     stop_reason = "wall_time_budget"
@@ -483,6 +562,7 @@ async def fetch_user_about_batch(
                             payload = json.loads(body_text)
                         except json.JSONDecodeError:
                             reason = "schema_drift"
+                            schema_diagnostic = ("parser_error:response is not JSON",)
                         else:
                             try:
                                 observation = parse_user_about(
@@ -492,8 +572,19 @@ async def fetch_user_about_batch(
                                 )
                             except IdentityMismatchError:
                                 reason = "identity_mismatch"
-                            except SchemaDriftError:
+                            except SchemaDriftError as exc:
                                 reason = "schema_drift"
+                                sensitive = {
+                                    str(selection.author_id),
+                                    str(selection.handle),
+                                }
+                                schema_diagnostic = (
+                                    "parser_error:" + _schema_error_summary(exc),
+                                    *describe_json_shape(
+                                        payload,
+                                        sensitive_values=sensitive,
+                                    ),
+                                )
                             except ProviderResponseError:
                                 reason = "provider_error"
                             else:
@@ -528,6 +619,7 @@ async def fetch_user_about_batch(
                     reason=reason,
                     status_code=status,
                     latency_ms=latency,
+                    schema_diagnostic=schema_diagnostic,
                 )
                 if reason in {
                     "schema_drift",
