@@ -27,6 +27,10 @@ def test_account_model_exposes_typed_user_about_fields():
         "affiliate_username",
         "source",
         "username_changes_count",
+        "username_changes_last_changed_at_msec",
+        "created_country_accurate",
+        "verification_info_id",
+        "verification_info_is_identity_verified",
         "identity_profile_label_badge_url",
         "identity_profile_label_description",
         "identity_profile_label_url",
@@ -39,6 +43,42 @@ def test_account_model_exposes_typed_user_about_fields():
     fields = {field.name for field in Account._meta.get_fields()}
     assert expected <= fields
     assert not any("raw" in field for field in expected)
+
+
+def test_live_user_about_fields_use_typed_deduplicated_destinations():
+    Account.objects.create(author_id="42")
+    outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=datetime(2026, 8, 30, tzinfo=UTC),
+        candidates={
+            "verified": True,
+            "profile_picture": "https://cdn.example/avatar.png",
+            "created_country_accurate": False,
+            "username_changes_last_changed_at_msec": 1_784_691_635_000,
+            "verification_info_id": "verification-42",
+            "verification_info_is_identity_verified": True,
+        },
+        present_fields={
+            "verified",
+            "profile_picture",
+            "created_country_accurate",
+            "username_changes_last_changed_at_msec",
+            "verification_info_id",
+            "verification_info_is_identity_verified",
+        },
+    )
+
+    account = Account.objects.get(author_id="42")
+    assert account.verified is True
+    assert account.profile_picture.endswith("avatar.png")
+    assert account.created_country_accurate is False
+    assert account.username_changes_last_changed_at_msec == 1_784_691_635_000
+    assert account.verification_info_id == "verification-42"
+    assert account.verification_info_is_identity_verified is True
+    assert outcome.rejected_fields == {}
+    assert not hasattr(account, "is_verified")
 
 
 def test_valid_observation_applies_and_invalid_sibling_is_contained():

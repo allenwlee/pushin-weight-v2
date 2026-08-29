@@ -341,11 +341,16 @@ _ACCOUNT_COUNT_FIELDS = {
     "fast_followers_count",
     "username_changes_count",
 }
+_ACCOUNT_BIGINT_FIELDS = {
+    "username_changes_last_changed_at_msec",
+}
 _ACCOUNT_BOOLEAN_FIELDS = {
     "verified",
     "is_blue_verified",
     "protected",
     "location_accurate",
+    "created_country_accurate",
+    "verification_info_is_identity_verified",
 }
 _ACCOUNT_URL_FIELDS = {
     "affiliate_label_badge_url",
@@ -364,6 +369,7 @@ _ACCOUNT_SHORT_TEXT_FIELDS = {
     "identity_profile_label_url_type": 128,
     "identity_profile_label_user_label_display_type": 128,
     "identity_profile_label_user_label_type": 128,
+    "verification_info_id": 128,
     "country_code": 2,
 }
 _ACCOUNT_TEXT_FIELDS = {
@@ -396,10 +402,14 @@ _IDENTITY_LABEL_FIELDS = {
 _ABOUT_ONLY_FIELDS = {
     "account_based_in",
     "location_accurate",
+    "created_country_accurate",
     "learn_more_url",
     "affiliate_username",
     "source",
     "username_changes_count",
+    "username_changes_last_changed_at_msec",
+    "verification_info_id",
+    "verification_info_is_identity_verified",
     "country_code",
     "account_based_in_fetched_at",
     *_IDENTITY_LABEL_FIELDS,
@@ -432,8 +442,10 @@ _WRITER_FIELDS = {
         "handle",
         "display_name",
         "created_at",
+        "verified",
         "is_blue_verified",
         "protected",
+        "profile_picture",
         *_AFFILIATE_LABEL_FIELDS,
         *_ABOUT_ONLY_FIELDS,
     },
@@ -460,6 +472,10 @@ def _validate_account_field(
     if field_name in _ACCOUNT_COUNT_FIELDS:
         if type(value) is not int or value < 0 or value > 2_147_483_647:
             return None, "invalid_nonnegative_integer"
+        return value, None
+    if field_name in _ACCOUNT_BIGINT_FIELDS:
+        if type(value) is not int or value < 0 or value > 9_223_372_036_854_775_807:
+            return None, "invalid_nonnegative_bigint"
         return value, None
     if field_name in _ACCOUNT_BOOLEAN_FIELDS:
         if type(value) is not bool:
@@ -564,6 +580,16 @@ class Account(models.Model):
     affiliate_username = models.CharField(max_length=64, blank=True, null=True)
     source = models.CharField(max_length=128, blank=True, null=True)
     username_changes_count = models.PositiveIntegerField(blank=True, null=True)
+    username_changes_last_changed_at_msec = models.PositiveBigIntegerField(
+        blank=True, null=True
+    )
+    created_country_accurate = models.BooleanField(blank=True, null=True)
+    verification_info_id = models.CharField(
+        max_length=128, blank=True, null=True
+    )
+    verification_info_is_identity_verified = models.BooleanField(
+        blank=True, null=True
+    )
     identity_profile_label_badge_url = models.URLField(
         max_length=2048, blank=True, null=True
     )

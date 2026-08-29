@@ -78,8 +78,11 @@ _DATA_KEYS = {
     "name",
     "userName",
     "createdAt",
+    "isVerified",
     "isBlueVerified",
     "protected",
+    "profilePicture",
+    "verification_info",
     "affiliates_highlighted_label",
     "about_profile",
     "identity_profile_labels_highlighted_label",
@@ -87,11 +90,14 @@ _DATA_KEYS = {
 _ABOUT_KEYS = {
     "account_based_in",
     "location_accurate",
+    "created_country_accurate",
     "learn_more_url",
     "affiliate_username",
     "source",
     "username_changes",
 }
+_USERNAME_CHANGES_KEYS = {"count", "last_changed_at_msec"}
+_VERIFICATION_INFO_KEYS = {"id", "is_identity_verified"}
 _LABEL_KEYS = {
     "badge",
     "description",
@@ -228,6 +234,15 @@ def _strict_datetime(value: object, path: str) -> datetime | None:
     return parsed
 
 
+def _strict_numeric_string(value: object, path: str) -> int | None:
+    text = _strict_string(value, path)
+    if text is None:
+        return None
+    if not text.isdigit():
+        raise SchemaDriftError(f"{path} must be a numeric string")
+    return int(text)
+
+
 def _put(
     candidates: dict[str, Any],
     present: set[str],
@@ -345,11 +360,59 @@ def parse_user_about(
         candidates,
         present,
         data,
+        "isVerified",
+        "verified",
+        _strict_bool,
+        "response.data",
+    )
+    _put(
+        candidates,
+        present,
+        data,
         "isBlueVerified",
         "is_blue_verified",
         _strict_bool,
         "response.data",
     )
+    _put(
+        candidates,
+        present,
+        data,
+        "profilePicture",
+        "profile_picture",
+        _strict_string,
+        "response.data",
+    )
+
+    if "verification_info" in data:
+        verification_info = _optional_dict(
+            data["verification_info"],
+            "response.data.verification_info",
+        )
+        if verification_info is not None:
+            _assert_keys(
+                verification_info,
+                _VERIFICATION_INFO_KEYS,
+                "response.data.verification_info",
+            )
+            _put(
+                candidates,
+                present,
+                verification_info,
+                "id",
+                "verification_info_id",
+                _strict_string,
+                "response.data.verification_info",
+            )
+            _put(
+                candidates,
+                present,
+                verification_info,
+                "is_identity_verified",
+                "verification_info_is_identity_verified",
+                _strict_bool,
+                "response.data.verification_info",
+            )
     _put(
         candidates,
         present,
@@ -395,6 +458,15 @@ def parse_user_about(
                 candidates,
                 present,
                 about,
+                "created_country_accurate",
+                "created_country_accurate",
+                _strict_bool,
+                "response.data.about_profile",
+            )
+            _put(
+                candidates,
+                present,
+                about,
                 "learn_more_url",
                 "learn_more_url",
                 _strict_string,
@@ -425,23 +497,30 @@ def parse_user_about(
                 )
                 present.add("username_changes_count")
                 candidates["username_changes_count"] = None
+                present.add("username_changes_last_changed_at_msec")
+                candidates["username_changes_last_changed_at_msec"] = None
                 if changes is not None:
                     _assert_keys(
                         changes,
-                        {"count"},
+                        _USERNAME_CHANGES_KEYS,
                         "response.data.about_profile.username_changes",
                     )
                     if "count" in changes and changes["count"] is not None:
-                        count = _strict_string(
+                        candidates["username_changes_count"] = _strict_numeric_string(
                             changes["count"],
                             "response.data.about_profile.username_changes.count",
                         )
-                        if count is None or not count.isdigit():
-                            raise SchemaDriftError(
-                                "response.data.about_profile.username_changes.count "
-                                "must be a numeric string"
+                    if (
+                        "last_changed_at_msec" in changes
+                        and changes["last_changed_at_msec"] is not None
+                    ):
+                        candidates["username_changes_last_changed_at_msec"] = (
+                            _strict_numeric_string(
+                                changes["last_changed_at_msec"],
+                                "response.data.about_profile.username_changes."
+                                "last_changed_at_msec",
                             )
-                        candidates["username_changes_count"] = int(count)
+                        )
             if "account_based_in" in about:
                 code = normalize_country_code(candidates.get("account_based_in"))
                 if code is not None:

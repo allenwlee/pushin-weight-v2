@@ -177,3 +177,27 @@ def test_post_affiliate_label_refresh_preserves_about_only_country():
     assert account.affiliate_label_description == "New"
     assert account.country_code == "US"
     assert account.account_based_in == "United States"
+
+
+def test_post_refreshes_shared_live_about_fields_and_preserves_about_only_fields():
+    account = Account.objects.create(
+        author_id="42",
+        verified=True,
+        profile_picture="https://cdn.example/about.png",
+        created_country_accurate=True,
+        verification_info_id="verification-42",
+    )
+
+    _upsert_account(
+        {
+            "author_id": "42",
+            "author_verified": False,
+            "author_profile_picture": "https://cdn.example/post.png",
+        }
+    )
+
+    account.refresh_from_db()
+    assert account.verified is False
+    assert account.profile_picture.endswith("post.png")
+    assert account.created_country_accurate is True
+    assert account.verification_info_id == "verification-42"

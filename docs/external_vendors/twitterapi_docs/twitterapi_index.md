@@ -5,6 +5,11 @@ download of the corresponding upstream `.md` URL — no LLM rewriting, no
 extraction. The docs site publishes per-page `.md` URLs specifically for
 machine consumption (see `llms.txt` at the upstream root).
 
+`endpoint/get_user_about.md` is the exception: on 2026-08-30 a value-free live
+probe proved that the provider's public example omitted six response leaves.
+That file is a current project reference combining the public schema with the
+observed additions, and records the exact evidence without response values.
+
 **To refresh this library:**
 
 ```bash
@@ -59,7 +64,7 @@ method+path header (e.g. `GET /twitter/tweet/advanced_search`). All require
 | [get_tweet_reply.md](endpoint/get_tweet_reply.md) | Get Tweet Replies | get tweet replies by tweet id.Each page returns up to 20 replies(Sometimes less than 20,because we will filter out ads or other not  tweets). Use cursor for pagination. Order by re |
 | [get_tweet_retweeter.md](endpoint/get_tweet_retweeter.md) | Get Tweet Retweeters | get tweet retweeters by tweet id.Each page returns about 100 retweeters. Use cursor for pagination. Order by retweet time desc |
 | [get_tweet_thread_context.md](endpoint/get_tweet_thread_context.md) | Get Tweet Thread Context | Get the thread context of a tweet.Suppose a tweet thread consists of t1, t2 (replying to t1), t3 (replying to t2), and t4, t5, t6 (all replying to t3). If we provide an API where y |
-| [get_user_about.md](endpoint/get_user_about.md) | Get User Profile About | Get user profile about by screen name |
+| [get_user_about.md](endpoint/get_user_about.md) | Get User Profile About | Live-verified success schema, including six leaves omitted from the public example. |
 | [get_user_by_username.md](endpoint/get_user_by_username.md) | Get User Info | Get user info by screen name |
 | [get_user_followers_ids.md](endpoint/get_user_followers_ids.md) | Get User Followers IDs (Bulk) | Get a user's follower IDs in bulk — **lightweight, IDs only, no profile metadata**. Designed for large-scale follower-graph collection where you join IDs against your own data ware |
 | [get_user_followers.md](endpoint/get_user_followers.md) | Get User Followers | Get user followers (with full profile metadata) in reverse chronological order (newest first). Sorted by follow date — most recent followers appear on the first page. Use `cursor`  |
@@ -303,4 +308,3 @@ for js in $(curl -sSf https://twitterapi.io/dashboard | grep -oE 'src="[^"]+\.js
   curl -sSf "https://twitterapi.io$js" | grep -oE 'fetch\("[^"]+"|"/backend/[^"]+"'
 done | sort -u
 ```
-

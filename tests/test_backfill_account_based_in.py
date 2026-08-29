@@ -179,6 +179,92 @@ def test_schema_drift_reaches_report_without_response_values_or_account_identity
     assert account.account_based_in_fetched_at is None
 
 
+@override_settings(OLLIJA_STAGING_MODE=True)
+def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatch):
+    import json
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    account = Account.objects.create(author_id="424242", handle="selected_handle")
+    response = MagicMock()
+    response.status = 200
+    response.headers = {}
+    response.text = AsyncMock(
+        return_value=json.dumps(
+            {
+                "status": "success",
+                "msg": "ok",
+                "data": {
+                    "id": account.author_id,
+                    "name": "Selected Account",
+                    "userName": account.handle,
+                    "createdAt": "Wed Jul 22 03:40:35 +0000 2020",
+                    "isVerified": True,
+                    "isBlueVerified": False,
+                    "protected": False,
+                    "profilePicture": "https://cdn.example/avatar.png",
+                    "verification_info": {
+                        "id": "verification-42",
+                        "is_identity_verified": True,
+                    },
+                    "affiliates_highlighted_label": {},
+                    "about_profile": {
+                        "account_based_in": "United States",
+                        "location_accurate": True,
+                        "created_country_accurate": False,
+                        "learn_more_url": "https://help.example/about",
+                        "source": "ip",
+                        "username_changes": {
+                            "count": "2",
+                            "last_changed_at_msec": "1784691635000",
+                        },
+                    },
+                    "identity_profile_labels_highlighted_label": {},
+                },
+            }
+        )
+    )
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(return_value=response)
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    json_path = tmp_path / "live-shape.json"
+    markdown_path = tmp_path / "live-shape.md"
+
+    call_command(
+        "backfill_account_based_in",
+        apply=True,
+        limit=1,
+        max_attempts=1,
+        max_credits=18,
+        max_wall_seconds=60,
+        max_qps=1,
+        provider_qps=1,
+        seed="test-seed",
+        json_report=str(json_path),
+        markdown_report=str(markdown_path),
+        stdout=StringIO(),
+    )
+
+    account.refresh_from_db()
+    report = json_path.read_text()
+    assert account.verified is True
+    assert account.profile_picture.endswith("avatar.png")
+    assert account.created_country_accurate is False
+    assert account.username_changes_last_changed_at_msec == 1_784_691_635_000
+    assert account.verification_info_id == "verification-42"
+    assert account.verification_info_is_identity_verified is True
+    assert account.country_code == "US"
+    assert account.account_based_in_fetched_at is not None
+    assert '"accepted": 1' in report
+    assert '"schema_diagnostics": []' in report
+    assert account.author_id not in report
+    assert account.handle not in report
+
+
 @override_settings(OLLIJA_STAGING_MODE=False)
 def test_apply_refuses_outside_staging(monkeypatch, tmp_path):
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")

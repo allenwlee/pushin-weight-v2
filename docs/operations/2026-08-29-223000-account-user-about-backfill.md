@@ -38,8 +38,9 @@ population, a recurring schedule, or feed rendering.
 2. Verify the active database identifies as the staging database and the
    service has at least 100 eligible Accounts. Do not print connection
    strings.
-3. Verify migration `core.0020_account_account_based_in_and_more` is applied.
-4. Verify the 22 additive nullable columns and the `country_code` index exist.
+3. Verify migrations `core.0020_account_account_based_in_and_more` and
+   `core.0021_account_user_about_live_schema` are applied.
+4. Verify the 26 additive nullable columns and the `country_code` index exist.
 5. Run a dry selection and confirm it reports zero calls and zero writes:
 
 ```bash
@@ -74,6 +75,11 @@ whose optional About fields are empty. Transport, provider, identity, and
 schema failures remain eligible for a later retry. Unknown leaves, documented
 type drift, returned-ID mismatch, invalid authentication, an open circuit, or
 any hard budget stop the run.
+
+The 2026-08-30 replacement pilot follows two earlier one-attempt stops (the
+original drift and the schema-only diagnostic). To preserve the original
+cumulative ceiling, its remaining limits are `--max-attempts 108` and
+`--max-credits 1944`; all other arguments remain as above.
 
 ## Evidence and reconciliation
 

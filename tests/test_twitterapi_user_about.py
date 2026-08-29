@@ -23,8 +23,14 @@ def _complete_payload() -> dict:
             "name": "Example Account",
             "userName": "example",
             "createdAt": "Wed Jul 22 03:40:35 +0000 2026",
+            "isVerified": True,
             "isBlueVerified": True,
             "protected": False,
+            "profilePicture": "https://cdn.example/avatar.png",
+            "verification_info": {
+                "id": "verification-42",
+                "is_identity_verified": True,
+            },
             "affiliates_highlighted_label": {
                 "label": {
                     "badge": {"url": "https://cdn.example/badge.png"},
@@ -37,10 +43,14 @@ def _complete_payload() -> dict:
             "about_profile": {
                 "account_based_in": "United States",
                 "location_accurate": True,
+                "created_country_accurate": False,
                 "learn_more_url": "https://help.x.com/about",
                 "affiliate_username": "parent",
                 "source": "ip",
-                "username_changes": {"count": "2"},
+                "username_changes": {
+                    "count": "2",
+                    "last_changed_at_msec": "1784691635000",
+                },
             },
             "identity_profile_labels_highlighted_label": {
                 "label": {
@@ -65,14 +75,41 @@ def test_complete_response_flattens_every_documented_leaf():
     assert observation.candidates["display_name"] == "Example Account"
     assert observation.candidates["handle"] == "example"
     assert observation.candidates["created_at"].year == 2026
+    assert observation.candidates["verified"] is True
     assert observation.candidates["is_blue_verified"] is True
     assert observation.candidates["protected"] is False
+    assert observation.candidates["profile_picture"].endswith("avatar.png")
+    assert observation.candidates["verification_info_id"] == "verification-42"
+    assert observation.candidates["verification_info_is_identity_verified"] is True
     assert observation.candidates["affiliate_label_description"] == "Affiliate"
     assert observation.candidates["account_based_in"] == "United States"
+    assert observation.candidates["created_country_accurate"] is False
     assert observation.candidates["country_code"] == "US"
     assert observation.candidates["username_changes_count"] == 2
+    assert (
+        observation.candidates["username_changes_last_changed_at_msec"]
+        == 1_784_691_635_000
+    )
     assert observation.candidates["identity_profile_label_description"] == "Identity"
     assert observation.candidates["account_based_in_fetched_at"] == observed_at
+
+
+def test_live_probe_shape_parses_with_empty_optional_labels():
+    payload = _complete_payload()
+    payload["data"]["affiliates_highlighted_label"] = {}
+    payload["data"]["identity_profile_labels_highlighted_label"] = {}
+    payload["data"]["about_profile"].pop("affiliate_username")
+
+    observation = parse_user_about(
+        payload,
+        expected_author_id="42",
+        observed_at=datetime(2026, 8, 30, tzinfo=UTC),
+    )
+
+    assert observation.candidates["verification_info_id"] == "verification-42"
+    assert observation.candidates["created_country_accurate"] is False
+    assert observation.candidates["affiliate_label_description"] is None
+    assert observation.candidates["identity_profile_label_description"] is None
 
 
 def test_missing_optional_objects_checkpoint_without_implicit_clears():
@@ -111,6 +148,9 @@ def test_unsupported_country_stores_exact_value_without_code():
         lambda payload: payload["data"]["about_profile"][
             "username_changes"
         ].__setitem__("count", "two"),
+        lambda payload: payload["data"]["about_profile"][
+            "username_changes"
+        ].__setitem__("last_changed_at_msec", "yesterday"),
     ],
 )
 def test_unknown_leaf_or_wrong_type_rejects_entire_response(mutate):
