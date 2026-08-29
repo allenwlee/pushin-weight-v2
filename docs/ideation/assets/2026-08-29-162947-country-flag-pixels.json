@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "dimensions": {
+    "width": 16,
+    "height": 9
+  },
+  "source": {
+    "top_gun_commit": "5ad0dbda9140ffa52ea791a0ec51c975b8c9a97b",
+    "r74n_revision": "a1f3a5db7e97961e3e515db192ac7d2c7fa1a8bf",
+    "attribution": "Pixel flags by R74n",
+    "license_clearance": "Owner confirmed for this PushinWeight use on 2026-08-29"
+  },
+  "flags": [
+    {
+      "code": "CN",
+      "name": "China",
+      "source_name": "china",
+      "pixels": [
+        ["#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF4700", "#FF1700", "#FF0000", "#FF0100", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0400", "#FF1600", "#FF4C00", "#FF9B00", "#FF1300", "#FFA800", "#FF5E00", "#FF4400", "#FF0300", "#FF0100", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0600", "#FF8600", "#FFEE00", "#FFFA00", "#FFCB00", "#FF2600", "#FF3400", "#FF9600", "#FF0300", "#FF0200", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0000", "#FF4800", "#FFCF00", "#FFAF00", "#FFB300", "#FF0000", "#FF1200", "#FF4100", "#FF0000", "#FF0100", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0000", "#FF3B00", "#FF1A00", "#FF0000", "#FF4400", "#FF4900", "#FF5D00", "#FF9F00", "#FF0400", "#FF0200", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0000", "#FF0000", "#FF0000", "#FF0200", "#FF0000", "#FFA000", "#FF4100", "#FF0000", "#FF0200", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0000", "#FF0200", "#FF0100", "#FF0100", "#FF0200", "#FF0000", "#FF0000", "#FF0100", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0100", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"],
+        ["#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000"]
+      ]
+    },
+    {
+      "code": "KR",
+      "name": "South Korea",
+      "source_name": "south_korea",
+      "pixels": [
+        ["#FFFFFF", "#FDFDFD", "#FFFFFF", "#C1C1C1", "#EDEEEE", "#FFFDFD", "#FEFFFF", "#FFFFFF", "#FFFFFF", "#FEFFFF", "#FFFDFD", "#EDEEEE", "#C1C1C1", "#FFFFFF", "#FDFDFD", "#FFFFFF"],
+        ["#FDFDFD", "#FFFFFF", "#C4C4C4", "#696969", "#888585", "#F4FFFF", "#FDBCBC", "#FF8181", "#FE8182", "#FCBCBD", "#F3FFFF", "#878585", "#696969", "#C4C4C4", "#FFFFFF", "#FDFDFD"],
+        ["#FEFEFE", "#FDFDFD", "#E7E7E7", "#868383", "#B7C3C3", "#F6BCC0", "#FB0203", "#FE0000", "#FF0000", "#FD0101", "#FBBCBD", "#B9C2C2", "#868383", "#E7E7E7", "#FDFDFD", "#FEFEFE"],
+        ["#FFFFFF", "#FEFEFE", "#FFFFFF", "#FBFAF6", "#E3FFFF", "#901D7B", "#FF0000", "#FF0706", "#FF0606", "#FF0000", "#FF0B07", "#FFFAFB", "#FBFAFA", "#FFFFFF", "#FEFEFE", "#FFFFFF"],
+        ["#FFFFFF", "#FFFFFF", "#FCFCFD", "#FFFFFF", "#EDF1FB", "#1335F4", "#AF0B4E", "#F1020E", "#3F1FC0", "#431DBA", "#F40E12", "#FBEEED", "#FFFFFF", "#FDFCFC", "#FFFFFF", "#FFFFFF"],
+        ["#FFFFFF", "#FEFEFE", "#FFFFFF", "#FAFAFB", "#FBFCFF", "#0733FF", "#0023FF", "#142DF1", "#0030FF", "#0027FF", "#7B2190", "#FFF6E3", "#F6FAFB", "#FFFFFF", "#FEFEFE", "#FFFFFF"],
+        ["#FEFEFE", "#FDFDFD", "#E7E7E7", "#838386", "#C2C1B9", "#BDC7FB", "#0122FD", "#0016FF", "#0015FC", "#0322FB", "#C0C6F7", "#C3C0B7", "#838386", "#E7E7E7", "#FDFDFD", "#FEFEFE"],
+        ["#FDFDFD", "#FFFFFF", "#C4C4C4", "#696969", "#858587", "#FFFFF3", "#BDC8FC", "#828FFE", "#818FFF", "#BCC9FD", "#FFFFF4", "#858588", "#696969", "#C4C4C4", "#FFFFFF", "#FDFDFD"],
+        ["#FFFFFF", "#FDFDFD", "#FFFFFF", "#C1C1C1", "#EEEEED", "#FDFDFF", "#FFFFFE", "#FFFFFF", "#FFFFFF", "#FFFFFE", "#FDFDFF", "#EEEEED", "#C1C1C1", "#FFFFFF", "#FDFDFD", "#FFFFFF"]
+      ]
+    },
+    {
+      "code": "US",
+      "name": "United States",
+      "source_name": "united_states",
+      "pixels": [
+        ["#3253FF", "#3757FF", "#3556FF", "#3554FE", "#3A5BFF", "#142DF2", "#EF1420", "#FF1414", "#FE1314", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414"],
+        ["#143AFF", "#4865FF", "#4160FF", "#4361FF", "#4562FF", "#3D5AFD", "#EBCDDD", "#FFDBDB", "#FEDBDC", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB"],
+        ["#3350FB", "#4560FB", "#425DFB", "#425CFA", "#4762FB", "#2438EF", "#ED2330", "#FF2424", "#FE2425", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424"],
+        ["#053EFF", "#3767FF", "#3061FF", "#3163FF", "#3464FF", "#2757FF", "#EACCDD", "#FFDADA", "#FED9DA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA"],
+        ["#802792", "#8E3392", "#8C3292", "#8D3292", "#8D3392", "#94328C", "#F6232B", "#FF2525", "#FE2525", "#FF2525", "#FF2525", "#FF2525", "#FF2525", "#FF2525", "#FF2525", "#FF2525"],
+        ["#FFDBCA", "#FFD8CA", "#FFD8CA", "#FFD8CA", "#FFD8CA", "#FFD9CB", "#FFDAD9", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA", "#FFDADA"],
+        ["#FA2428", "#FB2428", "#FB2428", "#FB2428", "#FB2428", "#FB2428", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424", "#FF2424"],
+        ["#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB", "#FFDBDB"],
+        ["#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414", "#FF1414"]
+      ]
+    }
+  ]
+}
