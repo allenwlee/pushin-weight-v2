@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import hashlib
 import html
 import json
 import re
 import sys
-import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
@@ -21,18 +19,8 @@ SPRITE_PATH = (
     REPO_ROOT / "docs/ideation/assets/2026-08-29-162947-country-flag-sprite.svg"
 )
 HTML_PATH = (
-    REPO_ROOT / "docs/reference/2026-08-29-162947-country-flag-svg-reference.html"
+    REPO_ROOT / "docs/ideation/2026-08-29-162947-country-flag-svg-reference.html"
 )
-RUNTIME_SPRITE_PATH = REPO_ROOT / "monitor/static/pw-country-flags.svg"
-RUNTIME_DATA_PATH = REPO_ROOT / "monitor/country_flags.py"
-CLDR_ZH_CN_SOURCE = {
-    "provider": "Unicode CLDR",
-    "release": "48",
-    "url": "https://raw.githubusercontent.com/unicode-org/cldr/release-48/common/main/zh.xml",
-    "sha256": "b1ef8bcadcf19fa8914d9ba812a7bcec124c72fecbf4acea02e4c8bd2fe51866",
-    "license": "Unicode License v3",
-    "license_url": "https://www.unicode.org/license.txt",
-}
 EXPECTED_CODES = (
     "AD",
     "AE",
@@ -260,23 +248,19 @@ def _pixels_sha256(flags: list[dict]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _validate_manifest(manifest: dict, *, require_localized_names: bool) -> None:
-    """Reject inventory, identity, dimension, localization, or color drift."""
+def validate_manifest(manifest: dict) -> None:
+    """Reject inventory, identity, dimension, or color drift."""
 
-    expected_fields = {
+    if set(manifest) != {
         "schema_version",
         "dimensions",
         "inventory",
         "source",
         "flags",
-    }
-    if require_localized_names:
-        expected_fields.add("locale_sources")
-    if set(manifest) != expected_fields:
+    }:
         raise ValueError("flag manifest top-level fields are invalid")
-    expected_schema = 2 if require_localized_names else 1
-    if manifest.get("schema_version") != expected_schema:
-        raise ValueError(f"flag manifest schema_version must be {expected_schema}")
+    if manifest.get("schema_version") != 1:
+        raise ValueError("flag manifest schema_version must be 1")
     if manifest.get("dimensions") != {"width": 16, "height": 9}:
         raise ValueError("flag manifest dimensions must be 16x9")
     if manifest.get("inventory") != {
@@ -293,10 +277,6 @@ def _validate_manifest(manifest: dict, *, require_localized_names: bool) -> None
         "license_clearance",
     }:
         raise ValueError("flag manifest source metadata is incomplete")
-    if require_localized_names and manifest.get("locale_sources") != {
-        "zh_cn": CLDR_ZH_CN_SOURCE
-    }:
-        raise ValueError("flag manifest zh_cn source metadata is invalid")
 
     flags = manifest.get("flags")
     if not isinstance(flags, list):
@@ -315,23 +295,14 @@ def _validate_manifest(manifest: dict, *, require_localized_names: bool) -> None
     if identity_sha256 != EXPECTED_IDENTITY_SHA256:
         raise ValueError("flag manifest country identity mapping has drifted")
 
-    expected_flag_fields = {"code", "name", "source_name", "pixels"}
-    if require_localized_names:
-        expected_flag_fields.add("name_zh_cn")
     for flag in flags:
-        if set(flag) != expected_flag_fields:
+        if set(flag) != {"code", "name", "source_name", "pixels"}:
             raise ValueError(f"{flag['code']} has unexpected manifest fields")
         code = flag["code"]
         if not re.fullmatch(r"[A-Z]{2}", code):
             raise ValueError(f"{code!r} is not an uppercase alpha-2 code")
         if not isinstance(flag["name"], str) or not flag["name"].strip():
             raise ValueError(f"{code} must have a review name")
-        if require_localized_names and (
-            not isinstance(flag["name_zh_cn"], str)
-            or not flag["name_zh_cn"].strip()
-            or "↑↑↑" in flag["name_zh_cn"]
-        ):
-            raise ValueError(f"{code} must have a resolved zh_cn display name")
         if not isinstance(
             flag["source_name"], str
         ) or not SOURCE_NAME_PATTERN.fullmatch(flag["source_name"]):
@@ -350,87 +321,6 @@ def _validate_manifest(manifest: dict, *, require_localized_names: bool) -> None
 
     if _pixels_sha256(flags) != EXPECTED_PIXELS_SHA256:
         raise ValueError("flag manifest pixel matrices have drifted")
-
-
-def validate_manifest(manifest: dict) -> None:
-    """Validate the committed localized manifest."""
-
-    _validate_manifest(manifest, require_localized_names=True)
-
-
-def import_cldr_zh_names(
-    manifest: dict,
-    xml_bytes: bytes,
-    *,
-    expected_sha256: str = CLDR_ZH_CN_SOURCE["sha256"],
-) -> dict:
-    """Return a localized manifest imported from one pinned CLDR zh file."""
-
-    is_localized = manifest.get("schema_version") == 2
-    _validate_manifest(manifest, require_localized_names=is_localized)
-    actual_sha256 = hashlib.sha256(xml_bytes).hexdigest()
-    if actual_sha256 != expected_sha256:
-        raise ValueError("CLDR zh source digest does not match the pinned release")
-
-    root = ET.fromstring(xml_bytes)
-    names: dict[str, str] = {}
-    for territory in root.findall("./localeDisplayNames/territories/territory"):
-        code = territory.attrib.get("type", "")
-        if "alt" in territory.attrib or code not in EXPECTED_CODES:
-            continue
-        if code in names:
-            raise ValueError(f"CLDR contains duplicate standard territory {code}")
-        name = (territory.text or "").strip()
-        if not name or "↑↑↑" in name:
-            raise ValueError(f"CLDR territory {code} is unresolved")
-        names[code] = name
-
-    missing = [code for code in EXPECTED_CODES if code not in names]
-    if missing:
-        raise ValueError(f"CLDR is missing standard territories: {', '.join(missing)}")
-
-    localized = copy.deepcopy(manifest)
-    localized["schema_version"] = 2
-    localized["locale_sources"] = {"zh_cn": dict(CLDR_ZH_CN_SOURCE)}
-    for flag in localized["flags"]:
-        flag["name_zh_cn"] = names[flag["code"]]
-    validate_manifest(localized)
-    return localized
-
-
-def render_manifest(manifest: dict) -> str:
-    """Render readable metadata while keeping audited pixel rows compact."""
-
-    validate_manifest(manifest)
-    rendered_flags = []
-    replacements: dict[str, str] = {}
-    for flag_index, flag in enumerate(manifest["flags"]):
-        pixels = []
-        for row_index, row in enumerate(flag["pixels"]):
-            marker = f"__PIXEL_ROW_{flag_index}_{row_index}__"
-            pixels.append(marker)
-            replacements[f'"{marker}"'] = json.dumps(row, separators=(",", ":"))
-        rendered_flags.append(
-            {
-                "code": flag["code"],
-                "name": flag["name"],
-                "name_zh_cn": flag["name_zh_cn"],
-                "source_name": flag["source_name"],
-                "pixels": pixels,
-            }
-        )
-    ordered = {
-        "schema_version": manifest["schema_version"],
-        "dimensions": manifest["dimensions"],
-        "inventory": manifest["inventory"],
-        "source": manifest["source"],
-        "locale_sources": manifest["locale_sources"],
-        "flags": rendered_flags,
-    }
-    rendered = json.dumps(ordered, ensure_ascii=False, indent=2)
-    for marker, row_json in replacements.items():
-        rendered = rendered.replace(marker, row_json)
-    return rendered + "\n"
 
 
 def _paths_by_color(pixels: list[list[str | None]]) -> dict[str, list[str]]:
@@ -472,64 +362,6 @@ def render_sprite(manifest: dict) -> str:
             lines.append(f'    <path fill="{color}" d="{" ".join(commands)}"/>')
         lines.append("  </symbol>")
     lines.append("</svg>")
-    return "\n".join(lines) + "\n"
-
-
-def render_runtime_module(manifest: dict) -> str:
-    """Render deterministic country lookup data with fail-closed normalization."""
-
-    validate_manifest(manifest)
-    name_to_codes: dict[str, set[str]] = defaultdict(set)
-    for flag in manifest["flags"]:
-        for name in (flag["name"], flag["name_zh_cn"]):
-            name_to_codes[name.strip().casefold()].add(flag["code"])
-
-    lines = [
-        '"""Generated country identity data. Do not edit by hand."""',
-        "",
-        "from __future__ import annotations",
-        "",
-        "COUNTRY_FLAGS: dict[str, dict[str, str]] = {",
-    ]
-    for flag in manifest["flags"]:
-        lines.append(
-            f"    {flag['code']!r}: {{'name_en': {flag['name']!r}, "
-            f"'name_zh_cn': {flag['name_zh_cn']!r}}},"
-        )
-    lines.extend(("}", "", "_NAME_TO_CODE: dict[str, str] = {"))
-    for name, codes in sorted(name_to_codes.items()):
-        if len(codes) == 1:
-            lines.append(f"    {name!r}: {next(iter(codes))!r},")
-    lines.extend(
-        (
-            "}",
-            "",
-            "",
-            "def normalize_country_code(value: str | None) -> str | None:",
-            '    """Return a supported code for an exact code or canonical name."""',
-            "",
-            "    if not isinstance(value, str):",
-            "        return None",
-            "    normalized = value.strip()",
-            "    if not normalized:",
-            "        return None",
-            "    code = normalized.upper()",
-            "    if len(code) == 2 and code in COUNTRY_FLAGS:",
-            "        return code",
-            "    return _NAME_TO_CODE.get(normalized.casefold())",
-            "",
-            "",
-            "def country_identity(value: str | None, locale: str) -> dict[str, str] | None:",
-            '    """Return the normalized code and locale-selected display name."""',
-            "",
-            "    code = normalize_country_code(value)",
-            "    if code is None:",
-            "        return None",
-            "    locale_key = (locale or '').replace('-', '_').casefold()",
-            "    name_key = 'name_zh_cn' if locale_key.startswith('zh') else 'name_en'",
-            "    return {'code': code, 'name': COUNTRY_FLAGS[code][name_key]}",
-        )
-    )
     return "\n".join(lines) + "\n"
 
 
@@ -613,7 +445,7 @@ def _flag_card(flag: dict) -> str:
       <span class="country-code">{flag["code"]}</span>
       <div>
         <h3>{html.escape(flag["name"])}</h3>
-        <p><span class="country-name-zh">{html.escape(flag["name_zh_cn"])}</span> · {code_kind} · source key {html.escape(flag["source_name"])}</p>
+        <p>{code_kind} · source key {html.escape(flag["source_name"])}</p>
       </div>
     </header>
     <div class="treatment-grid">
@@ -776,8 +608,8 @@ def render_html(manifest: dict) -> str:
   </div>
   <aside class="status-card">
     <span class="status">Review boundary</span>
-    <strong>197 flags · Recommended approved</strong>
-    <p>Reference artifact for the homepage feed integration. Runtime instances use the Recommended presentation while source fills stay exact.</p>
+    <strong>197 flags · 0 runtime changes</strong>
+    <p>Review artifact only — no live feed integration. The sprite stays under ideation until a size and color treatment are approved.</p>
   </aside>
 </header>
 
@@ -803,7 +635,7 @@ def render_html(manifest: dict) -> str:
 </main>
 
 <footer class="shell">
-  <strong>{{ATTRIBUTION}}</strong> · Top Gun <code>{{TOP_GUN_COMMIT}}</code> · R74n <code>{{R74N_REVISION}}</code>. License clearance confirmed by the owner for this PushinWeight use. Chinese territory names come from Unicode CLDR 48 under Unicode License v3. SVG path fills remain exact to the vendored matrices; muting is presentation-only.
+  <strong>{{ATTRIBUTION}}</strong> · Top Gun <code>{{TOP_GUN_COMMIT}}</code> · R74n <code>{{R74N_REVISION}}</code>. License clearance confirmed by the owner for this PushinWeight use. SVG path fills remain exact to the vendored matrices; muting is presentation-only.
 </footer>
 </body>
 </html>
@@ -834,47 +666,22 @@ def _check_file(path: Path, expected: str) -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
-    parser.add_argument(
-        "--import-cldr-zh",
-        type=Path,
-        metavar="LOCAL_XML",
-        help="import pinned CLDR 48 standard zh territory names into the manifest",
-    )
     args = parser.parse_args(argv)
 
-    if args.check and args.import_cldr_zh:
-        parser.error("--check and --import-cldr-zh are mutually exclusive")
-
-    if args.import_cldr_zh:
-        manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-        manifest = import_cldr_zh_names(manifest, args.import_cldr_zh.read_bytes())
-        MANIFEST_PATH.write_text(
-            render_manifest(manifest),
-            encoding="utf-8",
-        )
-        print(f"wrote {MANIFEST_PATH.relative_to(REPO_ROOT)}")
-    else:
-        manifest = load_manifest()
+    manifest = load_manifest()
     sprite = render_sprite(manifest)
     dossier = render_html(manifest)
-    runtime_data = render_runtime_module(manifest)
     if args.check:
         checks = (
             _check_file(SPRITE_PATH, sprite),
             _check_file(HTML_PATH, dossier),
-            _check_file(RUNTIME_SPRITE_PATH, sprite),
-            _check_file(RUNTIME_DATA_PATH, runtime_data),
         )
         return 0 if all(checks) else 1
 
     SPRITE_PATH.write_text(sprite, encoding="utf-8")
     HTML_PATH.write_text(dossier, encoding="utf-8")
-    RUNTIME_SPRITE_PATH.write_text(sprite, encoding="utf-8")
-    RUNTIME_DATA_PATH.write_text(runtime_data, encoding="utf-8")
     print(f"wrote {SPRITE_PATH.relative_to(REPO_ROOT)}")
     print(f"wrote {HTML_PATH.relative_to(REPO_ROOT)}")
-    print(f"wrote {RUNTIME_SPRITE_PATH.relative_to(REPO_ROOT)}")
-    print(f"wrote {RUNTIME_DATA_PATH.relative_to(REPO_ROOT)}")
     return 0
 
 

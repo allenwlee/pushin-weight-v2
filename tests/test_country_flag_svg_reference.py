@@ -23,13 +23,8 @@ SPRITE_PATH = (
     REPO_ROOT / "docs/ideation/assets/2026-08-29-162947-country-flag-sprite.svg"
 )
 HTML_PATH = (
-    REPO_ROOT / "docs/reference/2026-08-29-162947-country-flag-svg-reference.html"
-)
-OLD_HTML_PATH = (
     REPO_ROOT / "docs/ideation/2026-08-29-162947-country-flag-svg-reference.html"
 )
-RUNTIME_SPRITE_PATH = REPO_ROOT / "monitor/static/pw-country-flags.svg"
-RUNTIME_DATA_PATH = REPO_ROOT / "monitor/country_flags.py"
 EXPECTED_CODES = (
     "AD",
     "AE",
@@ -245,24 +240,6 @@ EXPECTED_NAME_SAMPLES = {
     "US": "United States",
     "XK": "Kosovo",
 }
-EXPECTED_ZH_CN_NAME_SAMPLES = {
-    "CD": "刚果（金）",
-    "CI": "科特迪瓦",
-    "CN": "中国",
-    "KR": "韩国",
-    "SZ": "斯威士兰",
-    "TR": "土耳其",
-    "US": "美国",
-    "XK": "科索沃",
-}
-EXPECTED_CLDR_SOURCE = {
-    "provider": "Unicode CLDR",
-    "release": "48",
-    "url": "https://raw.githubusercontent.com/unicode-org/cldr/release-48/common/main/zh.xml",
-    "sha256": "b1ef8bcadcf19fa8914d9ba812a7bcec124c72fecbf4acea02e4c8bd2fe51866",
-    "license": "Unicode License v3",
-    "license_url": "https://www.unicode.org/license.txt",
-}
 APPROVED_SYMBOL_SHA256 = {
     "flag-cn": "b2b8b8866a47d1b6519507112bdb2dbe194ebf3cbe0b76424b85b914caf4072c",
     "flag-kr": "6cfee124679d2da52ecb80b35ccdf9cd9165c229092cfac89890890ccb1f3e67",
@@ -299,27 +276,12 @@ def _pixels_sha256(flags: list[dict]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _cldr_fixture(manifest: dict, **overrides: str) -> bytes:
-    names = {
-        flag["code"]: overrides.get(flag["code"], flag["name_zh_cn"])
-        for flag in manifest["flags"]
-    }
-    territories = "".join(
-        f'<territory type="{code}">{html.escape(name)}</territory>'
-        for code, name in names.items()
-    )
-    return (
-        f"<ldml><localeDisplayNames><territories>{territories}"
-        "</territories></localeDisplayNames></ldml>"
-    ).encode()
-
-
 def test_manifest_is_the_exact_portable_country_source() -> None:
     generator = _load_generator()
     manifest = _load_manifest()
 
     generator.validate_manifest(manifest)
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 1
     assert manifest["dimensions"] == {"width": 16, "height": 9}
     assert manifest["inventory"] == {
         "country_count": COUNTRY_COUNT,
@@ -332,7 +294,6 @@ def test_manifest_is_the_exact_portable_country_source() -> None:
         "attribution": "Pixel flags by R74n",
         "license_clearance": "Owner confirmed for this PushinWeight use on 2026-08-29",
     }
-    assert manifest["locale_sources"]["zh_cn"] == EXPECTED_CLDR_SOURCE
 
     flags = manifest["flags"]
     assert tuple(flag["code"] for flag in flags) == EXPECTED_CODES
@@ -340,11 +301,6 @@ def test_manifest_is_the_exact_portable_country_source() -> None:
     assert {code: names[code] for code in EXPECTED_NAME_SAMPLES} == (
         EXPECTED_NAME_SAMPLES
     )
-    names_zh_cn = {flag["code"]: flag["name_zh_cn"] for flag in flags}
-    assert {code: names_zh_cn[code] for code in EXPECTED_ZH_CN_NAME_SAMPLES} == (
-        EXPECTED_ZH_CN_NAME_SAMPLES
-    )
-    assert all(name.strip() and "↑↑↑" not in name for name in names_zh_cn.values())
     assert sum(len(row) for flag in flags for row in flag["pixels"]) == 28_368
     assert _pixels_sha256(flags) == EXPECTED_PIXELS_SHA256
 
@@ -371,69 +327,12 @@ def test_manifest_rejects_inventory_and_pixel_shape_drift(mutate) -> None:
         generator.validate_manifest(manifest)
 
 
-def test_cldr_import_accepts_only_complete_pinned_standard_names() -> None:
-    generator = _load_generator()
-    manifest = _load_manifest()
-    fixture = _cldr_fixture(manifest)
-    root = ET.fromstring(fixture)
-    territories = root.find("./localeDisplayNames/territories")
-    assert territories is not None
-    ET.SubElement(territories, "territory", {"type": "CN", "alt": "short"}).text = (
-        "not-the-standard-name"
-    )
-    fixture = ET.tostring(root, encoding="utf-8")
-
-    imported = generator.import_cldr_zh_names(
-        manifest,
-        fixture,
-        expected_sha256=hashlib.sha256(fixture).hexdigest(),
-    )
-
-    assert imported["locale_sources"]["zh_cn"] == EXPECTED_CLDR_SOURCE
-    assert imported["flags"] == manifest["flags"]
-
-
-def test_cldr_import_rejects_digest_mismatch() -> None:
-    generator = _load_generator()
-    manifest = _load_manifest()
-
-    with pytest.raises(ValueError, match="digest"):
-        generator.import_cldr_zh_names(manifest, _cldr_fixture(manifest))
-
-
-@pytest.mark.parametrize("failure", ("missing", "duplicate", "inheritance"))
-def test_cldr_import_rejects_incomplete_or_ambiguous_standard_names(
-    failure: str,
-) -> None:
-    generator = _load_generator()
-    manifest = _load_manifest()
-    fixture = _cldr_fixture(manifest, CN="↑↑↑" if failure == "inheritance" else "中国")
-    root = ET.fromstring(fixture)
-    territories = root.find("./localeDisplayNames/territories")
-    assert territories is not None
-    cn = territories.find('./territory[@type="CN"]')
-    assert cn is not None
-    if failure == "missing":
-        territories.remove(cn)
-    elif failure == "duplicate":
-        territories.append(copy.deepcopy(cn))
-    fixture = ET.tostring(root, encoding="utf-8")
-
-    with pytest.raises(ValueError):
-        generator.import_cldr_zh_names(
-            manifest,
-            fixture,
-            expected_sha256=hashlib.sha256(fixture).hexdigest(),
-        )
-
-
 def test_generated_sprite_reconstructs_all_manifest_pixels() -> None:
     generator = _load_generator()
     manifest = _load_manifest()
     committed = SPRITE_PATH.read_text(encoding="utf-8")
 
     assert generator.render_sprite(manifest) == committed
-    assert RUNTIME_SPRITE_PATH.read_text(encoding="utf-8") == committed
 
     root = ET.fromstring(committed)
     assert root.tag == f"{{{SVG_NAMESPACE}}}svg"
@@ -501,7 +400,6 @@ def test_review_page_is_generated_from_the_same_country_symbols() -> None:
     manifest = _load_manifest()
     source = HTML_PATH.read_text(encoding="utf-8")
 
-    assert not OLD_HTML_PATH.exists()
     assert generator.render_html(manifest) == source
     assert _symbol_bodies(source) == _symbol_bodies(
         SPRITE_PATH.read_text(encoding="utf-8")
@@ -519,18 +417,6 @@ def test_review_page_is_generated_from_the_same_country_symbols() -> None:
         code = flag["code"]
         assert source.count(f'<span class="country-code">{code}</span>') == 1
         assert source.count(f"<h3>{html.escape(flag['name'])}</h3>") == 1
-        assert source.count(
-            f'<span class="country-name-zh">{html.escape(flag["name_zh_cn"])}</span>'
-        ) == 1
-
-
-def test_runtime_country_module_is_generated_from_manifest() -> None:
-    generator = _load_generator()
-    manifest = _load_manifest()
-
-    assert generator.render_runtime_module(manifest) == RUNTIME_DATA_PATH.read_text(
-        encoding="utf-8"
-    )
 
 
 def test_review_page_exposes_all_treatments_in_realistic_feed_headers() -> None:
@@ -565,8 +451,7 @@ def test_review_page_is_standalone_and_decorative_svgs_are_accessible() -> None:
     assert re.search(r'<use href="#flag-[a-z]{2}"></use>', source)
     assert not re.search(r'(?:src|href)="(?!#)[^"]+"', source)
     assert "Pixel flags by R74n" in source
-    assert "Reference artifact for the homepage feed integration" in source
-    assert "Chinese territory names come from Unicode CLDR 48" in source
+    assert "Review artifact only — no live feed integration" in source
 
 
 def test_check_mode_fails_loudly_after_controlled_output_drift(
@@ -576,16 +461,10 @@ def test_check_mode_fails_loudly_after_controlled_output_drift(
     manifest = _load_manifest()
     sprite_path = tmp_path / SPRITE_PATH.name
     html_path = tmp_path / HTML_PATH.name
-    runtime_sprite_path = tmp_path / RUNTIME_SPRITE_PATH.name
-    runtime_data_path = tmp_path / RUNTIME_DATA_PATH.name
     sprite_path.write_text(generator.render_sprite(manifest), encoding="utf-8")
     html_path.write_text(generator.render_html(manifest), encoding="utf-8")
-    runtime_sprite_path.write_text(generator.render_sprite(manifest), encoding="utf-8")
-    runtime_data_path.write_text(generator.render_runtime_module(manifest), encoding="utf-8")
     monkeypatch.setattr(generator, "SPRITE_PATH", sprite_path)
     monkeypatch.setattr(generator, "HTML_PATH", html_path)
-    monkeypatch.setattr(generator, "RUNTIME_SPRITE_PATH", runtime_sprite_path)
-    monkeypatch.setattr(generator, "RUNTIME_DATA_PATH", runtime_data_path)
 
     assert generator.main(["--check"]) == 0
     sprite_path.write_text("<!-- controlled drift -->\n", encoding="utf-8")
