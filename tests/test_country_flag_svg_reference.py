@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import sync_playwright
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -195,3 +196,68 @@ def test_review_page_is_standalone_and_decorative_svgs_are_accessible() -> None:
     assert not re.search(r'(?:src|href)="(?!#)[^"]+"', source)
     assert "Pixel flags by R74n" in source
     assert "Review artifact only — no live feed integration" in source
+
+
+def test_check_mode_fails_loudly_after_controlled_output_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    generator = _load_generator()
+    manifest = _load_manifest()
+    sprite_path = tmp_path / SPRITE_PATH.name
+    html_path = tmp_path / HTML_PATH.name
+    sprite_path.write_text(generator.render_sprite(manifest), encoding="utf-8")
+    html_path.write_text(generator.render_html(manifest), encoding="utf-8")
+    monkeypatch.setattr(generator, "SPRITE_PATH", sprite_path)
+    monkeypatch.setattr(generator, "HTML_PATH", html_path)
+
+    assert generator.main(["--check"]) == 0
+    sprite_path.write_text("<!-- controlled drift -->\n", encoding="utf-8")
+    assert generator.main(["--check"]) == 1
+    assert sprite_path.name in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "viewport",
+    (
+        {"width": 1440, "height": 960},
+        {"width": 390, "height": 844},
+    ),
+)
+def test_standalone_review_page_renders_in_chromium_without_errors(
+    viewport: dict[str, int],
+) -> None:
+    page_errors: list[str] = []
+    failed_requests: list[str] = []
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            context = browser.new_context(viewport=viewport)
+            page = context.new_page()
+            page.on("pageerror", lambda error: page_errors.append(str(error)))
+            page.on("requestfailed", lambda request: failed_requests.append(request.url))
+            page.goto(HTML_PATH.as_uri(), wait_until="load")
+
+            cards = page.locator(".flag-card")
+            assert cards.count() == 3
+            assert all(cards.nth(index).is_visible() for index in range(3))
+            assert page.locator(".feed-sample").count() == 9
+            assert page.locator(".flag-art").count() == 27
+            assert all(
+                page.locator(".flag-art").nth(index).bounding_box()["width"] > 0
+                for index in range(27)
+            )
+            assert page.locator(".treatment--original .flag-art").first.evaluate(
+                "node => getComputedStyle(node).filter"
+            ) == "none"
+            assert page.locator(".treatment--recommended .flag-art").first.evaluate(
+                "node => getComputedStyle(node).filter"
+            ) == "saturate(0.72) brightness(0.9)"
+            assert page.locator(".treatment--recommended .flag-art").first.evaluate(
+                "node => getComputedStyle(node).opacity"
+            ) == "0.9"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert page_errors == []
+            assert failed_requests == []
+        finally:
+            browser.close()

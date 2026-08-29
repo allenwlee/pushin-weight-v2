@@ -413,7 +413,8 @@ def render_html(manifest: dict) -> str:
 
 def _check_file(path: Path, expected: str) -> bool:
     if not path.exists() or path.read_text(encoding="utf-8") != expected:
-        print(f"out of date: {path.relative_to(REPO_ROOT)}", file=sys.stderr)
+        display_path = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+        print(f"out of date: {display_path}", file=sys.stderr)
         return False
     return True
 
