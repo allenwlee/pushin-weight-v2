@@ -18,7 +18,7 @@ feed rendering.
   falls back to the scheduled key or retired unsuffixed key.
 - Production apply requires `--target production`,
   `X_MONITOR_DEPLOYMENT_ENVIRONMENT=production`, PostgreSQL database
-  `pushinweight_shadow`, migrations `core.0020` through `core.0023`, and a
+  `pushinweight_shadow`, migrations `core.0020` through `core.0024`, and a
   fresh recovery receipt. These gates run before credential access or HTTP.
 - Production `--refresh` is forbidden. Successful responses, including
   documented unavailable and success-empty responses, checkpoint
@@ -91,7 +91,8 @@ Before paid calls:
 4. Verify migrations `0020_account_account_based_in_and_more`,
    `0021_account_user_about_live_schema`,
    `0022_account_verification_reason_timestamp`, and
-   `0023_account_user_about_unavailable` are applied.
+   `0023_account_user_about_unavailable`, and
+   `0024_account_identity_profile_label_long_description` are applied.
 5. Verify the scheduled harvester's latest completed cycle is healthy. Do not
    pause it for the multi-hour provider run.
 6. Run the production selection dry-run and record the aggregate eligible
@@ -139,7 +140,7 @@ its digest and relation in aggregate output.
 
 ## Production 100-Account smoke
 
-Use the fresh receipt and the same missing-first seed as the full run:
+Use the fresh receipt with the explicit diversity-stratified smoke strategy:
 
 ```bash
 python manage.py backfill_account_based_in \
@@ -147,11 +148,17 @@ python manage.py backfill_account_based_in \
   --max-attempts 110 --max-credits 1980 \
   --max-wall-seconds 1800 --max-qps 5 --provider-qps 5 \
   --concurrency 5 --chunk-size 100 \
-  --seed account-based-in-production-v1 \
+  --selection-strategy diversity_stratified \
+  --seed account-based-in-production-smoke-v1 \
   --recovery-receipt '<secure-receipt>' \
   --json-report /tmp/twitterapi-user-about-production-smoke.json \
   --markdown-report /tmp/twitterapi-user-about-production-smoke.md
 ```
+
+The smoke balances actual or snowflake-derived X-account age, observed
+follower-size buckets, and public profile-location proxies for the US, EU,
+Japan, other, and unknown. Profile location is used only to diversify the
+test; it never populates or validates `country_code`.
 
 Stop before the full run if the smoke has any authentication, schema,
 identity, rate-limit, circuit, or hard-budget stop; unexpected rejected-field

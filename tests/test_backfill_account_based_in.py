@@ -16,6 +16,7 @@ from core.models import Account
 from monitor.management.commands.backfill_account_based_in import (
     _is_authorized_staging_executor,
     _select_accounts,
+    _selection_distribution,
 )
 from monitor.twitterapi.user_about import (
     FetchBatchResult,
@@ -131,6 +132,58 @@ def test_default_dry_run_selects_without_http_or_writes():
         Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 0
     )
     assert '"mode": "dry_run"' in stdout.getvalue()
+
+
+def test_diversity_stratified_selection_balances_age_size_and_location_proxy():
+    ages = [
+        datetime(2012, 1, 1, tzinfo=UTC),
+        datetime(2017, 1, 1, tzinfo=UTC),
+        datetime(2022, 1, 1, tzinfo=UTC),
+    ]
+    sizes = [100, 10_000, 1_000_000, None]
+    locations = ["United States", "France", "日本", "Brazil", None]
+    index = 0
+    for age in ages:
+        for followers_count in sizes:
+            for location in locations:
+                for _ in range(2):
+                    index += 1
+                    Account.objects.create(
+                        author_id=str(index),
+                        handle=f"user{index}",
+                        created_at=age,
+                        followers_count=followers_count,
+                        location=location,
+                    )
+
+    selections = _select_accounts(
+        limit=100,
+        seed="diversity-test",
+        refresh=False,
+        strategy="diversity_stratified",
+    )
+
+    assert len(selections) == 100
+    assert _selection_distribution(selections) == {
+        "account_age": {
+            "middle_2015_2019": 33,
+            "new_2020_plus": 33,
+            "old_pre_2015": 34,
+        },
+        "audience_size": {
+            "large_100k_plus": 25,
+            "medium_1k_100k": 25,
+            "small_lt_1k": 25,
+            "unknown": 25,
+        },
+        "profile_location_proxy": {
+            "eu": 20,
+            "jp": 20,
+            "other": 20,
+            "unknown": 20,
+            "us": 20,
+        },
+    }
 
 
 @override_settings(OLLIJA_STAGING_MODE=True)

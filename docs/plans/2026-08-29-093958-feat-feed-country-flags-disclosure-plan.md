@@ -150,7 +150,7 @@ The Django harvester currently writes Account snapshots directly with `update_or
 - R29. Production apply must require a fresh pre-write snapshot receipt naming the Account row count, SHA-256 digest, encrypted-at-rest snapshot location, restore-proof database or schema, restore row count/digest, and completion timestamp. The command validates a receipt digest and freshness before HTTP; the runbook retains the full untracked receipt and recovery commands without account data or credentials.
 - R30. The production runner is default-dry-run, explicit-apply, missing-only unless `--refresh` is separately supplied, and restart-safe through database checkpoints. It processes bounded chunks, applies each completed chunk before fetching the next, reselects eligible rows between chunks, and never depends on Render's ephemeral filesystem for progress.
 - R31. One production invocation must hold a nonblocking PostgreSQL advisory lock and enforce explicit global ceilings for Accounts, attempts, projected credits, wall time, QPS, and concurrency. It may use bounded concurrent HTTP over one reusable session to approach the lower of operator and verified provider QPS, but reservations must prevent attempt or credit overshoot and a stop signal must prevent new requests.
-- R32. Run an exact-SHA production smoke of at most 100 previously unfetched Accounts before expansion. Continue only when migration/schema identity, checkpoint counts, provider outcomes, country yield, projected credits, and scheduled-harvester health reconcile. The full run ends only when the eligible missing-only count reaches zero or emits a named hard stop and resumable remainder.
+- R32. Run an exact-SHA production smoke of at most 100 previously unfetched Accounts before expansion. Stratify it across old/middle/new X-account age, small/medium/large/unknown follower size, and US/EU/Japan/other/unknown public profile-location proxies; the location proxy diversifies the test only and never supplies `country_code`. Continue only when migration/schema identity, checkpoint counts, provider outcomes, country yield, projected credits, and scheduled-harvester health reconcile. The full run ends only when the eligible missing-only count reaches zero or emits a named hard stop and resumable remainder.
 
 ### Acceptance Examples
 
@@ -306,6 +306,7 @@ A successful profile `data.id` must match `Account.author_id`. The live unavaila
 | `data.about_profile.username_changes.last_changed_at_msec` | `username_changes_last_changed_at_msec` | `PositiveBigIntegerField(null=True)` | About only; strictly parse numeric-string epoch milliseconds |
 | `data.identity_profile_labels_highlighted_label.label.badge.url` | `identity_profile_label_badge_url` | `URLField(2048, null=True)` | About only |
 | `data.identity_profile_labels_highlighted_label.label.description` | `identity_profile_label_description` | `TextField(null=True)` | About only |
+| `data.identity_profile_labels_highlighted_label.label.long_description.text` | `identity_profile_label_long_description` | `TextField(null=True)` | About only; entity offsets and nested presentation cache are type-validated but not persisted as Account facts |
 | `data.identity_profile_labels_highlighted_label.label.url.url` | `identity_profile_label_url` | `URLField(2048, null=True)` | About only |
 | `data.identity_profile_labels_highlighted_label.label.url.urlType` | `identity_profile_label_url_type` | `CharField(128, null=True)` | About only |
 | `data.identity_profile_labels_highlighted_label.label.userLabelDisplayType` | `identity_profile_label_user_label_display_type` | `CharField(128, null=True)` | About only |
@@ -324,7 +325,7 @@ A successful profile `data.id` must match `Account.author_id`. The live unavaila
 | Booleans | Exact Boolean when present; no string or integer coercion | Preserve the affected Boolean |
 | URLs | Null or absolute HTTP(S) URL within 2,048 characters | Preserve the affected URL or label group |
 | `created_at` | Timezone-aware, not before X launch, not beyond observation time plus tolerance, and fill-once | Preserve current value and report conflict |
-| Affiliate/identity labels | Validate six related leaves as one group; explicit empty object may clear the group | Preserve the whole current group |
+| Affiliate/identity labels | Validate six affiliate leaves and seven identity leaves as atomic groups; explicit empty object may clear its group | Preserve the whole current group |
 | About provider strings | Correct type, trimmed, control-free, and within pilot-observed limits | Preserve the affected field |
 | `country_code` | Uppercase supported two-letter code | Preserve the current code or null; count an exact-but-unsupported About value as unmapped without rejecting the otherwise valid observation |
 
@@ -391,7 +392,7 @@ flowchart TB
 
 ### System-Wide Impact
 
-- **Schema:** `Account` gains 29 typed fields across migrations 0020 through 0023. The seven live-only additions are additive and nullable; `isVerified` and `profilePicture` reuse existing shared fields.
+- **Schema:** `Account` gains 30 typed fields across migrations 0020 through 0024. Live-only additions are additive and nullable; `isVerified` and `profilePicture` reuse existing shared fields.
 - **Country identity:** A generated backend-only code/name map supports R6. It carries no SVG, zh-CN display name, template, CSS, or client rendering.
 - **Writers:** Post, list, seed, and User About inputs share one Account write boundary.
 - **Freshness:** `followers_fetched_at` becomes active. `account_based_in_fetched_at` records successful About lookup completion. Other fields do not gain timestamps.
@@ -604,7 +605,7 @@ U5-U7 produced the completed staging pilot, and U8 cuts credentials over by purp
   1. Commit and push the feature branch, fast-forward the exact candidate to staging, verify staging SHA/config/migrations, and run a small on-demand-key smoke without refreshing completed pilot rows.
   2. Re-measure production callable/missing counts and provider allowance, set explicit attempt/credit/time/QPS/concurrency ceilings, and record the dry-run output.
   3. Create the encrypted-at-rest Account snapshot, compute its digest, restore it to a disposable proof relation, compare count/digest, and produce the fresh receipt consumed by the command.
-  4. Promote the unchanged reviewed SHA to `main`; verify Render web and harvester SHAs plus migrations 0020-0023 and both credential lanes.
+  4. Promote the unchanged reviewed SHA to `main`; verify Render web and harvester SHAs plus migrations 0020-0024 and both credential lanes.
   5. Run at most 100 missing production Accounts. Reconcile SQL, aggregate report, provider outcomes, and projected spend before continuing.
   6. Continue the missing-only population under the same global ceilings. If the one-off job stops, rerun only after reconciling its receipt; durable checkpoints skip accepted rows.
   7. Verify final eligible remainder, typed-field/country yield, total attempts/credits, and one literal post-deploy scheduled cycle in Render logs and PostgreSQL. Remove the legacy key only after both credential lanes are proven.
@@ -675,7 +676,8 @@ U5-U7 produced the completed staging pilot, and U8 cuts credentials over by purp
 
 ## Production Runner Verification — 2026-08-31
 
-- The production path is restricted to the production deployment marker and `pushinweight_shadow`, requires migrations 0020–0023, validates a fresh recovery receipt and its live snapshot relation before credential access, and holds a nonblocking PostgreSQL advisory lock.
+- The production path is restricted to the production deployment marker and `pushinweight_shadow`, requires migrations 0020–0024, validates a fresh recovery receipt and its live snapshot relation before credential access, and holds a nonblocking PostgreSQL advisory lock.
+- The first full-run attempt stopped safely after 17 calls when a conditional identity-label `long_description` appeared. Sixteen accepted rows checkpointed, one drift response wrote nothing, and only 306 projected credits were consumed. The value-free shape evidence adds the typed long-description field and explicit annotation-envelope validation before any continuation.
 - Missing-only work checkpoints accepted observations after every bounded chunk. The full invocation uses `--require-complete`, so a named stop or eligible residue writes its aggregate resume report and exits nonzero.
 - The changed-test regression net passed (`365 passed`), including 118 required PostgreSQL verifications with zero skips or errors. Focused recovery/backfill tests passed (`21 passed`), Ruff passed for the new production command surfaces, `makemigrations --check --dry-run` reported no changes, `manage.py check` reported no issues, and `git diff --check` passed.
 - A whole-repository collection attempt reached 509 required PostgreSQL verifications but stopped on two unchanged baseline import errors: `tests/test_brand_search_terms_hybrid.py` expects `_log_brand_search_terms_drift`, and `tests/test_relevance.py` expects `load_filter`. Neither affected module or test differs from the production candidate's base SHA.

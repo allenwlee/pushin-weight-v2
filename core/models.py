@@ -379,6 +379,7 @@ _ACCOUNT_TEXT_FIELDS = {
     "affiliate_label_description",
     "account_based_in",
     "identity_profile_label_description",
+    "identity_profile_label_long_description",
     "verified_type",
     "profile_picture",
     "location",
@@ -397,6 +398,7 @@ _AFFILIATE_LABEL_FIELDS = {
 _IDENTITY_LABEL_FIELDS = {
     "identity_profile_label_badge_url",
     "identity_profile_label_description",
+    "identity_profile_label_long_description",
     "identity_profile_label_url",
     "identity_profile_label_url_type",
     "identity_profile_label_user_label_display_type",
@@ -605,6 +607,7 @@ class Account(models.Model):
         max_length=2048, blank=True, null=True
     )
     identity_profile_label_description = models.TextField(blank=True, null=True)
+    identity_profile_label_long_description = models.TextField(blank=True, null=True)
     identity_profile_label_url = models.URLField(
         max_length=2048, blank=True, null=True
     )

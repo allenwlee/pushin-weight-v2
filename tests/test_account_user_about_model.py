@@ -36,6 +36,7 @@ def test_account_model_exposes_typed_user_about_fields():
         "unavailable_reason",
         "identity_profile_label_badge_url",
         "identity_profile_label_description",
+        "identity_profile_label_long_description",
         "identity_profile_label_url",
         "identity_profile_label_url_type",
         "identity_profile_label_user_label_display_type",
@@ -50,6 +51,15 @@ def test_account_model_exposes_typed_user_about_fields():
 
 def test_live_user_about_fields_use_typed_deduplicated_destinations():
     Account.objects.create(author_id="42")
+    identity_profile_label = {
+        "identity_profile_label_badge_url": None,
+        "identity_profile_label_description": None,
+        "identity_profile_label_long_description": "Identity details",
+        "identity_profile_label_url": None,
+        "identity_profile_label_url_type": None,
+        "identity_profile_label_user_label_display_type": None,
+        "identity_profile_label_user_label_type": None,
+    }
     outcome = Account.apply_observation(
         author_id="42",
         observed_author_id="42",
@@ -63,6 +73,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
             "verification_info_id": "verification-42",
             "verification_info_is_identity_verified": True,
             "verification_info_reason_verified_since_msec": 1_784_691_635_000,
+            **identity_profile_label,
         },
         present_fields={
             "verified",
@@ -72,6 +83,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
             "verification_info_id",
             "verification_info_is_identity_verified",
             "verification_info_reason_verified_since_msec",
+            *identity_profile_label,
         },
     )
 
@@ -83,6 +95,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
     assert account.verification_info_id == "verification-42"
     assert account.verification_info_is_identity_verified is True
     assert account.verification_info_reason_verified_since_msec == 1_784_691_635_000
+    assert account.identity_profile_label_long_description == "Identity details"
     assert outcome.rejected_fields == {}
     assert not hasattr(account, "is_verified")
 

@@ -14,7 +14,7 @@ import time
 from collections import Counter
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -54,8 +54,32 @@ REQUIRED_MIGRATIONS = {
     "0021_account_user_about_live_schema",
     "0022_account_verification_reason_timestamp",
     "0023_account_user_about_unavailable",
+    "0024_account_identity_profile_label_long_description",
 }
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_TWITTER_SNOWFLAKE_EPOCH_MS = 1_288_834_974_657
+_AGE_BUCKETS = ("old_pre_2015", "middle_2015_2019", "new_2020_plus")
+_SIZE_BUCKETS = ("small_lt_1k", "medium_1k_100k", "large_100k_plus", "unknown")
+_GEOGRAPHY_BUCKETS = ("us", "eu", "jp", "other", "unknown")
+_JP_LOCATION = re.compile(
+    r"japan|日本|tokyo|東京|osaka|大阪|kyoto|京都|yokohama|横浜",
+    re.IGNORECASE,
+)
+_US_LOCATION = re.compile(
+    r"united states|(?:^|[^a-z])usa(?:[^a-z]|$)|u[.]s[.]|new york|"
+    r"california|los angeles|san francisco|washington,? dc|texas|florida|"
+    r"chicago|boston|seattle",
+    re.IGNORECASE,
+)
+_EU_LOCATION = re.compile(
+    r"united kingdom|(?:^|[^a-z])uk(?:[^a-z]|$)|england|london|france|"
+    r"paris|germany|berlin|spain|madrid|italy|rome|netherlands|amsterdam|"
+    r"belgium|brussels|sweden|stockholm|norway|oslo|denmark|copenhagen|"
+    r"finland|helsinki|poland|warsaw|ireland|dublin|portugal|lisbon|"
+    r"austria|vienna|switzerland|zurich|czech|prague|greece|athens|europe|"
+    r"(?:^|[^a-z])eu(?:[^a-z]|$)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -91,17 +115,146 @@ def _select_accounts(
     seed: str,
     refresh: bool,
     eligible_before: datetime | None = None,
+    strategy: str = "deterministic_hash",
 ) -> list[FetchSelection]:
     queryset = _eligible_accounts(
         refresh=refresh,
         eligible_before=eligible_before,
     )
+    if strategy == "diversity_stratified":
+        return _select_stratified_accounts(queryset=queryset, limit=limit, seed=seed)
     rows = list(queryset.values_list("author_id", "handle"))
     rows.sort(key=lambda row: hashlib.sha256(f"{seed}:{row[0]}".encode()).hexdigest())
     return [
         FetchSelection(author_id=str(author_id), handle=str(handle))
         for author_id, handle in rows[:limit]
     ]
+
+
+def _account_age_bucket(author_id: str, created_at: datetime | None) -> str:
+    account_date = created_at
+    if account_date is None:
+        try:
+            milliseconds = (int(author_id) >> 22) + _TWITTER_SNOWFLAKE_EPOCH_MS
+            account_date = datetime.fromtimestamp(milliseconds / 1_000, tz=UTC)
+        except (OverflowError, ValueError, OSError):
+            return "unknown"
+    if account_date < datetime(2015, 1, 1, tzinfo=UTC):
+        return "old_pre_2015"
+    if account_date < datetime(2020, 1, 1, tzinfo=UTC):
+        return "middle_2015_2019"
+    return "new_2020_plus"
+
+
+def _account_size_bucket(followers_count: int | None) -> str:
+    if followers_count is None:
+        return "unknown"
+    if followers_count < 1_000:
+        return "small_lt_1k"
+    if followers_count < 100_000:
+        return "medium_1k_100k"
+    return "large_100k_plus"
+
+
+def _account_geography_bucket(location: str | None) -> str:
+    if not location or not location.strip():
+        return "unknown"
+    if _JP_LOCATION.search(location):
+        return "jp"
+    if _US_LOCATION.search(location):
+        return "us"
+    if _EU_LOCATION.search(location):
+        return "eu"
+    return "other"
+
+
+def _balanced_targets(labels: tuple[str, ...], limit: int) -> dict[str, int]:
+    quotient, remainder = divmod(limit, len(labels))
+    return {
+        label: quotient + (1 if index < remainder else 0)
+        for index, label in enumerate(labels)
+    }
+
+
+def _select_stratified_accounts(*, queryset, limit: int, seed: str):
+    rows = list(
+        queryset.values_list(
+            "author_id",
+            "handle",
+            "created_at",
+            "followers_count",
+            "location",
+        )
+    )
+    candidates = []
+    for author_id, handle, created_at, followers_count, location in rows:
+        author_id = str(author_id)
+        age_bucket = _account_age_bucket(author_id, created_at)
+        if age_bucket == "unknown":
+            continue
+        candidates.append(
+            (
+                hashlib.sha256(f"{seed}:{author_id}".encode()).hexdigest(),
+                FetchSelection(author_id=author_id, handle=str(handle)),
+                age_bucket,
+                _account_size_bucket(followers_count),
+                _account_geography_bucket(location),
+            )
+        )
+    candidates.sort(key=lambda candidate: candidate[0])
+
+    targets = (
+        _balanced_targets(_AGE_BUCKETS, limit),
+        _balanced_targets(_SIZE_BUCKETS, limit),
+        _balanced_targets(_GEOGRAPHY_BUCKETS, limit),
+    )
+    counts = (Counter(), Counter(), Counter())
+    selected: list[FetchSelection] = []
+    selected_indexes: set[int] = set()
+    for _ in range(min(limit, len(candidates))):
+        best_index = -1
+        best_score = -1.0
+        for index, candidate in enumerate(candidates):
+            if index in selected_indexes:
+                continue
+            score = 0.0
+            for dimension, bucket in enumerate(candidate[2:]):
+                target = targets[dimension].get(bucket, 0)
+                if target:
+                    deficit = max(target - counts[dimension][bucket], 0)
+                    score += deficit / target
+            if score > best_score:
+                best_index = index
+                best_score = score
+        selected_indexes.add(best_index)
+        selected.append(candidates[best_index][1])
+        for dimension, bucket in enumerate(candidates[best_index][2:]):
+            counts[dimension][bucket] += 1
+    return selected
+
+
+def _selection_distribution(
+    selections: list[FetchSelection],
+) -> dict[str, dict[str, int]]:
+    author_ids = [selection.author_id for selection in selections]
+    rows = Account.objects.filter(author_id__in=author_ids).values_list(
+        "author_id",
+        "created_at",
+        "followers_count",
+        "location",
+    )
+    age: Counter[str] = Counter()
+    size: Counter[str] = Counter()
+    geography: Counter[str] = Counter()
+    for author_id, created_at, followers_count, location in rows:
+        age[_account_age_bucket(str(author_id), created_at)] += 1
+        size[_account_size_bucket(followers_count)] += 1
+        geography[_account_geography_bucket(location)] += 1
+    return {
+        "account_age": dict(sorted(age.items())),
+        "audience_size": dict(sorted(size.items())),
+        "profile_location_proxy": dict(sorted(geography.items())),
+    }
 
 
 def _current_database_name() -> str | None:
@@ -262,6 +415,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Finished: {report['finished_at']}",
         f"- Mode: {report['mode']}",
         f"- Selected Accounts: {report['sample']['selected']}",
+        f"- Selection strategy: {report['sample']['selection']}",
         f"- Accepted: {outcome['accepted']}",
         f"- Changed: {outcome['changed']}",
         f"- Success-empty: {outcome['success_empty']}",
@@ -274,6 +428,12 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Stop reason: {outcome['stop_reason'] or 'none'}",
         f"- Remaining eligible: {outcome['remaining_eligible']}",
         f"- Schema diagnostics: `{json.dumps(outcome['schema_diagnostics'])}`",
+        "",
+        "## Sample distribution",
+        "",
+        f"- Account age: `{json.dumps(report['sample']['distribution']['account_age'], sort_keys=True)}`",
+        f"- Audience size: `{json.dumps(report['sample']['distribution']['audience_size'], sort_keys=True)}`",
+        f"- Profile-location proxy: `{json.dumps(report['sample']['distribution']['profile_location_proxy'], sort_keys=True)}`",
         "",
         "## Aggregate distributions",
         "",
@@ -317,6 +477,11 @@ class Command(BaseCommand):
         parser.add_argument("--recovery-receipt")
         parser.add_argument("--require-complete", action="store_true")
         parser.add_argument("--seed", default="account-based-in-pilot-v1")
+        parser.add_argument(
+            "--selection-strategy",
+            choices=("deterministic_hash", "diversity_stratified"),
+            default="deterministic_hash",
+        )
         parser.add_argument("--json-report", type=Path)
         parser.add_argument("--markdown-report", type=Path)
 
@@ -390,7 +555,9 @@ class Command(BaseCommand):
             seed=options["seed"],
             refresh=options["refresh"],
             eligible_before=eligible_before,
+            strategy=options["selection_strategy"],
         )
+        selection_distribution = _selection_distribution(selections)
         if target == "staging" and len(selections) < limit:
             raise CommandError(
                 f"only {len(selections)} eligible Accounts exist; requested {limit}"
@@ -403,6 +570,8 @@ class Command(BaseCommand):
                 "eligible": eligible_count,
                 "selected": len(selections),
                 "seed": options["seed"],
+                "selection_strategy": options["selection_strategy"],
+                "selection_distribution": selection_distribution,
                 "http_calls": 0,
                 "writes": 0,
             }
@@ -576,7 +745,8 @@ class Command(BaseCommand):
                 if eligible_before
                 else None,
                 "seed": options["seed"],
-                "selection": "missing-first deterministic SHA-256 order",
+                "selection": options["selection_strategy"],
+                "distribution": selection_distribution,
             },
             "budgets": {
                 "accounts": limit,

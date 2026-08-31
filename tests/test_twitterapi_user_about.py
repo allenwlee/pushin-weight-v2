@@ -57,6 +57,21 @@ def _complete_payload() -> dict:
                 "label": {
                     "badge": {"url": "https://cdn.example/identity.png"},
                     "description": "Identity",
+                    "long_description": {
+                        "text": "Identity details",
+                        "entities": [
+                            {
+                                "from_index": 0,
+                                "to_index": 8,
+                                "ref": {
+                                    "__isTimelineReferenceObject": "TimelineUser",
+                                    "__typename": "TimelineUser",
+                                    "screen_name": "reference",
+                                    "user_results": {},
+                                },
+                            }
+                        ],
+                    },
                     "url": {"url": "https://x.com/identity", "urlType": "DeepLink"},
                     "userLabelDisplayType": "Badge",
                     "userLabelType": "IdentityLabel",
@@ -96,6 +111,10 @@ def test_complete_response_flattens_every_documented_leaf():
         == 1_784_691_635_000
     )
     assert observation.candidates["identity_profile_label_description"] == "Identity"
+    assert (
+        observation.candidates["identity_profile_label_long_description"]
+        == "Identity details"
+    )
     assert observation.candidates["account_based_in_fetched_at"] == observed_at
 
 
@@ -115,6 +134,22 @@ def test_live_probe_shape_parses_with_empty_optional_labels():
     assert observation.candidates["created_country_accurate"] is False
     assert observation.candidates["affiliate_label_description"] is None
     assert observation.candidates["identity_profile_label_description"] is None
+    assert observation.candidates["identity_profile_label_long_description"] is None
+
+
+def test_identity_label_long_description_rejects_unknown_entity_shape():
+    payload = _complete_payload()
+    entity = payload["data"]["identity_profile_labels_highlighted_label"]["label"][
+        "long_description"
+    ]["entities"][0]
+    entity["unexpected"] = "value"
+
+    with pytest.raises(SchemaDriftError, match="unknown leaves"):
+        parse_user_about(
+            payload,
+            expected_author_id="42",
+            observed_at=datetime(2026, 8, 30, tzinfo=UTC),
+        )
 
 
 def test_missing_optional_objects_checkpoint_without_implicit_clears():

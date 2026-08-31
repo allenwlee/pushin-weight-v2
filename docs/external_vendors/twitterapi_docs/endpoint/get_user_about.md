@@ -3,7 +3,8 @@
 Current project reference for TwitterAPI's `GET /twitter/user_about` endpoint.
 It combines the provider's public schema with a value-free live response-shape
 probe run on 2026-08-30. The public example is incomplete: the live success
-response includes nine leaves that the example omits.
+response includes additional conditional leaves and structures that the example
+omits.
 
 - Method and path: `GET https://api.twitterapi.io/twitter/user_about`
 - Authentication: `X-API-Key` header
@@ -15,6 +16,9 @@ response includes nine leaves that the example omits.
   `284e1fc18307b288eae63bb977bc3cb532da56ba`
 - Unavailable-variant evidence: staging job `job-da9l1j2jnfac73e6ajvg`, exact
   SHA `12f67affc56f0d67476c54028ef0dc98b9c23601`
+- Identity-label long-description evidence: production smoke continuation job
+  `job-daadckpf2nfc739vlfk0`, exact SHA
+  `b4e411df913a72625bb14538f4efd83c709cfbfb`
 
 The probe retained JSON paths and JSON types only. It discarded response
 values, handles, account IDs, URLs, credentials, headers, and the raw payload.
@@ -66,6 +70,21 @@ values, handles, account IDs, URLs, credentials, headers, and the raw payload.
       "label": {
         "badge": {"url": "<string>"},
         "description": "<string>",
+        "long_description": {
+          "text": "<string>",
+          "entities": [
+            {
+              "from_index": 0,
+              "to_index": 1,
+              "ref": {
+                "__isTimelineReferenceObject": "<string>",
+                "__typename": "<string>",
+                "screen_name": "<string>",
+                "user_results": {}
+              }
+            }
+          ]
+        },
         "url": {"url": "<string>", "urlType": "<string>"},
         "userLabelDisplayType": "<string>",
         "userLabelType": "<string>"
@@ -78,6 +97,13 @@ values, handles, account IDs, URLs, credentials, headers, and the raw payload.
 Optional objects or leaves may be absent, null, or empty. The live probe saw
 both highlighted-label wrappers as empty objects; the nested label shapes above
 come from the provider's public schema and remain valid conditional leaves.
+The production population later observed `long_description` on an identity
+label. PushinWeight stores its account-valued `text` leaf as
+`Account.identity_profile_label_long_description`. It strictly validates the
+entity annotation envelope and types, but does not persist entity offsets or
+the nested `user_results` presentation cache; those are rich-text rendering
+metadata rather than Account facts, and retaining the opaque object would
+violate the no-raw-response contract.
 
 The endpoint also returns a success envelope whose `data` is an unavailable
 variant instead of a profile:
@@ -111,7 +137,8 @@ case-insensitive handle used for the request. It cannot update profile facts.
 | `data.unavailableReason` | string | `Account.unavailable_reason` |
 | `data.about_profile.created_country_accurate` | boolean | `Account.created_country_accurate` |
 | `data.about_profile.username_changes.last_changed_at_msec` | string | `Account.username_changes_last_changed_at_msec`, parsed as a nonnegative bigint |
+| `data.identity_profile_labels_highlighted_label.label.long_description.text` | string | `Account.identity_profile_label_long_description` |
 
 `isVerified` and `profilePicture` deliberately reuse fields populated by fresh
-post-author payloads. The other seven leaves receive nullable typed columns. No
-raw response column is used.
+post-author payloads. All account-valued additions receive nullable typed
+columns. No raw response column is used.

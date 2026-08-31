@@ -108,6 +108,14 @@ _LABEL_KEYS = {
     "userLabelDisplayType",
     "userLabelType",
 }
+_LONG_DESCRIPTION_KEYS = {"text", "entities"}
+_LONG_DESCRIPTION_ENTITY_KEYS = {"from_index", "to_index", "ref"}
+_LONG_DESCRIPTION_REF_KEYS = {
+    "__isTimelineReferenceObject",
+    "__typename",
+    "screen_name",
+    "user_results",
+}
 _LABEL_SUFFIXES = {
     "badge_url",
     "description",
@@ -246,6 +254,36 @@ def _strict_numeric_string(value: object, path: str) -> int | None:
     return int(text)
 
 
+def _strict_nonnegative_int(value: object, path: str) -> int:
+    if type(value) is not int or value < 0:
+        raise SchemaDriftError(f"{path} must be a nonnegative integer")
+    return value
+
+
+def _validate_long_description_entities(value: object, path: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise SchemaDriftError(f"{path} must be an array or null")
+    for index, entity_value in enumerate(value):
+        entity_path = f"{path}[{index}]"
+        if not isinstance(entity_value, dict):
+            raise SchemaDriftError(f"{entity_path} must be an object")
+        _assert_keys(entity_value, _LONG_DESCRIPTION_ENTITY_KEYS, entity_path)
+        for key in ("from_index", "to_index"):
+            if key in entity_value:
+                _strict_nonnegative_int(entity_value[key], f"{entity_path}.{key}")
+        ref = entity_value.get("ref")
+        if not isinstance(ref, dict):
+            raise SchemaDriftError(f"{entity_path}.ref must be an object")
+        _assert_keys(ref, _LONG_DESCRIPTION_REF_KEYS, f"{entity_path}.ref")
+        for key in ("__isTimelineReferenceObject", "__typename", "screen_name"):
+            if key in ref:
+                _strict_string(ref[key], f"{entity_path}.ref.{key}")
+        if "user_results" in ref and not isinstance(ref["user_results"], dict):
+            raise SchemaDriftError(f"{entity_path}.ref.user_results must be an object")
+
+
 def _put(
     candidates: dict[str, Any],
     present: set[str],
@@ -266,17 +304,23 @@ def flatten_label(
     *,
     prefix: str,
     path: str,
+    include_long_description: bool = False,
 ) -> tuple[dict[str, Any], set[str]]:
     """Flatten one documented highlighted-label wrapper as an atomic group."""
     wrapper = _optional_dict(value, path)
     field_names = {f"{prefix}_{suffix}" for suffix in _LABEL_SUFFIXES}
+    if include_long_description:
+        field_names.add(f"{prefix}_long_description")
     if wrapper is None or not wrapper:
         return ({field: None for field in field_names}, field_names)
     _assert_keys(wrapper, {"label"}, path)
     label = _optional_dict(wrapper.get("label"), f"{path}.label")
     if label is None or not label:
         return ({field: None for field in field_names}, field_names)
-    _assert_keys(label, _LABEL_KEYS, f"{path}.label")
+    label_keys = _LABEL_KEYS | (
+        {"long_description"} if include_long_description else set()
+    )
+    _assert_keys(label, label_keys, f"{path}.label")
 
     candidates: dict[str, Any] = {field: None for field in field_names}
     badge = _optional_dict(label.get("badge"), f"{path}.label.badge")
@@ -290,6 +334,26 @@ def flatten_label(
         candidates[f"{prefix}_description"] = _strict_string(
             label["description"], f"{path}.label.description"
         )
+    if include_long_description and "long_description" in label:
+        long_description = _optional_dict(
+            label["long_description"], f"{path}.label.long_description"
+        )
+        if long_description is not None:
+            _assert_keys(
+                long_description,
+                _LONG_DESCRIPTION_KEYS,
+                f"{path}.label.long_description",
+            )
+            if "text" in long_description:
+                candidates[f"{prefix}_long_description"] = _strict_string(
+                    long_description["text"],
+                    f"{path}.label.long_description.text",
+                )
+            if "entities" in long_description:
+                _validate_long_description_entities(
+                    long_description["entities"],
+                    f"{path}.label.long_description.entities",
+                )
     url = _optional_dict(label.get("url"), f"{path}.label.url")
     if url is not None:
         _assert_keys(url, {"url", "urlType"}, f"{path}.label.url")
@@ -597,6 +661,7 @@ def parse_user_about(
             data["identity_profile_labels_highlighted_label"],
             prefix="identity_profile_label",
             path="response.data.identity_profile_labels_highlighted_label",
+            include_long_description=True,
         )
         candidates.update(values)
         present.update(fields)
