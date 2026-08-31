@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGING_DATABASE = "pushinweight-staging-db"
 STAGING_BROKER = "pushinweight-staging-headlines-broker"
 DORMANT_SCHEDULE = "0 0 31 2 *"
+HEADLINE_CONTROL_REVISION = "staging-v23-per-brand-activation-20260831"
 
 
 def _blueprint() -> dict:
@@ -42,7 +43,7 @@ def test_staging_blueprint_declares_one_resource_for_each_owned_role() -> None:
     assert all(name.startswith("pushinweight-staging-") for name in services)
 
 
-def test_staging_web_remains_owner_only_and_provider_dark() -> None:
+def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> None:
     service = _service(_blueprint(), "pushinweight-staging-web")
     environment = _environment_by_key(service)
 
@@ -53,9 +54,12 @@ def test_staging_web_remains_owner_only_and_provider_dark() -> None:
     assert environment["GOOGLE_CLIENT_SECRET"]["sync"] is False
     assert "XMONITOR_DRY_RUN" not in environment
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
-    assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "False"
-    assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "False"
-    assert environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"]["value"] == "False"
+    assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "True"
+    assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
+    assert environment["X_MONITOR_HEADLINE_PUBLICATION_SOURCE"]["value"] == "prefer_per_brand"
+    assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"] == HEADLINE_CONTROL_REVISION
+    assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
+    assert "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED" not in environment
     assert environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
     assert environment["STAGING_REFRESH_SOURCE_DATABASE_URL"] == {
         "key": "STAGING_REFRESH_SOURCE_DATABASE_URL",
@@ -89,7 +93,11 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
     assert (
         environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
     )
-    assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "False"
+    assert "X_MONITOR_HEADLINE_SERVING_ENABLED" not in environment
+    assert (
+        environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"]
+        == HEADLINE_CONTROL_REVISION
+    )
     assert "OLLIJA_STAGING_MODE" not in environment
     assert environment["TWITTERAPI_IO_SCHEDULED_API_KEY"]["sync"] is False
     assert environment["TWITTERAPI_IO_ON_DEMAND_API_KEY"]["sync"] is False
@@ -112,7 +120,11 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
     assert (
         environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
     )
-    assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "False"
+    assert "X_MONITOR_HEADLINE_SERVING_ENABLED" not in environment
+    assert (
+        environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"]
+        == HEADLINE_CONTROL_REVISION
+    )
     assert environment["DEEPSEEK_API_KEY"]["sync"] is False
     assert "OLLIJA_STAGING_MODE" not in environment
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment

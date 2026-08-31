@@ -56,13 +56,13 @@ services:
       - key: STAGING_REFRESH_SOURCE_DATABASE_URL
         sync: false
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED
-        value: "False"
-      - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
-        value: "False"
-      - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
-        value: "False"
+        value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
-        value: pending
+        value: owner_override
+      - key: X_MONITOR_HEADLINE_PUBLICATION_SOURCE
+        value: prefer_per_brand
+      - key: X_MONITOR_HEADLINE_CONTROL_REVISION
+        value: staging-v23-per-brand-activation-20260831
 
   - type: worker
     name: pushinweight-staging-headlines
@@ -103,12 +103,10 @@ services:
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
         value: "True"
-      - key: X_MONITOR_HEADLINE_SERVING_ENABLED
-        value: "False"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: staging-acceptance-v1
+        value: staging-v23-per-brand-activation-20260831
 
   - type: cron
     name: pushinweight-staging-harvest
@@ -173,12 +171,10 @@ services:
         sync: false
       - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
         value: "True"
-      - key: X_MONITOR_HEADLINE_SERVING_ENABLED
-        value: "False"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: staging-acceptance-v1
+        value: staging-v23-per-brand-activation-20260831
 
 databases:
   - name: pushinweight-staging-db

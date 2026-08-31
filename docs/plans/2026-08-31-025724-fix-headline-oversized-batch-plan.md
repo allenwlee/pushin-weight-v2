@@ -89,4 +89,10 @@ window.
 - Keep the staging build entry point retryable when `DATABASE_URL` is missing:
   it must return before Django setup so Ollija's required staging-access check
   and the direct Render script boundary remain valid.
+- Keep staging headline controls role-for-role with production: the web service
+  serves `prefer_per_brand`, the queue-only headline worker may call the pinned
+  provider, and the dormant/manual staging harvester may enqueue completed
+  cycles. Staging remains isolated and does not gain a recurring harvest.
+- Verify a fresh staging narrative reaches the visible per-brand projection;
+  a green deploy with the UI still reporting `Disabled` is not acceptance.
 - Delivery stops at staging, as explicitly selected by the owner.
