@@ -40,11 +40,13 @@ def _success(author_id: str, country: str = "US") -> FetchOutcome:
             candidates={
                 "account_based_in": "United States",
                 "country_code": country,
+                "based_in_region_key": None,
                 "account_based_in_fetched_at": observed_at,
             },
             present_fields={
                 "account_based_in",
                 "country_code",
+                "based_in_region_key",
                 "account_based_in_fetched_at",
             },
         ),
@@ -256,7 +258,7 @@ def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
             stdout=StringIO(),
         )
 
-    assert Account.objects.filter(country_code="US").count() == 2
+    assert Account.objects.filter(country_id="US").count() == 2
     assert fetch.await_args.kwargs["api_key"] == "on-demand-secret"
     report = json_path.read_text()
     assert "on-demand-secret" not in report
@@ -965,12 +967,14 @@ def test_production_require_complete_quarantines_account_drift_and_continues(
         )
 
     report = json.loads(json_path.read_text())
-    assert Account.objects.get(
-        author_id=quarantined_ids[0]
-    ).account_based_in_fetched_at is None
-    assert Account.objects.get(
-        author_id=accepted_ids[0]
-    ).account_based_in_fetched_at is not None
+    assert (
+        Account.objects.get(author_id=quarantined_ids[0]).account_based_in_fetched_at
+        is None
+    )
+    assert (
+        Account.objects.get(author_id=accepted_ids[0]).account_based_in_fetched_at
+        is not None
+    )
     assert report["outcome"]["quarantined_accounts"] == 1
     assert report["outcome"]["quarantined_reasons"] == {"schema_drift": 1}
     assert report["outcome"]["remaining_eligible"] == 1

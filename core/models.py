@@ -376,6 +376,7 @@ _ACCOUNT_SHORT_TEXT_FIELDS = {
     "identity_profile_label_user_label_type": 128,
     "verification_info_id": 128,
     "country_code": 2,
+    "based_in_region_key": 64,
 }
 _ACCOUNT_TEXT_FIELDS = {
     "display_name",
@@ -407,6 +408,15 @@ _IDENTITY_LABEL_FIELDS = {
     "identity_profile_label_user_label_display_type",
     "identity_profile_label_user_label_type",
 }
+_GEOGRAPHY_FIELDS = {"country_code", "based_in_region_key"}
+_ACCOUNT_STORAGE_ATTRIBUTES = {
+    "country_code": "country_id",
+    "based_in_region_key": "based_in_region_id",
+}
+_ACCOUNT_MODEL_FIELDS = {
+    "country_code": "country",
+    "based_in_region_key": "based_in_region",
+}
 _ABOUT_ONLY_FIELDS = {
     "account_based_in",
     "location_accurate",
@@ -423,6 +433,7 @@ _ABOUT_ONLY_FIELDS = {
     "unavailable",
     "unavailable_reason",
     "country_code",
+    "based_in_region_key",
     "account_based_in_fetched_at",
     *_IDENTITY_LABEL_FIELDS,
 }
@@ -535,10 +546,15 @@ def _validate_account_field(
         ):
             return None, "invalid_handle"
         if field_name == "country_code":
-            from monitor.country_codes import COUNTRY_NAMES
+            from monitor.account_geography import COUNTRY_NAMES
 
             if value not in COUNTRY_NAMES:
                 return None, "unsupported_country_code"
+        if field_name == "based_in_region_key":
+            from monitor.account_geography import REGION_NAMES
+
+            if value not in REGION_NAMES:
+                return None, "unsupported_region_key"
         return value, None
     if field_name in _ACCOUNT_TEXT_FIELDS:
         if not isinstance(value, str) or _contains_control(value, allow_layout=True):
@@ -547,6 +563,197 @@ def _validate_account_field(
             return None, "invalid_string"
         return value, None
     return None, "unsupported_field"
+
+
+_COUNTRY_DISPLAY_PARENT_RELATIONSHIPS = (
+    ("special_administrative_region", "Special administrative region"),
+    ("owner_display_context", "Owner-selected display context"),
+    ("us_insular_area", "US insular area"),
+    ("french_overseas", "French overseas arrangement"),
+    ("british_overseas_territory", "British Overseas Territory"),
+    ("crown_dependency", "Crown Dependency"),
+    ("kingdom_constituent_country", "Kingdom constituent country"),
+    ("netherlands_public_body", "Netherlands public body"),
+)
+
+
+class Region(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    m49_code = models.CharField(max_length=3, unique=True, blank=True, null=True)
+    source = models.CharField(max_length=64)
+    level = models.CharField(max_length=32)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="children",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        db_table = "regions"
+        ordering = ["key"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(parent__isnull=True)
+                    | ~models.Q(parent=models.F("key"))
+                ),
+                name="ck_regions_not_self_parent",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.key
+
+
+class RegionLabel(models.Model):
+    pk = models.CompositePrimaryKey("region", "lang")
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="region_key",
+        to_field="key",
+    )
+    lang = models.CharField(max_length=16)
+    label = models.TextField()
+
+    class Meta:
+        db_table = "region_labels"
+
+
+class Country(models.Model):
+    DISPLAY_PARENT_RELATIONSHIPS = _COUNTRY_DISPLAY_PARENT_RELATIONSHIPS
+
+    code = models.CharField(max_length=2, primary_key=True)
+    m49_code = models.CharField(max_length=3, unique=True)
+    display_parent_country = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="display_children",
+        blank=True,
+        null=True,
+    )
+    display_parent_relationship_type = models.CharField(
+        max_length=64,
+        choices=DISPLAY_PARENT_RELATIONSHIPS,
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        db_table = "countries"
+        ordering = ["code"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (
+                        models.Q(display_parent_country__isnull=True)
+                        & models.Q(display_parent_relationship_type__isnull=True)
+                    )
+                    | (
+                        models.Q(display_parent_country__isnull=False)
+                        & models.Q(display_parent_relationship_type__isnull=False)
+                    )
+                ),
+                name="ck_countries_display_parent_complete",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(display_parent_country__isnull=True)
+                    | ~models.Q(display_parent_country=models.F("code"))
+                ),
+                name="ck_countries_not_self_parent",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(display_parent_relationship_type__isnull=True)
+                    | models.Q(
+                        display_parent_relationship_type__in=tuple(
+                            key for key, _label in _COUNTRY_DISPLAY_PARENT_RELATIONSHIPS
+                        )
+                    )
+                ),
+                name="ck_countries_parent_relationship_type",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.code
+
+
+class CountryLabel(models.Model):
+    pk = models.CompositePrimaryKey("country", "lang")
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="country_code",
+        to_field="code",
+    )
+    lang = models.CharField(max_length=16)
+    label = models.TextField()
+
+    class Meta:
+        db_table = "country_labels"
+
+
+class CountryRegion(models.Model):
+    country = models.OneToOneField(
+        Country,
+        on_delete=models.CASCADE,
+        related_name="region_mapping",
+        db_column="country_code",
+        to_field="code",
+        primary_key=True,
+    )
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.PROTECT,
+        related_name="country_mappings",
+        db_column="region_key",
+        to_field="key",
+    )
+    source = models.CharField(max_length=64)
+
+    class Meta:
+        db_table = "country_codes_region"
+
+
+class AccountBasedInMapping(models.Model):
+    value = models.TextField(primary_key=True)
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.CASCADE,
+        related_name="provider_mappings",
+        db_column="country_code",
+        to_field="code",
+        blank=True,
+        null=True,
+    )
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.CASCADE,
+        related_name="provider_mappings",
+        db_column="region_key",
+        to_field="key",
+        blank=True,
+        null=True,
+    )
+    review_note = models.TextField()
+
+    class Meta:
+        db_table = "account_based_in_mappings"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(country__isnull=False) & models.Q(region__isnull=True))
+                    | (models.Q(country__isnull=True) & models.Q(region__isnull=False))
+                ),
+                name="ck_account_based_in_mapping_one_target",
+            )
+        ]
 
 
 class Account(models.Model):
@@ -635,8 +842,23 @@ class Account(models.Model):
     identity_profile_label_user_label_type = models.CharField(
         max_length=128, blank=True, null=True
     )
-    country_code = models.CharField(
-        max_length=2, blank=True, null=True, db_index=True
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.PROTECT,
+        related_name="accounts",
+        db_column="country_code",
+        to_field="code",
+        blank=True,
+        null=True,
+    )
+    based_in_region = models.ForeignKey(
+        Region,
+        on_delete=models.PROTECT,
+        related_name="accounts",
+        db_column="based_in_region_key",
+        to_field="key",
+        blank=True,
+        null=True,
     )
     account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
 
@@ -647,9 +869,35 @@ class Account(models.Model):
             models.Index(fields=["last_seen_at"], name="idx_accounts_last_seen_at"),
         ]
         ordering = ["handle"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(country__isnull=True)
+                    | models.Q(based_in_region__isnull=True)
+                ),
+                name="ck_accounts_one_geography_target",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"@{self.handle}"
+
+    @property
+    def country_code(self) -> str | None:
+        """Expose the raw alpha-2 value at observation and wire boundaries."""
+        return self.country_id
+
+    @country_code.setter
+    def country_code(self, value: str | None) -> None:
+        self.country_id = value
+
+    @property
+    def based_in_region_key(self) -> str | None:
+        return self.based_in_region_id
+
+    @based_in_region_key.setter
+    def based_in_region_key(self, value: str | None) -> None:
+        self.based_in_region_id = value
 
     @classmethod
     def apply_observation(
@@ -762,7 +1010,44 @@ class Account(models.Model):
                 else:
                     accepted.update(group_values)
 
-            grouped = _AFFILIATE_LABEL_FIELDS | _IDENTITY_LABEL_FIELDS
+            geography_present = supplied & _GEOGRAPHY_FIELDS
+            if geography_present:
+                if geography_present != _GEOGRAPHY_FIELDS:
+                    for field_name in geography_present:
+                        rejected[field_name] = "incomplete_geography_target"
+                elif any(field_name in rejected for field_name in _GEOGRAPHY_FIELDS):
+                    for field_name in _GEOGRAPHY_FIELDS:
+                        rejected.setdefault(field_name, "missing_candidate")
+                else:
+                    geography_values: dict[str, Any] = {}
+                    geography_errors: dict[str, str] = {}
+                    for field_name in _GEOGRAPHY_FIELDS:
+                        validated, error = _validate_account_field(
+                            field_name,
+                            candidates[field_name],
+                            observed_at=observed_at,
+                        )
+                        if error:
+                            geography_errors[field_name] = error
+                        else:
+                            geography_values[field_name] = validated
+                    if all(geography_values.values()):
+                        geography_errors = {
+                            field_name: "multiple_geography_targets"
+                            for field_name in _GEOGRAPHY_FIELDS
+                        }
+                    if geography_errors:
+                        reason = next(iter(geography_errors.values()))
+                        for field_name in _GEOGRAPHY_FIELDS:
+                            rejected[field_name] = reason
+                    else:
+                        accepted.update(geography_values)
+
+            grouped = (
+                _AFFILIATE_LABEL_FIELDS
+                | _IDENTITY_LABEL_FIELDS
+                | _GEOGRAPHY_FIELDS
+            )
             for field_name in supplied - grouped:
                 if field_name in rejected:
                     continue
@@ -796,12 +1081,16 @@ class Account(models.Model):
 
             update_fields: set[str] = set()
             for field_name, value in accepted.items():
-                if getattr(account, field_name) == value:
+                storage_attribute = _ACCOUNT_STORAGE_ATTRIBUTES.get(
+                    field_name, field_name
+                )
+                model_field = _ACCOUNT_MODEL_FIELDS.get(field_name, field_name)
+                if getattr(account, storage_attribute) == value:
                     unchanged.append(field_name)
                 else:
-                    setattr(account, field_name, value)
+                    setattr(account, storage_attribute, value)
                     applied.append(field_name)
-                    update_fields.add(field_name)
+                    update_fields.add(model_field)
 
             if (
                 source == "post"
@@ -827,13 +1116,19 @@ class Account(models.Model):
                     applied = [field for field in applied if field != "handle"]
                     update_fields.remove("handle")
                     account.refresh_from_db()
-                    for field_name in update_fields:
-                        value = (
-                            observed_at
-                            if field_name == "followers_fetched_at"
-                            else accepted[field_name]
+                    for field_name, value in accepted.items():
+                        model_field = _ACCOUNT_MODEL_FIELDS.get(
+                            field_name, field_name
                         )
-                        setattr(account, field_name, value)
+                        if model_field not in update_fields:
+                            continue
+                        setattr(
+                            account,
+                            _ACCOUNT_STORAGE_ATTRIBUTES.get(field_name, field_name),
+                            value,
+                        )
+                    if "followers_fetched_at" in update_fields:
+                        account.followers_fetched_at = observed_at
                     if update_fields:
                         account.save(
                             update_fields=[*sorted(update_fields), "last_seen_at"]

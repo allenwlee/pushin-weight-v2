@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from core.models import Account
 from monitor.twitterapi.user_about import (
     FetchSelection,
     IdentityMismatchError,
@@ -208,7 +209,7 @@ def test_malformed_unavailable_variant_is_schema_drift(data):
         )
 
 
-def test_unsupported_country_stores_exact_value_without_code():
+def test_unresolved_value_stores_exact_value_and_clears_normalized_targets():
     payload = _complete_payload()
     payload["data"]["about_profile"]["account_based_in"] = "Asia Pacific"
     observation = parse_user_about(
@@ -218,7 +219,68 @@ def test_unsupported_country_stores_exact_value_without_code():
     )
 
     assert observation.candidates["account_based_in"] == "Asia Pacific"
-    assert "country_code" not in observation.present_fields
+    assert observation.candidates["country_code"] is None
+    assert observation.candidates["based_in_region_key"] is None
+    assert {"country_code", "based_in_region_key"} <= observation.present_fields
+
+
+def test_provider_region_derives_direct_region_and_clears_country():
+    payload = _complete_payload()
+    payload["data"]["about_profile"]["account_based_in"] = "Europe"
+    observation = parse_user_about(
+        payload,
+        expected_author_id="42",
+        observed_at=datetime(2026, 8, 29, tzinfo=UTC),
+    )
+
+    assert observation.candidates["account_based_in"] == "Europe"
+    assert observation.candidates["country_code"] is None
+    assert observation.candidates["based_in_region_key"] == "europe"
+    assert {"country_code", "based_in_region_key"} <= observation.present_fields
+
+
+@pytest.mark.django_db
+def test_real_parser_to_orm_transition_clears_stale_geography_target():
+    account = Account.objects.create(author_id="42")
+    observed_at = datetime(2026, 8, 29, tzinfo=UTC)
+
+    europe_payload = _complete_payload()
+    europe_payload["data"]["about_profile"]["account_based_in"] = "Europe"
+    europe = parse_user_about(
+        europe_payload,
+        expected_author_id="42",
+        observed_at=observed_at,
+    )
+    Account.apply_observation(
+        author_id="42",
+        observed_author_id=europe.author_id,
+        source="user_about",
+        observed_at=observed_at,
+        candidates=europe.candidates,
+        present_fields=europe.present_fields,
+    )
+    account.refresh_from_db()
+    assert account.country_code is None
+    assert account.based_in_region_key == "europe"
+
+    country_payload = _complete_payload()
+    country_payload["data"]["about_profile"]["account_based_in"] = "United States"
+    country = parse_user_about(
+        country_payload,
+        expected_author_id="42",
+        observed_at=observed_at,
+    )
+    Account.apply_observation(
+        author_id="42",
+        observed_author_id=country.author_id,
+        source="user_about",
+        observed_at=observed_at,
+        candidates=country.candidates,
+        present_fields=country.present_fields,
+    )
+    account.refresh_from_db()
+    assert account.country_code == "US"
+    assert account.based_in_region_key is None
 
 
 @pytest.mark.parametrize(
@@ -240,7 +302,8 @@ def test_provider_country_alias_derives_country_code(provider_name, expected_cod
 
     assert observation.candidates["account_based_in"] == provider_name
     assert observation.candidates["country_code"] == expected_code
-    assert "country_code" in observation.present_fields
+    assert observation.candidates["based_in_region_key"] is None
+    assert {"country_code", "based_in_region_key"} <= observation.present_fields
 
 
 @pytest.mark.parametrize(
@@ -715,9 +778,9 @@ async def test_schema_drift_does_not_stop_queued_request_admission(monkeypatch):
         payload["data"]["id"] = author_id
         payload["data"]["userName"] = handle
         if author_id == "0":
-            payload["data"]["verification_info"]["reason"][
-                "override_verified_year"
-            ] = 2025.5
+            payload["data"]["verification_info"]["reason"]["override_verified_year"] = (
+                2025.5
+            )
         request_count += 1
         return ResponseContext(json.dumps(payload))
 

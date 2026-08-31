@@ -4,9 +4,10 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 
-from core.models import Account
+from core.models import Account, AccountBasedInMapping, Country, Region
 
 pytestmark = pytest.mark.django_db
 
@@ -42,12 +43,116 @@ def test_account_model_exposes_typed_user_about_fields():
         "identity_profile_label_url_type",
         "identity_profile_label_user_label_display_type",
         "identity_profile_label_user_label_type",
-        "country_code",
+        "country",
+        "based_in_region",
         "account_based_in_fetched_at",
     }
     fields = {field.name for field in Account._meta.get_fields()}
     assert expected <= fields
     assert not any("raw" in field for field in expected)
+
+
+def test_geography_targets_transition_atomically():
+    account = Account.objects.create(author_id="42")
+    observed_at = datetime(2026, 8, 30, tzinfo=UTC)
+
+    country_outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=observed_at,
+        candidates={"country_code": "US", "based_in_region_key": None},
+        present_fields={"country_code", "based_in_region_key"},
+    )
+    account.refresh_from_db()
+    assert account.country_code == "US"
+    assert account.based_in_region_key is None
+    assert set(country_outcome.applied_fields) == {"country_code"}
+
+    region_outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=observed_at,
+        candidates={"country_code": None, "based_in_region_key": "europe"},
+        present_fields={"country_code", "based_in_region_key"},
+    )
+    account.refresh_from_db()
+    assert account.country_code is None
+    assert account.based_in_region_key == "europe"
+    assert set(region_outcome.applied_fields) == {
+        "country_code",
+        "based_in_region_key",
+    }
+
+    unresolved_outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=observed_at,
+        candidates={"country_code": None, "based_in_region_key": None},
+        present_fields={"country_code", "based_in_region_key"},
+    )
+    account.refresh_from_db()
+    assert account.country_code is None
+    assert account.based_in_region_key is None
+    assert set(unresolved_outcome.applied_fields) == {"based_in_region_key"}
+
+
+def test_incomplete_geography_target_is_rejected_without_clearing_existing_value():
+    account = Account.objects.create(author_id="42", country_code="US")
+
+    outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=datetime(2026, 8, 30, tzinfo=UTC),
+        candidates={"based_in_region_key": "europe"},
+        present_fields={"based_in_region_key"},
+    )
+
+    account.refresh_from_db()
+    assert account.country_code == "US"
+    assert account.based_in_region_key is None
+    assert outcome.rejected_fields == {
+        "based_in_region_key": "incomplete_geography_target"
+    }
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        {},
+        {"country_id": "US", "region_id": "europe"},
+    ],
+)
+def test_exact_provider_mapping_requires_one_database_target(targets):
+    with pytest.raises(IntegrityError), transaction.atomic():
+        AccountBasedInMapping.objects.create(
+            value=f"invalid-target-{len(targets)}",
+            review_note="constraint proof",
+            **targets,
+        )
+
+
+def test_display_parent_relationship_type_is_database_constrained():
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Country.objects.filter(pk="HK").update(
+            display_parent_relationship_type="invented_relationship"
+        )
+
+
+def test_normalized_geography_references_are_protected():
+    Account.objects.create(author_id="country-protect", country_code="US")
+    Account.objects.create(
+        author_id="region-protect",
+        based_in_region_key="eastern-europe-non-eu",
+    )
+
+    with pytest.raises(ProtectedError):
+        Country.objects.get(pk="US").delete()
+    with pytest.raises(ProtectedError):
+        Region.objects.get(pk="eastern-europe-non-eu").delete()
 
 
 def test_live_user_about_fields_use_typed_deduplicated_destinations():

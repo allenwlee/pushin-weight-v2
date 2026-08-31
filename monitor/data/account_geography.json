@@ -1,0 +1,5014 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "retrieved_at": "2026-09-01",
+    "un_m49": {
+      "url": "https://unstats.un.org/unsd/methodology/m49/overview/",
+      "sha256": "b9048114f6e7f2abda83bf03d4263c9d7cd1bd7230e3d0461025ee7839a7a1fb"
+    },
+    "cldr_en": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-localenames-full/main/en/territories.json",
+      "sha256": "158c1d575308f7e46912edbeda435c8fe2ef5dad280798231f3a432e406b1807"
+    },
+    "cldr_zh_hans": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-localenames-full/main/zh-Hans/territories.json",
+      "sha256": "de255a878dc85dbf801353e13e7d6685eccebe238b485818f129a6ad82212d43"
+    },
+    "flag_manifest": {
+      "path": "docs/ideation/assets/2026-08-29-162947-country-flag-pixels.json",
+      "sha256": "80bd98a61cdb8d1f9642a337aa379097c7d07b4753ba47d2244e91f1a1b3d965"
+    }
+  },
+  "countries": [
+    {
+      "code": "AD",
+      "m49_code": "020",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Andorra",
+        "zh-cn": "安道尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AE",
+      "m49_code": "784",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "United Arab Emirates",
+        "zh-cn": "阿拉伯联合酋长国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AF",
+      "m49_code": "004",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Afghanistan",
+        "zh-cn": "阿富汗"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AG",
+      "m49_code": "028",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Antigua and Barbuda",
+        "zh-cn": "安提瓜和巴布达"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AI",
+      "m49_code": "660",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Anguilla",
+        "zh-cn": "安圭拉"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "british_overseas_territory"
+    },
+    {
+      "code": "AL",
+      "m49_code": "008",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Albania",
+        "zh-cn": "阿尔巴尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AM",
+      "m49_code": "051",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Armenia",
+        "zh-cn": "亚美尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AO",
+      "m49_code": "024",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Angola",
+        "zh-cn": "安哥拉"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AQ",
+      "m49_code": "010",
+      "region_key": "world",
+      "labels": {
+        "en": "Antarctica",
+        "zh-cn": "南极洲"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AR",
+      "m49_code": "032",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Argentina",
+        "zh-cn": "阿根廷"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AS",
+      "m49_code": "016",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "American Samoa",
+        "zh-cn": "美属萨摩亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AT",
+      "m49_code": "040",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Austria",
+        "zh-cn": "奥地利"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AU",
+      "m49_code": "036",
+      "region_key": "australia-and-new-zealand",
+      "labels": {
+        "en": "Australia",
+        "zh-cn": "澳大利亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AW",
+      "m49_code": "533",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Aruba",
+        "zh-cn": "阿鲁巴"
+      },
+      "display_parent_country": "NL",
+      "display_parent_relationship_type": "kingdom_constituent_country"
+    },
+    {
+      "code": "AX",
+      "m49_code": "248",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Åland Islands",
+        "zh-cn": "奥兰群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "AZ",
+      "m49_code": "031",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Azerbaijan",
+        "zh-cn": "阿塞拜疆"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BA",
+      "m49_code": "070",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Bosnia and Herzegovina",
+        "zh-cn": "波斯尼亚和黑塞哥维那"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BB",
+      "m49_code": "052",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Barbados",
+        "zh-cn": "巴巴多斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BD",
+      "m49_code": "050",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Bangladesh",
+        "zh-cn": "孟加拉国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BE",
+      "m49_code": "056",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Belgium",
+        "zh-cn": "比利时"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BF",
+      "m49_code": "854",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Burkina Faso",
+        "zh-cn": "布基纳法索"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BG",
+      "m49_code": "100",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Bulgaria",
+        "zh-cn": "保加利亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BH",
+      "m49_code": "048",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Bahrain",
+        "zh-cn": "巴林"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BI",
+      "m49_code": "108",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Burundi",
+        "zh-cn": "布隆迪"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BJ",
+      "m49_code": "204",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Benin",
+        "zh-cn": "贝宁"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BL",
+      "m49_code": "652",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Saint Barthélemy",
+        "zh-cn": "圣巴泰勒米"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BM",
+      "m49_code": "060",
+      "region_key": "northern-america",
+      "labels": {
+        "en": "Bermuda",
+        "zh-cn": "百慕大"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "british_overseas_territory"
+    },
+    {
+      "code": "BN",
+      "m49_code": "096",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Brunei Darussalam",
+        "zh-cn": "文莱达鲁萨兰国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BO",
+      "m49_code": "068",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Bolivia (Plurinational State of)",
+        "zh-cn": "多民族玻利维亚国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BQ",
+      "m49_code": "535",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Bonaire, Sint Eustatius and Saba",
+        "zh-cn": "博纳尔，圣俄斯塔休斯和萨巴"
+      },
+      "display_parent_country": "NL",
+      "display_parent_relationship_type": "netherlands_public_body"
+    },
+    {
+      "code": "BR",
+      "m49_code": "076",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Brazil",
+        "zh-cn": "巴西"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BS",
+      "m49_code": "044",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Bahamas",
+        "zh-cn": "巴哈马"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BT",
+      "m49_code": "064",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Bhutan",
+        "zh-cn": "不丹"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BV",
+      "m49_code": "074",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Bouvet Island",
+        "zh-cn": "布维岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BW",
+      "m49_code": "072",
+      "region_key": "southern-africa",
+      "labels": {
+        "en": "Botswana",
+        "zh-cn": "博茨瓦纳"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BY",
+      "m49_code": "112",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Belarus",
+        "zh-cn": "白俄罗斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "BZ",
+      "m49_code": "084",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Belize",
+        "zh-cn": "伯利兹"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CA",
+      "m49_code": "124",
+      "region_key": "northern-america",
+      "labels": {
+        "en": "Canada",
+        "zh-cn": "加拿大"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CC",
+      "m49_code": "166",
+      "region_key": "australia-and-new-zealand",
+      "labels": {
+        "en": "Cocos (Keeling) Islands",
+        "zh-cn": "科科斯（基林）群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CD",
+      "m49_code": "180",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Democratic Republic of the Congo",
+        "zh-cn": "刚果民主共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CF",
+      "m49_code": "140",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Central African Republic",
+        "zh-cn": "中非共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CG",
+      "m49_code": "178",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Congo",
+        "zh-cn": "刚果"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CH",
+      "m49_code": "756",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Switzerland",
+        "zh-cn": "瑞士"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CI",
+      "m49_code": "384",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Côte d’Ivoire",
+        "zh-cn": "科特迪瓦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CK",
+      "m49_code": "184",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Cook Islands",
+        "zh-cn": "库克群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CL",
+      "m49_code": "152",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Chile",
+        "zh-cn": "智利"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CM",
+      "m49_code": "120",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Cameroon",
+        "zh-cn": "喀麦隆"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CN",
+      "m49_code": "156",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "China",
+        "zh-cn": "中国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CO",
+      "m49_code": "170",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Colombia",
+        "zh-cn": "哥伦比亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CR",
+      "m49_code": "188",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Costa Rica",
+        "zh-cn": "哥斯达黎加"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CU",
+      "m49_code": "192",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Cuba",
+        "zh-cn": "古巴"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CV",
+      "m49_code": "132",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Cabo Verde",
+        "zh-cn": "佛得角"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CW",
+      "m49_code": "531",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Curaçao",
+        "zh-cn": "库拉索"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CX",
+      "m49_code": "162",
+      "region_key": "australia-and-new-zealand",
+      "labels": {
+        "en": "Christmas Island",
+        "zh-cn": "圣诞岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CY",
+      "m49_code": "196",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Cyprus",
+        "zh-cn": "塞浦路斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "CZ",
+      "m49_code": "203",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Czechia",
+        "zh-cn": "捷克"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "DE",
+      "m49_code": "276",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Germany",
+        "zh-cn": "德国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "DJ",
+      "m49_code": "262",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Djibouti",
+        "zh-cn": "吉布提"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "DK",
+      "m49_code": "208",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Denmark",
+        "zh-cn": "丹麦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "DM",
+      "m49_code": "212",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Dominica",
+        "zh-cn": "多米尼克"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "DO",
+      "m49_code": "214",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Dominican Republic",
+        "zh-cn": "多米尼加"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "DZ",
+      "m49_code": "012",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Algeria",
+        "zh-cn": "阿尔及利亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "EC",
+      "m49_code": "218",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Ecuador",
+        "zh-cn": "厄瓜多尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "EE",
+      "m49_code": "233",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Estonia",
+        "zh-cn": "爱沙尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "EG",
+      "m49_code": "818",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Egypt",
+        "zh-cn": "埃及"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "EH",
+      "m49_code": "732",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Western Sahara",
+        "zh-cn": "西撒哈拉"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ER",
+      "m49_code": "232",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Eritrea",
+        "zh-cn": "厄立特里亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ES",
+      "m49_code": "724",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Spain",
+        "zh-cn": "西班牙"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ET",
+      "m49_code": "231",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Ethiopia",
+        "zh-cn": "埃塞俄比亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "FI",
+      "m49_code": "246",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Finland",
+        "zh-cn": "芬兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "FJ",
+      "m49_code": "242",
+      "region_key": "melanesia",
+      "labels": {
+        "en": "Fiji",
+        "zh-cn": "斐济"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "FK",
+      "m49_code": "238",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Falkland Islands (Malvinas)",
+        "zh-cn": "福克兰群岛（马尔维纳斯）"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "FM",
+      "m49_code": "583",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Micronesia (Federated States of)",
+        "zh-cn": "密克罗尼西亚联邦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "FO",
+      "m49_code": "234",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Faroe Islands",
+        "zh-cn": "法罗群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "FR",
+      "m49_code": "250",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "France",
+        "zh-cn": "法国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GA",
+      "m49_code": "266",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Gabon",
+        "zh-cn": "加蓬"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GB",
+      "m49_code": "826",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "United Kingdom of Great Britain and Northern Ireland",
+        "zh-cn": "大不列颠及北爱尔兰联合王国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GD",
+      "m49_code": "308",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Grenada",
+        "zh-cn": "格林纳达"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GE",
+      "m49_code": "268",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Georgia",
+        "zh-cn": "格鲁吉亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GF",
+      "m49_code": "254",
+      "region_key": "south-america",
+      "labels": {
+        "en": "French Guiana",
+        "zh-cn": "法属圭亚那"
+      },
+      "display_parent_country": "FR",
+      "display_parent_relationship_type": "french_overseas"
+    },
+    {
+      "code": "GG",
+      "m49_code": "831",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Guernsey",
+        "zh-cn": "格恩西"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "crown_dependency"
+    },
+    {
+      "code": "GH",
+      "m49_code": "288",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Ghana",
+        "zh-cn": "加纳"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GI",
+      "m49_code": "292",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Gibraltar",
+        "zh-cn": "直布罗陀"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "british_overseas_territory"
+    },
+    {
+      "code": "GL",
+      "m49_code": "304",
+      "region_key": "northern-america",
+      "labels": {
+        "en": "Greenland",
+        "zh-cn": "格陵兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GM",
+      "m49_code": "270",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Gambia",
+        "zh-cn": "冈比亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GN",
+      "m49_code": "324",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Guinea",
+        "zh-cn": "几内亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GP",
+      "m49_code": "312",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Guadeloupe",
+        "zh-cn": "瓜德罗普"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GQ",
+      "m49_code": "226",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Equatorial Guinea",
+        "zh-cn": "赤道几内亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GR",
+      "m49_code": "300",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Greece",
+        "zh-cn": "希腊"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GS",
+      "m49_code": "239",
+      "region_key": "south-america",
+      "labels": {
+        "en": "South Georgia and the South Sandwich Islands",
+        "zh-cn": "南乔治亚岛和南桑德韦奇岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GT",
+      "m49_code": "320",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Guatemala",
+        "zh-cn": "危地马拉"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GU",
+      "m49_code": "316",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Guam",
+        "zh-cn": "关岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GW",
+      "m49_code": "624",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Guinea-Bissau",
+        "zh-cn": "几内亚比绍"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "GY",
+      "m49_code": "328",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Guyana",
+        "zh-cn": "圭亚那"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "HK",
+      "m49_code": "344",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "China, Hong Kong Special Administrative Region",
+        "zh-cn": "中国香港特别行政区"
+      },
+      "display_parent_country": "CN",
+      "display_parent_relationship_type": "special_administrative_region"
+    },
+    {
+      "code": "HM",
+      "m49_code": "334",
+      "region_key": "australia-and-new-zealand",
+      "labels": {
+        "en": "Heard Island and McDonald Islands",
+        "zh-cn": "赫德岛和麦克唐纳岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "HN",
+      "m49_code": "340",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Honduras",
+        "zh-cn": "洪都拉斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "HR",
+      "m49_code": "191",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Croatia",
+        "zh-cn": "克罗地亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "HT",
+      "m49_code": "332",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Haiti",
+        "zh-cn": "海地"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "HU",
+      "m49_code": "348",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Hungary",
+        "zh-cn": "匈牙利"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ID",
+      "m49_code": "360",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Indonesia",
+        "zh-cn": "印度尼西亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IE",
+      "m49_code": "372",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Ireland",
+        "zh-cn": "爱尔兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IL",
+      "m49_code": "376",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Israel",
+        "zh-cn": "以色列"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IM",
+      "m49_code": "833",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Isle of Man",
+        "zh-cn": "马恩岛"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "crown_dependency"
+    },
+    {
+      "code": "IN",
+      "m49_code": "356",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "India",
+        "zh-cn": "印度"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IO",
+      "m49_code": "086",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "British Indian Ocean Territory",
+        "zh-cn": "英属印度洋领土"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IQ",
+      "m49_code": "368",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Iraq",
+        "zh-cn": "伊拉克"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IR",
+      "m49_code": "364",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Iran (Islamic Republic of)",
+        "zh-cn": "伊朗伊斯兰共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IS",
+      "m49_code": "352",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Iceland",
+        "zh-cn": "冰岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "IT",
+      "m49_code": "380",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Italy",
+        "zh-cn": "意大利"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "JE",
+      "m49_code": "832",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Jersey",
+        "zh-cn": "泽西"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "crown_dependency"
+    },
+    {
+      "code": "JM",
+      "m49_code": "388",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Jamaica",
+        "zh-cn": "牙买加"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "JO",
+      "m49_code": "400",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Jordan",
+        "zh-cn": "约旦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "JP",
+      "m49_code": "392",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "Japan",
+        "zh-cn": "日本"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KE",
+      "m49_code": "404",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Kenya",
+        "zh-cn": "肯尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KG",
+      "m49_code": "417",
+      "region_key": "central-asia",
+      "labels": {
+        "en": "Kyrgyzstan",
+        "zh-cn": "吉尔吉斯斯坦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KH",
+      "m49_code": "116",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Cambodia",
+        "zh-cn": "柬埔寨"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KI",
+      "m49_code": "296",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Kiribati",
+        "zh-cn": "基里巴斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KM",
+      "m49_code": "174",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Comoros",
+        "zh-cn": "科摩罗"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KN",
+      "m49_code": "659",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Saint Kitts and Nevis",
+        "zh-cn": "圣基茨和尼维斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KP",
+      "m49_code": "408",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "Democratic People's Republic of Korea",
+        "zh-cn": "朝鲜民主主义人民共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KR",
+      "m49_code": "410",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "Republic of Korea",
+        "zh-cn": "大韩民国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KW",
+      "m49_code": "414",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Kuwait",
+        "zh-cn": "科威特"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "KY",
+      "m49_code": "136",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Cayman Islands",
+        "zh-cn": "开曼群岛"
+      },
+      "display_parent_country": "GB",
+      "display_parent_relationship_type": "british_overseas_territory"
+    },
+    {
+      "code": "KZ",
+      "m49_code": "398",
+      "region_key": "central-asia",
+      "labels": {
+        "en": "Kazakhstan",
+        "zh-cn": "哈萨克斯坦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LA",
+      "m49_code": "418",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Lao People's Democratic Republic",
+        "zh-cn": "老挝人民民主共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LB",
+      "m49_code": "422",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Lebanon",
+        "zh-cn": "黎巴嫩"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LC",
+      "m49_code": "662",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Saint Lucia",
+        "zh-cn": "圣卢西亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LI",
+      "m49_code": "438",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Liechtenstein",
+        "zh-cn": "列支敦士登"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LK",
+      "m49_code": "144",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Sri Lanka",
+        "zh-cn": "斯里兰卡"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LR",
+      "m49_code": "430",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Liberia",
+        "zh-cn": "利比里亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LS",
+      "m49_code": "426",
+      "region_key": "southern-africa",
+      "labels": {
+        "en": "Lesotho",
+        "zh-cn": "莱索托"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LT",
+      "m49_code": "440",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Lithuania",
+        "zh-cn": "立陶宛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LU",
+      "m49_code": "442",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Luxembourg",
+        "zh-cn": "卢森堡"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LV",
+      "m49_code": "428",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Latvia",
+        "zh-cn": "拉脱维亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "LY",
+      "m49_code": "434",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Libya",
+        "zh-cn": "利比亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MA",
+      "m49_code": "504",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Morocco",
+        "zh-cn": "摩洛哥"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MC",
+      "m49_code": "492",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Monaco",
+        "zh-cn": "摩纳哥"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MD",
+      "m49_code": "498",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Republic of Moldova",
+        "zh-cn": "摩尔多瓦共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ME",
+      "m49_code": "499",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Montenegro",
+        "zh-cn": "黑山"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MF",
+      "m49_code": "663",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Saint Martin (French Part)",
+        "zh-cn": "圣马丁（法属）"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MG",
+      "m49_code": "450",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Madagascar",
+        "zh-cn": "马达加斯加"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MH",
+      "m49_code": "584",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Marshall Islands",
+        "zh-cn": "马绍尔群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MK",
+      "m49_code": "807",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "North Macedonia",
+        "zh-cn": "北马其顿"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ML",
+      "m49_code": "466",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Mali",
+        "zh-cn": "马里"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MM",
+      "m49_code": "104",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Myanmar",
+        "zh-cn": "缅甸"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MN",
+      "m49_code": "496",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "Mongolia",
+        "zh-cn": "蒙古"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MO",
+      "m49_code": "446",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "China, Macao Special Administrative Region",
+        "zh-cn": "中国澳门特别行政区"
+      },
+      "display_parent_country": "CN",
+      "display_parent_relationship_type": "special_administrative_region"
+    },
+    {
+      "code": "MP",
+      "m49_code": "580",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Northern Mariana Islands",
+        "zh-cn": "北马里亚纳群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MQ",
+      "m49_code": "474",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Martinique",
+        "zh-cn": "马提尼克"
+      },
+      "display_parent_country": "FR",
+      "display_parent_relationship_type": "french_overseas"
+    },
+    {
+      "code": "MR",
+      "m49_code": "478",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Mauritania",
+        "zh-cn": "毛里塔尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MS",
+      "m49_code": "500",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Montserrat",
+        "zh-cn": "蒙特塞拉特"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MT",
+      "m49_code": "470",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Malta",
+        "zh-cn": "马耳他"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MU",
+      "m49_code": "480",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Mauritius",
+        "zh-cn": "毛里求斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MV",
+      "m49_code": "462",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Maldives",
+        "zh-cn": "马尔代夫"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MW",
+      "m49_code": "454",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Malawi",
+        "zh-cn": "马拉维"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MX",
+      "m49_code": "484",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Mexico",
+        "zh-cn": "墨西哥"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MY",
+      "m49_code": "458",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Malaysia",
+        "zh-cn": "马来西亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "MZ",
+      "m49_code": "508",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Mozambique",
+        "zh-cn": "莫桑比克"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NA",
+      "m49_code": "516",
+      "region_key": "southern-africa",
+      "labels": {
+        "en": "Namibia",
+        "zh-cn": "纳米比亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NC",
+      "m49_code": "540",
+      "region_key": "melanesia",
+      "labels": {
+        "en": "New Caledonia",
+        "zh-cn": "新喀里多尼亚"
+      },
+      "display_parent_country": "FR",
+      "display_parent_relationship_type": "french_overseas"
+    },
+    {
+      "code": "NE",
+      "m49_code": "562",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Niger",
+        "zh-cn": "尼日尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NF",
+      "m49_code": "574",
+      "region_key": "australia-and-new-zealand",
+      "labels": {
+        "en": "Norfolk Island",
+        "zh-cn": "诺福克岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NG",
+      "m49_code": "566",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Nigeria",
+        "zh-cn": "尼日利亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NI",
+      "m49_code": "558",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Nicaragua",
+        "zh-cn": "尼加拉瓜"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NL",
+      "m49_code": "528",
+      "region_key": "western-europe",
+      "labels": {
+        "en": "Netherlands (Kingdom of the)",
+        "zh-cn": "荷兰王国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NO",
+      "m49_code": "578",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Norway",
+        "zh-cn": "挪威"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NP",
+      "m49_code": "524",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Nepal",
+        "zh-cn": "尼泊尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NR",
+      "m49_code": "520",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Naoero",
+        "zh-cn": "瑙鲁"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NU",
+      "m49_code": "570",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Niue",
+        "zh-cn": "纽埃"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "NZ",
+      "m49_code": "554",
+      "region_key": "australia-and-new-zealand",
+      "labels": {
+        "en": "New Zealand",
+        "zh-cn": "新西兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "OM",
+      "m49_code": "512",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Oman",
+        "zh-cn": "阿曼"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PA",
+      "m49_code": "591",
+      "region_key": "central-america",
+      "labels": {
+        "en": "Panama",
+        "zh-cn": "巴拿马"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PE",
+      "m49_code": "604",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Peru",
+        "zh-cn": "秘鲁"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PF",
+      "m49_code": "258",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "French Polynesia",
+        "zh-cn": "法属波利尼西亚"
+      },
+      "display_parent_country": "FR",
+      "display_parent_relationship_type": "french_overseas"
+    },
+    {
+      "code": "PG",
+      "m49_code": "598",
+      "region_key": "melanesia",
+      "labels": {
+        "en": "Papua New Guinea",
+        "zh-cn": "巴布亚新几内亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PH",
+      "m49_code": "608",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Philippines",
+        "zh-cn": "菲律宾"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PK",
+      "m49_code": "586",
+      "region_key": "southern-asia",
+      "labels": {
+        "en": "Pakistan",
+        "zh-cn": "巴基斯坦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PL",
+      "m49_code": "616",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Poland",
+        "zh-cn": "波兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PM",
+      "m49_code": "666",
+      "region_key": "northern-america",
+      "labels": {
+        "en": "Saint Pierre and Miquelon",
+        "zh-cn": "圣皮埃尔和密克隆"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PN",
+      "m49_code": "612",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Pitcairn",
+        "zh-cn": "皮特凯恩"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PR",
+      "m49_code": "630",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Puerto Rico",
+        "zh-cn": "波多黎各"
+      },
+      "display_parent_country": "US",
+      "display_parent_relationship_type": "us_insular_area"
+    },
+    {
+      "code": "PS",
+      "m49_code": "275",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "State of Palestine",
+        "zh-cn": "巴勒斯坦国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PT",
+      "m49_code": "620",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Portugal",
+        "zh-cn": "葡萄牙"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PW",
+      "m49_code": "585",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "Palau",
+        "zh-cn": "帕劳"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "PY",
+      "m49_code": "600",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Paraguay",
+        "zh-cn": "巴拉圭"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "QA",
+      "m49_code": "634",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Qatar",
+        "zh-cn": "卡塔尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "RE",
+      "m49_code": "638",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Réunion",
+        "zh-cn": "留尼汪"
+      },
+      "display_parent_country": "FR",
+      "display_parent_relationship_type": "french_overseas"
+    },
+    {
+      "code": "RO",
+      "m49_code": "642",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Romania",
+        "zh-cn": "罗马尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "RS",
+      "m49_code": "688",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Serbia",
+        "zh-cn": "塞尔维亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "RU",
+      "m49_code": "643",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Russian Federation",
+        "zh-cn": "俄罗斯联邦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "RW",
+      "m49_code": "646",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Rwanda",
+        "zh-cn": "卢旺达"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SA",
+      "m49_code": "682",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Saudi Arabia",
+        "zh-cn": "沙特阿拉伯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SB",
+      "m49_code": "090",
+      "region_key": "melanesia",
+      "labels": {
+        "en": "Solomon Islands",
+        "zh-cn": "所罗门群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SC",
+      "m49_code": "690",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Seychelles",
+        "zh-cn": "塞舌尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SD",
+      "m49_code": "729",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Sudan",
+        "zh-cn": "苏丹"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SE",
+      "m49_code": "752",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Sweden",
+        "zh-cn": "瑞典"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SG",
+      "m49_code": "702",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Singapore",
+        "zh-cn": "新加坡"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SH",
+      "m49_code": "654",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Saint Helena",
+        "zh-cn": "圣赫勒拿"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SI",
+      "m49_code": "705",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Slovenia",
+        "zh-cn": "斯洛文尼亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SJ",
+      "m49_code": "744",
+      "region_key": "northern-europe",
+      "labels": {
+        "en": "Svalbard and Jan Mayen Islands",
+        "zh-cn": "斯瓦尔巴群岛和扬马延岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SK",
+      "m49_code": "703",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Slovakia",
+        "zh-cn": "斯洛伐克"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SL",
+      "m49_code": "694",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Sierra Leone",
+        "zh-cn": "塞拉利昂"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SM",
+      "m49_code": "674",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "San Marino",
+        "zh-cn": "圣马力诺"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SN",
+      "m49_code": "686",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Senegal",
+        "zh-cn": "塞内加尔"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SO",
+      "m49_code": "706",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Somalia",
+        "zh-cn": "索马里"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SR",
+      "m49_code": "740",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Suriname",
+        "zh-cn": "苏里南"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SS",
+      "m49_code": "728",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "South Sudan",
+        "zh-cn": "南苏丹"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ST",
+      "m49_code": "678",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Sao Tome and Principe",
+        "zh-cn": "圣多美和普林西比"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SV",
+      "m49_code": "222",
+      "region_key": "central-america",
+      "labels": {
+        "en": "El Salvador",
+        "zh-cn": "萨尔瓦多"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SX",
+      "m49_code": "534",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Sint Maarten (Dutch part)",
+        "zh-cn": "圣马丁（荷属）"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SY",
+      "m49_code": "760",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Syrian Arab Republic",
+        "zh-cn": "阿拉伯叙利亚共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "SZ",
+      "m49_code": "748",
+      "region_key": "southern-africa",
+      "labels": {
+        "en": "Eswatini",
+        "zh-cn": "斯威士兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TC",
+      "m49_code": "796",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Turks and Caicos Islands",
+        "zh-cn": "特克斯和凯科斯群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TD",
+      "m49_code": "148",
+      "region_key": "middle-africa",
+      "labels": {
+        "en": "Chad",
+        "zh-cn": "乍得"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TF",
+      "m49_code": "260",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "French Southern Territories",
+        "zh-cn": "法属南方领地"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TG",
+      "m49_code": "768",
+      "region_key": "western-africa",
+      "labels": {
+        "en": "Togo",
+        "zh-cn": "多哥"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TH",
+      "m49_code": "764",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Thailand",
+        "zh-cn": "泰国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TJ",
+      "m49_code": "762",
+      "region_key": "central-asia",
+      "labels": {
+        "en": "Tajikistan",
+        "zh-cn": "塔吉克斯坦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TK",
+      "m49_code": "772",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Tokelau",
+        "zh-cn": "托克劳"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TL",
+      "m49_code": "626",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Timor-Leste",
+        "zh-cn": "东帝汶"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TM",
+      "m49_code": "795",
+      "region_key": "central-asia",
+      "labels": {
+        "en": "Turkmenistan",
+        "zh-cn": "土库曼斯坦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TN",
+      "m49_code": "788",
+      "region_key": "northern-africa",
+      "labels": {
+        "en": "Tunisia",
+        "zh-cn": "突尼斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TO",
+      "m49_code": "776",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Tonga",
+        "zh-cn": "汤加"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TR",
+      "m49_code": "792",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Türkiye",
+        "zh-cn": "土耳其"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TT",
+      "m49_code": "780",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Trinidad and Tobago",
+        "zh-cn": "特立尼达和多巴哥"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TV",
+      "m49_code": "798",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Tuvalu",
+        "zh-cn": "图瓦卢"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "TW",
+      "m49_code": "158",
+      "region_key": "eastern-asia",
+      "labels": {
+        "en": "Taiwan",
+        "zh-cn": "台湾"
+      },
+      "display_parent_country": "CN",
+      "display_parent_relationship_type": "owner_display_context"
+    },
+    {
+      "code": "TZ",
+      "m49_code": "834",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "United Republic of Tanzania",
+        "zh-cn": "坦桑尼亚联合共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "UA",
+      "m49_code": "804",
+      "region_key": "eastern-europe",
+      "labels": {
+        "en": "Ukraine",
+        "zh-cn": "乌克兰"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "UG",
+      "m49_code": "800",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Uganda",
+        "zh-cn": "乌干达"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "UM",
+      "m49_code": "581",
+      "region_key": "micronesia",
+      "labels": {
+        "en": "United States Minor Outlying Islands",
+        "zh-cn": "美国本土外小岛屿"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "US",
+      "m49_code": "840",
+      "region_key": "northern-america",
+      "labels": {
+        "en": "United States of America",
+        "zh-cn": "美利坚合众国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "UY",
+      "m49_code": "858",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Uruguay",
+        "zh-cn": "乌拉圭"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "UZ",
+      "m49_code": "860",
+      "region_key": "central-asia",
+      "labels": {
+        "en": "Uzbekistan",
+        "zh-cn": "乌兹别克斯坦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "VA",
+      "m49_code": "336",
+      "region_key": "southern-europe",
+      "labels": {
+        "en": "Holy See",
+        "zh-cn": "教廷"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "VC",
+      "m49_code": "670",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "Saint Vincent and the Grenadines",
+        "zh-cn": "圣文森特和格林纳丁斯"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "VE",
+      "m49_code": "862",
+      "region_key": "south-america",
+      "labels": {
+        "en": "Venezuela (Bolivarian Republic of)",
+        "zh-cn": "委内瑞拉玻利瓦尔共和国"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "VG",
+      "m49_code": "092",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "British Virgin Islands",
+        "zh-cn": "英属维尔京群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "VI",
+      "m49_code": "850",
+      "region_key": "caribbean",
+      "labels": {
+        "en": "United States Virgin Islands",
+        "zh-cn": "美属维尔京群岛"
+      },
+      "display_parent_country": "US",
+      "display_parent_relationship_type": "us_insular_area"
+    },
+    {
+      "code": "VN",
+      "m49_code": "704",
+      "region_key": "south-eastern-asia",
+      "labels": {
+        "en": "Viet Nam",
+        "zh-cn": "越南"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "VU",
+      "m49_code": "548",
+      "region_key": "melanesia",
+      "labels": {
+        "en": "Vanuatu",
+        "zh-cn": "瓦努阿图"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "WF",
+      "m49_code": "876",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Wallis and Futuna Islands",
+        "zh-cn": "瓦利斯群岛和富图纳群岛"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "WS",
+      "m49_code": "882",
+      "region_key": "polynesia",
+      "labels": {
+        "en": "Samoa",
+        "zh-cn": "萨摩亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "YE",
+      "m49_code": "887",
+      "region_key": "western-asia",
+      "labels": {
+        "en": "Yemen",
+        "zh-cn": "也门"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "YT",
+      "m49_code": "175",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Mayotte",
+        "zh-cn": "马约特"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ZA",
+      "m49_code": "710",
+      "region_key": "southern-africa",
+      "labels": {
+        "en": "South Africa",
+        "zh-cn": "南非"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ZM",
+      "m49_code": "894",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Zambia",
+        "zh-cn": "赞比亚"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    },
+    {
+      "code": "ZW",
+      "m49_code": "716",
+      "region_key": "eastern-africa",
+      "labels": {
+        "en": "Zimbabwe",
+        "zh-cn": "津巴布韦"
+      },
+      "display_parent_country": null,
+      "display_parent_relationship_type": null
+    }
+  ],
+  "regions": [
+    {
+      "key": "africa",
+      "m49_code": "002",
+      "source": "un-m49",
+      "level": "region",
+      "parent": "world",
+      "labels": {
+        "en": "Africa",
+        "zh-cn": "非洲"
+      }
+    },
+    {
+      "key": "americas",
+      "m49_code": "019",
+      "source": "un-m49",
+      "level": "region",
+      "parent": "world",
+      "labels": {
+        "en": "Americas",
+        "zh-cn": "美洲"
+      }
+    },
+    {
+      "key": "asia",
+      "m49_code": "142",
+      "source": "un-m49",
+      "level": "region",
+      "parent": "world",
+      "labels": {
+        "en": "Asia",
+        "zh-cn": "亚洲"
+      }
+    },
+    {
+      "key": "australia-and-new-zealand",
+      "m49_code": "053",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "oceania",
+      "labels": {
+        "en": "Australia and New Zealand",
+        "zh-cn": "澳大利亚和新西兰"
+      }
+    },
+    {
+      "key": "caribbean",
+      "m49_code": "029",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "latin-america-and-the-caribbean",
+      "labels": {
+        "en": "Caribbean",
+        "zh-cn": "加勒比"
+      }
+    },
+    {
+      "key": "central-america",
+      "m49_code": "013",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "latin-america-and-the-caribbean",
+      "labels": {
+        "en": "Central America",
+        "zh-cn": "中美洲"
+      }
+    },
+    {
+      "key": "central-asia",
+      "m49_code": "143",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "asia",
+      "labels": {
+        "en": "Central Asia",
+        "zh-cn": "中亚"
+      }
+    },
+    {
+      "key": "eastern-africa",
+      "m49_code": "014",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "sub-saharan-africa",
+      "labels": {
+        "en": "Eastern Africa",
+        "zh-cn": "东非"
+      }
+    },
+    {
+      "key": "eastern-asia",
+      "m49_code": "030",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "asia",
+      "labels": {
+        "en": "Eastern Asia",
+        "zh-cn": "东亚"
+      }
+    },
+    {
+      "key": "eastern-europe",
+      "m49_code": "151",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "europe",
+      "labels": {
+        "en": "Eastern Europe",
+        "zh-cn": "东欧"
+      }
+    },
+    {
+      "key": "eastern-europe-non-eu",
+      "m49_code": null,
+      "source": "twitterapi-user-about",
+      "level": "provider",
+      "parent": "eastern-europe",
+      "labels": {
+        "en": "Eastern Europe (Non-EU)",
+        "zh-cn": "东欧（非欧盟）"
+      }
+    },
+    {
+      "key": "europe",
+      "m49_code": "150",
+      "source": "un-m49",
+      "level": "region",
+      "parent": "world",
+      "labels": {
+        "en": "Europe",
+        "zh-cn": "欧洲"
+      }
+    },
+    {
+      "key": "latin-america-and-the-caribbean",
+      "m49_code": "419",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "americas",
+      "labels": {
+        "en": "Latin America and the Caribbean",
+        "zh-cn": "拉丁美洲和加勒比"
+      }
+    },
+    {
+      "key": "melanesia",
+      "m49_code": "054",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "oceania",
+      "labels": {
+        "en": "Melanesia",
+        "zh-cn": "美拉尼西亚"
+      }
+    },
+    {
+      "key": "micronesia",
+      "m49_code": "057",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "oceania",
+      "labels": {
+        "en": "Micronesia",
+        "zh-cn": "密克罗尼西亚"
+      }
+    },
+    {
+      "key": "middle-africa",
+      "m49_code": "017",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "sub-saharan-africa",
+      "labels": {
+        "en": "Middle Africa",
+        "zh-cn": "中非"
+      }
+    },
+    {
+      "key": "northern-africa",
+      "m49_code": "015",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "africa",
+      "labels": {
+        "en": "Northern Africa",
+        "zh-cn": "北非"
+      }
+    },
+    {
+      "key": "northern-america",
+      "m49_code": "021",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "americas",
+      "labels": {
+        "en": "Northern America",
+        "zh-cn": "北美"
+      }
+    },
+    {
+      "key": "northern-europe",
+      "m49_code": "154",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "europe",
+      "labels": {
+        "en": "Northern Europe",
+        "zh-cn": "北欧"
+      }
+    },
+    {
+      "key": "oceania",
+      "m49_code": "009",
+      "source": "un-m49",
+      "level": "region",
+      "parent": "world",
+      "labels": {
+        "en": "Oceania",
+        "zh-cn": "大洋洲"
+      }
+    },
+    {
+      "key": "polynesia",
+      "m49_code": "061",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "oceania",
+      "labels": {
+        "en": "Polynesia",
+        "zh-cn": "波利尼西亚"
+      }
+    },
+    {
+      "key": "south-america",
+      "m49_code": "005",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "latin-america-and-the-caribbean",
+      "labels": {
+        "en": "South America",
+        "zh-cn": "南美洲"
+      }
+    },
+    {
+      "key": "south-eastern-asia",
+      "m49_code": "035",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "asia",
+      "labels": {
+        "en": "South-eastern Asia",
+        "zh-cn": "东南亚"
+      }
+    },
+    {
+      "key": "southern-africa",
+      "m49_code": "018",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "sub-saharan-africa",
+      "labels": {
+        "en": "Southern Africa",
+        "zh-cn": "南部非洲"
+      }
+    },
+    {
+      "key": "southern-asia",
+      "m49_code": "034",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "asia",
+      "labels": {
+        "en": "Southern Asia",
+        "zh-cn": "南亚"
+      }
+    },
+    {
+      "key": "southern-europe",
+      "m49_code": "039",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "europe",
+      "labels": {
+        "en": "Southern Europe",
+        "zh-cn": "南欧"
+      }
+    },
+    {
+      "key": "sub-saharan-africa",
+      "m49_code": "202",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "africa",
+      "labels": {
+        "en": "Sub-Saharan Africa",
+        "zh-cn": "撒哈拉以南非洲"
+      }
+    },
+    {
+      "key": "western-africa",
+      "m49_code": "011",
+      "source": "un-m49",
+      "level": "intermediate",
+      "parent": "sub-saharan-africa",
+      "labels": {
+        "en": "Western Africa",
+        "zh-cn": "西非"
+      }
+    },
+    {
+      "key": "western-asia",
+      "m49_code": "145",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "asia",
+      "labels": {
+        "en": "Western Asia",
+        "zh-cn": "西亚"
+      }
+    },
+    {
+      "key": "western-europe",
+      "m49_code": "155",
+      "source": "un-m49",
+      "level": "subregion",
+      "parent": "europe",
+      "labels": {
+        "en": "Western Europe",
+        "zh-cn": "西欧"
+      }
+    },
+    {
+      "key": "world",
+      "m49_code": "001",
+      "source": "un-m49",
+      "level": "global",
+      "parent": null,
+      "labels": {
+        "en": "World",
+        "zh-cn": "世界"
+      }
+    }
+  ],
+  "account_based_in_mappings": [
+    {
+      "value": "Afghanistan",
+      "country_code": "AF",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Africa",
+      "country_code": null,
+      "region_key": "africa",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Albania",
+      "country_code": "AL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Algeria",
+      "country_code": "DZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "American Samoa",
+      "country_code": "AS",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Andorra",
+      "country_code": "AD",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Angola",
+      "country_code": "AO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Anguilla",
+      "country_code": "AI",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Antarctica",
+      "country_code": "AQ",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Antigua & Barbuda",
+      "country_code": "AG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Antigua and Barbuda",
+      "country_code": "AG",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Argentina",
+      "country_code": "AR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Armenia",
+      "country_code": "AM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Aruba",
+      "country_code": "AW",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Australasia",
+      "country_code": null,
+      "region_key": "australia-and-new-zealand",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Australia",
+      "country_code": "AU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Austria",
+      "country_code": "AT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Azerbaijan",
+      "country_code": "AZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Bahamas",
+      "country_code": "BS",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Bahrain",
+      "country_code": "BH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Bangladesh",
+      "country_code": "BD",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Barbados",
+      "country_code": "BB",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Belarus",
+      "country_code": "BY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Belgium",
+      "country_code": "BE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Belize",
+      "country_code": "BZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Benin",
+      "country_code": "BJ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Bermuda",
+      "country_code": "BM",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Bhutan",
+      "country_code": "BT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Bolivia",
+      "country_code": "BO",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Bolivia (Plurinational State of)",
+      "country_code": "BO",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Bonaire",
+      "country_code": "BQ",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Bonaire, Sint Eustatius and Saba",
+      "country_code": "BQ",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Bosnia & Herzegovina",
+      "country_code": "BA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Bosnia and Herzegovina",
+      "country_code": "BA",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Botswana",
+      "country_code": "BW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Bouvet Island",
+      "country_code": "BV",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Brazil",
+      "country_code": "BR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "British Indian Ocean Territory",
+      "country_code": "IO",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "British Virgin Islands",
+      "country_code": "VG",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Brunei",
+      "country_code": "BN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Brunei Darussalam",
+      "country_code": "BN",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Bulgaria",
+      "country_code": "BG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Burkina Faso",
+      "country_code": "BF",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Burundi",
+      "country_code": "BI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Cabo Verde",
+      "country_code": "CV",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Cambodia",
+      "country_code": "KH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Cameroon",
+      "country_code": "CM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Canada",
+      "country_code": "CA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Cape Verde",
+      "country_code": "CV",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Caribbean",
+      "country_code": null,
+      "region_key": "caribbean",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Caribbean Netherlands",
+      "country_code": "BQ",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Cayman Islands",
+      "country_code": "KY",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Central African Republic",
+      "country_code": "CF",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Central Asia",
+      "country_code": null,
+      "region_key": "central-asia",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Chad",
+      "country_code": "TD",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Chile",
+      "country_code": "CL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "China",
+      "country_code": "CN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "China, Hong Kong Special Administrative Region",
+      "country_code": "HK",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "China, Macao Special Administrative Region",
+      "country_code": "MO",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Christmas Island",
+      "country_code": "CX",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Cocos (Keeling) Islands",
+      "country_code": "CC",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Colombia",
+      "country_code": "CO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Comoros",
+      "country_code": "KM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Congo - Brazzaville",
+      "country_code": "CG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Congo - Kinshasa",
+      "country_code": "CD",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Cook Islands",
+      "country_code": "CK",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Costa Rica",
+      "country_code": "CR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Croatia",
+      "country_code": "HR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Cuba",
+      "country_code": "CU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Curaçao",
+      "country_code": "CW",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Cyprus",
+      "country_code": "CY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Czech Republic",
+      "country_code": "CZ",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Czechia",
+      "country_code": "CZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Côte d'Ivoire",
+      "country_code": "CI",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Côte d’Ivoire",
+      "country_code": "CI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Democratic People's Republic of Korea",
+      "country_code": "KP",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Democratic Republic of the Congo",
+      "country_code": "CD",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Denmark",
+      "country_code": "DK",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Djibouti",
+      "country_code": "DJ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Dominica",
+      "country_code": "DM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Dominican Republic",
+      "country_code": "DO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "East Asia",
+      "country_code": null,
+      "region_key": "eastern-asia",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Eastern Europe (Non-EU)",
+      "country_code": null,
+      "region_key": "eastern-europe-non-eu",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Ecuador",
+      "country_code": "EC",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Egypt",
+      "country_code": "EG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "El Salvador",
+      "country_code": "SV",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Equatorial Guinea",
+      "country_code": "GQ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Eritrea",
+      "country_code": "ER",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Estonia",
+      "country_code": "EE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Eswatini",
+      "country_code": "SZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Ethiopia",
+      "country_code": "ET",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Europe",
+      "country_code": null,
+      "region_key": "europe",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Falkland Islands",
+      "country_code": "FK",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Falkland Islands (Malvinas)",
+      "country_code": "FK",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Faroe Islands",
+      "country_code": "FO",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Fiji",
+      "country_code": "FJ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Finland",
+      "country_code": "FI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "France",
+      "country_code": "FR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "French Guiana",
+      "country_code": "GF",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "French Polynesia",
+      "country_code": "PF",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "French Southern Territories",
+      "country_code": "TF",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Gabon",
+      "country_code": "GA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Gambia",
+      "country_code": "GM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Georgia",
+      "country_code": "GE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Germany",
+      "country_code": "DE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Ghana",
+      "country_code": "GH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Gibraltar",
+      "country_code": "GI",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Greece",
+      "country_code": "GR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Greenland",
+      "country_code": "GL",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Grenada",
+      "country_code": "GD",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Guadeloupe",
+      "country_code": "GP",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Guam",
+      "country_code": "GU",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Guatemala",
+      "country_code": "GT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Guernsey",
+      "country_code": "GG",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Guinea",
+      "country_code": "GN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Guinea-Bissau",
+      "country_code": "GW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Guyana",
+      "country_code": "GY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Haiti",
+      "country_code": "HT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Heard & McDonald Islands",
+      "country_code": "HM",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Heard Island and McDonald Islands",
+      "country_code": "HM",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Holy See",
+      "country_code": "VA",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Honduras",
+      "country_code": "HN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Hong Kong",
+      "country_code": "HK",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Hong Kong SAR China",
+      "country_code": "HK",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Hungary",
+      "country_code": "HU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Iceland",
+      "country_code": "IS",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "India",
+      "country_code": "IN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Indonesia",
+      "country_code": "ID",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Iran",
+      "country_code": "IR",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Iran (Islamic Republic of)",
+      "country_code": "IR",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Iraq",
+      "country_code": "IQ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Ireland",
+      "country_code": "IE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Isle of Man",
+      "country_code": "IM",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Israel",
+      "country_code": "IL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Italy",
+      "country_code": "IT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Jamaica",
+      "country_code": "JM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Japan",
+      "country_code": "JP",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Jersey",
+      "country_code": "JE",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Jordan",
+      "country_code": "JO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Kazakhstan",
+      "country_code": "KZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Kenya",
+      "country_code": "KE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Kiribati",
+      "country_code": "KI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Kuwait",
+      "country_code": "KW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Kyrgyzstan",
+      "country_code": "KG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Lao People's Democratic Republic",
+      "country_code": "LA",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Laos",
+      "country_code": "LA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Latvia",
+      "country_code": "LV",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Lebanon",
+      "country_code": "LB",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Lesotho",
+      "country_code": "LS",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Liberia",
+      "country_code": "LR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Libya",
+      "country_code": "LY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Liechtenstein",
+      "country_code": "LI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Lithuania",
+      "country_code": "LT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Luxembourg",
+      "country_code": "LU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Macao",
+      "country_code": "MO",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Macao SAR China",
+      "country_code": "MO",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Macedonia",
+      "country_code": "MK",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Madagascar",
+      "country_code": "MG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Malawi",
+      "country_code": "MW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Malaysia",
+      "country_code": "MY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Maldives",
+      "country_code": "MV",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Mali",
+      "country_code": "ML",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Malta",
+      "country_code": "MT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Marshall Islands",
+      "country_code": "MH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Martinique",
+      "country_code": "MQ",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Mauritania",
+      "country_code": "MR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Mauritius",
+      "country_code": "MU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Mayotte",
+      "country_code": "YT",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Mexico",
+      "country_code": "MX",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Micronesia",
+      "country_code": "FM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Micronesia (Federated States of)",
+      "country_code": "FM",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Moldova",
+      "country_code": "MD",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Monaco",
+      "country_code": "MC",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Mongolia",
+      "country_code": "MN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Montenegro",
+      "country_code": "ME",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Montserrat",
+      "country_code": "MS",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Morocco",
+      "country_code": "MA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Mozambique",
+      "country_code": "MZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Myanmar",
+      "country_code": "MM",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Myanmar (Burma)",
+      "country_code": "MM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Namibia",
+      "country_code": "NA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Naoero",
+      "country_code": "NR",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Nauru",
+      "country_code": "NR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Nepal",
+      "country_code": "NP",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Netherlands",
+      "country_code": "NL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Netherlands (Kingdom of the)",
+      "country_code": "NL",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "New Caledonia",
+      "country_code": "NC",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "New Zealand",
+      "country_code": "NZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Nicaragua",
+      "country_code": "NI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Niger",
+      "country_code": "NE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Nigeria",
+      "country_code": "NG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Niue",
+      "country_code": "NU",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Norfolk Island",
+      "country_code": "NF",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "North Africa",
+      "country_code": null,
+      "region_key": "northern-africa",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "North America",
+      "country_code": null,
+      "region_key": "northern-america",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "North Korea",
+      "country_code": "KP",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "North Macedonia",
+      "country_code": "MK",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Northern Mariana Islands",
+      "country_code": "MP",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Norway",
+      "country_code": "NO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Oman",
+      "country_code": "OM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Pakistan",
+      "country_code": "PK",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Palau",
+      "country_code": "PW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Palestine",
+      "country_code": "PS",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Palestinian Territories",
+      "country_code": "PS",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Panama",
+      "country_code": "PA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Papua New Guinea",
+      "country_code": "PG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Paraguay",
+      "country_code": "PY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Peru",
+      "country_code": "PE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Philippines",
+      "country_code": "PH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Pitcairn",
+      "country_code": "PN",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Pitcairn Islands",
+      "country_code": "PN",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Poland",
+      "country_code": "PL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Portugal",
+      "country_code": "PT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Puerto Rico",
+      "country_code": "PR",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Qatar",
+      "country_code": "QA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Republic of Korea",
+      "country_code": "KR",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Republic of Moldova",
+      "country_code": "MD",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Romania",
+      "country_code": "RO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Russia",
+      "country_code": "RU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Russian Federation",
+      "country_code": "RU",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Rwanda",
+      "country_code": "RW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Réunion",
+      "country_code": "RE",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Saint Barthélemy",
+      "country_code": "BL",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saint Helena",
+      "country_code": "SH",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saint Kitts and Nevis",
+      "country_code": "KN",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saint Lucia",
+      "country_code": "LC",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saint Martin (French Part)",
+      "country_code": "MF",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saint Pierre and Miquelon",
+      "country_code": "PM",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saint Vincent and the Grenadines",
+      "country_code": "VC",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Samoa",
+      "country_code": "WS",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "San Marino",
+      "country_code": "SM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Sao Tome and Principe",
+      "country_code": "ST",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Saudi Arabia",
+      "country_code": "SA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Senegal",
+      "country_code": "SN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Serbia",
+      "country_code": "RS",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Seychelles",
+      "country_code": "SC",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Sierra Leone",
+      "country_code": "SL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Singapore",
+      "country_code": "SG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Sint Maarten",
+      "country_code": "SX",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Sint Maarten (Dutch part)",
+      "country_code": "SX",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Slovakia",
+      "country_code": "SK",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Slovenia",
+      "country_code": "SI",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Solomon Islands",
+      "country_code": "SB",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Somalia",
+      "country_code": "SO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "South Africa",
+      "country_code": "ZA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "South America",
+      "country_code": null,
+      "region_key": "south-america",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "South Asia",
+      "country_code": null,
+      "region_key": "southern-asia",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "South Georgia & South Sandwich Islands",
+      "country_code": "GS",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "South Georgia and the South Sandwich Islands",
+      "country_code": "GS",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "South Korea",
+      "country_code": "KR",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "South Sudan",
+      "country_code": "SS",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Southeast Asia",
+      "country_code": null,
+      "region_key": "south-eastern-asia",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Spain",
+      "country_code": "ES",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Sri Lanka",
+      "country_code": "LK",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "St. Barthélemy",
+      "country_code": "BL",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "St. Helena",
+      "country_code": "SH",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "St. Kitts & Nevis",
+      "country_code": "KN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "St. Lucia",
+      "country_code": "LC",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "St. Martin",
+      "country_code": "MF",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "St. Pierre & Miquelon",
+      "country_code": "PM",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "St. Vincent & Grenadines",
+      "country_code": "VC",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "State of Palestine",
+      "country_code": "PS",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Sudan",
+      "country_code": "SD",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Suriname",
+      "country_code": "SR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Svalbard & Jan Mayen",
+      "country_code": "SJ",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Svalbard and Jan Mayen Islands",
+      "country_code": "SJ",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Sweden",
+      "country_code": "SE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Switzerland",
+      "country_code": "CH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Syria",
+      "country_code": "SY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Syrian Arab Republic",
+      "country_code": "SY",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "São Tomé & Príncipe",
+      "country_code": "ST",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Taiwan",
+      "country_code": "TW",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Tajikistan",
+      "country_code": "TJ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Tanzania",
+      "country_code": "TZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Thailand",
+      "country_code": "TH",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Timor-Leste",
+      "country_code": "TL",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Togo",
+      "country_code": "TG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Tokelau",
+      "country_code": "TK",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Tonga",
+      "country_code": "TO",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Trinidad & Tobago",
+      "country_code": "TT",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Trinidad and Tobago",
+      "country_code": "TT",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Tunisia",
+      "country_code": "TN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Turkey",
+      "country_code": "TR",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Turkmenistan",
+      "country_code": "TM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Turks & Caicos Islands",
+      "country_code": "TC",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Turks and Caicos Islands",
+      "country_code": "TC",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Tuvalu",
+      "country_code": "TV",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Türkiye",
+      "country_code": "TR",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "U.S. Outlying Islands",
+      "country_code": "UM",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "U.S. Virgin Islands",
+      "country_code": "VI",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "US Virgin Islands",
+      "country_code": "VI",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Uganda",
+      "country_code": "UG",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Ukraine",
+      "country_code": "UA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "United Arab Emirates",
+      "country_code": "AE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "United Kingdom",
+      "country_code": "GB",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "United Kingdom of Great Britain and Northern Ireland",
+      "country_code": "GB",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "United Republic of Tanzania",
+      "country_code": "TZ",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "United States",
+      "country_code": "US",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "United States Minor Outlying Islands",
+      "country_code": "UM",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "United States Virgin Islands",
+      "country_code": "VI",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "United States of America",
+      "country_code": "US",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Uruguay",
+      "country_code": "UY",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Uzbekistan",
+      "country_code": "UZ",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Vanuatu",
+      "country_code": "VU",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Vatican City",
+      "country_code": "VA",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Venezuela",
+      "country_code": "VE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Venezuela (Bolivarian Republic of)",
+      "country_code": "VE",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "Viet Nam",
+      "country_code": "VN",
+      "region_key": null,
+      "review_note": "reviewed TwitterAPI User About country alias"
+    },
+    {
+      "value": "Vietnam",
+      "country_code": "VN",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Wallis & Futuna",
+      "country_code": "WF",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Wallis and Futuna Islands",
+      "country_code": "WF",
+      "region_key": null,
+      "review_note": "UN M49 English name"
+    },
+    {
+      "value": "West Asia",
+      "country_code": null,
+      "region_key": "western-asia",
+      "review_note": "reviewed TwitterAPI User About region"
+    },
+    {
+      "value": "Western Sahara",
+      "country_code": "EH",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    },
+    {
+      "value": "Yemen",
+      "country_code": "YE",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Zambia",
+      "country_code": "ZM",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Zimbabwe",
+      "country_code": "ZW",
+      "region_key": null,
+      "review_note": "approved flag reference display name"
+    },
+    {
+      "value": "Åland Islands",
+      "country_code": "AX",
+      "region_key": null,
+      "review_note": "CLDR English display name"
+    }
+  ],
+  "explicit_unresolved_values": [
+    "Congo",
+    "Korea"
+  ]
+}

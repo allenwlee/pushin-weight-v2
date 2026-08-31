@@ -17,7 +17,7 @@ from dateutil.parser import isoparse
 from dateutil.parser import parse as parse_datetime
 from django.utils import timezone
 
-from monitor.country_codes import normalize_country_code
+from monitor.account_geography import resolve_account_based_in
 from monitor.twitterapi.caller import USER_AGENT, CircuitBreaker, GlobalPaceGate
 
 USER_ABOUT_URL = "https://api.twitterapi.io/twitter/user_about"
@@ -673,10 +673,16 @@ def parse_user_about(
                             )
                         )
             if "account_based_in" in about:
-                code = normalize_country_code(candidates.get("account_based_in"))
-                if code is not None:
-                    candidates["country_code"] = code
-                    present.add("country_code")
+                resolution = resolve_account_based_in(
+                    candidates.get("account_based_in")
+                )
+                candidates["country_code"] = (
+                    resolution.country_code if resolution is not None else None
+                )
+                candidates["based_in_region_key"] = (
+                    resolution.region_key if resolution is not None else None
+                )
+                present.update({"country_code", "based_in_region_key"})
 
     if "identity_profile_labels_highlighted_label" in data:
         values, fields = flatten_label(

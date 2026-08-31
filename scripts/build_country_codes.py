@@ -1,4 +1,4 @@
-"""Generate the runtime country-code map from the approved flag inventory."""
+"""Generate the compatibility country-code surface from account geography."""
 
 from __future__ import annotations
 
@@ -7,37 +7,23 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = (
-    ROOT / "docs" / "ideation" / "assets" / "2026-08-29-162947-country-flag-pixels.json"
-)
+DEFAULT_SOURCE = ROOT / "monitor" / "data" / "account_geography.json"
 DEFAULT_OUTPUT = ROOT / "monitor" / "country_codes.py"
-
-PROVIDER_COUNTRY_CODES_BY_NAME = {
-    "Macedonia": "MK",
-    "Russian Federation": "RU",
-    "Turkey": "TR",
-}
 
 
 def render(source: Path) -> str:
     payload = json.loads(source.read_text(encoding="utf-8"))
-    flags = payload["flags"]
-    countries = sorted((flag["code"], flag["name"]) for flag in flags)
-    if len(countries) != 197 or len(dict(countries)) != 197:
-        raise ValueError("approved country inventory must contain 197 unique codes")
-    if any(len(code) != 2 or code != code.upper() for code, _name in countries):
-        raise ValueError("country codes must be uppercase alpha-2 values")
-    if len({name for _code, name in countries}) != 197:
-        raise ValueError("canonical country names must be unique")
-    canonical_codes = dict(countries)
-    canonical_names = {name for _code, name in countries}
-    if not set(PROVIDER_COUNTRY_CODES_BY_NAME.values()) <= set(canonical_codes):
-        raise ValueError("provider country aliases must use approved country codes")
-    if set(PROVIDER_COUNTRY_CODES_BY_NAME) & canonical_names:
-        raise ValueError("provider country aliases must not replace canonical names")
-
+    countries = payload["countries"]
+    mappings = payload["account_based_in_mappings"]
+    if len(countries) != 249 or len({item["code"] for item in countries}) != 249:
+        raise ValueError("account geography must contain 249 unique country codes")
+    exact_country_targets = {
+        item["value"]: item["country_code"]
+        for item in mappings
+        if item["country_code"] is not None
+    }
     lines = [
-        '"""Generated exact country-code map. Do not edit by hand.',
+        '"""Generated exact country-code compatibility map. Do not edit by hand.',
         "",
         f"Source: {source.relative_to(ROOT)}",
         "Run: python scripts/build_country_codes.py",
@@ -47,28 +33,21 @@ def render(source: Path) -> str:
         "",
         "COUNTRY_NAMES: dict[str, str] = {",
     ]
-    lines.extend(f"    {code!r}: {name!r}," for code, name in countries)
     lines.extend(
-        [
-            "}",
-            "COUNTRY_CODES_BY_NAME: dict[str, str] = {",
-            "    name: code for code, name in COUNTRY_NAMES.items()",
-            "}",
-            "PROVIDER_COUNTRY_CODES_BY_NAME: dict[str, str] = {",
-        ]
+        f"    {item['code']!r}: {item['labels']['en']!r}," for item in countries
     )
+    lines.extend(["}", "COUNTRY_CODES_BY_NAME: dict[str, str] = {"])
     lines.extend(
-        f"    {name!r}: {code!r},"
-        for name, code in sorted(PROVIDER_COUNTRY_CODES_BY_NAME.items())
+        f"    {value!r}: {code!r},"
+        for value, code in sorted(exact_country_targets.items())
     )
     lines.extend(
         [
             "}",
-            "COUNTRY_CODES_BY_NAME.update(PROVIDER_COUNTRY_CODES_BY_NAME)",
             "",
             "",
             "def normalize_country_code(value: object) -> str | None:",
-            '    """Return a code only for an exact code, canonical name, or provider alias."""',
+            '    """Return a code only for an exact reviewed country value."""',
             "    if not isinstance(value, str):",
             "        return None",
             "    if value in COUNTRY_NAMES:",

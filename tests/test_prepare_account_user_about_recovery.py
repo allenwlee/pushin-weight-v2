@@ -15,7 +15,10 @@ from monitor.management.commands.backfill_account_based_in import (
     _parse_recovery_receipt,
 )
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
+pytestmark = [
+    pytest.mark.requires_postgres,
+    pytest.mark.django_db(transaction=True, serialized_rollback=True),
+]
 
 
 def test_recovery_snapshot_defaults_to_zero_write_dry_run():
