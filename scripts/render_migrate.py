@@ -37,16 +37,16 @@ def main(
     setup_django: Callable[[], None] = django.setup,
 ) -> int:
     values = os.environ if environ is None else environ
+    database_url = values.get("DATABASE_URL")
+    if not database_url:
+        print("Migration cluster lock unavailable; set DATABASE_URL and retry.", file=sys.stderr)
+        return 75
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
     setup_django()
 
     from django.core.management import execute_from_command_line
     from django.db import connection
 
-    database_url = values.get("DATABASE_URL")
-    if not database_url:
-        print("Migration cluster lock unavailable; set DATABASE_URL and retry.", file=sys.stderr)
-        return 75
     migration_connection = app_connection or connection
     migration_command = execute_migrate or (
         lambda: execute_from_command_line(["manage.py", "migrate", "--noinput"])
