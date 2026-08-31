@@ -22,6 +22,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from x_monitor.twitterapi_credentials import (
+    TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+)
 
 _PKG_ROOT = Path(__file__).resolve().parent.parent
 
@@ -83,11 +86,11 @@ def _source_secrets(path: Path = _DEFAULT_SECRETS_PATH) -> int:
 
     Returns the number of vars loaded (0 if path missing / no parsable lines).
     Used by main() before launching the x-monitor subprocess so the
-    subprocess inherits the operator's TWITTERAPI_IO_API_KEY without
+    subprocess inherits the operator's on-demand TwitterAPI key without
     requiring the caller to source the file in their shell.
 
     Plan 2026-07-13-001 R1 mitigation: caller (main) checks
-    `TWITTERAPI_IO_API_KEY in os.environ` after this returns and prints
+    `TWITTERAPI_IO_ON_DEMAND_API_KEY in os.environ` after this returns and prints
     a stderr diagnostic + exits rc=2 if absent.
     """
     if not path.exists():
@@ -197,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     # Plan 2026-07-13-001 R1: source ~/.env.secrets before launching the
-    # subprocess so TWITTERAPI_IO_API_KEY reaches TwitterApiClient.from_env()
+    # subprocess so the on-demand key reaches TwitterApiClient.from_env()
     # without the caller needing to `source ~/.env.secrets` themselves.
     loaded = _source_secrets(args.secrets)
     if loaded:
@@ -205,11 +208,12 @@ def main(argv: list[str] | None = None) -> int:
             f"_source_secrets: loaded {loaded} vars from {args.secrets}",
             file=sys.stderr,
         )
-    if not args.dry_run and "TWITTERAPI_IO_API_KEY" not in os.environ:
+    if not args.dry_run and TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV not in os.environ:
         print(
-            "TWITTERAPI_IO_API_KEY not in environment and not found in "
-            f"{args.secrets}. TwitterApiClient.from_env() will raise at "
-            "subprocess start. Recovery: add `export TWITTERAPI_IO_API_KEY=\"...\"` "
+            f"{TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV} not in environment and "
+            f"not found in {args.secrets}. TwitterApiClient.from_env() will "
+            "raise at subprocess start. Recovery: add "
+            f"`export {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV}=\"...\"` "
             "to your secrets file or pass --secrets <path>.",
             file=sys.stderr,
         )

@@ -33,9 +33,10 @@ Do not apply `render.yaml`, suspend `pushinweight-harvest`, or change its
 Configure service-scoped secrets in the Render Dashboard without printing or
 copying their values into a terminal transcript:
 
-- harvester: `TWITTERAPI_IO_API_KEY` plus the credentials selected by the
-  effective translator/classifier URLs (`ANTHROPIC_API_KEY`,
-  `MINIMAX_API_TOKEN`, or `DEEPSEEK_API_KEY`);
+- harvester: `TWITTERAPI_IO_SCHEDULED_API_KEY` for the acceptance cycle,
+  `TWITTERAPI_IO_ON_DEMAND_API_KEY` for explicitly launched management jobs,
+  plus the credentials selected by the effective translator/classifier URLs
+  (`ANTHROPIC_API_KEY`, `MINIMAX_API_TOKEN`, or `DEEPSEEK_API_KEY`);
 - headline worker: `DEEPSEEK_API_KEY`;
 - staging web: `STAGING_REFRESH_SOURCE_DATABASE_URL` only for refresh.
 

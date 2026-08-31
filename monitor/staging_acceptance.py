@@ -21,6 +21,10 @@ from monitor.post_enrichment import (
 )
 from scripts.staging_refresh.policy import RefreshPolicy
 from x_monitor.config import Config
+from x_monitor.twitterapi_credentials import (
+    TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+    TwitterApiCredentialPurpose,
+)
 
 ACCEPTANCE_ENABLE_ENVIRONMENT = "X_MONITOR_STAGING_ACCEPTANCE_ENABLED"
 ACCEPTANCE_SERVICE_ENVIRONMENT = "X_MONITOR_STAGING_ACCEPTANCE_SERVICE"
@@ -501,7 +505,7 @@ def prepare_staging_acceptance(
     if call_id not in _configured_call_ids(cfg):
         raise StagingAcceptanceError("call_id_not_configured")
 
-    if not environ.get("TWITTERAPI_IO_API_KEY"):
+    if not environ.get(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV):
         raise StagingAcceptanceError("provider_credential_missing:twitter")
 
     translator_base_url = cfg.llm.translator_base_url or environ.get(
@@ -577,8 +581,8 @@ def bounded_twitter_client_factory() -> Iterator[None]:
     original_descriptor = TwitterApiClient.__dict__["from_env"]
     original_factory = TwitterApiClient.from_env
 
-    def _from_env(_cls):
-        return BoundedTwitterApiClient(original_factory())
+    def _from_env(_cls, purpose: TwitterApiCredentialPurpose):
+        return BoundedTwitterApiClient(original_factory(purpose))
 
     TwitterApiClient.from_env = classmethod(_from_env)
     try:

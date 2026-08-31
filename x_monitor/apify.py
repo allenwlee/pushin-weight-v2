@@ -13,7 +13,6 @@ TwitterAPI.io. Rationale:
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -21,6 +20,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 import requests
+
+from x_monitor.twitterapi_credentials import (
+    TwitterApiCredentialPurpose,
+    require_twitterapi_api_key,
+)
 
 log = logging.getLogger(__name__)
 
@@ -93,9 +97,8 @@ class ListMembersSnapshot:
 class TwitterApiClient:
     """REST client for TwitterAPI.io.
 
-    Replaces the previous ApifyClient. The shape (run_search, run_followers,
-    from_env) is preserved so call sites in run.py / __main__.py / tests
-    only need to rename the class.
+    Replaces the previous ApifyClient. Callers must declare whether they are
+    scheduled collection or explicitly launched on-demand work.
     """
 
     api_key: str
@@ -109,11 +112,11 @@ class TwitterApiClient:
     _request_log: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
-    def from_env(cls) -> "TwitterApiClient":
-        api_key = os.environ.get("TWITTERAPI_IO_API_KEY")
-        if not api_key:
-            raise RuntimeError("TWITTERAPI_IO_API_KEY not in environment")
-        return cls(api_key=api_key)
+    def from_env(
+        cls,
+        purpose: TwitterApiCredentialPurpose,
+    ) -> TwitterApiClient:
+        return cls(api_key=require_twitterapi_api_key(purpose))
 
     # --- low-level HTTP --------------------------------------------------
 

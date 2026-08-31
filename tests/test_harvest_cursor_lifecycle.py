@@ -85,7 +85,7 @@ def harvest(monkeypatch):
         monkeypatch.setattr(
             cycle_mod.TwitterApiClient,
             "from_env",
-            classmethod(lambda cls: api),
+            classmethod(lambda cls, _purpose: api),
         )
         monkeypatch.setattr(
             CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False

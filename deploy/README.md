@@ -39,7 +39,7 @@ do an unload/load cycle so re-running them is idempotent.
 ## Prerequisites
 
 - `~/.env.secrets` exists and contains
-  `export TWITTERAPI_IO_API_KEY="..."` (from https://twitterapi.io) and
+  `export TWITTERAPI_IO_ON_DEMAND_API_KEY="..."` (from https://twitterapi.io) and
   `export ANTHROPIC_API_KEY="..."` (LLM classification).
 - The x-monitoring repo is on a stable path (the plists hardcode
   `/Users/fuchitalee/development/pushin-weight-v2`).
@@ -111,7 +111,7 @@ rm ~/Library/LaunchAgents/com.fuchitalee.x-monitor.harvest.plist
 
 ## Security notes
 
-- `TWITTERAPI_IO_API_KEY` and `ANTHROPIC_API_KEY` are sourced from
+- `TWITTERAPI_IO_ON_DEMAND_API_KEY` and `ANTHROPIC_API_KEY` are sourced from
   `~/.env.secrets` via the wrapper scripts. Neither plist contains the
   literal key values.
 - No user cookies are stored on disk; TwitterAPI.io handles auth

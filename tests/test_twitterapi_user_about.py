@@ -321,9 +321,7 @@ async def test_fetch_batch_stops_on_schema_drift_without_raw_payload(monkeypatch
     assert "parser_error:unknown_leaves:response.data" in (
         result.outcomes[0].schema_diagnostic or ()
     )
-    assert "$.data.unknown:string" in (
-        result.outcomes[0].schema_diagnostic or ()
-    )
+    assert "$.data.unknown:string" in (result.outcomes[0].schema_diagnostic or ())
     assert "secret-value" not in repr(result)
 
 
@@ -517,3 +515,124 @@ async def test_fetch_batch_opens_circuit_after_ten_failed_accounts(monkeypatch):
     assert len(result.outcomes) == 10
     assert result.stop_reason == "circuit_open"
     assert session.get.call_count == 20
+
+
+@pytest.mark.asyncio
+async def test_concurrent_fetch_never_exceeds_attempt_or_connector_budget(monkeypatch):
+    import asyncio
+    from unittest.mock import MagicMock
+
+    active = 0
+    peak_active = 0
+    request_count = 0
+
+    class ResponseContext:
+        status = 500
+
+        def __init__(self):
+            self.headers = {}
+
+        async def __aenter__(self):
+            nonlocal active, peak_active
+            active += 1
+            peak_active = max(peak_active, active)
+            await asyncio.sleep(0)
+            return self
+
+        async def __aexit__(self, *_args):
+            nonlocal active
+            active -= 1
+
+        async def text(self):
+            await asyncio.sleep(0)
+            return "error"
+
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    def get(*_args, **_kwargs):
+        nonlocal request_count
+        request_count += 1
+        return ResponseContext()
+
+    session.get.side_effect = get
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id=str(index), handle=f"user{index}")
+            for index in range(10)
+        ],
+        api_key="secret",
+        rate_qps=1_000,
+        concurrency=3,
+        max_attempts=4,
+        max_credits=72,
+        max_wall_seconds=60,
+    )
+
+    assert result.attempts == 4
+    assert result.projected_credits == 72
+    assert result.stop_reason == "attempt_budget"
+    assert request_count == 4
+    assert peak_active <= 3
+
+
+@pytest.mark.asyncio
+async def test_fatal_concurrent_response_stops_queued_request_admission(monkeypatch):
+    import asyncio
+    import json
+    from unittest.mock import MagicMock
+
+    drift = _complete_payload()
+    drift["data"]["unknown"] = "private"
+    payloads = [json.dumps(drift), json.dumps(_complete_payload())]
+    request_count = 0
+
+    class ResponseContext:
+        status = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+            self.headers = {}
+
+        async def __aenter__(self):
+            await asyncio.sleep(0)
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def text(self):
+            return self.payload
+
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    def get(*_args, **_kwargs):
+        nonlocal request_count
+        payload = payloads[min(request_count, len(payloads) - 1)]
+        request_count += 1
+        return ResponseContext(payload)
+
+    session.get.side_effect = get
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id=str(index), handle=f"user{index}")
+            for index in range(10)
+        ],
+        api_key="secret",
+        rate_qps=1_000,
+        concurrency=2,
+        max_attempts=10,
+        max_credits=180,
+        max_wall_seconds=60,
+    )
+
+    assert result.stop_reason == "schema_drift"
+    assert request_count <= 2
+    assert all(outcome.author_id in {"0", "1"} for outcome in result.outcomes)

@@ -38,8 +38,9 @@ def main() -> int:
     print(f"max_pages: {args.max_pages}", file=sys.stderr)
 
     from x_monitor.apify import TwitterApiClient
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
-    api = TwitterApiClient.from_env()
+    api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     items = api.run_search(
         query,
         max_results=20 * args.max_pages,

@@ -322,7 +322,12 @@ X_MONITOR_LIST_ID = env.int("X_MONITOR_LIST_ID", default=None)
 # overriding via `monitor/management/commands/run_cycle.py`.
 # Third-party API keys
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
-TWITTERAPI_IO_API_KEY = env("TWITTERAPI_IO_API_KEY", default="")
+TWITTERAPI_IO_SCHEDULED_API_KEY = env(
+    "TWITTERAPI_IO_SCHEDULED_API_KEY", default=""
+)
+TWITTERAPI_IO_ON_DEMAND_API_KEY = env(
+    "TWITTERAPI_IO_ON_DEMAND_API_KEY", default=""
+)
 TWITTERAPI_BASE_URL = env("TWITTERAPI_BASE_URL", default="https://api.twitterapi.io")
 
 # ============================================================================

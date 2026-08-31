@@ -27,6 +27,8 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
       - key: ALLOWED_HOSTS
         value: localhost,127.0.0.1,.onrender.com,pushinweight.ai,www.pushinweight.ai
       - key: CSRF_TRUSTED_ORIGINS
@@ -45,6 +47,8 @@ services:
         value: prefer_per_brand
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
         value: v23-per-brand-why-first-v2-activation-20260827
+      # Render-managed group must supply purpose-separated TwitterAPI keys:
+      # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets
 
   # --------------------------------------------------------------------------
@@ -103,6 +107,8 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
       - key: ALLOWED_HOSTS
         value: localhost,127.0.0.1,.onrender.com
       - key: X_MONITOR_LIST_ID
@@ -127,6 +133,8 @@ services:
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
         value: v23-per-brand-why-first-v2-activation-20260827
+      # Render-managed group must supply purpose-separated TwitterAPI keys:
+      # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets
 
 databases:

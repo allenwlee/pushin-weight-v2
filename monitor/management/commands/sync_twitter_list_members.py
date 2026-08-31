@@ -10,6 +10,7 @@ from monitor.list_membership import reconciliation_due, run_due_reconciliation
 from monitor.run_lock import harvest_writer_lock
 from x_monitor.apify import TwitterApiClient
 from x_monitor.config import load_config
+from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 
 class Command(BaseCommand):
@@ -44,7 +45,9 @@ class Command(BaseCommand):
                 self.stderr.write("List reconciliation skipped: harvest lock is held.")
                 return
             result = run_due_reconciliation(
-                api=TwitterApiClient.from_env(),
+                api=TwitterApiClient.from_env(
+                    TwitterApiCredentialPurpose.ON_DEMAND
+                ),
                 cfg=cfg,
                 list_id=int(list_id),
                 deadline=cfg.harvest.start_deadline(),

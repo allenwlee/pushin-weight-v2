@@ -75,7 +75,7 @@ def _environment(**overrides) -> dict[str, str]:
         "X_MONITOR_DEPLOYMENT_ENVIRONMENT": "staging",
         "RENDER_SERVICE_NAME": "pushinweight-staging-harvest",
         "X_MONITOR_STAGING_ACCEPTANCE_SERVICE": "pushinweight-staging-harvest",
-        "TWITTERAPI_IO_API_KEY": "twitter-fixture",
+        "TWITTERAPI_IO_SCHEDULED_API_KEY": "twitter-fixture",
         "ANTHROPIC_API_KEY": "anthropic-fixture",
     }
     values.update(overrides)
@@ -382,7 +382,11 @@ def test_acceptance_fails_closed_for_independently_corrupted_evidence(
             None,
             "configured_service_identity_mismatch",
         ),
-        ({"TWITTERAPI_IO_API_KEY": ""}, None, "provider_credential_missing:twitter"),
+        (
+            {"TWITTERAPI_IO_SCHEDULED_API_KEY": ""},
+            None,
+            "provider_credential_missing:twitter",
+        ),
         ({"ANTHROPIC_API_KEY": ""}, None, "provider_credential_missing:translator"),
         ({}, _Connection(host="production.internal"), "database_host_mismatch"),
         ({}, _Connection(database="pushinweight"), "database_name_mismatch"),
@@ -685,7 +689,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     api = Api()
     client = object()
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env", lambda: api
+        "monitor.cycle.TwitterApiClient.from_env", lambda _purpose: api
     )
     monkeypatch.setattr(
         reattribute, "build_translator_client_from_env", lambda _cfg: client

@@ -28,6 +28,7 @@ from monitor import cycle as cycle_mod
 from monitor.cycle import CycleRunner, _cursor_key
 from x_monitor.apify import TwitterApiAuthError, TwitterApiRateLimitError
 from x_monitor.query_plan import PlannedCall
+from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -50,6 +51,7 @@ class FakeApi:
         self._results = results if results is not None else []
         self._raise = raise_exc
         self.calls: list[dict] = []
+        self.credential_purposes: list[TwitterApiCredentialPurpose] = []
 
     def run_search(self, query, **kwargs):
         self.calls.append({"query": query, **kwargs})
@@ -73,24 +75,36 @@ def _tweet(tid: str = "1", handle: str | None = None):
 def wired(monkeypatch):
     """Run one cycle with a stubbed plan + API and no post-fetch LLM work."""
 
-    def _run(*, calls=None, results=None, raise_exc=None, settings_over=None):
+    def _run(
+        *,
+        calls=None,
+        results=None,
+        raise_exc=None,
+        settings_over=None,
+        cycle_kind="scheduled",
+    ):
         calls = calls or [_planned()]
         api = FakeApi(results=results, raise_exc=raise_exc)
         monkeypatch.setattr(
             cycle_mod, "plan_calls_for_cycle", lambda cfg=None: list(calls)
         )
         # run() builds its client via TwitterApiClient.from_env(); replace that
-        # classmethod so no test ever reaches the network.
+        # classmethod so no test ever reaches the network while retaining the
+        # purpose argument as production call-chain evidence.
+        def _client_from_env(_cls, purpose):
+            api.credential_purposes.append(purpose)
+            return api
+
         monkeypatch.setattr(
             cycle_mod.TwitterApiClient,
             "from_env",
-            classmethod(lambda cls: api),
+            classmethod(_client_from_env),
         )
         monkeypatch.setattr(
             CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
         with override_settings(**(settings_over or {})):
-            runner = CycleRunner(cycle_kind="scheduled")
+            runner = CycleRunner(cycle_kind=cycle_kind)
             stats = runner.run()
         return api, stats
 
@@ -98,6 +112,16 @@ def wired(monkeypatch):
 
 
 # --- the core regression: scheduled calls are time-bounded ---------------
+
+
+def test_scheduled_cycle_requests_only_scheduled_credential(wired):
+    api, _ = wired(results=[])
+    assert api.credential_purposes == [TwitterApiCredentialPurpose.SCHEDULED]
+
+
+def test_backfill_cycle_requests_only_on_demand_credential(wired):
+    api, _ = wired(results=[], cycle_kind="backfill")
+    assert api.credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
 
 
 def test_scheduled_call_passes_both_time_bounds(wired):
@@ -198,7 +222,7 @@ def test_one_failing_call_does_not_block_the_others(wired):
     with _pytest.MonkeyPatch.context() as mp:
         mp.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: list(calls))
         mp.setattr(
-            monkeypatch_target, "from_env", classmethod(lambda cls: api)
+            monkeypatch_target, "from_env", classmethod(lambda cls, _purpose: api)
         )
         mp.setattr(
             CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
@@ -441,7 +465,9 @@ def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeyp
     api = TruncatingApi()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
     )
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
@@ -493,7 +519,9 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
     api = TruncatingApi()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
     )
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
@@ -525,7 +553,9 @@ def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
 
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: CaptureApi())
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: CaptureApi()),
     )
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
@@ -561,7 +591,9 @@ def test_truncated_empty_result_transfers_full_interval(wired, monkeypatch):
     api = TruncatedEmpty()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
     )
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
@@ -598,7 +630,9 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
     api = CappedButExhausted()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
     )
     monkeypatch.setattr(
         CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False

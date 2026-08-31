@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import base64
+import hashlib
+import json
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import override_settings
 
 from core.models import Account
@@ -17,6 +21,10 @@ from monitor.twitterapi.user_about import (
     FetchBatchResult,
     FetchOutcome,
     UserAboutObservation,
+)
+from x_monitor.twitterapi_credentials import (
+    TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+    TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
 )
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -55,6 +63,29 @@ def _batch(outcomes):
         wall_seconds=1.0,
         stop_reason=None,
     )
+
+
+def _production_recovery_receipt(
+    *,
+    account_count: int,
+    created_at: datetime | None = None,
+) -> str:
+    payload = {
+        "schema_version": 1,
+        "database": "pushinweight_shadow",
+        "created_at": (created_at or datetime.now(UTC)).isoformat(),
+        "snapshot_account_count": account_count,
+        "snapshot_row_digest": "a" * 64,
+        "restore_account_count": account_count,
+        "restore_row_digest": "a" * 64,
+        "storage": "render-postgres-encrypted-at-rest",
+        "snapshot_relation": "account_user_about_backup.accounts_20260831t120000z",
+        "restore_proof": "temporary-relation-count-and-digest-match",
+    }
+    canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    payload["receipt_sha256"] = hashlib.sha256(canonical).hexdigest()
+    encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    return base64.urlsafe_b64encode(encoded).decode().rstrip("=")
 
 
 def _unavailable(author_id: str) -> FetchOutcome:
@@ -103,8 +134,34 @@ def test_default_dry_run_selects_without_http_or_writes():
 
 
 @override_settings(OLLIJA_STAGING_MODE=True)
+def test_apply_does_not_fall_back_to_scheduled_or_legacy_key(tmp_path, monkeypatch):
+    monkeypatch.delenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, raising=False)
+    monkeypatch.setenv(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV, "scheduled-secret")
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
+    Account.objects.create(author_id="1", handle="user1")
+
+    with pytest.raises(CommandError, match=TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            seed="test-seed",
+            json_report=str(tmp_path / "pilot.json"),
+            markdown_report=str(tmp_path / "pilot.md"),
+            stdout=StringIO(),
+        )
+
+
+@override_settings(OLLIJA_STAGING_MODE=True)
 def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "on-demand-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV, "scheduled-secret")
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
     accounts = [
         Account.objects.create(author_id=str(index), handle=f"user{index}")
         for index in range(2)
@@ -133,9 +190,11 @@ def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
         )
 
     assert Account.objects.filter(country_code="US").count() == 2
-    assert fetch.await_args.kwargs["api_key"] == "managed-secret"
+    assert fetch.await_args.kwargs["api_key"] == "on-demand-secret"
     report = json_path.read_text()
-    assert "managed-secret" not in report
+    assert "on-demand-secret" not in report
+    assert "scheduled-secret" not in report
+    assert "legacy-secret" not in report
     assert "user0" not in report
     assert '"accepted": 2' in report
     assert markdown_path.exists()
@@ -146,7 +205,7 @@ def test_unavailable_result_checkpoints_selected_handle_without_leaking_reason(
     tmp_path,
     monkeypatch,
 ):
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
     account = Account.objects.create(author_id="42", handle="selected_handle")
 
     with patch(
@@ -185,7 +244,7 @@ def test_schema_drift_reaches_report_without_response_values_or_account_identity
     import json
     from unittest.mock import MagicMock
 
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
     account = Account.objects.create(author_id="424242", handle="selected_handle")
     response = MagicMock()
     response.status = 200
@@ -243,7 +302,7 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
     import json
     from unittest.mock import MagicMock
 
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
     account = Account.objects.create(author_id="424242", handle="selected_handle")
     response = MagicMock()
     response.status = 200
@@ -328,7 +387,7 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
 
 @override_settings(OLLIJA_STAGING_MODE=False)
 def test_apply_refuses_outside_staging(monkeypatch, tmp_path):
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
     Account.objects.create(author_id="1", handle="user1")
 
     with pytest.raises(Exception, match="staging"):
@@ -340,6 +399,371 @@ def test_apply_refuses_outside_staging(monkeypatch, tmp_path):
             json_report=str(tmp_path / "report.json"),
             markdown_report=str(tmp_path / "report.md"),
         )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_apply_checks_environment_before_credential_access(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "staging")
+    Account.objects.create(author_id="1", handle="user1")
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in.require_twitterapi_api_key",
+            side_effect=AssertionError("credential loaded before production guard"),
+        ),
+        pytest.raises(CommandError, match="production"),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            recovery_receipt=_production_recovery_receipt(account_count=1),
+            json_report=str(tmp_path / "report.json"),
+            markdown_report=str(tmp_path / "report.md"),
+            stdout=StringIO(),
+        )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_apply_requires_recovery_receipt_before_credential(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    Account.objects.create(author_id="1", handle="user1")
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.require_twitterapi_api_key",
+            side_effect=AssertionError("credential loaded before recovery guard"),
+        ),
+        pytest.raises(CommandError, match="recovery receipt"),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            json_report=str(tmp_path / "report.json"),
+            markdown_report=str(tmp_path / "report.md"),
+            stdout=StringIO(),
+        )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_apply_rejects_stale_recovery_receipt_before_credential(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    Account.objects.create(author_id="1", handle="user1")
+    stale = _production_recovery_receipt(
+        account_count=1,
+        created_at=datetime.now(UTC) - timedelta(hours=25),
+    )
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.require_twitterapi_api_key",
+            side_effect=AssertionError("credential loaded before recovery guard"),
+        ),
+        pytest.raises(CommandError, match="stale"),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            recovery_receipt=stale,
+            json_report=str(tmp_path / "report.json"),
+            markdown_report=str(tmp_path / "report.md"),
+            stdout=StringIO(),
+        )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_apply_loses_advisory_lock_before_credential_access(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    Account.objects.create(author_id="1", handle="user1")
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._verify_recovery_snapshot"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._production_run_lock",
+            side_effect=CommandError(
+                "another production User About backfill is running"
+            ),
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.require_twitterapi_api_key",
+            side_effect=AssertionError("credential loaded after losing run lock"),
+        ),
+        pytest.raises(CommandError, match="another production"),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            recovery_receipt=_production_recovery_receipt(account_count=1),
+            json_report=str(tmp_path / "report.json"),
+            markdown_report=str(tmp_path / "report.md"),
+            stdout=StringIO(),
+        )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_chunk_checkpoint_survives_crash_and_restart(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
+    for index in range(3):
+        Account.objects.create(author_id=str(index), handle=f"user{index}")
+    recovery_receipt = _production_recovery_receipt(account_count=3)
+    fetched_ids: list[list[str]] = []
+
+    async def crash_after_first_chunk(selections, **_kwargs):
+        fetched_ids.append([selection.author_id for selection in selections])
+        if len(fetched_ids) == 1:
+            return _batch([_success(selections[0].author_id)])
+        raise RuntimeError("simulated process crash")
+
+    common = {
+        "apply": True,
+        "target": "production",
+        "limit": 3,
+        "max_attempts": 3,
+        "max_credits": 54,
+        "max_wall_seconds": 60,
+        "max_qps": 1,
+        "provider_qps": 1,
+        "concurrency": 1,
+        "chunk_size": 1,
+        "recovery_receipt": recovery_receipt,
+        "json_report": str(tmp_path / "report.json"),
+        "markdown_report": str(tmp_path / "report.md"),
+        "stdout": StringIO(),
+    }
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._verify_recovery_snapshot"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._production_run_lock"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
+            side_effect=crash_after_first_chunk,
+        ),
+        pytest.raises(RuntimeError, match="simulated process crash"),
+    ):
+        call_command("backfill_account_based_in", **common)
+
+    completed_id = fetched_ids[0][0]
+    assert Account.objects.get(author_id=completed_id).account_based_in_fetched_at
+    remaining_ids: list[str] = []
+
+    async def finish_remaining(selections, **_kwargs):
+        remaining_ids.extend(selection.author_id for selection in selections)
+        return _batch([_success(selection.author_id) for selection in selections])
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._verify_recovery_snapshot"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._production_run_lock"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
+            side_effect=finish_remaining,
+        ),
+    ):
+        call_command("backfill_account_based_in", **{**common, "limit": 3})
+
+    assert completed_id not in remaining_ids
+    assert (
+        Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 3
+    )
+    report = (tmp_path / "report.json").read_text()
+    assert "managed-secret" not in report
+    assert recovery_receipt not in report
+    assert all(f"user{index}" not in report for index in range(3))
+    assert '"remaining_eligible": 0' in report
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_apply_requires_current_snapshot_relation_before_credential(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    Account.objects.create(author_id="1", handle="user1")
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.require_twitterapi_api_key",
+            side_effect=AssertionError("credential loaded before snapshot guard"),
+        ),
+        pytest.raises(CommandError, match="snapshot relation is unavailable"),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            recovery_receipt=_production_recovery_receipt(account_count=1),
+            json_report=str(tmp_path / "report.json"),
+            markdown_report=str(tmp_path / "report.md"),
+            stdout=StringIO(),
+        )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_require_complete_fails_after_writing_resume_report(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
+    for index in range(2):
+        Account.objects.create(author_id=str(index), handle=f"user{index}")
+    json_path = tmp_path / "incomplete.json"
+
+    async def fetch_selected(selections, **_kwargs):
+        return _batch([_success(selections[0].author_id)])
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._verify_recovery_snapshot"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._production_run_lock"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
+            side_effect=fetch_selected,
+        ),
+        pytest.raises(CommandError, match="1 eligible Accounts remain"),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            require_complete=True,
+            limit=1,
+            max_attempts=1,
+            max_credits=18,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            recovery_receipt=_production_recovery_receipt(account_count=2),
+            json_report=str(json_path),
+            markdown_report=str(tmp_path / "incomplete.md"),
+            stdout=StringIO(),
+        )
+
+    assert json.loads(json_path.read_text())["outcome"]["remaining_eligible"] == 1
 
 
 @override_settings(OLLIJA_STAGING_MODE=False)
@@ -378,7 +802,7 @@ def test_staging_harvester_guard_requires_environment_and_database_identity(
 
 @override_settings(OLLIJA_STAGING_MODE=True)
 def test_apply_refuses_budget_above_pilot_caps(monkeypatch, tmp_path):
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
     with pytest.raises(Exception, match="pilot cap"):
         call_command(
             "backfill_account_based_in",
@@ -392,7 +816,7 @@ def test_apply_refuses_budget_above_pilot_caps(monkeypatch, tmp_path):
 
 @override_settings(OLLIJA_STAGING_MODE=True)
 def test_success_empty_checkpoint_is_skipped_on_restart(tmp_path, monkeypatch):
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "managed-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
     account = Account.objects.create(author_id="1", handle="user1")
     observed_at = datetime(2026, 8, 29, tzinfo=UTC)
     result = _batch(

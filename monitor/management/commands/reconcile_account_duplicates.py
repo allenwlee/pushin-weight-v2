@@ -10,7 +10,6 @@ combined plan).
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.error
 import urllib.parse
@@ -20,6 +19,10 @@ from typing import Any
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
+from x_monitor.twitterapi_credentials import (
+    TwitterApiCredentialPurpose,
+    get_twitterapi_api_key,
+)
 
 PLACEHOLDER_PREFIXES = ("handle:", "synthetic:")
 
@@ -659,7 +662,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        api_key = os.environ.get("TWITTERAPI_IO_API_KEY")
+        api_key = get_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
 
         if options["residual_only"] and options["lonely_only"]:
             self.stderr.write("error: --residual-only and --lonely-only are mutually exclusive")
@@ -740,8 +743,7 @@ class Command(BaseCommand):
             handles_only = [h for h, _ in groups]
             self.stdout.write(
                 f"Pre-pass: TwitterAPI lookup for {len(handles_only)} handles "
-                f"with {options['workers']} workers... "
-                f"(api_key prefix={api_key[:8]}..., len={len(api_key)})"
+                f"with {options['workers']} workers..."
             )
             lookup_cache = _twitterapi_lookup_batch(
                 handles=handles_only,

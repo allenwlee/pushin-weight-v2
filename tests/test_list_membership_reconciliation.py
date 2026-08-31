@@ -183,7 +183,9 @@ def test_sync_command_dry_run_never_calls_provider(monkeypatch):
     monkeypatch.setattr(
         TwitterApiClient,
         "from_env",
-        classmethod(lambda cls: (_ for _ in ()).throw(AssertionError("network"))),
+        classmethod(
+            lambda cls, _purpose: (_ for _ in ()).throw(AssertionError("network"))
+        ),
     )
     stdout = StringIO()
     call_command(

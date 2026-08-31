@@ -511,7 +511,9 @@ def main() -> int:
         return 2
 
     from x_monitor.apify import TwitterApiClient
-    client = TwitterApiClient.from_env()
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+
+    client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
 
     # Run the actual probe.
     all_rows: list[dict] = []

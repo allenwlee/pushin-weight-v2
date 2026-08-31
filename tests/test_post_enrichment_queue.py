@@ -423,7 +423,7 @@ def test_cycle_runner_threads_cutoff_to_normal_runs_but_not_backfill(
     monkeypatch.setattr(
         cycle_module.TwitterApiClient,
         "from_env",
-        classmethod(lambda cls: EmptyApi()),
+        classmethod(lambda cls, _purpose: EmptyApi()),
     )
 
     def capture_post_fetch(self, items, **kwargs):

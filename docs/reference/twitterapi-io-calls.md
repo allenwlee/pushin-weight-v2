@@ -12,10 +12,20 @@ Flask + macOS launchd system is retired.
 Replaced the Apify-based scraper in 2026-06-08. ~95% cheaper ($0.15/1k
 tweets vs $3/1k on Apify).
 
-**API key env var:** `TWITTERAPI_IO_API_KEY`
+**API key env vars:** `TWITTERAPI_IO_SCHEDULED_API_KEY` for recurring
+`run_cycle` collection; `TWITTERAPI_IO_ON_DEMAND_API_KEY` for explicitly
+launched batches, backfills, reconciliation, probes, and API-backed smoke
+tests. Callers declare one purpose and never fall back to the other key or the
+retired unsuffixed name.
 **Base URL:** `https://api.twitterapi.io`
 **HTTP method:** All calls are `GET` with `params=...` query string.
 **Auth header:** `X-API-Key: <key>`
+
+The one-time `/twitter/user_about` Account population uses the on-demand key,
+5-QPS operator pacing, bounded concurrency, missing-only checkpoints, and the
+production recovery gate documented in
+`docs/operations/2026-08-29-223000-account-user-about-backfill.md`. It is not a
+scheduled harvester endpoint.
 **Timeout:** 60 s per request; up to 3 attempts (1 initial + 2 retries,
 `max_retries=2`) on 429/5xx/network errors.
 
@@ -556,4 +566,3 @@ Last reviewed: 2026-08-05
 ## Update 2026-08-10 (plan 2026-08-10-002)
 
 Cycle no longer runs continuous QT capture. `GET /twitter/tweets` is used only for **one-shot metrics refresh** on posts older than `metrics_refresh.delay_hours` that have never been stamped (`metrics_refreshed_at` null). `GET /twitter/tweet/quotes` is not invoked from the harvest cycle.
-

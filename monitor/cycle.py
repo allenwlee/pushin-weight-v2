@@ -99,6 +99,7 @@ from x_monitor.attribution import (
 from x_monitor.config import KNOWN_MODELS, Config, CycleConfig, load_config
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
+from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -1268,6 +1269,7 @@ class CycleRunner:
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
         self._monotonic = _monotonic or time.monotonic
         self._llm_call_count: int = 0
+
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
         self._posts_inserted: int = 0
@@ -1290,6 +1292,16 @@ class CycleRunner:
             "classifier_flags_invalid": 0,
             "enrichment_quarantined": 0,
         }
+
+    @property
+    def twitterapi_credential_purpose(self) -> TwitterApiCredentialPurpose:
+        """Resolve the credential lane without a permissive default."""
+
+        if self.cycle_kind in {"scheduled", "manual"}:
+            return TwitterApiCredentialPurpose.SCHEDULED
+        if self.cycle_kind == "backfill":
+            return TwitterApiCredentialPurpose.ON_DEMAND
+        raise ValueError(f"unsupported cycle kind: {self.cycle_kind!r}")
 
     def _wall_now(self) -> datetime:
         """Return the server-owned wall clock used by U14 evidence."""
@@ -2679,7 +2691,7 @@ class CycleRunner:
 
         run_id = f"backlog-{uuid.uuid4().hex[:12]}"
         calls = self._plan_calls()
-        api = TwitterApiClient.from_env()
+        api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
         enabled_models = _resolve_enabled_models(self.cfg, None)
         index, search_terms = _build_brand_index(enabled_models)
         search_terms = {**search_terms, **_load_brand_search_terms()}
@@ -2816,7 +2828,7 @@ class CycleRunner:
 
         # Build TwitterAPI client from environment
         try:
-            api = TwitterApiClient.from_env()
+            api = TwitterApiClient.from_env(self.twitterapi_credential_purpose)
         except RuntimeError as exc:
             logger.error("CycleRunner.run: cannot create API client: %s", exc)
             summary["status"] = "aborted"

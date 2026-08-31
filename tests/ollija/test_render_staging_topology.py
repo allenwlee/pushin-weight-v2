@@ -63,7 +63,8 @@ def test_staging_web_remains_owner_only_and_provider_dark() -> None:
     }
     assert not {
         "DEEPSEEK_API_KEY",
-        "TWITTERAPI_IO_API_KEY",
+        "TWITTERAPI_IO_SCHEDULED_API_KEY",
+        "TWITTERAPI_IO_ON_DEMAND_API_KEY",
     } & set(environment)
 
 
@@ -90,7 +91,8 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
     )
     assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "False"
     assert "OLLIJA_STAGING_MODE" not in environment
-    assert environment["TWITTERAPI_IO_API_KEY"]["sync"] is False
+    assert environment["TWITTERAPI_IO_SCHEDULED_API_KEY"]["sync"] is False
+    assert environment["TWITTERAPI_IO_ON_DEMAND_API_KEY"]["sync"] is False
     assert not any("fromGroup" in entry for entry in service["envVars"])
 
 

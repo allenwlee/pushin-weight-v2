@@ -50,6 +50,7 @@ def _load_config_or_die(path: Path):
 def cmd_run(args, paths) -> int:
     from x_monitor.apify import TwitterApiClient
     from x_monitor.run import RunPipeline
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
     cfg = _load_config_or_die(paths["config"])
     api: TwitterApiClient
@@ -58,7 +59,9 @@ def cmd_run(args, paths) -> int:
         api = TwitterApiClient(api_key="dry-run")
     else:
         try:
-            api = TwitterApiClient.from_env()
+            api = TwitterApiClient.from_env(
+                TwitterApiCredentialPurpose.ON_DEMAND
+            )
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
@@ -198,18 +201,20 @@ def cmd_setup(args, paths) -> int:
     if args.setup_action == "twitterapi-key":
         # Just confirms the key is in env; the env file path is informational.
         from x_monitor.apify import TwitterApiClient
+        from x_monitor.twitterapi_credentials import (
+            TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+            TwitterApiCredentialPurpose,
+        )
 
         try:
-            api = TwitterApiClient.from_env()
-            print(
-                f"OK: TWITTERAPI_IO_API_KEY present (prefix={api.api_key[:4]}...)"
-            )
+            TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+            print(f"OK: {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV} present")
             return 0
         except Exception as e:
             print(
                 f"FAIL: {e}\n"
                 f"Add to ~/.env.secrets:\n"
-                f"  export TWITTERAPI_IO_API_KEY=\"...\"",
+                f"  export {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV}=\"...\"",
                 file=sys.stderr,
             )
             return 1
@@ -342,6 +347,8 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         return 0
 
     if action == "audit-handles":
+        import yaml as _yaml
+
         from x_monitor.apify import (
             TwitterApiAuthError,
             TwitterApiClient,
@@ -353,17 +360,22 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             load_filter,
             looks_like_ai_account,
         )
-        import yaml as _yaml
+        from x_monitor.twitterapi_credentials import (
+            TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+            TwitterApiCredentialPurpose,
+        )
 
         # Try to make a real client. If env var is missing, return 2 so the
         # operator can run `x-monitor setup twitterapi-key` first.
         try:
-            api = TwitterApiClient.from_env()
+            api = TwitterApiClient.from_env(
+                TwitterApiCredentialPurpose.ON_DEMAND
+            )
         except Exception as e:
             print(
                 f"error: {e}\n"
                 f"Run `x-monitor setup twitterapi-key` first.\n"
-                f"Or set TWITTERAPI_IO_API_KEY in your env.",
+                f"Or set {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV} in your env.",
                 file=sys.stderr,
             )
             return 2
@@ -463,7 +475,13 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         if via_api:
             try:
                 from x_monitor.apify import TwitterApiClient
-                api = TwitterApiClient.from_env()
+                from x_monitor.twitterapi_credentials import (
+                    TwitterApiCredentialPurpose,
+                )
+
+                api = TwitterApiClient.from_env(
+                    TwitterApiCredentialPurpose.ON_DEMAND
+                )
             except Exception as e:
                 print(
                     f"warning: --via-api requested but api init failed: {e}\n"
@@ -1259,7 +1277,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--via-api",
         action="store_true",
         help="Use TwitterAPI.io get_article() for x.com/i/article URLs "
-             "(100 credits per call). Requires TWITTERAPI_IO_API_KEY in env.",
+             "(100 credits per call). Requires "
+             "TWITTERAPI_IO_ON_DEMAND_API_KEY in env.",
     )
     p_rel.add_argument(
         "--write-verify",

@@ -89,7 +89,8 @@ createdb xmonitor -U xmonitor
 
 # 3. Real secrets -- copy from .env.example and fill in values
 cp .env.example .env
-# Edit .env with your API keys (TWITTERAPI_IO_API_KEY, ANTHROPIC_API_KEY,
+# Edit .env with your API keys (TWITTERAPI_IO_SCHEDULED_API_KEY,
+# TWITTERAPI_IO_ON_DEMAND_API_KEY, ANTHROPIC_API_KEY,
 # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
 
 # 4. Apply migrations
@@ -429,7 +430,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 
 # 2. Secrets (chmod 600, gitignored)
-echo 'export TWITTERAPI_IO_API_KEY="..."' >> ~/.env.secrets
+echo 'export TWITTERAPI_IO_ON_DEMAND_API_KEY="..."' >> ~/.env.secrets
 echo 'export ANTHROPIC_API_KEY="..."'        >> ~/.env.secrets   # LLM classification
 chmod 600 ~/.env.secrets
 source ~/.env.secrets
@@ -443,7 +444,8 @@ x-monitor dashboard start
 # open http://127.0.0.1:5000/
 ```
 
-`TWITTERAPI_IO_API_KEY` is the only auth surface — cookies were retired
+TwitterAPI authentication uses purpose-specific scheduled and on-demand API
+keys — cookies were retired
 2026-06-08 when the pipeline migrated from Apify search-with-cookies to
 TwitterAPI.io (~$0.15/1k tweets vs $3/1k).
 

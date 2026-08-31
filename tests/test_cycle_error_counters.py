@@ -14,7 +14,7 @@ import pytest
 def _django_setup():
     os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    os.environ.setdefault("TWITTERAPI_IO_API_KEY", "dummy")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy")
     import django
     if not django.apps.apps.ready:
         django.setup()

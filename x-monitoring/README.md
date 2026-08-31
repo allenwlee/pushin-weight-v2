@@ -232,7 +232,8 @@ python manage.py migrate --noinput
 
 API keys live in the `pushinweight-secrets` env group on Render:
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` -- Google OAuth
-- `TWITTERAPI_IO_API_KEY` -- Twitter data API
+- `TWITTERAPI_IO_SCHEDULED_API_KEY` -- recurring collection
+- `TWITTERAPI_IO_ON_DEMAND_API_KEY` -- explicit batches and backfills
 - `ANTHROPIC_API_KEY` -- LLM classifier (future)
 
 ### Config
@@ -407,4 +408,3 @@ Last reviewed: 2026-08-05
 - "Retired / removed" section expanded with the 2026-07-11 yaml
   retirements, the 2026-07-22 `x-monitoring/` wrapper flatten, and
   the `RunPipeline` -> `CycleRunner` v1-to-v2 migration.
-

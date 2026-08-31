@@ -19,6 +19,11 @@ from x_monitor.apify import (
     _normalize_follower,
     _normalize_tweet,
 )
+from x_monitor.twitterapi_credentials import (
+    TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+    TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+    TwitterApiCredentialPurpose,
+)
 
 # --- error mapping --------------------------------------------------------
 
@@ -345,17 +350,63 @@ def test_probe_api_returns_true_on_transient_5xx():
 # --- from_env -------------------------------------------------------------
 
 
-def test_from_env_requires_key(monkeypatch):
-    monkeypatch.delenv("TWITTERAPI_IO_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="TWITTERAPI_IO_API_KEY"):
-        TwitterApiClient.from_env()
+def test_from_env_requires_explicit_typed_purpose():
+    with pytest.raises(TypeError):
+        TwitterApiClient.from_env()  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="purpose enum"):
+        TwitterApiClient.from_env("scheduled")  # type: ignore[arg-type]
 
 
-def test_from_env_reads_key(monkeypatch):
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "abc")
-    c = TwitterApiClient.from_env()
-    assert c.api_key == "abc"
-    assert c.base_url == "https://api.twitterapi.io"
+@pytest.mark.parametrize(
+    ("purpose", "environment_name"),
+    [
+        (
+            TwitterApiCredentialPurpose.SCHEDULED,
+            TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+        ),
+        (
+            TwitterApiCredentialPurpose.ON_DEMAND,
+            TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+        ),
+    ],
+)
+def test_from_env_reads_only_designated_key(monkeypatch, purpose, environment_name):
+    monkeypatch.setenv(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV, "scheduled-secret")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "on-demand-secret")
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
+
+    client = TwitterApiClient.from_env(purpose)
+
+    expected = {
+        TWITTERAPI_IO_SCHEDULED_API_KEY_ENV: "scheduled-secret",
+        TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV: "on-demand-secret",
+    }
+    assert client.api_key == expected[environment_name]
+    assert client.base_url == "https://api.twitterapi.io"
+
+
+@pytest.mark.parametrize(
+    ("purpose", "missing_name", "other_name"),
+    [
+        (
+            TwitterApiCredentialPurpose.SCHEDULED,
+            TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+            TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+        ),
+        (
+            TwitterApiCredentialPurpose.ON_DEMAND,
+            TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
+            TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+        ),
+    ],
+)
+def test_from_env_does_not_fall_back(monkeypatch, purpose, missing_name, other_name):
+    monkeypatch.delenv(missing_name, raising=False)
+    monkeypatch.setenv(other_name, "wrong-purpose-secret")
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
+
+    with pytest.raises(RuntimeError, match=missing_name):
+        TwitterApiClient.from_env(purpose)
 
 
 # --- normalizer unit tests -----------------------------------------------

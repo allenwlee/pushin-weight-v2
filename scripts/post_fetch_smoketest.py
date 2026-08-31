@@ -320,17 +320,14 @@ def _load_api_posts(
     filtered (posts, posts_with_no_brand_skipped) tuple, mirroring
     `_load_latest_cycle_posts`.
     """
-    from x_monitor.attribution import detect_brand_mentions
-
     # Lazy import — the live client is only needed on this path.
     from x_monitor.apify import TwitterApiClient
+    from x_monitor.attribution import detect_brand_mentions
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
-    # Read the API key from the TWITTERAPI_IO_API_KEY env var. The
-    # smoketest's run-pipeline-watchpaths.sh `source ~/.env.secrets`
-    # makes the key available; for ad-hoc CLI runs the operator
-    # sources their own secrets file. from_env raises a clear error
-    # if the key is missing.
-    client = TwitterApiClient.from_env()
+    # Explicit smoke tests are on-demand work and must not consume the
+    # scheduled collection credential.
+    client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     rows = client.run_search(
         query=args.query,
         max_results=args.limit,

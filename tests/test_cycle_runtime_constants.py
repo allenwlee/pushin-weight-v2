@@ -68,7 +68,7 @@ def test_cycle_runner_uses_config_cycle_not_module_constants():
     import os
     os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    os.environ.setdefault("TWITTERAPI_IO_API_KEY", "dummy_for_smoketest")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy_for_smoketest")
     import django
     django.setup()
     from monitor.cycle import CycleRunner
@@ -89,7 +89,7 @@ def test_cycle_runner_propagates_weird_config_values():
     import os
     os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    os.environ.setdefault("TWITTERAPI_IO_API_KEY", "dummy_for_smoketest")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy_for_smoketest")
     import django
     django.setup()
     from monitor.cycle import CycleRunner
@@ -167,7 +167,7 @@ def test_seven_call_shape_preserved_post_refactor():
     import os
     os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    os.environ.setdefault("TWITTERAPI_IO_API_KEY", "dummy_for_smoketest")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy_for_smoketest")
     import django
     django.setup()
     from monitor.cycle import CycleRunner

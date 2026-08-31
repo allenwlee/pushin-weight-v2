@@ -24,13 +24,12 @@ reconcile command:
 from __future__ import annotations
 
 import json
-import os
 import signal
 import time
 from pathlib import Path
 from typing import Any
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
 from monitor.management.commands.reconcile_account_duplicates import (
@@ -39,7 +38,10 @@ from monitor.management.commands.reconcile_account_duplicates import (
     _repoint_fk,
 )
 from monitor.reconcile.apply_loop import run_apply_loop
-
+from x_monitor.twitterapi_credentials import (
+    TwitterApiCredentialPurpose,
+    require_twitterapi_api_key,
+)
 
 # KTD1 + KTD7 from the plan.
 DEFAULT_RATE_QPS = 5.0
@@ -149,7 +151,12 @@ class Command(BaseCommand):
             return
 
         # APPLY MODE: delegate to monitor.reconcile.apply_loop.run_apply_loop.
-        api_key = os.environ.get("TWITTERAPI_IO_API_KEY")
+        try:
+            api_key = require_twitterapi_api_key(
+                TwitterApiCredentialPurpose.ON_DEMAND
+            )
+        except RuntimeError as exc:
+            raise CommandError(str(exc)) from exc
         try:
             summary = run_apply_loop(
                 candidate_placeholders=candidates,

@@ -14,7 +14,7 @@ CONFIG_PATH = REPO / "config.yaml"
 def _django_setup():
     import os
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    os.environ.setdefault("TWITTERAPI_IO_API_KEY", "dummy_for_regression_test")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy_for_regression_test")
     import django
     if not django.apps.apps.ready:
         django.setup()

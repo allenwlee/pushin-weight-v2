@@ -17,7 +17,7 @@ def _django_setup():
     """Set Django env so x_monitor.config / reattribute imports work."""
     os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
-    os.environ.setdefault("TWITTERAPI_IO_API_KEY", "dummy_for_factory_test")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy_for_factory_test")
     import django
     if not django.apps.apps.ready:
         django.setup()

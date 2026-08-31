@@ -1,5 +1,5 @@
 ---
-title: Account User About Enrichment Staging Pilot - Plan
+title: Account User About Enrichment and Production Backfill - Plan
 type: feat
 date: 2026-08-29
 artifact_contract: ce-unified-plan/v1
@@ -11,7 +11,7 @@ ollija:
   change_id: feat-feed-country-flags-disclosure-2026-08-29-093958
   branch: feat/feed-country-flags-disclosure
   workflow: lfg
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -40,7 +40,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -51,6 +51,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-country-flags-disclosure` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-country-flags-disclosure` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -70,18 +77,19 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Apply and verify the Django migration on the isolated staging database before making a paid User About call.
 - Run the first paid population only from the staging environment against 100 unique staging `Account` rows with callable handles. Permit at most 110 attempts and at most 1,980 credits. Apply accepted values only to the staging database.
 - Owner follow-up on 2026-08-30 authorizes one schema-diagnostic staging call, a parser correction backed by redacted path/type evidence, and one replacement 100-Account staging pilot. Across the original failed call, diagnostic call, and replacement pilot, remain within the original cumulative ceiling of 110 attempts and 1,980 projected credits. Schema diagnostics may contain JSON paths, field names, and JSON types only; they must not contain response values, handles, Account IDs, URLs, credentials, headers, connection strings, or raw payloads. Correct the mirrored external-vendor endpoint reference from the observed schema before the replacement pilot.
-- Stop after the staging pilot report. Do not migrate or write production, run a full-account population, schedule User About, or ship feed UI under this delivery target.
+- Owner follow-up on 2026-08-31 selects purpose-based TwitterAPI credentials named `TWITTERAPI_IO_SCHEDULED_API_KEY` and `TWITTERAPI_IO_ON_DEMAND_API_KEY`. Implement and verify the fail-closed repository cutover without adding secret values; its first deployment remains staging before the later production promotion authorized below.
+- Owner follow-up on 2026-08-31 authorizes continuing this goal through the production migration and one full missing-only Account population after the successful staging pilot. Preserve the scheduled harvester, do not add recurring User About collection, and do not ship the deferred feed UI in this delivery.
 
-# Account User About Enrichment Staging Pilot
+# Account User About Enrichment and Production Backfill
 
 ## Goal Capsule
 
-- **Objective:** Give the operator verified evidence that X About-this-account data can safely enrich PushinWeight Accounts before any production migration, full population, or feed dependency is authorized.
-- **Means:** Add typed Account fields, a model-owned observation gateway, and a bounded User About command; deploy the migration to staging; then populate 100 staging Accounts under hard call, credit, time, and schema-drift limits (KTD10-KTD18).
-- **Authority:** The Product Contract governs stored data and write semantics. The official TwitterAPI User About schema and current pricing govern the provider boundary. The Ollija Delivery Guide and Delivery Exceptions govern staging-only delivery.
-- **Execution profile:** Build and test with fakes locally. Push one exact candidate to staging. Let `build.sh` apply the migration under the existing cluster lock. Run one explicit staging-only paid pilot and emit aggregate evidence.
-- **Stop conditions:** Stop before a provider call if the staging service, database identity, API credential, balance-derived QPS, account sample, or migration state is not verified. Stop during the pilot on unknown response leaves, type drift, returned-ID mismatch, authentication failure, open circuit, 110 attempts, a projected spend above 1,980 credits, or 30 minutes of wall time.
-- **Tail ownership:** LFG owns implementation, review, commits, PR creation, exact-SHA staging delivery, the capped staging pilot, and CI observation. The owner retains production migration, full population, and UI authorization.
+- **Objective:** Populate every currently callable production Account that has not completed a TwitterAPI User About lookup, preserving typed validation and producing auditable, restart-safe evidence for the roughly 60,000-account run.
+- **Means:** Retain the proven typed Account gateway and strict provider parser; split scheduled/on-demand credentials; add a production-identity-guarded, chunk-checkpointed mode; verify rollback evidence; then run the missing-only production population under hard call, credit, time, concurrency, and schema-drift limits.
+- **Authority:** The Product Contract governs stored data and write semantics. The official TwitterAPI User About schema and current pricing govern the provider boundary. The Ollija Delivery Guide and Delivery Exceptions govern exact-SHA staging and production delivery.
+- **Execution profile:** Finish and stage the credential cutover, add production-safe chunking with fake-network and PostgreSQL call-chain tests, create and restore-prove a pre-write Account snapshot, deploy the unchanged reviewed SHA, run a bounded production smoke, then continue missing-only until no eligible Account remains or a hard stop fires.
+- **Stop conditions:** Stop before a provider call if the service, database identity, exact SHA, migration state, on-demand credential, snapshot receipt, balance-derived QPS, dry-run count, or budgets are not verified. Stop during a run on schema drift, returned-ID mismatch, authentication failure, open circuit, exhausted budget, expired snapshot, or a reconciliation mismatch.
+- **Tail ownership:** The active goal owns implementation, review, commits, exact-SHA staging and production delivery, the production migration, one missing-only full population, post-run reconciliation, and legacy-key retirement. Feed UI and recurring User About scheduling remain excluded.
 
 ---
 
@@ -89,7 +97,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ### Summary
 
-Persist TwitterAPI User About account data in typed `Account` fields without a raw JSON column. Route User About, post-author, list-member, and seed observations through one model-owned validation path. Prove the migration and a 100-account paid population on the isolated staging database, then stop for review.
+Persist TwitterAPI User About account data in typed `Account` fields without a raw JSON column. Route User About, post-author, list-member, and seed observations through one model-owned validation path. Preserve the completed staging proof, then deliver the exact reviewed candidate through production and run one recovery-gated, missing-only Account population.
 
 ### Problem Frame
 
@@ -102,11 +110,13 @@ The Django harvester currently writes Account snapshots directly with `update_or
 ### Key Decisions
 
 - PD4. **Use About-this-account as the account-country source.** (session-settled: user-approved — chosen over profile location and post geotags: `account_based_in` is the selected X-reported account signal.) Governs R6 and R21.
-- PD6. **Deliver and test only on staging.** (session-settled: user-directed — chosen over production delivery: migration, paid calls, and writes must be proven on the isolated staging database first.) Governs R15-R18.
+- PD6. **Prove the first paid write only on staging.** (session-settled: user-directed — chosen over direct production delivery: migration, paid calls, and writes had to be proven on the isolated staging database before the later production authorization.) Governs R15-R18.
 - PD9. **Persist typed fields, not raw JSON.** (session-settled: user-directed — chosen over one raw response column: every account-valued response leaf should be queryable with an appropriate type.) Governs R12 and R19.
 - PD10. **Evaluate about 100 calls before a larger run.** (session-settled: user-directed — chosen over immediate population of every Account: actual schema, yield, time, and credit burn must be confirmed first.) Governs R16-R18 and R20.
 - PD11. **Allow valid post observations to refresh shared mutable fields.** (session-settled: user-directed — chosen over freezing the User About snapshot or adding history now: post author payloads are generally fresher.) Governs R22 and R24.
 - PD12. **Validate at the Django model boundary.** (session-settled: user-directed — chosen over parser-only validation and direct ORM defaults: faulty observations must not clobber good Account values.) Governs R22-R24.
+- PD13. **Name credentials by execution policy.** (session-settled: user-selected — scheduled collection uses `TWITTERAPI_IO_SCHEDULED_API_KEY`; explicitly launched bulk and backfill work uses `TWITTERAPI_IO_ON_DEMAND_API_KEY`.) Neither credential is a fallback for the other. Governs R27.
+- PD14. **Continue through one production missing-only population.** (session-settled: user-directed — chosen after the 100-account staging pilot succeeded: migrate the exact reviewed candidate, prove recovery, smoke-test the production call chain, then populate every currently eligible Account without scheduling refreshes.) Governs R28-R32.
 
 ### Requirements
 
@@ -132,6 +142,15 @@ The Django harvester currently writes Account snapshots directly with `update_or
 - R20. The command is default-dry-run, explicit-apply, resumable, idempotent for successful empty results, globally rate-limited, bounded by account, attempt, credit, and wall-time budgets, and absent from cron, Celery beat, and `run_cycle`.
 - R25. A later production apply requires a current encrypted pre-write Account snapshot, row count, digest, and disposable restore proof. This staging plan documents that gate but does not execute it.
 - R26. Read the TwitterAPI credential only from the staging service's managed environment. Fail closed when it is absent or invalid. Never accept it as a command argument or write it, request headers, connection strings, handles, Account IDs, or raw provider payloads to tracked reports or normal logs.
+- R27. Every TwitterAPI caller must declare scheduled or on-demand intent at its construction boundary. Recurring `run_cycle` and its search/metrics calls require `TWITTERAPI_IO_SCHEDULED_API_KEY`; About-user, backfill, reconciliation, probe, smoke-test, and other explicitly launched calls require `TWITTERAPI_IO_ON_DEMAND_API_KEY`. The legacy `TWITTERAPI_IO_API_KEY` is not read, and neither designated variable may fall back to the other.
+
+**Production population**
+
+- R28. Production apply must require both `X_MONITOR_DEPLOYMENT_ENVIRONMENT=production` and PostgreSQL `current_database() = 'pushinweight_shadow'`; staging apply must retain its existing dual identity guard. A local process, wrong service, wrong database, or missing explicit target fails before credential access or HTTP.
+- R29. Production apply must require a fresh pre-write snapshot receipt naming the Account row count, SHA-256 digest, encrypted-at-rest snapshot location, restore-proof database or schema, restore row count/digest, and completion timestamp. The command validates a receipt digest and freshness before HTTP; the runbook retains the full untracked receipt and recovery commands without account data or credentials.
+- R30. The production runner is default-dry-run, explicit-apply, missing-only unless `--refresh` is separately supplied, and restart-safe through database checkpoints. It processes bounded chunks, applies each completed chunk before fetching the next, reselects eligible rows between chunks, and never depends on Render's ephemeral filesystem for progress.
+- R31. One production invocation must hold a nonblocking PostgreSQL advisory lock and enforce explicit global ceilings for Accounts, attempts, projected credits, wall time, QPS, and concurrency. It may use bounded concurrent HTTP over one reusable session to approach the lower of operator and verified provider QPS, but reservations must prevent attempt or credit overshoot and a stop signal must prevent new requests.
+- R32. Run an exact-SHA production smoke of at most 100 previously unfetched Accounts before expansion. Continue only when migration/schema identity, checkpoint counts, provider outcomes, country yield, projected credits, and scheduled-harvester health reconcile. The full run ends only when the eligible missing-only count reaches zero or emits a named hard stop and resumable remainder.
 
 ### Acceptance Examples
 
@@ -180,6 +199,31 @@ The Django harvester currently writes Account snapshots directly with `update_or
   - **Given:** An Account has follower count 1,000 observed at T1.
   - **When:** A post at T2 explicitly supplies 1,000 and a post at T3 omits or malforms the count.
   - **Then:** The count remains 1,000, `followers_fetched_at` advances to T2, and T3 changes neither field.
+- AE18. **Credential-purpose isolation**
+  - **Covers:** R27.
+  - **Given:** Scheduled, on-demand, and legacy variables contain distinct sentinel values.
+  - **When:** The production `run_cycle` caller and the About-user management command construct their TwitterAPI requests.
+  - **Then:** The scheduled caller receives only the scheduled sentinel, the About-user caller receives only the on-demand sentinel, and deleting either required variable fails that path even when the other two remain set.
+- AE19. **Wrong production identity fails before spend**
+  - **Covers:** R28-R29.
+  - **Given:** Production apply is requested with the staging database, a non-production deployment marker, an absent/stale snapshot receipt, or a receipt whose restored digest does not match.
+  - **When:** Command preflight runs.
+  - **Then:** It performs zero credential reads, HTTP calls, and Account writes and names only the failed gate.
+- AE20. **Chunk crash resumes from durable checkpoints**
+  - **Covers:** R30.
+  - **Given:** The first two chunks are accepted and written, then the process exits before the third.
+  - **When:** The same missing-only production command restarts.
+  - **Then:** It excludes both completed chunks, retries only rows without a successful checkpoint, and needs no local state file.
+- AE21. **Concurrent pacing cannot overshoot budgets**
+  - **Covers:** R31.
+  - **Given:** Several workers finish and retry out of order near the attempt, credit, or wall-time boundary.
+  - **When:** The shared reservation and pace gates admit requests.
+  - **Then:** Actual attempts and projected credits never exceed their explicit ceilings, no request begins after the stop signal, and connector concurrency stays at or below the operator cap.
+- AE22. **Smoke-to-full production expansion**
+  - **Covers:** R32.
+  - **Given:** The exact production SHA and migrations are verified and the recovery receipt is fresh.
+  - **When:** A 100-account smoke completes and reconciles.
+  - **Then:** The missing-only full run continues under the same SHA and policies, aggregate reports reconcile each checkpointed chunk, and final SQL reports zero remaining callable Accounts without a checkpoint.
 
 ### Scope Boundaries
 
@@ -188,11 +232,10 @@ The Django harvester currently writes Account snapshots directly with `update_or
 - User About protocol, strict parsing, shared pacing, typed Account columns, exact country normalization, and the model-owned observation gateway.
 - Current Account writers in post ingestion, list reconciliation, and seed loading.
 - A default-dry-run management command and one 100-account staging apply.
-- Exact-SHA staging deployment, staging migration verification, aggregate pilot evidence, and a production recovery gate in the runbook.
+- Exact-SHA staging and production delivery, production migration, recovery proof, a 100-account production smoke, and one missing-only full Account population.
 
 ### Deferred to Follow-Up Work
 
-- Production migration and full Account population.
 - Country-flag rendering, localized country names, headline disclosure, Bridgewright UI assurance, and reference-page movement. These belong to `docs/plans/2026-08-29-223000-feed-country-flags-disclosure-successor-plan.md`.
 - Account observation history or per-field timestamps beyond `followers_fetched_at` and `account_based_in_fetched_at`.
 - Scheduling or recurring refresh of User About.
@@ -204,7 +247,7 @@ The Django harvester currently writes Account snapshots directly with `update_or
 
 ### Product Contract Preservation
 
-Changed by explicit owner direction: the former combined plan's UI requirements and units moved to the successor plan. The enrichment requirements, stable R/AE/KTD/U IDs, typed field map, and validation semantics retain their prior meaning. The latest direction replaces the former read-only production pilot with a migration-first, write-enabled staging pilot.
+Changed by explicit owner direction: the former combined plan's UI requirements and units moved to the successor plan. The enrichment requirements, stable R/AE/KTD/U IDs, typed field map, and validation semantics retain their prior meaning. The staging pilot remains completed evidence; the 2026-08-31 direction adds the separately gated production migration and one full missing-only population.
 
 ---
 
@@ -222,6 +265,11 @@ Changed by explicit owner direction: the former combined plan's UI requirements 
 - KTD17. **Keep request envelopes out of Account.** Store `status`, `msg`, HTTP status, attempt, latency, and error reason in the run report or dead letter. They describe a call, not an account. Implements R19-R21.
 - KTD18. **Reconcile paid usage with provider evidence.** Before each call, refuse an attempt whose published-rate projection would exceed 1,980 credits. Record application attempts and expected pricing, then reconcile the exact UTC pilot window to the TwitterAPI Recent API Calls ledger when dashboard credentials are available. A missing or inconsistent ledger makes the cost result inconclusive and stops the run after staging writes; it never authorizes expansion. Implements PD10 and R17-R18.
 - KTD19. **Generate a backend-only country map from the already approved source.** Build code and canonical English-name normalization from `docs/ideation/assets/2026-08-29-162947-country-flag-pixels.json` without moving the review page, generating the runtime SVG sprite, or changing feed code. This keeps R6 executable while preserving the UI successor boundary.
+- KTD20. **Make credential purpose explicit and fail closed.** Centralize the two environment names and require callers to choose a typed scheduled/on-demand purpose; provide no default purpose and no legacy or cross-purpose fallback. Rename current configuration and Render declarations, classify every executable caller, and pin the real `run_cycle` and About-command call chains with different sentinels. Implements PD13 and R27.
+- KTD21. **Guard apply with explicit environment plus database identity.** Add no generic “allow production” escape hatch. The requested target, managed deployment marker, and `current_database()` must all agree before the command loads the on-demand credential. Implements PD14 and R28.
+- KTD22. **Use database checkpoints, not a local progress file.** Select a bounded missing-only chunk, fetch it outside transactions, apply accepted outcomes one Account at a time through KTD12, aggregate the receipt, and repeat. A restart naturally excludes rows with `account_based_in_fetched_at`; transport and strict-validation failures remain eligible. Implements PD14 and R30.
+- KTD23. **Bound concurrency behind one run lock, pace gate, and reservation gate.** Acquire one nonblocking PostgreSQL advisory lock for the command, verify the receipt's recovery relation still exists with the expected row count, reuse one HTTP session within each durable chunk, cap persistent connections explicitly, and reserve attempt/credit capacity atomically before sending. A second runner fails before credential access; schema, identity, and authentication stops prevent new admissions while allowing already-reserved requests to finish safely. The full invocation uses `--require-complete` so any eligible residue fails the release job after writing its resumable aggregate report. Implements PD14 and R31.
+- KTD24. **Prove a narrow recoverable snapshot before paid production calls.** Snapshot the production `accounts` table in one repeatable-read transaction inside Render-managed encrypted PostgreSQL, compute a deterministic row digest, restore it to a disposable proof table/schema, compare count and digest, and retain a receipt digest consumed by command preflight. The advisory lock excludes another User About runner; the scheduled harvester remains active unless recovery is actually required. Implements PD14 and R29-R32.
 
 ### Typed Account Column and Writer Map
 
@@ -300,6 +348,25 @@ sequenceDiagram
 ```
 
 ```mermaid
+sequenceDiagram
+  participant O as Goal operator
+  participant R as Production one-off job
+  participant D as Production PostgreSQL
+  participant T as TwitterAPI
+  O->>D: Snapshot accounts and restore-prove digest
+  O->>R: Start exact-SHA dry run and 100-row smoke
+  R->>D: Verify target, migrations, receipt, and missing count
+  loop Bounded chunks
+    R->>D: Select missing-only chunk
+    R->>T: Paced concurrent User About requests
+    T-->>R: Strict typed outcomes
+    R->>D: Apply accepted checkpoints
+  end
+  R-->>O: Aggregate receipt and remaining count
+  O->>D: Verify zero eligible remainder or named resumable stop
+```
+
+```mermaid
 flowchart TB
   A[User About response] --> G[Account observation gateway]
   P[Post author payload] --> G
@@ -330,7 +397,8 @@ flowchart TB
 - **Freshness:** `followers_fetched_at` becomes active. `account_based_in_fetched_at` records successful About lookup completion. Other fields do not gain timestamps.
 - **Harvester:** Existing seven-call search, cursors, post columns, classification, translation, metrics, headlines, cron, and concurrency remain unchanged.
 - **Cost:** Only the explicit command performs User About calls. Staging and production share the provider quota, so the command enforces global pacing and fixed budgets.
-- **Recovery:** Staging changes can be rebuilt from its snapshot. Production rollback preparation is documented but not executed.
+- **Production execution:** The full population is an explicit one-off job using the on-demand credential; it is absent from cron and does not change the seven scheduled search calls.
+- **Recovery:** Production gets a pre-write encrypted-at-rest Account snapshot and disposable restore proof before the smoke. Chunk checkpoints make process failure resumable without rolling back successful validated observations.
 
 ### Risks and Mitigations
 
@@ -342,15 +410,18 @@ flowchart TB
 | Malformed post data clobbers good values | Route all current writers through KTD12 and preserve rejected fields. |
 | Provider I/O holds database locks | Fetch and parse outside transactions; lock one row only for compare-and-apply. |
 | Parallel workers exceed QPS | Use one shared limiter and one bounded session for the command. |
+| Concurrent requests overshoot a stop | Atomically reserve attempts/credits before transport and close admissions on the first fatal stop. |
 | Retries exceed spend | Enforce attempt, credit, wall-time, and circuit limits before each outbound call. |
+| A long Render job exits mid-population | Apply every completed chunk, then reselect missing rows; never rely on an ephemeral state file. |
+| Full population contends with the scheduled harvester | Use the separate on-demand key, bounded DB chunks, no long transaction, and inspect the literal next scheduled cycle; pause only for the short snapshot proof if needed. |
 | Report leaks account identity | Commit aggregates only; keep handles, IDs, credentials, and raw payloads out of tracked reports. |
-| Credential crosses an environment or logging boundary | Read `TWITTERAPI_IO_API_KEY` only from the staging service environment; reject CLI-provided secrets and redact request headers and connection strings. |
+| Credential crosses an environment, purpose, or logging boundary | Read only the purpose-specific Render-managed variable, provide no fallback, reject CLI-provided secrets, and redact request headers and connection strings. |
 | Migration and staging data are out of sync | Verify deployed SHA, Django migration leaf, actual columns, types, and row counts before the pilot. |
-| Vendor ledger is unavailable | Mark cost reconciliation inconclusive and stop after the bounded staging result. |
+| Vendor ledger is unavailable | Mark actual cost inconclusive, retain the hard published-rate projection as the spend ceiling, and do not claim exact provider burn. |
 
 ### Sequencing
 
-Implement U5 with fake network evidence. Implement U6 and prove every Account writer call chain. Commit a clean candidate with the deferred UI diff isolated. U7 deploys that exact SHA to staging, verifies the migration, runs the 100-account staging apply, and stops with evidence.
+U5-U7 produced the completed staging pilot, and U8 cuts credentials over by purpose. U9 adds production identity, recovery-receipt, chunking, and concurrency proofs. Commit and stage the exact candidate, run the on-demand credential smoke, then U10 snapshots, migrates, performs the 100-row production smoke, continues missing-only under the same SHA, verifies scheduled-harvester health, and retires the legacy key.
 
 ---
 
@@ -385,7 +456,7 @@ Implement U5 with fake network evidence. Implement U6 and prove every Account wr
   - Default invocation performs zero HTTP calls and zero Account writes.
   - Covers AE12. Accepted success-empty checkpoints once; a restart skips it unless refresh is explicit.
   - Account, attempt, projected-credit, 30-minute wall-time, and effective-QPS budgets are checked before the next request and cannot overshoot.
-  - The credential is sourced only from `TWITTERAPI_IO_API_KEY`; command arguments, reports, and ordinary logs never expose it or request headers.
+  - The credential is sourced only from `TWITTERAPI_IO_ON_DEMAND_API_KEY`; command arguments, reports, and ordinary logs never expose it or request headers.
 - **Verification:** Focused tests prove the command-to-caller boundary, strict schema, budgets, redaction, and no recurring scheduler edge.
 
 ### U6. Add typed Account persistence and validated writer ownership
@@ -467,6 +538,87 @@ Implement U5 with fake network evidence. Implement U6 and prove every Account wr
   - Reports contain no handle, Account ID, credential, connection string, or raw payload.
 - **Verification:** Staging reports the exact SHA and migration, the 100-account receipt reconciles to staging SQL and provider evidence, and production remains unchanged.
 
+### U8. Split scheduled and on-demand TwitterAPI credentials
+
+- **Goal:** Make the selected credential pair enforceable across every current executable caller without changing provider behavior or making a live request.
+- **Requirements:** R26-R27; AE18. Implements PD13 and KTD20.
+- **Dependencies:** Completed U5-U7 staging pilot.
+- **Files:**
+  - Create one dependency-light credential-purpose module shared by Django and `x_monitor` callers.
+  - Modify `x_monitor/apify.py`, `monitor/cycle.py`, current management commands, and maintained scripts that construct a TwitterAPI client.
+  - Modify `project/settings.py`, `render-staging.yaml`, `render.yaml` comments, `AGENTS.md`, the current TwitterAPI reference, and active operations runbooks.
+  - Modify or add focused credential-routing and production-call-chain tests.
+- **Approach:**
+  1. Define `TWITTERAPI_IO_SCHEDULED_API_KEY` and `TWITTERAPI_IO_ON_DEMAND_API_KEY` once behind a typed purpose selector with no default and no fallback.
+  2. Classify `run_cycle` and its search/metrics path as scheduled. Classify User About, maintenance backfills, probes, and API-backed smoke tests as on-demand.
+  3. Remove executable reads of `TWITTERAPI_IO_API_KEY`; retain historical plan/evidence text only where rewriting it would falsify the record.
+  4. Declare both staging secret names with `sync: false`; document that existing Render services require manual secret entry because Blueprint updates do not inject values.
+- **Test scenarios:**
+  - Covers AE18 with all three environment variables set to different sentinels.
+  - Scheduled construction fails when only on-demand and legacy variables exist.
+  - On-demand construction fails when only scheduled and legacy variables exist.
+  - The `run_cycle` caller passes the scheduled sentinel to its fake transport.
+  - The About-user command passes the on-demand sentinel to its fake transport.
+  - Static scans find no executable legacy-variable reads or credential-value logging.
+- **Verification:** Focused credential tests plus the existing harvester and About-command regression suites pass with zero provider calls; no secret, database, Git, or deployment mutation occurs.
+
+### U9. Add production-safe resumable population mode
+
+- **Goal:** Extend the proven command from a staging-only pilot into an explicit production mode that is crash-resumable, spend-bounded, concurrency-safe, and recovery-gated.
+- **Requirements:** R28-R31; AE19-AE21. Implements PD14 and KTD21-KTD24.
+- **Dependencies:** Completed U5-U8.
+- **Files:**
+  - Modify `monitor/management/commands/backfill_account_based_in.py` and `monitor/twitterapi/user_about.py`.
+  - Modify `render.yaml` to declare the production deployment marker on the web and harvest services.
+  - Add or modify focused tests in `tests/test_backfill_account_based_in.py` and `tests/test_twitterapi_user_about.py`.
+  - Update `docs/operations/2026-08-29-223000-account-user-about-backfill.md` and current TwitterAPI/deploy references.
+- **Approach:**
+  1. Require an explicit apply target and verify its managed environment plus exact PostgreSQL database identity before credential access.
+  2. Require a fresh, digest-addressed recovery receipt for production apply; preserve the existing strict staging pilot caps.
+  3. Move selection/fetch/apply/reporting into bounded chunks. Apply each fetched chunk before selecting the next, and use `account_based_in_fetched_at` as the durable missing-only checkpoint.
+  4. Reuse one client session, shared pace gate, stop signal, and atomic request-budget reservation across bounded workers. Expose explicit concurrency and chunk-size caps without changing endpoint semantics.
+  5. Emit one aggregate production receipt with per-chunk counts, total budgets/usage, stop reason, and remaining eligible count; never emit handles, IDs, response values, keys, or connection strings.
+- **Execution note:** Strengthen the real management-command and HTTP call-chain tests first and observe failures for production identity, restart, and concurrent budget cases before changing product code.
+- **Patterns to follow:** Existing `fetch_user_about_batch`, `Account.apply_observation`, `GlobalPaceGate`, and the database-identity guards in staging refresh and reconciliation tooling.
+- **Test scenarios:**
+  - Covers AE19 across wrong marker, wrong database, missing receipt, stale receipt, mismatched restore digest, and missing migration; every failure precedes credential access and HTTP.
+  - Existing staging apply remains capped at 100/110/1,980/1,800/5 and rejects production-sized arguments.
+  - Covers AE20 with two committed chunks, a simulated crash, and a restart that selects only remaining rows.
+  - A fatal schema/auth/identity stop applies already completed valid outcomes but admits no new request after the stop signal.
+  - Covers AE21 at attempt, credit, wall, QPS, and concurrency boundaries with out-of-order fake transports.
+  - Two simultaneous command instances contend on the production database; exactly one acquires the advisory lock and the loser performs no credential read or provider call.
+  - Default invocation and production dry-run perform zero HTTP and writes and report the exact eligible count.
+  - Reports and logs contain no three distinct sentinel keys, handles, Account IDs, database URL, request headers, or raw response values.
+- **Verification:** PostgreSQL-backed command tests and fake-transport concurrency tests prove the production call chain, bounded admissions, durable checkpoints, and staging regression net with no live provider calls.
+
+### U10. Deliver and run the production population
+
+- **Goal:** Apply the exact reviewed schema and runner to production, prove recovery, smoke the live on-demand path, populate all currently eligible Accounts, and verify the scheduled lane remains healthy.
+- **Requirements:** R28-R32; AE19-AE22. Implements PD14 and KTD21-KTD24.
+- **Dependencies:** U9 plus all local verification and review gates.
+- **Files:**
+  - Update `docs/operations/2026-08-29-223000-account-user-about-backfill.md` with aggregate production evidence and recovery receipt metadata only.
+  - Create timestamped aggregate JSON and Markdown production reports under `docs/analysis/`; keep the detailed recovery receipt and snapshot untracked.
+  - Append pause/resume events to `docs/operations/pause-and-resume-harvest-cron.md` only if the cron is actually paused.
+- **Approach:**
+  1. Commit and push the feature branch, fast-forward the exact candidate to staging, verify staging SHA/config/migrations, and run a small on-demand-key smoke without refreshing completed pilot rows.
+  2. Re-measure production callable/missing counts and provider allowance, set explicit attempt/credit/time/QPS/concurrency ceilings, and record the dry-run output.
+  3. Create the encrypted-at-rest Account snapshot, compute its digest, restore it to a disposable proof relation, compare count/digest, and produce the fresh receipt consumed by the command.
+  4. Promote the unchanged reviewed SHA to `main`; verify Render web and harvester SHAs plus migrations 0020-0023 and both credential lanes.
+  5. Run at most 100 missing production Accounts. Reconcile SQL, aggregate report, provider outcomes, and projected spend before continuing.
+  6. Continue the missing-only population under the same global ceilings. If the one-off job stops, rerun only after reconciling its receipt; durable checkpoints skip accepted rows.
+  7. Verify final eligible remainder, typed-field/country yield, total attempts/credits, and one literal post-deploy scheduled cycle in Render logs and PostgreSQL. Remove the legacy key only after both credential lanes are proven.
+- **Execution note:** This is the only unit authorized for production provider calls and writes. Fail closed at every preflight boundary; do not refresh previously completed rows or schedule recurring About calls.
+- **Patterns to follow:** Ollija exact-SHA delivery guide, `build.sh`/`scripts/render_migrate.py`, the verified staging pilot reconciliation, and `docs/operations/pause-and-resume-harvest-cron.md`.
+- **Test scenarios:**
+  - Candidate SHA is identical across reviewed commit, staging ref/deploy, `main`, production web, and production harvester.
+  - Snapshot and disposable restore counts/digests match before the first paid production request.
+  - Covers AE22: the 100-row smoke checkpoints only matching missing rows and its report reconciles exactly to SQL.
+  - Full-run attempts and projected credits remain inside explicit ceilings; each interrupted receipt plus final receipt reconciles to database checkpoints without duplicate successful calls.
+  - Final SQL reports zero callable missing checkpoints, or a named resumable remainder if a hard stop occurred.
+  - The next scheduled harvest uses only the scheduled key, exits without credential errors, and has a normal persisted cycle summary.
+- **Verification:** Exact-SHA Render evidence, migration/schema SQL, snapshot restore proof, smoke/full aggregate receipts, final production SQL, provider usage evidence when available, and a literal scheduled-harvester health check satisfy the production Definition of Done.
+
 ---
 
 ## Verification Contract
@@ -478,9 +630,14 @@ Implement U5 with fake network evidence. Implement U6 and prove every Account wr
 | Migration | `python manage.py makemigrations --check --dry-run` and `python manage.py migrate --plan` | No model drift; the additive migration follows `0019` and plans cleanly. |
 | Harvester regression | `pytest tests/test_cycle_regression_net.py tests/test_cycle_search_caps.py tests/test_cycle_cursor_wiring.py tests/test_cycle_error_counters.py tests/test_list_membership_reconciliation.py tests/test_post_schema_denormalization.py -q` | Seven-call shape, cursors, post persistence, Account isolation, and rejection behavior remain correct. |
 | Django | `python manage.py check --deploy` | No new deployment errors; existing environment warnings are named. |
-| Ollija | `pytest tests/ollija -q` and `./bin/ollija annotate-plan docs/plans/2026-08-29-093958-feat-feed-country-flags-disclosure-plan.md --check` | Guidance remains unchanged and target remains owner-selected staging. |
+| Ollija | `pytest tests/ollija -q` and `./bin/ollija annotate-plan docs/plans/2026-08-29-093958-feat-feed-country-flags-disclosure-plan.md --check` | Guidance remains unchanged and target remains owner-selected production. |
 | Staging migration | Render build log plus staging SQL | Candidate SHA, migration row, all column names/types, and existing row preservation are verified before calls. |
 | Staging pilot | Explicit U7 command and before/after SQL | Exactly 100 selected staging Accounts, at most 110 attempts and 1,980 credits, complete aggregate evidence, and no production write. |
+| Credential routing | `pytest` focused credential, cycle, and About-command tests plus an executable-source `rg` scan | Distinct sentinels reach the correct production call chains; missing designated variables fail closed; no executable legacy read remains. |
+| Production runner | PostgreSQL-backed command tests plus fake concurrent transport tests | Wrong identity/recovery state spends nothing; chunk restart skips accepted rows; attempt, credit, wall, QPS, and concurrency ceilings cannot overshoot. |
+| Production recovery | Snapshot receipt, disposable restore SQL, and digest comparison | Production Account snapshot is encrypted at rest, row count/digest match the restored proof, and the receipt is fresh before the smoke. |
+| Production smoke and full run | Aggregate reports plus before/after/final production SQL | The 100-row smoke reconciles before expansion; every completed chunk reconciles; the final callable missing count is zero or a named resumable hard stop remains. |
+| Scheduled-lane health | Exact-SHA Render service state, next literal cron logs, and persisted cycle SQL | Scheduled harvesting uses its designated credential and remains healthy after the on-demand run. |
 
 ---
 
@@ -489,12 +646,15 @@ Implement U5 with fake network evidence. Implement U6 and prove every Account wr
 - U5 is done when fake caller and command tests prove strict response parsing, aggregate pacing, retry/circuit behavior, all four concrete budgets, environment-only credential loading, default dry-run, explicit apply, idempotent success-empty checkpointing, and aggregate-only reports.
 - U6 is done when the migration contains every missing typed destination and no raw response field; every current Django Account writer uses the model gateway; invalid observations cannot clobber good data; post ingestion remains successful; and `followers_fetched_at` follows R24.
 - U7 is done when the exact candidate deploys to staging, the migration and schema are verified there before calls, the 100-account apply completes or stops safely within all caps, and reports reconcile to staging rows and provider evidence.
+- U8 is done when every maintained executable caller declares scheduled or on-demand purpose, both production call chains are regression-pinned with distinct sentinels, the legacy variable is unread, and current configuration/runbooks name the selected pair without containing values.
+- U9 is done when production apply is identity- and recovery-gated before credential access, chunks checkpoint durably, bounded concurrency cannot overshoot, and the existing staging behavior remains pinned.
+- U10 is done when the unchanged reviewed SHA is live on production, migrations and recovery proof are verified, the production smoke reconciles, every callable missing Account is checkpointed or a named resumable stop is reported, and the scheduled lane is healthy.
 - Every behavior change has at least one production-caller-to-ORM regression test. Helper-only coverage is insufficient.
 - The candidate diff excludes the deferred flag/disclosure implementation and unrelated working-tree changes.
 - Required checks have zero unexpected failures or skips. Pre-existing warnings and unrelated suite failures are named precisely.
-- Production branch, service SHA, database schema, and Account data remain unchanged.
-- No full population, recurring schedule, UI successor work, raw response payload, credential, handle, or Account ID is committed.
-- Abandoned experimental code and temporary pilot data are removed. The staging-only worktree remains registered.
+- No recurring schedule, UI successor work, raw response payload, credential, handle, or Account ID is committed.
+- Production changes are limited to the exact reviewed migrations, validated Account observations, purpose-specific environment names, and aggregate evidence; unrelated services and the seven-call harvest policy remain unchanged.
+- Abandoned experimental code and temporary runtime data are removed. After exact-SHA production verification, the canonical clean worktree follows Ollija's guarded cleanup guidance as the final filesystem action.
 
 ## Staging Implementation Evidence — 2026-08-30
 
@@ -504,7 +664,22 @@ Implement U5 with fake network evidence. Implement U6 and prove every Account wr
 - Across the original stop, diagnostic, and replacement, usage was 104 calls, zero retries, and 1,872 projected credits. Exact provider credits remain inconclusive without the dashboard session token.
 - Aggregate evidence: `docs/analysis/2026-08-30-065017-twitterapi-user-about-replacement-staging-pilot.md` and matching JSON.
 - Read-only production verification found migrations 0020–0023 absent and no sampled User About columns. No production write occurred.
-- Delivery stops at staging. Production migration, full population, scheduling, and feed UI remain unauthorized.
+- This receipt marked the original staging stop. The later owner direction in PD14 authorizes the separately gated production migration and missing-only population; recurring scheduling and feed UI remain unauthorized.
+
+## Credential Routing Evidence — 2026-08-31
+
+- Added the purpose-specific names `TWITTERAPI_IO_SCHEDULED_API_KEY` and `TWITTERAPI_IO_ON_DEMAND_API_KEY`; executable code no longer reads the legacy variable and never falls back between purposes.
+- The scheduled cycle and on-demand About-user production call chains are pinned with distinct sentinel credentials. Focused credential tests passed (`85 passed`), PostgreSQL-backed cycle/About tests passed (`81 passed`), and the broader harvester regression selection passed (`99 passed`).
+- Ollija tests passed (`74 passed`), `makemigrations --check --dry-run` reports no changes, and static scans found neither executable legacy-variable reads nor credential-prefix logging.
+- No provider call, credential-value write, database write, commit, push, or deployment occurred. Both Render secret values must exist before this candidate is released.
+
+## Production Runner Verification — 2026-08-31
+
+- The production path is restricted to the production deployment marker and `pushinweight_shadow`, requires migrations 0020–0023, validates a fresh recovery receipt and its live snapshot relation before credential access, and holds a nonblocking PostgreSQL advisory lock.
+- Missing-only work checkpoints accepted observations after every bounded chunk. The full invocation uses `--require-complete`, so a named stop or eligible residue writes its aggregate resume report and exits nonzero.
+- The changed-test regression net passed (`365 passed`), including 118 required PostgreSQL verifications with zero skips or errors. Focused recovery/backfill tests passed (`21 passed`), Ruff passed for the new production command surfaces, `makemigrations --check --dry-run` reported no changes, `manage.py check` reported no issues, and `git diff --check` passed.
+- A whole-repository collection attempt reached 509 required PostgreSQL verifications but stopped on two unchanged baseline import errors: `tests/test_brand_search_terms_hybrid.py` expects `_log_brand_search_terms_drift`, and `tests/test_relevance.py` expects `load_filter`. Neither affected module or test differs from the production candidate's base SHA.
+- The external read-only Claude adversarial review timed out without schema-shaped output and was excluded. The inline correctness, project-standards, testing, maintainability, security, performance, data-migration, reliability, agent-native, learnings, and deployment passes found and resolved two release gates: verify the receipt's current snapshot relation, and fail an incomplete full invocation.
 
 ---
 

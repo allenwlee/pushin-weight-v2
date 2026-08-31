@@ -155,7 +155,9 @@ services:
         value: A
       - key: X_MONITOR_LIST_ID
         value: "2067062923525275922"
-      - key: TWITTERAPI_IO_API_KEY
+      - key: TWITTERAPI_IO_SCHEDULED_API_KEY
+        sync: false
+      - key: TWITTERAPI_IO_ON_DEMAND_API_KEY
         sync: false
       # The effective translator/classifier URLs decide which one of these
       # service-scoped credentials the acceptance preflight requires.

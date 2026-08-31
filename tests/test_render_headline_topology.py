@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 PRODUCTION_BLUEPRINT_SHA256 = (
-    "2e85c84ebd5eb45557ec5fdecf5cd1ccc444283049cb4c72f1af8f66c67ac84f"
+    "2652df38ef32f11a37ed421ff0cb3185ef81dc47f5f6ea73e9262ab836b9a1b7"
 )
 
 
@@ -60,7 +60,7 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         assert environment[control] == "True"
         assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"] == "owner_override"
         assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"] == (
-            "v23-per-brand-why-first-v1"
+            "v23-per-brand-why-first-v2-activation-20260827"
         )
         database = next(
             entry["fromDatabase"]["name"]
@@ -84,3 +84,16 @@ def test_render_cron_is_the_only_declared_scheduler():
         "beat" not in service.get("startCommand", "")
         for service in blueprint["services"]
     )
+
+
+def test_about_backfill_hosts_have_explicit_production_identity():
+    blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
+    services = {service["name"]: service for service in blueprint["services"]}
+
+    for service_name in ("pushinweight-web", "pushinweight-harvest"):
+        environment = {
+            entry["key"]: entry.get("value")
+            for entry in services[service_name]["envVars"]
+            if "key" in entry
+        }
+        assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"] == "production"

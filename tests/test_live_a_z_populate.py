@@ -118,6 +118,7 @@ def test_no_six_call_post_insertion_returns_rc_one(
         lap.subprocess, "run",
         lambda cmd, **kwargs: _FakeCompleted(),
     )
+    monkeypatch.setenv(lap.TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "test-secret")
     # Simulate no DB by pointing _PKG_ROOT at a tmp dir.
     monkeypatch.setattr(lap, "_PKG_ROOT", tmp_path)
     rc = lap.main([
@@ -244,22 +245,23 @@ def test_source_secrets_does_not_overwrite_existing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     """Existing os.environ values must win — the helper only fills in
-    unset keys (so the caller's shell-exported TWITTERAPI_IO_API_KEY is
+    unset keys (so the caller's shell-exported on-demand key is
     preserved across runs)."""
     secrets = tmp_path / ".env.secrets"
-    secrets.write_text('export TWITTERAPI_IO_API_KEY="from_file"\n')
-    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "from_shell")
+    key_name = lap.TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV
+    secrets.write_text(f'export {key_name}="from_file"\n')
+    monkeypatch.setenv(key_name, "from_shell")
     loaded = lap._source_secrets(secrets)
     assert loaded == 0  # already in env, not loaded
     import os
-    assert os.environ["TWITTERAPI_IO_API_KEY"] == "from_shell"
+    assert os.environ[key_name] == "from_shell"
 
 
 def test_source_secrets_returns_zero_when_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     """Missing secrets file → 0 loaded, no exception. Caller checks
-    for the specific TWITTERAPI_IO_API_KEY in os.environ afterwards."""
+    for the specific on-demand key in os.environ afterwards."""
     missing = tmp_path / "does_not_exist"
     loaded = lap._source_secrets(missing)
     assert loaded == 0
@@ -270,11 +272,11 @@ def test_missing_twitterapi_key_exits_rc_two(
     capsys: pytest.CaptureFixture,
 ) -> None:
     """When neither os.environ nor the secrets file contains
-    TWITTERAPI_IO_API_KEY, main() prints a stderr diagnostic and
+    on-demand TwitterAPI key, main() prints a stderr diagnostic and
     returns rc=2 BEFORE launching the subprocess (no API quota burned)."""
     secrets = tmp_path / ".env.secrets"
     secrets.write_text('export SOMETHING_ELSE="x"\n')
-    monkeypatch.delenv("TWITTERAPI_IO_API_KEY", raising=False)
+    monkeypatch.delenv(lap.TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, raising=False)
     rc = lap.main([
         "--limit-per-call", "5",
         "--secrets", str(secrets),
@@ -282,5 +284,5 @@ def test_missing_twitterapi_key_exits_rc_two(
     ])
     captured = capsys.readouterr()
     assert rc == 2
-    assert "TWITTERAPI_IO_API_KEY" in captured.err
+    assert lap.TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV in captured.err
     assert "Recovery:" in captured.err

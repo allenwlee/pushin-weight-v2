@@ -462,12 +462,12 @@ def parse_user_about(
                         "verified_since_msec" in reason
                         and reason["verified_since_msec"] is not None
                     ):
-                        candidates[
-                            "verification_info_reason_verified_since_msec"
-                        ] = _strict_numeric_string(
-                            reason["verified_since_msec"],
-                            "response.data.verification_info.reason."
-                            "verified_since_msec",
+                        candidates["verification_info_reason_verified_since_msec"] = (
+                            _strict_numeric_string(
+                                reason["verified_since_msec"],
+                                "response.data.verification_info.reason."
+                                "verified_since_msec",
+                            )
                         )
             _put(
                 candidates,
@@ -615,6 +615,7 @@ async def fetch_user_about_batch(
     *,
     api_key: str,
     rate_qps: float,
+    concurrency: int = 1,
     max_attempts: int,
     max_credits: int,
     max_wall_seconds: float,
@@ -626,6 +627,8 @@ async def fetch_user_about_batch(
         raise ValueError("api_key is required")
     if max_attempts <= 0 or max_credits <= 0 or max_wall_seconds <= 0:
         raise ValueError("all User About budgets must be positive")
+    if concurrency <= 0:
+        raise ValueError("concurrency must be positive")
     started = clock()
     attempts = 0
     retries = 0
@@ -635,8 +638,10 @@ async def fetch_user_about_batch(
     stop_reason: str | None = None
     breaker = CircuitBreaker()
     pace = GlobalPaceGate(rate_qps=rate_qps, clock=clock, sleep=sleep)
-    connector = aiohttp.TCPConnector(limit=2)
+    connector = aiohttp.TCPConnector(limit=concurrency)
     headers = {"X-API-Key": api_key, "User-Agent": USER_AGENT}
+    admission_lock = asyncio.Lock()
+    stopped = asyncio.Event()
 
     def remaining_wall() -> float:
         return max(0.0, max_wall_seconds - (clock() - started))
@@ -650,27 +655,49 @@ async def fetch_user_about_batch(
             return "credit_budget"
         return None
 
+    async def stop(reason: str) -> None:
+        nonlocal stop_reason
+        async with admission_lock:
+            if stop_reason is None:
+                stop_reason = reason
+            stopped.set()
+
+    async def reserve_attempt(*, retry: bool) -> bool:
+        nonlocal attempts, retries, projected_credits, stop_reason
+        await pace.wait()
+        async with admission_lock:
+            if stopped.is_set():
+                return False
+            reason = budget_stop()
+            if reason is not None:
+                stop_reason = reason
+                stopped.set()
+                return False
+            attempts += 1
+            projected_credits += 18
+            if retry:
+                retries += 1
+            return True
+
     async with aiohttp.ClientSession(
         connector=connector,
         headers=headers,
     ) as session:
-        for selection in selections:
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def fetch_one(
+            index: int,
+            selection: FetchSelection,
+        ) -> tuple[int, FetchOutcome | None]:
+            if stopped.is_set():
+                return index, None
             if breaker.is_open:
-                stop_reason = "circuit_open"
-                break
+                await stop("circuit_open")
+                return index, None
             final_outcome: FetchOutcome | None = None
             for attempt_number in (1, 2):
-                stop_reason = budget_stop()
-                if stop_reason:
+                if not await reserve_attempt(retry=attempt_number == 2):
                     break
-                await pace.wait()
-                stop_reason = budget_stop()
-                if stop_reason:
-                    break
-                attempts += 1
-                projected_credits += 18
-                if attempt_number == 2:
-                    retries += 1
                 request_started = clock()
                 status: int | None = None
                 body_text = ""
@@ -679,7 +706,7 @@ async def fetch_user_about_batch(
                 schema_diagnostic: tuple[str, ...] | None = None
                 request_budget = remaining_wall()
                 if request_budget <= 0:
-                    stop_reason = "wall_time_budget"
+                    await stop("wall_time_budget")
                     break
                 try:
                     async with session.get(
@@ -772,7 +799,7 @@ async def fetch_user_about_batch(
                     "auth_forbidden",
                     "wall_time_budget",
                 }:
-                    stop_reason = reason
+                    await stop(reason)
                     break
                 retryable = reason in {"rate_limited", "http_5xx", "connection_error"}
                 if attempt_number == 1 and retryable:
@@ -786,17 +813,35 @@ async def fetch_user_about_batch(
                         remaining = remaining_wall()
                         if delay >= remaining:
                             await sleep(remaining)
-                            stop_reason = "wall_time_budget"
+                            await stop("wall_time_budget")
                             break
                         await sleep(delay)
                     continue
                 breaker.record(reason)
+                if breaker.is_open:
+                    await stop("circuit_open")
                 break
 
-            if final_outcome is not None:
-                outcomes.append(final_outcome)
-            if stop_reason:
-                break
+            return index, final_outcome
+
+        async def fetch_one_bounded(
+            index: int,
+            selection: FetchSelection,
+        ) -> tuple[int, FetchOutcome | None]:
+            async with semaphore:
+                return await fetch_one(index, selection)
+
+        fetched = await asyncio.gather(
+            *(
+                fetch_one_bounded(index, selection)
+                for index, selection in enumerate(selections)
+            )
+        )
+        outcomes.extend(
+            outcome
+            for _, outcome in sorted(fetched, key=lambda item: item[0])
+            if outcome is not None
+        )
 
     return FetchBatchResult(
         outcomes=outcomes,

@@ -161,6 +161,27 @@ These controls are independent and fail closed:
 | harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` |
 | headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `True` |
 
+TwitterAPI credentials are also purpose-separated and fail closed:
+
+| Purpose | Render-managed variable | Authorized callers |
+|---|---|---|
+| Scheduled | `TWITTERAPI_IO_SCHEDULED_API_KEY` | Recurring `run_cycle` search and metrics |
+| On demand | `TWITTERAPI_IO_ON_DEMAND_API_KEY` | Explicit batches, backfills, reconciliation, probes, and smoke tests |
+
+Store both production values in the existing `pushinweight-secrets`
+environment group. Do not define the retired unsuffixed name, duplicate a key
+as a service-local override, or configure either credential as a fallback for
+the other. Staging declares both names directly on its harvester with
+`sync: false`; enter their values manually in the Render Dashboard.
+
+The one-time Account User About population runs as an exact-SHA one-off job
+from `pushinweight-harvest`, never as a cron schedule. It requires an explicit
+production target, database identity, applied migrations, a fresh
+restore-proved recovery receipt, an advisory run lock, and bounded spend and
+concurrency. Follow
+`docs/operations/2026-08-29-223000-account-user-about-backfill.md`; do not copy
+the on-demand key to a shell command or another service.
+
 Before changing a control, verify the resolved service environment and record
 the new control revision. Render may preserve an older per-service override;
 the deployed value, rather than the Blueprint text alone, is authoritative.

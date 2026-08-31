@@ -50,7 +50,9 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
     api = Api()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: calls)
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls: api)
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
     )
     monkeypatch.setattr(cycle_mod, "_resolve_enabled_models", lambda cfg, f: [])
     monkeypatch.setattr(cycle_mod, "_build_brand_index", lambda models: (None, {}))

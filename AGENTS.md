@@ -21,6 +21,17 @@ fetch-vs-insert anomalies), read and follow
 M12, M17, M18). This applies to every agent working in this repository,
 including Claude Code and Codex.
 
+### TwitterAPI credential purposes
+
+- `TWITTERAPI_IO_SCHEDULED_API_KEY` is only for recurring collection through
+  `run_cycle` and its scheduled search/metrics path.
+- `TWITTERAPI_IO_ON_DEMAND_API_KEY` is only for explicitly launched batches,
+  backfills, reconciliation, probes, and API-backed smoke tests.
+- Callers must declare a credential purpose. Never read the legacy
+  `TWITTERAPI_IO_API_KEY`, default a purpose, or fall back between keys.
+- Secret values live only in Render-managed environment configuration (or an
+  operator's untracked local secret store); never commit, print, or log them.
+
 ## Plans and delivery
 
 Before selecting or creating a PushinWeight plan, run
