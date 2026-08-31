@@ -11,8 +11,8 @@ minimal, verified change that cannot silently ship a green cron with zero work.
 This skill is the harvest twin of `.claude/skills/fix-ui/SKILL.md`.
 **Always also load** `.claude/skills/avoiding-recurring-mistakes/SKILL.md`
 before editing harvest code — especially **M7** (DRY cycle/backfill),
-**M8** (LLM/DB guards), **M12** (explicit model/env), **M17** (halt-first),
-and **M18** (call-chain regression nets). If this skill and the avoid-mistakes
+**M8** (LLM/DB guards), **M12** (explicit model/env), **M17** (production
+pause authorization), and **M18** (call-chain regression nets). If this skill and the avoid-mistakes
 skill disagree on pause/resume or config SSOT, follow `AGENTS.md` +
 `docs/operations/pause-and-resume-harvest-cron.md` first, then the more
 specific rule here.
@@ -33,11 +33,13 @@ do not require every field:
 >   “B1 not truncated every cycle”, “credits ≤ X / cycle”).
 > - **Keep unchanged:** 7-call shape, brand set, policy bands, metrics delay,
 >   translator/classifier models — unless named.
-> - **Risk posture:** live fix vs halt-first; credit budget if probing.
+> - **Risk posture:** whether the owner explicitly authorizes a live pause;
+>   credit budget if probing.
 > - **Done means:** the metric or post-deploy check the user will judge.
 
-Users need not name files or root cause. The agent owns halt decision,
-reproduction, tracing, regression pins, and post-deploy evidence.
+Users need not name files or root cause. The agent owns reproduction, tracing,
+regression pins, and post-deploy evidence. The owner controls every production
+pause or resume decision.
 
 ## Scope before editing
 
@@ -54,6 +56,8 @@ State exact **TOUCH**, **PRESERVE**, and **ASK FIRST** boundaries.
 
 Do **not** commit, push, merge, deploy, suspend/resume cron, run live
 `run_cycle` against prod, or rewrite policy YAML wholesale unless requested.
+A report, question, request to investigate, or request to diagnose/fix an
+anomaly is not authorization to pause production.
 
 Read, in order:
 
@@ -63,22 +67,31 @@ Read, in order:
 4. Relevant `docs/solutions/**` and `docs/operations/pause-and-resume-harvest-cron.md`
 5. Active worktrees / `git status` / recent `origin/main` — surface collisions
 
-## Halt-first for live anomalies (M17)
+## Production pause authorization (M17)
 
-When the user reports a **live** harvester anomaly (credits too high, fetched
-vs inserted gap, cron “successful” but no posts, 402 loop, cursor weirdness):
+A production pause is an external mutation, not a diagnostic step.
 
-1. **Halt** `pushinweight-harvest` (`crn-d9gv94o4n6ts739tqaug`) first — see
-   `docs/operations/pause-and-resume-harvest-cron.md`.
-2. Verify suspended state (`GET` service → `"suspended": "suspended"`).
-3. Then diagnose (logs + DB). Do not leave the 15-min cron rewriting cursors
-   while you inspect state.
-4. Resume **only** after DoD is green and the user authorizes. Resume may be
-   dashboard-only; API `suspend: no` has returned 200 without clearing suspend.
+- **Default to read-only.** Leave the cron in its current state while inspecting
+  logs, persisted rows, query configuration, and code.
+- Pause only when the owner's current request explicitly says to halt, pause,
+  stop, or suspend the exact production cron, or when the active plan records
+  explicit owner authorization for that pause. A prior incident's instruction
+  never carries forward as standing permission.
+- If a pause could reduce ongoing credit burn or data damage, explain the
+  evidence and ask for authorization. Do not infer permission from urgency,
+  anomaly severity, or a request to investigate or fix.
+- Before an authorized pause, read
+  `docs/operations/pause-and-resume-harvest-cron.md`, identify the exact service,
+  record its current state, mutate only that service, and verify the result.
+- Preserve the owner's requested pause scope. Resume only when explicitly
+  authorized or when the same request clearly authorized a bounded
+  pause-diagnose-resume operation.
+- If an unauthorized pause or resume occurs, restore the prior state
+  immediately, disclose the error, and verify restoration.
 
-Routine planned changes (feature with dry-run tests, offline refactor) do not
-require a halt — but still ASK if the change will alter live credit burn or
-call volume on the next deploy.
+Routine planned changes, dry-run tests, offline refactors, and forensic
+questions do not require a halt. Ask before any action that changes live credit
+burn, call volume, or service state.
 
 ## Reproduce from the real path (not code-only)
 
@@ -195,8 +208,9 @@ This planned verification does not authorize a cron halt.
 It does not authorize a harvest run.
 It does not authorize provider calls.
 It does not authorize production mutation.
-If the owner separately reports a live anomaly, use the M17 incident path in
-`.claude/skills/avoiding-recurring-mistakes/SKILL.md`.
+If the owner separately reports a live anomaly, use the M17 authorization gate
+in `.claude/skills/avoiding-recurring-mistakes/SKILL.md`; the report itself does
+not authorize a pause.
 
 ## Definition of Done
 
@@ -221,7 +235,8 @@ If the owner separately reports a live anomaly, use the M17 incident path in
 
 ## Anti-patterns (do not)
 
-- Diagnose a live anomaly for a full cycle while the cron keeps firing (M17).
+- Suspend or resume production based only on an anomaly report, diagnostic
+  request, historical instruction, or inferred urgency (M17).
 - Invent a second harvest path “just for this fix” (M7).
 - Trust function-level tests while production callers still miss `cfg=` (M18).
 - Treat log `inserted=N` as DB truth without a `posts` query when they diverge.
