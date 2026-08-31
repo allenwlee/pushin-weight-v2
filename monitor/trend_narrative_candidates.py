@@ -248,7 +248,7 @@ def build_editor_batches(
     *,
     brand_order: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Project deterministic five-brand packets from a compact V3 snapshot.
+    """Project deterministic packets of at most five brands from a V3 snapshot.
 
     ``brand_order`` is the mechanically validated rank-stage order. Missing or
     ineligible keys are ignored and eligible keys omitted by the rank response
@@ -278,21 +278,44 @@ def build_editor_batches(
     batches = []
     for index in range(0, len(dossiers), MAX_EDITOR_BRANDS_PER_BATCH):
         members = dossiers[index : index + MAX_EDITOR_BRANDS_PER_BATCH]
-        batch = {
-            "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
-            "window_days": snapshot["window_days"],
-            "as_of": snapshot["as_of"],
-            "baseline_context": dict(snapshot["baseline_context"]),
-            "batch_key": (
-                f"{snapshot['window_days']}d:"
-                f"{index // MAX_EDITOR_BRANDS_PER_BATCH + 1:03d}"
-            ),
-            "manifest_brand_keys": [str(row["brand_key"]) for row in members],
-            "dossiers": [_provider_dossier(row) for row in members],
-        }
-        _fit_editor_batch_to_packet_budget(batch)
-        batches.append(batch)
+        batch_key = (
+            f"{snapshot['window_days']}d:"
+            f"{index // MAX_EDITOR_BRANDS_PER_BATCH + 1:03d}"
+        )
+        batches.extend(_fit_or_split_editor_batch(snapshot, members, batch_key))
     return batches
+
+
+def _fit_or_split_editor_batch(
+    snapshot: Mapping[str, Any],
+    members: Sequence[Mapping[str, Any]],
+    batch_key: str,
+) -> list[dict[str, Any]]:
+    """Split only irreducibly oversized multi-brand packets, preserving order."""
+    batch = {
+        "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
+        "window_days": snapshot["window_days"],
+        "as_of": snapshot["as_of"],
+        "baseline_context": dict(snapshot["baseline_context"]),
+        "batch_key": batch_key,
+        "manifest_brand_keys": [str(row["brand_key"]) for row in members],
+        "dossiers": [_provider_dossier(row) for row in members],
+    }
+    try:
+        _fit_editor_batch_to_packet_budget(batch)
+    except TrendSnapshotSizeError as exc:
+        if str(exc) != "compact_editor_packet_too_large" or len(members) == 1:
+            raise
+        midpoint = len(members) // 2
+        return [
+            *_fit_or_split_editor_batch(
+                snapshot, members[:midpoint], f"{batch_key}.1"
+            ),
+            *_fit_or_split_editor_batch(
+                snapshot, members[midpoint:], f"{batch_key}.2"
+            ),
+        ]
+    return [batch]
 
 
 def _provider_dossier(dossier: Mapping[str, Any]) -> dict[str, Any]:

@@ -556,6 +556,70 @@ def test_u1_packet_compaction_preserves_each_evidence_target_or_fails_safe():
     )
 
 
+def test_u1_irreducible_five_brand_packet_splits_without_dropping_evidence():
+    dossiers = []
+    for brand_index in range(5):
+        brand_key = f"brand-{brand_index}"
+        dossiers.append(
+            {
+                "brand_key": brand_key,
+                "outcome": "narrative_eligible",
+                "facts": [
+                    {
+                        "fact_id": f"{brand_key}:fact-{fact_index}",
+                        "family": "post_type",
+                        "metric": "share_change_pp",
+                        "label_key": f"label-{fact_index}",
+                        "current_value": "50.0",
+                        "baseline_value": "40.0",
+                        "source_value": "10.0",
+                        "unit": "percentage_points",
+                        "display_en": "10%",
+                        "display_zh_cn": "10%",
+                    }
+                    for fact_index in range(200)
+                ],
+                "evidence": [
+                    {
+                        "evidence_id": f"evidence-{brand_index}",
+                        "excerpt": "bounded evidence",
+                    }
+                ],
+            }
+        )
+    snapshot = {
+        "packet_schema_version": 3,
+        "window_days": 1,
+        "as_of": "2026-08-12T12:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "dossiers": dossiers,
+    }
+
+    batches = build_editor_batches(snapshot)
+
+    assert [batch["batch_key"] for batch in batches] == [
+        "1d:001.1",
+        "1d:001.2.1",
+        "1d:001.2.2",
+    ]
+    assert [batch["manifest_brand_keys"] for batch in batches] == [
+        ["brand-0", "brand-1"],
+        ["brand-2"],
+        ["brand-3", "brand-4"],
+    ]
+    assert [
+        evidence["evidence_id"]
+        for batch in batches
+        for dossier in batch["dossiers"]
+        for evidence in dossier["evidence"]
+    ] == [f"evidence-{index}" for index in range(5)]
+    assert all(
+        len(canonical_snapshot_json(batch).encode("utf-8"))
+        <= MAX_PROVIDER_PACKET_BYTES
+        for batch in batches
+    )
+
+
 def test_u1_corpus_phrase_summary_keeps_unseen_phrase_separate_from_taxonomy():
     summary = trend_candidates._corpus_phrase_family_fact(
         [

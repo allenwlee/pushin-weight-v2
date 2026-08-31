@@ -15,6 +15,10 @@ from core.models import (
     TrendNarrativeVisibleRun,
     TrendNarrativeWorkSlot,
 )
+from monitor.trend_narrative_candidates import (
+    MAX_PROVIDER_PACKET_BYTES,
+    canonical_snapshot_json,
+)
 from monitor.trend_narrative_generation import (
     HeadlineGenerationError,
     PerBrandProviderResponse,
@@ -346,6 +350,134 @@ def test_twenty_brands_use_one_rank_four_editor_four_critic_calls(monkeypatch):
         == BrandTrendNarrative.Status.UNAVAILABLE
     )
     assert TrendNarrativeVisibleRun.objects.get(window_days=1).run_id == run.pk
+    assert not TrendNarrativeWorkSlot.objects.get(window_days=1).active_source_cycle_id
+
+
+def test_oversized_editor_group_splits_and_completes_the_production_call_chain(
+    monkeypatch,
+):
+    config = _config()
+    snapshot = _snapshot(5)
+    for dossier in snapshot["dossiers"]:
+        brand_key = dossier["brand_key"]
+        dossier["facts"].extend(
+            {
+                "fact_id": f"{brand_key}:fact-{fact_index}",
+                "family": "post_type",
+                "metric": "share_change_pp",
+                "label_key": f"label-{fact_index}",
+                "current_value": "50.0",
+                "baseline_value": "40.0",
+                "source_value": "10.0",
+                "unit": "percentage_points",
+                "display_en": "10%",
+                "display_zh_cn": "10%",
+            }
+            for fact_index in range(1, 24)
+        )
+        dossier["evidence"] = [
+            {
+                "evidence_id": f"{brand_key}:evidence-{evidence_index}",
+                "created_at": NOW.isoformat(),
+                "source_language": "zh",
+                "translation_status": "succeeded",
+                "classification_status": "succeeded",
+                "original_text": "中" * 1_000,
+                "excerpt": "中" * 1_000,
+                "text_en": "translated " * 90,
+                "text_zh_cn": "中" * 1_000,
+                "first_party_role": "public_opaque",
+                "taxonomy": {
+                    "post_types": {"status": "available", "values": ["hands_on"]},
+                    "discourse_roles": {
+                        "status": "available",
+                        "values": ["technical_capability"],
+                    },
+                    "sentiment": {"status": "available", "values": ["positive"]},
+                },
+                "roles": ["supporting_context"],
+                "source_flags": {
+                    "official": False,
+                    "post_kind": "source_post",
+                    "metrics_observed": True,
+                    "occurrence_source": "original_post",
+                },
+            }
+            for evidence_index in range(6)
+        ]
+    Brand.objects.bulk_create(
+        [
+            Brand(
+                nickname=dossier["brand_key"],
+                display_name=dossier["display_name_en"],
+                display_name_en=dossier["display_name_en"],
+                display_name_zh_cn=dossier["display_name_zh_cn"],
+            )
+            for dossier in snapshot["dossiers"]
+        ]
+    )
+    queued: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("monitor.trend_narrative_tasks._load_config", lambda: config)
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        lambda *_args, **_kwargs: snapshot,
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._enqueue_per_brand_stage",
+        lambda kind, **kwargs: queued.append((kind, kwargs)),
+    )
+    monkeypatch.setattr("monitor.trend_narrative_tasks.timezone.now", lambda: NOW)
+
+    run = initialize_per_brand_snapshot(
+        source_cycle_id="cycle-oversized-editor-group",
+        window_days=1,
+        facts_as_of=NOW,
+        enqueue=lambda kind, **kwargs: queued.append((kind, kwargs)),
+    )
+    assert run is not None
+    while queued:
+        kind, kwargs = queued.pop(0)
+        if kind == "stage":
+            call = TrendNarrativeProviderCall.objects.get(pk=kwargs["call_id"])
+            raw = _provider_raw(call)
+            monkeypatch.setattr(
+                "monitor.trend_narrative_tasks.execute_per_brand_provider_request",
+                lambda *_args, _raw=raw, **_kwargs: PerBrandProviderResponse(
+                    raw_text=_raw,
+                    input_tokens=100,
+                    output_tokens=100,
+                    latency_ms=10,
+                ),
+            )
+            execute_per_brand_stage(**kwargs, now=NOW)
+        elif kind == "finalize":
+            finalize_per_brand_run(kwargs["run_id"], now=NOW + timedelta(seconds=1))
+        else:  # pragma: no cover - a promoted snapshot would be a regression here
+            raise AssertionError(kind)
+
+    run.refresh_from_db()
+    assert run.status == TrendNarrativeRun.Status.ACTIVE
+    assert [batch["batch_key"] for batch in run.batch_manifest] == [
+        "1d:001.1",
+        "1d:001.2",
+    ]
+    assert [len(batch["brand_keys"]) for batch in run.batch_manifest] == [2, 3]
+    calls = list(TrendNarrativeProviderCall.objects.filter(run=run))
+    assert len(calls) == 5
+    assert all(
+        len(
+            canonical_snapshot_json(
+                call.request_packet["envelope"]["analysis_packet"]
+            ).encode("utf-8")
+        )
+        <= MAX_PROVIDER_PACKET_BYTES
+        for call in calls
+        if call.stage
+        in {
+            TrendNarrativeProviderCall.Stage.RANK,
+            TrendNarrativeProviderCall.Stage.EDITOR,
+        }
+    )
     assert not TrendNarrativeWorkSlot.objects.get(window_days=1).active_source_cycle_id
 
 
