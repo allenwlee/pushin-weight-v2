@@ -3714,6 +3714,42 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             }];
             const flag = geography.querySelector('.account-country-flag');
             const style = flag ? getComputedStyle(flag) : null;
+            const text = geography.querySelector('.account-geography-text');
+            const parseColor = value => {
+              const channels = value.match(/[\\d.]+/g).map(Number);
+              return {
+                rgb: channels.slice(0, 3),
+                alpha: channels.length > 3 ? channels[3] : 1,
+              };
+            };
+            const composite = (foreground, background) => foreground.rgb.map(
+              (channel, index) => Math.round(
+                channel * foreground.alpha
+                + background.rgb[index] * (1 - foreground.alpha)
+              )
+            );
+            const luminance = rgb => {
+              const linear = rgb.map(channel => {
+                const value = channel / 255;
+                return value <= 0.04045
+                  ? value / 12.92
+                  : Math.pow((value + 0.055) / 1.055, 2.4);
+              });
+              return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+            };
+            const contrast = text ? (() => {
+              const foreground = parseColor(getComputedStyle(text).color).rgb;
+              const shell = parseColor(
+                getComputedStyle(row.querySelector('.feed-row-shell')).backgroundColor
+              );
+              const surface = parseColor(
+                getComputedStyle(row.closest('.feed-strip')).backgroundColor
+              );
+              const background = composite(shell, surface);
+              const lighter = Math.max(luminance(foreground), luminance(background));
+              const darker = Math.min(luminance(foreground), luminance(background));
+              return (lighter + 0.05) / (darker + 0.05);
+            })() : null;
             return [key, {
               geography: {
                 kind: geography.dataset.geographyKind,
@@ -3727,6 +3763,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 width: style ? style.width : '',
                 filter: style ? style.filter : '',
                 opacity: style ? style.opacity : '',
+                textContrast: contrast,
               },
               leadChildren: [...lead.children].map(node => node.className),
             }];
@@ -3843,6 +3880,14 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 initial["fallback"]["geography"]["text"],
                                 labels["fallback"],
+                            )
+                            self.assertGreaterEqual(
+                                initial["region"]["geography"]["textContrast"],
+                                4.5,
+                            )
+                            self.assertGreaterEqual(
+                                initial["taiwan"]["geography"]["textContrast"],
+                                4.5,
                             )
                             self.assertIsNone(initial["unresolved"]["geography"])
                             self.assertEqual(

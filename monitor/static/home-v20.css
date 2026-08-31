@@ -900,7 +900,7 @@
   .feed-row .account-geography-text {
     min-width: 0;
     max-width: 38px;
-    color: var(--muted);
+    color: #95a4b9;
     font-size: 6.5px;
     line-height: 1.05;
     overflow-wrap: anywhere;
