@@ -345,6 +345,9 @@ _ACCOUNT_BIGINT_FIELDS = {
     "username_changes_last_changed_at_msec",
     "verification_info_reason_verified_since_msec",
 }
+_ACCOUNT_YEAR_FIELDS = {
+    "verification_info_reason_override_verified_year",
+}
 _ACCOUNT_BOOLEAN_FIELDS = {
     "verified",
     "is_blue_verified",
@@ -415,6 +418,7 @@ _ABOUT_ONLY_FIELDS = {
     "username_changes_last_changed_at_msec",
     "verification_info_id",
     "verification_info_is_identity_verified",
+    "verification_info_reason_override_verified_year",
     "verification_info_reason_verified_since_msec",
     "unavailable",
     "unavailable_reason",
@@ -484,6 +488,14 @@ def _validate_account_field(
     if field_name in _ACCOUNT_BIGINT_FIELDS:
         if type(value) is not int or value < 0 or value > 9_223_372_036_854_775_807:
             return None, "invalid_nonnegative_bigint"
+        return value, None
+    if field_name in _ACCOUNT_YEAR_FIELDS:
+        if (
+            type(value) is not int
+            or value < 2006
+            or value > observed_at.year + 1
+        ):
+            return None, "invalid_year"
         return value, None
     if field_name in _ACCOUNT_BOOLEAN_FIELDS:
         if type(value) is not bool:
@@ -599,6 +611,9 @@ class Account(models.Model):
         blank=True, null=True
     )
     verification_info_reason_verified_since_msec = models.PositiveBigIntegerField(
+        blank=True, null=True
+    )
+    verification_info_reason_override_verified_year = models.PositiveSmallIntegerField(
         blank=True, null=True
     )
     unavailable = models.BooleanField(blank=True, null=True)

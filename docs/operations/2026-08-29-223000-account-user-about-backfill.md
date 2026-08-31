@@ -18,7 +18,7 @@ feed rendering.
   falls back to the scheduled key or retired unsuffixed key.
 - Production apply requires `--target production`,
   `X_MONITOR_DEPLOYMENT_ENVIRONMENT=production`, PostgreSQL database
-  `pushinweight_shadow`, migrations `core.0020` through `core.0024`, and a
+  `pushinweight_shadow`, migrations `core.0020` through `core.0025`, and a
   fresh recovery receipt. These gates run before credential access or HTTP.
 - Production `--refresh` is forbidden. Successful responses, including
   documented unavailable and success-empty responses, checkpoint
@@ -92,7 +92,8 @@ Before paid calls:
    `0021_account_user_about_live_schema`,
    `0022_account_verification_reason_timestamp`, and
    `0023_account_user_about_unavailable`, and
-   `0024_account_identity_profile_label_long_description` are applied.
+   `0024_account_identity_profile_label_long_description`, and
+   `0025_account_verification_override_year` are applied.
 5. Verify the scheduled harvester's latest completed cycle is healthy. Do not
    pause it for the multi-hour provider run.
 6. Run the production selection dry-run and record the aggregate eligible

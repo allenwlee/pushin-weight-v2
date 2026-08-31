@@ -377,7 +377,10 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
                     "verification_info": {
                         "id": "verification-42",
                         "is_identity_verified": True,
-                        "reason": {"verified_since_msec": "1784691635000"},
+                        "reason": {
+                            "verified_since_msec": "1784691635000",
+                            "override_verified_year": 2012,
+                        },
                     },
                     "affiliates_highlighted_label": {},
                     "about_profile": {
@@ -430,6 +433,7 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
     assert account.verification_info_id == "verification-42"
     assert account.verification_info_is_identity_verified is True
     assert account.verification_info_reason_verified_since_msec == 1_784_691_635_000
+    assert account.verification_info_reason_override_verified_year == 2012
     assert account.country_code == "US"
     assert account.account_based_in_fetched_at is not None
     assert '"accepted": 1' in report
@@ -620,6 +624,69 @@ def test_production_apply_loses_advisory_lock_before_credential_access(
             markdown_report=str(tmp_path / "report.md"),
             stdout=StringIO(),
         )
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_apply_excludes_nonnumeric_account_ids_before_provider_call(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
+    numeric = Account.objects.create(author_id="42", handle="numeric_user")
+    placeholders = [
+        Account.objects.create(author_id="handle:legacy", handle="legacy_user"),
+        Account.objects.create(author_id="synthetic:seed", handle="seed_user"),
+    ]
+    fetch = AsyncMock(return_value=_batch([_success(numeric.author_id)]))
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._verify_recovery_snapshot"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._production_run_lock"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
+            new=fetch,
+        ),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            limit=3,
+            max_attempts=3,
+            max_credits=54,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=1,
+            recovery_receipt=_production_recovery_receipt(account_count=3),
+            json_report=str(tmp_path / "report.json"),
+            markdown_report=str(tmp_path / "report.md"),
+            stdout=StringIO(),
+        )
+
+    fetch.assert_awaited_once()
+    selections = fetch.await_args.args[0]
+    assert [selection.author_id for selection in selections] == [numeric.author_id]
+    assert all(
+        account.account_based_in_fetched_at is None
+        for account in Account.objects.filter(
+            author_id__in=[placeholder.author_id for placeholder in placeholders]
+        )
+    )
 
 
 @override_settings(OLLIJA_STAGING_MODE=False)

@@ -19,6 +19,9 @@ omits.
 - Identity-label long-description evidence: production smoke continuation job
   `job-daadckpf2nfc739vlfk0`, exact SHA
   `b4e411df913a72625bb14538f4efd83c709cfbfb`
+- Verification override-year evidence: production continuation job
+  `job-daafuqpf2nfc73a75210`, exact SHA
+  `4fdbd395bca04430a716accbe3008712dfe02ea8`
 
 The probe retained JSON paths and JSON types only. It discarded response
 values, handles, account IDs, URLs, credentials, headers, and the raw payload.
@@ -42,6 +45,7 @@ values, handles, account IDs, URLs, credentials, headers, and the raw payload.
       "id": "<string>",
       "is_identity_verified": true,
       "reason": {
+        "override_verified_year": 0,
         "verified_since_msec": "<numeric string>"
       }
     },
@@ -132,6 +136,7 @@ case-insensitive handle used for the request. It cannot update profile facts.
 | `data.profilePicture` | string | existing `Account.profile_picture` |
 | `data.verification_info.id` | string | `Account.verification_info_id` |
 | `data.verification_info.is_identity_verified` | boolean | `Account.verification_info_is_identity_verified` |
+| `data.verification_info.reason.override_verified_year` | number | `Account.verification_info_reason_override_verified_year`, parsed as a validated year |
 | `data.verification_info.reason.verified_since_msec` | string | `Account.verification_info_reason_verified_since_msec`, parsed as a nonnegative bigint |
 | `data.unavailable` | boolean | `Account.unavailable` |
 | `data.unavailableReason` | string | `Account.unavailable_reason` |

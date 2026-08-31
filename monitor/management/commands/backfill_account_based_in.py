@@ -55,6 +55,7 @@ REQUIRED_MIGRATIONS = {
     "0022_account_verification_reason_timestamp",
     "0023_account_user_about_unavailable",
     "0024_account_identity_profile_label_long_description",
+    "0025_account_verification_override_year",
 }
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _TWITTER_SNOWFLAKE_EPOCH_MS = 1_288_834_974_657
@@ -101,7 +102,11 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 
 def _eligible_accounts(*, refresh: bool, eligible_before: datetime | None = None):
-    queryset = Account.objects.exclude(handle__isnull=True).exclude(handle="")
+    queryset = (
+        Account.objects.filter(author_id__regex=r"^[0-9]+$")
+        .exclude(handle__isnull=True)
+        .exclude(handle="")
+    )
     if not refresh:
         queryset = queryset.filter(account_based_in_fetched_at__isnull=True)
     if eligible_before is not None:

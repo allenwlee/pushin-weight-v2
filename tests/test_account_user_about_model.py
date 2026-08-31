@@ -32,6 +32,7 @@ def test_account_model_exposes_typed_user_about_fields():
         "verification_info_id",
         "verification_info_is_identity_verified",
         "verification_info_reason_verified_since_msec",
+        "verification_info_reason_override_verified_year",
         "unavailable",
         "unavailable_reason",
         "identity_profile_label_badge_url",
@@ -73,6 +74,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
             "verification_info_id": "verification-42",
             "verification_info_is_identity_verified": True,
             "verification_info_reason_verified_since_msec": 1_784_691_635_000,
+            "verification_info_reason_override_verified_year": 2012,
             **identity_profile_label,
         },
         present_fields={
@@ -83,6 +85,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
             "verification_info_id",
             "verification_info_is_identity_verified",
             "verification_info_reason_verified_since_msec",
+            "verification_info_reason_override_verified_year",
             *identity_profile_label,
         },
     )
@@ -95,6 +98,7 @@ def test_live_user_about_fields_use_typed_deduplicated_destinations():
     assert account.verification_info_id == "verification-42"
     assert account.verification_info_is_identity_verified is True
     assert account.verification_info_reason_verified_since_msec == 1_784_691_635_000
+    assert account.verification_info_reason_override_verified_year == 2012
     assert account.identity_profile_label_long_description == "Identity details"
     assert outcome.rejected_fields == {}
     assert not hasattr(account, "is_verified")
@@ -132,6 +136,25 @@ def test_valid_observation_applies_and_invalid_sibling_is_contained():
         "handle",
         "followers_count",
         "is_blue_verified",
+    }
+
+
+def test_verification_override_year_rejects_values_before_x_existed():
+    account = Account.objects.create(author_id="42")
+
+    outcome = Account.apply_observation(
+        author_id="42",
+        observed_author_id="42",
+        source="user_about",
+        observed_at=datetime(2026, 8, 31, tzinfo=UTC),
+        candidates={"verification_info_reason_override_verified_year": 1900},
+        present_fields={"verification_info_reason_override_verified_year"},
+    )
+
+    account.refresh_from_db()
+    assert account.verification_info_reason_override_verified_year is None
+    assert outcome.rejected_fields == {
+        "verification_info_reason_override_verified_year": "invalid_year"
     }
 
 

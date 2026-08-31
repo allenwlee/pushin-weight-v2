@@ -100,7 +100,10 @@ _ABOUT_KEYS = {
 }
 _USERNAME_CHANGES_KEYS = {"count", "last_changed_at_msec"}
 _VERIFICATION_INFO_KEYS = {"id", "is_identity_verified", "reason"}
-_VERIFICATION_REASON_KEYS = {"verified_since_msec"}
+_VERIFICATION_REASON_KEYS = {
+    "override_verified_year",
+    "verified_since_msec",
+}
 _LABEL_KEYS = {
     "badge",
     "description",
@@ -514,7 +517,13 @@ def parse_user_about(
                     verification_info["reason"],
                     "response.data.verification_info.reason",
                 )
-                present.add("verification_info_reason_verified_since_msec")
+                present.update(
+                    {
+                        "verification_info_reason_override_verified_year",
+                        "verification_info_reason_verified_since_msec",
+                    }
+                )
+                candidates["verification_info_reason_override_verified_year"] = None
                 candidates["verification_info_reason_verified_since_msec"] = None
                 if reason is not None:
                     _assert_keys(
@@ -522,6 +531,17 @@ def parse_user_about(
                         _VERIFICATION_REASON_KEYS,
                         "response.data.verification_info.reason",
                     )
+                    if (
+                        "override_verified_year" in reason
+                        and reason["override_verified_year"] is not None
+                    ):
+                        candidates[
+                            "verification_info_reason_override_verified_year"
+                        ] = _strict_nonnegative_int(
+                            reason["override_verified_year"],
+                            "response.data.verification_info.reason."
+                            "override_verified_year",
+                        )
                     if (
                         "verified_since_msec" in reason
                         and reason["verified_since_msec"] is not None
